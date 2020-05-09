@@ -19,7 +19,7 @@ use sp_runtime::{
 	traits::{Block as BlockT},
 };
 use crate::{StorageProof, ChangesProof};
-use sp_storage::{ChildInfo, StorageKey};
+use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
 
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {
@@ -35,8 +35,7 @@ pub trait ProofProvider<Block: BlockT> {
 	fn read_child_proof(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
@@ -65,7 +64,7 @@ pub trait ProofProvider<Block: BlockT> {
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 }

@@ -41,6 +41,11 @@ pub struct NetworkParams {
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
 
+	/// The public address that other nodes will use to connect to it.
+	/// This can be used if there's a proxy in front of this node.
+	#[structopt(long, value_name = "PUBLIC_ADDR")]
+	pub public_addr: Vec<Multiaddr>,
+
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
 	pub listen_addr: Vec<Multiaddr>,
@@ -85,9 +90,21 @@ pub struct NetworkParams {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 
-	/// Experimental feature flag.
-	#[structopt(long = "use-yamux-flow-control")]
-	pub use_yamux_flow_control: bool,
+	/// Disable the yamux flow control. This option will be removed in the future once there is
+	/// enough confidence that this feature is properly working.
+	#[structopt(long)]
+	pub no_yamux_flow_control: bool,
+
+	/// Enable peer discovery on local networks.
+	///
+	/// By default this option is true for `--dev` and false otherwise.
+	#[structopt(long)]
+	pub discover_local: bool,
+
+	/// Use the legacy "pre-mainnet-launch" networking protocol. Enable if things seem broken.
+	/// This option will be removed in the future.
+	#[structopt(long)]
+	pub legacy_network_protocol: bool,
 }
 
 impl NetworkParams {
@@ -113,6 +130,8 @@ impl NetworkParams {
 			self.listen_addr.clone()
 		};
 
+		let public_addresses = self.public_addr.clone();
+
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
 
@@ -126,7 +145,7 @@ impl NetworkParams {
 				NonReservedPeerMode::Accept
 			},
 			listen_addresses,
-			public_addresses: Vec::new(),
+			public_addresses,
 			notifications_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
@@ -137,9 +156,11 @@ impl NetworkParams {
 				enable_mdns: !is_dev && !self.no_mdns,
 				allow_private_ipv4: !self.no_private_ipv4,
 				wasm_external_transport: None,
-				use_yamux_flow_control: self.use_yamux_flow_control,
+				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			allow_non_globals_in_dht: self.discover_local || is_dev,
+			use_new_block_requests_protocol: !self.legacy_network_protocol,
 		}
 	}
 }

@@ -526,47 +526,55 @@ mod test_append_and_len {
 	#[test]
 	fn append_works() {
 		TestExternalities::default().execute_with(|| {
-			let _ = MapVec::append(1, [1, 2, 3].iter());
-			let _ = MapVec::append(1, [4, 5].iter());
+			for val in &[1, 2, 3, 4, 5] {
+				MapVec::append(1, val);
+			}
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append([1, 2, 3].iter());
-			let _ = JustVec::append([4, 5].iter());
+			MapVec::remove(1);
+			MapVec::append(1, 1);
+			assert_eq!(MapVec::get(1), vec![1]);
+
+			for val in &[1, 2, 3, 4, 5] {
+				JustVec::append(val);
+			}
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+
+			JustVec::kill();
+			JustVec::append(1);
+			assert_eq!(JustVec::get(), vec![1]);
 		});
 	}
 
 	#[test]
-	fn append_works_for_default() {
+	fn append_overwrites_invalid_data() {
+		TestExternalities::default().execute_with(|| {
+			let key = JustVec::hashed_key();
+			// Set it to some invalid value.
+			frame_support::storage::unhashed::put_raw(&key, &*b"1");
+			assert_eq!(JustVec::get(), Vec::new());
+			assert_eq!(frame_support::storage::unhashed::get_raw(&key), Some(b"1".to_vec()));
+
+			JustVec::append(1);
+			JustVec::append(2);
+			assert_eq!(JustVec::get(), vec![1, 2]);
+		});
+	}
+
+	#[test]
+	fn append_overwrites_default() {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			let _ = JustVecWithDefault::append([1].iter());
-			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
+			JustVecWithDefault::append(1);
+			assert_eq!(JustVecWithDefault::get(), vec![1]);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			let _ = MapVecWithDefault::append(0, [1].iter());
-			assert_eq!(MapVecWithDefault::get(0), vec![6, 9, 1]);
+			MapVecWithDefault::append(0, 1);
+			assert_eq!(MapVecWithDefault::get(0), vec![1]);
 
 			assert_eq!(OptionVec::get(), None);
-			let _ = OptionVec::append([1].iter());
+			OptionVec::append(1);
 			assert_eq!(OptionVec::get(), Some(vec![1]));
-		});
-	}
-
-	#[test]
-	fn append_or_put_works() {
-		TestExternalities::default().execute_with(|| {
-			let _ = MapVec::append_or_insert(1, &[1, 2, 3][..]);
-			let _ = MapVec::append_or_insert(1, &[4, 5][..]);
-			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
-
-			let _ = JustVec::append_or_put(&[1, 2, 3][..]);
-			let _ = JustVec::append_or_put(&[4, 5][..]);
-			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
-
-			let _ = OptionVec::append_or_put(&[1, 2, 3][..]);
-			let _ = OptionVec::append_or_put(&[4, 5][..]);
-			assert_eq!(OptionVec::get(), Some(vec![1, 2, 3, 4, 5]));
 		});
 	}
 

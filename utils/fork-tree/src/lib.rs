@@ -114,7 +114,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		)?;
 
 		let removed = if let Some(mut root_index) = new_root_index {
-			let mut old_roots = std::mem::replace(&mut self.roots, Vec::new());
+			let mut old_roots = std::mem::take(&mut self.roots);
 
 			let mut root = None;
 			let mut cur_children = Some(&mut old_roots);
@@ -137,7 +137,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 			// we found the deepest ancestor of the finalized block, so we prune
 			// out any children that don't include the finalized block.
-			let root_children = std::mem::replace(&mut root.children, Vec::new());
+			let root_children = std::mem::take(&mut root.children);
 			let mut is_first = true;
 
 			for child in root_children {
@@ -306,7 +306,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		}
 	}
 
-	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns mutable reference.
 	pub fn find_node_where_mut<F, E, P>(
 		&mut self,
 		hash: &H,
@@ -331,7 +331,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(None)
 	}
 
-	/// Same as [`find_node_where`](Self::find_node_where), but returns indexes.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indexes.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,

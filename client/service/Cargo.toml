@@ -19,11 +19,14 @@ db = ["sc-client-db/kvdb-rocksdb", "sc-client-db/parity-db"]
 wasmtime = [
 	"sc-executor/wasmtime",
 ]
+# exposes the client type
+test-helpers = []
 
 [dependencies]
 derive_more = "0.99.2"
 futures01 = { package = "futures", version = "0.1.29" }
-futures = "0.3.4"
+futures = { version = "0.3.4", features = ["compat"] }
+rand = "0.7.3"
 parking_lot = "0.10.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
@@ -32,30 +35,37 @@ futures-timer = "3.0.1"
 wasm-timer = "0.2"
 exit-future = "0.2.0"
 pin-project = "0.4.8"
+hash-db = "0.15.2"
 serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.13.3"
 sc-keystore = { version = "2.0.0-dev", path = "../keystore" }
 sp-io = { version = "2.0.0-dev", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }
+sp-externalities = { version = "0.8.0-dev", path = "../../primitives/externalities" }
 sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
+sp-version = { version = "2.0.0-dev", path = "../../primitives/version" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-session = { version = "2.0.0-dev", path = "../../primitives/session" }
+sp-state-machine = { version = "0.8.0-dev", path = "../../primitives/state-machine" }
 sp-application-crypto = { version = "2.0.0-dev", path = "../../primitives/application-crypto" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
 sc-network = { version = "0.8.0-dev", path = "../network" }
 sc-chain-spec = { version = "2.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "2.0.0-dev", path = "../api" }
-sc-client = { version = "0.8.0-dev", path = "../" }
 sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
-sc-client-db = { version = "0.8.0-dev", path = "../db" }
+sc-client-db = { version = "0.8.0-dev", default-features = false, path = "../db" }
 codec = { package = "parity-scale-codec", version = "1.3.0" }
 sc-executor = { version = "0.8.0-dev", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0-dev", path = "../transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
 sc-rpc-server = { version = "2.0.0-dev", path = "../rpc-servers" }
 sc-rpc = { version = "2.0.0-dev", path = "../rpc" }
+sc-block-builder = { version = "0.8.0-dev", path = "../block-builder" }
+sp-block-builder = { version = "2.0.0-dev", path = "../../primitives/block-builder" }
+
 sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
 sc-offchain = { version = "2.0.0-dev", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
@@ -65,7 +75,7 @@ tracing = "0.1.10"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 
 
-[target.'cfg(any(unix, windows))'.dependencies]
+[target.'cfg(all(any(unix, windows), not(target_os = "android")))'.dependencies]
 netstat2 = "0.8.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]

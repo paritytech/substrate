@@ -18,9 +18,8 @@ use crate::state_holder;
 use sc_executor_common::error::WasmError;
 use sp_wasm_interface::{Function, Value, ValueType};
 use std::any::Any;
-use std::rc::Rc;
 use wasmtime::{
-	Callable, Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
+	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
 	Trap, Val,
 };
 
@@ -53,11 +52,11 @@ pub fn resolve_imports(
 		let resolved = match import_ty.name() {
 			"memory" => {
 				memory_import_index = Some(externs.len());
-				resolve_memory_import(module, import_ty, heap_pages)?
+				resolve_memory_import(module, &import_ty, heap_pages)?
 			}
 			_ => resolve_func_import(
 				module,
-				import_ty,
+				&import_ty,
 				host_functions,
 				allow_missing_func_imports,
 			)?,
@@ -131,7 +130,7 @@ fn resolve_func_import(
 	{
 		Some(host_func) => host_func,
 		None if allow_missing_func_imports => {
-			return Ok(MissingHostFuncHandler::new(import_ty).into_extern(module, func_ty));
+			return Ok(MissingHostFuncHandler::new(import_ty).into_extern(module, &func_ty));
 		}
 		None => {
 			return Err(WasmError::Other(format!(
@@ -163,6 +162,58 @@ struct HostFuncHandler {
 	host_func: &'static dyn Function,
 }
 
+fn call_static(
+	static_func: &'static dyn Function,
+	wasmtime_params: &[Val],
+	wasmtime_results: &mut [Val],
+) -> Result<(), wasmtime::Trap> {
+	let unwind_result = state_holder::with_context(|host_ctx| {
+		let mut host_ctx = host_ctx.expect(
+			"host functions can be called only from wasm instance;
+			wasm instance is always called initializing context;
+			therefore host_ctx cannot be None;
+			qed
+			",
+		);
+		// `into_value` panics if it encounters a value that doesn't fit into the values
+		// available in substrate.
+		//
+		// This, however, cannot happen since the signature of this function is created from
+		// a `dyn Function` signature of which cannot have a non substrate value by definition.
+		let mut params = wasmtime_params.iter().cloned().map(into_value);
+
+		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			static_func.execute(&mut host_ctx, &mut params)
+		}))
+	});
+
+	let execution_result = match unwind_result {
+		Ok(execution_result) => execution_result,
+		Err(err) => return Err(Trap::new(stringify_panic_payload(err))),
+	};
+
+	match execution_result {
+		Ok(Some(ret_val)) => {
+			debug_assert!(
+				wasmtime_results.len() == 1,
+				"wasmtime function signature, therefore the number of results, should always \
+				correspond to the number of results returned by the host function",
+			);
+			wasmtime_results[0] = into_wasmtime_val(ret_val);
+			Ok(())
+		}
+		Ok(None) => {
+			debug_assert!(
+				wasmtime_results.len() == 0,
+				"wasmtime function signature, therefore the number of results, should always \
+				correspond to the number of results returned by the host function",
+			);
+			Ok(())
+		}
+		Err(msg) => Err(Trap::new(msg)),
+	}
+}
+
 impl HostFuncHandler {
 	fn new(host_func: &'static dyn Function) -> Self {
 		Self {
@@ -171,63 +222,14 @@ impl HostFuncHandler {
 	}
 
 	fn into_extern(self, module: &Module) -> Extern {
+		let host_func = self.host_func;
 		let func_ty = wasmtime_func_sig(self.host_func);
-		let func = Func::new(module.store(), func_ty, Rc::new(self));
+		let func = Func::new(module.store(), func_ty,
+			move |_, params, result| {
+				call_static(host_func, params, result)
+			}
+		);
 		Extern::Func(func)
-	}
-}
-
-impl Callable for HostFuncHandler {
-	fn call(
-		&self,
-		wasmtime_params: &[Val],
-		wasmtime_results: &mut [Val],
-	) -> Result<(), wasmtime::Trap> {
-		let unwind_result = state_holder::with_context(|host_ctx| {
-			let mut host_ctx = host_ctx.expect(
-				"host functions can be called only from wasm instance;
-				wasm instance is always called initializing context;
-				therefore host_ctx cannot be None;
-				qed
-				",
-			);
-			// `into_value` panics if it encounters a value that doesn't fit into the values
-			// available in substrate.
-			//
-			// This, however, cannot happen since the signature of this function is created from
-			// a `dyn Function` signature of which cannot have a non substrate value by definition.
-			let mut params = wasmtime_params.iter().cloned().map(into_value);
-
-			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-				self.host_func.execute(&mut host_ctx, &mut params)
-			}))
-		});
-
-		let execution_result = match unwind_result {
-			Ok(execution_result) => execution_result,
-			Err(err) => return Err(Trap::new(stringify_panic_payload(err))),
-		};
-
-		match execution_result {
-			Ok(Some(ret_val)) => {
-				debug_assert!(
-					wasmtime_results.len() == 1,
-					"wasmtime function signature, therefore the number of results, should always \
-					correspond to the number of results returned by the host function",
-				);
-				wasmtime_results[0] = into_wasmtime_val(ret_val);
-				Ok(())
-			}
-			Ok(None) => {
-				debug_assert!(
-					wasmtime_results.len() == 0,
-					"wasmtime function signature, therefore the number of results, should always \
-					correspond to the number of results returned by the host function",
-				);
-				Ok(())
-			}
-			Err(msg) => Err(Trap::new(msg)),
-		}
 	}
 }
 
@@ -245,22 +247,15 @@ impl MissingHostFuncHandler {
 		}
 	}
 
-	fn into_extern(self, module: &Module, func_ty: &FuncType) -> Extern {
-		let func = Func::new(module.store(), func_ty.clone(), Rc::new(self));
+	fn into_extern(self, wasmtime_module: &Module, func_ty: &FuncType) -> Extern {
+		let Self { module, name } = self;
+		let func = Func::new(wasmtime_module.store(), func_ty.clone(),
+			move |_, _, _| Err(Trap::new(format!(
+				"call to a missing function {}:{}",
+				module, name
+			)))
+		);
 		Extern::Func(func)
-	}
-}
-
-impl Callable for MissingHostFuncHandler {
-	fn call(
-		&self,
-		_wasmtime_params: &[Val],
-		_wasmtime_results: &mut [Val],
-	) -> Result<(), wasmtime::Trap> {
-		Err(Trap::new(format!(
-			"call to a missing function {}:{}",
-			self.module, self.name
-		)))
 	}
 }
 

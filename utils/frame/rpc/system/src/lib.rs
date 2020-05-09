@@ -19,10 +19,7 @@
 use std::sync::Arc;
 
 use codec::{self, Codec, Decode, Encode};
-use sc_client::{
-	light::blockchain::{future_header, RemoteBlockchain},
-	light::fetcher::{Fetcher, RemoteCallRequest},
-};
+use sc_client_api::light::{future_header, RemoteBlockchain, Fetcher, RemoteCallRequest};
 use jsonrpc_core::{
 	Error, ErrorCode,
 	futures::future::{result, Future},

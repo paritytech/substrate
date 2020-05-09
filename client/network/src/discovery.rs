@@ -48,6 +48,7 @@
 use crate::config::ProtocolId;
 use futures::prelude::*;
 use futures_timer::Delay;
+use ip_network::IpNetwork;
 use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
 use libp2p::swarm::protocols_handler::multi::MultiHandler;
@@ -71,6 +72,7 @@ pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	user_defined: Vec<(PeerId, Multiaddr)>,
 	allow_private_ipv4: bool,
+	allow_non_globals_in_dht: bool,
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
 	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>
@@ -83,6 +85,7 @@ impl DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
 			user_defined: Vec::new(),
 			allow_private_ipv4: true,
+			allow_non_globals_in_dht: false,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
 			kademlias: HashMap::new()
@@ -120,6 +123,12 @@ impl DiscoveryConfig {
 	/// Should private IPv4 addresses be reported?
 	pub fn allow_private_ipv4(&mut self, value: bool) -> &mut Self {
 		self.allow_private_ipv4 = value;
+		self
+	}
+
+	/// Should non-global addresses be inserted to the DHT?
+	pub fn allow_non_globals_in_dht(&mut self, value: bool) -> &mut Self {
+		self.allow_non_globals_in_dht = value;
 		self
 	}
 
@@ -190,6 +199,7 @@ impl DiscoveryConfig {
 			} else {
 				None.into()
 			},
+			allow_non_globals_in_dht: self.allow_non_globals_in_dht
 		}
 	}
 }
@@ -219,6 +229,8 @@ pub struct DiscoveryBehaviour {
 	allow_private_ipv4: bool,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
+	/// Should non-global addresses be added to the DHT?
+	allow_non_globals_in_dht: bool
 }
 
 impl DiscoveryBehaviour {
@@ -251,8 +263,12 @@ impl DiscoveryBehaviour {
 	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
 	/// not properly work.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, addr: Multiaddr) {
-		for k in self.kademlias.values_mut() {
-			k.add_address(peer_id, addr.clone())
+		if self.allow_non_globals_in_dht || self.can_add_to_dht(&addr) {
+			for k in self.kademlias.values_mut() {
+				k.add_address(peer_id, addr.clone())
+			}
+		} else {
+			log::trace!(target: "sub-libp2p", "Ignoring self-reported address {} from {}", addr, peer_id);
 		}
 	}
 
@@ -297,6 +313,23 @@ impl DiscoveryBehaviour {
 			let size = kad.store_mut().records().fold(0, |tot, rec| tot + rec.value.len());
 			(id, size)
 		})
+	}
+
+	/// Can the given `Multiaddr` be put into the DHT?
+	///
+	/// This test is successful only for global IP addresses and DNS names.
+	//
+	// NB: Currently all DNS names are allowed and no check for TLD suffixes is done
+	// because the set of valid domains is highly dynamic and would require frequent
+	// updates, for example by utilising publicsuffix.org or IANA.
+	pub fn can_add_to_dht(&self, addr: &Multiaddr) -> bool {
+		let ip = match addr.iter().next() {
+			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
+			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
+			Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) => return true,
+			_ => return false
+		};
+		ip.is_global()
 	}
 }
 
@@ -714,6 +747,7 @@ mod tests {
 				let mut config = DiscoveryConfig::new(keypair.public());
 				config.with_user_defined(user_defined.clone())
 					.allow_private_ipv4(true)
+					.allow_non_globals_in_dht(true)
 					.discovery_limit(50);
 				config.finish()
 			};

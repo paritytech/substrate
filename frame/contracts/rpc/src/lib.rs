@@ -46,9 +46,10 @@ const CONTRACT_IS_A_TOMBSTONE: i64 = 3;
 /// This value is used to set the upper bound for maximal contract calls to
 /// prevent blocking the RPC for too long.
 ///
-/// Based on W3F research spreadsheet:
-/// https://docs.google.com/spreadsheets/d/1h0RqncdqiWI4KgxO0z9JIpZEJESXjX_ZCK6LFX6veDo/view
-const GAS_PER_SECOND: u64 = 1_000_000_000;
+/// As 1 gas is equal to 1 weight we base this on the conducted benchmarks which
+/// determined runtime weights:
+/// https://github.com/paritytech/substrate/pull/5446
+const GAS_PER_SECOND: u64 = 1_000_000_000_000;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
 struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);

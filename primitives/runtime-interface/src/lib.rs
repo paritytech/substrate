@@ -110,6 +110,9 @@ extern crate self as sp_runtime_interface;
 pub use sp_wasm_interface;
 
 #[doc(hidden)]
+pub use sp_tracing;
+
+#[doc(hidden)]
 pub use sp_std;
 
 /// Attribute macro for transforming a trait declaration into a runtime interface.

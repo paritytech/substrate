@@ -54,8 +54,8 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
-    pub const ExistentialDeposit: u64 = 1;
-    pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const ExistentialDeposit: u64 = 1;
+	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 }
 
 ord_parameter_types! {
@@ -77,6 +77,8 @@ impl frame_system::Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -107,8 +109,8 @@ impl Trait for Test {
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
-    type ChallengePeriod = ChallengePeriod;
-    type ModuleId = SocietyModuleId;
+	type ChallengePeriod = ChallengePeriod;
+	type ModuleId = SocietyModuleId;
 }
 
 pub type Society = Module<Test>;

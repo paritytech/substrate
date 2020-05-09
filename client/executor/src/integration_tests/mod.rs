@@ -45,7 +45,6 @@ fn call_in_wasm<E: Externalities>(
 		execution_method,
 		Some(1024),
 		HostFunctions::host_functions(),
-		true,
 		8,
 	);
 	executor.call_in_wasm(
@@ -54,6 +53,7 @@ fn call_in_wasm<E: Externalities>(
 		function,
 		call_data,
 		ext,
+		sp_core::traits::MissingHostFunctions::Allow,
 	)
 }
 
@@ -92,9 +92,8 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert_eq!(
-					&format!("{:?}", e),
-					"\"Wasm execution trapped: call to a missing function env:missing_external\""
+				WasmExecutionMethod::Compiled => assert!(
+					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:missing_external")
 				),
 			}
 		}
@@ -121,9 +120,8 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert_eq!(
-					&format!("{:?}", e),
-					"\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\""
+				WasmExecutionMethod::Compiled => assert!(
+					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:yet_another_missing_external")
 				),
 			}
 		}
@@ -186,7 +184,7 @@ fn storage_should_work(wasm_method: WasmExecutionMethod) {
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		],
-		children: map![],
+		children_default: map![],
 	});
 	assert_eq!(ext, expected);
 }
@@ -220,7 +218,7 @@ fn clear_prefix_should_work(wasm_method: WasmExecutionMethod) {
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
 		],
-		children: map![],
+		children_default: map![],
 	});
 	assert_eq!(expected, ext);
 }
@@ -452,6 +450,28 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn offchain_index(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let (offchain, _state) = testing::TestOffchainExt::new();
+	ext.register_extension(OffchainExt::new(offchain));
+	call_in_wasm(
+		"test_offchain_index_set",
+		&[0],
+		wasm_method,
+		&mut ext.ext(),
+	).unwrap();
+
+	use sp_core::offchain::storage::OffchainOverlayedChange;
+	assert_eq!(
+		ext.ext()
+			.get_offchain_storage_changes()
+			.get(sp_core::offchain::STORAGE_PREFIX, b"k"),
+		Some(OffchainOverlayedChange::SetValue(b"v".to_vec()))
+	);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn offchain_local_storage_should_work(wasm_method: WasmExecutionMethod) {
 	use sp_core::offchain::OffchainStorage;
 
@@ -511,7 +531,6 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		wasm_method,
 		Some(17),  // `17` is the initial number of pages compiled into the binary.
 		HostFunctions::host_functions(),
-		true,
 		8,
 	);
 	executor.call_in_wasm(
@@ -520,6 +539,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		"test_exhaust_heap",
 		&[0],
 		&mut ext.ext(),
+		sp_core::traits::MissingHostFunctions::Allow,
 	).unwrap();
 }
 
@@ -600,4 +620,26 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 	// Cal it a second time to check that the heap was freed.
 	instance.call("check_and_set_in_heap", &params).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn parallel_execution(wasm_method: WasmExecutionMethod) {
+	let threads: Vec<_> = (0..8).map(|_| std::thread::spawn(move || {
+		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
+		assert_eq!(
+			call_in_wasm(
+				"test_twox_128",
+				&[0],
+				wasm_method.clone(),
+				&mut ext,
+			).unwrap(),
+			hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
+		);
+	})).collect();
+
+	for t in threads.into_iter() {
+		t.join().unwrap();
+	}
 }

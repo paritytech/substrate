@@ -37,6 +37,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use codec::Encode;
 	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
+	use crate::{assert_noop, assert_ok};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -57,6 +58,7 @@ mod tests {
 		trait Store for Module<T: Trait> as Runtime {
 			Value get(fn value) config(): (u64, u64);
 			NumberMap: map hasher(identity) u32 => u64;
+			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
 		}
 	}
 
@@ -101,5 +103,55 @@ mod tests {
 				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
 			);
 		})
+	}
+
+	#[test]
+	fn try_mutate_works() {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
+			assert_eq!(Value::get(), (0, 0));
+			assert_eq!(NumberMap::get(0), 0);
+			assert_eq!(DoubleMap::get(0, 0), 0);
+
+			// `assert_noop` ensures that the state does not change
+			assert_noop!(Value::try_mutate(|value| -> Result<(), &'static str> {
+				*value = (2, 2);
+				Err("don't change value")
+			}), "don't change value");
+
+			assert_noop!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+				*value = 4;
+				Err("don't change value")
+			}), "don't change value");
+
+			assert_noop!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+				*value = 6;
+				Err("don't change value")
+			}), "don't change value");
+
+			// Showing this explicitly for clarity
+			assert_eq!(Value::get(), (0, 0));
+			assert_eq!(NumberMap::get(0), 0);
+			assert_eq!(DoubleMap::get(0, 0), 0);
+
+			assert_ok!(Value::try_mutate(|value| -> Result<(), &'static str> {
+				*value = (2, 2);
+				Ok(())
+			}));
+
+			assert_ok!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+				*value = 4;
+				Ok(())
+			}));
+
+			assert_ok!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+				*value = 6;
+				Ok(())
+			}));
+
+			assert_eq!(Value::get(), (2, 2));
+			assert_eq!(NumberMap::get(0), 4);
+			assert_eq!(DoubleMap::get(0, 0), 6);
+		});
 	}
 }

@@ -57,7 +57,7 @@ macro_rules! decl_tests {
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
-			DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
+			DispatchInfo { weight: w, ..Default::default() }
 		}
 
 		#[test]

@@ -26,10 +26,10 @@ sc-transaction-graph = { version = "2.0.0-dev", path = "./graph" }
 sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+sp-tracing = { version = "2.0.0-dev", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
-tracing = "0.1.10"
 wasm-timer = "0.2"
 
 [dev-dependencies]

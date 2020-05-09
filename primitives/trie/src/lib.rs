@@ -86,8 +86,6 @@ pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
-/// Reexport from `hash_db`, with genericity set for key only.
-pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a `KeyFunction` for prefixing keys internally (avoiding
 /// key conflict for non random keys).
@@ -211,9 +209,8 @@ pub fn read_trie_value_with<
 	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
-/// Determine the default child trie root.
-pub fn default_child_trie_root<L: TrieConfiguration>(
-	_storage_key: &[u8],
+/// Determine the empty child trie root.
+pub fn empty_child_trie_root<L: TrieConfiguration>(
 ) -> <L::Hash as Hasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
@@ -221,7 +218,6 @@ pub fn default_child_trie_root<L: TrieConfiguration>(
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
-	_storage_key: &[u8],
 	input: I,
 ) -> <L::Hash as Hasher>::Out
 	where
@@ -235,7 +231,6 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
 pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &mut DB,
 	root_data: RD,
@@ -247,7 +242,6 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 		B: AsRef<[u8]>,
 		RD: AsRef<[u8]>,
 		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDB<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -270,7 +264,6 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 
 /// Call `f` for all keys in a child trie.
 pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -278,7 +271,6 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 ) -> Result<(), Box<TrieError<L>>>
 	where
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -321,7 +313,6 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 
 /// Read a value from the child trie.
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -329,7 +320,6 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 	where
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.
@@ -341,7 +331,6 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 
 /// Read a value from the child trie with given query.
 pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=DBValue>, DB>(
-	_storage_key: &[u8],
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -350,7 +339,6 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 	where
 		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-			+ hash_db::PlainDBRef<TrieHash<L>, trie_db::DBValue>,
 {
 	let mut root = TrieHash::<L>::default();
 	// root is fetched from DB, not writable by runtime, so it's always valid.

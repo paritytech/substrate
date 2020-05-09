@@ -23,7 +23,7 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 use sp_core::offchain::{OpaquePeerId, OpaqueMultiaddr};
-use sp_runtime::traits::{ValidateUnsigned, Zero};
+use sp_runtime::traits::{ValidateUnsigned, Zero, Dispatchable};
 use sp_runtime::transaction_validity::TransactionSource;
 
 use crate::Module as ImOnline;
@@ -49,6 +49,7 @@ pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 		network_state,
 		session_index: 0,
 		authority_index: k-1,
+		validators_len: keys.len() as u32,
 	};
 
 	let encoded_heartbeat = input_heartbeat.encode();
@@ -75,6 +76,16 @@ benchmarks! {
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
 	}
+
+	validate_unsigned_and_then_heartbeat {
+		let k in 1 .. MAX_KEYS;
+		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
+		let call = Call::heartbeat(input_heartbeat, signature);
+	}: {
+		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
+		call.dispatch(RawOrigin::None.into())?;
+	}
 }
 
 #[cfg(test)]
@@ -88,6 +99,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_heartbeat::<Runtime>());
 			assert_ok!(test_benchmark_validate_unsigned::<Runtime>());
+			assert_ok!(test_benchmark_validate_unsigned_and_then_heartbeat::<Runtime>());
 		});
 	}
 }

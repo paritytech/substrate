@@ -21,108 +21,177 @@
 use super::*;
 
 use frame_system::{RawOrigin, Module as System};
-use sp_io::hashing::blake2_256;
 use frame_benchmarking::{benchmarks, account};
+use sp_runtime::traits::Bounded;
 
 use crate::Module as Vesting;
 
 const SEED: u32 = 0;
 const MAX_LOCKS: u32 = 20;
 
-fn add_locks<T: Trait>(l: u32) {
-	for id in 0..l {
-		let lock_id = <[u8; 8]>::decode(&mut &id.using_encoded(blake2_256)[..])
-			.unwrap_or_default();
-		let locker = account("locker", 0, SEED);
-		let locked = 1;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
+	for id in 0..n {
+		let lock_id = [id; 8];
+		let locked = 100;
 		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-		T::Currency::set_lock(lock_id, &locker, locked.into(), reasons);
+		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
 	}
 }
 
-fn setup<T: Trait>(b: u32) -> T::AccountId {
-		let locked = 1;
-		let per_block = 1;
-		let starting_block = 0;
+fn add_vesting_schedule<T: Trait>(who: &T::AccountId) -> Result<(), &'static str> {
+	let locked = 100;
+	let per_block = 10;
+	let starting_block = 1;
 
-		let caller = account("caller", 0, SEED);
-		System::<T>::set_block_number(0.into());
+	System::<T>::set_block_number(0.into());
 
-		// Add schedule to avoid `NotVesting` error.
-		let _ = Vesting::<T>::add_vesting_schedule(
-			&caller,
-			locked.into(),
-			per_block.into(),
-			starting_block.into(),
-		);
-
-		// Set lock and block number to take different code paths.
-		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-		T::Currency::set_lock(VESTING_ID, &caller, locked.into(), reasons);
-		System::<T>::set_block_number(b.into());
-
-		caller
+	// Add schedule to avoid `NotVesting` error.
+	Vesting::<T>::add_vesting_schedule(
+		&who,
+		locked.into(),
+		per_block.into(),
+		starting_block.into(),
+	)?;
+	Ok(())
 }
 
 benchmarks! {
-	_ {
-		// Number of previous locks.
-		// It doesn't seems to influence the timings for lower values.
-		let l in 0 .. MAX_LOCKS => add_locks::<T>(l);
-	}
+	_ { }
 
 	vest_locked {
-		let l in ...;
+		let l in 0 .. MAX_LOCKS;
 
-		let caller = setup::<T>(0u32);
+		let caller = account("caller", 0, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		add_locks::<T>(&caller, l as u8);
+		add_vesting_schedule::<T>(&caller)?;
+		// At block zero, everything is vested.
+		System::<T>::set_block_number(T::BlockNumber::zero());
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&caller),
+			Some(100.into()),
+			"Vesting schedule not added",
+		);
+	}: vest(RawOrigin::Signed(caller.clone()))
+	verify {
+		// Nothing happened since everything is still vested.
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&caller),
+			Some(100.into()),
+			"Vesting schedule was removed",
+		);
+	}
 
-	}: vest(RawOrigin::Signed(caller))
+	vest_unlocked {
+		let l in 0 .. MAX_LOCKS;
 
-	vest_not_locked {
-		let l in ...;
-
-		let caller = setup::<T>(1u32);
-
-	}: vest(RawOrigin::Signed(caller))
+		let caller = account("caller", 0, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		add_locks::<T>(&caller, l as u8);
+		add_vesting_schedule::<T>(&caller)?;
+		// At block 20, everything is unvested.
+		System::<T>::set_block_number(20.into());
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&caller),
+			Some(BalanceOf::<T>::zero()),
+			"Vesting schedule still active",
+		);
+	}: vest(RawOrigin::Signed(caller.clone()))
+	verify {
+		// Vesting schedule is removed!
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&caller),
+			None,
+			"Vesting schedule was not removed",
+		);
+	}
 
 	vest_other_locked {
-		let l in ...;
+		let l in 0 .. MAX_LOCKS;
 
-		let other: T::AccountId = setup::<T>(0u32);
+		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
+		T::Currency::make_free_balance_be(&other, BalanceOf::<T>::max_value());
+		add_locks::<T>(&other, l as u8);
+		add_vesting_schedule::<T>(&other)?;
+		// At block zero, everything is vested.
+		System::<T>::set_block_number(T::BlockNumber::zero());
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&other),
+			Some(100.into()),
+			"Vesting schedule not added",
+		);
 
-		let caller = account("caller", 0, SEED);
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
+	verify {
+		// Nothing happened since everything is still vested.
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&other),
+			Some(100.into()),
+			"Vesting schedule was removed",
+		);
+	}
 
-	}: vest_other(RawOrigin::Signed(caller), other_lookup)
+	vest_other_unlocked {
+		let l in 0 .. MAX_LOCKS;
 
-	vest_other_not_locked {
-		let l in ...;
-
-		let other: T::AccountId = setup::<T>(1u32);
+		let other: T::AccountId = account("other", 0, SEED);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
+		T::Currency::make_free_balance_be(&other, BalanceOf::<T>::max_value());
+		add_locks::<T>(&other, l as u8);
+		add_vesting_schedule::<T>(&other)?;
+		// At block 20, everything is unvested.
+		System::<T>::set_block_number(20.into());
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&other),
+			Some(BalanceOf::<T>::zero()),
+			"Vesting schedule still active",
+		);
 
-		let caller = account("caller", 0, SEED);
-
-	}: vest_other(RawOrigin::Signed(caller), other_lookup)
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: vest_other(RawOrigin::Signed(caller.clone()), other_lookup)
+	verify {
+		// Vesting schedule is removed!
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&other),
+			None,
+			"Vesting schedule was not removed",
+		);
+	}
 
 	vested_transfer {
-		let u in 0 .. 1000;
+		let l in 0 .. MAX_LOCKS;
 
-		let from = account("from", u, SEED);
-		let to = account("to", u, SEED);
-		let to_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(to);
+		let caller: T::AccountId = account("caller", 0, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		// Give target existing locks
+		add_locks::<T>(&target, l as u8);
 
 		let transfer_amount = T::MinVestedTransfer::get();
 
 		let vesting_schedule = VestingInfo {
 			locked: transfer_amount,
-			per_block: 1.into(),
-			starting_block: 0.into(),
+			per_block: 10.into(),
+			starting_block: 1.into(),
 		};
-
-		let _ = T::Currency::make_free_balance_be(&from, transfer_amount * 10.into());
-
-	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
+	}: _(RawOrigin::Signed(caller), target_lookup, vesting_schedule)
+	verify {
+		assert_eq!(
+			T::MinVestedTransfer::get(),
+			T::Currency::free_balance(&target),
+			"Transfer didn't happen",
+		);
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&target),
+			Some(T::MinVestedTransfer::get()),
+			"Lock not created",
+		);
+	}
 }
 
 #[cfg(test)]
@@ -135,9 +204,9 @@ mod tests {
 	fn test_benchmarks() {
 		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {
 			assert_ok!(test_benchmark_vest_locked::<Test>());
-			assert_ok!(test_benchmark_vest_not_locked::<Test>());
+			assert_ok!(test_benchmark_vest_unlocked::<Test>());
 			assert_ok!(test_benchmark_vest_other_locked::<Test>());
-			assert_ok!(test_benchmark_vest_other_not_locked::<Test>());
+			assert_ok!(test_benchmark_vest_other_unlocked::<Test>());
 			assert_ok!(test_benchmark_vested_transfer::<Test>());
 		});
 	}

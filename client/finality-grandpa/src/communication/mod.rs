@@ -258,7 +258,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		// is a no-op if currently in that set.
 		self.validator.note_set(
 			set_id,
-			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			voters.iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
@@ -289,7 +289,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let locals = local_key.and_then(|pair| {
 			let id = pair.public();
-			if voters.contains_key(&id) {
+			if voters.contains(&id) {
 				Some((pair, id))
 			} else {
 				None
@@ -308,12 +308,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					}
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
-						if !voters.contains_key(&msg.message.id) {
+						if !voters.contains(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 							return future::ready(None);
 						}
 
-						if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+						if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 							match &msg.message.message {
 								PrimaryPropose(propose) => {
 									telemetry!(CONSENSUS_INFO; "afg.received_propose";
@@ -378,7 +378,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	) {
 		self.validator.note_set(
 			set_id,
-			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			voters.iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
@@ -476,7 +476,7 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+		if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 			let precommits_signed_by: Vec<String> =
 				msg.message.auth_data.iter().map(move |(_, a)| {
 					format!("{}", a)
@@ -610,30 +610,6 @@ impl<B: BlockT, N: Network<B>> Clone for NetworkBridge<B, N> {
 	}
 }
 
-/// Encode round message localized to a given round and set id.
-pub(crate) fn localized_payload<E: Encode>(
-	round: RoundNumber,
-	set_id: SetIdNumber,
-	message: &E,
-) -> Vec<u8> {
-	let mut buf = Vec::new();
-	localized_payload_with_buffer(round, set_id, message, &mut buf);
-	buf
-}
-
-/// Encode round message localized to a given round and set id using the given
-/// buffer. The given buffer will be cleared and the resulting encoded payload
-/// will always be written to the start of the buffer.
-pub(crate) fn localized_payload_with_buffer<E: Encode>(
-	round: RoundNumber,
-	set_id: SetIdNumber,
-	message: &E,
-	buf: &mut Vec<u8>,
-) {
-	buf.clear();
-	(message, round, set_id).encode_to(buf)
-}
-
 /// Type-safe wrapper around a round number.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct Round(pub RoundNumber);
@@ -641,48 +617,6 @@ pub struct Round(pub RoundNumber);
 /// Type-safe wrapper around a set ID.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Encode, Decode)]
 pub struct SetId(pub SetIdNumber);
-
-/// Check a message signature by encoding the message as a localized payload and
-/// verifying the provided signature using the expected authority id.
-pub(crate) fn check_message_sig<Block: BlockT>(
-	message: &Message<Block>,
-	id: &AuthorityId,
-	signature: &AuthoritySignature,
-	round: RoundNumber,
-	set_id: SetIdNumber,
-) -> Result<(), ()> {
-	check_message_sig_with_buffer::<Block>(
-		message,
-		id,
-		signature,
-		round,
-		set_id,
-		&mut Vec::new(),
-	)
-}
-
-/// Check a message signature by encoding the message as a localized payload and
-/// verifying the provided signature using the expected authority id.
-/// The encoding necessary to verify the signature will be done using the given
-/// buffer, the original content of the buffer will be cleared.
-pub(crate) fn check_message_sig_with_buffer<Block: BlockT>(
-	message: &Message<Block>,
-	id: &AuthorityId,
-	signature: &AuthoritySignature,
-	round: RoundNumber,
-	set_id: SetIdNumber,
-	buf: &mut Vec<u8>,
-) -> Result<(), ()> {
-	let as_public = id.clone();
-	localized_payload_with_buffer(round, set_id, message, buf);
-
-	if AuthorityPair::verify(signature, buf, &as_public) {
-		Ok(())
-	} else {
-		debug!(target: "afg", "Bad signature on message from {:?}", id);
-		Err(())
-	}
-}
 
 /// A sink for outgoing messages to the network. Any messages that are sent will
 /// be replaced, as appropriate, according to the given `HasVoted`.
@@ -731,16 +665,14 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 		}
 
 		// when locals exist, sign messages on import
-		if let Some((ref pair, ref local_id)) = self.locals {
-			let encoded = localized_payload(self.round, self.set_id, &msg);
-			let signature = pair.sign(&encoded[..]);
-
+		if let Some((ref pair, _)) = self.locals {
 			let target_hash = msg.target().0.clone();
-			let signed = SignedMessage::<Block> {
-				message: msg,
-				signature,
-				id: local_id.clone(),
-			};
+			let signed = sp_finality_grandpa::sign_message(
+				msg,
+				pair,
+				self.round,
+				self.set_id,
+			);
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
 				message: signed.clone(),
@@ -799,13 +731,13 @@ fn check_compact_commit<Block: BlockT>(
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
-	let full_threshold = voters.total_weight() + f;
+	let full_threshold = (f + voters.total_weight()).0;
 
 	// check total weight is not out of range.
 	let mut total_weight = 0;
 	for (_, ref id) in &msg.auth_data {
-		if let Some(weight) = voters.info(id).map(|info| info.weight()) {
-			total_weight += weight;
+		if let Some(weight) = voters.get(id).map(|info| info.weight()) {
+			total_weight += weight.get();
 			if total_weight > full_threshold {
 				return Err(cost::MALFORMED_COMMIT);
 			}
@@ -815,7 +747,7 @@ fn check_compact_commit<Block: BlockT>(
 		}
 	}
 
-	if total_weight < voters.threshold() {
+	if total_weight < voters.threshold().get() {
 		return Err(cost::MALFORMED_COMMIT);
 	}
 
@@ -828,7 +760,7 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if let Err(()) = check_message_sig_with_buffer::<Block>(
+		if let Err(()) = sp_finality_grandpa::check_message_signature_with_buffer(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
@@ -860,7 +792,7 @@ fn check_catch_up<Block: BlockT>(
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
-	let full_threshold = voters.total_weight() + f;
+	let full_threshold = (f + voters.total_weight()).0;
 
 	// check total weight is not out of range for a set of votes.
 	fn check_weight<'a>(
@@ -871,8 +803,8 @@ fn check_catch_up<Block: BlockT>(
 		let mut total_weight = 0;
 
 		for id in votes {
-			if let Some(weight) = voters.info(&id).map(|info| info.weight()) {
-				total_weight += weight;
+			if let Some(weight) = voters.get(&id).map(|info| info.weight()) {
+				total_weight += weight.get();
 				if total_weight > full_threshold {
 					return Err(cost::MALFORMED_CATCH_UP);
 				}
@@ -882,7 +814,7 @@ fn check_catch_up<Block: BlockT>(
 			}
 		}
 
-		if total_weight < voters.threshold() {
+		if total_weight < voters.threshold().get() {
 			return Err(cost::MALFORMED_CATCH_UP);
 		}
 
@@ -916,7 +848,7 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if let Err(()) = check_message_sig_with_buffer::<B>(
+			if let Err(()) = sp_finality_grandpa::check_message_signature_with_buffer(
 				&msg,
 				id,
 				sig,

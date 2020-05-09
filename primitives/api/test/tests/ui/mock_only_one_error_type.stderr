@@ -23,5 +23,5 @@ error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is 
              <u32 as std::convert::From<bool>>
              <u32 as std::convert::From<char>>
              <u32 as std::convert::From<h2::frame::reason::Reason>>
-             <u32 as std::convert::From<h2::frame::stream_id::StreamId>>
-           and 16 others
+             <u32 as std::convert::From<h2::frame::reason::Reason>>
+           and 18 others

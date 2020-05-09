@@ -26,6 +26,7 @@
 //! which is then processed by [`NetworkWorker::poll`].
 
 use crate::{
+	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	discovery::DiscoveryConfig,
@@ -34,7 +35,8 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	protocol::{self, event::Event, light_client_handler, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
+	light_client_handler, block_requests, finality_requests,
+	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
@@ -57,7 +59,7 @@ use sp_runtime::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
 	pin::Pin,
@@ -72,86 +74,6 @@ use std::{
 mod out_events;
 #[cfg(test)]
 mod tests;
-
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Transaction pool interface
-pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
-	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
-	/// Get hash of transaction.
-	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
-	/// Import a transaction into the pool.
-	///
-	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
-	fn import(
-		&self,
-		report_handle: ReportHandle,
-		who: PeerId,
-		reputation_change_good: ReputationChange,
-		reputation_change_bad: ReputationChange,
-		transaction: B::Extrinsic,
-	);
-	/// Notify the pool about transactions broadcast.
-	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
-	/// Get transaction by hash.
-	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
-}
-
-/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
-/// empty and discards all incoming transactions.
-///
-/// Requires the "hash" type to implement the `Default` trait.
-///
-/// Useful for testing purposes.
-pub struct EmptyTransactionPool;
-
-impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
-		Vec::new()
-	}
-
-	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
-		Default::default()
-	}
-
-	fn import(
-		&self,
-		_report_handle: ReportHandle,
-		_who: PeerId,
-		_rep_change_good: ReputationChange,
-		_rep_change_bad: ReputationChange,
-		_transaction: B::Extrinsic
-	) {}
-
-	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
-
-	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
-}
-
-/// A cloneable handle for reporting cost/benefits of peers.
-#[derive(Clone)]
-pub struct ReportHandle {
-	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
-}
-
-impl From<PeersetHandle> for ReportHandle {
-	fn from(peerset_handle: PeersetHandle) -> Self {
-		ReportHandle { inner: peerset_handle }
-	}
-}
-
-impl ReportHandle {
-	/// Report a given peer as either beneficial (+) or costly (-) according to the
-	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		self.inner.report_peer(who, cost_benefit);
-	}
-}
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -290,6 +212,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
+			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -301,12 +224,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.node_name
 			);
 			let block_requests = {
-				let config = protocol::block_requests::Config::new(&params.protocol_id);
-				protocol::BlockRequests::new(config, params.chain.clone())
+				let config = block_requests::Config::new(&params.protocol_id);
+				block_requests::BlockRequests::new(config, params.chain.clone())
+			};
+			let finality_proof_requests = {
+				let config = finality_requests::Config::new(&params.protocol_id);
+				finality_requests::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
-				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
-				protocol::LightClientHandler::new(
+				let config = light_client_handler::Config::new(&params.protocol_id);
+				light_client_handler::LightClientHandler::new(
 					config,
 					params.chain,
 					checker,
@@ -319,6 +246,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.with_user_defined(known_addresses);
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
+				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -340,6 +268,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				user_agent,
 				local_public,
 				block_requests,
+				finality_proof_requests,
 				light_client_handler,
 				discovery_config
 			);
@@ -792,15 +721,6 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
-}
-
 impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	where
 		B: sp_runtime::traits::Block,
@@ -898,6 +818,9 @@ struct Metrics {
 	peerset_num_requested: Gauge<U64>,
 	pending_connections: Gauge<U64>,
 	pending_connections_errors_total: CounterVec<U64>,
+	requests_in_total: HistogramVec,
+	requests_out_finished: HistogramVec,
+	requests_out_started_total: CounterVec<U64>,
 }
 
 impl Metrics {
@@ -1046,6 +969,35 @@ impl Metrics {
 				),
 				&["reason"]
 			)?, registry)?,
+			requests_in_total: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_requests_in_total",
+						"Total number of requests received and answered"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["protocol"]
+			)?, registry)?,
+			requests_out_finished: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_requests_out_finished",
+						"Time between a request's start and finish (successful or not)"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["protocol"]
+			)?, registry)?,
+			requests_out_started_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_requests_out_started_total",
+					"Total number of requests emitted"
+				),
+				&["protocol"]
+			)?, registry)?,
 		})
 	}
 
@@ -1165,6 +1117,27 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::AnsweredRequest { protocol, build_time, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_in_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.observe(build_time.as_secs_f64());
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestStarted { protocol, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_out_started_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.inc();
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, request_duration, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_out_finished
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.observe(request_duration.as_secs_f64());
+					}
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.kademlia_random_queries_total
@@ -1201,10 +1174,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectionError::IO(_) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
+								EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout)))))))) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
+								EitherError::A(EitherError::A(EitherError::A(
+								EitherError::B(LegacyConnectionKillError)))))))) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
@@ -1236,9 +1211,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
-								"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
-								peer_id,
+								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
 								address,
+								peer_id,
 							);
 						}
 					}

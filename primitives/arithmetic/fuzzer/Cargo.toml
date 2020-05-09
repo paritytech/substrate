@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Fuzzer for fixed point arithmetic primitives."
 documentation = "https://docs.rs/sp-arithmetic-fuzzer"
+publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

@@ -97,10 +97,10 @@ impl Stream for Receiver {
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
 		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
 			let metrics = self.metrics.lock().clone();
-			if let Some(Some(metrics)) = metrics.as_ref().map(|m| &**m) {
-				metrics.event_out(&ev, self.name);
-			} else {
-				log::warn!("Inconsistency in out_events: event happened before sender associated");
+			match metrics.as_ref().map(|m| m.as_ref()) {
+				Some(Some(metrics)) => metrics.event_out(&ev, self.name),
+				Some(None) => (),	// no registry
+				None => log::warn!("Inconsistency in out_events: event happened before sender associated"),
 			}
 			Poll::Ready(Some(ev))
 		} else {

@@ -17,6 +17,7 @@
 //! Substrate state API.
 
 pub mod error;
+pub mod helpers;
 
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
@@ -28,6 +29,7 @@ use sp_version::RuntimeVersion;
 use self::error::FutureResult;
 
 pub use self::gen_client::Client as StateClient;
+pub use self::helpers::ReadProof;
 
 /// Substrate state API
 #[rpc]
@@ -72,50 +74,6 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
 	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
 
-	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[rpc(name = "state_getChildKeys")]
-	fn child_storage_keys(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		prefix: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageKey>>;
-
-	/// Returns a child storage entry at a specific block's state.
-	#[rpc(name = "state_getChildStorage")]
-	fn child_storage(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<StorageData>>;
-
-	/// Returns the hash of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageHash")]
-	fn child_storage_hash(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<Hash>>;
-
-	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageSize")]
-	fn child_storage_size(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<u64>>;
-
 	/// Returns the runtime metadata as an opaque blob.
 	#[rpc(name = "state_getMetadata")]
 	fn metadata(&self, hash: Option<Hash>) -> FutureResult<Bytes>;
@@ -143,6 +101,10 @@ pub trait StateApi<Hash> {
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+
+	/// Returns proof of storage entries at a specific block's state.
+	#[rpc(name = "state_getReadProof")]
+	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[pubsub(

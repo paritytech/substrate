@@ -51,6 +51,8 @@ impl frame_system::Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -123,7 +125,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 parameter_types!{
-    pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
+	pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
 }
 
 impl elections::Trait for Test {
@@ -142,8 +144,8 @@ impl elections::Trait for Test {
 	type CarryCount = CarryCount;
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = VotingPeriod;
-    type DecayRatio = DecayRatio;
-    type ModuleId = ElectionModuleId;
+	type DecayRatio = DecayRatio;
+	type ModuleId = ElectionModuleId;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

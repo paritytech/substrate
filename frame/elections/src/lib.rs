@@ -30,10 +30,10 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
+	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-        OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -148,6 +148,9 @@ pub trait Trait: frame_system::Trait {
     type ModuleId: Get<LockIdentifier>;
 
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Identifier for the elections pallet's lock
+	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -381,6 +384,8 @@ decl_module! {
         
         const MouduleId: LockIdentifier  = T::ModuleId::get();
 
+		const ModuleId: LockIdentifier = T::ModuleId::get();
+
 		fn deposit_event() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -407,13 +412,13 @@ decl_module! {
 		/// - Two extra DB entries, one DB change.
 		/// - Argument `votes` is limited in length to number of candidates.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
+		#[weight = 2_500_000_000]
 		fn set_approvals(
 			origin,
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
-			#[compact] value: BalanceOf<T>
+			#[compact] value: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
@@ -425,12 +430,12 @@ decl_module! {
 		/// # <weight>
 		/// - Same as `set_approvals` with one additional storage read.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
+		#[weight = 2_500_000_000]
 		fn proxy_set_approvals(origin,
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
 			hint: SetIndex,
-			#[compact] value: BalanceOf<T>
+			#[compact] value: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = Self::proxy(ensure_signed(origin)?).ok_or(Error::<T>::NotProxy)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
@@ -448,13 +453,13 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
+		#[weight = 2_500_000_000]
 		fn reap_inactive_voter(
 			origin,
 			#[compact] reporter_index: u32,
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] who_index: u32,
-			#[compact] assumed_vote_index: VoteIndex
+			#[compact] assumed_vote_index: VoteIndex,
 		) {
 			let reporter = ensure_signed(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -496,7 +501,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-                T::ModuleId::get(),
+				T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -522,7 +527,7 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_250_000_000)]
+		#[weight = 1_250_000_000]
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -534,7 +539,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-            T::Currency::remove_lock(T::ModuleId::get(), &who);
+			T::Currency::remove_lock(T::ModuleId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -550,7 +555,7 @@ decl_module! {
 		/// - Independent of input.
 		/// - Three DB changes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
+		#[weight = 2_500_000_000]
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -587,12 +592,12 @@ decl_module! {
 		/// - O(voters) compute.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000_000)]
+		#[weight = 10_000_000_000]
 		fn present_winner(
 			origin,
 			candidate: <T::Lookup as StaticLookup>::Source,
 			#[compact] total: BalanceOf<T>,
-			#[compact] index: VoteIndex
+			#[compact] index: VoteIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
@@ -661,7 +666,7 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
-		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_desired_seats(origin, #[compact] count: u32) {
 			ensure_root(origin)?;
 			DesiredSeats::put(count);
@@ -671,7 +676,7 @@ decl_module! {
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -686,7 +691,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
@@ -694,7 +699,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
@@ -705,7 +710,7 @@ decl_module! {
 				print("Guru meditation");
 				print(e);
 			}
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
@@ -885,7 +890,7 @@ impl<T: Trait> Module<T> {
 					if set_len + 1 == VOTER_SET_SIZE {
 						NextVoterSet::put(next + 1);
 					}
-					<Voters<T>>::append_or_insert(next, &[Some(who.clone())][..])
+					<Voters<T>>::append(next, Some(who.clone()));
 				}
 			}
 
@@ -894,7 +899,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-            T::ModuleId::get(),
+			T::ModuleId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),

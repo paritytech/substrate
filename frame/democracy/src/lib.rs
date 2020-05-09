@@ -168,10 +168,10 @@ use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
 	traits::{Zero, Hash, Dispatchable, Saturating},
 };
-use codec::{Ref, Encode, Decode};
+use codec::{Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT},
+	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
@@ -346,7 +346,7 @@ decl_storage! {
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
-		pub Locks get(locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
+		pub Locks get(fn locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
@@ -525,12 +525,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			Self::migrate();
-
-			MINIMUM_WEIGHT
-		}
-
 		/// Propose a sensitive action to be taken.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the sender must
@@ -546,7 +540,7 @@ decl_module! {
 		/// - P is the number proposals in the `PublicProps` vec.
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000_000)]
+		#[weight = 5_000_000_000]
 		fn propose(origin,
 			proposal_hash: T::Hash,
 			#[compact] value: BalanceOf<T>
@@ -559,8 +553,7 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
-			let new_prop = (index, proposal_hash, who);
-			<PublicProps<T>>::append_or_put(&[Ref::from(&new_prop)][..]);
+			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -577,7 +570,7 @@ decl_module! {
 		/// - S is the number of seconds a proposal already has.
 		/// - One DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000_000)]
+		#[weight = 5_000_000_000]
 		fn second(origin, #[compact] proposal: PropIndex) {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
@@ -600,7 +593,7 @@ decl_module! {
 		/// - R is the number of referendums the voter has voted on.
 		/// - One DB change, one DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(200_000_000)]
+		#[weight = 200_000_000]
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -621,7 +614,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - One DB change, one DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(200_000_000)]
+		#[weight = 200_000_000]
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -641,7 +634,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(500_000_000)]
+		#[weight = (500_000_000, DispatchClass::Operational)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
@@ -664,7 +657,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000_000)]
+		#[weight = 5_000_000_000]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
@@ -691,7 +684,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000_000)]
+		#[weight = 5_000_000_000]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SimpleMajority));
@@ -711,7 +704,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000_000)]
+		#[weight = 5_000_000_000]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SuperMajorityAgainst));
@@ -736,7 +729,7 @@ decl_module! {
 		/// - One DB change.
 		/// - One extra DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(200_000_000)]
+		#[weight = 200_000_000]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
 			voting_period: T::BlockNumber,
@@ -787,7 +780,7 @@ decl_module! {
 		///   be very large.
 		/// - O(log v), v is number of `existing_vetoers`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(200_000_000)]
+		#[weight = 200_000_000]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 
@@ -820,7 +813,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
@@ -836,10 +829,10 @@ decl_module! {
 		/// - One DB change.
 		/// - O(d) where d is the items in the dispatch queue.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
-			T::Scheduler::cancel_named((DEMOCRACY_ID, which))
+			T::Scheduler::cancel_named((DEMOCRACY_ID, which).encode())
 				.map_err(|_| Error::<T>::ProposalMissing)?;
 		}
 
@@ -848,7 +841,7 @@ decl_module! {
 				sp_runtime::print(e);
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		/// Specify a proxy that is already open to us. Called by the stash.
@@ -862,7 +855,7 @@ decl_module! {
 		/// # <weight>
 		/// - One extra DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn activate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
@@ -885,7 +878,7 @@ decl_module! {
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn close_proxy(origin) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::mutate(&who, |a| {
@@ -909,7 +902,7 @@ decl_module! {
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn deactivate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
@@ -942,7 +935,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		pub fn delegate(origin, to: T::AccountId, conviction: Conviction, balance: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			Self::try_delegate(who, to, conviction, balance)?;
@@ -961,7 +954,7 @@ decl_module! {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
 			Self::try_undelegate(who)?;
@@ -975,7 +968,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
 
@@ -995,7 +988,7 @@ decl_module! {
 		/// - Dependent on the size of `encoded_proposal` but protected by a
 		///   required deposit.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -1030,7 +1023,7 @@ decl_module! {
 		/// # <weight>
 		/// - Dependent on the size of `encoded_proposal` and length of dispatch queue.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -1066,7 +1059,7 @@ decl_module! {
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let (provider, deposit, since, expiry) = <Preimages<T>>::get(&proposal_hash)
@@ -1096,7 +1089,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
 			Self::update_lock(&target);
@@ -1115,7 +1108,7 @@ decl_module! {
 		/// # <weight>
 		/// - One extra DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn open_proxy(origin, target: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::mutate(&who, |a| {
@@ -1154,7 +1147,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, UnvoteScope::Any)
@@ -1176,7 +1169,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
@@ -1207,7 +1200,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		pub fn proxy_delegate(origin,
 			to: T::AccountId,
 			conviction: Conviction,
@@ -1231,7 +1224,7 @@ decl_module! {
 		/// # <weight>
 		/// - O(1).
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn proxy_undelegate(origin) {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
@@ -1251,7 +1244,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn proxy_remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
@@ -1259,7 +1252,7 @@ decl_module! {
 		}
 
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
-		#[weight = SimpleDispatchInfo::MaxNormal]
+		#[weight = T::MaximumBlockWeight::get()]
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_enact_proposal(proposal_hash, index)
@@ -1268,25 +1261,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn migrate() {
-		use frame_support::{Twox64Concat, migration::{StorageKeyIterator, remove_storage_prefix}};
-		remove_storage_prefix(b"Democracy", b"VotesOf", &[]);
-		remove_storage_prefix(b"Democracy", b"VotersFor", &[]);
-		remove_storage_prefix(b"Democracy", b"Delegations", &[]);
-		for (who, (end, proposal_hash, threshold, delay))
-			in StorageKeyIterator::<
-				ReferendumIndex,
-				(T::BlockNumber, T::Hash, VoteThreshold, T::BlockNumber),
-				Twox64Concat,
-			>::new(b"Democracy", b"ReferendumInfoOf").drain()
-		{
-			let status = ReferendumStatus {
-				end, proposal_hash, threshold, delay, tally: Tally::default()
-			};
-			ReferendumInfoOf::<T>::insert(who, ReferendumInfo::Ongoing(status))
-		}
-	}
-
 	// exposed immutables.
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
@@ -1685,7 +1659,7 @@ impl<T: Trait> Module<T> {
 				});
 
 				if T::Scheduler::schedule_named(
-					(DEMOCRACY_ID, index),
+					(DEMOCRACY_ID, index).encode(),
 					when,
 					None,
 					63,

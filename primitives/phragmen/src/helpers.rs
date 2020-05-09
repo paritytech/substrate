@@ -17,7 +17,7 @@
 //! Helper methods for phragmen.
 
 use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf};
-use sp_runtime::PerThing;
+use sp_arithmetic::PerThing;
 use sp_std::prelude::*;
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
@@ -57,7 +57,7 @@ pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Ve
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::Perbill;
+	use sp_arithmetic::Perbill;
 
 	#[test]
 	fn into_staked_works() {

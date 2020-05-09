@@ -23,8 +23,9 @@ extern crate self as frame_support;
 
 #[macro_use]
 extern crate bitmask;
-#[cfg(feature = "std")]
-pub extern crate tracing;
+
+#[doc(hidden)]
+pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
@@ -32,6 +33,7 @@ pub use serde;
 pub use sp_std;
 #[doc(hidden)]
 pub use codec;
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -76,6 +78,10 @@ pub use self::storage::{
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+
+/// A type that cannot be instantiated.
+#[derive(Debug)]
+pub enum Never {}
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -188,10 +194,6 @@ macro_rules! assert_noop {
 	}
 }
 
-/// Panic if an expression doesn't evaluate to an `Err`.
-///
-/// Used as `assert_err!(expression_to_assert, expected_err_expression)`.
-
 /// Assert an expression returns an error specified.
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
@@ -200,6 +202,18 @@ macro_rules! assert_noop {
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y.into()));
+	}
+}
+
+/// Assert an expression returns an error specified.
+///
+/// This can be used on`DispatchResultWithPostInfo` when the post info should
+/// be ignored.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_ignore_postinfo {
+	( $x:expr , $y:expr $(,)? ) => {
+		assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
 	}
 }
 
@@ -222,41 +236,9 @@ macro_rules! assert_ok {
 	}
 }
 
-/// Runs given code within a tracing span, measuring it's execution time.
-///
-/// Has effect only when running in native environment. In WASM, it simply inserts the
-/// code in-place, without any metrics added.
-#[macro_export]
-macro_rules! tracing_span {
-	($name:expr; $( $code:tt )*) => {
-		let span = $crate::if_tracing!(
-			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
-		,
-			()
-		);
-		let guard = $crate::if_tracing!(span.enter(), ());
-		$( $code )*
-
-		$crate::sp_std::mem::drop(guard);
-		$crate::sp_std::mem::drop(span);
-	}
-}
-
-#[macro_export]
-#[cfg(feature = "tracing")]
-macro_rules! if_tracing {
-	( $if:expr, $else:expr ) => {{ $if }}
-}
-
-#[macro_export]
-#[cfg(not(feature = "tracing"))]
-macro_rules! if_tracing {
-	( $if:expr, $else:expr ) => {{ $else }}
-}
-
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
 pub enum Void {}
 
 #[cfg(feature = "std")]
@@ -298,8 +280,6 @@ mod tests {
 				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
 				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub GetterNoFnKeyword get(no_fn): Option<u32>;
-
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
 				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
 			pub GenericDataDM:
@@ -520,8 +500,8 @@ mod tests {
 			let key2 = 18u32;
 
 			DoubleMap::insert(&key1, &key2, &vec![1]);
-			DoubleMap::append(&key1, &key2, &[2, 3]).unwrap();
-			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2, 3]);
+			DoubleMap::append(&key1, &key2, 2);
+			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2]);
 		});
 	}
 
@@ -582,15 +562,6 @@ mod tests {
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetterNoFnKeyword"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetterNoFnKeyword(PhantomData::<Test>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},

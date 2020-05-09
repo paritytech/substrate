@@ -27,19 +27,20 @@ use sp_runtime::traits::{
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::{Client, LocalCallExecutor};
+use crate::client::{Client, LocalCallExecutor};
 use sp_consensus::{
 	BlockOrigin,
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
 };
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
+use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
-use std::{io::{Read, Write, Seek}, pin::Pin};
-use sc_client_api::BlockBackend;
+use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
-	Ok(spec.as_json(raw)?)
+	spec.as_json(raw).map_err(Into::into)
 }
 
 impl<
@@ -56,12 +57,13 @@ impl<
 	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
+	Self: Send + 'static,
 {
 	type Block = TBl;
 	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
-		self,
+		mut self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
@@ -98,9 +100,6 @@ impl<
 			}
 		}
 
-		let client = self.client;
-		let mut queue = self.import_queue;
-
 		let mut io_reader_input = IoReader(input);
 		let mut count = None::<u64>;
 		let mut read_block_count = 0;
@@ -114,6 +113,9 @@ impl<
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
 		let import = future::poll_fn(move |cx| {
+			let client = &self.client;
+			let queue = &mut self.import_queue;
+
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
 				Some(c) => c,
@@ -203,13 +205,12 @@ impl<
 		to: Option<NumberFor<TBl>>,
 		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-		let client = self.client;
 		let mut block = from;
 
 		let last = match to {
 			Some(v) if v.is_zero() => One::one(),
 			Some(v) => v,
-			None => client.chain_info().best_number,
+			None => self.client.chain_info().best_number,
 		};
 
 		let mut wrote_header = false;
@@ -222,6 +223,8 @@ impl<
 		// This makes it possible either to interleave other operations in-between the block exports,
 		// or to stop the operation completely.
 		let export = future::poll_fn(move |cx| {
+			let client = &self.client;
+
 			if last < block {
 				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 			}
@@ -295,5 +298,46 @@ impl<
 			Ok(None) => Box::pin(future::err("Unknown block".into())),
 			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
+	}
+
+	fn export_raw_state(
+		&self,
+		block: Option<BlockId<Self::Block>>,
+	) -> Result<Storage, Error> {
+		let block = block.unwrap_or_else(
+			|| BlockId::Hash(self.client.usage_info().chain.best_hash)
+		);
+
+		let empty_key = StorageKey(Vec::new());
+		let mut top_storage = self.client.storage_pairs(&block, &empty_key)?;
+		let mut children_default = HashMap::new();
+
+		// Remove all default child storage roots from the top storage and collect the child storage
+		// pairs.
+		while let Some(pos) = top_storage
+			.iter()
+			.position(|(k, _)| k.0.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)) {
+			let (key, _) = top_storage.swap_remove(pos);
+
+			let key = StorageKey(
+				key.0[well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..].to_vec(),
+			);
+			let child_info = ChildInfo::new_default(&key.0);
+
+			let keys = self.client.child_storage_keys(&block, &child_info, &empty_key)?;
+			let mut pairs = StorageMap::new();
+			keys.into_iter().try_for_each(|k| {
+				if let Some(value) = self.client.child_storage(&block, &child_info, &k)? {
+					pairs.insert(k.0, value.0);
+				}
+
+				Ok::<_, Error>(())
+			})?;
+
+			children_default.insert(key.0, StorageChild { child_info, data: pairs });
+		}
+
+		let top = top_storage.into_iter().map(|(k, v)| (k.0, v.0)).collect();
+		Ok(Storage { top, children_default })
 	}
 }
