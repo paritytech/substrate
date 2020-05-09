@@ -44,10 +44,12 @@ impl_outer_event! {
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		sudo::Sudo,
+		priveleged_fn_test_module::Priveleged,
 	}
 }
 
-mod PrivellegFunctionTest {
+// Dummy module for the testing the sudo modules's ability to limit access to root
+mod priveleged_fn_test_module {
 	use frame_support::{decl_module, dispatch};
 	use frame_system::{self as system, ensure_root};
 	pub trait Trait: frame_system::Trait {}
@@ -103,12 +105,20 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 
-// Implement the sudo pallet's Trait on the Test runtime
+// Implement the sudo modules's Trait on the Test runtime
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
 }
 
-// New type that wraps the mock in the pallets module
+// Implement the privelleged test module's Trait on the Test runtime
+impl priveleged_fn_test_module::Trait for Test {}
+
+// New type that wraps the runtime mock in the pallets module
 pub type Sudo = Module<Test>;
 pub type System = frame_system::Module<Test>;
+// New type that wraps the runtime mock in the priveleged module
+pub type Priveleged = priveleged_fn_test_module::Module<Test>;
+
+// New type for dispatchable functions from priveleged module for the mock runtime
+pub type PrivelegedCall = priveleged_fn_test_module::Call<Test>;
