@@ -21,7 +21,7 @@ use super::*;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
 	weights::Weight,
-	traits::{OnInitialize, OnFinalize},
+	// traits::{OnInitialize, OnFinalize},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -60,7 +60,7 @@ mod priveleged_fn_test_module {
 			#[weight = 0]
 			pub fn privileged_function(origin) -> dispatch::DispatchResult {
 				ensure_root(origin)?;
-				println!("privellege_function was passed a valid root origin");
+				println!("privellege_function was passed a valid origin");
 				Ok(())
 			}
 		}
@@ -115,6 +115,7 @@ impl Trait for Test {
 // Implement the privelleged test module's Trait on the Test runtime
 impl priveleged_fn_test_module::Trait for Test {}
 
+// Assign back to type variables so we can make dispatched calls of these modules later.
 // New type that wraps the runtime mock in the pallets module
 pub type Sudo = Module<Test>;
 // New type that wraps the runtime mock in the frame_system's module
