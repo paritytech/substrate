@@ -177,10 +177,15 @@ impl pallet_im_online::Trait for Test {
 	type UnsignedPriority = ();
 }
 
+parameter_types! {
+	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+}
+
 impl pallet_offences::Trait for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {

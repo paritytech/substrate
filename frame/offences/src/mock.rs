@@ -31,7 +31,7 @@ use sp_runtime::traits::{IdentityLookup, BlakeTwo256};
 use sp_core::H256;
 use frame_support::{
 	impl_outer_origin, impl_outer_event, parameter_types, StorageMap, StorageDoubleMap,
-	weights::Weight,
+	weights::{Weight, constants::{WEIGHT_PER_SECOND, RocksDbWeight}},
 };
 use frame_system as system;
 
@@ -85,7 +85,7 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
+	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -102,7 +102,7 @@ impl frame_system::Trait for Runtime {
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
+	type DbWeight = RocksDbWeight;
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
@@ -114,10 +114,15 @@ impl frame_system::Trait for Runtime {
 	type OnKilledAccount = ();
 }
 
+parameter_types! {
+	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+}
+
 impl Trait for Runtime {
 	type Event = TestEvent;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
+	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 mod offences {
