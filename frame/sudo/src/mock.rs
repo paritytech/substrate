@@ -18,7 +18,38 @@
 
 use super::*;
 
-#[cfg(test)]
-mod tests {
-    // -- snip --
+use frame_support::{
+	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
+	weights::Weight,
+	traits::{OnInitialize, OnFinalize},
+};
+use sp_core::H256;
+// The testing primitives are very useful for avoiding having to work with signatures
+// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
+use sp_runtime::{
+	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+};
+use crate as sudo;
+
+impl_outer_origin! {
+	pub enum Origin for Test where system = frame_system {}
 }
+
+// For testing the pallet, we construct most of a mock runtime. This means
+// first constructing a configuration type (`Test`) which `impl`s each of the
+// configuration traits of pallets we want to use.
+#[derive(Clone, Eq, PartialEq)]
+pub struct Test;
+
+impl frame_system::Trait for Test {
+	type Event = ();
+	type Call = ();
+}
+
+
+// impl Trait for TestRuntime {
+//     type Event = ();
+// }
+
+pub type Sudo = Module<Test>;
+pub type System = frame_system::Module<Test>;
