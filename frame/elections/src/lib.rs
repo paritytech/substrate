@@ -145,7 +145,6 @@ type ApprovalFlag = u32;
 const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
-    type ModuleId: Get<LockIdentifier>;
 
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 

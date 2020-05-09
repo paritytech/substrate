@@ -277,9 +277,6 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
     /// The societies's module id
     type ModuleId: Get<ModuleId>;
 
-	/// The societies's module id
-	type ModuleId: Get<ModuleId>;
-
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
@@ -497,9 +494,6 @@ decl_module! {
         
         /// The societies's module id
         const ModuleId: ModuleId = T::ModuleId::get();
-
-		/// The societies's module id
-		const ModuleId: ModuleId = T::ModuleId::get();
 
 		// Used for handling module events.
 		fn deposit_event() = default;
