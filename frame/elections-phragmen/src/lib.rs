@@ -108,9 +108,7 @@ type NegativeImbalanceOf<T> =
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-    
-    type ModuleId: Get<LockIdentifier>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Identifier for the elections-phragmen pallet's lock
 	type ModuleId: Get<LockIdentifier>;
@@ -1022,14 +1020,6 @@ mod tests {
 		fn convert(x: u128) -> u64 {
 			x as u64
 		}
-    }
-    
-    parameter_types!{
-        pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
-    }
-
-	parameter_types!{
-		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 	}
 
 	impl Trait for Test {

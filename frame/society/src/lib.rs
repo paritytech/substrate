@@ -272,10 +272,7 @@ type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trai
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
-    type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
-    
-    /// The societies's module id
-    type ModuleId: Get<ModuleId>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 
 	/// The societies's module id
 	type ModuleId: Get<ModuleId>;
@@ -493,10 +490,7 @@ decl_module! {
 		const RotationPeriod: T::BlockNumber = T::RotationPeriod::get();
 
 		/// The number of blocks between membership challenges.
-        const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
-        
-        /// The societies's module id
-        const ModuleId: ModuleId = T::ModuleId::get();
+		const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
 
 		/// The societies's module id
 		const ModuleId: ModuleId = T::ModuleId::get();

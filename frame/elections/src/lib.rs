@@ -145,8 +145,6 @@ type ApprovalFlag = u32;
 const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
-    type ModuleId: Get<LockIdentifier>;
-
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Identifier for the elections pallet's lock
@@ -380,11 +378,9 @@ decl_module! {
 		/// The chunk size of the voter vector.
 		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
 		/// The chunk size of the approval vector.
-        const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
-        
-        const MouduleId: LockIdentifier  = T::ModuleId::get();
+		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
-		const ModuleId: LockIdentifier = T::ModuleId::get();
+		const MouduleId: LockIdentifier  = T::ModuleId::get();
 
 		fn deposit_event() = default;
 
@@ -903,7 +899,7 @@ impl<T: Trait> Module<T> {
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
-        );
+		);
 
 		<VoterInfoOf<T>>::insert(
 			&who,
