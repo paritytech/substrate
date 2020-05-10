@@ -85,7 +85,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
-    type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl pallet_balances::Trait for Test {
