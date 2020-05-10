@@ -290,7 +290,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{Weight, DispatchClass},
+	weights::{Weight, DispatchClass, Pays, FunctionOf, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -1262,8 +1262,13 @@ decl_module! {
 		///
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
+		/// ------------------
+		/// Base Weight: 77.11 µs
+		/// DB Weight:
+		/// - Read: Bonded, Ledger, [Origin Account], Current Era, History Depth, Locks
+		/// - Write: Bonded, Payee, [Origin Account], Locks, Ledger
 		/// # </weight>
-		#[weight = 500_000_000]
+		#[weight = 77 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(5, 4)]
 		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
@@ -1326,8 +1331,13 @@ decl_module! {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - O(1).
 		/// - One DB entry.
+		/// ------------
+		/// Base Weight: 62.23 µs
+		/// DB Weight:
+		/// - Read: Era Election Status, Bonded, Ledger, [Origin Account], Locks
+		/// - Write: [Origin Account], Locks, Ledger
 		/// # </weight>
-		#[weight = 500_000_000]
+		#[weight = 62 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)]
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let stash = ensure_signed(origin)?;
@@ -1372,8 +1382,13 @@ decl_module! {
 		///   The only way to clean the aforementioned storage item is also user-controlled via
 		///   `withdraw_unbonded`.
 		/// - One DB entry.
+		/// ----------
+		/// Base Weight: 56.36 µs
+		/// DB Weight:
+		/// - Read: Era Election Status, Ledger, Current Era, Locks, [Origin Account]
+		/// - Write: [Origin Account], Locks, Ledger
 		/// </weight>
-		#[weight = 400_000_000]
+		#[weight = 56 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1420,8 +1435,13 @@ decl_module! {
 		///  indirectly user-controlled. See [`unbond`] for more detail.
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
+		/// ---------------
+		/// Base Weight: 40.85 µs
+		/// DB Weight:
+		/// - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
+		/// - Writes: [Origin Account], Locks, Ledger
 		/// # </weight>
-		#[weight = 400_000_000]
+		#[weight = 40 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)]
 		fn withdraw_unbonded(origin) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1463,8 +1483,13 @@ decl_module! {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
+		/// -----------
+		/// Base Weight: 18.4 µs
+		/// DB Weight:
+		/// - Read: Era Election Status, Ledger
+		/// - Write: Nominators, Validators
 		/// # </weight>
-		#[weight = 750_000_000]
+		#[weight = 18 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(2, 2)]
 		pub fn validate(origin, prefs: ValidatorPrefs) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1484,10 +1509,23 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets`,
-		/// which is capped at CompactAssignments::LIMIT.
+		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
 		/// - Both the reads and writes follow a similar pattern.
+		/// ---------
+		/// Base Weight: 24.59 + .397 * n µs
+		/// DB Weight:
+		/// - Reads: Era Election Status, Ledger, Current Era
+		/// - Writes: Validators, Nominators
 		/// # </weight>
-		#[weight = 750_000_000]
+		#[weight = FunctionOf(
+			|(targets,): (&Vec<<T::Lookup as StaticLookup>::Source>,)| {
+				T::DbWeight::get().reads_writes(3, 2)
+					.saturating_add(24 * WEIGHT_PER_MICROS)
+					.saturating_add((400 * WEIGHT_PER_NANOS).saturating_mul(targets.len() as Weight))
+			},
+			DispatchClass::Normal,
+			Pays::Yes
+		)]
 		pub fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1495,7 +1533,7 @@ decl_module! {
 			let stash = &ledger.stash;
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			let targets = targets.into_iter()
-				.take(<CompactAssignments as VotingLimit>::LIMIT)
+				.take(MAX_NOMINATIONS)
 				.map(|t| T::Lookup::lookup(t))
 				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
 
@@ -1521,8 +1559,13 @@ decl_module! {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
+		/// --------
+		/// Base Weight: 18.19 µs
+		/// DB Weight:
+		/// - Read: EraElectionStatus, Ledger
+		/// - Write: Validators, Nominators
 		/// # </weight>
-		#[weight = 500_000_000]
+		#[weight = 18 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(2, 2)]
 		fn chill(origin) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1540,8 +1583,13 @@ decl_module! {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
+		/// ---------
+		/// - Base Weight: 12.33 µs
+		/// - DB Weight:
+		///     - Read: Ledger
+		///     - Write: Payee
 		/// # </weight>
-		#[weight = 500_000_000]
+		#[weight = 12 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 1)]
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1559,8 +1607,13 @@ decl_module! {
 		/// - Independent of the arguments. Insignificant complexity.
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
+		/// ----------
+		/// Base Weight: 27.8 µs
+		/// DB Weight:
+		/// - Read: Bonded, Ledger New Controller, Ledger Old Controller
+		/// - Write: Bonded, Ledger New Controller, Ledger Old Controller
 		/// # </weight>
-		#[weight = 750_000_000]
+		#[weight = 27 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 3)]
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
@@ -1576,8 +1629,15 @@ decl_module! {
 			}
 		}
 
-		/// The ideal number of validators.
-		#[weight = 5_000_000]
+		/// Sets the ideal number of validators.
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Base Weight: 1.897 µs
+		/// Write: Validator Count
+		/// # </weight>
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().writes(1)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -1585,10 +1645,14 @@ decl_module! {
 
 		/// Force there to be no new eras indefinitely.
 		///
+		/// The dispatch origin must be Root.
+		///
 		/// # <weight>
 		/// - No arguments.
+		/// - Base Weight: 2.369 µs
+		/// - Write: ForceEra
 		/// # </weight>
-		#[weight = 5_000_000]
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().writes(1)]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -1597,24 +1661,52 @@ decl_module! {
 		/// Force there to be a new era at the end of the next session. After this, it will be
 		/// reset to normal (non-forced) behaviour.
 		///
+		/// The dispatch origin must be Root.
+		///
 		/// # <weight>
 		/// - No arguments.
+		/// - Base Weight: 2.292 µs
+		/// - Write ForceEra
 		/// # </weight>
-		#[weight = 5_000_000]
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().writes(1)]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = 5_000_000]
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// - O(V)
+		/// - Base Weight: 2.421 + .006 * V µs
+		/// - Write: Invulnerables
+		/// # </weight>
+		#[weight = FunctionOf(
+			|(validators,): (&Vec<T::AccountId>,)| {
+				T::DbWeight::get().writes(1)
+					.saturating_add(3 * WEIGHT_PER_MICROS)
+					.saturating_add((6 * WEIGHT_PER_NANOS).saturating_mul(validators.len() as Weight))
+			},
+			DispatchClass::Normal,
+			Pays::Yes
+		)]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = 0]
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Base Weight: 54.59 µs
+		/// Reads: Bonded, Slashing Spans, Account, Locks
+		/// Writes: Bonded, Ledger, Payee, Validators, Nominators, Account, Locks
+		/// # </weight>
+		#[weight = 55 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 7)]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1627,23 +1719,38 @@ decl_module! {
 
 		/// Force there to be a new era at the end of sessions indefinitely.
 		///
+		/// The dispatch origin must be Root.
+		///
 		/// # <weight>
-		/// - One storage write
+		/// - Base Weight: 2.429 µs
+		/// - Write: ForceEra
 		/// # </weight>
-		#[weight = 5_000_000]
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().writes(1)]
 		fn force_new_era_always(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
 		}
 
-		/// Cancel enactment of a deferred slash. Can be called by either the root origin or
-		/// the `T::SlashCancelOrigin`.
-		/// passing the era and indices of the slashes for that era to kill.
+		/// Cancel enactment of a deferred slash.
+		///
+		/// Can be called by either the root origin or the `T::SlashCancelOrigin`.
+		///
+		/// Parameters: era and indices of the slashes for that era to kill.
 		///
 		/// # <weight>
-		/// - One storage write.
+		/// - Base: 5880 + 34.62 * S µs
+		/// - Read: Unapplied Slashes
+		/// - Write: Unapplied Slashes
 		/// # </weight>
-		#[weight = 1_000_000_000]
+		#[weight = FunctionOf(
+			|(_, slash_indices,): (&EraIndex, &Vec<u32>,)| {
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(5_880 * WEIGHT_PER_MICROS)
+					.saturating_add((35 * WEIGHT_PER_MICROS).saturating_mul(slash_indices.len() as Weight))
+			},
+			DispatchClass::Normal,
+			Pays::Yes
+		)]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
