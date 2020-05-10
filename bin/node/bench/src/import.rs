@@ -129,9 +129,10 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Import benchmark ({:?}, {:?})",
+			"Import benchmark ({:?}, {:?}, {:?} backend)",
 			self.block_type,
 			self.profile,
+			self.database_type,
 		).into()
 	}
 }
