@@ -658,13 +658,14 @@ decl_module! {
 		) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
+			ensure!(Self::len_of_public_props() <= proposals_upper_bound, Error::<T>::WrongUpperBound);
+
 			T::Currency::reserve(&who, value)?;
 
 			let index = Self::public_prop_count();
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
 
-			ensure!(Self::len_of_public_props() <= proposals_upper_bound, Error::<T>::WrongUpperBound);
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
@@ -1969,6 +1970,7 @@ impl<T: Trait> Module<T> {
 
 	/// Reads the length of PublicProps without getting the complete value in the runtime.
 	fn len_of_public_props() -> u32 {
+		// PublicProps is a vec, decoding its len is equivalent to decode a `Compact<u32>`.
 		decode_compact_u32_at(&<PublicProps<T>>::hashed_key()).unwrap_or(0)
 	}
 
@@ -1976,21 +1978,28 @@ impl<T: Trait> Module<T> {
 	///
 	/// Return 0 if no deposit for this proposal.
 	fn len_of_deposit_of(proposal: PropIndex) -> Option<u32> {
+		// DepositOf first tuple element is a vec, decoding its len is equivalent to decode a
+		// `Compact<u32>`.
 		decode_compact_u32_at(&<DepositOf<T>>::hashed_key_for(proposal))
 	}
 
-	/// Check pre image is missing variant without getting the complete value in the runtime.
+	/// Check that pre image exists and its value is variant `PreimageStatus::Missing`.
+	///
+	/// This check is done without getting the complete value in the runtime to avoid copying a big
+	/// value in the runtime.
 	fn check_pre_image_is_missing(proposal_hash: T::Hash) -> DispatchResult {
+		// To decode the enum variant we only need the first byte.
 		let mut buf = [0u8; 1];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
 		let bytes = match sp_io::storage::read(&key, &mut buf, 0) {
 			Some(bytes) => bytes,
 			None => return Err(Error::<T>::NotImminent.into()),
 		};
+		// The value may be smaller that 1 byte.
 		let mut input = &buf[0..buf.len().min(bytes as usize)];
 
 		match input.read_byte() {
-			Ok(0) => Ok(()),
+			Ok(0) => Ok(()), // PreimageStatus::Missing is variant 0
 			Ok(1) => Err(Error::<T>::DuplicatePreimage.into()),
 			_ => {
 				sp_runtime::print("Failed to decode `PreimageStatus` variant");
@@ -1999,21 +2008,29 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Check pre image `data` len without getting the complete value in the runtime.
+	/// Check that pre image exists, its value is variant `PreimageStatus::Available` and decode
+	/// the length of `data: Vec<u8>` fields.
+	///
+	/// This check is done without getting the complete value in the runtime to avoid copying a big
+	/// value in the runtime.
 	///
 	/// If the pre image is missing variant or doesn't exist then the error `PreimageMissing` is
 	/// returned.
 	fn pre_image_data_len(proposal_hash: T::Hash) -> Result<u32, DispatchError> {
+		// To decode the `data` field of Available variant we need:
+		// * one byte for the variant
+		// * at most 5 bytes to decode a `Compact<u32>`
 		let mut buf = [0u8; 6];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
 		let bytes = match sp_io::storage::read(&key, &mut buf, 0) {
 			Some(bytes) => bytes,
 			None => return Err(Error::<T>::PreimageMissing.into()),
 		};
+		// The value may be smaller that 6 bytes.
 		let mut input = &buf[0..buf.len().min(bytes as usize)];
 
 		match input.read_byte() {
-			Ok(1) => (),
+			Ok(1) => (), // Check that input exists and is second variant.
 			Ok(0) => return Err(Error::<T>::PreimageMissing.into()),
 			_ => {
 				sp_runtime::print("Failed to decode `PreimageStatus` variant");
@@ -2021,6 +2038,7 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
+		// Decode the length of the vector.
 		let len = codec::Compact::<u32>::decode(&mut input).map_err(|_| {
 			sp_runtime::print("Failed to decode `PreimageStatus` variant");
 			DispatchError::from(Error::<T>::PreimageMissing)
@@ -2030,12 +2048,15 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// Decode `Compact<u32>` from the trie at given key.
 fn decode_compact_u32_at(key: &[u8]) -> Option<u32> {
+	// `Compact<u32>` takes at most 5 bytes.
 	let mut buf = [0u8; 5];
 	let bytes = match sp_io::storage::read(&key, &mut buf, 0) {
 		Some(bytes) => bytes,
 		None => return None,
 	};
+	// The value may be smaller than 5 bytes.
 	let mut input = &buf[0..buf.len().min(bytes as usize)];
 	match codec::Compact::<u32>::decode(&mut input) {
 		Ok(c) => Some(c.0),
