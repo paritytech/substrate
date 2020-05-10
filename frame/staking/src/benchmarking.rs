@@ -361,7 +361,7 @@ benchmarks! {
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
 			ErasStartSessionIndex::insert(i, i);
 		}
-	}: _(RawOrigin::Root, EraIndex::zero())
+	}: _(RawOrigin::Root, EraIndex::zero(), u32::max_value())
 	verify {
 		assert_eq!(HistoryDepth::get(), 0);
 	}

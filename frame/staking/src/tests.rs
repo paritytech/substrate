@@ -4082,16 +4082,16 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 fn set_history_depth_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		mock::start_era(10);
-		Staking::set_history_depth(Origin::ROOT, 20).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 20, u32::max_value()).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 4).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 4, u32::max_value()).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 3).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 3, u32::max_value()).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 8).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 8, u32::max_value()).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
