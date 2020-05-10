@@ -1026,10 +1026,6 @@ mod tests {
         pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
     }
 
-	parameter_types!{
-		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
-	}
-
 	impl Trait for Test {
 		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
