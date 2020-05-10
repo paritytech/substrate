@@ -29,7 +29,8 @@ use sp_io;
 use crate as sudo;
 
 // This logger module used by privileged_function() to track execution.
-// Adapted from the logger in `frame/src/lib.rs` `tests` to log u64 to represent AccountId
+// Adapted from the logger in `frame/scheduler/src/lib.rs` `tests`. Logs u64 to 
+// represent AccountId
 pub mod logger {
 	use super::*;
 	use std::cell::RefCell;
@@ -69,32 +70,21 @@ pub mod logger {
 					log.borrow_mut().push(i);
 				})
 			}
-		}
-	}
-}
 
-// Dummy module with a privelleged dispatchable function for testing sudo
-mod priveleged_fn_test_module {
-	use super::*;
-	use frame_support::{decl_module, dispatch};
-	use frame_system::ensure_root;
-
-	pub trait Trait: frame_system::Trait {}
-
-	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T: logger::Trait {
-			#[weight = 0]
-			pub fn privileged_function(origin) -> dispatch::DispatchResult {
-				ensure_root(origin)?;
-				
-				// If for some reason the logger does not work panic in order to help debug
-				let res = match logger::Call::<T>::log(42, 100) // TODO should the weight passed here be dynamic?
-					.dispatch(system::RawOrigin::Root.into()) 
-				{
-					Ok(_) => (),
-					Err(e) => panic!("logger was not succesful in privelleged function test. Err({:?})", e)
-				}; 
-				Ok(())
+			#[weight = FunctionOf(
+				|args: (&u64, &Weight)| *args.1,
+				|_: (&u64, &Weight)| DispatchClass::Normal,
+				Pays::Yes,
+			)]
+			fn non_priveleged_log(origin, i: u64, weight: Weight){
+				// Ensure that the origin is some signed account. For these tests 
+				// the 'Signer' is root_key using sudo_as() and it is not a literal 
+				// signature but instead `frame_system::RawOrigin::Signed(who)`.
+				ensure_signed(origin)?;
+				Self::deposit_event(Event::Logged(i, weight));
+				LOG.with(|log| {
+					log.borrow_mut().push(i);
+				})
 			}
 		}
 	}
@@ -103,6 +93,7 @@ mod priveleged_fn_test_module {
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
+
 impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
@@ -110,10 +101,10 @@ impl_outer_event! {
 		logger, // why does this not need to be generic over T?
 	}
 }
+
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		sudo::Sudo,
-		priveleged_fn_test_module::Priveleged,
 		logger::Logger,
 	}
 }
@@ -160,21 +151,20 @@ impl frame_system::Trait for Test {
 impl logger::Trait for Test {
 	type Event = TestEvent;
 }
-// Implement the privelleged test module's Trait on the Test runtime
-impl priveleged_fn_test_module::Trait for Test {}
+
 // Implement the sudo modules's Trait on the Test runtime
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
 }
 
-// Assign back to type variables so we can make dispatched calls of these modules later.
+// Assign back to type variables so we can make dispatched calls of these modules later
 pub type Sudo = Module<Test>;
-pub type Priveleged = priveleged_fn_test_module::Module<Test>;
 pub type Logger = logger::Module<Test>;
 
-// New type for dispatchable functions from priveleged module for the mock runtime
-pub type PrivelegedCall = priveleged_fn_test_module::Call<Test>;
+// New types for dispatchable functions
+pub type SudoCall = sudo::Call<Test>;
+pub type LoggerCall = logger::Call<Test>;
 
 // Build test enviroment by setting the root_key for the Genesis
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
