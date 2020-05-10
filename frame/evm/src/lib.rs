@@ -187,11 +187,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-        fn deposit_event() = default;
-        
-        const MouduleId: ModuleId = T::ModuleId::get();
+		fn deposit_event() = default;
 
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const MouduleId: ModuleId = T::ModuleId::get();
 
 		/// Deposit balance from currency/balances module into EVM.
 		#[weight = 0]
