@@ -52,7 +52,7 @@ impl_outer_dispatch! {
 // Dummy module with a privelleged dispatchable function for testing sudo
 mod priveleged_fn_test_module {
 	use frame_support::{decl_module, dispatch};
-	use frame_system::{self as system, ensure_root};
+	use frame_system::ensure_root;
 	pub trait Trait: frame_system::Trait {}
 
 	decl_module! {
@@ -60,7 +60,7 @@ mod priveleged_fn_test_module {
 			#[weight = 0]
 			pub fn privileged_function(origin) -> dispatch::DispatchResult {
 				ensure_root(origin)?;
-				println!("privellege_function was passed a valid origin");
+				println!("This is priveleged_fn_test_module::privileged_function() doing something.");
 				Ok(())
 			}
 		}
@@ -118,8 +118,6 @@ impl priveleged_fn_test_module::Trait for Test {}
 // Assign back to type variables so we can make dispatched calls of these modules later.
 // New type that wraps the runtime mock in the pallets module
 pub type Sudo = Module<Test>;
-// New type that wraps the runtime mock in the frame_system's module
-pub type System = frame_system::Module<Test>;
 // New type that wraps the runtime mock in the priveleged module
 pub type Priveleged = priveleged_fn_test_module::Module<Test>;
 
