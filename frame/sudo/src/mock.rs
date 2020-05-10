@@ -17,7 +17,6 @@
 //! Test utilities
 
 use super::*;
-
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
 	weights::{Weight, DispatchClass}
@@ -29,16 +28,17 @@ use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
 use sp_io;
 use crate as sudo;
 
-// logger module used by privileged_function() to track execution
-mod logger {
+// This logger module used by privileged_function() to track execution.
+// Adapted from the logger in `frame/src/lib.rs` `tests` to log u64 to represent AccountId
+pub mod logger {
 	use super::*;
 	use std::cell::RefCell;
 	use frame_system::ensure_root;
 
 	thread_local! {
-		static LOG: RefCell<Vec<u32>> = RefCell::new(Vec::new());
+		static LOG: RefCell<Vec<u64>> = RefCell::new(Vec::new());
 	}
-	pub fn log() -> Vec<u32> {
+	pub fn log() -> Vec<u64> {
 		LOG.with(|log| log.borrow().clone())
 	}
 	pub trait Trait: system::Trait {
@@ -50,7 +50,7 @@ mod logger {
 	}
 	decl_event! {
 		pub enum Event {
-			Logged(u32, Weight),
+			Logged(u64, Weight),
 		}
 	}
 	decl_module! {
@@ -58,11 +58,11 @@ mod logger {
 			fn deposit_event() = default;
 
 			#[weight = FunctionOf(
-				|args: (&u32, &Weight)| *args.1,
-				|_: (&u32, &Weight)| DispatchClass::Normal,
+				|args: (&u64, &Weight)| *args.1,
+				|_: (&u64, &Weight)| DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn log(origin, i: u32, weight: Weight) {
+			fn log(origin, i: u64, weight: Weight) {
 				ensure_root(origin)?;
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
@@ -75,18 +75,25 @@ mod logger {
 
 // Dummy module with a privelleged dispatchable function for testing sudo
 mod priveleged_fn_test_module {
+	use super::*;
 	use frame_support::{decl_module, dispatch};
 	use frame_system::ensure_root;
 
 	pub trait Trait: frame_system::Trait {}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T: logger::Trait {
 			#[weight = 0]
 			pub fn privileged_function(origin) -> dispatch::DispatchResult {
 				ensure_root(origin)?;
-				// Log the origin and an arbitrary weight of 42
-				// logger::call::log(origin, 42);
+				
+				// If for some reason the logger does not work panic in order to help debug
+				let res = match logger::Call::<T>::log(42, 100) // TODO should the weight passed here be dynamic?
+					.dispatch(system::RawOrigin::Root.into()) 
+				{
+					Ok(_) => (),
+					Err(e) => panic!("logger was not succesful in privelleged function test. Err({:?})", e)
+				}; 
 				Ok(())
 			}
 		}
@@ -164,7 +171,7 @@ impl Trait for Test {
 // Assign back to type variables so we can make dispatched calls of these modules later.
 pub type Sudo = Module<Test>;
 pub type Priveleged = priveleged_fn_test_module::Module<Test>;
-type Logger = logger::Module<Test>;
+pub type Logger = logger::Module<Test>;
 
 // New type for dispatchable functions from priveleged module for the mock runtime
 pub type PrivelegedCall = priveleged_fn_test_module::Call<Test>;
