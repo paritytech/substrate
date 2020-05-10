@@ -30,7 +30,7 @@
 
 use std::borrow::Cow;
 
-use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes};
+use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
 use node_primitives::Block;
 use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
@@ -72,6 +72,7 @@ pub struct ImportBenchmarkDescription {
 	pub key_types: KeyTypes,
 	pub block_type: BlockType,
 	pub size: SizeType,
+	pub database_type: DatabaseType,
 }
 
 pub struct ImportBenchmark {
@@ -101,6 +102,11 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			BlockType::Noop(_) => path.push("noop"),
 		}
 
+		match self.database_type {
+			DatabaseType::RocksDb => path.push("rocksdb"),
+			DatabaseType::ParityDb => path.push("paritydb"),
+		}
+
 		path.push(&format!("{}", self.size));
 
 		path
@@ -109,6 +115,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let profile = self.profile;
 		let mut bench_db = BenchDb::with_key_types(
+			self.database_type,
 			50_000,
 			self.key_types
 		);
@@ -122,9 +129,10 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Import benchmark ({:?}, {:?})",
+			"Import benchmark ({:?}, {:?}, {:?} backend)",
 			self.block_type,
 			self.profile,
+			self.database_type,
 		).into()
 	}
 }
