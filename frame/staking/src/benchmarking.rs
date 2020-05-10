@@ -252,10 +252,10 @@ benchmarks! {
 	}: _(RawOrigin::Root, era, slash_indices)
 
 	payout_stakers {
-		let n in 1 .. MAX_NOMINATIONS as u32;
-		let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
+		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32)?;
 		let current_era = CurrentEra::get().unwrap();
-		let caller = account("caller", n, SEED);
+		let caller = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller), validator, current_era)
 
 	rebond {
@@ -395,7 +395,7 @@ mod tests {
 
 			let validator_stash = create_validator_with_nominators::<Test>(
 				n,
-				MAX_NOMINATIONS as u32,
+				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
 			).unwrap();
 
 			let current_era = CurrentEra::get().unwrap();
