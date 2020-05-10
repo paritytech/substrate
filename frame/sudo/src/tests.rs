@@ -1,8 +1,6 @@
 use super::*;
-use mock::{
-	Sudo, Origin, Call, Test, PrivelegedCall, new_test_ext,
-}; 
-use frame_support::{assert_ok, assert_err};
+use mock::{ Sudo, SudoCall, Origin, Call, Test, new_test_ext, logger, LoggerCall }; 
+use frame_support::{assert_ok, assert_noop};
 
 #[test]
 fn new_test_ext_and_sudo_get_key_works() {
@@ -16,11 +14,15 @@ fn new_test_ext_and_sudo_get_key_works() {
 fn sudo_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A privelleged function should work when sudo is passed the root_key as origin
-		let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
+		// let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
+		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
+		assert_eq!(logger::log(), vec![42u64]); 
+		
 		// A privelleged function should not work when called with a non-root user
-		let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
-		assert_err!(Sudo::sudo(Origin::signed(2), call), Error::<Test>::RequireSudo);
+		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
+		assert_noop!(Sudo::sudo(Origin::signed(2), call), Error::<Test>::RequireSudo);
+		assert_eq!(logger::log(), vec![42u64]); 
 	});
 }
 
@@ -28,14 +30,23 @@ fn sudo_basics() {
 fn sudo_unchecked_weight_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A privelleged function should work when sudo is passed the root_key as origin
-		let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
-		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1));
+		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
+		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
+		assert_eq!(logger::log(), vec![42u64]); 
+
 		// A privelleged function should not work when called with a non-root user
-		let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
-		assert_err!(
-			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1), 
+		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
+		assert_noop!(
+			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000), 
 			Error::<Test>::RequireSudo,
 		);
+		assert_eq!(logger::log(), vec![42u64]); 
+
+		// Controlls the dispatched weight
+		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
+		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight( call, 1_000);
+		let info = sudo_unchecked_weight_call .get_dispatch_info();
+		assert_eq!(info.weight, 1_000);
 	});
 }
 
@@ -46,10 +57,11 @@ fn set_key_basics() {
 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
 		assert_eq!(Sudo::key(),  2u64);
 	});
+
 	new_test_ext(1).execute_with(|| {	
 		// A non root key will trigger a require sudo error and 
-		// non root key cannot change the root key
-		assert_err!(Sudo::set_key(Origin::signed(2), 3), Error::<Test>::RequireSudo);
+		// a non root key cannot change the root key
+		assert_noop!(Sudo::set_key(Origin::signed(2), 3), Error::<Test>::RequireSudo);
 		assert_eq!(Sudo::key(),  1u64);
 	});
 }
@@ -57,11 +69,19 @@ fn set_key_basics() {
 #[test]
 fn sudo_as_basics() {
 	new_test_ext(1).execute_with(|| {	
-		// A privelleged function should work when sudo is passed the root_key as origin
-		let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
+		// A privelleged function will not work when passed to sudo_as
+		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		// A privelleged function should not work when called with a non-root user
-		let call = Box::new(Call::Priveleged(PrivelegedCall::privileged_function()));
-		assert_err!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
+		assert_eq!(logger::log(), vec![]); 
+
+		// A non-privelleged function should not work when called with a non-root user
+		let call = Box::new(Call::Logger(LoggerCall::non_priveleged_log(42, 1)));
+		assert_noop!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
+		assert_eq!(logger::log(), vec![]); 
+
+		// A non-privelleged function will work when passed to sudo_as
+		let call = Box::new(Call::Logger(LoggerCall::non_priveleged_log(42, 1)));
+		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
+		assert_eq!(logger::log(), vec![42u64]); 
 	});
 }
