@@ -272,10 +272,10 @@ type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trai
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
-    type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
     
     /// The societies's module id
-    type ModuleId: Get<ModuleId>;
+	type ModuleId: Get<ModuleId>;
 
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
