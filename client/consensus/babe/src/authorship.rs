@@ -124,7 +124,7 @@ pub(super) fn secondary_slot_author(
 fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	key_pairs: &Vec<(AuthorityPair, usize)>,
+	key_pairs: &[(AuthorityPair, usize)],
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityPair)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -196,7 +196,7 @@ pub fn claim_slot(
 pub fn claim_slot_using_key_pairs(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	key_pairs: &Vec<(AuthorityPair, usize)>,
+	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityPair)> {
 	claim_primary_slot(slot_number, epoch, epoch.config.c, &key_pairs)
 		.or_else(|| {
@@ -228,7 +228,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	key_pairs: &Vec<(AuthorityPair, usize)>,
+	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityPair)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
