@@ -49,7 +49,7 @@ impl_outer_dispatch! {
 	}
 }
 
-// Dummy module for the testing the sudo modules's ability to limit access to root
+// Dummy module with a privelleged dispatchable function for testing sudo
 mod priveleged_fn_test_module {
 	use frame_support::{decl_module, dispatch};
 	use frame_system::{self as system, ensure_root};
