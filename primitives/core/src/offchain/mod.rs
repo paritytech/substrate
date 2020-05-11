@@ -36,6 +36,9 @@ pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
 
+	/// Remove a perviously pin storage ersisted value under given key and prefix.
+	fn remove(&mut self, prefix: &[u8], key: &[u8]);
+
 	/// Retrieve a value from storage under given key and prefix.
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
@@ -348,6 +351,12 @@ pub trait Externalities: Send {
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
 
+	/// Removes a value in the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]);
+
 	/// Sets a value in the local storage if it matches current value.
 	///
 	/// Since multiple offchain workers may be running concurrently, to prevent
@@ -512,6 +521,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).local_storage_set(kind, key, value)
 	}
 
+	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
+		(&mut **self).local_storage_remove(kind, key)
+	}
+
 	fn local_storage_compare_and_set(
 		&mut self,
 		kind: StorageKind,
@@ -615,6 +628,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		self.check(Capability::OffchainWorkerDbWrite, "local_storage_set");
 		self.externalities.local_storage_set(kind, key, value)
+	}
+
+	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_remove");
+		self.externalities.local_storage_remove(kind, key)
 	}
 
 	fn local_storage_compare_and_set(
