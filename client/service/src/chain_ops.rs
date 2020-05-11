@@ -78,7 +78,7 @@ impl<R, B> BlockIter<R, B>
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
-	{
+{
 	fn new(input: R, binary: bool) -> Result<Self, String> {
 		if binary {
 			let mut reader = CodecIoReader(input);
@@ -123,7 +123,7 @@ impl<R, B> Iterator for BlockIter<R, B>
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
-	{
+{
 	type Item = Result<SignedBlock<B>, String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -270,7 +270,7 @@ impl<
 			Err(e) => {
 				// We've encountered an error while creating the block iterator 
 				// so we can just return a future that returns an error.
-				return future::ready(Err(Error::Other(e.clone()))).boxed()
+				return future::ready(Err(Error::Other(e))).boxed()
 			}
 		};
 
