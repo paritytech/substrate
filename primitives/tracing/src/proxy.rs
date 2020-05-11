@@ -126,3 +126,40 @@ impl TracingProxy {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn create_spans(proxy: &mut TracingProxy, qty: usize) -> Vec<u64>{
+		let mut spans = Vec::new();
+		for n in 0..qty {
+			spans.push(proxy.create_span("target", &format!("{}", n)));
+		}
+		spans
+	}
+
+	#[test]
+	fn max_spans_len_respected() {
+		let mut proxy = TracingProxy::new();
+		let _spans = create_spans(&mut proxy, MAX_SPANS_LEN + 10);
+		assert_eq!(proxy.spans.len(), MAX_SPANS_LEN);
+		// ensure oldest spans removed
+		assert_eq!(proxy.spans[0].0, 11);
+	}
+
+	#[test]
+	fn handles_span_exit_scenarios() {
+		let mut proxy = TracingProxy::new();
+		let _spans = create_spans(&mut proxy, 10);
+		assert_eq!(proxy.spans.len(), 10);
+		// exit span normally
+		proxy.exit_span(10);
+		assert_eq!(proxy.spans.len(), 9);
+		// skip and exit outer span without exiting inner, 9 instead of 10
+		proxy.exit_span(8);
+		// should have also removed the inner span that was lost
+		assert_eq!(proxy.spans.len(), 7);
+	}
+
+}
