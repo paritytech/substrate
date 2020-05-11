@@ -77,15 +77,19 @@ struct Visitor(FxHashMap<String, String>);
 
 impl Visit for Visitor {
 	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.record_debug(field, &value)
+		self.0.insert(field.name().to_string(), value.to_string());
 	}
 
 	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.record_debug(field, &value)
+		self.0.insert(field.name().to_string(), value.to_string());
 	}
 
 	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.record_debug(field, &value)
+		self.0.insert(field.name().to_string(), value.to_string());
+	}
+
+	fn record_str(&mut self, field: &Field, value: &str) {
+		self.0.insert(field.name().to_string(), value.to_owned());
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
@@ -154,6 +158,17 @@ impl ProfilingSubscriber {
 			span_data: Mutex::new(FxHashMap::default()),
 		}
 	}
+
+	fn check_target(&self, target: &str, level: &Level) -> bool {
+		for t in &self.targets {
+			if target.starts_with(t.0.as_str()) && level <= &t.1 {
+				log::debug!("Enabled target: {}, level: {}", target, level);
+				return true;
+			}
+		}
+		log::debug!("Disabled target: {}, level: {}", target, level);
+		false
+	}
 }
 
 // Default to TRACE if no level given or unable to parse Level
@@ -175,20 +190,20 @@ fn parse_target(s: &str) -> (String, Level) {
 
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		for t in &self.targets {
-			if metadata.target().starts_with(t.0.as_str()) && metadata.level() <= &t.1 {
-				log::debug!("Enabled target: {}, level: {}", metadata.target(), metadata.level());
-				return true;
-			}
-		}
-		log::debug!("Disabled target: {}, level: {}", metadata.target(), metadata.level());
-		false
+		if metadata.target() == WASM_TARGET_KEY { return true }
+		self.check_target(metadata.target(), metadata.level())
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let mut values = Visitor(FxHashMap::default());
 		attrs.record(&mut values);
+		// If this is a wasm trace, check if target/level is enabled
+		if let Some(wasm_target) = values.0.get(WASM_TARGET_KEY) {
+			if !self.check_target(wasm_target, attrs.metadata().level()) {
+				return Id::from_u64(id);
+			}
+		}
 		let span_datum = SpanDatum {
 			id,
 			name: attrs.metadata().name().to_owned(),
@@ -221,14 +236,12 @@ impl Subscriber for ProfilingSubscriber {
 		let start_time = Instant::now();
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
 			s.start_time = start_time;
-		} else {
-			log::warn!("Tried to enter span {:?} that has already been closed!", span);
 		}
 	}
 
 	fn exit(&self, span: &Id) {
-		let mut span_data = self.span_data.lock();
 		let end_time = Instant::now();
+		let mut span_data = self.span_data.lock();
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
 			s.overall_time = end_time - s.start_time + s.overall_time;
 		}
