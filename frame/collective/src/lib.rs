@@ -755,6 +755,10 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
+	/// NOTE: Will only allow setting up to `MaxMembers` members. Any excess members will be
+	///       dropped and not inserted. Use `ensure_can_change_members` to check before
+	///       calling this to make sure no members are dropped.
+	///
 	/// # <weight>
 	/// ## Weight
 	/// - `O(MP + N)`
@@ -1223,7 +1227,7 @@ mod tests {
 				Collective::ensure_can_change_members(&new_members, &Collective::members()),
 				Error::<Test, Instance1>::TooManyMembers
 			);
-			Collective::change_members_sorted(&Collective::members(), &[], &new_members[..]);
+			Collective::change_members_sorted(&Collective::members(), &[], &new_members);
 			assert_eq!(Collective::members().len(), MaxMembers::get() as usize);
 		})
 	}
