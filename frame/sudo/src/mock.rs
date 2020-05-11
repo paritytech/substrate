@@ -29,8 +29,7 @@ use sp_io;
 use crate as sudo;
 
 // This logger module used by privileged_function() to track execution.
-// Adapted from the logger in `frame/scheduler/src/lib.rs` `tests`. Logs u64 to 
-// represent AccountId
+// Adapted from the logger in `frame/scheduler/src/lib.rs` `tests`. 
 pub mod logger {
 	use super::*;
 	use std::cell::RefCell;
@@ -77,9 +76,7 @@ pub mod logger {
 				Pays::Yes,
 			)]
 			fn non_priveleged_log(origin, i: u64, weight: Weight){
-				// Ensure that the origin is some signed account. For these tests 
-				// the 'Signer' is root_key using sudo_as() and it is not a literal 
-				// signature but instead `frame_system::RawOrigin::Signed(who)`.
+				// Ensure that the `origin` is some signed account.
 				ensure_signed(origin)?;
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
@@ -102,7 +99,7 @@ impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
 		sudo<T>,
-		logger, // why does this not need to be generic over T?
+		logger,
 	}
 }
 
@@ -151,27 +148,27 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 
-// Implement the logger module's Trait on the Test runtime
+// Implement the logger module's `Trait` on the Test runtime.
 impl logger::Trait for Test {
 	type Event = TestEvent;
 }
 
-// Implement the sudo modules's Trait on the Test runtime
+// Implement the sudo modules's `Trait` on the Test runtime.
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
 }
 
-// Assign back to type variables so we can make dispatched calls of these modules later
+// Assign back to type variables so we can make dispatched calls of these modules later.
 pub type Sudo = Module<Test>;
 pub type Logger = logger::Module<Test>;
 pub type System = system::Module<Test>;
 
-// New types for dispatchable functions
+// New types for dispatchable functions.
 pub type SudoCall = sudo::Call<Test>;
 pub type LoggerCall = logger::Call<Test>;
 
-// Build test enviroment by setting the root_key for the Genesis
+// Build test enviroment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
