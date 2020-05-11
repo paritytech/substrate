@@ -77,7 +77,7 @@ impl_outer_event! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
+	pub const MaximumBlockWeight: Weight = 1_000_000;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -106,14 +106,16 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-	pub const MaximumWeight: u32 = 1000000;
+	pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 impl pallet_scheduler::Trait for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type MaximumWeight = MaximumWeight;
+	type MaximumWeight = MaximumSchedulerWeight;
+}
+parameter_types! {
+	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;

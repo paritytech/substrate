@@ -65,7 +65,7 @@
 //!
 //! ##### Renouncing candidacy.
 //!
-//! All candidates, elected or not, can renounce their candidacy. A call to [`renounce_candidacy`]
+//! All candidates, elected or not, can renounce their candidacy. A call to [`Module::renounce_candidacy`]
 //! will always cause the candidacy bond to be refunded.
 //!
 //! Note that with the members being the default candidates for the next round and votes persisting

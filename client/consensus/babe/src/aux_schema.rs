@@ -112,7 +112,7 @@ pub(crate) fn write_epoch_changes<Block: BlockT, F, R>(
 /// Write the cumulative chain-weight of a block ot aux storage.
 pub(crate) fn write_block_weight<H: Encode, F, R>(
 	block_hash: H,
-	block_weight: &BabeBlockWeight,
+	block_weight: BabeBlockWeight,
 	write_aux: F,
 ) -> R where
 	F: FnOnce(&[(Vec<u8>, &[u8])]) -> R,
