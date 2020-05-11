@@ -663,35 +663,24 @@ mod tests {
 		storage::{
 			Storage,
 			StorageChild,
-			well_known_keys::EXTRINSIC_INDEX,
 		},
 	};
 	use crate::{
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
 			InMemoryStorage as TestChangesTrieStorage,
-		}, InMemoryBackend, overlayed_changes::OverlayedValue,
+		}, InMemoryBackend,
 	};
 
 	type TestBackend = InMemoryBackend<Blake2Hasher>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
-		OverlayedChanges {
-			prospective: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-				(vec![1], OverlayedValue {
-					value: Some(vec![100].into_iter().collect()),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-			committed: Default::default(),
-			collect_extrinsics: true,
-			stats: Default::default(),
-		}
+		let mut changes = OverlayedChanges::default();
+		changes.set_collect_extrinsics(true);
+		changes.set_extrinsic_index(3);
+		changes.set_storage(vec![1], Some(vec![100]));
+		changes
 	}
 
 	fn prepare_offchain_overlay_with_changes() -> OffchainOverlayedChanges {
@@ -739,7 +728,7 @@ mod tests {
 		let mut ext = TestExt::new(&mut overlay, &mut offchain_overlay, &mut cache, &backend, state, None);
 		assert_eq!(
 			ext.storage_changes_root(&H256::default().encode()).unwrap(),
-			Some(hex!("bb0c2ef6e1d36d5490f9766cfcc7dfe2a6ca804504c3bb206053890d6dd02376").to_vec()),
+			Some(hex!("dfb314e4d5ddfaed1b6ef8d98d9898971bffb303a5d50e0b9c9a7bfd42ccdb90").to_vec()),
 		);
 	}
 
@@ -748,14 +737,14 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut offchain_overlay = prepare_offchain_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
-		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
+		overlay.set_storage(vec![1], None);
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &mut offchain_overlay, &mut cache, &backend, state, None);
 		assert_eq!(
 			ext.storage_changes_root(&H256::default().encode()).unwrap(),
-			Some(hex!("96f5aae4690e7302737b6f9b7f8567d5bbb9eac1c315f80101235a92d9ec27f4").to_vec()),
+			Some(hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").to_vec()),
 		);
 	}
 

@@ -749,7 +749,6 @@ where
 mod tests {
 	use std::collections::BTreeMap;
 	use codec::Encode;
-	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
@@ -972,21 +971,16 @@ mod tests {
 		];
 		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
-		let mut overlay = OverlayedChanges {
-			committed: map![
-				b"aba".to_vec() => OverlayedValue::from(Some(b"1312".to_vec())),
-				b"bab".to_vec() => OverlayedValue::from(Some(b"228".to_vec()))
-			],
-			prospective: map![
-				b"abd".to_vec() => OverlayedValue::from(Some(b"69".to_vec())),
-				b"bbd".to_vec() => OverlayedValue::from(Some(b"42".to_vec()))
-			],
-			..Default::default()
-		};
-		let mut offchain_overlay = Default::default();
 
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(b"aba".to_vec(), Some(b"1312".to_vec()));
+		overlay.set_storage(b"bab".to_vec(), Some(b"228".to_vec()));
+		overlay.commit_prospective();
+		overlay.set_storage(b"abd".to_vec(), Some(b"69".to_vec()));
+		overlay.set_storage(b"bbd".to_vec(), Some(b"42".to_vec()));
 
 		{
+			let mut offchain_overlay = Default::default();
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1001,7 +995,8 @@ mod tests {
 		overlay.commit_prospective();
 
 		assert_eq!(
-			overlay.committed,
+			overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned()))
+				.collect::<HashMap<_, _>>(),
 			map![
 				b"abc".to_vec() => None.into(),
 				b"abb".to_vec() => None.into(),
