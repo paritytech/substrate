@@ -1942,6 +1942,7 @@ impl<T: Trait> Module<T> {
 	///   `ReferendumCount`, `LowestUnbaked`
 	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
+	/// - Base Weight: 58.58 + 10.9 * R µs
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
 		let mut weight = 60_000_000 + T::DbWeight::get().reads_writes(6, 5);
