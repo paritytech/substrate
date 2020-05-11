@@ -1356,17 +1356,16 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
+		let mut all_weight = Module::<T>::all_extrinsics_weight();
 		match info.class {
 			// If we have a dispatch that must be included in the block, it ignores all the limits.
 			DispatchClass::Mandatory => {
-				let mut all_weight = Module::<T>::all_extrinsics_weight();
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 				all_weight.add(extrinsic_weight, DispatchClass::Mandatory);
 				Ok(all_weight)
 			},
 			// If we have a normal dispatch, we follow all the normal rules and limits.
 			DispatchClass::Normal => {
-				let mut all_weight = Module::<T>::all_extrinsics_weight();
 				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
 				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
 					.ok_or(InvalidTransaction::ExhaustsResources)?;
@@ -1381,7 +1380,6 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			// If we have an operation dispatch, allow it if we have not used our full
 			// "operational space" (independent of existing fullness).
 			DispatchClass::Operational => {
-				let mut all_weight = Module::<T>::all_extrinsics_weight();
 				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
 				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
 				let operational_space = operational_limit.saturating_sub(normal_limit);
