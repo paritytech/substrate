@@ -106,6 +106,11 @@ impl TracingProxy {
 		match self.spans.pop() {
 			Some(v) => {
 				let mut last_span_id = v.0;
+				if id > last_span_id {
+					log::warn!("Span id not found {}", id);
+					self.spans.push(v);
+					return;
+				}
 				while id < last_span_id {
 					log::warn!("Span ids not equal! id parameter given: {}, last span: {}", id, last_span_id);
 					if let Some(mut s) = self.spans.pop() {
@@ -131,7 +136,7 @@ impl TracingProxy {
 mod tests {
 	use super::*;
 
-	fn create_spans(proxy: &mut TracingProxy, qty: usize) -> Vec<u64>{
+	fn create_spans(proxy: &mut TracingProxy, qty: usize) -> Vec<u64> {
 		let mut spans = Vec::new();
 		for n in 0..qty {
 			spans.push(proxy.create_span("target", &format!("{}", n)));
@@ -156,10 +161,12 @@ mod tests {
 		// exit span normally
 		proxy.exit_span(10);
 		assert_eq!(proxy.spans.len(), 9);
-		// skip and exit outer span without exiting inner, 9 instead of 10
+		// skip and exit outer span without exiting inner, id: 8 instead of 9
 		proxy.exit_span(8);
 		// should have also removed the inner span that was lost
 		assert_eq!(proxy.spans.len(), 7);
+		// try to exit span not held
+		proxy.exit_span(9);
+		assert_eq!(proxy.spans.len(), 7);
 	}
-
 }
