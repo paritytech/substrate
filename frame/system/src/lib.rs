@@ -1377,7 +1377,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 					Ok(all_weight)
 				}
 			},
-			// If we have an operation dispatch, allow it if we have not used our full
+			// If we have an operational dispatch, allow it if we have not used our full
 			// "operational space" (independent of existing fullness).
 			DispatchClass::Operational => {
 				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
