@@ -2,4 +2,6 @@ error: No api implementation given!
   --> $DIR/empty_impl_runtime_apis_call.rs:17:1
    |
 17 | sp_api::impl_runtime_apis! {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in this macro invocation
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
