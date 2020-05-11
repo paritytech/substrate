@@ -90,17 +90,20 @@ L: TrieLayout + Send,
             let tree_prefix = tree_prefix.as_slice();
 
             self.get_index(session_index)
-            .into_iter()
-            .filter_map(move |(derived_key, prefix)| {
-                if tree_prefix == prefix.as_slice() {
-                    // @todo FIXME erase
-                    offchain::local_storage_set(StorageKind::PERSISTENT, derived_key.as_slice(), &[]);
-                    None
-                } else {
-                    Some((derived_key, prefix))
-                }
-            })
-            .collect::<BTreeSet<_>>()
+                .into_iter()
+                .filter_map(move |(derived_key, prefix)| {
+                    if tree_prefix == prefix.as_slice() {
+                        // @todo FIXME erase
+                        offchain::local_storage_set(
+                            StorageKind::PERSISTENT,
+                            derived_key.as_slice(),
+                            &[]);
+                        None
+                    } else {
+                        Some((derived_key, prefix))
+                    }
+                })
+                .collect::<BTreeSet<_>>()
 
         } else {
 
