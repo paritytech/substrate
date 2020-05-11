@@ -79,7 +79,7 @@ impl TracingProxy {
 
 /// For spans to be recorded they must be registered in `span_dispatch`.
 impl TracingProxy {
-	// The identifiers `wasm_target` and `wasm_name` must match their associated const,
+	// The identifiers `proxied_wasm_target` and `proxied_wasm_name` must match their associated const,
 	// WASM_TARGET_KEY and WASM_NAME_KEY.
 	fn create_span(&mut self, proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
 		let span = info_span!(WASM_TRACE_IDENTIFIER, is_valid_trace = true, proxied_wasm_target, proxied_wasm_name);
