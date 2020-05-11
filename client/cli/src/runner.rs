@@ -248,7 +248,7 @@ impl<C: SubstrateCli> Runner<C> {
 	}
 
 	/// Get a mutable reference to the node Configuration
-	pub fn config_mut(&mut self) -> &Configuration {
+	pub fn config_mut(&mut self) -> &mut Configuration {
 		&mut self.config
 	}
 }

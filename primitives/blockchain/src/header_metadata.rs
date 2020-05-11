@@ -239,19 +239,16 @@ impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	}
 }
 
-impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
-	type Error = String;
-
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+impl<Block: BlockT> HeaderMetadataCache<Block> {
+	pub fn header_metadata(&self, hash: Block::Hash) -> Option<CachedHeaderMetadata<Block>> {
 		self.cache.write().get(&hash).cloned()
-			.ok_or("header metadata not found in cache".to_owned())
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+	pub fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.cache.write().put(hash, metadata);
 	}
 
-	fn remove_header_metadata(&self, hash: Block::Hash) {
+	pub fn remove_header_metadata(&self, hash: Block::Hash) {
 		self.cache.write().pop(&hash);
 	}
 }

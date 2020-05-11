@@ -814,7 +814,7 @@ dependencies = [
  "log",
  "serde",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.51.4",
 ]
 
 [[package]]
@@ -3875,9 +3875,7 @@ version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5666bbb90bc4d1e5bdcb26c0afda1822d25928341e9384ab187a9b37ab69e36"
 dependencies = [
- "flate2",
  "target-lexicon",
- "wasmparser",
 ]
 
 [[package]]
@@ -8259,7 +8257,7 @@ version = "2.0.0-dev"
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.9"
+version = "1.0.10"
 dependencies = [
  "atty",
  "build-helper",
@@ -8274,13 +8272,13 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.5"
+version = "1.0.6"
 
 [[package]]
 name = "substrate-wasmtime"
-version = "0.16.0-threadsafe.1"
+version = "0.16.0-threadsafe.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b8f9558e3fe7018b9aeac2aba318664dd7b15e307de11b09f58240695688a96"
+checksum = "7b40a6f3d5d3c00754e348863fead4f37763c32eedf950f5b23df87769882311"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -8293,7 +8291,7 @@ dependencies = [
  "substrate-wasmtime-profiling",
  "substrate-wasmtime-runtime",
  "target-lexicon",
- "wasmparser",
+ "wasmparser 0.52.2",
  "wasmtime-environ",
  "wat",
  "winapi 0.3.8",
@@ -8301,9 +8299,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasmtime-jit"
-version = "0.16.0-threadsafe.1"
+version = "0.16.0-threadsafe.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6b681b90a8d48b9535e4287c02e5aef6c72228ff45cbb60b4d195a762cc0770"
+checksum = "09712de4f56a2c2912bee7763b0877d17d72cfb2237987d63ab78956907e7692"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -8320,7 +8318,7 @@ dependencies = [
  "substrate-wasmtime-runtime",
  "target-lexicon",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.52.2",
  "wasmtime-debug",
  "wasmtime-environ",
  "winapi 0.3.8",
@@ -8328,9 +8326,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasmtime-profiling"
-version = "0.16.0-threadsafe.1"
+version = "0.16.0-threadsafe.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7cb99b24e771de6c20b380fdf2d26ffc2c20701892c540830beb83af98bb3b7"
+checksum = "31505dd221f001634a54ea51472bc0058bcbde9186eaf8dd31d0859638121385"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -8347,9 +8345,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasmtime-runtime"
-version = "0.16.0-threadsafe.1"
+version = "0.16.0-threadsafe.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaccd27cc466bd2904aa14f984f642083037bf5b47e251ccaf1009aed0a2a185"
+checksum = "3708081f04d9216d4dee487abf94872065f930cf82e287bd0c5bdb57895460ba"
 dependencies = [
  "backtrace",
  "cc",
@@ -9363,6 +9361,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aeb1956b19469d1c5e63e459d29e7b5aa0f558d9f16fcef09736f8a265e6c10a"
 
 [[package]]
+name = "wasmparser"
+version = "0.52.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "733954023c0b39602439e60a65126fd31b003196d3a1e8e4531b055165a79b31"
+
+[[package]]
 name = "wasmtime-debug"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9374,7 +9378,7 @@ dependencies = [
  "more-asserts",
  "target-lexicon",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.51.4",
  "wasmtime-environ",
 ]
 
@@ -9402,7 +9406,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "toml",
- "wasmparser",
+ "wasmparser 0.51.4",
  "winapi 0.3.8",
  "zstd",
 ]

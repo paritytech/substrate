@@ -832,7 +832,7 @@ decl_module! {
 		#[weight = (0, DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
-			T::Scheduler::cancel_named((DEMOCRACY_ID, which))
+			T::Scheduler::cancel_named((DEMOCRACY_ID, which).encode())
 				.map_err(|_| Error::<T>::ProposalMissing)?;
 		}
 
@@ -1252,7 +1252,7 @@ decl_module! {
 		}
 
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
-		#[weight = frame_system::Module::<T>::max_extrinsic_weight(DispatchClass::Normal)]
+		#[weight = T::MaximumBlockWeight::get()]
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_enact_proposal(proposal_hash, index)
@@ -1659,7 +1659,7 @@ impl<T: Trait> Module<T> {
 				});
 
 				if T::Scheduler::schedule_named(
-					(DEMOCRACY_ID, index),
+					(DEMOCRACY_ID, index).encode(),
 					when,
 					None,
 					63,

@@ -38,7 +38,7 @@ impl GlobalsSnapshot {
 	pub fn take(instance_wrapper: &InstanceWrapper) -> Result<Self> {
 		// EVIL:
 		// Usage of an undocumented function.
-		let handle = instance_wrapper.instance.handle().clone();
+		let handle = unsafe { instance_wrapper.instance.handle().clone() };
 
 		let mut preserved_mut_globals = vec![];
 
