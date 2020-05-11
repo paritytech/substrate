@@ -125,10 +125,13 @@ decl_module! {
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
+			let old = members.clone();
 			members.insert(location, who.clone());
+			T::MembershipChanged::ensure_can_change_members(&members, &old)?;
 			<Members<T, I>>::put(&members);
 
-			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
+			// Safe to ignore the length of the new members here because of `ensure_can_change_members`.
+			let _ = T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
 
 			Self::deposit_event(RawEvent::MemberAdded);
 		}
@@ -340,7 +343,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) -> usize {
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
@@ -351,7 +354,9 @@ mod tests {
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 			PRIME.with(|p| *p.borrow_mut() = None);
+			new.len()
 		}
+
 		fn set_prime(who: Option<u64>) {
 			PRIME.with(|p| *p.borrow_mut() = who);
 		}
