@@ -31,7 +31,10 @@ use std::{collections::HashSet, sync::{Arc, Mutex}};
 
 type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
-fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
+fn call_wasm_method_with_result<HF: HostFunctionsT>(
+	binary: &[u8],
+	method: &str,
+) -> Result<TestExternalities, String> {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
 	let mut host_functions = HF::host_functions();
@@ -50,9 +53,13 @@ fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExte
 		&[],
 		&mut ext_ext,
 		sp_core::traits::MissingHostFunctions::Disallow,
-	).expect(&format!("Executes `{}`", method));
+	).map_err(|e| format!("Failed to execute `{}`: {}", method, e))?;
 
-	ext
+	Ok(ext)
+}
+
+fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
+	call_wasm_method_with_result(binary, method).unwrap()
 }
 
 #[test]
@@ -94,11 +101,11 @@ fn test_return_input_public_key() {
 }
 
 #[test]
-#[should_panic(
-	expected = "Instantiation: Export ext_test_api_return_input_version_1 not found"
-)]
 fn host_function_not_found() {
-	call_wasm_method::<()>(&WASM_BINARY[..], "test_return_data");
+	let err = call_wasm_method_with_result::<()>(&WASM_BINARY[..], "test_return_data").unwrap_err();
+
+	assert!(err.contains("Instantiation: Export "));
+	assert!(err.contains(" not found"));
 }
 
 #[test]
