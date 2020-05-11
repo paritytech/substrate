@@ -607,13 +607,13 @@ decl_module! {
 
 		fn on_runtime_upgrade() -> Weight {
 			if let None = StorageVersion::get() {
+				StorageVersion::put(Releases::V1);
+
 				DepositOf::<T>::translate::<
 					(BalanceOf<T>, Vec<T::AccountId>), _
 				>(|_, (balance, accounts)| {
 					Some((accounts, balance))
 				});
-
-				StorageVersion::put(Releases::V1);
 
 				T::MaximumBlockWeight::get()
 			} else {
