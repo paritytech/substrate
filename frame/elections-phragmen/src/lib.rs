@@ -549,10 +549,13 @@ impl<T: Trait> Module<T> {
 			let members = members_with_stake.into_iter().map(|m| m.0).collect::<Vec<_>>();
 			let result = Ok(maybe_replacement.is_some());
 			let old = [who.clone()];
-			match maybe_replacement {
+			// We don't need to check the actual new members length because it will be the same
+			// as before or one less.
+			// TODO: Is this safe without ensure_can_change_members?
+			let _ = match maybe_replacement {
 				Some(new) => T::ChangeMembers::change_members_sorted(&[new], &old, &members),
 				None => T::ChangeMembers::change_members_sorted(&[], &old, &members),
-			}
+			};
 			result
 		} else {
 			Err(Error::<T>::NotMember)?
@@ -973,7 +976,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) -> usize {
 			// new, incoming, outgoing must be sorted.
 			let mut new_sorted = new.to_vec();
 			new_sorted.sort();
@@ -1004,6 +1007,8 @@ mod tests {
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 			PRIME.with(|p| *p.borrow_mut() = None);
+
+			new.len()
 		}
 
 		fn set_prime(who: Option<u64>) {

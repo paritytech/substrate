@@ -934,36 +934,68 @@ impl WithdrawReasons {
 	}
 }
 
-/// Trait for type that can handle incremental changes to a set of account IDs.
-pub trait ChangeMembers<AccountId: Clone + Ord> {
+/// Trait for types that can handle incremental changes to a set of account IDs.
+///
+/// Allows member changes according to the "verify first, write last" maxime by
+/// providing the `ensure_can_change_members` function for checking as well as the
+/// actual writing logic.
+pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
+
+	/// Returns whether changing the members will execute without errors.
+	///
+	/// Defaults to a noop. Implement this if `change_members_sorted` could fail.
+	///
+	/// If this returns `Err`, calls to `change_members`, `change_members_sorted` and 
+	/// `set_members_sorted` are not guaranteed to have the desired effect.
+	fn ensure_can_change_members(_new: &[AccountId], _old: &[AccountId]) -> DispatchResult {
+		Ok(())
+	}
+
 	/// A number of members `incoming` just joined the set and replaced some `outgoing` ones. The
 	/// new set is given by `new`, and need not be sorted.
 	///
 	/// This resets any previous value of prime.
-	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
+	///
+	/// Returns the actual number of members set. This may differ from `new.len()` for example
+	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
+	fn change_members(
+		incoming: &[AccountId],
+		outgoing: &[AccountId],
+		mut new: Vec<AccountId>
+	) -> MembersCount {
 		new.sort_unstable();
-		Self::change_members_sorted(incoming, outgoing, &new[..]);
+		Self::change_members_sorted(incoming, outgoing, &new[..])
 	}
 
 	/// A number of members `_incoming` just joined the set and replaced some `_outgoing` ones. The
 	/// new set is thus given by `sorted_new` and **must be sorted**.
 	///
-	/// NOTE: This is the only function that needs to be implemented in `ChangeMembers`.
+	/// NOTE: This is the only function that needs to be implemented in `ChangeMembers`, but make
+	///       sure that `ensure_can_change_members` is implemented correctly.
 	///
 	/// This resets any previous value of prime.
+	///
+	/// Returns the actual number of members set. This may differ from `new.len()` for example
+	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
 	fn change_members_sorted(
 		incoming: &[AccountId],
 		outgoing: &[AccountId],
 		sorted_new: &[AccountId],
-	);
+	) -> MembersCount;
 
 	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
 	/// call `change_members_sorted`.
 	///
 	/// This resets any previous value of prime.
-	fn set_members_sorted(new_members: &[AccountId], old_members: &[AccountId]) {
+	///
+	/// Returns the actual number of members set. This may differ from `new.len()` for example
+	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
+	fn set_members_sorted(
+		new_members: &[AccountId],
+		old_members: &[AccountId]
+	) -> MembersCount {
 		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
-		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
+		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members)
 	}
 
 	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
@@ -1003,13 +1035,15 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	}
 
 	/// Set the prime member.
+	///
+	/// Defaults to a noop.
 	fn set_prime(_prime: Option<AccountId>) {}
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
-	fn change_members(_: &[T], _: &[T], _: Vec<T>) {}
-	fn change_members_sorted(_: &[T], _: &[T], _: &[T]) {}
-	fn set_members_sorted(_: &[T], _: &[T]) {}
+	fn change_members(_: &[T], _: &[T], new: Vec<T>) -> usize { new.len() }
+	fn change_members_sorted(_: &[T], _: &[T], new: &[T]) -> usize { new.len() }
+	fn set_members_sorted(new: &[T], _: &[T]) -> usize { new.len() }
 	fn set_prime(_: Option<T>) {}
 }
 

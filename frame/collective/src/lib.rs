@@ -402,6 +402,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		}
 		Members::<T, I>::put(new);
 		Prime::<T, I>::kill();
+		length
 	}
 
 	fn set_prime(prime: Option<T::AccountId>) {
@@ -523,7 +524,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{Hashable, assert_err, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;

@@ -390,7 +390,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Fetches the `MemberCount` highest scoring members from
 	/// `Pool` and puts them into `Members`.
 	///
-	/// The `notify` parameter is used to deduct which associated
+	/// The `notify` parameter is used to decide which associated
 	/// type function to invoke at the end of the method.
 	fn refresh_members(
 		pool: PoolT<T, I>,
@@ -407,16 +407,20 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		new_members.sort();
 
 		let old_members = <Members<T, I>>::get();
+		// TODO: What to do in case of error?
+		let _ = T::MembershipChanged::ensure_can_change_members(&new_members, &old_members);
 		<Members<T, I>>::put(&new_members);
 
 		match notify {
 			ChangeReceiver::MembershipInitialized =>
 				T::MembershipInitialized::initialize_members(&new_members),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(
+			ChangeReceiver::MembershipChanged => {
+				// TODO: Is this safe?
+				let _ = T::MembershipChanged::set_members_sorted(
 					&new_members[..],
 					&old_members[..],
-				),
+				);
+			},
 		}
 	}
 
