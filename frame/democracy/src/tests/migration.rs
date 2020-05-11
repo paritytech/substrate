@@ -28,11 +28,11 @@ fn migration() {
 			let v: (BalanceOf<Test>, Vec<u64>) = (i * 1000, vec![i]);
 			migration::put_storage_value(b"Democracy", b"DepositOf", &k, v);
 		}
-		StorageVersion::put(Releases::V1);
+		StorageVersion::kill();
 
 		Democracy::on_runtime_upgrade();
 
-		assert_eq!(StorageVersion::get(), Releases::V2);
+		assert_eq!(StorageVersion::get(), Some(Releases::V1));
 		assert_eq_uvec!(
 			DepositOf::<Test>::iter().collect::<Vec<_>>(),
 			vec![

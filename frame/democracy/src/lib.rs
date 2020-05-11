@@ -390,7 +390,7 @@ decl_storage! {
 		/// Storage version of the pallet.
 		///
 		/// New networks start with last version.
-		StorageVersion build(|_| Releases::V1): Option<Releases>;
+		StorageVersion build(|_| Some(Releases::V1)): Option<Releases>;
 	}
 }
 
@@ -606,7 +606,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			if let None == StorageVersion::get() {
+			if let None = StorageVersion::get() {
 				DepositOf::<T>::translate::<
 					(BalanceOf<T>, Vec<T::AccountId>), _
 				>(|_, (balance, accounts)| {
