@@ -109,12 +109,7 @@ fn host_function_not_found() {
 }
 
 #[test]
-#[should_panic(
-	expected =
-		"Executes `test_invalid_utf8_data_should_return_an_error`: \
-		\"Trap: Trap { kind: Host(FunctionExecution(\\\"ext_test_api_invalid_utf8_data_version_1\\\", \
-		\\\"Invalid utf8 data provided\\\")) }\""
-)]
+#[should_panic(expected = "Invalid utf8 data provided")]
 fn test_invalid_utf8_data_should_return_an_error() {
 	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_invalid_utf8_data_should_return_an_error");
 }
