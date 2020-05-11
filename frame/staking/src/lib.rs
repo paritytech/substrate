@@ -2337,7 +2337,7 @@ impl<T: Trait> Module<T> {
 		// that we need. Then it should be Self::validator_count(). Else it should be all the
 		// candidates.
 		let snapshot_length = <SnapshotValidators<T>>::decode_len()
-			.map_err(|_| Error::<T>::SnapshotUnavailable)?;
+			.ok_or_else(|| Error::<T>::SnapshotUnavailable)?;
 
 		// check the winner length only here and when we know the length of the snapshot validators
 		// length.

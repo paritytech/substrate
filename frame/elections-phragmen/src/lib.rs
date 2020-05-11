@@ -1196,7 +1196,7 @@ mod tests {
 			assert_eq!(Elections::runners_up(), vec![]);
 
 			assert_eq!(Elections::candidates(), vec![]);
-			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 0);
+			assert_eq!(<Candidates<Test>>::decode_len(), None);
 			assert!(Elections::is_candidate(&1).is_err());
 
 			assert_eq!(all_voters(), vec![]);
@@ -1800,7 +1800,7 @@ mod tests {
 			assert_eq!(Elections::runners_up(), vec![]);
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 			assert_eq!(Elections::candidates(), vec![]);
-			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 0);
+			assert_eq!(<Candidates<Test>>::decode_len(), None);
 
 			assert_eq!(Elections::election_rounds(), 1);
 		});
