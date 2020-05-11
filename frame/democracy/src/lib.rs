@@ -320,13 +320,6 @@ impl<AccountId, Balance, BlockNumber> PreimageStatus<AccountId, Balance, BlockNu
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 enum Releases {
 	V1,
-	V2,
-}
-
-impl Default for Releases {
-	fn default() -> Self {
-		Releases::V1
-	}
 }
 
 decl_storage! {
@@ -397,7 +390,7 @@ decl_storage! {
 		/// Storage version of the pallet.
 		///
 		/// New networks start with last version.
-		StorageVersion build(|_| Releases::V2): Releases;
+		StorageVersion build(|_| Releases::V1): Option<Releases>;
 	}
 }
 
@@ -613,14 +606,14 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::get() == Releases::V1 {
+			if let None == StorageVersion::get() {
 				DepositOf::<T>::translate::<
 					(BalanceOf<T>, Vec<T::AccountId>), _
 				>(|_, (balance, accounts)| {
 					Some((accounts, balance))
 				});
 
-				StorageVersion::put(Releases::V2);
+				StorageVersion::put(Releases::V1);
 
 				T::MaximumBlockWeight::get()
 			} else {
