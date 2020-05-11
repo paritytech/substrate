@@ -709,7 +709,7 @@ where
 				peer,
 				total_handling_time,
 			};
-			self.pending_events.push_back(NetworkBehaviourAction::GenerateEvent(ev));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
 		Poll::Pending
