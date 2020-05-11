@@ -365,49 +365,49 @@ pub struct ExtrinsicsWeight {
 }
 
 impl ExtrinsicsWeight {
+	/// Returns the total weight consumed by all extrinsics in the block.
 	pub fn total(&self) -> Weight {
 		self.normal.saturating_add(self.operational)
 	}
 
+	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
 	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
-		match class {
-			DispatchClass::Operational => self.operational = self.operational.saturating_add(weight),
-			DispatchClass::Normal => self.normal = self.normal.saturating_add(weight),
-			DispatchClass::Mandatory => self.normal = self.normal.saturating_add(weight),
-		};
+		let value = self.get_mut(class);
+		*value = value.saturating_add(weight);
 	}
 
+	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would occur.
 	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		match class {
-			DispatchClass::Operational => self.operational = self.operational.checked_add(weight).ok_or(())?,
-			DispatchClass::Normal => self.normal = self.normal.checked_add(weight).ok_or(())?,
-			DispatchClass::Mandatory => self.normal = self.normal.checked_add(weight).ok_or(())?,
-		}
+		let value = self.get_mut(class);
+		*value = value.checked_add(weight).ok_or(())?;
 		Ok(())
 	}
 
+	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
 	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		match class {
-			DispatchClass::Operational => self.operational = self.operational.saturating_sub(weight),
-			DispatchClass::Normal => self.normal = self.normal.saturating_sub(weight),
-			DispatchClass::Mandatory => self.normal = self.normal.saturating_sub(weight),
-		};
+		let value = self.get_mut(class);
+		*value = value.saturating_sub(weight);
 	}
 
+	/// Get the current weight of a specific dispatch class.
 	pub fn get(&self, class: DispatchClass) -> Weight {
 		match class {
 			DispatchClass::Operational => self.operational,
-			DispatchClass::Normal => self.normal,
-			DispatchClass::Mandatory => self.normal,
+			DispatchClass::Normal | DispatchClass::Mandatory => self.normal,
 		}
 	}
 
-	pub fn put(&mut self, new: Weight, class: DispatchClass) {
+	/// Get a mutable reference to the current weight of a specific dispatch class.
+	fn get_mut(&mut self, class: DispatchClass) -> &mut Weight {
 		match class {
-			DispatchClass::Operational => self.operational = new,
-			DispatchClass::Normal => self.normal = new,
-			DispatchClass::Mandatory => self.normal = new,
-		};
+			DispatchClass::Operational => &mut self.operational,
+			DispatchClass::Normal | DispatchClass::Mandatory => &mut self.normal,
+		}
+	}
+
+	/// Set the weight of a specific dispatch class.
+	pub fn put(&mut self, new: Weight, class: DispatchClass) {
+		*self.get_mut(class) = new;
 	}
 }
 
@@ -993,8 +993,6 @@ impl<T: Trait> Module<T> {
 	/// of block weight is more than the block weight limit. This is what the _unchecked_.
 	///
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
-	///
-	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
 		AllExtrinsicsWeight::mutate(|current_weight| {
 			current_weight.add(weight, class);
@@ -1371,7 +1369,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 					.ok_or(InvalidTransaction::ExhaustsResources)?;
 				all_weight.checked_add(extrinsic_weight, DispatchClass::Normal)
 					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				if all_weight.normal > normal_limit {
+				if all_weight.get(DispatchClass::Normal) > normal_limit {
 					Err(InvalidTransaction::ExhaustsResources.into())
 				} else {
 					Ok(all_weight)
@@ -1392,7 +1390,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 				// If it would fit in normally, its okay
 				if all_weight.total() <= maximum_weight ||
 				// If we have not used our operational space
-				all_weight.operational <= operational_space {
+				all_weight.get(DispatchClass::Operational) <= operational_space {
 					Ok(all_weight)
 				} else {
 					Err(InvalidTransaction::ExhaustsResources.into())
@@ -2258,7 +2256,7 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			// Extra 10 here from block execution weight
+			// Extra 15 here from block execution + base extrinsic weight
 			assert_eq!(System::all_extrinsics_weight().total(), 266);
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
