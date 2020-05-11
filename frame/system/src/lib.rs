@@ -482,6 +482,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		/// The maximum number of blocks to allow in mortal eras.
+		const BlockHashCount: T::BlockNumber = T::BlockHashCount::get();
+
 		/// The maximum weight of a block.
 		const MaximumBlockWeight: Weight = T::MaximumBlockWeight::get();
 

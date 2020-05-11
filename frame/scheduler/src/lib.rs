@@ -125,7 +125,7 @@ decl_error! {
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what its working on.
+	/// Scheduler module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event() = default;
 
@@ -438,7 +438,6 @@ mod tests {
 			}
 		}
 		decl_module! {
-			// Simple declaration of the `Module` type. Lets the macro know what its working on.
 			pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 				fn deposit_event() = default;
 
