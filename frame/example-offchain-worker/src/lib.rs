@@ -45,7 +45,7 @@ use frame_system::{
 	ensure_signed,
 	ensure_none,
 	offchain::{
-		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction,
+		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SendSignedTransaction,
 		SignedPayload, SigningTypes, Signer, SubmitTransaction,
 	}
 };
@@ -381,8 +381,6 @@ impl<T: Trait> Module<T> {
 
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
-		use frame_system::offchain::SendSignedTransaction;
-
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
 		if !signer.can_sign() {
 			return Err(
