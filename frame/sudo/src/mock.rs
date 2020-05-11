@@ -63,7 +63,7 @@ pub mod logger {
 				|_: (&u64, &Weight)| DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn log(origin, i: u64, weight: Weight) {
+			fn log(origin, i: u64, weight: Weight){
 				ensure_root(origin)?;
 				Self::deposit_event(Event::Logged(i, weight));
 				LOG.with(|log| {
@@ -92,6 +92,10 @@ pub mod logger {
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
+}
+
+mod test_events {
+    pub use crate::Event;
 }
 
 impl_outer_event! {
@@ -161,6 +165,7 @@ impl Trait for Test {
 // Assign back to type variables so we can make dispatched calls of these modules later
 pub type Sudo = Module<Test>;
 pub type Logger = logger::Module<Test>;
+pub type System = system::Module<Test>;
 
 // New types for dispatchable functions
 pub type SudoCall = sudo::Call<Test>;
