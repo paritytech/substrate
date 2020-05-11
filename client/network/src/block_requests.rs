@@ -594,6 +594,10 @@ where
 						} else {
 							// We remove from `self.peers` requests we're no longer interested in,
 							// so this can legitimately happen.
+							log::trace!(
+								target: "sync",
+								"Response discarded because it concerns an obsolete request"
+							);
 							return;
 						}
 					} else {
