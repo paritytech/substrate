@@ -147,7 +147,7 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
 	/// Interval at which to check status of each awaited block.
-	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
+	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send + Sync>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.

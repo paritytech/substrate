@@ -18,11 +18,11 @@ use std::convert::TryFrom;
 
 use crate::NetworkStatus;
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_client::ClientInfo;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
+use sc_client_api::ClientInfo;
 
 use sysinfo::{self, ProcessExt, SystemExt};
 

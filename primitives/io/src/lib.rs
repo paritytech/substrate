@@ -117,6 +117,18 @@ pub trait Storage {
 		Externalities::clear_prefix(*self, prefix)
 	}
 
+	/// Append the encoded `value` to the storage item at `key`.
+	///
+	/// The storage item needs to implement [`EncodeAppend`](codec::EncodeAppend).
+	///
+	/// # Warning
+	///
+	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
+	/// something else fails at appending, the storage item will be set to `[value]`.
+	fn append(&mut self, key: &[u8], value: Vec<u8>) {
+		self.storage_append(key.to_vec(), value);
+	}
+
 	/// "Commit" all existing operations and compute the resulting storage root.
 	///
 	/// The hashing algorithm is defined by the `Block`.

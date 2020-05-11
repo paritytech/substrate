@@ -20,7 +20,7 @@
 //! can pregenerate seed database and `clone` it for every iteration of your benchmarks
 //! or tests to get consistent, smooth benchmark experience!
 
-use std::{sync::Arc, path::Path, collections::BTreeMap};
+use std::{sync::Arc, path::{Path, PathBuf}, collections::BTreeMap};
 
 use node_primitives::Block;
 use crate::client::{Client, Backend};
@@ -43,6 +43,7 @@ use node_runtime::{
 	constants::currency::DOLLARS,
 	UncheckedExtrinsic,
 	MinimumPeriod,
+	SystemCall,
 	BalancesCall,
 	AccountId,
 	Signature,
@@ -93,11 +94,13 @@ impl BenchPair {
 pub struct BenchDb {
 	keyring: BenchKeyring,
 	directory_guard: Guard,
+	database_type: DatabaseType,
 }
 
 impl Clone for BenchDb {
 	fn clone(&self) -> Self {
 		let keyring = self.keyring.clone();
+		let database_type = self.database_type;
 		let dir = tempfile::tempdir().expect("temp dir creation failed");
 
 		let seed_dir = self.directory_guard.0.path();
@@ -121,7 +124,7 @@ impl Clone for BenchDb {
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
 
-		BenchDb { keyring, directory_guard: Guard(dir) }
+		BenchDb { keyring, directory_guard: Guard(dir), database_type }
 	}
 }
 
@@ -129,16 +132,41 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfers(usize),
+	RandomTransfersKeepAlive(usize),
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping(usize),
+	/// Bunch of "no-op" calls.
+	Noop(usize),
+}
+
+/// Type of backend database.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum DatabaseType {
+	/// RocksDb backend.
+	RocksDb,
+	/// Parity DB backend.
+	ParityDb,
+}
+
+impl DatabaseType {
+	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSettingsSrc {
+		match self {
+			Self::RocksDb => sc_client_db::DatabaseSettingsSrc::RocksDb {
+				path,
+				cache_size: 512,
+			},
+			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb {
+				path,
+			}
+		}
+	}
 }
 
 impl BlockType {
 	/// Number of transactions for this block type.
 	pub fn transactions(&self) -> usize {
 		match self {
-			Self::RandomTransfers(v) | Self::RandomTransfersReaping(v) => *v,
+			Self::RandomTransfersKeepAlive(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
 		}
 	}
 }
@@ -178,7 +206,11 @@ impl BenchDb {
 	///
 	/// See [`new`] method documentation for more information about the purpose
 	/// of this structure.
-	pub fn with_key_types(keyring_length: usize, key_types: KeyTypes) -> Self {
+	pub fn with_key_types(
+		database_type: DatabaseType,
+		keyring_length: usize,
+		key_types: KeyTypes,
+	) -> Self {
 		let keyring = BenchKeyring::new(keyring_length, key_types);
 
 		let dir = tempfile::tempdir().expect("temp dir creation failed");
@@ -187,10 +219,10 @@ impl BenchDb {
 			"Created seed db at {}",
 			dir.path().to_string_lossy(),
 		);
-		let (_client, _backend) = Self::bench_client(dir.path(), Profile::Native, &keyring);
+		let (_client, _backend) = Self::bench_client(database_type, dir.path(), Profile::Native, &keyring);
 		let directory_guard = Guard(dir);
 
-		BenchDb { keyring, directory_guard }
+		BenchDb { keyring, directory_guard, database_type }
 	}
 
 	/// New immutable benchmarking database.
@@ -201,8 +233,8 @@ impl BenchDb {
 	/// You can `clone` this database or you can `create_context` from it
 	/// (which also does `clone`) to run actual operation against new database
 	/// which will be identical to the original.
-	pub fn new(keyring_length: usize) -> Self {
-		Self::with_key_types(keyring_length, KeyTypes::Sr25519)
+	pub fn new(database_type: DatabaseType, keyring_length: usize) -> Self {
+		Self::with_key_types(database_type, keyring_length, KeyTypes::Sr25519)
 	}
 
 	// This should return client that is doing everything that full node
@@ -210,18 +242,20 @@ impl BenchDb {
 	//
 	// - This client should use best wasm execution method.
 	// - This client should work with real database only.
-	fn bench_client(dir: &std::path::Path, profile: Profile, keyring: &BenchKeyring) -> (Client, std::sync::Arc<Backend>) {
+	fn bench_client(
+		database_type: DatabaseType,
+		dir: &std::path::Path,
+		profile: Profile,
+		keyring: &BenchKeyring,
+	) -> (Client, std::sync::Arc<Backend>) {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
 			pruning: PruningMode::ArchiveAll,
-			source: sc_client_db::DatabaseSettingsSrc::RocksDb {
-				path: dir.into(),
-				cache_size: 512,
-			},
+			source: database_type.into_settings(dir.into()),
 		};
 
-		let (client, backend) = sc_client_db::new_client(
+		let (client, backend) = sc_service::new_client(
 			db_config,
 			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
@@ -239,6 +273,7 @@ impl BenchDb {
 	/// Generate new block using this database.
 	pub fn generate_block(&mut self, block_type: BlockType) -> Block {
 		let (client, _backend) = Self::bench_client(
+			self.database_type,
 			self.directory_guard.path(),
 			Profile::Wasm,
 			&self.keyring,
@@ -287,15 +322,31 @@ impl BenchDb {
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
 					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
-					function: Call::Balances(
-						BalancesCall::transfer(
-							pallet_indices::address::Address::Id(receiver),
-							match block_type {
-								BlockType::RandomTransfers(_) => node_runtime::ExistentialDeposit::get() + 1,
-								BlockType::RandomTransfersReaping(_) => 100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
-							}
-						)
-					),
+					function: match block_type {
+						BlockType::RandomTransfersKeepAlive(_) => {
+							Call::Balances(
+								BalancesCall::transfer_keep_alive(
+									pallet_indices::address::Address::Id(receiver),
+									node_runtime::ExistentialDeposit::get() + 1,
+								)
+							)
+						},
+						BlockType::RandomTransfersReaping(_) => {
+							Call::Balances(
+								BalancesCall::transfer(
+									pallet_indices::address::Address::Id(receiver),
+									// Transfer so that ending balance would be 1 less than existential deposit
+									// so that we kill the sender account.
+									100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+								)
+							)
+						},
+						BlockType::Noop(_) => {
+							Call::System(
+								SystemCall::remark(Vec::new())
+							)
+						},
+					},
 				},
 				version,
 				genesis_hash,
@@ -335,8 +386,13 @@ impl BenchDb {
 
 	/// Clone this database and create context for testing/benchmarking.
 	pub fn create_context(&self, profile: Profile) -> BenchContext {
-		let BenchDb { directory_guard, keyring } = self.clone();
-		let (client, backend) = Self::bench_client(directory_guard.path(), profile, &keyring);
+		let BenchDb { directory_guard, keyring, database_type } = self.clone();
+		let (client, backend) = Self::bench_client(
+			database_type,
+			directory_guard.path(),
+			profile,
+			&keyring
+		);
 
 		BenchContext {
 			client, backend, db_guard: directory_guard,

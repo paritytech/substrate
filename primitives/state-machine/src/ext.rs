@@ -30,7 +30,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Extensions, Extension};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, EncodeAppend};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -415,6 +415,28 @@ where
 		});
 	}
 
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		trace!(target: "state", "{:04x}: Append {}={}",
+			self.id,
+			HexDisplay::from(&key),
+			HexDisplay::from(&value),
+		);
+
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		self.mark_dirty();
+
+		let backend = &mut self.backend;
+		let current_value = self.overlay.value_mut_or_insert_with(
+			&key,
+			|| backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
+		);
+		StorageAppend::new(current_value).append(value);
+	}
+
 	fn chain_id(&self) -> u64 {
 		42
 	}
@@ -422,7 +444,7 @@ where
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
-			trace!(target: "state", "{:04x}: Root (cached) {}",
+			trace!(target: "state", "{:04x}: Root(cached) {}",
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
@@ -448,7 +470,7 @@ where
 				.unwrap_or(
 					empty_child_trie_root::<Layout<H>>()
 				);
-			trace!(target: "state", "{:04x}: ChildRoot({}) (cached) {}",
+			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
 				self.id,
 				HexDisplay::from(&storage_key),
 				HexDisplay::from(&root.as_ref()),
@@ -496,7 +518,7 @@ where
 					.unwrap_or(
 						empty_child_trie_root::<Layout<H>>()
 					);
-				trace!(target: "state", "{:04x}: ChildRoot({}) (no change) {}",
+				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
 					self.id,
 					HexDisplay::from(&storage_key.as_ref()),
 					HexDisplay::from(&root.as_ref()),
@@ -533,21 +555,69 @@ where
 
 	fn wipe(&mut self) {
 		self.overlay.discard_prospective();
-		self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.overlay.drain_storage_changes(
+			&self.backend,
+			None,
+			Default::default(),
+			self.storage_transaction_cache,
+		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn commit(&mut self) {
 		self.overlay.commit_prospective();
-		let changes = self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let changes = self.overlay.drain_storage_changes(
+			&self.backend,
+			None,
+			Default::default(),
+			self.storage_transaction_cache,
+		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
+	}
+}
+
+
+/// Implement `Encode` by forwarding the stored raw vec.
+struct EncodeOpaqueValue(Vec<u8>);
+
+impl Encode for EncodeOpaqueValue {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.0)
+	}
+}
+
+/// Auxialiary structure for appending a value to a storage item.
+pub(crate) struct StorageAppend<'a>(&'a mut Vec<u8>);
+
+impl<'a> StorageAppend<'a> {
+	/// Create a new instance using the given `storage` reference.
+	pub fn new(storage: &'a mut Vec<u8>) -> Self {
+		Self(storage)
+	}
+
+	/// Append the given `value` to the storage item.
+	///
+	/// If appending fails, `[value]` is stored in the storage item.
+	pub fn append(&mut self, value: Vec<u8>) {
+		let value = vec![EncodeOpaqueValue(value)];
+
+		let item = std::mem::take(self.0);
+
+		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
+			Ok(item) => item,
+			Err(_) => {
+				log::error!(
+					target: "runtime",
+					"Failed to append value, resetting storage item to `[value]`.",
+				);
+				value.encode()
+			}
+		};
 	}
 }
 
@@ -823,5 +893,25 @@ mod tests {
 			ext.child_storage_hash(child_info, &[30]),
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
 		);
+	}
+
+	#[test]
+	fn storage_append_works() {
+		let mut data = Vec::new();
+		let mut append = StorageAppend::new(&mut data);
+		append.append(1u32.encode());
+		append.append(2u32.encode());
+		drop(append);
+
+		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
+
+		// Initialize with some invalid data
+		let mut data = vec![1];
+		let mut append = StorageAppend::new(&mut data);
+		append.append(1u32.encode());
+		append.append(2u32.encode());
+		drop(append);
+
+		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
 	}
 }

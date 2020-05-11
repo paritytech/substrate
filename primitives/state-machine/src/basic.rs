@@ -82,8 +82,8 @@ impl BasicExternalities {
 	) -> R {
 		let mut ext = Self {
 			inner: Storage {
-				top: std::mem::replace(&mut storage.top, Default::default()),
-				children_default: std::mem::replace(&mut storage.children_default, Default::default()),
+				top: std::mem::take(&mut storage.top),
+				children_default: std::mem::take(&mut storage.children_default),
 			},
 			extensions: Default::default(),
 		};
@@ -255,6 +255,15 @@ impl Externalities for BasicExternalities {
 				child.data.remove(&key);
 			}
 		}
+	}
+
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		let current = self.inner.top.entry(key).or_default();
+		crate::ext::StorageAppend::new(current).append(value);
 	}
 
 	fn chain_id(&self) -> u64 { 42 }

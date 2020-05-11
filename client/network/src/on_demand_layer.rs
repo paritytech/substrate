@@ -16,7 +16,7 @@
 
 //! On-demand requests service.
 
-use crate::protocol::light_client_handler;
+use crate::light_client_handler;
 
 use futures::{channel::oneshot, prelude::*};
 use parking_lot::Mutex;

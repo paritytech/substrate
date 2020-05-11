@@ -463,102 +463,131 @@ decl_error! {
 
 /// Functions for calcuating the weight of dispatchables.
 mod weight_for {
-	use frame_support::weights::{RuntimeDbWeight, Weight};
+	use frame_support::{traits::Get, weights::Weight};
+	use super::Trait;
+
+	/// Weight calculation for `add_registrar`.
+	///
+	/// Based on benchmark:
+	/// 22.24 + R * 0.371 µs (min squares analysis)
+	pub(crate) fn add_registrar<T: Trait>(
+		registrars: Weight
+	) -> Weight {
+		T::DbWeight::get().reads_writes(1, 1)
+			+ 23_000_000 // constant
+			+ 380_000 * registrars // R
+	}
 
 	/// Weight calculation for `set_identity`.
-	pub(crate) fn set_identity(
-		db: RuntimeDbWeight,
-		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>
+	///
+	/// Based on benchmark:
+	/// 50.64 + R * 0.215 + X * 1.424 µs (min squares analysis)
+	pub(crate) fn set_identity<T: Trait>(
+		judgements: Weight,
+		extra_fields: Weight
 	) -> Weight {
-		db.reads_writes(1, 1)
-			+ 150_000_000 // constant
-			+ 700_000 * judgements.into() // R
-			+ 3_000_000 * extra_fields.into() // X
+		T::DbWeight::get().reads_writes(1, 1)
+			+ 51_000_000 // constant
+			+ 220_000 * judgements // R
+			+ 1_500_000 * extra_fields // X
 	}
 
 	/// Weight calculation for `set_subs`.
-	pub(crate) fn set_subs(
-		db: RuntimeDbWeight,
-		old_subs: impl Into<Weight> + Copy,
-		subs: impl Into<Weight> + Copy
+	///
+	/// Based on benchmark:
+	/// 36.21 + P * 2.481 + S * 3.633 µs (min squares analysis)
+	pub(crate) fn set_subs<T: Trait>(
+		old_subs: Weight,
+		subs: Weight
 	) -> Weight {
+		let db = T::DbWeight::get();
 		db.reads(1) // storage-exists (`IdentityOf::contains_key`)
-			+ db.reads_writes(1, old_subs.into()) // `SubsOf::get` read + P old DB deletions
-			+ db.writes(subs.into() + 1) // S + 1 new DB writes
-			+ 130_000_000 // constant
-			+ 5_200_000 * old_subs.into() // P
-			+ 7_300_000 * subs.into() // S
+			.saturating_add(db.reads_writes(1, old_subs)) // `SubsOf::get` read + P old DB deletions
+			.saturating_add(db.writes(subs + 1)) // S + 1 new DB writes
+			.saturating_add(37_000_000) // constant
+			.saturating_add(2_500_000 * old_subs) // P
+			.saturating_add(subs.saturating_mul(3_700_000)) // S
 	}
 
 	/// Weight calculation for `clear_identity`.
-	pub(crate) fn clear_identity(
-		db: RuntimeDbWeight,
-		judgements: impl Into<Weight>,
-		subs: impl Into<Weight> + Copy,
-		extra_fields: impl Into<Weight>
+	///
+	/// Based on benchmark:
+	/// 43.19 + R * 0.099 + S * 2.547 + X * 0.875 µs (min squares analysis)
+	pub(crate) fn clear_identity<T: Trait>(
+		judgements: Weight,
+		subs: Weight,
+		extra_fields: Weight
 	) -> Weight {
-		db.reads_writes(2, subs.into() + 2) // S + 2 deletions
-			+ 160_000_000 // constant
-			+ 500_000 * judgements.into() // R
-			+ 5_400_000 * subs.into() // S
-			+ 2_000_000 * extra_fields.into() // X
+		T::DbWeight::get().reads_writes(2, subs + 2) // S + 2 deletions
+			+ 44_000_000 // constant
+			+ 100_000 * judgements // R
+			+ 2_600_000 * subs // S
+			+ 900_000 * extra_fields // X
 	}
 
 	/// Weight calculation for `request_judgement`.
-	pub(crate) fn request_judgement(
-		db: RuntimeDbWeight,
-		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>
+	///
+	/// Based on benchmark:
+	/// 51.51 + R * 0.32 + X * 1.85 µs (min squares analysis)
+	pub(crate) fn request_judgement<T: Trait>(
+		judgements: Weight,
+		extra_fields: Weight
 	) -> Weight {
-		db.reads_writes(2, 1)
-			+ 180_000_000 // constant
-			+ 950_000 * judgements.into() // R
-			+ 3_400_000 * extra_fields.into() // X
+		T::DbWeight::get().reads_writes(2, 1)
+			+ 52_000_000 // constant
+			+ 400_000 * judgements // R
+			+ 1_900_000 * extra_fields // X
 	}
 
 	/// Weight calculation for `cancel_request`.
-	pub(crate) fn cancel_request(
-		db: RuntimeDbWeight,
-		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>
+	///
+	/// Based on benchmark:
+	/// 40.95 + R * 0.219 + X * 1.655 µs (min squares analysis)
+	pub(crate) fn cancel_request<T: Trait>(
+		judgements: Weight,
+		extra_fields: Weight
 	) -> Weight {
-		db.reads_writes(1, 1)
-			+ 150_000_000 // constant
-			+ 600_000 * judgements.into() // R
-			+ 3_600_000 * extra_fields.into() // X
+		T::DbWeight::get().reads_writes(1, 1)
+			+ 41_000_000 // constant
+			+ 300_000 * judgements // R
+			+ 1_700_000 * extra_fields // X
 	}
 
 	/// Weight calculation for `provide_judgement`.
-	pub(crate) fn provide_judgement(
-		db: RuntimeDbWeight,
-		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>
+	///
+	/// Based on benchmark:
+	/// 40.77 + R * 0.282 + X * 1.66 µs (min squares analysis)
+	pub(crate) fn provide_judgement<T: Trait>(
+		judgements: Weight,
+		extra_fields: Weight
 	) -> Weight {
-		db.reads_writes(2, 1)
-			+ 120_000_000 // constant
-			+ 1_100_000 * judgements.into() // R
-			+ 3_500_000 * extra_fields.into()// X
+		T::DbWeight::get().reads_writes(2, 1)
+			+ 41_000_000 // constant
+			+ 300_000 * judgements // R
+			+ 1_700_000 * extra_fields// X
 	}
 
 	/// Weight calculation for `kill_identity`.
-	pub(crate) fn kill_identity(
-		db: RuntimeDbWeight,
-		judgements: impl Into<Weight>,
-		subs: impl Into<Weight> + Copy,
-		extra_fields: impl Into<Weight>
+	///
+	/// Based on benchmark:
+	/// 83.96 + R * 0.122 + S * 2.533 + X * 0.867 µs (min squares analysis)
+	pub(crate) fn kill_identity<T: Trait>(
+		judgements: Weight,
+		subs: Weight,
+		extra_fields: Weight
 	) -> Weight {
-		db.reads_writes(3, subs.into() + 3) // 2 `take`s + S deletions
+		let db = T::DbWeight::get();
+		db.reads_writes(2, subs + 2) // 2 `take`s + S deletions
 			+ db.reads_writes(1, 1) // balance ops
-			+ 170_000_000 // constant
-			+ 1_200_000 * judgements.into() // R
-			+ 5_400_000 * subs.into() // S
-			+ 2_300_000 * extra_fields.into() // X
+			+ 84_000_000 // constant
+			+ 130_000 * judgements // R
+			+ 2_600_000 * subs // S
+			+ 900_000 * extra_fields // X
 	}
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
+	/// Identity module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The amount held on deposit for a registered identity.
 		const BasicDeposit: BalanceOf<T> = T::BasicDeposit::get();
@@ -598,29 +627,26 @@ decl_module! {
 		/// - `O(R)` where `R` registrar-count (governance-bounded and code-bounded).
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
-		/// - Benchmarks:
-		///   - 78.71 + R * 0.965 µs (min squares analysis)
-		///   - 94.28 + R * 0.991 µs (min squares analysis)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 95_000_000 // constant
-			+ 1_000_000 * T::MaxRegistrars::get() as Weight // R
-		]
+		#[weight = weight_for::add_registrar::<T>(T::MaxRegistrars::get().into()) ]
 		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			let (i, registrar_count) = <Registrars<T>>::try_mutate(|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
-				ensure!((registrars.len() as u32) < T::MaxRegistrars::get(), Error::<T>::TooManyRegistrars);
-				registrars.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
-				Ok(((registrars.len() - 1) as RegistrarIndex, registrars.len()))
-			})?;
+			let (i, registrar_count) = <Registrars<T>>::try_mutate(
+				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
+					ensure!(registrars.len() < T::MaxRegistrars::get() as usize, Error::<T>::TooManyRegistrars);
+					registrars.push(Some(RegistrarInfo {
+						account, fee: Zero::zero(), fields: Default::default()
+					}));
+					Ok(((registrars.len() - 1) as RegistrarIndex, registrars.len()))
+				}
+			)?;
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 
-			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 95_000_000 + 1_000_000 * registrar_count as Weight).into())
+			Ok(Some(weight_for::add_registrar::<T>(registrar_count as Weight)).into())
 		}
 
 		/// Set an account's identity information and reserve the appropriate deposit.
@@ -641,14 +667,10 @@ decl_module! {
 		/// - One balance reserve operation.
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
-		/// - Benchmarks:
-		///   - 136.6 + R * 0.62 + X * 2.62 µs (min squares analysis)
-		///   - 146.2 + R * 0.372 + X * 2.98 µs (min squares analysis)
 		/// # </weight>
-		#[weight =  weight_for::set_identity(
-			T::DbWeight::get(),
-			T::MaxRegistrars::get(), // R
-			T::MaxAdditionalFields::get() // X
+		#[weight =  weight_for::set_identity::<T>(
+			T::MaxRegistrars::get().into(), // R
+			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn set_identity(origin, info: IdentityInfo) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -679,8 +701,7 @@ decl_module! {
 			<IdentityOf<T>>::insert(&sender, id);
 			Self::deposit_event(RawEvent::IdentitySet(sender));
 
-			Ok(Some(weight_for::set_identity(
-				T::DbWeight::get(),
+			Ok(Some(weight_for::set_identity::<T>(
 				judgements, // R
 				extra_fields as Weight // X
 			)).into())
@@ -706,13 +727,9 @@ decl_module! {
 		///   - One storage read (codec complexity `O(P)`).
 		///   - One storage write (codec complexity `O(S)`).
 		///   - One storage-exists (`IdentityOf::contains_key`).
-		/// - Benchmarks:
-		///   - 115.2 + P * 5.11 + S * 6.67 µs (min squares analysis)
-		///   - 121 + P * 4.852 + S * 7.111 µs (min squares analysis)
 		/// # </weight>
-		#[weight = weight_for::set_subs(
-			T::DbWeight::get(),
-			T::MaxSubAccounts::get(), // P
+		#[weight = weight_for::set_subs::<T>(
+			T::MaxSubAccounts::get().into(), // P
 			subs.len() as Weight // S
 		)]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) -> DispatchResultWithPostInfo {
@@ -746,8 +763,7 @@ decl_module! {
 				<SubsOf<T>>::insert(&sender, (new_deposit, ids));
 			}
 
-			Ok(Some(weight_for::set_subs(
-				T::DbWeight::get(),
+			Ok(Some(weight_for::set_subs::<T>(
 				old_ids.len() as Weight, // P
 				new_subs // S
 			)).into())
@@ -770,15 +786,11 @@ decl_module! {
 		/// - One balance-unreserve operation.
 		/// - `2` storage reads and `S + 2` storage deletions.
 		/// - One event.
-		/// - Benchmarks:
-		///   - 152.3 + R * 0.306 + S * 4.967 + X * 1.697 µs (min squares analysis)
-		///   - 139.5 + R * 0.466 + S * 5.304 + X * 1.895 µs (min squares analysis)
 		/// # </weight>
-		#[weight = weight_for::clear_identity(
-			T::DbWeight::get(),
-			T::MaxRegistrars::get(), // R
-			T::MaxSubAccounts::get(), // S
-			T::MaxAdditionalFields::get() // X
+		#[weight = weight_for::clear_identity::<T>(
+			T::MaxRegistrars::get().into(), // R
+			T::MaxSubAccounts::get().into(), // S
+			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn clear_identity(origin) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -795,8 +807,7 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityCleared(sender, deposit));
 
-			Ok(Some(weight_for::clear_identity(
-				T::DbWeight::get(),
+			Ok(Some(weight_for::clear_identity::<T>(
 				id.judgements.len() as Weight, // R
 				sub_ids.len() as Weight, // S
 				id.info.additional.len() as Weight // X
@@ -825,14 +836,10 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
-		/// - Benchmarks:
-		///   - 154 + R * 0.932 + X * 3.302 µs (min squares analysis)
-		///   - 172.9 + R * 0.69 + X * 3.304 µs (min squares analysis)
 		/// # </weight>
-		#[weight = weight_for::request_judgement(
-			T::DbWeight::get(),
-			T::MaxRegistrars::get(), // R
-			T::MaxAdditionalFields::get() // X
+		#[weight = weight_for::request_judgement::<T>(
+			T::MaxRegistrars::get().into(), // R
+			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn request_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
@@ -863,7 +870,7 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::JudgementRequested(sender, reg_index));
 
-			Ok(Some(weight_for::request_judgement(T::DbWeight::get(), judgements, extra_fields)).into())
+			Ok(Some(weight_for::request_judgement::<T>(judgements, extra_fields)).into())
 		}
 
 		/// Cancel a previous request.
@@ -881,15 +888,11 @@ decl_module! {
 		/// - `O(R + X)`.
 		/// - One balance-reserve operation.
 		/// - One storage mutation `O(R + X)`.
-		/// - One event.
-		/// - Benchmarks:
-		///   - 135.3 + R * 0.574 + X * 3.394 µs (min squares analysis)
-		///   - 144.3 + R * 0.316 + X * 3.53 µs (min squares analysis)
+		/// - One event
 		/// # </weight>
-		#[weight = weight_for::cancel_request(
-			T::DbWeight::get(),
-			T::MaxRegistrars::get(), // R
-			T::MaxAdditionalFields::get() // X
+		#[weight = weight_for::cancel_request::<T>(
+			T::MaxRegistrars::get().into(), // R
+			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn cancel_request(origin, reg_index: RegistrarIndex) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -910,7 +913,7 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::JudgementUnrequested(sender, reg_index));
 
-			Ok(Some(weight_for::request_judgement(T::DbWeight::get(), judgements, extra_fields)).into())
+			Ok(Some(weight_for::request_judgement::<T>(judgements, extra_fields)).into())
 		}
 
 		/// Set the fee required for a judgement to be requested from a registrar.
@@ -924,12 +927,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmarks:
-		///   - 23.81 + R * 0.774 µs (min squares analysis)
+		/// - Benchmark: 7.315 + R * 0.329 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 24_000_000 // constant
-			+ 780_000 * T::MaxRegistrars::get() as Weight // R
+			+ 7_400_000 // constant
+			+ 330_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
@@ -945,7 +947,7 @@ decl_module! {
 				Ok(rs.len())
 			})?;
 			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 24_000_000 + 780_000 * registrars as Weight // R
+				+ 7_400_000 + 330_000 * registrars as Weight // R
 			).into())
 		}
 
@@ -960,11 +962,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 24.59 + R * 0.832 µs (min squares analysis)
+		/// - Benchmark: 8.823 + R * 0.32 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 25_000_000 // constant
-			+ 850_000 * T::MaxRegistrars::get() as Weight // R
+			+ 8_900_000 // constant
+			+ 320_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
@@ -980,7 +982,7 @@ decl_module! {
 				Ok(rs.len())
 			})?;
 			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 25_000_000 + 850_000 * registrars as Weight // R
+				+ 8_900_000 + 320_000 * registrars as Weight // R
 			).into())
 		}
 
@@ -995,11 +997,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 22.85 + R * 0.853 µs (min squares analysis)
+		/// - Benchmark: 7.464 + R * 0.325 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 23_000_000 // constant
-			+ 860_000 * T::MaxRegistrars::get() as Weight // R
+			+ 7_500_000 // constant
+			+ 330_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
@@ -1015,7 +1017,7 @@ decl_module! {
 				Ok(rs.len())
 			})?;
 			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 23_000_000 + 860_000 * registrars as Weight // R
+				+ 7_500_000 + 330_000 * registrars as Weight // R
 			).into())
 		}
 
@@ -1037,12 +1039,10 @@ decl_module! {
 		/// - Up to one account-lookup operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
-		/// - Benchmark: 110.7 + R * 1.066 + X * 3.402 µs (min squares analysis)
 		/// # </weight>
-		#[weight = weight_for::provide_judgement(
-			T::DbWeight::get(),
-			T::MaxRegistrars::get(), // R
-			T::MaxAdditionalFields::get() // X
+		#[weight = weight_for::provide_judgement::<T>(
+			T::MaxRegistrars::get().into(), // R
+			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
@@ -1075,7 +1075,7 @@ decl_module! {
 			<IdentityOf<T>>::insert(&target, id);
 			Self::deposit_event(RawEvent::JudgementGiven(target, reg_index));
 
-			Ok(Some(weight_for::provide_judgement(T::DbWeight::get(), judgements, extra_fields)).into())
+			Ok(Some(weight_for::provide_judgement::<T>(judgements, extra_fields)).into())
 		}
 
 		/// Remove an account's identity and sub-account information and slash the deposits.
@@ -1096,13 +1096,11 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - `S + 2` storage mutations.
 		/// - One event.
-		/// - Benchmark: 167.4 + R * 1.107 + S * 5.343 + X * 2.294 µs (min squares analysis)
 		/// # </weight>
-		#[weight = weight_for::kill_identity(
-			T::DbWeight::get(),
-			T::MaxRegistrars::get(), // R
-			T::MaxSubAccounts::get(), // S
-			T::MaxAdditionalFields::get() // X
+		#[weight = weight_for::kill_identity::<T>(
+			T::MaxRegistrars::get().into(), // R
+			T::MaxSubAccounts::get().into(), // S
+			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::try_origin(origin)
@@ -1123,8 +1121,7 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
 
-			Ok(Some(weight_for::kill_identity(
-				T::DbWeight::get(),
+			Ok(Some(weight_for::kill_identity::<T>(
 				id.judgements.len() as Weight, // R
 				sub_ids.len() as Weight, // S
 				id.info.additional.len() as Weight // X

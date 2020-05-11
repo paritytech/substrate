@@ -98,9 +98,9 @@ pub struct StorageChanges<Transaction, H: Hasher, N: BlockNumber> {
 	/// Offchain state changes to write to the offchain database.
 	pub offchain_storage_changes: OffchainOverlayedChanges,
 	/// A transaction for the backend that contains all changes from
-	/// [`main_storage_changes`](Self::main_storage_changes) and from
-	/// [`child_storage_changes`](Self::child_storage_changes).
-	/// [`offchain_storage_changes`](Self::offchain_storage_changes).
+	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
+	/// [`child_storage_changes`](StorageChanges::child_storage_changes).
+	/// [`offchain_storage_changes`](StorageChanges::offchain_storage_changes).
 	pub transaction: Transaction,
 	/// The storage root after applying the transaction.
 	pub transaction_storage_root: H::Out,
@@ -221,6 +221,39 @@ impl OverlayedChanges {
 				self.stats.tally_read_modified(size_read);
 				x.value.as_ref().map(AsRef::as_ref)
 			})
+	}
+
+	/// Returns mutable reference to current changed value (prospective).
+	/// If there is no value in the overlay, the default callback is used to initiate
+	/// the value.
+	/// Warning this function register a change, so the mutable reference MUST be modified.
+	#[must_use = "A change was registered, so this value MUST be modified."]
+	pub fn value_mut_or_insert_with(
+		&mut self,
+		key: &[u8],
+		init: impl Fn() -> StorageValue,
+	) -> &mut StorageValue {
+		let extrinsic_index = self.extrinsic_index();
+		let committed = &self.committed.top;
+
+		let mut entry = self.prospective.top.entry(key.to_vec())
+			.or_insert_with(|| {
+				if let Some(overlay_state) = committed.get(key).cloned() {
+					overlay_state
+				} else {
+					OverlayedValue { value: Some(init()), ..Default::default() }
+				}
+			});
+
+		//if was deleted initialise back with empty vec
+		if entry.value.is_none() {
+			entry.value = Some(Default::default());
+		}
+		if let Some(extrinsic) = extrinsic_index {
+			entry.extrinsics.get_or_insert_with(Default::default)
+				.insert(extrinsic);
+		}
+		entry.value.as_mut().expect("Initialized above; qed")
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
@@ -456,10 +489,10 @@ impl OverlayedChanges {
 	) {
 		assert!(self.prospective.is_empty());
 		(
-			std::mem::replace(&mut self.committed.top, Default::default())
+			std::mem::take(&mut self.committed.top)
 				.into_iter()
 				.map(|(k, v)| (k, v.value)),
-			std::mem::replace(&mut self.committed.children_default, Default::default())
+			std::mem::take(&mut self.committed.children_default)
 				.into_iter()
 				.map(|(sk, (v, ci))| (sk, (v.into_iter().map(|(k, v)| (k, v.value)), ci))),
 		)

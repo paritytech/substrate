@@ -17,7 +17,7 @@ sp-api = { version = "2.0.0-dev", default-features = false, path = "../api" }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../runtime" }
 
 [dev-dependencies]
-sp-state-machine = { version = "0.8.0-alpha.5", default-features = false, path = "../state-machine" }
+sp-state-machine = { version = "0.8.0-dev", default-features = false, path = "../state-machine" }
 
 [features]
 default = ["std"]

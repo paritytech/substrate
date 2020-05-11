@@ -111,6 +111,12 @@ impl Contains<u64> for TenToFourteen {
 		})
 	}
 }
+impl ContainsLengthBound for TenToFourteen {
+	fn max_len() -> usize {
+		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
+	}
+	fn min_len() -> usize { 0 }
+}
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const ProposalBondMinimum: u64 = 1;

@@ -296,7 +296,25 @@ pub trait RemoteBlockchain<Block: BlockT>: Send + Sync {
 	>>;
 }
 
+/// Returns future that resolves header either locally, or remotely.
+pub fn future_header<Block: BlockT, F: Fetcher<Block>>(
+	blockchain: &dyn RemoteBlockchain<Block>,
+	fetcher: &F,
+	id: BlockId<Block>,
+) -> impl Future<Output = Result<Option<Block::Header>, ClientError>> {
+	use futures::future::{ready, Either, FutureExt};
 
+	match blockchain.header(id) {
+		Ok(LocalOrRemote::Remote(request)) => Either::Left(
+			fetcher
+				.remote_header(request)
+				.then(|header| ready(header.map(Some)))
+		),
+		Ok(LocalOrRemote::Unknown) => Either::Right(ready(Ok(None))),
+		Ok(LocalOrRemote::Local(local_header)) => Either::Right(ready(Ok(Some(local_header)))),
+		Err(err) => Either::Right(ready(Err(err))),
+	}
+}
 
 #[cfg(test)]
 pub mod tests {

@@ -106,7 +106,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Shorthand Example
 ///
 /// The macro automatically expands a shorthand function declaration to return the
-/// [`DispatchResult`] type. These functions are the same:
+/// [`DispatchResult`](dispatch::DispatchResult) type. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
@@ -133,7 +133,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Consuming only portions of the annotated static weight
 ///
 /// Per default a callable function consumes all of its static weight as declared via
-/// the #[weight] attribute. However, there are use cases where only a portion of this
+/// the #\[weight\] attribute. However, there are use cases where only a portion of this
 /// weight should be consumed. In that case the static weight is charged pre dispatch and
 /// the difference is refunded post dispatch.
 ///

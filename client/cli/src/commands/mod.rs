@@ -17,18 +17,20 @@
 mod build_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
+mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
 mod revert_cmd;
-mod runcmd;
+mod run_cmd;
 
-pub use crate::commands::build_spec_cmd::BuildSpecCmd;
-pub use crate::commands::check_block_cmd::CheckBlockCmd;
-pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
-pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
-pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
-pub use crate::commands::revert_cmd::RevertCmd;
-pub use crate::commands::runcmd::RunCmd;
+pub use self::build_spec_cmd::BuildSpecCmd;
+pub use self::check_block_cmd::CheckBlockCmd;
+pub use self::export_blocks_cmd::ExportBlocksCmd;
+pub use self::import_blocks_cmd::ImportBlocksCmd;
+pub use self::purge_chain_cmd::PurgeChainCmd;
+pub use self::revert_cmd::RevertCmd;
+pub use self::run_cmd::RunCmd;
+pub use self::export_state_cmd::ExportStateCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
 
@@ -56,6 +58,9 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
+
+	/// Export state as raw chain spec.
+	ExportState(ExportStateCmd),
 }
 
 // TODO: move to config.rs?
@@ -150,6 +155,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn database_params(&self) -> Option<&$crate::DatabaseParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -235,10 +246,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			fn pruning(&self, unsafe_pruning: bool, role: &::sc_service::Role)
 			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+					$($enum::$variant(cmd) => cmd.pruning(unsafe_pruning, role)),*
 				}
 			}
 
@@ -267,7 +278,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}
@@ -285,9 +296,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn unsafe_rpc_expose(&self) -> $crate::Result<bool> {
+			fn rpc_methods(&self) -> $crate::Result<sc_service::config::RpcMethods> {
 				match self {
-					$($enum::$variant(cmd) => cmd.unsafe_rpc_expose()),*
+					$($enum::$variant(cmd) => cmd.rpc_methods()),*
 				}
 			}
 
@@ -333,7 +344,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
+			fn offchain_worker(
+				&self,
+				role: &::sc_service::Role,
+			) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}
@@ -392,5 +406,6 @@ macro_rules! substrate_cli_subcommands {
 }
 
 substrate_cli_subcommands!(
-	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain
+	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
 );
+

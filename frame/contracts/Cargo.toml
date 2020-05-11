@@ -51,4 +51,5 @@ std = [
 	"pwasm-utils/std",
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
+	"pallet-transaction-payment/std",
 ]

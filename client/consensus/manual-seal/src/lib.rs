@@ -42,7 +42,6 @@ pub use self::{
 	error::Error,
 	rpc::{EngineCommand, CreatedBlock},
 };
-use sc_client_api::{TransactionFor, Backend};
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -66,18 +65,20 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<Block, B>(
-	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>
-) -> BasicQueue<Block, TransactionFor<B, Block>>
+pub fn import_queue<Block, Transaction>(
+	block_import: BoxBlockImport<Block, Transaction>,
+	spawner: &impl sp_core::traits::SpawnBlocking,
+) -> BasicQueue<Block, Transaction>
 	where
 		Block: BlockT,
-		B: Backend<Block> + 'static,
+		Transaction: Send + Sync + 'static,
 {
 	BasicQueue::new(
 		ManualSealVerifier,
-		Box::new(block_import),
+		block_import,
 		None,
 		None,
+		spawner,
 	)
 }
 
@@ -229,7 +230,7 @@ mod tests {
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
-				let sender = std::mem::replace(mut_sender, None);
+				let sender = std::mem::take(mut_sender);
 				EngineCommand::SealNewBlock {
 					create_empty: false,
 					finalize: true,

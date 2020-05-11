@@ -14,11 +14,66 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use kvdb::KeyValueDB;
+use std::{io, sync::Arc};
+use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{DatabaseConfig, Database};
 
+#[derive(Debug, Clone, Copy, derive_more::Display)]
+pub enum DatabaseType {
+	RocksDb,
+	ParityDb,
+}
+
 pub struct TempDatabase(tempfile::TempDir);
+
+struct ParityDbWrapper(parity_db::Db);
+parity_util_mem::malloc_size_of_is_0!(ParityDbWrapper);
+
+impl KeyValueDB for ParityDbWrapper {
+	/// Get a value by key.
+	fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
+		Ok(self.0.get(col as u8, &key[key.len() - 32..]).expect("db error"))
+	}
+
+	/// Get a value by partial key. Only works for flushed data.
+	fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
+		unimplemented!()
+	}
+
+	/// Write a transaction of changes to the buffer.
+	fn write_buffered(&self, transaction: DBTransaction) {
+		self.0.commit(
+			transaction.ops.iter().map(|op| match op {
+				kvdb::DBOp::Insert { col, key, value } => (*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
+				kvdb::DBOp::Delete { col, key } => (*col as u8, &key[key.len() - 32..], None),
+			})
+		).expect("db error");
+	}
+
+	/// Flush all buffered data.
+	fn flush(&self) -> io::Result<()> {
+		Ok(())
+	}
+
+	/// Iterate over flushed data for a given column.
+	fn iter<'a>(&'a self, _col: u32) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+		unimplemented!()
+	}
+
+	/// Iterate over flushed data for a given column, starting from a given prefix.
+	fn iter_from_prefix<'a>(
+		&'a self,
+		_col: u32,
+		_prefix: &'a [u8],
+	) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
+		unimplemented!()
+	}
+
+	/// Attempt to replace this database with a new one located at the given path.
+	fn restore(&self, _new_db: &str) -> io::Result<()> {
+		unimplemented!()
+	}
+}
 
 impl TempDatabase {
 	pub fn new() -> Self {
@@ -32,10 +87,25 @@ impl TempDatabase {
 		TempDatabase(dir)
 	}
 
-	pub fn open(&mut self) -> Arc<dyn KeyValueDB> {
-		let db_cfg = DatabaseConfig::with_columns(1);
-		let db = Database::open(&db_cfg, &self.0.path().to_string_lossy()).expect("Database backend error");
-		Arc::new(db)
+	pub fn open(&mut self, db_type: DatabaseType) -> Arc<dyn KeyValueDB> {
+		match db_type {
+			DatabaseType::RocksDb => {
+				let db_cfg = DatabaseConfig::with_columns(1);
+				let db = Database::open(&db_cfg, &self.0.path().to_string_lossy()).expect("Database backend error");
+				Arc::new(db)
+			},
+			DatabaseType::ParityDb => {
+				Arc::new(ParityDbWrapper({
+					let mut options = parity_db::Options::with_columns(self.0.path(), 1);
+					let mut column_options = &mut options.columns[0];
+					column_options.ref_counted = true;
+					column_options.preimage = true;
+					column_options.uniform = true;
+					parity_db::Db::open(&options).expect("db open error")
+				}))
+			}
+		}
+
 	}
 }
 

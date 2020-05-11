@@ -18,9 +18,9 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
-use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
+use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::{

@@ -17,6 +17,8 @@
 /// A `Database` adapter for parity-db.
 
 use sp_database::{Database, Change, Transaction, ColumnId};
+use crate::utils::NUM_COLUMNS;
+use crate::columns;
 
 struct DbAdapter(parity_db::Db);
 
@@ -30,8 +32,13 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 }
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
-pub fn open<H: Clone>(path: &std::path::Path, num_columns: u32) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
-	let db = parity_db::Db::with_columns(path, num_columns as u8)?;
+pub fn open<H: Clone>(path: &std::path::Path) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
+	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
+	let mut state_col = &mut config.columns[columns::STATE as usize];
+	state_col.ref_counted = true;
+	state_col.preimage = true;
+	state_col.uniform = true;
+	let db = parity_db::Db::open(&config)?;
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 

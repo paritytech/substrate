@@ -64,6 +64,7 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
+	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -140,6 +141,13 @@ pub struct SlashDeferDuration;
 impl Get<EraIndex> for SlashDeferDuration {
 	fn get() -> EraIndex {
 		SLASH_DEFER_DURATION.with(|v| *v.borrow())
+	}
+}
+
+pub struct MaxIterations;
+impl Get<u32> for MaxIterations {
+	fn get() -> u32 {
+		MAX_ITERATIONS.with(|v| *v.borrow())
 	}
 }
 
@@ -310,6 +318,7 @@ impl Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
+	type MaxIterations = MaxIterations;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 }
@@ -337,6 +346,7 @@ pub struct ExtBuilder {
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
+	max_offchain_iterations: u32,
 }
 
 impl Default for ExtBuilder {
@@ -355,6 +365,7 @@ impl Default for ExtBuilder {
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
+			max_offchain_iterations: 0,
 		}
 	}
 }
@@ -412,6 +423,10 @@ impl ExtBuilder {
 		self.has_stakers = has;
 		self
 	}
+	pub fn max_offchain_iterations(mut self, iterations: u32) -> Self {
+		self.max_offchain_iterations = iterations;
+		self
+	}
 	pub fn offchain_phragmen_ext(self) -> Self {
 		self.session_per_era(4)
 			.session_length(5)
@@ -423,6 +438,7 @@ impl ExtBuilder {
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
+		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();
@@ -457,7 +473,7 @@ impl ExtBuilder {
 				(41, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
-				// This allow us to have a total_payout different from 0.
+				// This allows us to have a total_payout different from 0.
 				(999, 1_000_000_000_000),
 			],
 		}.assimilate_storage(&mut storage);
@@ -818,7 +834,7 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
 	// for testing.
 	let score = {
-		let (_, _, better_score) = prepare_submission_with(true, |_| {});
+		let (_, _, better_score) = prepare_submission_with(true, 0, |_| {});
 
 		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
@@ -859,6 +875,7 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 // cannot do it since we want to have `tweak` injected into the process.
 pub(crate) fn prepare_submission_with(
 	do_reduce: bool,
+	iterations: usize,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
 	// run phragmen on the default stuff.
@@ -866,14 +883,25 @@ pub(crate) fn prepare_submission_with(
 		winners,
 		assignments,
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
-	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
+	let winners = sp_phragmen::to_without_backing(winners);
 
 	let stake_of = |who: &AccountId| -> VoteWeight {
 		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
 			Staking::slashable_balance_of(&who)
 		)
 	};
+
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
+	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
+
+	if iterations > 0 {
+		sp_phragmen::equalize(
+			&mut staked,
+			&mut support_map,
+			Zero::zero(),
+			iterations,
+		);
+	}
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
@@ -1006,4 +1034,8 @@ pub(crate) fn staking_events() -> Vec<Event<Test>> {
 			None
 		}
 	}).collect()
+}
+
+pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

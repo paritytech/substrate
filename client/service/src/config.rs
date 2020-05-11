@@ -16,11 +16,11 @@
 
 //! Service configuration.
 
-pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
@@ -38,7 +38,7 @@ pub struct Configuration {
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -59,8 +59,6 @@ pub struct Configuration {
 	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
-	/// Whether potentially unsafe RPC is considered safe to be exposed.
-	pub unsafe_rpc_expose: bool,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
@@ -69,6 +67,8 @@ pub struct Configuration {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
+	/// RPC methods to expose (by default only a safe subset or all of them).
+	pub rpc_methods: RpcMethods,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -100,6 +100,15 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+}
+
+/// Type for tasks spawned by the executor.
+#[derive(PartialEq)]
+pub enum TaskType {
+	/// Regular non-blocking futures. Polling the task is expected to be a lightweight operation.
+	Async,
+	/// The task might perform a lot of expensive CPU operations and/or call `thread::sleep`.
+	Blocking,
 }
 
 /// Configuration of the client keystore.
@@ -160,5 +169,23 @@ impl Configuration {
 	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
+	}
+}
+
+/// Available RPC methods.
+#[derive(Debug, Copy, Clone)]
+pub enum RpcMethods {
+	/// Expose every RPC method only when RPC is listening on `localhost`,
+	/// otherwise serve only safe RPC methods.
+	Auto,
+	/// Allow only a safe subset of RPC methods.
+	Safe,
+	/// Expose every RPC method (even potentially unsafe ones).
+	Unsafe,
+}
+
+impl Default for RpcMethods {
+	fn default() -> RpcMethods {
+		RpcMethods::Auto
 	}
 }
