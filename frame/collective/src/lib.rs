@@ -369,12 +369,14 @@ decl_module! {
 			prime: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(new_members.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
+			// We know that our implementation of `can_change` does not use the old members.
+			let can_set = <Self as ChangeMembers<T::AccountId>>::can_change_members(&new_members, &[]);
+			ensure!(can_set, Error::<T, I>::TooManyMembers);
 
 			let old = Members::<T, I>::get();
 			let mut new_members = new_members;
 			new_members.sort();
-			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], &old);
+			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
 			Prime::<T, I>::set(prime);
 
 			Ok(Some(weight_for::set_members::<T, I>(
@@ -745,6 +747,11 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
+	/// Only allow changing the members when they don't exceed the maximum.
+	fn can_change_members(new: &[T::AccountId], _old: &[T::AccountId]) -> bool {
+		new.len() <= T::MaxMembers::get() as usize
+	}
+
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
 	/// # <weight>
@@ -764,6 +771,9 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
 	) {
+		// limit members to `MaxMembers`
+		let max_length = new.len().min(T::MaxMembers::get() as usize);
+		let new = &new[..max_length];
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort_unstable();
@@ -1201,6 +1211,16 @@ mod tests {
 				}
 			]);
 		});
+	}
+
+	#[test]
+	fn limit_members() {
+		new_test_ext().execute_with(|| {
+			let new_members: Vec<_> = (0..MaxMembers::get() as u64 + 5).collect();
+			assert!(!Collective::can_change_members(&new_members[..], &Collective::members()));
+			Collective::change_members_sorted(&Collective::members(), &[], &new_members[..]);
+			assert_eq!(Collective::members().len(), MaxMembers::get() as usize);
+		})
 	}
 
 	#[test]

@@ -936,6 +936,14 @@ impl WithdrawReasons {
 
 /// Trait for type that can handle incremental changes to a set of account IDs.
 pub trait ChangeMembers<AccountId: Clone + Ord> {
+	/// Returns whether changing the members will execute without errors.
+	///
+	/// If this returns false, calls to `change_members` (and `change_members_sorted`) are
+	/// not guaranteed to have the desired effect.
+	fn can_change_members(_new: &[AccountId], _old: &[AccountId]) -> bool {
+		true
+	}
+
 	/// A number of members `incoming` just joined the set and replaced some `outgoing` ones. The
 	/// new set is given by `new`, and need not be sorted.
 	///
