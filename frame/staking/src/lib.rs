@@ -801,7 +801,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+	type Call: Dispatchable + From<Call<Self>> + IsSubType<Call<Self>> + Clone;
 
 	/// Maximum number of equalise iterations to run in the offchain submission. If set to 0,
 	/// equalize will not be executed at all.

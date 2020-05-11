@@ -315,7 +315,7 @@ pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 	type Call:
 		Parameter +
 		Dispatchable<PostInfo=PostDispatchInfo, Origin=<Self as frame_system::Trait>::Origin> +
-		IsSubType<Module<Self>, Self> + GetDispatchInfo;
+		IsSubType<Call<Self>> + GetDispatchInfo;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;

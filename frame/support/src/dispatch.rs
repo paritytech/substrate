@@ -48,13 +48,13 @@ pub type DispatchErrorWithPostInfo =
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
-pub trait Callable<T> {
+pub trait Callable<R> {
 	type Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo> + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
 
 /// A type that can be used as a parameter in a dispatchable function.
 ///
@@ -1611,8 +1611,8 @@ macro_rules! decl_module {
 	}
 }
 
-pub trait IsSubType<T: Callable<R>, R> {
-	fn is_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
+pub trait IsSubType<T> {
+	fn is_sub_type(&self) -> Option<&T>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1696,7 +1696,7 @@ macro_rules! impl_outer_dispatch {
 			}
 		}
 		$(
-			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
+			impl $crate::dispatch::IsSubType<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {

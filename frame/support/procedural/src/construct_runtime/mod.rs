@@ -86,7 +86,13 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
-	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
+	let inherent = decl_outer_inherent(
+		&name,
+		&block,
+		&unchecked_extrinsic,
+		modules.iter(),
+		&scrate,
+	);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
 
 	let res = quote!(
@@ -142,6 +148,7 @@ fn decl_validate_unsigned<'a>(
 }
 
 fn decl_outer_inherent<'a>(
+	runtime: &'a Ident,
 	block: &'a syn::TypePath,
 	unchecked_extrinsic: &'a syn::TypePath,
 	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
@@ -161,7 +168,10 @@ fn decl_outer_inherent<'a>(
 	});
 	quote!(
 		#scrate::impl_outer_inherent!(
-			impl Inherents where Block = #block, UncheckedExtrinsic = #unchecked_extrinsic {
+			impl Inherents for #runtime where
+				Block = #block,
+				UncheckedExtrinsic = #unchecked_extrinsic
+			{
 				#(#modules_tokens)*
 			}
 		);

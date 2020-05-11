@@ -40,7 +40,9 @@ pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFa
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
-		impl Inherents where Block = $block:ident, UncheckedExtrinsic = $uncheckedextrinsic:ident
+		impl Inherents for $runtime:ident where
+			Block = $block:ident,
+			UncheckedExtrinsic = $uncheckedextrinsic:ident
 		{
 			$( $module:ident: $call:ident, )*
 		}
@@ -54,15 +56,14 @@ macro_rules! impl_outer_inherent {
 		impl InherentDataExt for $crate::inherent::InherentData {
 			fn create_extrinsics(&self) ->
 				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic> {
-				use $crate::inherent::ProvideInherent;
-				use $crate::inherent::Extrinsic;
+				use $crate::inherent::{ProvideInherent, Extrinsic};
 
 				let mut inherents = Vec::new();
 
 				$(
 					if let Some(inherent) = $module::create_inherent(self) {
 						inherents.push($uncheckedextrinsic::new(
-							Call::$call(inherent),
+							inherent.into(),
 							None,
 						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return `Some`; qed"));
 					}
@@ -73,6 +74,7 @@ macro_rules! impl_outer_inherent {
 
 			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
 				use $crate::inherent::{ProvideInherent, IsFatalError};
+				use $crate::dispatch::IsSubType;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 				for xt in block.extrinsics() {
@@ -80,21 +82,18 @@ macro_rules! impl_outer_inherent {
 						break
 					}
 
-					$(
-						match xt.function {
-							Call::$call(ref call) => {
-								if let Err(e) = $module::check_inherent(call, self) {
-									result.put_error(
-										$module::INHERENT_IDENTIFIER, &e
-									).expect("There is only one fatal error; qed");
-									if e.is_fatal_error() {
-										return result
-									}
+					$({
+						if let Some(call) = IsSubType::<_>::is_sub_type(&xt.function) {
+							if let Err(e) = $module::check_inherent(call, self) {
+								result.put_error(
+									$module::INHERENT_IDENTIFIER, &e
+								).expect("There is only one fatal error; qed");
+								if e.is_fatal_error() {
+									return result
 								}
 							}
-							_ => {},
 						}
-					)*
+					})*
 				}
 
 				$(
@@ -105,10 +104,10 @@ macro_rules! impl_outer_inherent {
 									return false
 								}
 
-								match xt.function {
-									Call::$call(_) => true,
-									_ => false,
-								}
+								let call: Option<&<$module as ProvideInherent>::Call> =
+									xt.function.is_sub_type();
+
+								call.is_some()
 							});
 
 							if !found {
