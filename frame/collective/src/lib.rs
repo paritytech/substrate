@@ -1216,8 +1216,8 @@ mod tests {
 	#[test]
 	fn limit_members() {
 		new_test_ext().execute_with(|| {
-			let new_members: Vec<_> = (0..MaxMembers::get() as u64 + 5).collect();
-			assert!(!Collective::can_change_members(&new_members[..], &Collective::members()));
+			let new_members: Vec<u64> = (0..MaxMembers::get() as u64 + 5).collect();
+			assert!(!Collective::can_change_members(&new_members, &Collective::members()));
 			Collective::change_members_sorted(&Collective::members(), &[], &new_members[..]);
 			assert_eq!(Collective::members().len(), MaxMembers::get() as usize);
 		})
