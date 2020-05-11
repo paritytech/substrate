@@ -115,7 +115,7 @@ pub trait RuntimePublic: Sized {
 pub trait RuntimeAppPublic: Sized {
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;
-	/// An identifier for this application-specific crypto type.
+	/// The identifier of the crypto type of this application-specific key type.
 	const CRYPTO_ID: CryptoTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
