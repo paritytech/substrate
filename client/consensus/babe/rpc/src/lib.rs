@@ -130,7 +130,6 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 			};
 
 			for slot_number in epoch_start..epoch_end {
-				let epoch = epoch_data(&shared_epoch, &client, &babe_config, slot_number, &select_chain)?;
 				if let Some((claim, key)) =
 					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &key_pairs)
 				{
