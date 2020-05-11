@@ -372,14 +372,16 @@ impl ExtrinsicsWeight {
 	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
 		match class {
 			DispatchClass::Operational => self.operational = self.operational.saturating_add(weight),
-			_ => self.normal = self.normal.saturating_add(weight),
+			DispatchClass::Normal => self.normal = self.normal.saturating_add(weight),
+			DispatchClass::Mandatory => self.normal = self.normal.saturating_add(weight),
 		};
 	}
 
 	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
 		match class {
 			DispatchClass::Operational => self.operational = self.operational.checked_add(weight).ok_or(())?,
-			_ => self.normal = self.normal.checked_add(weight).ok_or(())?,
+			DispatchClass::Normal => self.normal = self.normal.checked_add(weight).ok_or(())?,
+			DispatchClass::Mandatory => self.normal = self.normal.checked_add(weight).ok_or(())?,
 		}
 		Ok(())
 	}
@@ -387,21 +389,24 @@ impl ExtrinsicsWeight {
 	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
 		match class {
 			DispatchClass::Operational => self.operational = self.operational.saturating_sub(weight),
-			_ => self.normal = self.normal.saturating_sub(weight),
+			DispatchClass::Normal => self.normal = self.normal.saturating_sub(weight),
+			DispatchClass::Mandatory => self.normal = self.normal.saturating_sub(weight),
 		};
 	}
 
 	pub fn get(&self, class: DispatchClass) -> Weight {
 		match class {
 			DispatchClass::Operational => self.operational,
-			_ => self.normal,
+			DispatchClass::Normal => self.normal,
+			DispatchClass::Mandatory => self.normal,
 		}
 	}
 
 	pub fn put(&mut self, new: Weight, class: DispatchClass) {
 		match class {
 			DispatchClass::Operational => self.operational = new,
-			_ => self.normal = new,
+			DispatchClass::Normal => self.normal = new,
+			DispatchClass::Mandatory => self.normal = new,
 		};
 	}
 }
