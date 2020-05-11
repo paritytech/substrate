@@ -277,9 +277,9 @@ decl_module! {
 		fn vote(origin, votes: Vec<T::AccountId>, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
-			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
-			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
-			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0) as usize;
+			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
+			let members_count = <Members<T>>::decode_len().unwrap_or(0);
+			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0);
 			// addition is valid: candidates, members and runners-up will never overlap.
 			let allowed_votes = candidates_count + members_count + runners_up_count;
 
