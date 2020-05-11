@@ -59,7 +59,7 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 }
 
 fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
-	call_wasm_method_with_result(binary, method).unwrap()
+	call_wasm_method_with_result::<HF>(binary, method).unwrap()
 }
 
 #[test]
