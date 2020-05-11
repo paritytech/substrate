@@ -210,16 +210,13 @@ impl<C: SubstrateCli> Runner<C> {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
 			}
 			Subcommand::ExportState(cmd) => cmd.run(self.config, builder),
+			Subcommand::Key(cmd) => cmd.run::<RA>(),
 			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
-			Subcommand::GenerateNodeKey(cmd) => cmd.run(),
-			Subcommand::Generate(cmd) => cmd.run(),
-			Subcommand::InspectKey(cmd) => cmd.run(),
 			Subcommand::Sign(cmd) => cmd.run(),
 			Subcommand::Verify(cmd) => cmd.run(),
 			Subcommand::Vanity(cmd) => cmd.run(),
 			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
-			Subcommand::Insert(cmd) => cmd.run::<RA>(),
 		}
 	}
 

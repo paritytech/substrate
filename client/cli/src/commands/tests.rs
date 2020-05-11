@@ -32,7 +32,7 @@ fn generate_node_key() {
 		.prefix("keyfile")
 		.tempfile()
 		.unwrap();
-	let generate = GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", "/tmp/keyfile"]);
+	let generate = GenerateNodeIdCmd::from_iter(&["generate-node-key", "--file", "/tmp/keyfile"]);
 	assert!(generate.run().is_ok());
 	let mut buf = String::new();
 	assert!(file.read_to_string(&mut buf).is_ok());

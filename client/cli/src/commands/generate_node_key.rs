@@ -21,13 +21,13 @@ use structopt::StructOpt;
 use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 
-/// The `generate-node-key` command
+/// The `generate-node-id` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
-	name = "generate-node-key",
+	name = "generate-node-id",
 	about = "Generate a random node libp2p key, save it to file and print its peer ID"
 )]
-pub struct GenerateNodeKeyCmd {
+pub struct GenerateNodeIdCmd {
 	/// Name of file to save secret key to.
 	#[structopt(long)]
 	file: PathBuf,
@@ -37,7 +37,7 @@ pub struct GenerateNodeKeyCmd {
 	pub shared_params: SharedParams,
 }
 
-impl GenerateNodeKeyCmd {
+impl GenerateNodeIdCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
 		let file = &self.file;
@@ -54,7 +54,7 @@ impl GenerateNodeKeyCmd {
 	}
 }
 
-impl CliConfiguration for GenerateNodeKeyCmd {
+impl CliConfiguration for GenerateNodeIdCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}

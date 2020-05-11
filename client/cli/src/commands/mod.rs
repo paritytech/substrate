@@ -23,6 +23,7 @@ mod purge_chain_cmd;
 mod generate_node_key;
 mod generate;
 mod inspect;
+mod key;
 mod sign;
 mod sign_transaction;
 mod utils;
@@ -47,7 +48,7 @@ pub use self::{
 	import_blocks_cmd::ImportBlocksCmd,
 	purge_chain_cmd::PurgeChainCmd,
 	generate::GenerateCmd,
-	generate_node_key::GenerateNodeKeyCmd,
+	generate_node_key::GenerateNodeIdCmd,
 	insert::InsertCmd,
 	sign::SignCmd,
 	vanity::VanityCmd,
@@ -56,10 +57,10 @@ pub use self::{
 	revert_cmd::RevertCmd,
 	run_cmd::RunCmd,
 	inspect::InspectCmd,
+	key::KeySubcommand,
 	utils::*
 };
 use cli_utils::{IndexFor, CallFor};
-
 
 /// All core commands that are provided by default.
 ///
@@ -89,17 +90,8 @@ pub enum Subcommand {
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
 
-	/// Generate a random node libp2p key, save it to file and print its peer ID
-	GenerateNodeKey(GenerateNodeKeyCmd),
-
-	/// Generate a random account
-	Generate(GenerateCmd),
-
-	/// Gets a public key and a SS58 address from the provided Secret URI
-	InspectKey(InspectCmd),
-
-	/// Insert a key to the keystore of a node.
-	Insert(InsertCmd),
+	/// Subcommand for key utilities, eg. generate-node-key, inspect.
+	Key(KeySubcommand),
 
 	/// Sign a message, with a given (secret) key
 	Sign(SignCmd),
@@ -465,10 +457,7 @@ substrate_cli_subcommands!(
 	CheckBlock,
 	Revert,
 	PurgeChain,
-	GenerateNodeKey,
-	Generate,
-	InspectKey,
-	Insert,
+	Key,
 	Sign,
 	SignTransaction,
 	Verify,

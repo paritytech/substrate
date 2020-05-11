@@ -74,7 +74,7 @@ impl SignTransactionCmd {
 		let pass = self.keystore_params.read_password()?;
 
 		with_crypto_scheme!(
-			self.crypto_scheme.scheme.clone(),
+			self.crypto_scheme.scheme,
 			print_ext<RA>(&self.suri, &pass, call, nonce)
 		)
 	}

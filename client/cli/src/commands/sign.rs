@@ -63,7 +63,7 @@ impl SignCmd {
 		let password = self.keystore_params.read_password()?;
 
 		let signature = with_crypto_scheme!(
-			self.crypto_scheme.scheme.clone(),
+			self.crypto_scheme.scheme,
 			sign(&suri, &password, message)
 		)?;
 
