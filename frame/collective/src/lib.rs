@@ -44,6 +44,7 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 use frame_support::{
 	codec::{Decode, Encode},
 	decl_error, decl_event, decl_module, decl_storage,
+	debug,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
@@ -778,6 +779,13 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	) -> usize {
 		// limit members to `MaxMembers`
 		let length = new.len().min(T::MaxMembers::get() as usize);
+		if length != new.len() {
+			debug::error!(
+				"Dropping excess members because new members are longer ({}) than MaxMembers ({})",
+				new.len(),
+				T::MaxMembers::get()
+			);
+		}
 		let new = &new[..length];
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
