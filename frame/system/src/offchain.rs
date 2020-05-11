@@ -388,8 +388,8 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// type GenericSignature = sr25519::Signature;
 ///
 /// // runtime-specific public key
-/// type GenericPublic = MultiSigner: From<sr25519::Public>;
-/// type GenericSignature = MulitSignature: From<sr25519::Signature>;
+/// type Public = MultiSigner: From<sr25519::Public>;
+/// type Signature = MulitSignature: From<sr25519::Signature>;
 /// ```
 pub trait AppCrypto<Public, Signature> {
 	/// A application-specific crypto.
