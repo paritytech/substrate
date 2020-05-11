@@ -110,7 +110,7 @@ const CATCH_UP_THRESHOLD: u64 = 2;
 const PROPAGATION_ALL: u32 = 4; //in rounds;
 const PROPAGATION_ALL_AUTHORITIES: u32 = 2; //in rounds;
 const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; //in rounds;
-const ROUND_DURATION: u32 = 4; // measured in gossip durations
+const ROUND_DURATION: u32 = 2; // measured in gossip durations
 
 const MIN_LUCKY: usize = 5;
 
