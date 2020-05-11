@@ -399,6 +399,7 @@ build-linux-substrate:             &build-binary
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
 
@@ -416,6 +417,7 @@ build-linux-subkey:                &build-subkey
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
+    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-macos-subkey:

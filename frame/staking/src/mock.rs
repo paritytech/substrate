@@ -473,7 +473,7 @@ impl ExtBuilder {
 				(41, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
-				// This allow us to have a total_payout different from 0.
+				// This allows us to have a total_payout different from 0.
 				(999, 1_000_000_000_000),
 			],
 		}.assimilate_storage(&mut storage);
@@ -1034,4 +1034,8 @@ pub(crate) fn staking_events() -> Vec<Event<Test>> {
 			None
 		}
 	}).collect()
+}
+
+pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
