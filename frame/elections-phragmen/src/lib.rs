@@ -376,13 +376,14 @@ decl_module! {
 			let reporter = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
 
+			ensure!(reporter != target, Error::<T>::ReportSelf);
+
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
 			// TODO: refund based on actual is less than predicted.
 			ensure!(
-				actual_count as u32 == candidate_count,
+				actual_count as u32 <= candidate_count,
 				Error::<T>::InvalidCandidateCount,
 			);
-			ensure!(reporter != target, Error::<T>::ReportSelf);
 			ensure!(Self::is_voter(&reporter), Error::<T>::MustBeVoter);
 
 			// Checking if someone is a candidate and a member here is O(LogN), making the whole
@@ -426,7 +427,7 @@ decl_module! {
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
 			// TODO: refund based on actual is less than predicted.
 			ensure!(
-				actual_count as u32 == candidate_count,
+				actual_count as u32 <= candidate_count,
 				Error::<T>::InvalidCandidateCount,
 			);
 
@@ -1780,6 +1781,21 @@ mod tests {
 
 			// correct candidate length.
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(4), 5, 2));
+		});
+	}
+
+	#[test]
+	fn reporter_can_overestimate_length() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(submit_candidacy(Origin::signed(5)));
+			assert_ok!(submit_candidacy(Origin::signed(4)));
+
+			// both are defunct.
+			assert_ok!(Elections::vote(Origin::signed(5), vec![99], 50));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![999], 40));
+
+			// 2 candidates! overestimation is okay.
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(4), 5, 3));
 		});
 	}
 
