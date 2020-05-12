@@ -551,7 +551,6 @@ impl<T: Trait> Module<T> {
 			let old = [who.clone()];
 			// We don't need to check the actual new members length because it will be the same
 			// as before or one less.
-			// TODO: Is this safe without ensure_can_change_members?
 			let _ = match maybe_replacement {
 				Some(new) => T::ChangeMembers::change_members_sorted(&[new], &old, &members),
 				None => T::ChangeMembers::change_members_sorted(&[], &old, &members),
