@@ -39,9 +39,9 @@ use sp_application_crypto::Public;
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber, BabeEpochConfiguration,
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, PreDigest},
+	digests::{NextEpochDescriptor, NextConfigDescriptor, PreDigest},
 };
 use sp_consensus_vrf::schnorrkel;
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
@@ -136,7 +136,7 @@ decl_storage! {
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
 		/// Next epoch configuration, if changed.
-		NextEpochConfig: Option<BabeEpochConfiguration>;
+		NextEpochConfig: Option<NextConfigDescriptor>;
 
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
@@ -367,7 +367,7 @@ impl<T: Trait> Module<T> {
 	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
 	/// method will replace any existing planned config change that had not been enacted yet.
 	pub fn plan_config_change(
-		config: BabeEpochConfiguration,
+		config: NextConfigDescriptor,
 	) {
 		NextEpochConfig::put(config);
 	}
