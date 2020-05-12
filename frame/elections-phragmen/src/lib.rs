@@ -359,7 +359,7 @@ decl_module! {
 		///     longer a candidate nor an active member or a runner-up.
 		///
 		///
-		/// The origin must provide teh number of current candidates for the purpose of accurate
+		/// The origin must provide the number of current candidates for the purpose of accurate
 		/// weight calculation.
 		///
 		/// # <weight>
@@ -460,7 +460,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			match renouncing {
 				Renouncing::Member => {
-					// returns NorMember error in case of error.
+					// returns NoMember error in case of error.
 					let _ = Self::remove_and_replace_member(&who)?;
 					T::Currency::unreserve(&who, T::CandidacyBond::get());
 					Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
