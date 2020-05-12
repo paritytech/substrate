@@ -23,7 +23,7 @@ use frame_support::{assert_ok, assert_noop};
 
 #[test]
 fn new_test_ext_and_sudo_get_key_works() {
-	// Test that the enivroment setup and pallets `key` retrieval works as expected.
+	// Test that the environment setup and pallets `key` retrieval works as expected.
 	new_test_ext(1).execute_with(|| {
 		assert_eq!(Sudo::key(),  1u64);
 	});
@@ -31,14 +31,14 @@ fn new_test_ext_and_sudo_get_key_works() {
 
 #[test]
 fn sudo_basics() {
-	// Configure a default test enviroment and set the root `key` to 1.
+	// Configure a default test environment and set the root `key` to 1.
 	new_test_ext(1).execute_with(|| {
-		// A priveleged function should work when `sudo` is passed the root `key` as `origin`.
+		// A privileged function should work when `sudo` is passed the root `key` as `origin`.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
 		assert_eq!(logger::log(), vec![42u64]); 
 		
-		// A priveleged function should not work when `sudo` is passed a non-root `key` as `origin`.
+		// A privileged function should not work when `sudo` is passed a non-root `key` as `origin`.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_noop!(Sudo::sudo(Origin::signed(2), call), Error::<Test>::RequireSudo);
 		assert_eq!(logger::log(), vec![42u64]); 
@@ -51,7 +51,7 @@ fn sudo_emits_events_correctly() {
 		// Set block number to 1 because events are not emitted on block 0.
 		System::set_block_number(1);
 
-		// Should emit event to indicate succes when called with the root `key` and `call` is `Ok`.
+		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
 		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
@@ -62,12 +62,12 @@ fn sudo_emits_events_correctly() {
 #[test]
 fn sudo_unchecked_weight_basics() {
 	new_test_ext(1).execute_with(|| {
-		// A priveleged function should work when `sudo` is passed the root `key` as origin.
+		// A privileged function should work when `sudo` is passed the root `key` as origin.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
 		assert_eq!(logger::log(), vec![42u64]); 
 
-		// A priveleged function should not work when called with a non-root `key`.
+		// A privileged function should not work when called with a non-root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_noop!(
 			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000), 
@@ -89,7 +89,7 @@ fn sudo_unchecked_weight_emits_events_correctly() {
 		// Set block number to 1 because events are not emitted on block 0.
 		System::set_block_number(1);
 
-		// Should emit event to indicate succes when called with the root `key` and `call` is `Ok`.
+		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
 		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
@@ -132,18 +132,18 @@ fn set_key_emits_events_correctly() {
 #[test]
 fn sudo_as_basics() {
 	new_test_ext(1).execute_with(|| {	
-		// A priveleged function will not work when passed to `sudo_as`.
+		// A privileged function will not work when passed to `sudo_as`.
 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(logger::log(), vec![]); 
 
-		// A non-priveleged function should not work when called with a non-root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_priveleged_log(42, 1)));
+		// A non-privileged function should not work when called with a non-root `key`.
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_noop!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
 		assert_eq!(logger::log(), vec![]); 
 
-		// A non-priveleged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_priveleged_log(42, 1)));
+		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(logger::log(), vec![42u64]); 
 	});
@@ -155,8 +155,8 @@ fn sudo_as_emits_events_correctly() {
 		// Set block number to 1 because events are not emitted on block 0.
 		System::set_block_number(1);
 
-		// A non-priveleged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_priveleged_log(42, 1)));
+		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		let expected_event = TestEvent::sudo(RawEvent::SudoAsDone(true));
 		assert!(System::events().iter().any(|a| {a.event == expected_event}));

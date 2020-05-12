@@ -75,7 +75,7 @@ pub mod logger {
 				|_: (&u64, &Weight)| DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn non_priveleged_log(origin, i: u64, weight: Weight){
+			fn non_privileged_log(origin, i: u64, weight: Weight){
 				// Ensure that the `origin` is some signed account.
 				ensure_signed(origin)?;
 				Self::deposit_event(Event::Logged(i, weight));
@@ -153,7 +153,7 @@ impl logger::Trait for Test {
 	type Event = TestEvent;
 }
 
-// Implement the sudo modules's `Trait` on the Test runtime.
+// Implement the sudo module's `Trait` on the Test runtime.
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
@@ -168,7 +168,7 @@ pub type System = system::Module<Test>;
 pub type SudoCall = sudo::Call<Test>;
 pub type LoggerCall = logger::Call<Test>;
 
-// Build test enviroment by setting the root `key` for the Genesis.
+// Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
