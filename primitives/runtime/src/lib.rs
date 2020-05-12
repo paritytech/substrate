@@ -62,7 +62,7 @@ pub use crate::runtime_string::*;
 pub use generic::{DigestItem, Digest};
 
 /// Re-export this since it's part of the API of this crate.
-pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, AccountId32}};
+pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, CryptoTypeId, AccountId32}};
 pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.

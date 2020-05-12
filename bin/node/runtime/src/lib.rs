@@ -175,14 +175,14 @@ impl pallet_utility::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MaximumWeight: Weight = 2_000_000;
+	pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 
 impl pallet_scheduler::Trait for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type MaximumWeight = MaximumWeight;
+	type MaximumWeight = MaximumSchedulerWeight;
 }
 
 parameter_types! {
@@ -967,6 +967,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"identity", Identity);
 			add_benchmark!(params, batches, b"im-online", ImOnline);
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
+			add_benchmark!(params, batches, b"scheduler", Scheduler);
 			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 			add_benchmark!(params, batches, b"staking", Staking);
 			add_benchmark!(params, batches, b"system", SystemBench::<Runtime>);

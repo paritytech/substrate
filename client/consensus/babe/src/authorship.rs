@@ -124,7 +124,7 @@ pub(super) fn secondary_slot_author(
 fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	keystore: &KeyStorePtr,
+	key_pairs: &[(AuthorityPair, usize)],
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityPair)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -139,14 +139,7 @@ fn claim_secondary_slot(
 		*randomness,
 	)?;
 
-	let keystore = keystore.read();
-
-	for (pair, authority_index) in authorities.iter()
-		.enumerate()
-		.flat_map(|(i, a)| {
-			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})
-	{
+	for (pair, authority_index) in key_pairs {
 		if pair.public() == *expected_author {
 			let pre_digest = if author_secondary_vrf {
 				let transcript = super::authorship::make_transcript(
@@ -161,16 +154,16 @@ fn claim_secondary_slot(
 					slot_number,
 					vrf_output: VRFOutput(s.0.to_output()),
 					vrf_proof: VRFProof(s.1),
-					authority_index: authority_index as u32,
+					authority_index: *authority_index as u32,
 				})
 			} else {
 				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
-					authority_index: authority_index as u32,
+					authority_index: *authority_index as u32,
 				})
 			};
 
-			return Some((pre_digest, pair));
+			return Some((pre_digest, pair.clone()));
 		}
 	}
 
@@ -186,7 +179,26 @@ pub fn claim_slot(
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore)
+	let key_pairs = {
+		let keystore = keystore.read();
+		epoch.authorities.iter()
+			.enumerate()
+			.flat_map(|(i, a)| {
+				keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+			})
+			.collect::<Vec<_>>()
+	};
+	claim_slot_using_key_pairs(slot_number, epoch, &key_pairs)
+}
+
+/// Like `claim_slot`, but allows passing an explicit set of key pairs. Useful if we intend
+/// to make repeated calls for different slots using the same key pairs.
+pub fn claim_slot_using_key_pairs(
+	slot_number: SlotNumber,
+	epoch: &Epoch,
+	key_pairs: &[(AuthorityPair, usize)],
+) -> Option<(PreDigest, AuthorityPair)> {
+	claim_primary_slot(slot_number, epoch, epoch.config.c, &key_pairs)
 		.or_else(|| {
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
@@ -194,7 +206,7 @@ pub fn claim_slot(
 				claim_secondary_slot(
 					slot_number,
 					&epoch,
-					keystore,
+					&key_pairs,
 					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {
@@ -216,39 +228,33 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	keystore: &KeyStorePtr,
+	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityPair)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
-	let keystore = keystore.read();
 
-	for (pair, authority_index) in authorities.iter()
-		.enumerate()
-		.flat_map(|(i, a)| {
-			keystore.key_pair::<AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-		})
-	{
+	for (pair, authority_index) in key_pairs {
 		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
 
 		// Compute the threshold we will use.
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
-		let threshold = super::authorship::calculate_primary_threshold(c, authorities, authority_index);
+		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let pre_digest = get_keypair(&pair)
+		let pre_digest = get_keypair(pair)
 			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
 			.map(|s| {
 				PreDigest::Primary(PrimaryPreDigest {
 					slot_number,
 					vrf_output: VRFOutput(s.0.to_output()),
 					vrf_proof: VRFProof(s.1),
-					authority_index: authority_index as u32,
+					authority_index: *authority_index as u32,
 				})
 			});
 
 		// early exit on first successful claim
 		if let Some(pre_digest) = pre_digest {
-			return Some((pre_digest, pair));
+			return Some((pre_digest, pair.clone()));
 		}
 	}
 
