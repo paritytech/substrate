@@ -17,7 +17,7 @@
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
-use crate::{storage::{self, unhashed, StorageAppend}, traits::Len, Never};
+use crate::{storage::{self, unhashed, StorageAppend}, Never};
 use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
@@ -258,23 +258,6 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 		sp_io::storage::append(&final_key, item.encode());
-	}
-
-	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str> where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		V: codec::DecodeLength + Len,
-	{
-		let final_key = Self::storage_double_map_final_key(key1, key2);
-		if let Some(v) = unhashed::get_raw(&final_key) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
-		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
-				.map(|v| v.len())
-				.unwrap_or(0);
-
-			Ok(len)
-		}
 	}
 
 	fn migrate_keys<
