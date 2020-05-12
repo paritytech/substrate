@@ -18,7 +18,7 @@
 use sp_core::crypto::Pair;
 
 use codec::Codec;
-use sp_core::crypto::{KeyTypeId, CryptoType, IsWrappedBy, Public};
+use sp_core::crypto::{KeyTypeId, CryptoType, CryptoTypeId, IsWrappedBy, Public};
 use sp_std::{fmt::Debug, vec::Vec};
 
 /// An application-specific key.
@@ -115,6 +115,8 @@ pub trait RuntimePublic: Sized {
 pub trait RuntimeAppPublic: Sized {
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;
+	/// The identifier of the crypto type of this application-specific key type.
+	const CRYPTO_ID: CryptoTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
 	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone;
