@@ -628,8 +628,6 @@ decl_module! {
 		///
 		/// - `proposal_hash`: The hash of the proposal preimage.
 		/// - `value`: The amount of deposit (must be at least `MinimumDeposit`).
-		/// - `proposals_upper_bound`: an upper bound on the current number of public proposals.
-		///   Extrinsic is weighted according to this value with no refund.
 		///
 		/// Emits `Proposed`.
 		///
