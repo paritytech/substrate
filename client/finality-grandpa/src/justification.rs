@@ -140,7 +140,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 				&mut buf,
 			) {
 				return Err(ClientError::BadJustification(
-					"invalid signature for precommit in grandpa justification".to_string()).into());
+					"invalid signature for precommit in grandpa justification".to_string()));
 			}
 
 			if self.commit.target_hash == signed.precommit.target_hash {
@@ -157,7 +157,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 				},
 				_ => {
 					return Err(ClientError::BadJustification(
-						"invalid precommit ancestry proof in grandpa justification".to_string()).into());
+						"invalid precommit ancestry proof in grandpa justification".to_string()));
 				},
 			}
 		}
@@ -169,7 +169,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 
 		if visited_hashes != ancestry_hashes {
 			return Err(ClientError::BadJustification(
-				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
+				"invalid precommit ancestries in grandpa justification with unused headers".to_string()));
 		}
 
 		Ok(())

@@ -328,7 +328,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		}
 		Some(other) => return Err(ClientError::Backend(
 			format!("Unsupported GRANDPA DB version: {:?}", other)
-		).into()),
+		)),
 	}
 
 	// genesis.

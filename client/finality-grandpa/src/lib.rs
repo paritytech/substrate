@@ -474,7 +474,7 @@ impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorPr
 			.and_then(|call_result| {
 				Decode::decode(&mut &call_result[..])
 					.map_err(|err| ClientError::CallResultDecode(
-						"failed to decode GRANDPA authorities set proof".into(), err
+						"failed to decode GRANDPA authorities set proof", err
 					))
 			})
 	}

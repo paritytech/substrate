@@ -108,7 +108,7 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
-				rounds: rounds.into(),
+				rounds,
 				set_id,
 				voters,
 			})

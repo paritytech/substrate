@@ -263,7 +263,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
 		Ok(r) => return Ok(r),
-		Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+		Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 	};
 
 	match justification {
@@ -435,7 +435,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 				hash,
 			);
 
-			return Err(ConsensusError::ClientImport(e.to_string()).into());
+			return Err(ConsensusError::ClientImport(e.to_string()));
 		},
 		Ok(justification) => {
 			trace!(
