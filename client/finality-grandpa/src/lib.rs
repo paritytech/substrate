@@ -916,7 +916,7 @@ where
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				if let None = self.shared_voter_state.reset(voter.voter_state()) {
+				if self.shared_voter_state.reset(voter.voter_state()).is_none() {
 					info!(target: "afg",
 						"Timed out trying to update shared GRANDPA voter state. \
 						RPC endpoints may return stale data."
