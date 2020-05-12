@@ -78,7 +78,6 @@ use std::{
 	collections::HashMap, sync::Arc, u64, pin::Pin, time::{Instant, Duration},
 	any::Any, borrow::Cow
 };
-use sp_consensus_babe;
 use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
@@ -186,7 +185,7 @@ impl Epoch {
 			start_slot: slot_number,
 			duration: genesis_config.epoch_length,
 			authorities: genesis_config.genesis_authorities.clone(),
-			randomness: genesis_config.randomness.clone(),
+			randomness: genesis_config.randomness,
 			config: BabeEpochConfiguration {
 				c: genesis_config.c,
 				allowed_slots: genesis_config.allowed_slots,
@@ -399,7 +398,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 
 	register_babe_inherent_data_provider(&inherent_data_providers, config.slot_duration())?;
 	sc_consensus_uncles::register_uncles_inherent_data_provider(
-		client.clone(),
+		client,
 		select_chain.clone(),
 		&inherent_data_providers,
 	)?;
@@ -494,7 +493,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			&self.keystore,
 		);
 
-		if let Some(_) = s {
+		if s.is_some() {
 			debug!(target: "babe", "Claimed slot {}", slot_number);
 		}
 
@@ -796,7 +795,7 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let v_params = verification::VerificationParams {
 			header: header.clone(),
-			pre_digest: Some(pre_digest.clone()),
+			pre_digest: Some(pre_digest),
 			slot_now: slot_now + 1,
 			epoch: viable_epoch.as_ref(),
 		};
@@ -952,7 +951,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
-		let number = block.header.number().clone();
+		let number = *block.header.number();
 
 		// early exit if block already in chain, otherwise the check for
 		// epoch changes will error when trying to re-import an epoch change
@@ -1133,7 +1132,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 		aux_schema::write_block_weight(
 			hash,
-			&total_weight,
+			total_weight,
 			|values| block.auxiliary.extend(
 				values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
 			),
@@ -1153,7 +1152,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				aux_schema::load_block_weight(&*self.client, last_best)
 					.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
 					.ok_or_else(
-						|| ConsensusError::ChainLookup(format!("No block weight for parent header."))
+						|| ConsensusError::ChainLookup("No block weight for parent header.".to_string())
 					)?
 			};
 
@@ -1170,7 +1169,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 		// revert to the original epoch changes in case there's an error
 		// importing the block
-		if let Err(_) = import_result {
+		if import_result.is_err() {
 			if let Some(old_epoch_changes) = old_epoch_changes {
 				*epoch_changes = old_epoch_changes;
 			}
@@ -1283,7 +1282,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
 	let verifier = BabeVerifier {
-		client: client.clone(),
+		client,
 		inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,

@@ -19,7 +19,6 @@ use crate::{
 	Never,
 	storage::{self, unhashed, StorageAppend},
 	hash::{Twox128, StorageHasher},
-	traits::Len
 };
 
 /// Generator for `StorageValue` used by `decl_storage`.
@@ -140,20 +139,5 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	{
 		let key = Self::storage_value_final_key();
 		sp_io::storage::append(&key, item.encode());
-	}
-
-	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
-		let key = Self::storage_value_final_key();
-
-		// attempt to get the length directly.
-		if let Some(k) = unhashed::get_raw(&key) {
-			<T as codec::DecodeLength>::len(&k).map_err(|e| e.what())
-		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
-				.map(|v| v.len())
-				.unwrap_or(0);
-
-			Ok(len)
-		}
 	}
 }
