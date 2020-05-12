@@ -2,7 +2,7 @@
 #
 # check if line width of rust source files is not beyond x characters
 #
-
+set -e
 
 BASE_BRANCH="origin/master"
 LINE_WIDTH="121"
