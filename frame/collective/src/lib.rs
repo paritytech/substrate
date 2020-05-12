@@ -41,7 +41,8 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
+	debug,
+	dispatch::{Dispatchable, DispatchResult, Parameter}, codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
 	weights::DispatchClass,
@@ -72,6 +73,9 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
+
+	/// Maxmimum number of members allowed as part of the collective.
+	type MaxMembers: Get<MemberCount>;
 }
 
 /// Origin for the collective module.
@@ -168,6 +172,8 @@ decl_error! {
 		AlreadyInitialized,
 		/// The close call is made too early, before the end of the voting.
 		TooEarly,
+		/// There can only be a maximum of `MaxMembers`.
+		TooManyMembers,
 	}
 }
 
@@ -190,10 +196,14 @@ decl_module! {
 		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>) {
 			ensure_root(origin)?;
+			// We know that our implementation of `ensure_can_change_members` does not use the old members.
+			<Self as ChangeMembers<T::AccountId>>::ensure_can_change_members(&new_members, &[])?;
+
+			let old = Members::<T, I>::get();
 			let mut new_members = new_members;
 			new_members.sort();
-			let old = Members::<T, I>::get();
-			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], &old);
+			// We can drop the members count from `ChangeMembers` because we used the ensure above.
+			let _ = <Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
 			Prime::<T, I>::set(prime);
 		}
 
@@ -379,11 +389,32 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
+	/// Only allow changing the members when they don't exceed the maximum.
+	fn ensure_can_change_members(new: &[T::AccountId], _old: &[T::AccountId]) -> DispatchResult {
+		ensure!(new.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
+		Ok(())
+	}
+
+	/// Update the members of the collective. Votes are updated and the prime is reset.
+	///
+	/// NOTE: Will only allow setting up to `MaxMembers` members. Any excess members will be
+	///       dropped and not inserted. Use `ensure_can_change_members` to check before
+	///       calling this to make sure no members are dropped.
 	fn change_members_sorted(
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
 	) -> usize {
+		// limit members to `MaxMembers`
+		let length = new.len().min(T::MaxMembers::get() as usize);
+		if length != new.len() {
+			debug::error!(
+				"Dropping excess members because new members are longer ({}) than MaxMembers ({})",
+				new.len(),
+				T::MaxMembers::get()
+			);
+		}
+		let new = &new[..length];
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort_unstable();
@@ -402,7 +433,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		}
 		Members::<T, I>::put(new);
 		Prime::<T, I>::kill();
-		new.len()
+		length
 	}
 
 	fn set_prime(prime: Option<T::AccountId>) {
@@ -540,6 +571,7 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 		pub const MotionDuration: u64 = 3;
+		pub const MaxMembers: MemberCount = 100;
 	}
 	impl frame_system::Trait for Test {
 		type Origin = Origin;
@@ -570,12 +602,14 @@ mod tests {
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
+		type MaxMembers = MaxMembers;
 	}
 	impl Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
+		type MaxMembers = MaxMembers;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -787,6 +821,19 @@ mod tests {
 				}
 			]);
 		});
+	}
+
+	#[test]
+	fn limit_members() {
+		new_test_ext().execute_with(|| {
+			let new_members: Vec<u64> = (0..MaxMembers::get() as u64 + 5).collect();
+			assert_err!(
+				Collective::ensure_can_change_members(&new_members, &Collective::members()),
+				Error::<Test, Instance1>::TooManyMembers
+			);
+			Collective::change_members_sorted(&Collective::members(), &[], &new_members);
+			assert_eq!(Collective::members().len(), MaxMembers::get() as usize);
+		})
 	}
 
 	#[test]
