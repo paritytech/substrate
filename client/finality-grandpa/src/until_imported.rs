@@ -359,7 +359,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 			}
 		}
 
-		return Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
+		Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
 	}
 
 	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked> {

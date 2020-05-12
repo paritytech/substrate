@@ -108,6 +108,6 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))));
 		}
 
-		return Poll::Pending;
+		Poll::Pending
 	}
 }

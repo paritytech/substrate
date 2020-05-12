@@ -304,7 +304,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				match decoded {
 					Err(ref e) => {
 						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
-						return future::ready(None);
+						future::ready(None)
 					}
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
@@ -343,7 +343,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						return future::ready(None);
+						future::ready(None)
 					}
 				}
 			});
