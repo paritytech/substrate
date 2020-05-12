@@ -194,8 +194,8 @@ benchmarks! {
 		// number of already existing candidates that may or may not be voted by the reported
 		// account.
 		let c in 1 .. MAX_CANDIDATES;
-		// number of candidates that the reported voter voted for. This may or may not have any
-		// impact on the outcome.
+		// number of candidates that the reported voter voted for. The worse case of search here is
+		// basically `c * v`.
 		let v in 1 .. (MAXIMUM_VOTE as u32);
 		clean::<T>();
 
@@ -249,8 +249,8 @@ benchmarks! {
 		// number of already existing candidates that may or may not be voted by the reported
 		// account.
 		let c in 1 .. MAX_CANDIDATES;
-		// number of candidates that the reported voter voted for. This may or may not have any
-		// impact on the outcome.
+		// number of candidates that the reported voter voted for. The worse case of search here is
+		// basically `c * v`.
 		let v in 2 .. (MAXIMUM_VOTE as u32);
 
 		clean::<T>();
