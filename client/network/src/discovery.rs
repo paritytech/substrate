@@ -26,12 +26,12 @@
 //!
 //! - mDNS. Discovers nodes on the local network by broadcasting UDP packets.
 //!
-//! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests in
-//! order for nodes to propagate to us their view of the network. This is performed automatically
-//! by the `DiscoveryBehaviour`.
+//! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests on the
+//! configured Kademlia DHTs in order for nodes to propagate to us their view of the network. This
+//! is performed automatically by the `DiscoveryBehaviour`.
 //!
 //! Additionally, the `DiscoveryBehaviour` is also capable of storing and loading value in the
-//! network-wide DHT.
+//! configured DHTs.
 //!
 //! ## Usage
 //!
@@ -68,6 +68,9 @@ use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
 /// `DiscoveryBehaviour` configuration.
+///
+/// Note: In order to discover nodes or load and store values via Kademlia one has to add at least
+///       one protocol via [`DiscoveryConfig::add_protocol`].
 pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	user_defined: Vec<(PeerId, Multiaddr)>,
@@ -81,7 +84,7 @@ pub struct DiscoveryConfig {
 impl DiscoveryConfig {
 	/// Create a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
-		let mut this = DiscoveryConfig {
+		DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
 			user_defined: Vec::new(),
 			allow_private_ipv4: true,
@@ -89,15 +92,7 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
 			kademlias: HashMap::new()
-		};
-
-		// Temporary hack to retain backwards compatibility.
-		// We should eventually remove the special handling of DEFAULT_PROTO_NAME.
-		let proto_id = ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME);
-		let proto_name = Vec::from(proto_id.as_bytes());
-		this.add_kademlia(proto_id, proto_name);
-
-		this
+		}
 	}
 
 	/// Set the number of active connections at which we pause discovery.
@@ -706,6 +701,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 #[cfg(test)]
 mod tests {
+	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::identity::Keypair;
 	use libp2p::Multiaddr;
@@ -744,11 +740,15 @@ mod tests {
 				});
 
 			let behaviour = {
+				let protocol_id: &[u8] = b"/test/kad/1.0.0";
+
 				let mut config = DiscoveryConfig::new(keypair.public());
 				config.with_user_defined(user_defined.clone())
 					.allow_private_ipv4(true)
 					.allow_non_globals_in_dht(true)
-					.discovery_limit(50);
+					.discovery_limit(50)
+					.add_protocol(ProtocolId::from(protocol_id));
+
 				config.finish()
 			};
 
