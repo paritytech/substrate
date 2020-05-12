@@ -380,7 +380,7 @@ decl_module! {
 		/// The chunk size of the approval vector.
 		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
-		const ModuleId: LockIdentifier  = T::ModuleId::get();
+		const ModuleId: LockIdentifier = T::ModuleId::get();
 
 		fn deposit_event() = default;
 

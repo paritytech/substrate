@@ -17,55 +17,97 @@
 //! Test utilities
 
 use super::*;
-
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
-	weights::Weight,
-	// traits::{OnInitialize, OnFinalize},
+	weights::{Weight, DispatchClass}
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-use sp_runtime::{
-	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
-};
+use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
-
 use crate as sudo;
+
+// This logger module used by privileged_function() to track execution.
+// Adapted from the logger in `frame/scheduler/src/lib.rs` `tests`. 
+pub mod logger {
+	use super::*;
+	use std::cell::RefCell;
+	use frame_system::ensure_root;
+
+	thread_local! {
+		static LOG: RefCell<Vec<u64>> = RefCell::new(Vec::new());
+	}
+	pub fn log() -> Vec<u64> {
+		LOG.with(|log| log.borrow().clone())
+	}
+	pub trait Trait: system::Trait {
+		type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	}
+	decl_storage! {
+		trait Store for Module<T: Trait> as Logger {
+		}
+	}
+	decl_event! {
+		pub enum Event {
+			Logged(u64, Weight),
+		}
+	}
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+			fn deposit_event() = default;
+
+			#[weight = FunctionOf(
+				|args: (&u64, &Weight)| *args.1,
+				|_: (&u64, &Weight)| DispatchClass::Normal,
+				Pays::Yes,
+			)]
+			fn log(origin, i: u64, weight: Weight){
+				ensure_root(origin)?;
+				Self::deposit_event(Event::Logged(i, weight));
+				LOG.with(|log| {
+					log.borrow_mut().push(i);
+				})
+			}
+
+			#[weight = FunctionOf(
+				|args: (&u64, &Weight)| *args.1,
+				|_: (&u64, &Weight)| DispatchClass::Normal,
+				Pays::Yes,
+			)]
+			fn non_privileged_log(origin, i: u64, weight: Weight){
+				// Ensure that the `origin` is some signed account.
+				ensure_signed(origin)?;
+				Self::deposit_event(Event::Logged(i, weight));
+				LOG.with(|log| {
+					log.borrow_mut().push(i);
+				})
+			}
+		}
+	}
+}
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
+
+mod test_events {
+    pub use crate::Event;
+}
+
 impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
 		sudo<T>,
+		logger,
 	}
 }
+
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		sudo::Sudo,
-		priveleged_fn_test_module::Priveleged,
+		logger::Logger,
 	}
-}
-
-// Dummy module with a privelleged dispatchable function for testing sudo
-mod priveleged_fn_test_module {
-	use frame_support::{decl_module, dispatch};
-	use frame_system::ensure_root;
-	pub trait Trait: frame_system::Trait {}
-
-	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-			#[weight = 0]
-			pub fn privileged_function(origin) -> dispatch::DispatchResult {
-				ensure_root(origin)?;
-				println!("This is priveleged_fn_test_module::privileged_function() doing something.");
-				Ok(())
-			}
-		}
-	}
-
 }
 
 // For testing the pallet, we construct most of a mock runtime. This means
@@ -106,25 +148,27 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 
-// Implement the sudo modules's Trait on the Test runtime
+// Implement the logger module's `Trait` on the Test runtime.
+impl logger::Trait for Test {
+	type Event = TestEvent;
+}
+
+// Implement the sudo module's `Trait` on the Test runtime.
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
 }
 
-// Implement the privelleged test module's Trait on the Test runtime
-impl priveleged_fn_test_module::Trait for Test {}
-
 // Assign back to type variables so we can make dispatched calls of these modules later.
-// New type that wraps the runtime mock in the pallets module
 pub type Sudo = Module<Test>;
-// New type that wraps the runtime mock in the priveleged module
-pub type Priveleged = priveleged_fn_test_module::Module<Test>;
+pub type Logger = logger::Module<Test>;
+pub type System = system::Module<Test>;
 
-// New type for dispatchable functions from priveleged module for the mock runtime
-pub type PrivelegedCall = priveleged_fn_test_module::Call<Test>;
+// New types for dispatchable functions.
+pub type SudoCall = sudo::Call<Test>;
+pub type LoggerCall = logger::Call<Test>;
 
-// Build test enviroment by setting the root_key for the Genesis
+// Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig::<Test>{
