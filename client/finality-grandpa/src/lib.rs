@@ -731,7 +731,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
 				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
-					.unwrap_or(Default::default());
+					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => maybe_authority_id.to_string(),
@@ -868,7 +868,7 @@ where
 
 		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
 			.map(|ap| ap.public())
-			.unwrap_or(Default::default());
+			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
