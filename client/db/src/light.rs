@@ -62,7 +62,7 @@ pub struct LightStorage<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
-	header_metadata_cache: HeaderMetadataCache<Block>,
+	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 
 	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
@@ -84,8 +84,10 @@ impl<Block: BlockT> LightStorage<Block> {
 
 	fn from_kvdb(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let header_metadata_cache = Arc::new(HeaderMetadataCache::default());
 		let cache = DbCache::new(
 			db.clone(),
+			header_metadata_cache.clone(),
 			columns::KEY_LOOKUP,
 			columns::HEADER,
 			columns::CACHE,
@@ -97,7 +99,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			db,
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
-			header_metadata_cache: HeaderMetadataCache::default(),
+			header_metadata_cache,
 			#[cfg(not(target_os = "unknown"))]
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 		})
@@ -188,7 +190,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 	type Error = ClientError;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+		self.header_metadata_cache.header_metadata(hash).map_or_else(|| {
 			self.header(BlockId::hash(hash))?.map(|header| {
 				let header_metadata = CachedHeaderMetadata::from(&header);
 				self.header_metadata_cache.insert_header_metadata(
@@ -197,7 +199,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 				);
 				header_metadata
 			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
-		})
+		}, Ok)
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {

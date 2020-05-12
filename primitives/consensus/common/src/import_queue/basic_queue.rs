@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
-use futures::{prelude::*, task::Context, task::Poll, future::BoxFuture};
+use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
@@ -56,7 +56,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-		spawner: impl Fn(BoxFuture<'static, ()>) -> (),
+		spawner: &impl sp_core::traits::SpawnBlocking,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
 		let (future, worker_sender) = BlockImportWorker::new(
@@ -67,7 +67,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			finality_proof_import,
 		);
 
-		spawner(future.boxed());
+		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
 
 		Self {
 			sender: worker_sender,

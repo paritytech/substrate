@@ -27,8 +27,8 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, TaskType,
-	TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+	TaskType, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
@@ -265,10 +265,11 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns `Ok(true) if potentially unsafe RPC is to be exposed.
+	/// Returns the RPC method set to expose.
 	///
-	/// By default this is `false`.
-	fn unsafe_rpc_expose(&self) -> Result<bool> {
+	/// By default this is `RpcMethods::Auto` (unsafe RPCs are denied iff
+	/// `{rpc,ws}_external` returns true, respectively).
+	fn rpc_methods(&self) -> Result<RpcMethods> {
 		Ok(Default::default())
 	}
 
@@ -449,7 +450,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
-			unsafe_rpc_expose: self.unsafe_rpc_expose()?,
+			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config()?,
@@ -471,9 +472,12 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the filters for the logging.
 	///
+	/// This should be a list of comma-separated values.
+	/// Example: `foo=trace,bar=debug,baz=info`
+	///
 	/// By default this is retrieved from `SharedParams`.
-	fn log_filters(&self) -> Result<Option<String>> {
-		Ok(self.shared_params().log_filters())
+	fn log_filters(&self) -> Result<String> {
+		Ok(self.shared_params().log_filters().join(","))
 	}
 
 	/// Initialize substrate. This must be done only once.
@@ -484,12 +488,12 @@ pub trait CliConfiguration: Sized {
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log_filters()?.unwrap_or_default();
+		let logger_pattern = self.log_filters()?;
 
 		sp_panic_handler::set(C::support_url(), C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(logger_pattern.as_str());
+		init_logger(&logger_pattern);
 
 		Ok(())
 	}

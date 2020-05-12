@@ -26,7 +26,6 @@ use sp_runtime::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use sp_finality_grandpa::AuthorityId;
 
 use crate::{Commit, Error};
-use crate::communication;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
@@ -132,7 +131,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 		let mut buf = Vec::new();
 		let mut visited_hashes = HashSet::new();
 		for signed in self.commit.precommits.iter() {
-			if let Err(_) = communication::check_message_sig_with_buffer::<Block>(
+			if let Err(_) = sp_finality_grandpa::check_message_signature_with_buffer(
 				&finality_grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,

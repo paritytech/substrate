@@ -19,6 +19,7 @@ name = "node-template"
 futures = "0.3.4"
 log = "0.4.8"
 structopt = "0.3.8"
+parking_lot = "0.10.0"
 
 sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }

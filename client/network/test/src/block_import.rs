@@ -81,13 +81,18 @@ fn import_single_good_block_without_header_fails() {
 
 #[test]
 fn async_import_queue_drops() {
+	let executor = sp_core::testing::SpawnBlockingExecutor::new();
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = PassThroughVerifier(true);
 
-		let threads_pool = futures::executor::ThreadPool::new().unwrap();
-		let spawner = |future| threads_pool.spawn_ok(future);
-		let queue = BasicQueue::new(verifier, Box::new(substrate_test_runtime_client::new()), None, None, spawner);
+		let queue = BasicQueue::new(
+			verifier,
+			Box::new(substrate_test_runtime_client::new()),
+			None,
+			None,
+			&executor,
+		);
 		drop(queue);
 	}
 }

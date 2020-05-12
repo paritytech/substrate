@@ -779,7 +779,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Returns the list of unique identifier for this signed extension.
 	///
-	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]`s we need to return a `Vec`
+	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]s we need to return a `Vec`
 	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
 	/// *exactly* one identifier.
 	///
@@ -1301,7 +1301,7 @@ impl Printable for Tuple {
 	}
 }
 
-/// Something that can convert a [`BlockId`] to a number or a hash.
+/// Something that can convert a [`BlockId`](crate::generic::BlockId) to a number or a hash.
 #[cfg(feature = "std")]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.
