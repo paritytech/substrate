@@ -56,9 +56,23 @@ fn default_stake<T: Trait>(factor: u32) -> BalanceOf<T> {
 	T::Currency::minimum_balance() * factor
 }
 
-/// Get the current number of candidates
+/// Get the current number of candidates.
 fn candidate_count<T: Trait>() -> u32 {
 	<Candidates<T>>::decode_len().unwrap_or(0usize) as u32
+}
+
+/// Get the number of voter of a voter.
+fn vote_count_of<T: Trait>(who: &T::AccountId) -> u32 {
+	<Voting<T>>::get(who).1.len() as u32
+}
+
+/// A `DefunctVoter` struct with correct value
+fn defunct_for<T: Trait>(who: T::AccountId) -> DefunctVoter<Lookup<T>> {
+	DefunctVoter {
+		who: as_lookup::<T>(who.clone()),
+		candidate_count: candidate_count::<T>(),
+		vote_count: vote_count_of::<T>(&who),
+	}
 }
 
 /// Index of a candidate. Panics if index is not found.
@@ -161,10 +175,10 @@ benchmarks! {
 
 	// -- Signed ones
 	vote {
-		// range of candidates to vote for.
-		let v in 1 .. (MAXIMUM_VOTE as u32);
 		// range of locks that the caller already had. This extrinsic adds a lock.
 		let l in 1 .. MAX_LOCKS;
+		// we fix the number of voted candidates to max
+		let v = MAXIMUM_VOTE as u32;
 		clean::<T>();
 
 		// create a bunch of candidates.
@@ -181,14 +195,11 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), votes, stake)
 
 	remove_voter {
-		// range of candidates that we have voted for. This may or may have a significant impact on
-		// the outcome.
-		let v in 1 .. (MAXIMUM_VOTE as u32);
 		// range of locks that the caller already had. This extrinsic removes a lock.
 		let l in 1 .. MAX_LOCKS;
+		// we fix the number of voted candidates to max
+		let v = MAXIMUM_VOTE as u32;
 		clean::<T>();
-
-		let votes_to_remove = (MAXIMUM_VOTE / 2) as u32;
 
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(v, "candidates")?;
@@ -202,14 +213,15 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller))
 
 	report_defunct_voter_correct {
-		// number fo already existing members or runners.
-		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of already existing candidates that may or may not be voted by the reported
 		// account.
 		let c in 1 .. MAX_CANDIDATES;
 		// number of candidates that the reported voter voted for. The worse case of search here is
 		// basically `c * v`.
 		let v in 1 .. (MAXIMUM_VOTE as u32);
+		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// this state almost always.
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -238,8 +250,6 @@ benchmarks! {
 			stake,
 		)?;
 
-		let account_2_lookup = as_lookup::<T>(account_2.clone());
-
 		// all the bailers go away.
 		bailing_candidates.into_iter().for_each(|b| {
 			let index = index_of_candidate::<T>(&b);
@@ -248,7 +258,8 @@ benchmarks! {
 				Renouncing::Candidate(index),
 			).is_ok());
 		});
-	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), account_2_lookup, candidate_count::<T>())
+		let defunct = defunct_for::<T>(account_2.clone());
+	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), defunct)
 	verify {
 		assert!(<Elections<T>>::is_voter(&account_1));
 		assert!(!<Elections<T>>::is_voter(&account_2));
@@ -261,14 +272,15 @@ benchmarks! {
 	}
 
 	report_defunct_voter_incorrect {
-		// number fo already existing members or runners.
-		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of already existing candidates that may or may not be voted by the reported
 		// account.
 		let c in 1 .. MAX_CANDIDATES;
 		// number of candidates that the reported voter voted for. The worse case of search here is
 		// basically `c * v`.
-		let v in 2 .. (MAXIMUM_VOTE as u32);
+		let v in 1 .. (MAXIMUM_VOTE as u32);
+		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// this state almost always.
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
 		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -298,9 +310,9 @@ benchmarks! {
 			stake,
 		)?;
 
-		let account_2_lookup = as_lookup::<T>(account_2.clone());
+		let defunct = defunct_for::<T>(account_2.clone());
 		// no one bails out. account_1 is slashed and removed as voter now.
-	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), account_2_lookup, candidate_count::<T>())
+	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), defunct)
 	verify {
 		assert!(!<Elections<T>>::is_voter(&account_1));
 		assert!(<Elections<T>>::is_voter(&account_2));
@@ -313,11 +325,11 @@ benchmarks! {
 	}
 
 	submit_candidacy {
-		// number fo already existing members or runners. Because candidates cannot be duplicate
-		// with members and previous candidates.
-		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
+		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// this state almost always.
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
 		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -343,10 +355,11 @@ benchmarks! {
 	renounce_candidacy_candidate {
 		// this will check members, runners-up and candidate for removal. Members and runners-up are
 		// limited by the runtime bound, nonetheless we fill them by `m`.
-		// number of already existing members and runners-up.
-		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
+		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// this state almost always.
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
 		clean::<T>();
 
@@ -371,8 +384,9 @@ benchmarks! {
 		// have no impact.
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
-		// number of already existing members and runners-up.
-		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		// we fix the number of members to when members and runners-up to the desired. We'll be in
+		// this state almost always.
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
 		// create m members and runners combined.

@@ -123,6 +123,19 @@ pub enum Renouncing {
 	Candidate(#[codec(compact)] u32),
 }
 
+/// Information needed to prove the defunct-ness of a voter.
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
+pub struct DefunctVoter<AccountId> {
+	/// the voter's who's being challenged for being defunct
+	pub who: AccountId,
+	/// The number of votes that `who` has placed.
+	#[codec(compact)]
+	pub vote_count: u32,
+	/// The number of current active candidates.
+	#[codec(compact)]
+	pub candidate_count: u32
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -259,6 +272,8 @@ decl_error! {
 		NotMember,
 		/// The provided count of number of candidates is incorrect.
 		InvalidCandidateCount,
+		/// The provided count of number of votes is incorrect.
+		InvalidVoteCount,
 		/// The renouncing origin presented a wrong `Renouncing` parameter.
 		InvalidRenouncing,
 		/// Prediction regarding replacement after member removal is wrong.
@@ -370,27 +385,27 @@ decl_module! {
 		#[weight = 1_000_000_000]
 		fn report_defunct_voter(
 			origin,
-			target: <T::Lookup as StaticLookup>::Source,
-			#[compact] candidate_count: u32,
+			defunct: DefunctVoter<<T::Lookup as StaticLookup>::Source>,
 		) {
 			let reporter = ensure_signed(origin)?;
-			let target = T::Lookup::lookup(target)?;
+			let target = T::Lookup::lookup(defunct.who)?;
 
 			ensure!(reporter != target, Error::<T>::ReportSelf);
-
-			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0);
-			// TODO: refund based on actual is less than predicted.
-			ensure!(
-				actual_count as u32 <= candidate_count,
-				Error::<T>::InvalidCandidateCount,
-			);
 			ensure!(Self::is_voter(&reporter), Error::<T>::MustBeVoter);
 
-			// Checking if someone is a candidate and a member here is O(LogN), making the whole
-			// function O(MLonN) with N candidates in total and M of them being voted by `target`.
-			// We could easily add another mapping to be able to check if someone is a candidate in
-			// `O(1)` but that would make the process of removing candidates at the end of each
-			// round slightly harder. Note that for now we have a bound of number of votes (`N`).
+			let DefunctVoter { candidate_count, vote_count, .. }  = defunct;
+
+			// TODO: refund if actual is less than predicted. Or not?.. with <= they are paying for it.
+			ensure!(
+				<Candidates<T>>::decode_len().unwrap_or(0) as u32 <= candidate_count,
+				Error::<T>::InvalidCandidateCount,
+			);
+			// TODO: We read this again in is_defunct_voter, still duplicate overlay read.
+			ensure!(
+				<Voting<T>>::get(&target).1.len() as u32 <= vote_count,
+				Error::<T>::InvalidVoteCount,
+			);
+
 			let valid = Self::is_defunct_voter(&target);
 			if valid {
 				// reporter will get the voting bond of the target
@@ -1276,6 +1291,14 @@ mod tests {
 		Elections::submit_candidacy(origin, Elections::candidates().len() as u32)
 	}
 
+	fn defunct_for(who: u64) -> DefunctVoter<u64> {
+		DefunctVoter {
+			who,
+			candidate_count: Elections::candidates().len() as u32,
+			vote_count: Elections::votes_of(&who).len() as u32
+		}
+	}
+
 	#[test]
 	fn params_should_work() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1758,30 +1781,48 @@ mod tests {
 	fn reporter_must_be_voter() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(
-				Elections::report_defunct_voter(Origin::signed(1), 2, 0),
+				Elections::report_defunct_voter(Origin::signed(1), defunct_for(2)),
 				Error::<Test>::MustBeVoter,
 			);
 		});
 	}
 
 	#[test]
-	fn reporter_must_provide_length() {
+	fn reporter_must_provide_lengths() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
 
 			// both are defunct.
-			assert_ok!(Elections::vote(Origin::signed(5), vec![99], 50));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![99, 999, 9999], 50));
 			assert_ok!(Elections::vote(Origin::signed(4), vec![999], 40));
 
 			// 2 candidates! incorrect candidate length.
 			assert_noop!(
-				Elections::report_defunct_voter(Origin::signed(4), 5, 1),
+				Elections::report_defunct_voter(Origin::signed(4), DefunctVoter {
+					who: 5,
+					candidate_count: 1,
+					vote_count: 3,
+				}),
+				Error::<Test>::InvalidCandidateCount,
+			);
+
+			// 3 votes! incorrect vote length
+			assert_noop!(
+				Elections::report_defunct_voter(Origin::signed(4), DefunctVoter {
+					who: 5,
+					candidate_count: 2,
+					vote_count: 1,
+				}),
 				Error::<Test>::InvalidCandidateCount,
 			);
 
 			// correct candidate length.
-			assert_ok!(Elections::report_defunct_voter(Origin::signed(4), 5, 2));
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(4), DefunctVoter {
+				who: 5,
+				candidate_count: 2,
+				vote_count: 3,
+			}));
 		});
 	}
 
@@ -1796,7 +1837,7 @@ mod tests {
 			assert_ok!(Elections::vote(Origin::signed(4), vec![999], 40));
 
 			// 2 candidates! overestimation is okay.
-			assert_ok!(Elections::report_defunct_voter(Origin::signed(4), 5, 3));
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(4), defunct_for(5)));
 		});
 	}
 
@@ -1860,7 +1901,7 @@ mod tests {
 			assert_eq!(balances(&3), (28, 2));
 			assert_eq!(balances(&5), (45, 5));
 
-			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 3, 0));
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), defunct_for(3)));
 			assert!(System::events().iter().any(|event| {
 				event.event == Event::elections_phragmen(RawEvent::VoterReported(3, 5, true))
 			}));
@@ -1888,7 +1929,7 @@ mod tests {
 			assert_eq!(balances(&4), (35, 5));
 			assert_eq!(balances(&5), (45, 5));
 
-			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 4, 0));
+			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), defunct_for(4)));
 			assert!(System::events().iter().any(|event| {
 				event.event == Event::elections_phragmen(RawEvent::VoterReported(4, 5, false))
 			}));
