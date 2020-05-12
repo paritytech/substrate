@@ -1187,6 +1187,11 @@ decl_module! {
 		/// worker, if applicable, will execute at the end of the current block, and solutions may
 		/// be submitted.
 		fn on_initialize(now: T::BlockNumber) -> Weight {
+			let mut consumed_weight = 0;
+			let mut add_weight = |reads, writes, weight| {
+				consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+				consumed_weight += weight;
+			};
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status().is_closed() &&
@@ -1197,12 +1202,15 @@ decl_module! {
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
 						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 							// create snapshot.
-							if Self::create_stakers_snapshot() {
+							let (did_snapshot, snapshot_weight) = Self::create_stakers_snapshot();
+							add_weight(0, 0, snapshot_weight);
+							if did_snapshot {
 								// Set the flag to make sure we don't waste any compute here in the same era
 								// after we have triggered the offline compute.
 								<EraElectionStatus<T>>::put(
 									ElectionStatus::<T::BlockNumber>::Open(now)
 								);
+								add_weight(0, 1, 0);
 								log!(info, "💸 Election window is Open({:?}). Snapshot created", now);
 							} else {
 								log!(warn, "💸 Failed to create snapshot at {:?}.", now);
@@ -1213,9 +1221,10 @@ decl_module! {
 					log!(warn, "💸 Estimating next session change failed.");
 				}
 			}
-
-			// weight
-			50_000
+			add_weight(3, 0, 0);
+			// Additional read from `on_finalize`
+			add_weight(1, 0, 0);
+			consumed_weight
 		}
 
 		/// Check if the current block number is the one at which the election window has been set
@@ -2119,12 +2128,18 @@ impl<T: Trait> Module<T> {
 	///
 	/// This data is used to efficiently evaluate election results. returns `true` if the operation
 	/// is successful.
-	fn create_stakers_snapshot() -> bool {
+	fn create_stakers_snapshot() -> (bool, Weight) {
+		let mut consumed_weight = 0;
+		let mut add_db_reads_writes = |reads, writes| {
+			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+		};
 		let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
 		let mut nominators = <Nominators<T>>::iter().map(|(n, _)| n).collect::<Vec<_>>();
 
 		let num_validators = validators.len();
 		let num_nominators = nominators.len();
+		add_db_reads_writes((num_validators + num_nominators) as u64, 0);
+
 		if
 			num_validators > MAX_VALIDATORS ||
 			num_nominators.saturating_add(num_validators) > MAX_NOMINATORS
@@ -2137,14 +2152,15 @@ impl<T: Trait> Module<T> {
 				num_nominators,
 				MAX_NOMINATORS,
 			);
-			false
+			(false, consumed_weight)
 		} else {
 			// all validators nominate themselves;
 			nominators.extend(validators.clone());
 
 			<SnapshotValidators<T>>::put(validators);
 			<SnapshotNominators<T>>::put(nominators);
-			true
+			add_db_reads_writes(0, 2);
+			(true, consumed_weight)
 		}
 	}
 
