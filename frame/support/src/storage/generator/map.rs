@@ -18,8 +18,10 @@
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
-use crate::{storage::{self, unhashed, StorageAppend}, traits::Len, Never};
-use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
+use crate::{
+	storage::{self, unhashed, StorageAppend},
+	Never, hash::{StorageHasher, Twox128, ReversibleStorageHasher},
+};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -285,21 +287,6 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	{
 		let key = Self::storage_map_final_key(key);
 		sp_io::storage::append(&key, item.encode());
-	}
-
-	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>
-		where V: codec::DecodeLength + Len
-	{
-		let key = Self::storage_map_final_key(key);
-		if let Some(v) = unhashed::get_raw(key.as_ref()) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
-		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
-				.map(|v| v.len())
-				.unwrap_or(0);
-
-			Ok(len)
-		}
 	}
 
 	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
