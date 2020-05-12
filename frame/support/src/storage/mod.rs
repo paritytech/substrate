@@ -529,7 +529,7 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 	/// This function assumes that the length is at the beginning of the encoded object
 	/// and is a `Compact<u32>`.
 	///
-	/// Returns `None` if the storage value does not exists or the decoding failed.
+	/// Returns `None` if the storage value does not exist or the decoding failed.
 	fn decode_len(key: &[u8]) -> Option<usize> {
 		// `Compact<u32>` is 5 bytes in maximum.
 		let mut data = [0u8; 5];
