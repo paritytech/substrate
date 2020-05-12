@@ -166,7 +166,7 @@ impl<BlockNumber: PartialEq + AtLeast32Bit + Copy> HeartbeatStatus<BlockNumber> 
 	/// `session_index` - index of current session.
 	/// `now` - block at which the offchain worker is running.
 	///
-	/// This function will return `true` iff:
+	/// This function will return `true` if:
 	/// 1. the session index is the same (we don't care if it went up or down)
 	/// 2. the heartbeat has been sent recently (within the threshold)
 	///
@@ -264,7 +264,7 @@ decl_event!(
 		HeartbeatReceived(AuthorityId),
 		/// At the end of the session, no offence was committed.
 		AllGood,
-		/// At the end of the session, at least once validator was found to be offline.
+		/// At the end of the session, at least one validator was found to be offline.
 		SomeOffline(Vec<IdentificationTuple>),
 	}
 );
