@@ -74,10 +74,7 @@ use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
-use serde_json;
 use parking_lot::RwLock;
-
-use sp_finality_tracker;
 
 use finality_grandpa::Error as GrandpaError;
 use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
