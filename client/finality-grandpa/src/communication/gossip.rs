@@ -1281,7 +1281,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
 			report_sender: tx,
-			metrics: metrics,
+			metrics,
 		};
 
 		(val, rx)
