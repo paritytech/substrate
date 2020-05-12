@@ -334,7 +334,6 @@ mod tests {
 
 	mod event_module {
 		use crate::dispatch::DispatchResult;
-		use crate::weights::MINIMUM_WEIGHT;
 
 		pub trait Trait: super::system::Trait {
 			type Balance;
@@ -352,7 +351,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 				type Error = Error<T>;
 
-				#[weight = MINIMUM_WEIGHT]
+				#[weight = 0]
 				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}

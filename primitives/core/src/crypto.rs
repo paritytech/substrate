@@ -873,7 +873,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 
 	/// Interprets the string `s` in order to generate a key pair.
 	///
-	/// See [`from_string_with_seed`](Self::from_string_with_seed) for more extensive documentation.
+	/// See [`from_string_with_seed`](Pair::from_string_with_seed) for more extensive documentation.
 	#[cfg(feature = "std")]
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
 		Self::from_string_with_seed(s, password_override).map(|x| x.0)
@@ -1006,6 +1006,8 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
+	/// Key type for equivocation reporting, built-in. Identified as `fish`.
+	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }

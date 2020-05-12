@@ -101,6 +101,8 @@ impl frame_system::Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -136,7 +138,6 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 0;
 }
 
@@ -149,7 +150,6 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Balances;
 	type OnTransactionPayment = ();
-	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = Test;
 	type FeeMultiplierUpdate = ();

@@ -107,16 +107,35 @@ impl BatchVerifier {
 	) -> bool {
 		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
+
+		if self.sr25519_items.len() >= 128 {
+			let items = std::mem::take(&mut self.sr25519_items);
+			if self.spawn_verification_task(move || Self::verify_sr25519_batch(items)).is_err() {
+				log::debug!(
+					target: "runtime",
+					"Batch-verification returns false because failed to spawn background task.",
+				);
+
+				return false;
+			}
+		}
+
 		true
+	}
+
+	fn verify_sr25519_batch(items: Vec<Sr25519BatchItem>) -> bool {
+		let messages = items.iter().map(|item| &item.message[..]).collect();
+		let signatures = items.iter().map(|item| &item.signature).collect();
+		let pub_keys = items.iter().map(|item| &item.pub_key).collect();
+
+		sr25519::verify_batch(messages, signatures, pub_keys)
 	}
 
 	/// Verify all previously pushed signatures since last call and return
 	/// aggregated result.
 	#[must_use]
 	pub fn verify_and_clear(&mut self) -> bool {
-		use std::sync::{Mutex, Condvar};
-
-		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
+		let pending = std::mem::take(&mut self.pending_tasks);
 		let started = std::time::Instant::now();
 
 		log::trace!(
@@ -126,25 +145,17 @@ impl BatchVerifier {
 			self.sr25519_items.len(),
 		);
 
-		let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
-		let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
-		let pub_keys = self.sr25519_items.iter().map(|item| &item.pub_key).collect();
-
-		if !sr25519::verify_batch(messages, signatures, pub_keys) {
-			self.sr25519_items.clear();
-
+		if !Self::verify_sr25519_batch(std::mem::take(&mut self.sr25519_items)) {
 			return false;
 		}
 
-		self.sr25519_items.clear();
-
 		if pending.len() > 0 {
-			let pair = Arc::new((Mutex::new(()), Condvar::new()));
-			let pair_clone = pair.clone();
-
+			let (sender, receiver) = std::sync::mpsc::channel();
 			if self.scheduler.spawn_obj(FutureObj::new(async move {
 				futures::future::join_all(pending).await;
-				pair_clone.1.notify_all();
+				sender.send(())
+					.expect("Channel never panics if receiver is live. \
+							Receiver is always live until received this data; qed. ");
 			}.boxed())).is_err() {
 				log::debug!(
 					target: "runtime",
@@ -153,10 +164,10 @@ impl BatchVerifier {
 
 				return false;
 			}
-
-			let (mtx, cond_var) = &*pair;
-			let mtx = mtx.lock().expect("Locking can only fail when the mutex is poisoned; qed");
-			let _ = cond_var.wait(mtx).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
+			if receiver.recv().is_err() {
+				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.");
+				return false;
+			}
 		}
 
 		log::trace!(

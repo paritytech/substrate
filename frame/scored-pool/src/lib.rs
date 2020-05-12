@@ -54,7 +54,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_scored_pool::{self as scored_pool};
 //!
@@ -62,7 +61,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
@@ -98,12 +97,10 @@ use sp_std::{
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
 	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
-use sp_runtime::{
-	traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
-};
+use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
@@ -253,7 +250,7 @@ decl_module! {
 				let pool = <Pool<T, I>>::get();
 				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			MINIMUM_WEIGHT
+			0
 		}
 
 		/// Add `origin` to the pool of candidates.
@@ -267,7 +264,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -277,10 +274,7 @@ decl_module! {
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			if let Err(e) = <Pool<T, I>>::append(&[(who.clone(), None)]) {
-				T::Currency::unreserve(&who, deposit);
-				Err(e)?
-			}
+			<Pool<T, I>>::append((who.clone(), Option::<<T as Trait<I>>::Score>::None));
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
@@ -297,7 +291,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -317,7 +311,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -342,7 +336,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -383,7 +377,7 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);

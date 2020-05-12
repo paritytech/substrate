@@ -42,7 +42,7 @@ impl<T: BabeTrait> Trait for T {
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawPreDigest::decode(&mut data).ok()
+				PreDigest::decode(&mut data).ok()
 			} else {
 				None
 			})
@@ -72,6 +72,30 @@ impl<T: BabeTrait> Trait for T {
 		);
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
+
+	fn make_randomness(vrf_output: VRFOutput) {
+		// Reconstruct the bytes of VRFInOut using the authority id.
+		Authorities::get()
+			.get(primary.authority_index as usize)
+			.and_then(|author| {
+				schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+			})
+			.and_then(|pubkey| {
+				let transcript = sp_consensus_babe::make_transcript(
+					&Self::randomness(),
+					current_slot,
+					EpochIndex::get(),
+				);
+
+				primary.vrf_output.0.attach_input_hash(
+					&pubkey,
+					transcript
+				).ok()
+			})
+			.map(|inout| {
+				inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
+			})
+	}
 }
 
 impl RawPreDigestT for RawPreDigest {
@@ -98,7 +122,7 @@ impl<T: BabeTrait> FindAuthor<u32> for BabeFindAuthor<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
+				let pre_digest: PreDigest = PreDigest::decode(&mut data).ok()?;
 				return Some(pre_digest.authority_index())
 			}
 		}

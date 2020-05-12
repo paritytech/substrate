@@ -74,6 +74,8 @@ pub struct OffchainState {
 	pub local_storage: InMemOffchainStorage,
 	/// Current timestamp (unix millis)
 	pub timestamp: u64,
+	/// A supposedly random seed.
+	pub seed: [u8; 32],
 }
 
 impl OffchainState {
@@ -103,7 +105,7 @@ impl OffchainState {
 	fn fulfill_expected(&mut self, id: u16) {
 		if let Some(mut req) = self.expected_requests.remove(&RequestId(id)) {
 			let response = req.response.take().expect("Response checked while added.");
-			let headers = std::mem::replace(&mut req.response_headers, vec![]);
+			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
 		}
 	}
@@ -165,7 +167,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		unimplemented!("not needed in tests so far")
+		self.0.read().seed
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {

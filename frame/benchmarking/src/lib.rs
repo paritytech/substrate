@@ -69,6 +69,9 @@ pub use paste;
 /// (or not) by each arm. Syntax is available to allow for only the range to be drawn upon if
 /// desired, allowing an alternative instancing expression to be given.
 ///
+/// Note that the ranges are *inclusive* on both sides. This is in contrast to ranges in Rust which
+/// are left-inclusive right-exclusive.
+///
 /// Each arm may also have a block of code which is run prior to any instancing and a block of code
 /// which is run afterwards. All code blocks may draw upon the specific value of each parameter
 /// at any time. Local variables are shared between the two pre- and post- code blocks, but do not
@@ -81,6 +84,7 @@ pub use paste;
 /// ```ignore
 /// benchmarks! {
 ///   // common parameter; just one for this example.
+///   // will be `1`, `MAX_LENGTH` or any value inbetween
 ///   _ {
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }

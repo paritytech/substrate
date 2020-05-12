@@ -24,10 +24,10 @@
 //!     chance to be included by the transaction queue.
 //!
 //! Additionally, this module allows one to configure:
-//!   - The mapping between one unit of weight to one unit of fee via [`WeightToFee`].
+//!   - The mapping between one unit of weight to one unit of fee via [`Trait::WeightToFee`].
 //!   - A means of updating the fee for the next block, via defining a multiplier, based on the
 //!     final state of the chain at the end of the previous block. This can be configured via
-//!     [`FeeMultiplierUpdate`]
+//!     [`Trait::FeeMultiplierUpdate`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -67,9 +67,6 @@ pub trait Trait: frame_system::Trait {
 	/// if any.
 	type OnTransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// The fee to be paid for making a transaction; the base.
-	type TransactionBaseFee: Get<BalanceOf<Self>>;
-
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
@@ -88,9 +85,6 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// The fee to be paid for making a transaction; the base.
-		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
-
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
@@ -98,20 +92,6 @@ decl_module! {
 			NextFeeMultiplier::mutate(|fm| {
 				*fm = T::FeeMultiplierUpdate::convert(*fm)
 			});
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			// TODO: Remove this code after on-chain upgrade from u32 to u64 weights
-			use sp_runtime::Fixed64;
-			use frame_support::migration::take_storage_value;
-			if let Some(old_next_fee_multiplier) = take_storage_value::<Fixed64>(b"TransactionPayment", b"NextFeeMultiplier", &[]) {
-				let raw_multiplier = old_next_fee_multiplier.into_inner() as i128;
-				// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
-				let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
-				let new_next_fee_multiplier: Fixed128 = Fixed128::from_parts(new_raw_multiplier);
-				NextFeeMultiplier::put(new_next_fee_multiplier);
-			}
-			0
 		}
 	}
 }
@@ -178,7 +158,7 @@ impl<T: Trait> Module<T> {
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
-			let base_fee = T::TransactionBaseFee::get();
+			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
 		} else {
 			tip
@@ -367,6 +347,15 @@ mod tests {
 		pub enum Origin for Runtime {}
 	}
 
+	thread_local! {
+		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
+	}
+
+	pub struct ExtrinsicBaseWeight;
+	impl Get<u64> for ExtrinsicBaseWeight {
+		fn get() -> u64 { EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()) }
+	}
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
@@ -388,6 +377,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -409,14 +400,8 @@ mod tests {
 		type AccountStore = System;
 	}
 	thread_local! {
-		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
-	}
-
-	pub struct TransactionBaseFee;
-	impl Get<u64> for TransactionBaseFee {
-		fn get() -> u64 { TRANSACTION_BASE_FEE.with(|v| *v.borrow()) }
 	}
 
 	pub struct TransactionByteFee;
@@ -434,7 +419,6 @@ mod tests {
 	impl Trait for Runtime {
 		type Currency = pallet_balances::Module<Runtime>;
 		type OnTransactionPayment = ();
-		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
@@ -446,7 +430,7 @@ mod tests {
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
-		base_fee: u64,
+		base_weight: u64,
 		byte_fee: u64,
 		weight_to_fee: u64
 	}
@@ -455,7 +439,7 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				balance_factor: 1,
-				base_fee: 0,
+				base_weight: 0,
 				byte_fee: 1,
 				weight_to_fee: 1,
 			}
@@ -463,8 +447,8 @@ mod tests {
 	}
 
 	impl ExtBuilder {
-		pub fn base_fee(mut self, base_fee: u64) -> Self {
-			self.base_fee = base_fee;
+		pub fn base_weight(mut self, base_weight: u64) -> Self {
+			self.base_weight = base_weight;
 			self
 		}
 		pub fn byte_fee(mut self, byte_fee: u64) -> Self {
@@ -480,7 +464,7 @@ mod tests {
 			self
 		}
 		fn set_constants(&self) {
-			TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.base_fee);
+			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
@@ -523,7 +507,7 @@ mod tests {
 	fn signed_extension_transaction_payment_work() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -558,7 +542,7 @@ mod tests {
 	fn signed_extension_transaction_payment_multiplied_refund_works() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -606,7 +590,7 @@ mod tests {
 	#[test]
 	fn signed_extension_allows_free_transactions() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.balance_factor(0)
 			.build()
 			.execute_with(||
@@ -645,7 +629,7 @@ mod tests {
 	#[test]
 	fn signed_ext_length_fee_is_also_updated_per_congestion() {
 		ExtBuilder::default()
-			.base_fee(5)
+			.base_weight(5)
 			.balance_factor(10)
 			.build()
 			.execute_with(||
@@ -673,7 +657,7 @@ mod tests {
 		let ext = xt.encode();
 		let len = ext.len() as u32;
 		ExtBuilder::default()
-			.base_fee(5)
+			.base_weight(5)
 			.weight_fee(2)
 			.build()
 			.execute_with(||
@@ -687,7 +671,7 @@ mod tests {
 					weight: info.weight,
 					class: info.class,
 					partial_fee:
-						5 /* base */
+						5 * 2 /* base * weight_fee */
 						+ (
 							len as u64 /* len * 1 */
 							+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
@@ -701,7 +685,7 @@ mod tests {
 	#[test]
 	fn compute_fee_works_without_multiplier() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.byte_fee(10)
 			.balance_factor(0)
 			.build()
@@ -741,7 +725,7 @@ mod tests {
 	#[test]
 	fn compute_fee_works_with_multiplier() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.byte_fee(10)
 			.balance_factor(0)
 			.build()
@@ -774,7 +758,7 @@ mod tests {
 	#[test]
 	fn compute_fee_does_not_overflow() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.byte_fee(10)
 			.balance_factor(0)
 			.build()
@@ -801,7 +785,7 @@ mod tests {
 	fn refund_does_not_recreate_account() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -828,7 +812,7 @@ mod tests {
 	fn actual_weight_higher_than_max_refunds_nothing() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -844,40 +828,6 @@ mod tests {
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
-		});
-	}
-
-	// TODO Remove after u32 to u64 weights upgrade
-	#[test]
-	fn upgrade_to_fixed128_works() {
-		// TODO You can remove this from dev-dependencies after removing this test
-		use sp_storage::Storage;
-		use sp_runtime::Fixed64;
-		use frame_support::storage::generator::StorageValue;
-		use frame_support::traits::OnRuntimeUpgrade;
-		use core::num::NonZeroI128;
-
-		let mut s = Storage::default();
-
-		let original_multiplier = Fixed64::from_rational(1, 2);
-
-		let data = vec![
-			(
-				NextFeeMultiplier::storage_value_final_key().to_vec(),
-				original_multiplier.encode().to_vec()
-			),
-		];
-
-		s.top = data.into_iter().collect();
-
-		sp_io::TestExternalities::new(s).execute_with(|| {
-			let old_value = NextFeeMultiplier::get();
-			assert!(old_value != Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
-
-			// Convert Fixed64(.5) to Fixed128(.5)
-			TransactionPayment::on_runtime_upgrade();
-			let new_value = NextFeeMultiplier::get();
-			assert_eq!(new_value, Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 		});
 	}
 }

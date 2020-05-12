@@ -190,9 +190,7 @@ impl<T: Default> Get<T> for () {
 	fn get() -> T { T::default() }
 }
 
-/// A trait for querying whether a type can be said to statically "contain" a value. Similar
-/// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
-/// enumerate all values that it contains) and work for multiple values rather than just one.
+/// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T: Ord> {
 	/// Return `true` if this "contains" the given value `t`.
 	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
@@ -209,6 +207,14 @@ pub trait Contains<T: Ord> {
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_t: &T) { unimplemented!() }
+}
+
+/// A trait for querying bound for the length of an implementation of `Contains`
+pub trait ContainsLengthBound {
+	/// Minimum number of elements contained
+	fn min_len() -> usize;
+	/// Maximum number of elements contained
+	fn max_len() -> usize;
 }
 
 /// Determiner to say whether a given account is unused.
@@ -280,6 +286,21 @@ pub trait KeyOwnerProofSystem<Key> {
 	/// Check a proof of membership on-chain. Return `Some` iff the proof is
 	/// valid and recent enough to check.
 	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::IdentificationTuple>;
+}
+
+impl<Key> KeyOwnerProofSystem<Key> for () {
+	// The proof and identification tuples is any bottom type to guarantee that the methods of this
+	// implementation can never be called or return anything other than `None`.
+	type Proof = crate::Void;
+	type IdentificationTuple = crate::Void;
+
+	fn prove(_key: Key) -> Option<Self::Proof> {
+		None
+	}
+
+	fn check_proof(_key: Key, _proof: Self::Proof) -> Option<Self::IdentificationTuple> {
+		None
+	}
 }
 
 /// Handler for when some currency "account" decreased in balance for
@@ -1220,7 +1241,7 @@ pub mod schedule {
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
-			id: impl Encode,
+			id: Vec<u8>,
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
@@ -1234,7 +1255,7 @@ pub mod schedule {
 		///
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		fn cancel_named(id: impl Encode) -> Result<(), ()>;
+		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
 	}
 }
 

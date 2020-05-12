@@ -14,15 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::CliConfiguration;
+use crate::{
+	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
+};
 use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::fmt::Debug;
-use std::str::FromStr;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::{fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
@@ -30,7 +27,7 @@ use structopt::StructOpt;
 pub struct CheckBlockCmd {
 	/// Block hash or number
 	#[structopt(value_name = "HASH or NUMBER")]
-	pub input: String,
+	pub input: BlockNumberOrHash,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
@@ -57,29 +54,13 @@ impl CheckBlockCmd {
 	where
 		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		BB: BlockT + Debug,
+		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
+		BB::Hash: FromStr,
+		<BB::Hash as FromStr>::Err: std::fmt::Debug,
 	{
-		let input = if self.input.starts_with("0x") {
-			&self.input[2..]
-		} else {
-			&self.input[..]
-		};
-		let block_id = match FromStr::from_str(input) {
-			Ok(hash) => BlockId::hash(hash),
-			Err(_) => match self.input.parse::<u32>() {
-				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => {
-					return Err(error::Error::Input(
-						"Invalid hash or number specified".into(),
-					))
-				}
-			},
-		};
-
 		let start = std::time::Instant::now();
-		builder(config)?.check_block(block_id).await?;
+		builder(config)?.check_block(self.input.parse()?).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

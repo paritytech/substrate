@@ -20,11 +20,13 @@ use std::{sync::Arc, collections::HashMap};
 use std::convert::TryInto;
 use parking_lot::RwLock;
 
-use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
-use sc_client::blockchain::{
-	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
+use sc_client_api::{
+	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
+	blockchain::{
+		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
+	},
+	Storage
 };
-use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
@@ -32,7 +34,6 @@ use sp_blockchain::{
 	well_known_cache_keys,
 };
 use sp_database::{Database, Transaction};
-use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HashFor};
@@ -61,7 +62,7 @@ pub struct LightStorage<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
-	header_metadata_cache: HeaderMetadataCache<Block>,
+	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 
 	#[cfg(not(target_os = "unknown"))]
 	io_stats: FrozenForDuration<kvdb::IoStats>,
@@ -83,8 +84,10 @@ impl<Block: BlockT> LightStorage<Block> {
 
 	fn from_kvdb(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let header_metadata_cache = Arc::new(HeaderMetadataCache::default());
 		let cache = DbCache::new(
 			db.clone(),
+			header_metadata_cache.clone(),
 			columns::KEY_LOOKUP,
 			columns::HEADER,
 			columns::CACHE,
@@ -96,7 +99,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			db,
 			meta: RwLock::new(meta),
 			cache: Arc::new(DbCacheSync(RwLock::new(cache))),
-			header_metadata_cache: HeaderMetadataCache::default(),
+			header_metadata_cache,
 			#[cfg(not(target_os = "unknown"))]
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 		})
@@ -187,7 +190,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 	type Error = ClientError;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+		self.header_metadata_cache.header_metadata(hash).map_or_else(|| {
 			self.header(BlockId::hash(hash))?.map(|header| {
 				let header_metadata = CachedHeaderMetadata::from(&header);
 				self.header_metadata_cache.insert_header_metadata(
@@ -196,7 +199,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for LightStorage<Block> {
 				);
 				header_metadata
 			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
-		})
+		}, Ok)
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
@@ -406,7 +409,7 @@ impl<Block> AuxStore for LightStorage<Block>
 	}
 }
 
-impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
+impl<Block> Storage<Block> for LightStorage<Block>
 	where Block: BlockT,
 {
 	fn import_header(
@@ -614,7 +617,7 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use sc_client::cht;
+	use sc_client_api::cht;
 	use sp_core::ChangesTrieConfiguration;
 	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};

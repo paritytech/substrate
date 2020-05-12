@@ -23,7 +23,6 @@ use frame_support::{
 		DecodeDifferent, StorageMetadata, StorageEntryModifier, StorageEntryType, DefaultByteGetter,
 		StorageEntryMetadata, StorageHasher,
 	},
-	weights::MINIMUM_WEIGHT,
 	StorageValue, StorageMap, StorageDoubleMap,
 };
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier, MakeFatalError};
@@ -56,7 +55,7 @@ mod module1 {
 
 			fn deposit_event() = default;
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = 0]
 			fn one(origin) {
 				system::ensure_root(origin)?;
 				Self::deposit_event(RawEvent::AnotherVariant(3));

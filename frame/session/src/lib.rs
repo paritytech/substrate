@@ -110,7 +110,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -350,6 +350,8 @@ pub trait Trait: frame_system::Trait {
 	type ValidatorId: Member + Parameter;
 
 	/// A conversion from account ID to validator ID.
+	///
+	/// Its cost must be at most one storage read.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
@@ -493,12 +495,16 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(log n) in number of accounts.
-		/// - One extra DB entry.
-		/// - Increases system account refs by one on success iff there were previously no keys set.
-		///   In this case, purge_keys will need to be called before the account can be removed.
+		/// - Complexity: `O(1)`
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `origin account`, `T::ValidatorIdOf`, `NextKeys`
+		/// - DbWrites: `origin account`, `NextKeys`
+		/// - DbReads per key id: `KeyOwner`
+		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
-		#[weight = 150_000_000]
+		#[weight = 200_000_000
+			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len() as Weight)
+			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len() as Weight)]
 		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -515,11 +521,14 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(N) in number of key types.
-		/// - Removes N + 1 DB entries.
-		/// - Reduces system account refs by one on success.
+		/// - Complexity: `O(1)` in number of key types.
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `T::ValidatorIdOf`, `NextKeys`, `origin account`
+		/// - DbWrites: `NextKeys`, `origin account`
+		/// - DbWrites per key id: `KeyOwnder`
 		/// # </weight>
-		#[weight = 150_000_000]
+		#[weight = 120_000_000
+			+ T::DbWeight::get().reads_writes(2, 1 + T::Keys::key_ids().len() as Weight)]
 		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;
@@ -530,9 +539,13 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
+				T::MaximumBlockWeight::get()
+			} else {
+				// NOTE: the non-database part of the weight for `should_end_session(n)` is
+				// included as weight for empty block, the database part is expected to be in
+				// cache.
+				0
 			}
-
-			MINIMUM_WEIGHT
 		}
 	}
 }

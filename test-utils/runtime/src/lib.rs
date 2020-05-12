@@ -33,14 +33,15 @@ use sp_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
-	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
+	create_runtime_str, impl_opaque_keys,
+	ApplyExtrinsicResult, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, NumberFor, Verify, IdentityLookup,
 	},
 };
 use sp_version::RuntimeVersion;
@@ -52,7 +53,7 @@ use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AuthorityId, SlotNumber};
+pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
@@ -402,6 +403,8 @@ impl frame_system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -633,15 +636,15 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_epoch_vrf::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
@@ -666,6 +669,29 @@ cfg_if! {
 					encoded: Vec<u8>,
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
+				}
+			}
+
+			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+					Vec::new()
+				}
+
+				fn submit_report_equivocation_extrinsic(
+					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+						<Block as BlockT>::Hash,
+						NumberFor<Block>,
+					>,
+					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_finality_grandpa::SetId,
+					_authority_id: sp_finality_grandpa::AuthorityId,
+				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					None
 				}
 			}
 
@@ -827,15 +853,15 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_epoch_vrf::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 

@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::OffchainStorage;
+use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
@@ -77,6 +77,25 @@ pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	pub notify_imported: Option<ImportSummary<Block>>,
 	/// A list of hashes of blocks that got finalized.
 	pub notify_finalized: Vec<Block::Hash>,
+}
+
+/// Helper function to apply auxiliary data insertion into an operation.
+pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, D, I>(
+	operation: &mut ClientImportOperation<Block, B>,
+	insert: I,
+	delete: D,
+) -> sp_blockchain::Result<()>
+	where
+		Block: BlockT,
+		B: Backend<Block>,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+{
+	operation.op.insert_aux(
+		insert.into_iter()
+			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+	)
 }
 
 /// State of a new block.
@@ -147,6 +166,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
 	) -> sp_blockchain::Result<()>;
+
+	/// Write offchain storage changes to the database.
+	fn update_offchain_storage(
+		&mut self,
+		_offchain_update: OffchainOverlayedChanges,
+	) -> sp_blockchain::Result<()> {
+		 Ok(())
+	}
 
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(

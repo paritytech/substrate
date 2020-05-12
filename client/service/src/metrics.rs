@@ -18,22 +18,22 @@ use std::convert::TryFrom;
 
 use crate::NetworkStatus;
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_client::ClientInfo;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
+use sc_client_api::ClientInfo;
 
 use sysinfo::{self, ProcessExt, SystemExt};
 
-#[cfg(not(target_os = "unknown"))]
+#[cfg(all(any(unix, windows), not(target_os = "android")))]
 use netstat2::{
 	TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags,
 };
 
 struct PrometheusMetrics {
 	// system
-	#[cfg(any(unix, windows))]
+	#[cfg(all(any(unix, windows), not(target_os = "android")))]
 	load_avg: GaugeVec<F64>,
 
 	// process
@@ -42,7 +42,7 @@ struct PrometheusMetrics {
 	threads: Gauge<U64>,
 	open_files: GaugeVec<U64>,
 
-	#[cfg(any(unix, windows))]
+	#[cfg(all(any(unix, windows), not(target_os = "android")))]
 	netstat: GaugeVec<U64>,
 
 	// -- inner counters
@@ -79,7 +79,7 @@ impl PrometheusMetrics {
 
 		Ok(Self {
 			// system
-			#[cfg(any(unix, windows))]
+			#[cfg(all(any(unix, windows), not(target_os = "android")))]
 			load_avg: register(GaugeVec::new(
 				Opts::new("load_avg", "System load average"),
 				&["over"]
@@ -94,7 +94,7 @@ impl PrometheusMetrics {
 				"cpu_usage_percentage", "Node CPU usage",
 			)?, registry)?,
 
-			#[cfg(any(unix, windows))]
+			#[cfg(all(any(unix, windows), not(target_os = "android")))]
 			netstat: register(GaugeVec::new(
 				Opts::new("netstat_tcp", "Current TCP connections "),
 				&["status"]
@@ -144,7 +144,7 @@ impl PrometheusMetrics {
 	}
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(all(any(unix, windows), not(target_os = "android")))]
 #[derive(Default)]
 struct ConnectionsCount {
 	listen: u64,
@@ -176,7 +176,7 @@ struct ProcessInfo {
 
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
-	#[cfg(not(target_os = "unknown"))]
+	#[cfg(all(any(unix, windows), not(target_os = "android")))]
 	system: sysinfo::System,
 	pid: Option<sysinfo::Pid>,
 }
@@ -219,7 +219,7 @@ impl MetricsService {
 	}
 }
 
-#[cfg(all(any(unix, windows), not(target_os = "linux")))]
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -235,7 +235,7 @@ impl MetricsService {
 }
 
 
-#[cfg(target_os = "unknown")]
+#[cfg(not(all(any(unix, windows), not(target_os = "android"))))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -263,7 +263,7 @@ impl MetricsService {
 		Self::inner_new(None)
 	}
 
-	#[cfg(not(target_os = "unknown"))]
+	#[cfg(all(any(unix, windows), not(target_os = "android")))]
 	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
 		let mut info = ProcessInfo::default();
 		if self.system.refresh_process(*pid) {
@@ -275,7 +275,7 @@ impl MetricsService {
 		info
 	}
 
-	#[cfg(not(target_os = "unknown"))]
+	#[cfg(all(any(unix, windows), not(target_os = "android")))]
 	fn connections_info(&self) -> Option<ConnectionsCount> {
 		self.pid.as_ref().and_then(|pid| {
 			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
@@ -406,7 +406,7 @@ impl MetricsService {
 				);
 			}
 
-			#[cfg(not(target_os = "unknown"))]
+			#[cfg(all(any(unix, windows), not(target_os = "android")))]
 			{
 				let load = self.system.get_load_average();
 				metrics.load_avg.with_label_values(&["1min"]).set(load.one);

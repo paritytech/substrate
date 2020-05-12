@@ -254,7 +254,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(feature = "parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
-			crate::parity_db::open(&path, NUM_COLUMNS)
+			crate::parity_db::open(&path)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),

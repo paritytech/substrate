@@ -23,6 +23,7 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
+	offchain::storage::OffchainOverlayedChanges,
 	storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
 	traits::{CodeExecutor, CallInWasmExt, RuntimeCode},
 };
@@ -190,6 +191,7 @@ pub struct StateMachine<'a, B, H, N, Exec>
 	method: &'a str,
 	call_data: &'a [u8],
 	overlay: &'a mut OverlayedChanges,
+	offchain_overlay: &'a mut OffchainOverlayedChanges,
 	extensions: Extensions,
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
@@ -219,6 +221,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		backend: &'a B,
 		changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 		overlay: &'a mut OverlayedChanges,
+		offchain_overlay: &'a mut OffchainOverlayedChanges,
 		exec: &'a Exec,
 		method: &'a str,
 		call_data: &'a [u8],
@@ -236,6 +239,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			call_data,
 			extensions,
 			overlay,
+			offchain_overlay,
 			changes_trie_state,
 			storage_transaction_cache: None,
 			runtime_code,
@@ -293,6 +297,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 
 		let mut ext = Ext::new(
 			self.overlay,
+			self.offchain_overlay,
 			cache,
 			self.backend,
 			self.changes_trie_state.clone(),
@@ -301,7 +306,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 
 		let id = ext.id;
 		trace!(
-			target: "state-trace", "{:04x}: Call {} at {:?}. Input={:?}",
+			target: "state", "{:04x}: Call {} at {:?}. Input={:?}",
 			id,
 			self.method,
 			self.backend,
@@ -318,7 +323,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		);
 
 		trace!(
-			target: "state-trace", "{:04x}: Return. Native={:?}, Result={:?}",
+			target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
 			id,
 			was_native,
 			result,
@@ -503,11 +508,13 @@ where
 	Exec: CodeExecutor + 'static + Clone,
 	N: crate::changes_trie::BlockNumber,
 {
+	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
 		&proving_backend,
 		None,
 		overlay,
+		&mut offchain_overlay,
 		exec,
 		method,
 		call_data,
@@ -569,10 +576,12 @@ where
 	Exec: CodeExecutor + Clone + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
+	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
 		trie_backend,
 		None,
 		overlay,
+		&mut offchain_overlay,
 		exec,
 		method,
 		call_data,
@@ -824,12 +833,14 @@ mod tests {
 	fn execute_works() {
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
+		let mut offchain_overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
 			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
+			&mut offchain_overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
 				native_available: true,
@@ -854,12 +865,14 @@ mod tests {
 	fn execute_works_with_native_else_wasm() {
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
+		let mut offchain_overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
 			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
+			&mut offchain_overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
 				native_available: true,
@@ -881,12 +894,14 @@ mod tests {
 		let mut consensus_failed = false;
 		let backend = trie_backend::tests::test_trie();
 		let mut overlayed_changes = Default::default();
+		let mut offchain_overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
 		let mut state_machine = StateMachine::new(
 			&backend,
 			changes_trie::disabled_state::<_, u64>(),
 			&mut overlayed_changes,
+			&mut offchain_overlayed_changes,
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
 				native_available: true,
@@ -972,11 +987,14 @@ mod tests {
 			],
 			..Default::default()
 		};
+		let mut offchain_overlay = Default::default();
+
 
 		{
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
+				&mut offchain_overlay,
 				&mut cache,
 				backend,
 				changes_trie::disabled_state::<_, u64>(),
@@ -1007,9 +1025,11 @@ mod tests {
 		let mut state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(
 			&mut overlay,
+			&mut offchain_overlay,
 			&mut cache,
 			backend,
 			changes_trie::disabled_state::<_, u64>(),
@@ -1038,6 +1058,168 @@ mod tests {
 			),
 			None
 		);
+	}
+
+	#[test]
+	fn append_storage_works() {
+		let reference_data = vec![
+			b"data1".to_vec(),
+			b"2".to_vec(),
+			b"D3".to_vec(),
+			b"d4".to_vec(),
+		];
+		let key = b"key".to_vec();
+		let mut state = new_in_mem::<BlakeTwo256>();
+		let backend = state.as_trie_backend().unwrap();
+		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+		let mut cache = StorageTransactionCache::default();
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			ext.storage_append(key.clone(), reference_data[0].encode());
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![reference_data[0].clone()].encode()),
+			);
+		}
+		overlay.commit_prospective();
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			for i in reference_data.iter().skip(1) {
+				ext.storage_append(key.clone(), i.encode());
+			}
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(reference_data.encode()),
+			);
+		}
+		overlay.discard_prospective();
+		{
+			let ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![reference_data[0].clone()].encode()),
+			);
+		}
+	}
+
+	#[test]
+	fn remove_with_append_then_rollback_appended_then_append_again() {
+
+		#[derive(codec::Encode, codec::Decode)]
+		enum Item { InitializationItem, DiscardedItem, CommitedItem }
+
+		let key = b"events".to_vec();
+		let mut cache = StorageTransactionCache::default();
+		let mut state = new_in_mem::<BlakeTwo256>();
+		let backend = state.as_trie_backend().unwrap();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+		let mut overlay = OverlayedChanges::default();
+
+		// For example, block initialization with event.
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			ext.clear_storage(key.as_slice());
+			ext.storage_append(key.clone(), Item::InitializationItem.encode());
+		}
+		overlay.commit_prospective();
+
+		// For example, first transaction resulted in panic during block building
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem].encode()),
+			);
+
+			ext.storage_append(key.clone(), Item::DiscardedItem.encode());
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem, Item::DiscardedItem].encode()),
+			);
+		}
+		overlay.discard_prospective();
+
+		// Then we apply next transaction which is valid this time.
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem].encode()),
+			);
+
+			ext.storage_append(key.clone(), Item::CommitedItem.encode());
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
+			);
+
+		}
+		overlay.commit_prospective();
+
+		// Then only initlaization item and second (commited) item should persist.
+		{
+			let ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
+			);
+		}
 	}
 
 	#[test]
@@ -1103,12 +1285,14 @@ mod tests {
 
 		use crate::trie_backend::tests::test_trie;
 		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
 
 		let mut transaction = {
 			let backend = test_trie();
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
+				&mut offchain_overlay,
 				&mut cache,
 				&backend,
 				changes_trie::disabled_state::<_, u64>(),
