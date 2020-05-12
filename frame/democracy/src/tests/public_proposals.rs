@@ -85,17 +85,6 @@ fn poor_seconder_should_not_work() {
 }
 
 #[test]
-fn invalid_proposals_upper_bound_should_not_work() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(propose_set_balance_and_note(2, 2, 11));
-		assert_noop!(
-			Democracy::propose(Origin::signed(1), Default::default(), 10, 0),
-			Error::<Test>::WrongUpperBound
-		);
-	});
-}
-
-#[test]
 fn invalid_seconds_upper_bound_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));

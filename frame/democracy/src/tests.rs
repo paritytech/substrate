@@ -238,7 +238,6 @@ fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 		Origin::signed(who),
 		set_balance_proposal_hash(value),
 		delay,
-		u32::max_value(),
 	)
 }
 
@@ -247,7 +246,6 @@ fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchRes
 		Origin::signed(who),
 		set_balance_proposal_hash_and_note(value),
 		delay,
-		u32::max_value(),
 	)
 }
 

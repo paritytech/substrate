@@ -640,18 +640,15 @@ decl_module! {
 		/// -------------------
 		/// Base Weight: 42.58 + .127 * P µs
 		/// # </weight>
-		#[weight = 42_000_000
-			.saturating_add(130_000.saturating_mul(Weight::from(*proposals_upper_bound)))
+		#[weight = 50_000_000
 			.saturating_add(T::DbWeight::get().reads_writes(2, 3))
 		]
 		fn propose(origin,
 			proposal_hash: T::Hash,
 			#[compact] value: BalanceOf<T>,
-			#[compact] proposals_upper_bound: u32,
 		) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
-			ensure!(Self::len_of_public_props() <= proposals_upper_bound, Error::<T>::WrongUpperBound);
 
 			T::Currency::reserve(&who, value)?;
 
@@ -1960,12 +1957,6 @@ impl<T: Trait> Module<T> {
 		}
 
 		Ok(weight)
-	}
-
-	/// Reads the length of PublicProps without getting the complete value in the runtime.
-	fn len_of_public_props() -> u32 {
-		// PublicProps is a vec, decoding its len is equivalent to decode a `Compact<u32>`.
-		decode_compact_u32_at(&<PublicProps<T>>::hashed_key()).unwrap_or(0)
 	}
 
 	/// Reads the length of account in DepositOf without getting the complete value in the runtime.

@@ -17,7 +17,7 @@
 //! The for various partial storage decoders
 
 use super::*;
-use frame_support::storage::{migration, StorageMap, StorageValue, unhashed};
+use frame_support::storage::{migration, StorageMap, unhashed};
 
 #[test]
 fn test_decode_compact_u32_at() {
@@ -34,20 +34,6 @@ fn test_decode_compact_u32_at() {
 
 		unhashed::kill(b"test");
 		assert_eq!(decode_compact_u32_at(b"test"), None);
-	})
-}
-
-#[test]
-fn len_of_public_props() {
-	new_test_ext().execute_with(|| {
-		for l in vec![0, 1, 200, 1000] {
-			let value: Vec<(PropIndex, H256, u64)> = (0..l).map(|_| Default::default()).collect();
-			PublicProps::<Test>::put(value);
-			assert_eq!(Democracy::len_of_public_props(), l);
-		}
-
-		PublicProps::<Test>::kill();
-		assert_eq!(Democracy::len_of_public_props(), 0);
 	})
 }
 
