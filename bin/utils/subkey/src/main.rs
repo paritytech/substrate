@@ -143,7 +143,7 @@ trait Crypto: Sized {
 				},
 			}
 		} else if let Ok((public_key, v)) =
-		<Self::Pair as Pair>::Public::from_string_with_version(uri)
+			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
 			let v = network_override.unwrap_or(v);
 
@@ -164,11 +164,11 @@ trait Crypto: Sized {
 						Public key (hex):   {}\n  \
 						Account ID:         {}\n  \
 						SS58 Address:       {}",
-					         uri,
-					         String::from(v),
-					         format_public_key::<Self>(public_key.clone()),
-					         format_account_id::<Self>(public_key.clone()),
-					         public_key.to_ss58check_with_version(v),
+						uri,
+						String::from(v),
+						format_public_key::<Self>(public_key.clone()),
+						format_account_id::<Self>(public_key.clone()),
+						public_key.to_ss58check_with_version(v),
 					);
 				},
 			}
@@ -380,9 +380,9 @@ fn static_err(msg: &'static str) -> Result<(), Error> {
 }
 
 fn execute<C: Crypto>(matches: ArgMatches) -> Result<(), Error>
-	where
-		SignatureOf<C>: SignatureT,
-		PublicOf<C>: PublicT,
+where
+	SignatureOf<C>: SignatureT,
+	PublicOf<C>: PublicT,
 {
 	let password_interactive = matches.is_present("password-interactive");
 	let password = matches.value_of("password");
@@ -406,7 +406,7 @@ fn execute<C: Crypto>(matches: ArgMatches) -> Result<(), Error>
 		Some(Err(e)) => return Err(e),
 		Some(Ok(v)) => Some(v),
 		None => None,
-	};
+	 };
 
 	if let Some(network) = maybe_network {
 		set_default_ss58_version(network);
@@ -416,7 +416,7 @@ fn execute<C: Crypto>(matches: ArgMatches) -> Result<(), Error>
 		Some(Err(_)) => return Err(Error::Static("Invalid output name. See --help for available outputs.")),
 		Some(Ok(v)) => v,
 		None => OutputType::Text,
-	};
+	 };
 
 	match matches.subcommand() {
 		("generate", Some(matches)) => {
@@ -546,9 +546,9 @@ fn generate_mnemonic(matches: &ArgMatches) -> Result<Mnemonic, Error> {
 }
 
 fn do_sign<C: Crypto>(suri: &str, message: Vec<u8>, password: Option<&str>) -> Result<String, Error>
-	where
-		SignatureOf<C>: SignatureT,
-		PublicOf<C>: PublicT,
+where
+	SignatureOf<C>: SignatureT,
+	PublicOf<C>: PublicT,
 {
 	let pair = read_pair::<C>(Some(suri), password)?;
 	let signature = pair.sign(&message);
@@ -556,9 +556,9 @@ fn do_sign<C: Crypto>(suri: &str, message: Vec<u8>, password: Option<&str>) -> R
 }
 
 fn do_verify<C: Crypto>(matches: &ArgMatches, uri: &str, message: Vec<u8>) -> Result<bool, Error>
-	where
-		SignatureOf<C>: SignatureT,
-		PublicOf<C>: PublicT,
+where
+	SignatureOf<C>: SignatureT,
+	PublicOf<C>: PublicT,
 {
 
 	let signature = read_signature::<C>(matches)?;
@@ -607,9 +607,9 @@ fn read_genesis_hash(matches: &ArgMatches) -> Result<H256, Error> {
 }
 
 fn read_signature<C: Crypto>(matches: &ArgMatches) -> Result<SignatureOf<C>, Error>
-	where
-		SignatureOf<C>: SignatureT,
-		PublicOf<C>: PublicT,
+where
+	SignatureOf<C>: SignatureT,
+	PublicOf<C>: PublicT,
 {
 	let sig_data = matches
 		.value_of("sig")
@@ -628,8 +628,8 @@ fn read_signature<C: Crypto>(matches: &ArgMatches) -> Result<SignatureOf<C>, Err
 }
 
 fn read_public_key<C: Crypto>(matched_uri: Option<&str>) -> PublicOf<C>
-	where
-		PublicOf<C>: PublicT,
+where
+	PublicOf<C>: PublicT,
 {
 	let uri = matched_uri.expect("parameter is required; thus it can't be None; qed");
 	let uri = if uri.starts_with("0x") {
@@ -708,7 +708,6 @@ fn create_extrinsic<C: Crypto>(
 			frame_system::CheckNonce::<Runtime>::from(i),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
-			pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
 		)
 	};
 	let raw_payload = SignedPayload::from_raw(
@@ -718,7 +717,6 @@ fn create_extrinsic<C: Crypto>(
 			VERSION.spec_version as u32,
 			genesis_hash,
 			genesis_hash,
-			(),
 			(),
 			(),
 			(),
@@ -749,9 +747,9 @@ mod tests {
 	use super::*;
 
 	fn test_generate_sign_verify<CryptoType: Crypto>()
-		where
-			SignatureOf<CryptoType>: SignatureT,
-			PublicOf<CryptoType>: PublicT,
+	where
+		SignatureOf<CryptoType>: SignatureT,
+		PublicOf<CryptoType>: PublicT,
 	{
 		let usage = get_usage();
 		let app = get_app(&usage);
