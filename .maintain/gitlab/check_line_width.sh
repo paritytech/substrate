@@ -9,7 +9,7 @@ BASE_ORIGIN="origin"
 BASE_BRANCH_NAME="master"
 LINE_WIDTH="120"
 GOOD_LINE_WIDTH="100"
-BASE_BRANCH="${BASE_ORIGN}/${BASE_BRANCH_NAME}"
+BASE_BRANCH="${BASE_ORIGIN}/${BASE_BRANCH_NAME}"
 
 git fetch ${BASE_ORIGIN} ${BASE_BRANCH_NAME}
 git diff --name-only ${BASE_BRANCH}...${CI_COMMIT_SHA} -- \*.rs | ( while read file
