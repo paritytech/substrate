@@ -166,7 +166,7 @@ impl<BlockNumber: PartialEq + AtLeast32Bit + Copy> HeartbeatStatus<BlockNumber> 
 	/// `session_index` - index of current session.
 	/// `now` - block at which the offchain worker is running.
 	///
-	/// This function will return `true` if:
+	/// This function will return `true` iff:
 	/// 1. the session index is the same (we don't care if it went up or down)
 	/// 2. the heartbeat has been sent recently (within the threshold)
 	///
