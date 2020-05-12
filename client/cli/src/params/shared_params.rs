@@ -45,7 +45,7 @@ pub struct SharedParams {
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
-	pub log: Option<String>,
+	pub log: Vec<String>,
 }
 
 /// Optional flag for specifying crypto algorithm
@@ -117,7 +117,7 @@ impl SharedParams {
 	}
 
 	/// Get the filters for the logging
-	pub fn log_filters(&self) -> Option<String> {
-		self.log.clone()
+	pub fn log_filters(&self) -> &[String] {
+		&self.log
 	}
 }
