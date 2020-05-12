@@ -481,6 +481,7 @@ decl_module! {
 					}
 				}
 				Renouncing::Candidate(index) => {
+					// TODO: probably need the length of candidates here as well.
 					let mut candidates = Self::candidates();
 					let index = index as usize;
 					if let Some(c) = candidates.get(index) {
