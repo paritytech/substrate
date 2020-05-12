@@ -1252,9 +1252,11 @@ decl_module! {
 				if active_era.start.is_none() {
 					let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 					active_era.start = Some(now_as_millis_u64);
+					// This write only ever happens once, we don't include it in the weight in general
 					ActiveEra::put(active_era);
 				}
 			}
+			// `on_finalize` weight is tracked in `on_initialize`
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
