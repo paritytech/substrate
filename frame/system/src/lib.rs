@@ -53,9 +53,9 @@
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
-//!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one encoded in the
+//!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one used to sign the
 //!     transaction.
-//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one encoded in the
+//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used the
 //!     transaction.
 //!
 //! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
