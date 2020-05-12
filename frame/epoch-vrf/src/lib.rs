@@ -285,10 +285,10 @@ impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	}
 }
 
-/// A BABE equivocation offence report.
+/// An equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
-pub struct BabeEquivocationOffence<FullIdentification> {
+pub struct EquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
 	pub slot: u64,
 	/// The session index in which the incident happened.
@@ -299,7 +299,7 @@ pub struct BabeEquivocationOffence<FullIdentification> {
 	pub offender: FullIdentification,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
+impl<FullIdentification: Clone> Offence<FullIdentification> for EquivocationOffence<FullIdentification> {
 	const ID: Kind = *b"babe:equivocatio";
 	type TimeSlot = u64;
 

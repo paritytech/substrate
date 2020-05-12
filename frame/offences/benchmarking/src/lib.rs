@@ -31,7 +31,7 @@ use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSatu
 use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
 use pallet_balances::{Trait as BalancesTrait};
-use pallet_babe::BabeEquivocationOffence;
+use pallet_epoch_vrf::EquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
@@ -337,9 +337,9 @@ benchmarks! {
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
 		let (mut offenders, raw_offenders) = make_offenders::<T>(o, n)?;
-		let keys =  ImOnline::<T>::keys();
+		let keys = ImOnline::<T>::keys();
 
-		let offence = BabeEquivocationOffence {
+		let offence = EquivocationOffence {
 			slot: 0,
 			session_index: 0,
 			validator_set_count: keys.len() as u32,

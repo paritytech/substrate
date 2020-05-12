@@ -23,7 +23,6 @@ use sp_consensus_babe::{
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
-use sp_consensus_babe::digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest};
 use sp_consensus_epoch_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256};
 use codec::Encode;
