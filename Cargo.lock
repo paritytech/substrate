@@ -4003,6 +4003,7 @@ dependencies = [
  "sp-std",
 ]
 
+[[package]]
 name = "pallet-balances"
 version = "2.0.0-dev"
 dependencies = [
@@ -4178,6 +4179,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "serde",
+ "sp-application-crypto",
  "sp-consensus-babe",
  "sp-consensus-epoch-vrf",
  "sp-core",
@@ -4402,8 +4404,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-babe",
  "pallet-balances",
+ "pallet-epoch-vrf",
  "pallet-grandpa",
  "pallet-im-online",
  "pallet-offences",
