@@ -277,9 +277,9 @@ decl_module! {
 		fn vote(origin, votes: Vec<T::AccountId>, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
-			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
-			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
-			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0) as usize;
+			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
+			let members_count = <Members<T>>::decode_len().unwrap_or(0);
+			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0);
 			// addition is valid: candidates, members and runners-up will never overlap.
 			let allowed_votes = candidates_count + members_count + runners_up_count;
 
@@ -1196,7 +1196,7 @@ mod tests {
 			assert_eq!(Elections::runners_up(), vec![]);
 
 			assert_eq!(Elections::candidates(), vec![]);
-			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 0);
+			assert_eq!(<Candidates<Test>>::decode_len(), None);
 			assert!(Elections::is_candidate(&1).is_err());
 
 			assert_eq!(all_voters(), vec![]);
@@ -1800,7 +1800,7 @@ mod tests {
 			assert_eq!(Elections::runners_up(), vec![]);
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 			assert_eq!(Elections::candidates(), vec![]);
-			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 0);
+			assert_eq!(<Candidates<Test>>::decode_len(), None);
 
 			assert_eq!(Elections::election_rounds(), 1);
 		});
