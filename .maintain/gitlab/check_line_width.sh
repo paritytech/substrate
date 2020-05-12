@@ -11,7 +11,7 @@ LINE_WIDTH="120"
 GOOD_LINE_WIDTH="100"
 BASE_BRANCH="${BASE_ORIGIN}/${BASE_BRANCH_NAME}"
 
-git fetch ${BASE_ORIGIN} ${BASE_BRANCH_NAME}
+git fetch ${BASE_ORIGIN} ${BASE_BRANCH_NAME} --depth ${GIT_DEPTH}
 git diff --name-only ${BASE_BRANCH} -- \*.rs | ( while read file
 do
   if [ ! -f ${file} ];
