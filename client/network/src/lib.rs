@@ -53,9 +53,10 @@
 //! - mDNS. We perform a UDP broadcast on the local network. Nodes that listen may respond with
 //! their identity. More info [here](https://github.com/libp2p/specs/blob/master/discovery/mdns.md).
 //! mDNS can be disabled in the network configuration.
-//! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests in
-//! order for nodes to propagate to us their view of the network. More information about Kademlia
-//! can be found [on Wikipedia](https://en.wikipedia.org/wiki/Kademlia).
+//! - Kademlia random walk. Once connected, we perform random Kademlia `FIND_NODE` requests on the
+//! configured Kademlia DHTs (one per configured chain protocol) in order for nodes to propagate to
+//! us their view of the network. More information about Kademlia can be found [on
+//! Wikipedia](https://en.wikipedia.org/wiki/Kademlia).
 //!
 //! ## Connection establishment
 //!
@@ -77,6 +78,7 @@
 //! frames. Encryption and multiplexing are additionally negotiated again inside this channel.
 //! - DNS for addresses of the form `/dns4/example.com/tcp/5` or `/dns4/example.com/tcp/5/ws`. A
 //! node's address can contain a domain name.
+//! - (All of the above using IPv6 instead of IPv4.)
 //!
 //! On top of the base-layer protocol, the [Noise](https://noiseprotocol.org/) protocol is
 //! negotiated and applied. The exact handshake protocol is experimental and is subject to change.
@@ -109,7 +111,7 @@
 //! to a disconnection.
 //! - **[`/ipfs/id/1.0.0`](https://github.com/libp2p/specs/tree/master/identify)**. We
 //! periodically open an ephemeral substream in order to ask information from the remote.
-//! - **[`/ipfs/kad/1.0.0`](https://github.com/libp2p/specs/pull/108)**. We periodically open
+//! - **[`/<protocol_id>/kad`](https://github.com/libp2p/specs/pull/108)**. We periodically open
 //! ephemeral substreams for Kademlia random walk queries. Each Kademlia query is done in a
 //! separate substream.
 //!
