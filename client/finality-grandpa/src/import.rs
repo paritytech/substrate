@@ -466,7 +466,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
 		if do_pause {
 			let _ = self.send_voter_commands.unbounded_send(
-				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
+				VoterCommand::Pause("Forced change scheduled after inactivity".to_string())
 			);
 		}
 
