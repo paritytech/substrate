@@ -523,7 +523,9 @@ impl OverlayedChanges {
 	/// Supplying `None` for `child_info` will only return changes that are in the top
 	/// trie. Specifying some `child_info` will return only the changes in that
 	/// child trie.
-	pub fn changes(&self, child_info: Option<&ChildInfo>) -> impl Iterator<Item=(&StorageKey, &OverlayedValue)> {
+	pub fn changes(&self, child_info: Option<&ChildInfo>)
+		-> impl Iterator<Item=(&StorageKey, &OverlayedValue)>
+	{
 		let (committed, prospective) = if let Some(child_info) = child_info {
 			match child_info.child_type() {
 				ChildType::ParentKeyId => (
