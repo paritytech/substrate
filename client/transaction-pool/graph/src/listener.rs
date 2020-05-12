@@ -129,10 +129,11 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	}
 
 	/// Notify all watchers that transactions have been finalized
-	pub fn finalized(&mut self, block_hash: BlockHash<C>, txs: Vec<H>) {
-		self.finality_watchers.remove(&block_hash);
-		for h in txs {
-			self.fire(&h, |s| s.finalized(block_hash.clone()))
+	pub fn finalized(&mut self, block_hash: BlockHash<C>) {
+		if let Some(hashes) = self.finality_watchers.remove(&block_hash) {
+			for hash in hashes {
+				self.fire(&hash, |s| s.finalized(block_hash))
+			}
 		}
 	}
 }

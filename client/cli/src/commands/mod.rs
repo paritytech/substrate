@@ -396,7 +396,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn log_filters(&self) -> $crate::Result<::std::option::Option<String>> {
+			fn log_filters(&self) -> $crate::Result<String> {
 				match self {
 					$($enum::$variant(cmd) => cmd.log_filters()),*
 				}
