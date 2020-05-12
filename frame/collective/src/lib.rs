@@ -404,7 +404,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
-	) -> usize {
+	) -> Vec<T::AccountId> {
 		// limit members to `MaxMembers`
 		let length = new.len().min(T::MaxMembers::get() as usize);
 		if length != new.len() {
@@ -433,7 +433,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		}
 		Members::<T, I>::put(new);
 		Prime::<T, I>::kill();
-		length
+		new.to_vec()
 	}
 
 	fn set_prime(prime: Option<T::AccountId>) {

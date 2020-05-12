@@ -939,7 +939,7 @@ impl WithdrawReasons {
 /// Allows member changes according to the "verify first, write last" maxime by
 /// providing the `ensure_can_change_members` function for checking as well as the
 /// actual writing logic.
-pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
+pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Returns whether changing the members will execute without errors.
 	///
@@ -956,13 +956,13 @@ pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
 	///
 	/// This resets any previous value of prime.
 	///
-	/// Returns the actual number of members set. This may differ from `new.len()`
-	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
+	/// Returns the actual members set. This may differ from `new` if there are errors.
+	/// Use `ensure_can_change_members` to check for those beforehand.
 	fn change_members(
 		incoming: &[AccountId],
 		outgoing: &[AccountId],
 		mut new: Vec<AccountId>
-	) -> MembersCount {
+	) -> Vec<AccountId> {
 		new.sort_unstable();
 		Self::change_members_sorted(incoming, outgoing, &new[..])
 	}
@@ -975,31 +975,30 @@ pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
 	///
 	/// This resets any previous value of prime.
 	///
-	/// Returns the actual number of members set. This may differ from `sorted_new.len()`
-	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
+	/// Returns the actual members set. This may differ from `sorted_new` if there are errors.
+	/// Use `ensure_can_change_members` to check for those beforehand.
 	fn change_members_sorted(
 		incoming: &[AccountId],
 		outgoing: &[AccountId],
 		sorted_new: &[AccountId],
-	) -> MembersCount;
+	) -> Vec<AccountId>;
 
 	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
 	/// call `change_members_sorted`.
 	///
 	/// This resets any previous value of prime.
 	///
-	/// Returns the actual number of members set. This may differ from `new_members.len()`
-	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
+	/// Returns the actual members set. This may differ from `new_members` if there are errors.
+	/// Use `ensure_can_change_members` to check for those beforehand.
 	fn set_members_sorted(
 		new_members: &[AccountId],
 		old_members: &[AccountId]
-	) -> MembersCount {
+	) -> Vec<AccountId> {
 		let (incoming, outgoing) = Self::compute_members_diff(new_members, old_members);
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members)
 	}
 
-	/// Set the new members; they **must already be sorted**. This will compute the diff and use it to
-	/// call `change_members_sorted`.
+	/// Compute the changes between `new_members` and `old_members` and return them as `(incoming, outgoing)`.
 	fn compute_members_diff(
 		new_members: &[AccountId],
 		old_members: &[AccountId]
@@ -1041,9 +1040,9 @@ pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
 }
 
 impl<T: Clone + Ord> ChangeMembers<T> for () {
-	fn change_members(_: &[T], _: &[T], new: Vec<T>) -> usize { new.len() }
-	fn change_members_sorted(_: &[T], _: &[T], new: &[T]) -> usize { new.len() }
-	fn set_members_sorted(new: &[T], _: &[T]) -> usize { new.len() }
+	fn change_members(_: &[T], _: &[T], new: Vec<T>) -> Vec<T> { new }
+	fn change_members_sorted(_: &[T], _: &[T], new: &[T]) -> Vec<T> { new.to_vec() }
+	fn set_members_sorted(new: &[T], _: &[T]) -> Vec<T> { new.to_vec() }
 	fn set_prime(_: Option<T>) {}
 }
 

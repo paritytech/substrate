@@ -343,7 +343,7 @@ mod tests {
 
 	pub struct TestChangeMembers;
 	impl ChangeMembers<u64> for TestChangeMembers {
-		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) -> usize {
+		fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) -> Vec<u64> {
 			let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 			old_plus_incoming.extend_from_slice(incoming);
 			old_plus_incoming.sort();
@@ -354,7 +354,7 @@ mod tests {
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 			PRIME.with(|p| *p.borrow_mut() = None);
-			new.len()
+			new.to_vec()
 		}
 
 		fn set_prime(who: Option<u64>) {
