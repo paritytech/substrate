@@ -130,8 +130,7 @@ decl_module! {
 			T::MembershipChanged::ensure_can_change_members(&members, &old)?;
 			<Members<T, I>>::put(&members);
 
-			// Safe to ignore the length of the new members here because of `ensure_can_change_members`.
-			let _ = T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
+			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
 
 			Self::deposit_event(RawEvent::MemberAdded);
 		}

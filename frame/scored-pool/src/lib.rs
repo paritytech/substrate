@@ -416,7 +416,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				T::MembershipInitialized::initialize_members(&new_members),
 			ChangeReceiver::MembershipChanged => {
 				// TODO: Is this safe?
-				let _ = T::MembershipChanged::set_members_sorted(
+				T::MembershipChanged::set_members_sorted(
 					&new_members[..],
 					&old_members[..],
 				);
