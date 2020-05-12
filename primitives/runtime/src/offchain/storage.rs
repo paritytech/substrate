@@ -62,6 +62,12 @@ impl<'a> StorageValueRef<'a> {
 			.map(|val| T::decode(&mut &*val).ok())
 	}
 
+
+	/// Remove the value from storage.
+	pub fn remove(&self) {
+		sp_io::offchain::local_storage_remove(self.kind, self.key)
+	}
+
 	/// Retrieve & decode the value and set it to a new one atomically.
 	///
 	/// Function `f` should return a new value that we should attempt to write to storage.
