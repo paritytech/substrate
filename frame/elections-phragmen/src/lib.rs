@@ -456,7 +456,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			match renouncing {
 				Renouncing::Member => {
-					// returns NorMember error in case of error.
+					// returns NoMember error in case of error.
 					let _ = Self::remove_and_replace_member(&who)?;
 					T::Currency::unreserve(&who, T::CandidacyBond::get());
 					Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
