@@ -24,8 +24,8 @@ use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
 use frame_support::{
-	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
-	weights::{Weight, MINIMUM_WEIGHT},
+	decl_storage, decl_module, traits::{Get, Randomness as RandomnessT},
+	weights::Weight,
 };
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{Perbill, RuntimeAppPublic};
@@ -37,7 +37,6 @@ use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
-use sp_application_crypto::Public;
 
 use codec::{Encode, EncodeLike, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
@@ -50,13 +49,11 @@ mod tests;
 #[cfg(all(feature = "std", test))]
 mod mock;
 
-/// Raw pre-digest for this block production engine.
-pub trait RawPreDigest {
+/// Pre-digest for this block production engine.
+pub trait PreDigest {
 	/// Type of slot number.
 	type SlotNumber;
 
-	/// Primary VRF output.
-	fn vrf_output(&self) -> Option<schnorrkel::RawVRFOutput>;
 	/// Slot number.
 	fn slot_number(&self) -> Self::SlotNumber;
 }
@@ -90,11 +87,11 @@ pub trait Trait: pallet_timestamp::Trait {
 		CheckedSub + CheckedAdd + UniqueSaturatedInto<Self::BlockNumber> + Ord + One +
 		MaybeDisplay + MaybeDebug + UniqueSaturatedInto<u64>;
 
-	/// Type of raw pre-digest.
-	type RawPreDigest: RawPreDigest<SlotNumber=Self::SlotNumber>;
+	/// Type of pre-digest.
+	type PreDigest: PreDigest<SlotNumber=Self::SlotNumber>;
 
-	/// Find the raw pre-digest in current block.
-	fn find_raw_pre_digest() -> Option<Self::RawPreDigest>;
+	/// Find the pre-digest in current block.
+	fn find_pre_digest() -> Option<Self::PreDigest>;
 
 	/// Deposit next epoch descriptor.
 	fn deposit_next_epoch_descriptor(
@@ -104,6 +101,9 @@ pub trait Trait: pallet_timestamp::Trait {
 
 	/// Deposit disabled event.
 	fn deposit_disabled_event(i: u32);
+
+	/// Make randomness from pre-digest.
+	fn make_randomness(pre_digest: &Self::PreDigest) -> Option<schnorrkel::Randomness>;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -445,7 +445,7 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest: Option<T::RawPreDigest> = T::find_raw_pre_digest();
+		let maybe_pre_digest: Option<T::PreDigest> = T::find_pre_digest();
 
 		let maybe_randomness: Option<schnorrkel::Randomness> = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
@@ -472,11 +472,11 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(UniqueSaturatedInto::<T::BlockNumber>::unique_saturated_into(lateness));
 			CurrentSlot::<T>::put(current_slot);
 
-			if let Some(vrf_output) = digest.vrf_output() {
+			if let Some(randomness) = T::make_randomness(&digest) {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				Some(T::make_randomness(vrf_output))
+				Some(randomness)
 			} else {
 				None
 			}

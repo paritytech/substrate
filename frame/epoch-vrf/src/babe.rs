@@ -1,11 +1,15 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode};
-use frame_support::{ConsensusEngineId, traits::{Get, FindAuthor}};
+use frame_support::{ConsensusEngineId, traits::{Get, FindAuthor}, storage::StorageValue};
 use sp_runtime::generic::DigestItem;
-use sp_consensus_babe::{SlotNumber, AuthorityId, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID};
-use sp_consensus_babe::digests::{RawPreDigest, NextEpochDescriptor};
+use sp_consensus_babe::{
+	SlotNumber, AuthorityId, BabeAuthorityWeight,
+	ConsensusLog, BABE_ENGINE_ID
+};
+use sp_consensus_babe::digests::{PreDigest, NextEpochDescriptor};
 use sp_consensus_epoch_vrf::schnorrkel;
-use crate::{EpochChangeTrigger, Trait, RawPreDigest as RawPreDigestT};
+use sp_application_crypto::Public;
+use crate::{EpochChangeTrigger, Trait, PreDigest as PreDigestT};
 
 pub trait BabeTrait: pallet_timestamp::Trait {
 	/// The amount of time, in slots, that each epoch should last.
@@ -34,9 +38,9 @@ impl<T: BabeTrait> Trait for T {
 	type AuthorityId = AuthorityId;
 	type AuthorityWeight = BabeAuthorityWeight;
 	type SlotNumber = SlotNumber;
-	type RawPreDigest = RawPreDigest;
+	type PreDigest = PreDigest;
 
-	fn find_raw_pre_digest() -> Option<Self::RawPreDigest> {
+	fn find_pre_digest() -> Option<Self::PreDigest> {
 		<frame_system::Module<T>>::digest()
 			.logs
 			.iter()
@@ -73,41 +77,37 @@ impl<T: BabeTrait> Trait for T {
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn make_randomness(vrf_output: VRFOutput) {
-		// Reconstruct the bytes of VRFInOut using the authority id.
-		Authorities::get()
-			.get(primary.authority_index as usize)
-			.and_then(|author| {
-				schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
-			})
-			.and_then(|pubkey| {
-				let transcript = sp_consensus_babe::make_transcript(
-					&Self::randomness(),
-					current_slot,
-					EpochIndex::get(),
-				);
+	fn make_randomness(pre_digest: &Self::PreDigest) -> Option<schnorrkel::Randomness> {
+		if let PreDigest::Primary(ref primary) = pre_digest {
+			// Reconstruct the bytes of VRFInOut using the authority id.
+			super::Authorities::<Self>::get()
+				.get(primary.authority_index as usize)
+				.and_then(|author: &(AuthorityId, BabeAuthorityWeight)| {
+					schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+				})
+				.and_then(|pubkey| {
+					let transcript = sp_consensus_babe::make_transcript(
+						&super::Randomness::get(),
+						primary.slot_number,
+						super::EpochIndex::<Self>::get(),
+					);
 
-				primary.vrf_output.0.attach_input_hash(
-					&pubkey,
-					transcript
-				).ok()
-			})
-			.map(|inout| {
-				inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
-			})
-	}
-}
-
-impl RawPreDigestT for RawPreDigest {
-	type SlotNumber = SlotNumber;
-
-	fn vrf_output(&self) -> Option<schnorrkel::RawVRFOutput> {
-		if let RawPreDigest::Primary(ref primary) = self {
-			Some(primary.vrf_output.clone())
+					primary.vrf_output.0.attach_input_hash(
+						&pubkey,
+						transcript
+					).ok()
+				})
+				.map(|inout| {
+					inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
+				})
 		} else {
 			None
 		}
 	}
+}
+
+impl PreDigestT for PreDigest {
+	type SlotNumber = SlotNumber;
 
 	fn slot_number(&self) -> SlotNumber {
 		self.slot_number()

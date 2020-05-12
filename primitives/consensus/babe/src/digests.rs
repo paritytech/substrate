@@ -28,9 +28,7 @@ use codec::{Decode, Encode};
 use codec::Codec;
 use sp_std::vec::Vec;
 use sp_runtime::RuntimeDebug;
-use sp_consensus_epoch_vrf::schnorrkel::{self, Randomness};
-#[cfg(feature = "std")]
-use sp_consensus_epoch_vrf::schnorrkel::SignatureError;
+use sp_consensus_epoch_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 
 /// Raw BABE primary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
