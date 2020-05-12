@@ -236,16 +236,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let (neighbor_packet_worker, neighbor_packet_sender) = periodic::NeighborPacketWorker::new();
 
-		let bridge = NetworkBridge {
+		NetworkBridge {
 			service,
 			gossip_engine,
 			validator,
 			neighbor_sender: neighbor_packet_sender,
 			neighbor_packet_worker: Arc::new(Mutex::new(neighbor_packet_worker)),
 			gossip_validator_report_stream: Arc::new(Mutex::new(report_stream)),
-		};
-
-		bridge
+		}
 	}
 
 	/// Note the beginning of a new round to the `GossipValidator`.
