@@ -133,7 +133,6 @@ parameter_types! {
 	pub const MinimumDeposit: u64 = 1;
 	pub const EnactmentPeriod: u64 = 2;
 	pub const CooloffPeriod: u64 = 2;
-	pub const MaxVetoers: u32 = 10;
 	pub const MaxVotes: u32 = 100;
 }
 ord_parameter_types! {
@@ -185,7 +184,6 @@ impl super::Trait for Test {
 	type InstantOrigin = EnsureSignedBy<Six, u64>;
 	type InstantAllowed = InstantAllowed;
 	type Scheduler = Scheduler;
-	type MaxVetoers = MaxVetoers;
 	type MaxVotes = MaxVotes;
 }
 

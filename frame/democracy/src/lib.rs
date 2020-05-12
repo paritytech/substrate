@@ -198,6 +198,11 @@ pub mod benchmarking;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
+/// The maximum number of vetoers on a single proposal used to compute Weight.
+///
+/// NOTE: This is not enforced by any logic.
+pub const MAX_VETOERS: Weight = 100;
+
 /// A proposal index.
 pub type PropIndex = u32;
 
@@ -266,6 +271,11 @@ pub trait Trait: frame_system::Trait + Sized {
 	type CancellationOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin for anyone able to veto proposals.
+	///
+	/// # Warning
+	///
+	/// The number of Vetoers for a proposal must be small, extrinsics are weighted according to
+	/// [MAX_VETOERS](./const.MAX_VETOERS.html)
 	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
 
 	/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
@@ -279,9 +289,6 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// The Scheduler.
 	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
-
-	/// The maximum number of possible vetoers origin, not a hard limit, only used to compute weight.
-	type MaxVetoers: Get<u32>;
 
 	/// The maximum number of votes for an account.
 	///
@@ -782,8 +789,7 @@ decl_module! {
 		/// - Db writes: `NextExternal`
 		/// - Base Weight: 13.8 + .106 * V µs
 		/// # </weight>
-		#[weight = 15_000_000 + 110_000 * Weight::from(T::MaxVetoers::get())
-		+ T::DbWeight::get().reads_writes(2, 1)]
+		#[weight = 15_000_000 + 110_000 * MAX_VETOERS + T::DbWeight::get().reads_writes(2, 1)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
@@ -909,8 +915,7 @@ decl_module! {
 		/// - Db writes: `NextExternal`, `Blacklist`
 		/// - Base Weight: 29.87 + .188 * V µs
 		/// # </weight>
-		#[weight = 30_000_000 + 180_000 * Weight::from(T::MaxVetoers::get())
-			+ T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = 30_000_000 + 180_000 * MAX_VETOERS + T::DbWeight::get().reads_writes(2, 2)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 

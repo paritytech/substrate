@@ -33,7 +33,6 @@ const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
 const MAX_SECONDERS: u32 = 100;
-const MAX_VETOERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
 fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
@@ -303,7 +302,7 @@ benchmarks! {
 	// Worst case scenario, we external propose a previously blacklisted proposal
 	external_propose {
 		let p in 1 .. MAX_PROPOSALS;
-		let v in 1 .. MAX_VETOERS;
+		let v in 1 .. MAX_VETOERS as u32;
 
 		let origin = T::ExternalOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&p);
@@ -364,7 +363,7 @@ benchmarks! {
 
 	veto_external {
 		// Existing veto-ers
-		let v in 0 .. MAX_VETOERS;
+		let v in 0 .. MAX_VETOERS as u32;
 
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
 
