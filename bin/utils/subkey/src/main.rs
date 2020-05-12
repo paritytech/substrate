@@ -702,7 +702,8 @@ fn create_extrinsic<C: Crypto>(
 {
 	let extra = |i: Index, f: Balance| {
 		(
-			frame_system::CheckVersion::<Runtime>::new(),
+			frame_system::CheckSpecVersion::<Runtime>::new(),
+			frame_system::CheckTxVersion::<Runtime>::new(),
 			frame_system::CheckGenesis::<Runtime>::new(),
 			frame_system::CheckEra::<Runtime>::from(Era::Immortal),
 			frame_system::CheckNonce::<Runtime>::from(i),
@@ -716,6 +717,7 @@ fn create_extrinsic<C: Crypto>(
 		extra(index, 0),
 		(
 			VERSION.spec_version as u32,
+			VERSION.transaction_version,
 			genesis_hash,
 			genesis_hash,
 			(),
