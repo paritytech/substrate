@@ -382,6 +382,7 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// ```ignore
 ///	// im-online specific crypto
 /// type RuntimeAppPublic = ImOnline(sr25519::Public);
+///
 /// // wrapped "raw" crypto
 /// type GenericPublic = sr25519::Public;
 /// type GenericSignature = sr25519::Signature;

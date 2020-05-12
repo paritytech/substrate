@@ -24,7 +24,7 @@ use crate::traits::{
 	SignedExtension, Dispatchable, DispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
+use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
@@ -86,6 +86,7 @@ impl UintAuthorityId {
 
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
+	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 	type Signature = TestSignature;
 

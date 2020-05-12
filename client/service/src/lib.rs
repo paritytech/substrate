@@ -50,7 +50,7 @@ use futures::{
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
 };
-use sc_network::{NetworkService, network_state::NetworkState, PeerId, ReportHandle};
+use sc_network::{NetworkService, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
@@ -64,7 +64,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Role, PruningMode, DatabaseConfig, TaskType};
+pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -76,7 +76,10 @@ pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+pub use sc_network::config::{
+	FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder, TransactionImport,
+	TransactionImportFuture,
+};
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
@@ -255,7 +258,7 @@ where
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
 			.map(move |_| {
-				error!("Essential task failed. Shutting down service.");
+				error!("Essential task `{}` failed. Shutting down service.", name);
 				let _ = essential_failed.send(());
 			});
 
@@ -551,12 +554,12 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 		})
 	}
 
-	fn deny_unsafe(addr: &Option<SocketAddr>, unsafe_rpc_expose: bool) -> sc_rpc::DenyUnsafe {
+	fn deny_unsafe(addr: &Option<SocketAddr>, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
-		if is_exposed_addr && !unsafe_rpc_expose {
-			sc_rpc::DenyUnsafe::Yes
-		} else {
-			sc_rpc::DenyUnsafe::No
+		match (is_exposed_addr, methods) {
+			| (_, RpcMethods::Unsafe)
+			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
+			_ => sc_rpc::DenyUnsafe::Yes
 		}
 	}
 
@@ -566,7 +569,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_http, config.unsafe_rpc_expose)),
+				gen_handler(deny_unsafe(&config.rpc_http, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -575,7 +578,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_ws, config.unsafe_rpc_expose)),
+				gen_handler(deny_unsafe(&config.rpc_ws, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
@@ -616,7 +619,6 @@ pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
-	executor: SpawnTaskHandle,
 }
 
 /// Get transactions for propagation.
@@ -659,42 +661,42 @@ where
 
 	fn import(
 		&self,
-		report_handle: ReportHandle,
-		who: PeerId,
-		reputation_change_good: sc_network::ReputationChange,
-		reputation_change_bad: sc_network::ReputationChange,
-		transaction: B::Extrinsic
-	) {
+		transaction: B::Extrinsic,
+	) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return;
+			Box::pin(futures::future::ready(TransactionImport::None));
 		}
 
 		let encoded = transaction.encode();
-		match Decode::decode(&mut &encoded[..]) {
-			Ok(uxt) => {
-				let best_block_id = BlockId::hash(self.client.info().best_hash);
-				let source = sp_transaction_pool::TransactionSource::External;
-				let import_future = self.pool.submit_one(&best_block_id, source, uxt);
-				let import_future = import_future
-					.map(move |import_result| {
-						match import_result {
-							Ok(_) => report_handle.report_peer(who, reputation_change_good),
-							Err(e) => match e.into_pool_error() {
-								Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => (),
-								Ok(e) => {
-									report_handle.report_peer(who, reputation_change_bad);
-									debug!("Error adding transaction to the pool: {:?}", e)
-								}
-								Err(e) => debug!("Error converting pool error: {:?}", e),
-							}
-						}
-					});
-
-				self.executor.spawn("extrinsic-import", import_future);
+		let uxt = match Decode::decode(&mut &encoded[..]) {
+			Ok(uxt) => uxt,
+			Err(e) => {
+				debug!("Transaction invalid: {:?}", e);
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
 			}
-			Err(e) => debug!("Error decoding transaction {}", e),
-		}
+		};
+
+		let best_block_id = BlockId::hash(self.client.info().best_hash);
+
+		let import_future = self.pool.submit_one(&best_block_id, sp_transaction_pool::TransactionSource::External, uxt);
+		Box::pin(async move {
+			match import_future.await {
+				Ok(_) => TransactionImport::NewGood,
+				Err(e) => match e.into_pool_error() {
+					Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => TransactionImport::KnownGood,
+					Ok(e) => {
+						debug!("Error adding transaction to the pool: {:?}", e);
+						TransactionImport::Bad
+					}
+					Err(e) => {
+						debug!("Error converting pool error: {:?}", e);
+						// it is not bad at least, just some internal node logic error, so peer is innocent.
+						TransactionImport::KnownGood
+					}
+				}
+			}
+		})
 	}
 
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>) {

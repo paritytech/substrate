@@ -16,6 +16,7 @@ serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "2.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "2.0.0-dev", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
@@ -38,6 +39,7 @@ std = [
 	"sp-std/std",
 	"frame-support/std",
 	"sp-runtime/std",
+	"sp-session/std",
 	"sp-staking/std",
 	"pallet-timestamp/std",
 	"sp-trie/std",

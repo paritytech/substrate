@@ -33,7 +33,7 @@ use std::{
 	collections::HashMap
 };
 
-use futures::{prelude::*, future::BoxFuture};
+use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
 
@@ -788,14 +788,14 @@ impl<Block: BlockT, C, I, P> BlockImport<Block> for AuraBlockImport<Block, C, I,
 }
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, I, C, P, F>(
+pub fn import_queue<B, I, C, P, S>(
 	slot_duration: SlotDuration,
 	block_import: I,
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
-	spawner: F,
+	spawner: &S,
 ) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
@@ -805,7 +805,7 @@ pub fn import_queue<B, I, C, P, F>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
-	F: Fn(BoxFuture<'static, ()>) -> (),
+	S: sp_core::traits::SpawnBlocking,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
@@ -815,6 +815,7 @@ pub fn import_queue<B, I, C, P, F>(
 		inherent_data_providers,
 		phantom: PhantomData,
 	};
+
 	Ok(BasicQueue::new(
 		verifier,
 		Box::new(block_import),

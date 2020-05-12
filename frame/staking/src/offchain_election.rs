@@ -168,13 +168,7 @@ pub fn prepare_submission<T: Trait>(
 		<Module<T>>::slashable_balance_of_vote_weight,
 	);
 
-	// reduce
-	if do_reduce {
-		reduce(&mut staked);
-	}
-
 	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
-
 	// equalize a random number of times.
 	let iterations_executed = match T::MaxIterations::get() {
 		0 => {
@@ -194,6 +188,10 @@ pub fn prepare_submission<T: Trait>(
 		}
 	};
 
+	// reduce
+	if do_reduce {
+		reduce(&mut staked);
+	}
 
 	// Convert back to ratio assignment. This takes less space.
 	let low_accuracy_assignment = sp_phragmen::assignment_staked_to_ratio(staked);

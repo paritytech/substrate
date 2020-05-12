@@ -21,9 +21,10 @@ log = "0.4.8"
 lru = "0.4.3"
 sc-network = { version = "0.8.0-dev", path = "../network" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
 wasm-timer = "0.2"
 
 [dev-dependencies]
 async-std = "1.5"
+quickcheck = "0.9.0"
+rand = "0.7.2"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
