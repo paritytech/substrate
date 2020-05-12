@@ -227,7 +227,6 @@ macro_rules! assert_err_with_weight {
 		} else {
 			panic!("expected Err(_), got Ok(_).")
 		}
-		println!("call = {:?} / err = {:?} / weight = {:?}", $call, $err, $weight);
 	}
 }
 

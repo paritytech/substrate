@@ -217,10 +217,7 @@ benchmarks! {
 			reporters.push(reporter);
 		}
 
-		// make sure reporters actually get rewarded
-		Staking::<T>::set_slash_reward_fraction(Perbill::one());
-
-		let (offenders, raw_offenders) = make_offenders::<T>(o, n)?;
+		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
 		let keys =  ImOnline::<T>::keys();
 		let validator_set_count = keys.len() as u32;
 

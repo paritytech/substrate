@@ -102,6 +102,8 @@ use frame_support::{
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
+mod benchmarking;
+
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
@@ -281,9 +283,11 @@ decl_module! {
 		///
 		/// The `votes` should:
 		///   - not be empty.
-		///   - be less than the number of candidates.
+		///   - be less than the number of possible candidates. Note that all current members and
+		///     runners-up are also automatically candidates for the next round.
 		///
 		/// Upon voting, `value` units of `who`'s balance is locked and a bond amount is reserved.
+		///
 		/// It is the responsibility of the caller to not place all of their balance into the lock
 		/// and keep some for further transactions.
 		///
@@ -296,6 +300,9 @@ decl_module! {
 		fn vote(origin, votes: Vec<T::AccountId>, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
+			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
+			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
+
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
 			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
 			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0) as usize;
@@ -304,19 +311,15 @@ decl_module! {
 
 			ensure!(!allowed_votes.is_zero(), Error::<T>::UnableToVote);
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
-			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
-			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
-			ensure!(
-				value > T::Currency::minimum_balance(),
-				Error::<T>::LowBalance,
-			);
+			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
 
 			if !Self::is_voter(&who) {
 				// first time voter. Reserve bond.
 				T::Currency::reserve(&who, T::VotingBond::get())
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
 			}
+
 			// Amount to be locked up.
 			let locked_balance = value.min(T::Currency::total_balance(&who));
 
@@ -403,7 +406,6 @@ decl_module! {
 			Self::deposit_event(RawEvent::VoterReported(target, reporter, valid));
 		}
 
-
 		/// Submit oneself for candidacy.
 		///
 		/// A candidate will either:
@@ -430,6 +432,7 @@ decl_module! {
 
 			let is_candidate = Self::is_candidate(&who);
 			ensure!(is_candidate.is_err(), Error::<T>::DuplicatedCandidate);
+
 			// assured to be an error, error always contains the index.
 			let index = is_candidate.unwrap_err();
 
@@ -586,7 +589,10 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	/// Attempts to remove a member `who`.
+	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
+	/// Ok(true). is returned.
+	///
+	/// Otherwise, `Ok(false)` is returned to signal the caller.
 	///
 	/// If a replacement exists, `Members` and `RunnersUp` storage is updated, where the first
 	/// element of `RunnersUp` is used as the replacement and `Ok(true)` is returned. Else,
@@ -626,7 +632,7 @@ impl<T: Trait> Module<T> {
 	/// Check if `who` is a candidate. It returns the insert index if the element does not exists as
 	/// an error.
 	///
-	/// State: O(LogN) given N candidates.
+	/// O(LogN) given N candidates.
 	fn is_candidate(who: &T::AccountId) -> Result<(), usize> {
 		Self::candidates().binary_search(who).map(|_| ())
 	}
@@ -640,14 +646,14 @@ impl<T: Trait> Module<T> {
 
 	/// Check if `who` is currently an active member.
 	///
-	/// Limited number of members. Binary search. Constant time factor. O(1)
+	/// O(LogN) given N members. Since members are limited, O(1).
 	fn is_member(who: &T::AccountId) -> bool {
 		Self::members().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
 	}
 
 	/// Check if `who` is currently an active runner.
 	///
-	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
+	/// O(LogN) given N runners-up. Since runners-up are limited, O(1).
 	fn is_runner(who: &T::AccountId) -> bool {
 		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
@@ -686,7 +692,9 @@ impl<T: Trait> Module<T> {
 		if Self::is_voter(who) {
 			Self::votes_of(who)
 				.iter()
-				.all(|v| !Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok())
+				.all(|v|
+					!Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok()
+				)
 		} else {
 			false
 		}
@@ -1066,7 +1074,7 @@ mod tests {
 			new_plus_outgoing.extend_from_slice(outgoing);
 			new_plus_outgoing.sort();
 
-			assert_eq!(old_plus_incoming, new_plus_outgoing);
+			assert_eq!(old_plus_incoming, new_plus_outgoing, "change members call is incorrect!");
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 			PRIME.with(|p| *p.borrow_mut() = None);
@@ -1130,6 +1138,7 @@ mod tests {
 		voter_bond: u64,
 		term_duration: u64,
 		desired_runners_up: u32,
+		desired_members: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -1138,8 +1147,9 @@ mod tests {
 				genesis_members: vec![],
 				balance_factor: 1,
 				voter_bond: 2,
-				desired_runners_up: 0,
 				term_duration: 5,
+				desired_runners_up: 0,
+				desired_members: 2,
 			}
 		}
 	}
@@ -1161,15 +1171,24 @@ mod tests {
 			self.genesis_members = members;
 			self
 		}
+		#[cfg(feature = "runtime-benchmarks")]
+		pub fn desired_members(mut self, count: u32) -> Self {
+			self.desired_members = count;
+			self
+		}
 		pub fn balance_factor(mut self, factor: u64) -> Self {
 			self.balance_factor = factor;
 			self
 		}
-		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		fn set_constants(&self) {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
+			DESIRED_MEMBERS.with(|m| *m.borrow_mut() = self.desired_members);
 			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
+		}
+		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+			self.set_constants();
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
 				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
@@ -1534,7 +1553,7 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(
 				Elections::vote(Origin::signed(2), vec![], 20),
-				Error::<Test>::UnableToVote,
+				Error::<Test>::NoVotes,
 			);
 		});
 	}
