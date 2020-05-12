@@ -634,19 +634,14 @@ decl_module! {
 		/// Emits `Proposed`.
 		///
 		/// # <weight>
-		/// - Complexity: `O(P)` where `P` is the number of proposals in the `PublicProps` vec.
+		/// - Complexity: `O(1)`
 		/// - Db reads: `PublicPropCount`, `PublicProps`
 		/// - Db writes: `PublicPropCount`, `PublicProps`, `DepositOf`
 		/// -------------------
-		/// Base Weight: 42.58 + .127 * P µs
+		/// Base Weight: 42.58 + .127 * P µs with `P` the number of proposals `PublicProps`
 		/// # </weight>
-		#[weight = 50_000_000
-			.saturating_add(T::DbWeight::get().reads_writes(2, 3))
-		]
-		fn propose(origin,
-			proposal_hash: T::Hash,
-			#[compact] value: BalanceOf<T>,
-		) {
+		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 3)]
+		fn propose(origin, proposal_hash: T::Hash, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
 
