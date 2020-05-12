@@ -1948,7 +1948,6 @@ decl_module! {
 			|(_, &items,): (&EraIndex, &u32,)| {
 				let items = Weight::from(items);
 				T::DbWeight::get().reads_writes(2, 1)
-					.saturating_add((30 * WEIGHT_PER_MICROS).saturating_mul(items))
 					.saturating_add(T::DbWeight::get().reads_writes(items, items))
 			},
 			DispatchClass::Normal,
