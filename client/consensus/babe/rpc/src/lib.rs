@@ -116,9 +116,20 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
+			let key_pairs = {
+				let keystore = keystore.read();
+				epoch.authorities.iter().enumerate()
+				.flat_map(|(i, a)| {
+					keystore.key_pair::<sp_consensus_babe::AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
+				})
+				.collect::<Vec<_>>()
+			};
+
 			for slot_number in epoch_start..epoch_end {
 				let epoch = epoch_data(&shared_epoch, &client, &babe_config, slot_number, &select_chain)?;
-				if let Some((claim, key)) = authorship::claim_slot(slot_number, &epoch, &keystore) {
+				if let Some((claim, key)) =
+					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &key_pairs)
+				{
 					match claim {
 						PreDigest::Primary { .. } => {
 							claims.entry(key.public()).or_default().primary.push(slot_number);
@@ -163,7 +174,7 @@ pub enum Error {
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		jsonrpc_core::Error {
-			message: format!("{}", error).into(),
+			message: format!("{}", error),
 			code: jsonrpc_core::ErrorCode::ServerError(1234),
 			data: None,
 		}
