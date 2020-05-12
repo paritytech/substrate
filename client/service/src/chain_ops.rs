@@ -36,7 +36,12 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
 use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
-use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
+use std::{
+	collections::HashMap,
+	io::{Read, Write, Seek},
+	pin::Pin,
+	sync::atomic::Ordering,
+};
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
@@ -104,6 +109,7 @@ impl<
 		let mut count = None::<u64>;
 		let mut read_block_count = 0;
 		let mut link = WaitLink::new();
+		let rejected_blocks_number = self.rejected_blocks_number.clone();
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -175,6 +181,7 @@ impl<
 					"Stopping after #{} blocks because of an error",
 					link.imported_blocks,
 				);
+				rejected_blocks_number.fetch_add(1, Ordering::Relaxed);
 				return std::task::Poll::Ready(Ok(()));
 			}
 

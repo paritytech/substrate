@@ -48,7 +48,10 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::{
 	collections::HashMap,
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, pin::Pin
+	marker::PhantomData,
+	pin::Pin,
+	sync::Arc,
+	sync::atomic::{AtomicU64, Ordering},
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -96,8 +99,9 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	transaction_pool: Arc<TExPool>,
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
-	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	pub (crate) rejected_blocks_number: Arc<AtomicU64>,
+	marker: PhantomData<(TBl, TRtApi)>,
 }
 
 /// Full client type.
@@ -312,6 +316,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions: Default::default(),
 			remote_backend: None,
 			block_announce_validator_builder: None,
+			rejected_blocks_number: Arc::new(AtomicU64::new(0)),
 			marker: PhantomData,
 		})
 	}
@@ -395,6 +400,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
+			rejected_blocks_number: Arc::new(AtomicU64::new(0)),
 			marker: PhantomData,
 		})
 	}
@@ -468,6 +474,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -512,6 +519,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -550,6 +558,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -614,6 +623,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -677,6 +687,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -705,6 +716,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -733,6 +745,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
+			rejected_blocks_number: self.rejected_blocks_number,
 			marker: self.marker,
 		})
 	}
@@ -851,6 +864,7 @@ ServiceBuilder<
 			rpc_extensions,
 			remote_backend,
 			block_announce_validator_builder,
+			rejected_blocks_number,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -1065,6 +1079,7 @@ ServiceBuilder<
 				&info,
 				&transaction_pool_.status(),
 				&net_status,
+				rejected_blocks_number.load(Ordering::Relaxed)
 			);
 			ready(())
 		});

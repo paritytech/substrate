@@ -50,6 +50,7 @@ struct PrometheusMetrics {
 	block_height: GaugeVec<U64>,
 	number_leaves: Gauge<U64>,
 	ready_transactions_number: Gauge<U64>,
+	rejected_blocks_number: Gauge<U64>,
 
 	// I/O
 	network_per_sec_bytes: GaugeVec<U64>,
@@ -123,6 +124,10 @@ impl PrometheusMetrics {
 
 			ready_transactions_number: register(Gauge::new(
 				"ready_transactions_number", "Number of transactions in the ready queue",
+			)?, registry)?,
+
+			rejected_blocks_number: register(Gauge::new(
+				"rejected_blocks_number", "Number of blocks rejected as invalid",
 			)?, registry)?,
 
 			// I/ O
@@ -313,6 +318,7 @@ impl MetricsService {
 		info: &ClientInfo<T>,
 		txpool_status: &PoolStatus,
 		net_status: &NetworkStatus<T>,
+		rejected_blocks_number: u64,
 	) {
 
 		let best_number = info.chain.best_number.saturated_into::<u64>();
@@ -386,6 +392,8 @@ impl MetricsService {
 			}
 
 			metrics.ready_transactions_number.set(txpool_status.ready as u64);
+
+			metrics.rejected_blocks_number.set(rejected_blocks_number);
 
 			if let Some(best_seen_block) = best_seen_block {
 				metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
