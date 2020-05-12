@@ -210,6 +210,12 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+	let db_open_error = |feat| Err(
+		sp_blockchain::Error::Backend(
+			format!("`{}` feature not enabled, database can not be opened", feat),
+		),
+	);
+
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
 		#[cfg(any(feature = "kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
@@ -247,21 +253,29 @@ pub fn open_database<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
+		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
+		DatabaseSettingsSrc::RocksDb { .. } => {
+			return db_open_error("kvdb-rocksdb");
+		},
 		#[cfg(feature = "subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
 			crate::subdb::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
+		},
+		#[cfg(not(feature = "subdb"))]
+		DatabaseSettingsSrc::SubDb { .. } => {
+			return db_open_error("subdb");
 		},
 		#[cfg(feature = "parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		DatabaseSettingsSrc::Custom(db) => db.clone(),
-		_ => {
-			let msg = "Trying to open a unsupported database".into();
-			return Err(sp_blockchain::Error::Backend(msg));
+		#[cfg(not(feature = "parity-db"))]
+		DatabaseSettingsSrc::ParityDb { .. } => {
+			return db_open_error("parity-db");
 		},
+		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
 	check_database_type(&*db, db_type)?;
