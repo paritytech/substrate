@@ -940,7 +940,6 @@ impl WithdrawReasons {
 /// providing the `ensure_can_change_members` function for checking as well as the
 /// actual writing logic.
 pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
-
 	/// Returns whether changing the members will execute without errors.
 	///
 	/// Defaults to a noop. Implement this if `change_members_sorted` could fail.
