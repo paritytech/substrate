@@ -59,7 +59,7 @@ fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed128) -> Balance {
 	let weight = default_transfer_call().get_dispatch_info().weight;
 	let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
 
-	base_fee + fee_multiplier.saturating_mul_int_acc(length_fee + weight_fee)
+	base_fee + fee_multiplier.saturating_mul_acc_int(length_fee + weight_fee)
 }
 
 fn xt() -> UncheckedExtrinsic {

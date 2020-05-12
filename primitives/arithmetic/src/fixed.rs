@@ -157,7 +157,7 @@ pub trait FixedPointNumber:
 	/// Equal to `self * n + n`.
 	///
 	/// Returns `N::min` or `N::max` if the multiplication or final result does not fit in `N`.
-	fn saturating_mul_int_acc<N: FixedPointOperand>(self, n: N) -> N {
+	fn saturating_mul_acc_int<N: FixedPointOperand>(self, n: N) -> N {
 		self.saturating_mul_int(n).saturating_add(n)
 	}
 
@@ -1249,19 +1249,19 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			fn saturating_mul_int_acc_works() {
-				assert_eq!($name::zero().saturating_mul_int_acc(42i8), 42i8);
-				assert_eq!($name::one().saturating_mul_int_acc(42i8), 2 * 42i8);
+			fn saturating_mul_acc_int_works() {
+				assert_eq!($name::zero().saturating_mul_acc_int(42i8), 42i8);
+				assert_eq!($name::one().saturating_mul_acc_int(42i8), 2 * 42i8);
 
-				assert_eq!($name::one().saturating_mul_int_acc(i128::max_value()), i128::max_value());
-				assert_eq!($name::one().saturating_mul_int_acc(i128::min_value()), i128::min_value());
+				assert_eq!($name::one().saturating_mul_acc_int(i128::max_value()), i128::max_value());
+				assert_eq!($name::one().saturating_mul_acc_int(i128::min_value()), i128::min_value());
 
-				assert_eq!($name::one().saturating_mul_int_acc(u128::max_value() / 2), u128::max_value() - 1);
-				assert_eq!($name::one().saturating_mul_int_acc(u128::min_value()), u128::min_value());
+				assert_eq!($name::one().saturating_mul_acc_int(u128::max_value() / 2), u128::max_value() - 1);
+				assert_eq!($name::one().saturating_mul_acc_int(u128::min_value()), u128::min_value());
 
 				let a = $name::saturating_from_rational(-1, 2);
-				assert_eq!(a.saturating_mul_int_acc(42i8), 21i8);
-				assert_eq!(a.saturating_mul_int_acc(u128::max_value() - 1), u128::max_value() - 1);
+				assert_eq!(a.saturating_mul_acc_int(42i8), 21i8);
+				assert_eq!(a.saturating_mul_acc_int(u128::max_value() - 1), u128::max_value() - 1);
 			}
 
 			#[test]

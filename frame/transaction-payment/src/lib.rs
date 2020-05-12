@@ -156,7 +156,7 @@ impl<T: Trait> Module<T> {
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturating_mul_int_acc(adjustable_fee.saturated_into());
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee.saturated_into());
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
@@ -174,7 +174,7 @@ impl<T: Trait> Module<T> {
 	{
 		let fee = UniqueSaturatedInto::<u128>::unique_saturated_into(Self::weight_to_fee(weight));
 		UniqueSaturatedFrom::unique_saturated_from(
-			NextFeeMultiplier::get().saturating_mul_int_acc(fee)
+			NextFeeMultiplier::get().saturating_mul_acc_int(fee)
 		)
 	}
 
