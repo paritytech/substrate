@@ -1684,7 +1684,7 @@ impl<T: Trait + Send + Sync> CheckTxVersion<T> {
 impl<T: Trait + Send + Sync> SignedExtension for CheckTxVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
-	type AdditionalSigned = u8;
+	type AdditionalSigned = u32;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckTxVersion";
 

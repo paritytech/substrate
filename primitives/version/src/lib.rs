@@ -103,7 +103,7 @@ pub struct RuntimeVersion {
 	/// index.
 	///
 	/// It need *not* change when a new module is added or when a dispatchable is added.
-	pub transaction_version: u8,
+	pub transaction_version: u32,
 }
 
 #[cfg(feature = "std")]
