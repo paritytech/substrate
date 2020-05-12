@@ -535,16 +535,6 @@ impl OverlayedChanges {
 		committed.into_iter().flatten().chain(prospective.into_iter().flatten())
 	}
 
-	/// Return a clone of the currently pending changes.
-	pub fn clone_pending(&self) -> OverlayedChangeSet {
-		self.prospective.clone()
-	}
-
-	/// Replace the currently pending changes.
-	pub fn set_pending(&mut self, pending: OverlayedChangeSet) {
-		self.prospective = pending;
-	}
-
 	/// Convert this instance with all changes into a [`StorageChanges`] instance.
 	pub fn into_storage_changes<
 		B: Backend<H>, H: Hasher, N: BlockNumber
