@@ -284,29 +284,30 @@ impl<
 		let import = future::poll_fn(move |cx| {
 			let client = &self.client;
 			let queue = &mut self.import_queue;
+			let read_block_count = block_iter.read_block_count();
 
-			// Read blocks from the input.
-			match block_iter.next() {
-				None => {
-					let read_block_count = block_iter.read_block_count();
+			// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
+			// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
+			if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+				// Read blocks from the input.
+				match block_iter.next() {
+					None => {
+						let read_block_count = block_iter.read_block_count();
 
-					info!(
-						"🎉 Imported {} blocks. Best: #{}",
-						read_block_count, client.chain_info().best_number
-					);
-					return std::task::Poll::Ready(Ok(()))
-				},
-				Some(block_result) => {
-					let read_block_count = block_iter.read_block_count();
-					// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
-					// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
-					if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+						info!(
+							"🎉 Imported {} blocks. Best: #{}",
+							read_block_count, client.chain_info().best_number
+						);
+						return std::task::Poll::Ready(Ok(()))
+					},
+					Some(block_result) => {
+						let read_block_count = block_iter.read_block_count();
+
 						match block_result {
 							Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
 							Err(e) => {
 								return std::task::Poll::Ready(
-									Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e)))
-								)
+									Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e))))
 							}
 						}
 					}
