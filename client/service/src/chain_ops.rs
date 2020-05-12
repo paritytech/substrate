@@ -170,6 +170,15 @@ where
 	]);
 }
 
+/// Returns true if we have imported every block we were supposed to import, else returns false.
+fn importing_is_done(num_expected_blocks: Option<u64>, read_block_count: u64, imported_blocks: u64) -> bool {
+	if let Some(num_expected_blocks) = num_expected_blocks {
+		imported_blocks >= num_expected_blocks
+	} else {
+		imported_blocks >= read_block_count
+	}
+}
+
 // Logs information regarding the current importing status.
 fn log_importing_status_updates<R, T>(block_iter: &BlockIter<R, T>, blocks_before: u64, imported_blocks: u64)
 where
@@ -293,21 +302,27 @@ impl<
 				match block_iter.next() {
 					None => {
 						let read_block_count = block_iter.read_block_count();
+						let num_expected_blocks = block_iter.num_expected_blocks();
 
-						info!(
-							"🎉 Imported {} blocks. Best: #{}",
-							read_block_count, client.chain_info().best_number
-						);
-						return std::task::Poll::Ready(Ok(()))
+						if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
+							info!(
+								"🎉 Imported {} blocks. Best: #{}",
+								read_block_count, client.chain_info().best_number
+							);
+							return std::task::Poll::Ready(Ok(()))
+						}
 					},
 					Some(block_result) => {
 						let read_block_count = block_iter.read_block_count();
-
-						match block_result {
-							Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
-							Err(e) => {
-								return std::task::Poll::Ready(
-									Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e))))
+						// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
+						// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
+						if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+							match block_result {
+								Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
+								Err(e) => {
+									return std::task::Poll::Ready(
+										Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e))))
+								}
 							}
 						}
 					}
