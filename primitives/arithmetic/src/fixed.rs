@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Decimal Fixed Point implementations for Substrate runtime.
+
 use sp_std::{ops::{self, Add, Sub, Mul, Div}, fmt::Debug, prelude::*, convert::{TryInto, TryFrom}};
 use codec::{Encode, Decode};
 use crate::{
@@ -43,7 +45,7 @@ impl FixedPointOperand for i8 {}
 impl FixedPointOperand for u8 {}
 
 /// Something that implements a fixed point with an arbitrary precision `DIV`,
-/// meaning that `1 / DIV` can be represented. `DIV` should be a power of `10`.
+/// i.e. `1 / DIV` can be represented. `DIV` should be a power of `10`.
 pub trait FixedPointNumber:
 	Sized + Copy + Default + Debug
 	+ Saturating + Bounded
@@ -496,8 +498,8 @@ macro_rules! implement_fixed {
 
 		impl<P: PerThing> From<P> for $name {
 			fn from(p: P) -> Self {
-				let accuracy = P::ACCURACY.saturated_into() as <Self as FixedPointNumber>::Inner;
-				let value = p.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
+				let accuracy = P::ACCURACY.saturated_into();
+				let value = p.deconstruct().saturated_into();
 				$name::saturating_from_rational(value, accuracy)
 			}
 		}
@@ -1513,7 +1515,7 @@ implement_fixed!(
 	test_fixed64,
 	i64,
 	1_000_000_000,
-	"_Fixed 64 bits, range = [-9223372036.854775808, 9223372036.854775807]_",
+	"_Fixed Point 64 bits, range = [-9223372036.854775808, 9223372036.854775807]_",
 );
 
 implement_fixed!(
@@ -1521,5 +1523,5 @@ implement_fixed!(
 	test_fixed128,
 	i128,
 	1_000_000_000_000_000_000,
-	"_Fixed 128 bits, range = [-170141183460469231731.687303715884105728, 170141183460469231731.687303715884105727]_",
+	"_Fixed Point 128 bits, range = [-170141183460469231731.687303715884105728, 170141183460469231731.687303715884105727]_",
 );
