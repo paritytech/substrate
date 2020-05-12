@@ -58,7 +58,13 @@ fn default_stake<T: Trait>(factor: u32) -> BalanceOf<T> {
 
 /// Get the current number of candidates
 fn candidate_count<T: Trait>() -> u32 {
-	<Candidates<T>>::decode_len().unwrap_of(0) as u32
+	<Candidates<T>>::decode_len().unwrap_or(0usize) as u32
+}
+
+/// Index of a candidate. Panics if index is not found.
+fn index_of_candidate<T: Trait>(c: &T::AccountId) -> u32 {
+	<Elections<T>>::candidates().iter().position(|x| x == c)
+		.expect("Candidate does not exist") as u32
 }
 
 /// Add `c` new candidates.
@@ -236,12 +242,11 @@ benchmarks! {
 
 		// all the bailers go away.
 		bailing_candidates.into_iter().for_each(|b| {
-			let index = <Elections<T>>::candidates().iter().position(|x| x == b)
-				.expect("candidate will have some index");
+			let index = index_of_candidate::<T>(&b);
 			assert!(<Elections<T>>::renounce_candidacy(
-				RawOrigin::Signed(b).into()).is_ok(),
+				RawOrigin::Signed(b).into(),
 				Renouncing::Candidate(index),
-			);
+			).is_ok());
 		});
 	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), account_2_lookup, candidate_count::<T>())
 	verify {
@@ -325,7 +330,7 @@ benchmarks! {
 
 		// we assume worse case that: extrinsic is successful and candidate is not duplicate.
 		let candidate_account = endowed_account::<T>("caller", 0);
-	}: _(RawOrigin::Signed(candidate_account.clone(), candidate_count::<T>()))
+	}: _(RawOrigin::Signed(candidate_account.clone()), candidate_count::<T>())
 	verify {
 		#[cfg(test)]
 		{
@@ -350,7 +355,8 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(c, "caller")?;
 
 		let bailing = all_candidates[0].clone(); // Should be ("caller", 0)
-	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()))
+		let index = index_of_candidate::<T>(&bailing);
+	}: renounce_candidacy(RawOrigin::Signed(bailing), Renouncing::Candidate(index))
 	verify {
 		#[cfg(test)]
 		{
@@ -374,7 +380,14 @@ benchmarks! {
 		let _ = submit_candidates::<T>(c, "candidates")?;
 
 		let bailing = members_and_runners_up[0].clone();
-	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()))
+		let renouncing = if <Elections<T>>::is_member(&bailing) {
+			Renouncing::Member
+		} else if <Elections<T>>::is_runner_up(&bailing) {
+			Renouncing::RunnerUp
+		} else {
+			panic!("Bailing must be a member or runner-up for this bench to be sane.");
+		};
+	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()), renouncing)
 	verify {
 		#[cfg(test)]
 		{
@@ -402,8 +415,8 @@ benchmarks! {
 		// create some voters for these replacements.
 		distribute_voters::<T>(replacements, MAX_VOTERS, MAXIMUM_VOTE)?;
 
-		let to_remove = all_members[0].clone();
-	}: remove_member(RawOrigin::Root, as_lookup::<T>(to_remove), false)
+		let to_remove = as_lookup::<T>(all_members[0].clone());
+	}: remove_member(RawOrigin::Root, to_remove, false)
 	verify {
 		// must still have the desired number of members members.
 		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());

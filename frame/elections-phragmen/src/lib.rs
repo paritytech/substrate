@@ -437,7 +437,7 @@ decl_module! {
 			let index = is_candidate.unwrap_err();
 
 			ensure!(!Self::is_member(&who), Error::<T>::MemberSubmit);
-			ensure!(!Self::is_runner(&who), Error::<T>::RunnerSubmit);
+			ensure!(!Self::is_runner_up(&who), Error::<T>::RunnerSubmit);
 
 			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
@@ -651,10 +651,10 @@ impl<T: Trait> Module<T> {
 		Self::members().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
 	}
 
-	/// Check if `who` is currently an active runner.
+	/// Check if `who` is currently an active runner-up.
 	///
 	/// O(LogN) given N runners-up. Since runners-up are limited, O(1).
-	fn is_runner(who: &T::AccountId) -> bool {
+	fn is_runner_up(who: &T::AccountId) -> bool {
 		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
 
@@ -693,7 +693,7 @@ impl<T: Trait> Module<T> {
 			Self::votes_of(who)
 				.iter()
 				.all(|v|
-					!Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok()
+					!Self::is_member(v) && !Self::is_runner_up(v) && !Self::is_candidate(v).is_ok()
 				)
 		} else {
 			false
