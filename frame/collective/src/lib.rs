@@ -383,7 +383,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
-	) {
+	) -> usize {
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort_unstable();
@@ -402,7 +402,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		}
 		Members::<T, I>::put(new);
 		Prime::<T, I>::kill();
-		length
+		new.len()
 	}
 
 	fn set_prime(prime: Option<T::AccountId>) {

@@ -956,7 +956,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
 	///
 	/// This resets any previous value of prime.
 	///
-	/// Returns the actual number of members set. This may differ from `new.len()` for example
+	/// Returns the actual number of members set. This may differ from `new.len()`
 	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
 	fn change_members(
 		incoming: &[AccountId],
@@ -975,7 +975,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
 	///
 	/// This resets any previous value of prime.
 	///
-	/// Returns the actual number of members set. This may differ from `new.len()` for example
+	/// Returns the actual number of members set. This may differ from `sorted_new.len()`
 	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
 	fn change_members_sorted(
 		incoming: &[AccountId],
@@ -988,7 +988,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
 	///
 	/// This resets any previous value of prime.
 	///
-	/// Returns the actual number of members set. This may differ from `new.len()` for example
+	/// Returns the actual number of members set. This may differ from `new_members.len()`
 	/// if there are errors. Use `ensure_can_change_members` to check for those beforehand.
 	fn set_members_sorted(
 		new_members: &[AccountId],
