@@ -3,6 +3,7 @@
 # check if line width of rust source files is not beyond x characters
 #
 set -e
+set -o pipefail
 
 BASE_ORIGIN="origin"
 BASE_BRANCH_NAME="master"
