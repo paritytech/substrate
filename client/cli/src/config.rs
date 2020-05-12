@@ -473,7 +473,7 @@ pub trait CliConfiguration: Sized {
 	/// Get the filters for the logging.
 	///
 	/// This should be a list of comma-separated values.
-	/// Example: `foo=trace,bar=debug,bar=info`
+	/// Example: `foo=trace,bar=debug,baz=info`
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn log_filters(&self) -> Result<String> {
