@@ -30,8 +30,10 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_io;
-use sp_core::H256;
-use sp_consensus_epoch_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
+use sp_core::{U256, H256};
+use sp_application_crypto::Pair;
+use sp_consensus_babe::AuthorityPair;
+use sp_consensus_epoch_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 impl_outer_origin!{
 	pub enum Origin for Test where system = frame_system {}
@@ -115,9 +117,9 @@ pub fn new_test_ext(authorities_len: usize) -> (Vec<AuthorityPair>, sp_io::TestE
 	}).collect::<Vec<_>>();
 
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig {
+	GenesisConfig::<Test> {
 		authorities: pairs.iter().map(|a| (a.public(), 1)).collect(),
-	}.assimilate_storage::<Test>(&mut t).unwrap();
+	}.assimilate_storage(&mut t).unwrap();
 	(pairs, t.into())
 }
 

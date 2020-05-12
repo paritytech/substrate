@@ -21,8 +21,9 @@ use mock::*;
 use sp_runtime::generic::DigestItem;
 use frame_support::traits::{OnFinalize, FindAuthor};
 use pallet_session::ShouldEndSession;
+use sp_application_crypto::IsWrappedBy;
 use sp_consensus_babe::BABE_ENGINE_ID;
-use sp_consensus_epoch_vrf::schnorrkel::{RawVRFOutput, RawVRFProof, RANDOMNESS_LENGTH};
+use sp_consensus_epoch_vrf::schnorrkel::{VRFOutput, VRFProof, RANDOMNESS_LENGTH};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -67,7 +68,7 @@ fn first_block_epoch_zero_start() {
 			0,
 		);
 		let vrf_inout = pair.vrf_sign(transcript);
-		let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
+		let vrf_randomness: sp_consensus_epoch_vrf::schnorrkel::Randomness = vrf_inout.0
 			.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
 		let vrf_output = VRFOutput(vrf_inout.0.to_output());
 		let vrf_proof = VRFProof(vrf_inout.1);
