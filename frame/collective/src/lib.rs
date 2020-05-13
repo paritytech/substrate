@@ -374,7 +374,7 @@ decl_module! {
 			let old = Members::<T, I>::get();
 			let mut new_members = new_members;
 			new_members.sort();
-			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], &old);
+			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
 			Prime::<T, I>::set(prime);
 
 			Ok(Some(weight_for::set_members::<T, I>(
@@ -782,7 +782,6 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		}
 		Members::<T, I>::put(new);
 		Prime::<T, I>::kill();
-		length
 	}
 
 	fn set_prime(prime: Option<T::AccountId>) {
@@ -904,7 +903,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{Hashable, assert_err, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;
