@@ -69,11 +69,6 @@ where
 	},
 }
 
-impl<R, B> Unpin for BlockIter<R, B> 
-where
-	R: Read + Seek
-{}
-
 impl<R, B> BlockIter<R, B>
 	where
 		R: Read + Seek + 'static,
