@@ -559,15 +559,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Notify all watchers that transactions in the block with hash have been finalized
 	pub async fn on_block_finalized(&self, block_hash: BlockHash<B>) -> Result<(), B::Error> {
 		debug!(target: "txpool", "Attempting to notify watchers of finalization for {}", block_hash);
-		// fetch all extrinsic hashes
-		if let Some(txs) = self.api.block_body(&BlockId::Hash(block_hash.clone())).await? {
-			let tx_hashes = txs.into_iter()
-				.map(|tx| self.api.hash_and_length(&tx).0)
-				.collect::<Vec<_>>();
-			// notify the watcher that these extrinsics have been finalized
-			self.listener.write().finalized(block_hash, tx_hashes);
-		}
-
+		self.listener.write().finalized(block_hash);
 		Ok(())
 	}
 

@@ -118,15 +118,18 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 
 			let key_pairs = {
 				let keystore = keystore.read();
-				epoch.authorities.iter().enumerate()
-				.flat_map(|(i, a)| {
-					keystore.key_pair::<sp_consensus_babe::AuthorityPair>(&a.0).ok().map(|kp| (kp, i))
-				})
-				.collect::<Vec<_>>()
+				epoch.authorities.iter()
+					.enumerate()
+					.flat_map(|(i, a)| {
+						keystore
+							.key_pair::<sp_consensus_babe::AuthorityPair>(&a.0)
+							.ok()
+							.map(|kp| (kp, i))
+					})
+					.collect::<Vec<_>>()
 			};
 
 			for slot_number in epoch_start..epoch_end {
-				let epoch = epoch_data(&shared_epoch, &client, &babe_config, slot_number, &select_chain)?;
 				if let Some((claim, key)) =
 					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &key_pairs)
 				{
