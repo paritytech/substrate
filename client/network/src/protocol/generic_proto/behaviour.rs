@@ -810,7 +810,7 @@ impl GenericProto {
 		};
 
 		if !incoming.alive {
-			error!(target: "sub-libp2p", "PSM => Reject({:?}, {:?}): Obsolete incoming, \
+			debug!(target: "sub-libp2p", "PSM => Reject({:?}, {:?}): Obsolete incoming, \
 				ignoring", index, incoming.peer_id);
 			return
 		}
