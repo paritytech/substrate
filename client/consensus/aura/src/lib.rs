@@ -278,7 +278,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			let public = pair.public().to_raw_vec();
 			let public_type_pair = CryptoTypePublicPair(
 				<AuthorityId<Self::Claim> as RuntimeAppPublic>::CRYPTO_ID,
-				pair.public().to_raw_vec()
+				public.clone(),
 			);
 			let signature = keystore.read()
 				.sign_with(
@@ -287,7 +287,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 					header_hash.as_ref()
 				)
 				.map_err(|e| sp_consensus::Error::CannotSign(
-					pair.public().to_raw_vec(), e.to_string(),
+					public.clone(), e.to_string(),
 				))?;
 			let signature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(

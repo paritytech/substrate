@@ -530,7 +530,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			let public = pair.public().to_raw_vec();
 			let public_type_pair = CryptoTypePublicPair(
 				AuthorityId::CRYPTO_ID,
-				pair.public().to_raw_vec()
+				public.clone(),
 			);
 			let signature = keystore.read()
 				.sign_with(
@@ -539,7 +539,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 					header_hash.as_ref()
 				)
 				.map_err(|e| sp_consensus::Error::CannotSign(
-					pair.public().to_raw_vec(), e.to_string(),
+					public.clone(), e.to_string(),
 				))?;
 			let signature: AuthoritySignature = signature.clone().try_into()
 				.map_err(|_| sp_consensus::Error::InvalidSignature(
