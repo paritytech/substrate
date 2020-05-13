@@ -37,9 +37,9 @@ pub mod logger {
 	use std::convert::From;
 
 	thread_local! {
-		static LOG: RefCell<Vec<u64>> = RefCell::new(Vec::new());
+		static LOG: RefCell<Vec<i32>> = RefCell::new(Vec::new());
 	}
-	pub fn log() -> Vec<u64> {
+	pub fn log() -> Vec<i32> {
 		LOG.with(|log| log.borrow().clone())
 	}
 	pub trait Trait: system::Trait {
@@ -47,16 +47,15 @@ pub mod logger {
 	}
 	decl_storage! {
 		trait Store for Module<T: Trait> as Logger {
-			// N.B. LastSeenAccount will default to 0 when nothing has been `put` into storage.
-			LastSeenAccount get(fn last_seen_account): T::AccountId;
-			SeenAccounts get(fn seen_accounts): Vec<T::AccountId>
+			AccountLog get(fn account_log): Vec<T::AccountId>;
+			I32Log get(fn i32_log): Vec<i32>;
 		}
 	}
 	decl_event! {
 		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-			Logged(u64, Weight),
-			ReplaceLastAccount(AccountId, u64, Weight),
-			AppendAccount(AccountId),
+			// Logged(i32, Weight),
+			AppendI32(i32, Weight),
+			AppendAccount(AccountId, i32, Weight),
 		}
 	}
 	decl_module! {
@@ -64,49 +63,39 @@ pub mod logger {
 			fn deposit_event() = default;
 
 			#[weight = FunctionOf(
-				|args: (&u64, &Weight)| *args.1,
-				|_: (&u64, &Weight)| DispatchClass::Normal,
+				|args: (&i32, &Weight)| *args.1,
+				|_: (&i32, &Weight)| DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn log(origin, i: u64, weight: Weight){
+			fn privileged_i32_log(origin, i: i32, weight: Weight){
 				// // Ensure that the `origin` is `Root`.	
 				ensure_root(origin)?;
-				Self::deposit_event(RawEvent::Logged(i, weight));
-				LOG.with(|log| {
-					log.borrow_mut().push(i);
-				})
+				<I32Log>::append(i);
+				Self::deposit_event(RawEvent::AppendI32(i, weight));
 			}
 
 			#[weight = FunctionOf(
-				|args: (&u64, &Weight)| *args.1,
-				|_: (&u64, &Weight)| DispatchClass::Normal,
+				|args: (&i32, &Weight)| *args.1,
+				|_: (&i32, &Weight)| DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn non_privileged_log(origin, i: u64, weight: Weight){
+			fn non_privileged_i32_log(origin, i: i32, weight: Weight){
 				// Ensure that the `origin` is some signed account.		
 				ensure_signed(origin)?;
-				Self::deposit_event(RawEvent::Logged(i, weight));
-				LOG.with(|log| { 
-					log.borrow_mut().push(i);
-				})
+				<I32Log>::append(i);
+				Self::deposit_event(RawEvent::AppendI32(i, weight));
 			}
 
 			#[weight = FunctionOf(
-				|args: (&u64, &Weight)| *args.1,
-				|_: (&u64, &Weight)| DispatchClass::Normal,
+				|args: (&i32, &Weight)| *args.1,
+				|_: (&i32, &Weight)| DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn non_privileged_account_log(origin, i: u64, weight: Weight) {
+			fn non_privileged_account_log(origin, i: i32, weight: Weight) {
+				// Ensure that the `origin` is some signed account.	
 				let sender = ensure_signed(origin)?;
-				<LastSeenAccount<T>>::put(sender.clone());
-				Self::deposit_event(RawEvent::ReplaceLastAccount(sender, i, weight));
-			}
-
-			#[weight = 1]
-			fn non_privileged_account_append_log(origin) {
-				let sender = ensure_signed(origin)?;
-				<SeenAccounts<T>>::append(sender.clone());
-				Self::deposit_event(RawEvent::AppendAccount(sender));
+				<AccountLog<T>>::append(sender.clone());
+				Self::deposit_event(RawEvent::AppendAccount(sender, i, weight));
 			}
 		}
 	}
