@@ -981,14 +981,30 @@ impl NetworkBehaviour for GenericProto {
 					"`inject_disconnected` called for unknown peer {}",
 					peer_id),
 
-			Some(PeerState::Disabled { banned_until, .. }) => {
+			Some(PeerState::Disabled { open, banned_until, .. }) => {
+				if !open.is_empty() {
+					debug_assert!(false);
+					error!(
+						target: "sub-libp2p",
+						"State mismatch: disconnected from {} with non-empty list of connections",
+						peer_id
+					);
+				}
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({}): Was disabled.", peer_id);
 				if let Some(until) = banned_until {
 					self.peers.insert(peer_id.clone(), PeerState::Banned { until });
 				}
 			}
 
-			Some(PeerState::DisabledPendingEnable { timer_deadline, .. }) => {
+			Some(PeerState::DisabledPendingEnable { open, timer_deadline, .. }) => {
+				if !open.is_empty() {
+					debug_assert!(false);
+					error!(
+						target: "sub-libp2p",
+						"State mismatch: disconnected from {} with non-empty list of connections",
+						peer_id
+					);
+				}
 				debug!(target: "sub-libp2p",
 					"Libp2p => Disconnected({}): Was disabled but pending enable.",
 					peer_id);
@@ -997,7 +1013,15 @@ impl NetworkBehaviour for GenericProto {
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer_deadline });
 			}
 
-			Some(PeerState::Enabled { .. }) => {
+			Some(PeerState::Enabled { open, .. }) => {
+				if !open.is_empty() {
+					debug_assert!(false);
+					error!(
+						target: "sub-libp2p",
+						"State mismatch: disconnected from {} with non-empty list of connections",
+						peer_id
+					);
+				}
 				debug!(target: "sub-libp2p", "Libp2p => Disconnected({}): Was enabled.", peer_id);
 				debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 				self.peerset.dropped(peer_id.clone());
@@ -1088,8 +1112,16 @@ impl NetworkBehaviour for GenericProto {
 
 				let last = match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					PeerState::Enabled { mut open } => {
-						debug_assert!(open.iter().any(|c| c == &connection));
-						open.retain(|c| c != &connection);
+						if let Some(pos) = open.iter().position(|c| c == &connection) {
+							open.remove(pos);
+						} else {
+							debug_assert!(false);
+							error!(
+								target: "sub-libp2p",
+								"State mismatch with {}: unknown closed connection",
+								source
+							);
+						}
 
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
 						self.events.push(NetworkBehaviourAction::NotifyHandler {
@@ -1114,8 +1146,17 @@ impl NetworkBehaviour for GenericProto {
 						last
 					},
 					PeerState::Disabled { mut open, banned_until } => {
-						debug_assert!(open.iter().any(|c| c == &connection));
-						open.retain(|c| c != &connection);
+						if let Some(pos) = open.iter().position(|c| c == &connection) {
+							open.remove(pos);
+						} else {
+							debug_assert!(false);
+							error!(
+								target: "sub-libp2p",
+								"State mismatch with {}: unknown closed connection",
+								source
+							);
+						}
+
 						let last = open.is_empty();
 						*entry.into_mut() = PeerState::Disabled {
 							open,
@@ -1128,8 +1169,17 @@ impl NetworkBehaviour for GenericProto {
 						timer,
 						timer_deadline
 					} => {
-						debug_assert!(open.iter().any(|c| c == &connection));
-						open.retain(|c| c != &connection);
+						if let Some(pos) = open.iter().position(|c| c == &connection) {
+							open.remove(pos);
+						} else {
+							debug_assert!(false);
+							error!(
+								target: "sub-libp2p",
+								"State mismatch with {}: unknown closed connection",
+								source
+							);
+						}
+
 						let last = open.is_empty();
 						*entry.into_mut() = PeerState::DisabledPendingEnable {
 							open,
@@ -1168,7 +1218,15 @@ impl NetworkBehaviour for GenericProto {
 					Some(PeerState::DisabledPendingEnable { ref mut open, .. }) |
 					Some(PeerState::Disabled { ref mut open, .. }) => {
 						let first = open.is_empty();
-						open.push(connection);
+						if !open.iter().any(|c| *c == connection) {
+							open.push(connection);
+						} else {
+							error!(
+								target: "sub-libp2p",
+								"State mismatch: connection with {} opened a second time",
+								source
+							);
+						}
 						first
 					}
 					state => {
