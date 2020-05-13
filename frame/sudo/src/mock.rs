@@ -47,13 +47,16 @@ pub mod logger {
 	}
 	decl_storage! {
 		trait Store for Module<T: Trait> as Logger {
+			// N.B. LastSeenAccount will default to 0 when nothing has been `put` into storage.
 			LastSeenAccount get(fn last_seen_account): T::AccountId;
+			SeenAccounts get(fn seen_accounts): Vec<T::AccountId>
 		}
 	}
 	decl_event! {
 		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 			Logged(u64, Weight),
-			NewAccount(AccountId),
+			ReplaceLastAccount(AccountId),
+			AppendAccount(AccountId),
 		}
 	}
 	decl_module! {
@@ -86,11 +89,19 @@ pub mod logger {
 					log.borrow_mut().push(i);
 				})
 			}
+
 			#[weight = 1]
-			fn non_privileged_account_log(origin){
-				let who = ensure_signed(origin)?;
-				<LastSeenAccount<T>>::put(who.clone());
-				Self::deposit_event(RawEvent::NewAccount(who));
+			fn non_privileged_account_log(origin) {
+				let sender = ensure_signed(origin)?;
+				<LastSeenAccount<T>>::put(sender.clone());
+				Self::deposit_event(RawEvent::ReplaceLastAccount(sender));
+			}
+
+			#[weight = 1]
+			fn non_privileged_account_append_log(origin) {
+				let sender = ensure_signed(origin)?;
+				<SeenAccounts<T>>::append(sender.clone());
+				Self::deposit_event(RawEvent::AppendAccount(sender));
 			}
 		}
 	}

@@ -147,10 +147,20 @@ fn sudo_as_basics() {
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(logger::log(), vec![42u64]);
 
-		// The correct user makes the call within `sudo_as`
+		// The correct user makes the call within `sudo_as`.
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_account_log()));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		assert_eq!(Logger::last_seen_account(), 2)
+		assert_eq!(Logger::last_seen_account(), 2);
+		println!("last_seen_account: {}", Logger::last_seen_account());
+
+		// SeenAccounts log is empty before being used
+		assert_eq!(Logger::seen_accounts(), vec![]);
+
+		// The correct user makes the call within `sudo_as`.
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_account_append_log()));
+		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
+		assert_eq!(Logger::seen_accounts(), vec![2]);
+		println!("seen_accounts {:#?}", Logger::seen_accounts());
 	});
 }
 
