@@ -370,14 +370,12 @@ decl_module! {
 			prime: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			// We know that our implementation of `ensure_can_change_members` does not use the old members.
-			<Self as ChangeMembers<T::AccountId>>::ensure_can_change_members(&new_members, &[])?;
+			ensure!(new_members.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
 
 			let old = Members::<T, I>::get();
 			let mut new_members = new_members;
 			new_members.sort();
-			// We can drop the members count from `ChangeMembers` because we used the ensure above.
-			let _ = <Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
+			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], &old);
 			Prime::<T, I>::set(prime);
 
 			Ok(Some(weight_for::set_members::<T, I>(
@@ -748,12 +746,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
-	/// Only allow changing the members when they don't exceed the maximum.
-	fn ensure_can_change_members(new: &[T::AccountId], _old: &[T::AccountId]) -> DispatchResult {
-		ensure!(new.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
-		Ok(())
-	}
-
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
 	/// NOTE: Will only allow setting up to `MaxMembers` members. Any excess members will be
@@ -776,17 +768,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
-	) -> usize {
-		// limit members to `MaxMembers`
-		let length = new.len().min(T::MaxMembers::get() as usize);
-		if length != new.len() {
-			debug::error!(
-				"Dropping excess members because new members are longer ({}) than MaxMembers ({})",
-				new.len(),
-				T::MaxMembers::get()
-			);
-		}
-		let new = &new[..length];
+	) {
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort_unstable();
@@ -1225,19 +1207,6 @@ mod tests {
 				}
 			]);
 		});
-	}
-
-	#[test]
-	fn limit_members() {
-		new_test_ext().execute_with(|| {
-			let new_members: Vec<u64> = (0..MaxMembers::get() as u64 + 5).collect();
-			assert_err!(
-				Collective::ensure_can_change_members(&new_members, &Collective::members()),
-				Error::<Test, Instance1>::TooManyMembers
-			);
-			Collective::change_members_sorted(&Collective::members(), &[], &new_members);
-			assert_eq!(Collective::members().len(), MaxMembers::get() as usize);
-		})
 	}
 
 	#[test]

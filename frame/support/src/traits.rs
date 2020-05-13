@@ -934,23 +934,8 @@ impl WithdrawReasons {
 	}
 }
 
-/// Trait for types that can handle incremental changes to a set of account IDs.
-///
-/// Allows member changes according to the "verify first, write last" maxime by
-/// providing the `ensure_can_change_members` function for checking as well as the
-/// actual writing logic.
-pub trait ChangeMembers<AccountId: Clone + Ord, MembersCount = usize> {
-
-	/// Returns whether changing the members will execute without errors.
-	///
-	/// Defaults to a noop. Implement this if `change_members_sorted` could fail.
-	///
-	/// If this returns `Err`, calls to `change_members`, `change_members_sorted` and 
-	/// `set_members_sorted` are not guaranteed to have the desired effect.
-	fn ensure_can_change_members(_new: &[AccountId], _old: &[AccountId]) -> DispatchResult {
-		Ok(())
-	}
-
+/// Trait for type that can handle incremental changes to a set of account IDs.
+pub trait ChangeMembers<AccountId: Clone + Ord> {
 	/// A number of members `incoming` just joined the set and replaced some `outgoing` ones. The
 	/// new set is given by `new`, and need not be sorted.
 	///
