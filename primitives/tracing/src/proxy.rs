@@ -95,7 +95,10 @@ impl TracingProxy {
 			// 1. Too many nested spans, or MAX_SPANS_LEN is too low.
 			// 2. Not correctly exiting spans due to drop impl not running (panic in runtime)
 			// 3. Not correctly exiting spans due to misconfiguration / misuse
-			log::warn!("MAX_SPANS_LEN exceeded, removing oldest span, recording `is_valid_trace = false`");
+			log::warn!(
+				target: "tracing",
+				"MAX_SPANS_LEN exceeded, removing oldest span, recording `is_valid_trace = false`",
+			);
 			let mut sg = self.spans.remove(0).1;
 			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 		}

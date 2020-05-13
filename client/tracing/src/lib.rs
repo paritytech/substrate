@@ -190,8 +190,7 @@ fn parse_target(s: &str) -> (String, Level) {
 
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		if metadata.target() == WASM_TARGET_KEY { return true }
-		self.check_target(metadata.target(), metadata.level())
+		metadata.target() == WASM_TARGET_KEY || self.check_target(metadata.target(), metadata.level())
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
@@ -304,4 +303,3 @@ fn send_telemetry(span_datum: SpanDatum) {
 		"values" => span_datum.values
 	);
 }
-
