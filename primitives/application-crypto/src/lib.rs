@@ -262,6 +262,10 @@ macro_rules! app_crypto_public_common {
 
 		impl $crate::Public for Public {
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
+
+			fn to_public_crypto_pair(&self) -> $crate::CryptoTypePublicPair {
+				$crate::CryptoTypePublicPair($crypto_type, self.to_raw_vec())
+			}
 		}
 
 		impl $crate::AppPublic for Public {
