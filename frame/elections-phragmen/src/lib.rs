@@ -410,8 +410,8 @@ decl_module! {
 		///     longer a candidate nor an active member or a runner-up.
 		///
 		///
-		/// The origin must provide the number of current candidates for the purpose of accurate
-		/// weight calculation.
+		/// The origin must provide the number of current candidates and votes of the reported target 
+		/// for the purpose of accurate weight calculation.
 		///
 		/// # <weight>
 		/// No Base weight based on min square analysis.
