@@ -378,7 +378,7 @@ impl From<frame_system::Event<Runtime>> for Event {
 }
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 250;
+	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
