@@ -682,6 +682,7 @@ decl_module! {
 				.collect();
 			<Members<T>>::put(&new_set);
 			let new_set = new_set.into_iter().map(|x| x.0).collect::<Vec<_>>();
+			// This is save to just call because we are removing members, not adding any.
 			T::ChangeMembers::change_members(&[], &[who], new_set);
 		}
 

@@ -40,6 +40,9 @@
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
+//! NOTE: This pallet does not provide proper weights for its functions, yet.
+//!       Benchmark and adjust the weights before using in production.
+//!
 //! ## Interface
 //!
 //! ### Public Functions
@@ -407,21 +410,20 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		new_members.sort();
 
 		let old_members = <Members<T, I>>::get();
-		// TODO: What to do in case of error?
-		let _ = T::MembershipChanged::ensure_can_change_members(&new_members, &old_members);
 		<Members<T, I>>::put(&new_members);
 
 		match notify {
 			ChangeReceiver::MembershipInitialized =>
 				T::MembershipInitialized::initialize_members(&new_members),
 			ChangeReceiver::MembershipChanged => {
-				// TODO: Is this safe?
+				// TODO: This is not safe as members might be truncated.
 				T::MembershipChanged::set_members_sorted(
 					&new_members[..],
 					&old_members[..],
 				);
 			},
 		}
+		
 	}
 
 	/// Removes an entity `remove` at `index` from the `Pool`.

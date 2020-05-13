@@ -203,7 +203,7 @@ decl_module! {
 			let mut new_members = new_members;
 			new_members.sort();
 			// We can drop the members count from `ChangeMembers` because we used the ensure above.
-			let _ = <Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
+			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
 			Prime::<T, I>::set(prime);
 		}
 

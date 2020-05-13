@@ -25,6 +25,7 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
+	dispatch::DispatchResult,
 	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
@@ -149,6 +150,8 @@ decl_module! {
 			members.remove(location);
 			<Members<T, I>>::put(&members);
 
+			// This is safe without the `ensure_can_change_members` check because we only
+			// reduce the length.
 			T::MembershipChanged::change_members_sorted(&[], &[who], &members[..]);
 			Self::rejig_prime(&members);
 
@@ -175,6 +178,8 @@ decl_module! {
 			members.sort();
 			<Members<T, I>>::put(&members);
 
+			// This is safe without the `ensure_can_change_members` check because the length
+			// stays the same.
 			T::MembershipChanged::change_members_sorted(
 				&[add],
 				&[remove],
@@ -197,11 +202,13 @@ decl_module! {
 
 			let mut members = members;
 			members.sort();
-			<Members<T, I>>::mutate(|m| {
-				T::MembershipChanged::set_members_sorted(&members[..], m);
+			<Members<T, I>>::try_mutate(|m| -> DispatchResult {
+				T::MembershipChanged::ensure_can_change_members(&members, m)?;
+				T::MembershipChanged::set_members_sorted(&members, m);
 				Self::rejig_prime(&members);
 				*m = members;
-			});
+				Ok(())
+			})?;
 
 
 			Self::deposit_event(RawEvent::MembersReset);
@@ -224,6 +231,8 @@ decl_module! {
 				members.sort();
 				<Members<T, I>>::put(&members);
 
+				// This is safe without the `ensure_can_change_members` check because the length
+				// stays the same.
 				T::MembershipChanged::change_members_sorted(
 					&[new.clone()],
 					&[remove.clone()],
