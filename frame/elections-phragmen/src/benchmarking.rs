@@ -26,9 +26,7 @@ use frame_support::traits::OnInitialize;
 
 use crate::Module as Elections;
 
-const SEED: u32 = 0;
 const BALANCE_FACTOR: u32 = 250;
-const MAX_LOCKS: u32 = 20;
 const MAX_VOTERS: u32 = 500;
 const MAX_CANDIDATES: u32 = 100;
 
@@ -36,7 +34,7 @@ type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
 
 /// grab new account with infinite balance.
 fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let account: T::AccountId = account(name, index, SEED);
+	let account: T::AccountId = account(name, index, 0);
 	let amount = default_stake::<T>(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
@@ -75,12 +73,6 @@ fn defunct_for<T: Trait>(who: T::AccountId) -> DefunctVoter<Lookup<T>> {
 	}
 }
 
-/// Index of a candidate. Panics if index is not found.
-fn index_of_candidate<T: Trait>(c: &T::AccountId) -> u32 {
-	<Elections<T>>::candidates().iter().position(|x| x == c)
-		.expect("Candidate does not exist") as u32
-}
-
 /// Add `c` new candidates.
 fn submit_candidates<T: Trait>(c: u32, prefix: &'static str)
 	-> Result<Vec<T::AccountId>, &'static str>
@@ -112,18 +104,8 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
 	-> Result<(), &'static str>
 {
-	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
+	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake, true)
 		.map_err(|_| "failed to submit vote")
-}
-
-/// add `n` locks to account `who`.
-fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
-	for id in 0..n {
-		let lock_id = [id; 8];
-		let locked = 100;
-		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
-		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
-	}
 }
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
@@ -132,10 +114,9 @@ fn distribute_voters<T: Trait>(mut all_candidates: Vec<T::AccountId>, num_voters
 	-> Result<(), &'static str>
 {
 	let stake = default_stake::<T>(BALANCE_FACTOR);
-	let c = all_candidates.len() as u32;
 	for i in 0..num_voters {
-		// to ensure that votes are different,
-		all_candidates.rotate_left((i % c) as usize);
+		// to ensure that votes are different
+		all_candidates.rotate_left(1);
 		let votes = all_candidates
 			.iter()
 			.cloned()
@@ -171,32 +152,50 @@ fn clean<T: Trait>() {
 }
 
 benchmarks! {
-	_ {}
+	_ {
+		// User account seed
+		let u in 0 .. 1000 => ();
+	}
 
 	// -- Signed ones
 	vote {
-		// range of locks that the caller already had. This extrinsic adds a lock.
-		let l in 1 .. MAX_LOCKS;
+		let u in ...;
 		// we fix the number of voted candidates to max
-		let v = MAXIMUM_VOTE as u32;
+		let v = MAXIMUM_VOTE;
 		clean::<T>();
 
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", 0);
-		add_locks::<T>(&caller, l as u8);
-
+		let caller = endowed_account::<T>("caller", u);
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
-		// vote first `x` ones.
-		let votes = all_candidates.into_iter().take(v as usize).collect();
+		// vote for all of them.
+		let votes = all_candidates.into_iter().take(v).collect();
 
-	}: _(RawOrigin::Signed(caller), votes, stake)
+	}: _(RawOrigin::Signed(caller), votes, stake, true)
+
+	vote_update {
+		let u in ...;
+		// we fix the number of voted candidates to max
+		let v = MAXIMUM_VOTE;
+		clean::<T>();
+
+		// create a bunch of candidates.
+		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
+
+		let caller = endowed_account::<T>("caller", u);
+		let stake = default_stake::<T>(BALANCE_FACTOR);
+
+		// original votes.
+		let mut votes = all_candidates.into_iter().take(v).collect::<Vec<T::AccountId>>();
+		submit_voter::<T>(caller.clone(), votes.clone(), stake)?;
+		// new votes.
+		votes.rotate_left(1);
+	}: vote(RawOrigin::Signed(caller), votes, stake, false)
 
 	remove_voter {
-		// range of locks that the caller already had. This extrinsic removes a lock.
-		let l in 1 .. MAX_LOCKS;
+		let u in ...;
 		// we fix the number of voted candidates to max
 		let v = MAXIMUM_VOTE as u32;
 		clean::<T>();
@@ -204,8 +203,7 @@ benchmarks! {
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(v, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", 0);
-		add_locks::<T>(&caller, l as u8);
+		let caller = endowed_account::<T>("caller", u);
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 		submit_voter::<T>(caller.clone(), all_candidates, stake)?;
@@ -252,10 +250,10 @@ benchmarks! {
 
 		// all the bailers go away.
 		bailing_candidates.into_iter().for_each(|b| {
-			let index = index_of_candidate::<T>(&b);
+			let count = candidate_count::<T>();
 			assert!(<Elections<T>>::renounce_candidacy(
 				RawOrigin::Signed(b).into(),
-				Renouncing::Candidate(index),
+				Renouncing::Candidate(count),
 			).is_ok());
 		});
 		let defunct = defunct_for::<T>(account_2.clone());
@@ -368,8 +366,8 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(c, "caller")?;
 
 		let bailing = all_candidates[0].clone(); // Should be ("caller", 0)
-		let index = index_of_candidate::<T>(&bailing);
-	}: renounce_candidacy(RawOrigin::Signed(bailing), Renouncing::Candidate(index))
+		let count = candidate_count::<T>();
+	}: renounce_candidacy(RawOrigin::Signed(bailing), Renouncing::Candidate(count))
 	verify {
 		#[cfg(test)]
 		{
@@ -380,18 +378,15 @@ benchmarks! {
 	}
 
 	renounce_candidacy_member_runner_up {
-		// removing members and runners will be cheaper most likely. The number of candidates will
-		// have no impact.
-		// number of already existing candidates.
-		let c in 1 .. MAX_CANDIDATES;
+		// removing members and runners will be cheaper than a candidate.
 		// we fix the number of members to when members and runners-up to the desired. We'll be in
 		// this state almost always.
+		let u in ...;
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
 		// create m members and runners combined.
 		let members_and_runners_up = fill_seats_up_to::<T>(m)?;
-		let _ = submit_candidates::<T>(c, "candidates")?;
 
 		let bailing = members_and_runners_up[0].clone();
 		let renouncing = if <Elections<T>>::is_member(&bailing) {
