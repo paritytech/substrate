@@ -379,6 +379,13 @@ decl_module! {
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
+			if new_members.len() > MAX_MEMBERS as usize {
+				debug::error!(
+					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+					MAX_MEMBERS,
+					new_members.len()
+				);
+			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
@@ -386,13 +393,6 @@ decl_module! {
 					"Wrong count used to estimate set_members weight. (expected: {}, actual: {})",
 					old_count,
 					old.len()
-				);
-			}
-			if new_members.len() > MAX_MEMBERS as usize {
-				debug::error!(
-					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
-					MAX_MEMBERS,
-					new_members.len()
 				);
 			}
 			let mut new_members = new_members;
