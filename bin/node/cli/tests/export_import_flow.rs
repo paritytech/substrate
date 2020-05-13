@@ -19,19 +19,21 @@
 use assert_cmd::cargo::cargo_bin;
 use std::{process::Command, fs, path::PathBuf};
 use tempfile::{tempdir, TempDir};
+use regex::Regex;
 
 pub mod common;
 
-fn contains_error(stderr: &[u8]) -> bool {
-	String::from_utf8_lossy(stderr).contains("Error")
+fn contains_error(logged_output: &str) -> bool {
+	logged_output.contains("Error")
 }
 
 /// Helper struct to execute the export/import/revert tests.
 /// The fields are paths to a temporary directory
 struct ExportImportRevertExecutor<'a> {
 	base_path: &'a TempDir,
-	exported_blocks: &'a PathBuf,
+	exported_blocks_file: &'a PathBuf,
 	db_path: &'a PathBuf,
+	num_exported_blocks: Option<u64>,
 }
 
 /// Format options for export / import commands.
@@ -40,52 +42,112 @@ enum FormatOpt {
 	Binary,
 }
 
+/// Command corresponding to the different commands we would like to run.
+enum Cmd {
+	ExportBlocks,
+	ImportBlocks,
+}
+
+impl ToString for Cmd {
+	fn to_string(&self) -> String {
+		match self {
+			Cmd::ExportBlocks => String::from("export-blocks"),
+			Cmd::ImportBlocks => String::from("import-blocks"),
+		}
+	}
+}
+
 impl<'a> ExportImportRevertExecutor<'a> {
-	fn new(base_path: &'a TempDir, exported_blocks: &'a PathBuf, db_path: &'a PathBuf) -> Self {
+	fn new(base_path: &'a TempDir, exported_blocks_file: &'a PathBuf, db_path: &'a PathBuf) -> Self {
 		Self {
 			base_path,
-			exported_blocks,
+			exported_blocks_file,
 			db_path,
+			num_exported_blocks: None,
 		}
 	}
 
-	/// Helper method to run a command.
-	fn run_block_command(&self, command: &str, format_opt: FormatOpt, expected_to_fail: bool) {
-		let arguments = match format_opt {
-			FormatOpt::Binary => vec![command, "--dev", "--pruning", "archive", "--binary", "-d"],
-			FormatOpt::Json => vec![command, "--dev", "--pruning", "archive", "-d"],
+	/// Helper method to run a command. Returns a string corresponding to what has been logged.
+	fn run_block_command(&self, command: Cmd, format_opt: FormatOpt, expected_to_fail: bool) -> String {
+		let cmd = command.to_string();
+		// Adding "--binary" if need be.
+		let arguments: Vec<&str> = match format_opt {
+			FormatOpt::Binary => vec![&cmd, "--dev", "--pruning", "archive", "--binary", "-d"],
+			FormatOpt::Json => vec![&cmd, "--dev", "--pruning", "archive", "-d"],
 		};
+
+		let tmp: TempDir;
+		// Setting base_path to be a temporary folder if we are importing blocks.
+		// This allows us to make sure we are importing from scratch.
+		let base_path = match command {
+			Cmd::ExportBlocks => &self.base_path.path(),
+			Cmd::ImportBlocks => {
+				tmp = tempdir().unwrap();
+				tmp.path()
+			}
+		};
+
+		// Running the command and capturing the output.
 		let output = Command::new(cargo_bin("substrate"))
 			.args(&arguments)
-			.arg(&self.base_path.path())
-			.arg(&self.exported_blocks)
+			.arg(&base_path)
+			.arg(&self.exported_blocks_file)
 			.output()
 			.unwrap();
 
+		let logged_output = String::from_utf8_lossy(&output.stderr).to_string();
+
 		if expected_to_fail {
 			// Checking that we did indeed find an error.
-			assert!(contains_error(&output.stderr), "expected to error but did not error!");
+			assert!(contains_error(&logged_output), "expected to error but did not error!");
 			assert!(!output.status.success());
 		} else {
 			// Making sure no error were logged.
-			assert!(!contains_error(&output.stderr), "expected not to error but error'd!");
+			assert!(!contains_error(&logged_output), "expected not to error but error'd!");
 			assert!(output.status.success());
 		}
+
+		logged_output
 	}
 
 	/// Runs the `export-blocks` command.
-	fn run_export(&self, fmt_opt: FormatOpt) {
-		self.run_block_command("export-blocks", fmt_opt, false);
+	fn run_export(&mut self, fmt_opt: FormatOpt) {
+		let log = self.run_block_command(Cmd::ExportBlocks, fmt_opt, false);
 
-		let metadata = fs::metadata(&self.exported_blocks).unwrap();
+		// Using regex to find out how many block we exported.
+		let re = Regex::new(r"Exporting blocks from #\d to #(?P<to>\d)").unwrap();
+		let caps = re.captures(&log).unwrap();
+		// Saving the number of blocks we've exported for further use.
+		self.num_exported_blocks = Some(caps["to"].parse::<u64>().unwrap());
+
+		let metadata = fs::metadata(&self.exported_blocks_file).unwrap();
 		assert!(metadata.len() > 0, "file exported_blocks should not be empty");
 
 		let _ = fs::remove_dir_all(&self.db_path);
 	}
 
 	/// Runs the `import-blocks` command, asserting that an error was found or not depending on `expected_to_fail`.
-	fn run_import(&self, fmt_opt: FormatOpt, expected_to_fail: bool) {
-		self.run_block_command("import-blocks", fmt_opt, expected_to_fail)
+	fn run_import(&mut self, fmt_opt: FormatOpt, expected_to_fail: bool) {
+		let log = self.run_block_command(Cmd::ImportBlocks, fmt_opt, expected_to_fail);
+
+		if !expected_to_fail {
+			// Using regex to find out how much block we imported, and what's the best current block.
+			let re = Regex::new(r"Imported (?P<imported>\d) blocks. Best: #(?P<best>\d)").unwrap();
+			let caps = re.captures(&log).expect("capture should have succeeded");
+			let imported = caps["imported"].parse::<u64>().unwrap();
+			let best = caps["best"].parse::<u64>().unwrap();
+
+			assert_eq!(
+				imported,
+				best,
+				"numbers of blocks imported and best number differs"
+			);
+			assert_eq!(best,
+				self.num_exported_blocks.unwrap(),
+				"best block number and number of blocks exported should not differ"
+			);
+		}
+		self.num_exported_blocks = None;
 	}
 
 	/// Runs the `revert` command.
@@ -96,14 +158,16 @@ impl<'a> ExportImportRevertExecutor<'a> {
 			.output()
 			.unwrap();
 
+		let logged_output = String::from_utf8_lossy(&output.stderr).to_string();
+
 		// Reverting should not log any error.
-		assert!(!contains_error(&output.stderr));
+		assert!(!contains_error(&logged_output));
 		// Command should never fail.
 		assert!(output.status.success());
 	}
 
 	/// Helper function that runs the whole export / import / revert flow and checks for errors.
-	fn run(&self, export_fmt: FormatOpt, import_fmt: FormatOpt, expected_to_fail: bool) {
+	fn run(&mut self, export_fmt: FormatOpt, import_fmt: FormatOpt, expected_to_fail: bool) {
 		self.run_export(export_fmt);
 		self.run_import(import_fmt, expected_to_fail);
 		self.run_revert();
@@ -113,14 +177,14 @@ impl<'a> ExportImportRevertExecutor<'a> {
 #[test]
 fn export_import_revert() {
 	let base_path = tempdir().expect("could not create a temp dir");
-	let exported_blocks = base_path.path().join("exported_blocks");
+	let exported_blocks_file = base_path.path().join("exported_blocks");
 	let db_path = base_path.path().join("db");
 
 	common::run_dev_node_for_a_while(base_path.path());
 
-	let executor = ExportImportRevertExecutor::new(
+	let mut executor = ExportImportRevertExecutor::new(
 		&base_path,
-		&exported_blocks,
+		&exported_blocks_file,
 		&db_path,
 	);
 
