@@ -134,7 +134,7 @@ use sp_runtime::{
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
-use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -278,6 +278,20 @@ impl PostDispatchInfo {
 		} else {
 			0
 		}
+	}
+}
+
+/// Extract the actual weight from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+	let post_info = match result {
+		Ok(post_info) => &post_info.actual_weight,
+		Err(err) => &err.post_info.actual_weight,
+	};
+
+	if let Some(actual_weight) = post_info {
+		*actual_weight
+	} else {
+		info.weight
 	}
 }
 

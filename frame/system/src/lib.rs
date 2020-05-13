@@ -102,7 +102,7 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchOutcome, DispatchError, DispatchResult,
+	RuntimeDebug, Perbill, DispatchError, DispatchResult,
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -126,8 +126,9 @@ use frame_support::{
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
-		FunctionOf, Pays,
-	}
+		FunctionOf, Pays, extract_actual_weight,
+	},
+	dispatch::DispatchResultWithPostInfo,
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -1150,13 +1151,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
+	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
+		info.weight = extract_actual_weight(r, &info);
 		Self::deposit_event(
 			match r {
-				Ok(()) => RawEvent::ExtrinsicSuccess(info),
+				Ok(_) => RawEvent::ExtrinsicSuccess(info),
 				Err(err) => {
 					sp_runtime::print(err);
-					RawEvent::ExtrinsicFailed(err.clone(), info)
+					RawEvent::ExtrinsicFailed(err.error, info)
 				},
 			}
 		);
@@ -2001,8 +2003,11 @@ pub(crate) mod tests {
 			System::deposit_event(32u16);
 			System::note_finished_initialize();
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
-			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
+			System::note_applied_extrinsic(&Ok(().into()), Default::default());
+			System::note_applied_extrinsic(
+				&Err(DispatchError::BadOrigin.into()),
+				Default::default()
+			);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalize();
