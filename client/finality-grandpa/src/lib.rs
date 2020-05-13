@@ -911,7 +911,7 @@ where
 					global_comms,
 					last_completed_round.number,
 					last_completed_round.votes.clone(),
-					last_completed_round.base.clone(),
+					last_completed_round.base,
 					last_finalized,
 				);
 

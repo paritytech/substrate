@@ -887,7 +887,7 @@ impl<Block: BlockT> Inner<Block> {
 				// any catch up requests until we import this one (either with a
 				// success or failure).
 				self.pending_catch_up = PendingCatchUp::Processing {
-					instant: instant.clone(),
+					instant: *instant,
 				};
 
 				// always discard catch up messages, they're point-to-point

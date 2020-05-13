@@ -664,7 +664,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 
 		// when locals exist, sign messages on import
 		if let Some((ref pair, _)) = self.locals {
-			let target_hash = msg.target().0.clone();
+			let target_hash = *(msg.target().0);
 			let signed = sp_finality_grandpa::sign_message(
 				msg,
 				pair,

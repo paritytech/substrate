@@ -61,7 +61,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 		};
 
 		for signed in commit.precommits.iter() {
-			let mut current_hash = signed.precommit.target_hash.clone();
+			let mut current_hash = signed.precommit.target_hash;
 			loop {
 				if current_hash == commit.target_hash { break; }
 
@@ -71,7 +71,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 							return error();
 						}
 
-						let parent_hash = current_header.parent_hash().clone();
+						let parent_hash = *current_header.parent_hash();
 						if votes_ancestries_hashes.insert(current_hash) {
 							votes_ancestries.push(current_header);
 						}

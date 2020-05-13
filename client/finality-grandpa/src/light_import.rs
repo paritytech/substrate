@@ -169,7 +169,7 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 			if *pending_number > chain_info.finalized_number
 				&& *pending_number <= chain_info.best_number
 			{
-				out.push((pending_hash.clone(), *pending_number));
+				out.push((*pending_hash, *pending_number));
 			}
 		}
 
@@ -253,7 +253,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 		J: ProvableJustification<Block::Header>,
 {
 	let hash = block.post_hash();
-	let number = block.header.number().clone();
+	let number = *block.header.number();
 
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
