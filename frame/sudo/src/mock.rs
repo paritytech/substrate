@@ -55,7 +55,7 @@ pub mod logger {
 	decl_event! {
 		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 			Logged(u64, Weight),
-			ReplaceLastAccount(AccountId),
+			ReplaceLastAccount(AccountId, u64, Weight),
 			AppendAccount(AccountId),
 		}
 	}
@@ -69,6 +69,7 @@ pub mod logger {
 				Pays::Yes,
 			)]
 			fn log(origin, i: u64, weight: Weight){
+				// // Ensure that the `origin` is `Root`.	
 				ensure_root(origin)?;
 				Self::deposit_event(RawEvent::Logged(i, weight));
 				LOG.with(|log| {
@@ -90,11 +91,15 @@ pub mod logger {
 				})
 			}
 
-			#[weight = 1]
-			fn non_privileged_account_log(origin) {
+			#[weight = FunctionOf(
+				|args: (&u64, &Weight)| *args.1,
+				|_: (&u64, &Weight)| DispatchClass::Normal,
+				Pays::Yes,
+			)]
+			fn non_privileged_account_log(origin, i: u64, weight: Weight) {
 				let sender = ensure_signed(origin)?;
 				<LastSeenAccount<T>>::put(sender.clone());
-				Self::deposit_event(RawEvent::ReplaceLastAccount(sender));
+				Self::deposit_event(RawEvent::ReplaceLastAccount(sender, i, weight));
 			}
 
 			#[weight = 1]
