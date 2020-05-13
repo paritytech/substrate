@@ -50,7 +50,7 @@ pub enum InvalidTransaction {
 	/// that the signing and the verifying side use the same additional data. Additional
 	/// data will only be used to generate the signature, but will not be part of the transaction
 	/// itself. As the verifying side does not know which additional data was used while signing
-	/// it will only be able to assume a bad signature and can not express a more meaningful error.
+	/// it will only be able to assume a bad signature and cannot express a more meaningful error.
 	BadProof,
 	/// The transaction birth block is ancient.
 	AncientBirthBlock,
