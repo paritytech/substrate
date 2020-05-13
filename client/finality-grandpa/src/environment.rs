@@ -622,7 +622,7 @@ where
 						restricted_number >= base_header.number() &&
 							restricted_number < target_header.number()
 					})
-					.or(Some((target_header.hash(), *target_header.number())))
+					.or_else(|| Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
