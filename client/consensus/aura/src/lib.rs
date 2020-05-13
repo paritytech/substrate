@@ -52,10 +52,11 @@ use sp_blockchain::{
 	ProvideCache, HeaderBackend,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_core::crypto::CryptoTypePublicPair;
+use sp_core::crypto::Public;
+use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	Justification, RuntimeAppPublic,
+	Justification,
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
@@ -156,7 +157,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	P: Pair + Send + Sync,
-	P::Public: RuntimeAppPublic + Hash + Member + Encode + Decode,
+	P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -205,7 +206,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
-	P::Public: RuntimeAppPublic + Member + Encode + Decode + Hash,
+	P::Public: AppPublic + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -276,13 +277,14 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let public = pair.public().to_raw_vec();
-			let public_type_pair = CryptoTypePublicPair(
-				<AuthorityId<Self::Claim> as RuntimeAppPublic>::CRYPTO_ID,
-				public.clone(),
-			);
+			let public_type_pair = pair.public().into();
+			// let public_type_pair = CryptoTypePublicPair(
+			// 	<AuthorityId<Self::Claim> as AppPublic>::CRYPTO_ID,
+			// 	public.clone(),
+			// );
 			let signature = keystore.read()
 				.sign_with(
-					<AuthorityId<Self::Claim> as RuntimeAppPublic>::ID,
+					<AuthorityId<Self::Claim> as AppKey>::ID,
 					&public_type_pair,
 					header_hash.as_ref()
 				)
@@ -356,7 +358,7 @@ impl<B: BlockT, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, 
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
-	P::Public: RuntimeAppPublic + Member + Encode + Decode + Hash,
+	P::Public: AppPublic + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Sync + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,

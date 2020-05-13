@@ -82,16 +82,16 @@ use sp_consensus::{ImportResult, CanAuthorWith};
 use sp_consensus::import_queue::{
 	BoxJustificationImport, BoxFinalityProofImport,
 };
+use sp_core::crypto::Public;
+use sp_application_crypto::AppKey;
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
-	RuntimeAppPublic,
 };
 use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use sp_core::{
-	crypto::CryptoTypePublicPair,
 	traits::BareCryptoStore,
 	Pair
 };
@@ -528,13 +528,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let public = pair.public().to_raw_vec();
-			let public_type_pair = CryptoTypePublicPair(
-				AuthorityId::CRYPTO_ID,
-				public.clone(),
-			);
+			let public_type_pair = pair.public().into();
 			let signature = keystore.read()
 				.sign_with(
-					<AuthorityId as RuntimeAppPublic>::ID,
+					<AuthorityId as AppKey>::ID,
 					&public_type_pair,
 					header_hash.as_ref()
 				)
