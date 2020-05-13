@@ -88,7 +88,7 @@ impl_outer_origin! {
 }
 
 mod test_events {
-    pub use crate::Event;
+	pub use crate::Event;
 }
 
 impl_outer_event! {
