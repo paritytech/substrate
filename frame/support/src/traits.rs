@@ -943,7 +943,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 
 	/// Returns whether changing the members will execute without errors.
 	///
-	/// Defaults to a noop. Implement this if `change_members_sorted` could fail.
+	/// Defaults to a noop. Implement this if any of the other functions could fail.
 	///
 	/// If this returns `Err`, calls to `change_members`, `change_members_sorted` and 
 	/// `set_members_sorted` are not guaranteed to have the desired effect.
