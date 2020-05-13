@@ -79,19 +79,15 @@ fn main() {
 			SizeType::Medium,
 			SizeType::Large,
 			SizeType::Full,
-			SizeType::Custom,
+			SizeType::Custom(opt.transactions.unwrap_or(0)),
 		].iter() {
-			let txs = match size {
-				SizeType::Custom => opt.transactions.unwrap_or(0),
-				_ => size.transactions()
-			};
 			for block_type in [
-				BlockType::RandomTransfersKeepAlive(txs),
-				BlockType::RandomTransfersReaping(txs),
-				BlockType::Noop(txs),
+				BlockType::RandomTransfersKeepAlive,
+				BlockType::RandomTransfersReaping,
+				BlockType::Noop,
 			].iter() {
 				for database_type in [BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb].iter() {
-					import_benchmarks.push((profile, size, block_type.clone(), database_type));
+					import_benchmarks.push((profile, size.clone(), block_type.clone(), database_type));
 				}
 			}
 		}
@@ -102,7 +98,7 @@ fn main() {
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
-				size: *size,
+				size: size,
 				block_type: block_type,
 				database_type: *database_type,
 			},
