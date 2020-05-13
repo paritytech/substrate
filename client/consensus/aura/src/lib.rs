@@ -30,9 +30,7 @@
 #![forbid(missing_docs, unsafe_code)]
 use std::{
 	sync::Arc, time::Duration, thread, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
-	collections::HashMap,
-	convert::TryFrom,
-	convert::TryInto,
+	collections::HashMap, convert::{TryFrom, TryInto},
 };
 
 use futures::prelude::*;
