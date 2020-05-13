@@ -382,15 +382,15 @@ impl TraitPublic for Public {
 impl Derive for Public {}
 
 impl From<Public> for CryptoTypePublicPair {
-    fn from(key: Public) -> Self {
-        (&key).into()
-    }
+	fn from(key: Public) -> Self {
+		(&key).into()
+	}
 }
 
 impl From<&Public> for CryptoTypePublicPair {
-    fn from(key: &Public) -> Self {
-        CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
-    }
+	fn from(key: &Public) -> Self {
+		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+	}
 }
 
 /// Derive a single hard junction.
