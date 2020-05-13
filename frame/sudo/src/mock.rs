@@ -23,7 +23,7 @@ use frame_support::{
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
+// or public keys. 
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
@@ -36,19 +36,21 @@ pub mod logger {
 	pub trait Trait: system::Trait {
 		type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	}
+
 	decl_storage! {
 		trait Store for Module<T: Trait> as Logger {
 			AccountLog get(fn account_log): Vec<T::AccountId>;
 			I32Log get(fn i32_log): Vec<i32>;
 		}
 	}
+
 	decl_event! {
 		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-			// Logged(i32, Weight),
-			AppendI32(i32, Weight),
 			AppendAccount(AccountId, i32, Weight),
+			AppendI32(i32, Weight),
 		}
 	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event() = default;
@@ -59,7 +61,7 @@ pub mod logger {
 				Pays::Yes,
 			)]
 			fn privileged_i32_log(origin, i: i32, weight: Weight){
-				// // Ensure that the `origin` is `Root`.	
+				// Ensure that the `origin` is `Root`.	
 				ensure_root(origin)?;
 				<I32Log>::append(i);
 				Self::deposit_event(RawEvent::AppendI32(i, weight));
@@ -164,7 +166,7 @@ impl Trait for Test {
 	type Call = Call;
 }
 
-// Assign back to type variables so we can make dispatched calls of these modules later.
+// Assign back to type variables in order to make dispatched calls of these modules later.
 pub type Sudo = Module<Test>;
 pub type Logger = logger::Module<Test>;
 pub type System = system::Module<Test>;

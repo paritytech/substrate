@@ -37,14 +37,14 @@ fn sudo_basics() {
 	// Configure a default test environment and set the root `key` to 1.
 	new_test_ext(1).execute_with(|| {
 		// A privileged function should work when `sudo` is passed the root `key` as `origin`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
 		assert_eq!(Logger::i32_log(), vec![42i32]); 
 		
 		// A privileged function should not work when `sudo` is passed a non-root `key` as `origin`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_noop!(Sudo::sudo(Origin::signed(2), call), Error::<Test>::RequireSudo);
-		// `I32Log` is unchanged after unsuccessful call.
+		// `I32Log` is unchanged after an unsuccessful call.
 		assert_eq!(Logger::i32_log(), vec![42i32]); 
 	});
 }
@@ -138,7 +138,7 @@ fn set_key_emits_events_correctly() {
 fn sudo_as_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A privileged function will not work when passed to `sudo_as`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(Logger::i32_log(), vec![]); 
 
