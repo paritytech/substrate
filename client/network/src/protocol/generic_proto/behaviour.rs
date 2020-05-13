@@ -1124,24 +1124,20 @@ impl NetworkBehaviour for GenericProto {
 						}
 
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
+						debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
+						self.peerset.dropped(source.clone());
 						self.events.push(NetworkBehaviourAction::NotifyHandler {
 							peer_id: source.clone(),
-							handler: NotifyHandler::One(connection),
+							handler: NotifyHandler::All,
 							event: NotifsHandlerIn::Disable,
 						});
 
 						let last = open.is_empty();
 
-						if last {
-							debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
-							self.peerset.dropped(source.clone());
-							*entry.into_mut() = PeerState::Disabled {
-								open,
-								banned_until: None
-							};
-						} else {
-							*entry.into_mut() = PeerState::Enabled { open };
-						}
+						*entry.into_mut() = PeerState::Disabled {
+							open,
+							banned_until: None
+						};
 
 						last
 					},
