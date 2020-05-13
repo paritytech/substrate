@@ -43,7 +43,7 @@ use sp_runtime::{RuntimeDebug, traits::Hash};
 
 use frame_support::{
 	codec::{Decode, Encode},
-	decl_error, decl_event, decl_module, decl_storage,
+	debug, decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
 		PostDispatchInfo,
@@ -66,6 +66,13 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
+/// The maximum number of members supported by the pallet. Used for weight estimation.
+///
+/// NOTE:
+/// + Benchmarks will need to be re-run and weights adjusted if this changes.
+/// + This pallet assumes that dependents keep to the limit without enforcing it.
+pub const MAX_MEMBERS: MemberCount = 100;
+
 pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
@@ -81,9 +88,6 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
-
-	/// Maxmimum number of members allowed as part of the collective.
-	type MaxMembers: Get<MemberCount>;
 
 	/// Maximum number of proposals allowed to be active in parallel.
 	type MaxProposals: Get<u32>;
@@ -183,8 +187,6 @@ decl_error! {
 		AlreadyInitialized,
 		/// The close call is made too early, before the end of the voting.
 		TooEarly,
-		/// There can only be a maximum of `MaxMembers`.
-		TooManyMembers,
 		/// There can only be a maximum of `MaxProposals` active proposals.
 		TooManyProposals,
 		/// The given weight bound for the proposal was too low.
@@ -341,8 +343,13 @@ decl_module! {
 		///
 		/// - `new_members`: The new member list. Be nice to the chain and provide it sorted.
 		/// - `prime`: The prime member whose vote sets the default.
+		/// - `old_count`: The upper bound for the previous number of members in storage.
+		///                Used for weight estimation.
 		///
 		/// Requires root origin.
+		///
+		/// NOTE: Does not enforce the expected `MAX_MEMBERS` limit on the amount of members, but
+		///       the weight estimations rely on it to estimate dispatchable weight.
 		///
 		/// # <weight>
 		/// ## Weight
@@ -358,7 +365,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			weight_for::set_members::<T, I>(
-				T::MaxMembers::get().into(), // M
+				*old_count as Weight, // M
 				new_members.len() as Weight, // N
 				T::MaxProposals::get().into(), // P
 			),
@@ -367,11 +374,25 @@ decl_module! {
 		fn set_members(origin,
 			new_members: Vec<T::AccountId>,
 			prime: Option<T::AccountId>,
+			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
-			ensure!(new_members.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
 
 			let old = Members::<T, I>::get();
+			if old.len() > old_count as usize {
+				debug::warn!(
+					"Wrong count used to estimate set_members weight. (expected: {}, actual: {})",
+					old_count,
+					old.len()
+				);
+			}
+			if new_members.len() > MAX_MEMBERS as usize {
+				debug::error!(
+					"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+					MAX_MEMBERS,
+					new_members.len()
+				);
+			}
 			let mut new_members = new_members;
 			new_members.sort();
 			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members, &old);
@@ -396,7 +417,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			weight_for::execute::<T, I>(
-				T::MaxMembers::get().into(),
+				MAX_MEMBERS.into(),
 				proposal.get_dispatch_info().weight,
 				*length_bound as Weight,
 			),
@@ -450,13 +471,13 @@ decl_module! {
 		#[weight = (
 			if *threshold < 2 {
 				weight_for::propose_execute::<T, I>(
-					T::MaxMembers::get().into(), // M
+					MAX_MEMBERS.into(), // M
 					proposal.get_dispatch_info().weight, // P1
 					*length_bound as Weight, // B
 				)
 			} else {
 				weight_for::propose_proposed::<T, I>(
-					T::MaxMembers::get().into(), // M
+					MAX_MEMBERS.into(), // M
 					T::MaxProposals::get().into(), // P2
 					*length_bound as Weight, // B
 				)
@@ -527,7 +548,7 @@ decl_module! {
 		/// - 1 event
 		/// # </weight>
 		#[weight = (
-			weight_for::vote::<T, I>(T::MaxMembers::get().into()),
+			weight_for::vote::<T, I>(MAX_MEMBERS.into()),
 			DispatchClass::Operational
 		)]
 		fn vote(origin,
@@ -601,7 +622,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			weight_for::close::<T, I>(
-				T::MaxMembers::get().into(), // `M`
+				MAX_MEMBERS.into(), // `M`
 				*proposal_weight_bound, // `P1`
 				T::MaxProposals::get().into(), // `P2`
 				*length_bound as Weight, // B
@@ -747,6 +768,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
+	/// NOTE: Does not enforce the expected `MAX_MEMBERS` limit on the amount of members, but
+	///       the weight estimations rely on it to estimate dispatchable weight.
+	///
 	/// # <weight>
 	/// ## Weight
 	/// - `O(MP + N)`
@@ -764,6 +788,13 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 		outgoing: &[T::AccountId],
 		new: &[T::AccountId],
 	) {
+		if new.len() > MAX_MEMBERS as usize {
+			debug::error!(
+				"New members count exceeds maximum amount of members expected. (expected: {}, actual: {})",
+				MAX_MEMBERS,
+				new.len()
+			);
+		}
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort_unstable();
@@ -919,7 +950,6 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 		pub const MotionDuration: u64 = 3;
-		pub const MaxMembers: MemberCount = 100;
 		pub const MaxProposals: u32 = 100;
 	}
 	impl frame_system::Trait for Test {
@@ -951,7 +981,6 @@ mod tests {
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
-		type MaxMembers = MaxMembers;
 		type MaxProposals = MaxProposals;
 	}
 	impl Trait for Test {
@@ -959,7 +988,6 @@ mod tests {
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
-		type MaxMembers = MaxMembers;
 		type MaxProposals = MaxProposals;
 	}
 
@@ -1003,16 +1031,6 @@ mod tests {
 	}
 
 	#[test]
-	fn test_set_members_error_case() {
-		new_test_ext().execute_with(|| {
-			assert_noop!(
-				Collective::set_members(Origin::ROOT, vec![1; MaxMembers::get() as usize + 1], None),
-				Error::<Test, Instance1>::TooManyMembers
-			);
-		});
-	}
-
-	#[test]
 	fn close_works() {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
@@ -1043,7 +1061,7 @@ mod tests {
 	#[test]
 	fn proposal_weight_limit_works() {
 		new_test_ext().execute_with(|| {
-			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None));
+			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MAX_MEMBERS));
 			let hash = BlakeTwo256::hash_of(&proposal);
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
@@ -1064,7 +1082,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3)));
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3), MAX_MEMBERS));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1087,7 +1105,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1)));
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1), MAX_MEMBERS));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1152,7 +1170,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4], None));
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4], None, MAX_MEMBERS));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -1166,7 +1184,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4], None));
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4], None, MAX_MEMBERS));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
