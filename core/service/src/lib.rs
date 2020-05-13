@@ -28,6 +28,7 @@ pub mod chain_ops;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use client::BlockchainEvents;
 use exit_future::Signal;
@@ -99,6 +100,7 @@ pub struct Service<Components: components::Components> {
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
+	keystore_next: Option<Keystore>,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	/// Configuration of this Service
@@ -135,9 +137,9 @@ impl<Components: components::Components> Service<Components> {
 
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
+		// for seed in &config.keys {
+		// 	keystore.generate_from_seed(seed)?;
+		// }
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
@@ -149,6 +151,13 @@ impl<Components: components::Components> Service<Components> {
 				public_key
 			}
 		};
+		// Open next keystore
+		let mut keystore_next = None;
+		let path = format!("{}_next", config.keystore_path.clone());
+		let path = PathBuf::from(path);
+		if path.is_dir() {
+			keystore_next = Some(Keystore::open(path)?);
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
@@ -358,6 +367,7 @@ impl<Components: components::Components> Service<Components> {
 			inherents_pool,
 			signal: Some(signal),
 			keystore,
+			keystore_next,
 			config,
 			exit,
 			_rpc: Box::new(rpc),
@@ -381,9 +391,9 @@ impl<Components: components::Components> Service<Components> {
 
 		// This is meant to be for testing only
 		// FIXME #1063 remove this
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
+		// for seed in &config.keys {
+		// 	keystore.generate_from_seed(seed)?;
+		// }
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
@@ -395,6 +405,14 @@ impl<Components: components::Components> Service<Components> {
 				public_key
 			}
 		};
+
+		// Open next keystore
+		let mut keystore_next = None;
+		let path = format!("{}_next", config.keystore_path.clone());
+		let path = PathBuf::from(path);
+		if path.is_dir() {
+			keystore_next = Some(Keystore::open(path)?);
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
@@ -542,6 +560,7 @@ impl<Components: components::Components> Service<Components> {
 			transaction_pool,
 			inherents_pool,
 			keystore,
+			keystore_next,
 			exit,
 			signal: Some(signal),
 			config,
@@ -557,6 +576,20 @@ impl<Components: components::Components> Service<Components> {
 		let keystore = &self.keystore;
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
 				.map(|k| keystore.load(k, "")))
+		{
+			Some(key)
+		} else {
+			None
+		}
+	}
+
+	/// give the authority next key, if we are an authority and have a next key
+	pub fn authority_next_key(&self) -> Option<primitives::ed25519::Pair> {
+		if self.config.roles != Roles::AUTHORITY { return None }
+		if self.keystore_next.is_none() { return None }
+		let keystore = self.keystore_next.as_ref().unwrap();
+		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
+			.map(|k| keystore.load(k, "")))
 		{
 			Some(key)
 		} else {
@@ -594,6 +627,11 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared keystore.
 	pub fn keystore(&self) -> &Keystore {
 		&self.keystore
+	}
+
+	/// Get shared next keystore.
+	pub fn keystore_next(&self) -> &Option<Keystore> {
+		&self.keystore_next
 	}
 
 	/// Get a handle to a future that will resolve on exit.
@@ -836,7 +874,8 @@ macro_rules! construct_service_factory {
 			{
 				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
 					let key = (&service).authority_key().map(Arc::new);
-					($( $authority_setup )*)(service, executor, key)
+					let next_key = (&service).authority_next_key().map(Arc::new);
+					($( $authority_setup )*)(service, executor, key, next_key)
 				})
 			}
 

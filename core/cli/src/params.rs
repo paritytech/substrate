@@ -293,10 +293,6 @@ pub struct RunCmd {
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
 
-	/// Specify additional key seed
-	#[structopt(long = "key", value_name = "STRING")]
-	pub key: Option<String>,
-
 	/// Enable validator mode
 	#[structopt(long = "validator")]
 	pub validator: bool,

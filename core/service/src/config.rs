@@ -50,8 +50,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub database_cache_size: Option<u32>,
 	/// Pruning settings.
 	pub pruning: PruningMode,
-	/// Additional key seeds.
-	pub keys: Vec<String>,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G>,
 	/// Custom configuration.
@@ -91,7 +89,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			database_cache_size: Default::default(),
-			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategies: Default::default(),

@@ -78,6 +78,7 @@ fn node_config<F: ServiceFactory> (
 	if let Some(seed) = key_seed {
 		keys.push(seed);
 	}
+	let scale_keys = Vec::new();
 
 	let config_path = Some(String::from(root.join("network").to_str().unwrap()));
 	let net_config_path = config_path.clone();
@@ -114,6 +115,7 @@ fn node_config<F: ServiceFactory> (
 		database_cache_size: None,
 		pruning: Default::default(),
 		keys: keys,
+		scale_keys: scale_keys,
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),

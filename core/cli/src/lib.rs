@@ -475,14 +475,6 @@ where
 		cli.pool_config,
 	)?;
 
-	if let Some(key) = cli.key {
-		config.keys.push(key);
-	}
-
-	if let Some(account) = cli.keyring.account {
-		config.keys.push(format!("//{}", account));
-	}
-
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
 	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
 
