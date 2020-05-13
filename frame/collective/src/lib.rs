@@ -695,8 +695,7 @@ decl_module! {
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Check whether `who` is a member of the collective.
 	pub fn is_member(who: &T::AccountId) -> bool {
-		// Note:
-		// The dispatchables *do not* use this to check membership so make sure
+		// Note: The dispatchables *do not* use this to check membership so make sure
 		// to update those if this is changed.
 		Self::members().contains(who)
 	}
