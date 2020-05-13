@@ -399,7 +399,7 @@ parameter_types! {
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
-// Make sure that there are no more than MAX_MEMBERS members elected via phragmen.
+// Make sure that there are no more than `MAX_MEMBERS` members elected via phragmen.
 const_assert!(DESIRED_MEMBERS <= pallet_collective::MAX_MEMBERS);
 
 impl pallet_elections_phragmen::Trait for Runtime {
