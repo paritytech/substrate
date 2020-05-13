@@ -515,7 +515,7 @@ impl OverlayedChanges {
 	pub fn child_infos(&self) -> impl IntoIterator<Item=&ChildInfo> {
 		self.prospective.children_default.iter()
 			.chain(self.committed.children_default.iter())
-			.map(|(_, v)| &v.1).collect::<BTreeSet<&ChildInfo>>()
+			.map(|(_, v)| &v.1).collect::<BTreeSet<_>>()
 	}
 
 	/// Get an iterator over all pending and committed changes.
