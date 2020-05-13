@@ -831,7 +831,6 @@ impl<T: Trait> Module<T> {
 	/// O(NLogM) with M candidates and `who` having voted for `N` of them.
 	/// Reads Members, RunnersUp, Candidates and Voting(who) from database.
 	fn is_defunct_voter(who: &T::AccountId) -> bool {
-		// TODO: optimise this
 		if Self::is_voter(who) {
 			Self::votes_of(who)
 				.iter()
@@ -1100,7 +1099,7 @@ impl<T: Trait> ContainsLengthBound for Module<T> {
 mod tests {
 	use super::*;
 	use std::cell::RefCell;
-	use frame_support::{assert_ok, assert_noop, assert_err_ignore_postinfo, parameter_types,
+	use frame_support::{assert_ok, assert_noop, assert_err_with_weight, parameter_types,
 		weights::Weight,
 	};
 	use substrate_test_utils::assert_eq_uvec;
@@ -2466,10 +2465,10 @@ mod tests {
 			assert_eq!(Elections::runners_up_ids(), vec![3]);
 
 			// there is a replacement! and this one needs a weight refund.
-			// TODO: check refund
-			assert_err_ignore_postinfo!(
+			assert_err_with_weight!(
 				Elections::remove_member(Origin::ROOT, 4, false),
 				Error::<Test>::InvalidReplacement,
+				Some(48000000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}
