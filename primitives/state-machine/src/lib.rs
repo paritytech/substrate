@@ -345,10 +345,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				CallResult<R, Exec::Error>,
 			) -> CallResult<R, Exec::Error>
 	{
+		let pending_changes = self.overlay.clone_pending();
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.discard_prospective();
+			self.overlay.set_pending(pending_changes);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -375,6 +376,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			R: Decode + Encode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
+		let pending_changes = self.overlay.clone_pending();
 		let (result, was_native) = self.execute_aux(
 			true,
 			native_call.take(),
@@ -383,7 +385,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		if !was_native || result.is_ok() {
 			result
 		} else {
-			self.overlay.discard_prospective();
+			self.overlay.set_pending(pending_changes);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
