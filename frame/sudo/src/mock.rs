@@ -46,8 +46,8 @@ pub mod logger {
 
 	decl_event! {
 		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-			AppendAccount(AccountId, i32, Weight),
 			AppendI32(i32, Weight),
+			AppendI32AndAccount(AccountId, i32, Weight),
 		}
 	}
 
@@ -72,23 +72,12 @@ pub mod logger {
 				DispatchClass::Normal,
 				Pays::Yes,
 			)]
-			fn non_privileged_i32_log(origin, i: i32, weight: Weight){
+			fn non_privileged_log(origin, i: i32, weight: Weight){
 				// Ensure that the `origin` is some signed account.		
-				ensure_signed(origin)?;
-				<I32Log>::append(i);
-				Self::deposit_event(RawEvent::AppendI32(i, weight));
-			}
-
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
-			fn non_privileged_account_log(origin, i: i32, weight: Weight) {
-				// Ensure that the `origin` is some signed account.	
 				let sender = ensure_signed(origin)?;
+				<I32Log>::append(i);
 				<AccountLog<T>>::append(sender.clone());
-				Self::deposit_event(RawEvent::AppendAccount(sender, i, weight));
+				Self::deposit_event(RawEvent::AppendI32AndAccount(sender, i, weight));
 			}
 		}
 	}

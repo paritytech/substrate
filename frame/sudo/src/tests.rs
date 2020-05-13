@@ -141,20 +141,19 @@ fn sudo_as_basics() {
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(Logger::i32_log(), vec![]); 
+		assert_eq!(Logger::account_log(), vec![]);
 
 		// A non-privileged function should not work when called with a non-root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_i32_log(42, 1)));
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_noop!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
 		assert_eq!(Logger::i32_log(), vec![]); 
+		assert_eq!(Logger::account_log(), vec![]);
 
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_i32_log(42, 1)));
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(Logger::i32_log(), vec![42i32]);
-
-		// The correct user makes the call within `sudo_as`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_account_log(42, 1_000)));
-		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
+		 // The correct user makes the call within `sudo_as`.
 		assert_eq!(Logger::account_log(), vec![2]);
 	});
 }
@@ -166,7 +165,7 @@ fn sudo_as_emits_events_correctly() {
 		System::set_block_number(1);
 
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_i32_log(42, 1)));
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		let expected_event = TestEvent::sudo(RawEvent::SudoAsDone(true));
 		assert!(System::events().iter().any(|a| {a.event == expected_event}));
