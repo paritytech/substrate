@@ -410,11 +410,13 @@ decl_module! {
 		///     longer a candidate nor an active member or a runner-up.
 		///
 		///
-		/// The origin must provide the number of current candidates for the purpose of accurate
-		/// weight calculation.
+		/// The origin must provide the number of current candidates and votes of the reported target 
+		/// for the purpose of accurate weight calculation.
 		///
 		/// # <weight>
 		/// No Base weight based on min square analysis.
+		/// Complexity of candidate_count: 1.755 us
+		/// Complexity of vote_count: 17.97us
 		/// State reads:
 		///  	- Voting(reporter)
 		///  	- Candidate.len()
