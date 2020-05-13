@@ -189,7 +189,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		const MouduleId: ModuleId = T::ModuleId::get();
+		const ModuleId: ModuleId = T::ModuleId::get();
 
 		/// Deposit balance from currency/balances module into EVM.
 		#[weight = 0]
