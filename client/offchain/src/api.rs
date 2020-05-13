@@ -100,7 +100,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		}
 	}
 
-	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
 		match kind {
 			StorageKind::PERSISTENT => self.db.remove(STORAGE_PREFIX, key),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),

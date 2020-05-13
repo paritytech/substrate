@@ -36,7 +36,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
 
-	/// Remove a perviously pin storage ersisted value under given key and prefix.
+	/// Clear a storage entry under given key and prefix.
 	fn remove(&mut self, prefix: &[u8], key: &[u8]);
 
 	/// Retrieve a value from storage under given key and prefix.

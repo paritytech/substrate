@@ -16,7 +16,15 @@
 
 //! # Offchain Storage Lock
 //!
-//! A persistent storage lock with a defined expire time.
+//! A storage-based lock with a defined expiry time.
+//!
+//! The lock is using Local Storage and allows synchronizing
+//! access to critical section of your code for concurrently running Off-chain Workers.
+//! Usage of `PERSISTENT` variant of the storage persists the lock value even in case of re-orgs.
+//!
+//! A use case for the lock is to make sure that a particular section of the code is only run
+//! by one Off-chain Worker at the time. This may include performing a side-effect (i.e. an HTTP call)
+//! or alteration of single or multiple Local Storage entries.
 //!
 //! One use case would be collective updates of multiple data items
 //! or append / remove of i.e. sets, vectors which are stored in
@@ -32,7 +40,7 @@
 //!    if let Ok(_guard) =  lock.spin_lock() {
 //!         let acc = StorageValueRef::persistent(key);
 //!         let v: Vec<T> = acc.get::<Vec<T>>().unwrap().unwrap();
-//!         // modify `v` as desired
+//!         // modify `v` as desired - i.e. perform some heavy computation or side effects that should only be done once.
 //!         acc.set(v);
 //!    } else {
 //!         // the lock duration expired
@@ -45,7 +53,7 @@ use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
 /// Default expirey duration in milliseconds.
-const STORAGE_LOCK_DEFAULT_EXPIREY_DURATION: u64 = 30_000;
+const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
 
 /// Snooze duration before attempting to lock again in ms.
 const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
@@ -62,7 +70,7 @@ pub struct StorageLock<'a> {
 }
 
 impl<'a> StorageLock<'a> {
-	/// Create a new storage lock with [default expirey duration](Self::STORAGE_LOCK_DEFAULT_EXPIREY_DURATION).
+	/// Create a new storage lock with [default expiry duration](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION).
 	pub fn new<'k>(key: &'k [u8]) -> Self
 	where
 		'k: 'a,
@@ -122,7 +130,7 @@ impl<'a> StorageLock<'a> {
 
 	/// Try grabbing the lock until its expiry is reached.
 	///
-	/// Returns an error if the lock expired before it could be cought
+	/// Returns an error if the lock expired before it could be caught
 	pub fn spin_lock<'b, 'c>(&'b mut self) -> Result<StorageLockGuard<'a, 'c>, ()>
 	where
 		'a: 'b,
@@ -156,7 +164,7 @@ impl<'a> StorageLock<'a> {
 	/// Explicitly unlock the lock.
 	///
 	/// Does nothing if the lock was alrady unlocked before.
-	pub fn unlock(&mut self) {
+	fn unlock(&mut self) {
 		if let Some(_) = self.locked_until.take() {
 			self.value_ref.remove();
 		}
@@ -169,7 +177,9 @@ pub struct StorageLockGuard<'a, 'b> {
 }
 
 impl<'a, 'b> StorageLockGuard<'a, 'b> {
-	/// Consume the guard and unlock the underlying lock.
+	/// Consume the guard but DON'T unlock the underlying lock.
+	/// 
+	/// This can be used to finish off-chain worker execution while keeping the lock for it's desired expiry time.
 	pub fn forget(mut self) {
 		let _ = self.lock.take();
 	}

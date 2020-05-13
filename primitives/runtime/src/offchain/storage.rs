@@ -50,7 +50,7 @@ impl<'a> StorageValueRef<'a> {
 	}
 
 	/// Remove the associated value from the storage.
-	pub fn remove(&self) {
+	pub fn clear(&mut self) {
 		sp_io::offchain::local_storage_remove(self.kind, self.key)
 	}
 
