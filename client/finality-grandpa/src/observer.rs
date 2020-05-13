@@ -189,7 +189,7 @@ where
 		client,
 		network,
 		persistent_data,
-		config.keystore.clone(),
+		config.keystore,
 		voter_commands_rx
 	);
 

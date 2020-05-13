@@ -838,7 +838,7 @@ where
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
-			voter_set_state: persistent_data.set_state.clone(),
+			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			_phantom: PhantomData,
 		});
