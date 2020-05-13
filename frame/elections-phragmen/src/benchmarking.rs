@@ -440,15 +440,39 @@ benchmarks! {
 	remove_member_with_replacement {
 		// easy case. We have a runner up. Nothing will have that much of an impact. m will be
 		// number of members and runners. There is always at least one runner.
-		let m in
-			(T::DesiredMembers::get() + 1)
-			..
-			T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		let u in ...;
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		clean::<T>();
 
 		let _ = fill_seats_up_to::<T>(m)?;
 		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
 	}: remove_member(RawOrigin::Root, removing, true)
+	verify {
+		// must still have enough members.
+		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
+		#[cfg(test)]
+		{
+			// reset members in between benchmark tests.
+			use crate::tests::MEMBERS;
+			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
+		}
+	}
+
+	remove_member_wrong_refund {
+		// The root call by mistake indicated that this will have no replacement, while it has!
+		// this has now consumed a lot of weight and need to refund.
+		let u in ...;
+		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		clean::<T>();
+
+		let _ = fill_seats_up_to::<T>(m)?;
+		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
+	}: {
+		assert_eq!(
+			<Elections<T>>::remove_member(RawOrigin::Root.into(), removing, false).unwrap_err().error,
+			Error::<T>::InvalidReplacement.into(),
+		);
+	}
 	verify {
 		// must still have enough members.
 		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());

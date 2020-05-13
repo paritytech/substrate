@@ -85,7 +85,7 @@
 use codec::{Encode, Decode};
 use sp_std::prelude::*;
 use sp_runtime::{
-	print, DispatchResult, DispatchError, RuntimeDebug, Perbill,
+	DispatchError, RuntimeDebug, Perbill,
 	traits::{Zero, StaticLookup, Convert},
 };
 use frame_support::{
@@ -320,12 +320,11 @@ decl_module! {
 		/// State reads:
 		/// 	- Candidates.len() + Members.len() + RunnersUp.len()
 		/// 	- Voting (is_voter)
-		/// 	TODO: check this: This is all jst under one key: AccountData
 		/// 	- AccountBalance(who) (unreserve + total_balance)
 		/// State writes:
 		/// 	- Voting
-		/// 	-  AccountBalance(who) (unreserve -- only when would_create is true)
 		/// 	- Lock
+		/// 	-  AccountBalance(who) (unreserve -- only when would_create is true)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, _, would_create): (_, _, &bool)|
@@ -385,13 +384,14 @@ decl_module! {
 		///
 		/// # <weight>
 		/// Base weight: 35us
+		/// All state access is from do_remove_voter.
 		/// State reads:
-		/// 	- Voting (is_voter)
+		/// 	- Voting
 		/// 	- AccountData(who)
 		/// State writes:
 		/// 	- Voting
-		/// 	- Reserved
 		/// 	- Locks
+		/// 	- AccountData(who)
 		/// # </weight>
 		#[weight = 35 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(2, 3)]
 		fn remove_voter(origin) {
@@ -425,7 +425,6 @@ decl_module! {
 		/// 	- AccountBalance(reporter) + AccountBalance(target)
 		/// 	- Voting(reporter || target)
 		/// Note: the db access is worse with respect to db, which is when the report is correct.
-		/// TODO: T::BadReport???
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(defunct,): (&DefunctVoter<<T::Lookup as StaticLookup>::Source>,)|
@@ -451,7 +450,8 @@ decl_module! {
 				<Candidates<T>>::decode_len().unwrap_or(0) as u32 <= candidate_count,
 				Error::<T>::InvalidCandidateCount,
 			);
-			// TODO: We read this again in is_defunct_voter, still duplicate overlay read.
+			// Optimisation Note: We read this again in is_defunct_voter, still duplicate overlay
+			// read.
 			ensure!(
 				<Voting<T>>::get(&target).1.len() as u32 <= vote_count,
 				Error::<T>::InvalidVoteCount,
@@ -536,8 +536,8 @@ decl_module! {
 		///   removed as a member, consequently not being a candidate for the next round anymore.
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
 		/// <weight>
-		/// Base weight: 16.57us
 		/// If a candidate is renouncing:
+		/// 	Base weight: 16.57us
 		/// 	Complexity of candidate_count: 0.235
 		/// 	State reads:
 		/// 		- Candidates
@@ -553,7 +553,6 @@ decl_module! {
 		/// 	State writes:
 		/// 		- Members, RunnersUp (remove_and_replace_member),
 		/// 		- AccountData(who) (unreserve)
-		/// TODO: and calls into ChangeMembers??
 		/// If runner is renouncing:
 		/// 	Base weight: 46.25
 		/// 	State reads:
@@ -562,20 +561,22 @@ decl_module! {
 		/// 	State writes:
 		/// 		- RunnersUp (remove_and_replace_member),
 		/// 		- AccountData(who) (unreserve)
+		///
+		/// TODO: and calls into ChangeMembers??
 		/// </weight>
 		#[weight = FunctionOf(
 			|(renouncing,): (&Renouncing,)| match *renouncing {
+				Renouncing::Candidate(count) => {
+					16 * WEIGHT_PER_MICROS +
+					(count as Weight) * 235 * WEIGHT_PER_NANOS +
+					T::DbWeight::get().reads_writes(2, 2)
+				},
 				Renouncing::Member => {
 					47 * WEIGHT_PER_MICROS +
 					T::DbWeight::get().reads_writes(3, 3)
 				},
 				Renouncing::RunnerUp => {
 					47 * WEIGHT_PER_MICROS +
-					T::DbWeight::get().reads_writes(2, 2)
-				},
-				Renouncing::Candidate(count) => {
-					16 * WEIGHT_PER_MICROS +
-					(count as Weight) * 235 * WEIGHT_PER_NANOS +
 					T::DbWeight::get().reads_writes(2, 2)
 				}
 			},
@@ -631,9 +632,24 @@ decl_module! {
 		/// Note that this does not affect the designated block number of the next election.
 		///
 		/// # <weight>
-		/// ...
+		/// If we have a replacement:
+		/// 	- Base weight: 47.15 us
+		/// 	- State reads:
+		/// 		- RunnersUp.len()
+		/// 		- Members, RunnersUp (remove_and_replace_member)
+		/// 	- State writes:
+		/// 		- Members, RunnersUp (remove_and_replace_member)
+		/// Else, since this is a root call and will go into phragmen, we assume full block for now.
 		/// # </weight>
-		#[weight = (2_000_000_000, DispatchClass::Operational)]
+		#[weight = FunctionOf(
+			|(_, has_replacement): (_, &bool)| if *has_replacement {
+				48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
+			} else {
+				T::MaximumBlockWeight::get()
+			},
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn remove_member(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -655,8 +671,11 @@ decl_module! {
 				(true, false) => {
 					// prediction was that we will NOT have a replacement, and now this call is
 					// aborting whilst charging a metric ton of weight. Refund and abort.
-					// TODO: fix refund.
-					return Err(Error::<T>::InvalidReplacement.with_weight(2_000_000_000).into());
+					return Err(Error::<T>::InvalidReplacement.with_weight(
+						// refund to the variant where we have a replacement. This still an
+						// overestimate but fine for now.
+						48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
+					).into());
 				}
 			}
 
@@ -678,12 +697,8 @@ decl_module! {
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			if let Err(e) = Self::end_block(n) {
-				print("Guru meditation");
-				print(e);
-			}
-
-			0
+			// returns the correct weight.
+			Self::end_block(n)
 		}
 	}
 }
@@ -724,6 +739,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// Note that this function _will_ call into `T::ChangeMembers` in case any change happens
 	/// (`Ok(true)`).
+	///
+	/// If replacement exists, this will read and write from/into both `Members` and `RunnersUp`.
 	fn remove_and_replace_member(who: &T::AccountId) -> Result<bool, DispatchError> {
 		let mut members_with_stake = Self::members();
 		if let Ok(index) = members_with_stake.binary_search_by(|(ref m, ref _s)| m.cmp(who)) {
@@ -831,6 +848,8 @@ impl<T: Trait> Module<T> {
 	/// This will clean always clean the storage associated with the voter, and remove the balance
 	/// lock. Optionally, it would also return the reserved voting bond if indicated by `unreserve`.
 	/// If unreserve is true, has 3 storage reads and 1 reads.
+	///
+	/// DB access: Voting and Lock are always written to, if unreserve, then 1 read and write added.
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
 		Voting::<T>::remove(who);
@@ -855,13 +874,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// Runs phragmen election and cleans all the previous candidate state. The voter state is NOT
 	/// cleaned and voters must themselves submit a transaction to retract.
-	fn end_block(block_number: T::BlockNumber) -> DispatchResult {
+	fn end_block(block_number: T::BlockNumber) -> Weight {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
+				return T::MaximumBlockWeight::get()
 			}
 		}
-		Ok(())
+		0
 	}
 
 	/// Run the phragmen election with all required side processes and state updates.
@@ -2429,6 +2449,7 @@ mod tests {
 			assert_eq!(Elections::runners_up_ids(), vec![3]);
 
 			// there is a replacement! and this one needs a weight refund.
+			// TODO: check refund
 			assert_err_ignore_postinfo!(
 				Elections::remove_member(Origin::ROOT, 4, false),
 				Error::<Test>::InvalidReplacement,
