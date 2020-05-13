@@ -83,12 +83,12 @@ then
   if [ "${pr_companion}" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
-    git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
+    git fetch origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
     git merge origin/master
   else
     pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
-    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
+    if git fetch origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
     then
       boldprint "companion branch detected: $pr_ref"
       git checkout branch/"$pr_ref"
