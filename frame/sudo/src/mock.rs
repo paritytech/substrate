@@ -31,7 +31,6 @@ use crate as sudo;
 // Logger module to track execution.
 pub mod logger {
 	use super::*;
-	use std::cell::RefCell;
 	use frame_system::ensure_root;
 
 	pub trait Trait: system::Trait {
