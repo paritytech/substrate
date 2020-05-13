@@ -277,11 +277,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let public = pair.public().to_raw_vec();
-			let public_type_pair = pair.public().into();
-			// let public_type_pair = CryptoTypePublicPair(
-			// 	<AuthorityId<Self::Claim> as AppPublic>::CRYPTO_ID,
-			// 	public.clone(),
-			// );
+			let public_type_pair = pair.public().to_public_crypto_pair();
 			let signature = keystore.read()
 				.sign_with(
 					<AuthorityId<Self::Claim> as AppKey>::ID,
