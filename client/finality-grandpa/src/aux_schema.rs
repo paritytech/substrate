@@ -328,7 +328,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		}
 		Some(other) => return Err(ClientError::Backend(
 			format!("Unsupported GRANDPA DB version: {:?}", other)
-		).into()),
+		)),
 	}
 
 	// genesis.
@@ -336,7 +336,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		from genesis on what appears to be first startup.");
 
 	let genesis_authorities = genesis_authorities()?;
-	let genesis_set = AuthoritySet::genesis(genesis_authorities.clone())
+	let genesis_set = AuthoritySet::genesis(genesis_authorities)
 		.expect("genesis authorities is non-empty; all weights are non-zero; qed.");
 	let state = make_genesis_round();
 	let base = state.prevote_ghost

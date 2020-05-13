@@ -108,7 +108,7 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
-				rounds: rounds.into(),
+				rounds,
 				set_id,
 				voters,
 			})
@@ -248,14 +248,14 @@ impl<Block: BlockT> VoterSetState<Block> {
 	{
 		if let VoterSetState::Live { completed_rounds, current_rounds } = self {
 			if current_rounds.contains_key(&round) {
-				return Ok((completed_rounds, current_rounds));
+				Ok((completed_rounds, current_rounds))
 			} else {
 				let msg = "Voter acting on a live round we are not tracking.";
-				return Err(Error::Safety(msg.to_string()));
+				Err(Error::Safety(msg.to_string()))
 			}
 		} else {
 			let msg = "Voter acting while in paused state.";
-			return Err(Error::Safety(msg.to_string()));
+			Err(Error::Safety(msg.to_string()))
 		}
 	}
 }
@@ -622,7 +622,7 @@ where
 						restricted_number >= base_header.number() &&
 							restricted_number < target_header.number()
 					})
-					.or(Some((target_header.hash(), *target_header.number())))
+					.or_else(|| Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
