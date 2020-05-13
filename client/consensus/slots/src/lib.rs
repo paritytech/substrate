@@ -287,12 +287,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				epoch_data,
 			);
 
-			if let Err(e) = block_import_params {
-				return future::err(e);
-			}
-			let block_import_params = block_import_params.expect(
-				"Potential errors have been checked above; qed"
-			);
+			let block_import_params = match block_import_params {
+				Ok(params) => params,
+				Err(e) => return future::err(e),
+			};
 
 			info!(
 				"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
