@@ -1123,6 +1123,10 @@ impl NetworkBehaviour for GenericProto {
 							);
 						}
 
+						// TODO: We switch the entire peer state to "disabled" because of possible
+						// race conditions involving the legacy substream.
+						// Once https://github.com/paritytech/substrate/issues/5670 is done, this
+						// should be changed to stay in the `Enabled` state.
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
 						debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
 						self.peerset.dropped(source.clone());
