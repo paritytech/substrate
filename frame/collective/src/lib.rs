@@ -19,6 +19,8 @@
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
 //! function `set_members`, or indirectly, through implementing the `ChangeMembers`.
+//! The pallet assumes that the amount of members stays at or below `MAX_MEMBERS` for its weight 
+//! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
 //! A "prime" member may be set allowing their vote to act as the default vote in case of any
 //! abstentions after the voting period.
