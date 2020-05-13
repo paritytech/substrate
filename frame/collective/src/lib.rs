@@ -238,7 +238,7 @@ mod weight_for {
 	) -> Weight {
 		T::DbWeight::get().reads(1) // read members for `is_member`
 			.saturating_add(23_000_000) // constant
-			.saturating_add(4_000 * length) // B
+			.saturating_add(4_000.saturating_mul(length)) // B
 			.saturating_add(120_000 * members) // M
 			.saturating_add(proposal) // P
 	}
