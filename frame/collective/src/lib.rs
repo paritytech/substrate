@@ -367,7 +367,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			weight_for::set_members::<T, I>(
-				*old_count as Weight, // M
+				(*old_count).into(), // M
 				new_members.len() as Weight, // N
 				T::MaxProposals::get().into(), // P
 			),
