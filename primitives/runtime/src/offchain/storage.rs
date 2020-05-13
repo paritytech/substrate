@@ -49,6 +49,11 @@ impl<'a> StorageValueRef<'a> {
 		})
 	}
 
+	/// Remove the associated value from the storage.
+	pub fn remove(&self) {
+		sp_io::offchain::local_storage_remove(self.kind, self.key)
+	}
+
 	/// Retrieve & decode the value from storage.
 	///
 	/// Note that if you want to do some checks based on the value
