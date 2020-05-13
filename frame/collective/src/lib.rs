@@ -608,6 +608,8 @@ decl_module! {
 		/// unless there is a prime member set and the prime member cast an approval.
 		///
 		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed proposal.
+		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
+		///                   `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
 		///
 		/// # <weight>
 		/// ## Weight
@@ -700,6 +702,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 
 	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
+	///
+	/// Checks the length in storage via `storage::read` which adds an extra `size_of::<u32>() == 4`
+	/// to the length.
 	fn validate_and_get_proposal(
 		hash: &T::Hash,
 		length_bound: u32,
