@@ -897,6 +897,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
+	/// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] if it has failed.
+	pub fn on_block_request_failed(
+		&mut self,
+		peer: &PeerId,
+	) {
+		self.peerset_handle.report_peer(peer.clone(), rep::TIMEOUT);
+		self.behaviour.disconnect_peer(peer);
+	}
+
 	/// Perform time based maintenance.
 	///
 	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
@@ -1874,10 +1883,11 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
 	/// A new block request must be emitted.
-	/// Once you have the response, you must call `Protocol::on_block_response`.
+	/// You must later call either [`Protocol::on_block_response`] or
+	/// [`Protocol::on_block_request_failed`].
+	/// Each peer can only have one active request. If a request already exists for this peer, it
+	/// must be silently discarded.
 	/// It is the responsibility of the handler to ensure that a timeout exists.
-	/// If the request times out, or the peer responds in an invalid way, the peer has to be
-	/// disconnect. This will inform the state machine that the request it has emitted is stale.
 	BlockRequest { target: PeerId, request: message::BlockRequest<B> },
 	/// A new finality proof request must be emitted.
 	/// Once you have the response, you must call `Protocol::on_finality_proof_response`.
