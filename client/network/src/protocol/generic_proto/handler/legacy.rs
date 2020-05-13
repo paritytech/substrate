@@ -115,7 +115,7 @@ impl IntoProtocolsHandler for LegacyProtoHandlerProto {
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
-				init_deadline: Delay::new(Duration::from_secs(5))
+				init_deadline: Delay::new(Duration::from_secs(20))
 			},
 			events_queue: SmallVec::new(),
 		}
@@ -353,26 +353,26 @@ impl LegacyProtoHandler {
 			ProtocolState::Init { substreams, mut init_deadline } => {
 				match Pin::new(&mut init_deadline).poll(cx) {
 					Poll::Ready(()) => {
-						init_deadline = Delay::new(Duration::from_secs(60));
 						error!(target: "sub-libp2p", "Handler initialization process is too long \
-							with {:?}", self.remote_peer_id)
+							with {:?}", self.remote_peer_id);
+						self.state = ProtocolState::KillAsap;
 					},
-					Poll::Pending => {}
+					Poll::Pending => {
+						self.state = ProtocolState::Init { substreams, init_deadline };
+					}
 				}
 
-				self.state = ProtocolState::Init { substreams, init_deadline };
 				None
 			}
 
 			ProtocolState::Opening { mut deadline } => {
 				match Pin::new(&mut deadline).poll(cx) {
 					Poll::Ready(()) => {
-						deadline = Delay::new(Duration::from_secs(60));
 						let event = LegacyProtoHandlerOut::ProtocolError {
 							is_severe: true,
 							error: "Timeout when opening protocol".to_string().into(),
 						};
-						self.state = ProtocolState::Opening { deadline };
+						self.state = ProtocolState::KillAsap;
 						Some(ProtocolsHandlerEvent::Custom(event))
 					},
 					Poll::Pending => {
