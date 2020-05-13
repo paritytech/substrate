@@ -28,20 +28,12 @@ use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
 use sp_io;
 use crate as sudo;
 
-// This logger module used by privileged_function() to track execution.
-// Adapted from the logger in `frame/scheduler/src/lib.rs` `tests`. 
+// Logger module to track execution.
 pub mod logger {
 	use super::*;
 	use std::cell::RefCell;
 	use frame_system::ensure_root;
-	use std::convert::From;
 
-	thread_local! {
-		static LOG: RefCell<Vec<i32>> = RefCell::new(Vec::new());
-	}
-	pub fn log() -> Vec<i32> {
-		LOG.with(|log| log.borrow().clone())
-	}
 	pub trait Trait: system::Trait {
 		type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	}
@@ -64,7 +56,7 @@ pub mod logger {
 
 			#[weight = FunctionOf(
 				|args: (&i32, &Weight)| *args.1,
-				|_: (&i32, &Weight)| DispatchClass::Normal,
+				DispatchClass::Normal,
 				Pays::Yes,
 			)]
 			fn privileged_i32_log(origin, i: i32, weight: Weight){
@@ -76,7 +68,7 @@ pub mod logger {
 
 			#[weight = FunctionOf(
 				|args: (&i32, &Weight)| *args.1,
-				|_: (&i32, &Weight)| DispatchClass::Normal,
+				DispatchClass::Normal,
 				Pays::Yes,
 			)]
 			fn non_privileged_i32_log(origin, i: i32, weight: Weight){
@@ -88,7 +80,7 @@ pub mod logger {
 
 			#[weight = FunctionOf(
 				|args: (&i32, &Weight)| *args.1,
-				|_: (&i32, &Weight)| DispatchClass::Normal,
+				DispatchClass::Normal,
 				Pays::Yes,
 			)]
 			fn non_privileged_account_log(origin, i: i32, weight: Weight) {

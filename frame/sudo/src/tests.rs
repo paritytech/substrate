@@ -45,89 +45,92 @@ use frame_support::{assert_ok, assert_noop};
 // 	});
 // }
 
-// #[test]
-// fn sudo_emits_events_correctly() {
-// 	new_test_ext(1).execute_with(|| {
-// 		// Set block number to 1 because events are not emitted on block 0.
-// 		System::set_block_number(1);
+#[test]
+fn sudo_emits_events_correctly() {
+	new_test_ext(1).execute_with(|| {
+		// Set block number to 1 because events are not emitted on block 0.
+		System::set_block_number(1);
 
-// 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
-// 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
-// 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
-// 		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
-// 		assert!(System::events().iter().any(|a| {a.event == expected_event})); 
-// 	})
-// }
+		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
+		assert_ok!(Sudo::sudo(Origin::signed(1), call));
+		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
+		assert!(System::events().iter().any(|a| {a.event == expected_event})); 
+	})
+}
 
-// #[test]
-// fn sudo_unchecked_weight_basics() {
-// 	new_test_ext(1).execute_with(|| {
-// 		// A privileged function should work when `sudo` is passed the root `key` as origin.
-// 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
-// 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-// 		assert_eq!(logger::log(), vec![42i32]); 
+#[test]
+fn sudo_unchecked_weight_basics() {
+	new_test_ext(1).execute_with(|| {
+		// I32Log is empty before being used.
+		assert_eq!(Logger::i32_log(), vec![]);
 
-// 		// A privileged function should not work when called with a non-root `key`.
-// 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
-// 		assert_noop!(
-// 			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000), 
-// 			Error::<Test>::RequireSudo,
-// 		);
-// 		assert_eq!(logger::log(), vec![42i32]); 
+		// A privileged function should work when `sudo` is passed the root `key` as origin.
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
+		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
+		assert_eq!(Logger::i32_log(), vec![42i32]); 
 
-// 		// Controls the dispatched weight.
-// 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
-// 		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight(call, 1_000);
-// 		let info = sudo_unchecked_weight_call.get_dispatch_info();
-// 		assert_eq!(info.weight, 1_000);
-// 	});
-// }
+		// A privileged function should not work when called with a non-root `key`.
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1_000)));
+		assert_noop!(
+			Sudo::sudo_unchecked_weight(Origin::signed(2), call, 1_000), 
+			Error::<Test>::RequireSudo,
+		);
+		assert_eq!(Logger::i32_log(), vec![42i32]); 
 
-// #[test]
-// fn sudo_unchecked_weight_emits_events_correctly() {
-// 	new_test_ext(1).execute_with(|| {
-// 		// Set block number to 1 because events are not emitted on block 0.
-// 		System::set_block_number(1);
+		// Controls the dispatched weight.
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
+		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight(call, 1_000);
+		let info = sudo_unchecked_weight_call.get_dispatch_info();
+		assert_eq!(info.weight, 1_000);
+	});
+}
 
-// 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
-// 		let call = Box::new(Call::Logger(LoggerCall::log(42, 1)));
-// 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-// 		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
-// 		assert!(System::events().iter().any(|a| {a.event == expected_event}));
-// 	})
-// }
+#[test]
+fn sudo_unchecked_weight_emits_events_correctly() {
+	new_test_ext(1).execute_with(|| {
+		// Set block number to 1 because events are not emitted on block 0.
+		System::set_block_number(1);
 
-// #[test]
-// fn set_key_basics() {
-// 	new_test_ext(1).execute_with(|| {	
-// 		// A root `key` can change the root `key`
-// 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-// 		assert_eq!(Sudo::key(),  2u64);
-// 	});
+		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
+		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log(42, 1)));
+		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
+		let expected_event = TestEvent::sudo(RawEvent::Sudid(Ok(())));
+		assert!(System::events().iter().any(|a| {a.event == expected_event}));
+	})
+}
 
-// 	new_test_ext(1).execute_with(|| {
-// 		// A non-root `key` will trigger a `RequireSudo` error and a non-root `key` cannot change the root `key`.
-// 		assert_noop!(Sudo::set_key(Origin::signed(2), 3), Error::<Test>::RequireSudo);
-// 		assert_eq!(Sudo::key(),  1u64);
-// 	});
-// }
+#[test]
+fn set_key_basics() {
+	new_test_ext(1).execute_with(|| {	
+		// A root `key` can change the root `key`
+		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
+		assert_eq!(Sudo::key(),  2u64);
+	});
 
-// #[test]
-// fn set_key_emits_events_correctly() {
-// 	new_test_ext(1).execute_with(|| {	
-// 		// Set block number to 1 because events are not emitted on block 0.
-// 		System::set_block_number(1);
+	new_test_ext(1).execute_with(|| {
+		// A non-root `key` will trigger a `RequireSudo` error and a non-root `key` cannot change the root `key`.
+		assert_noop!(Sudo::set_key(Origin::signed(2), 3), Error::<Test>::RequireSudo);
+		assert_eq!(Sudo::key(),  1u64);
+	});
+}
 
-// 		// A root `key` can change the root `key`.
-// 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-// 		let expected_event = TestEvent::sudo(RawEvent::KeyChanged(1));
-// 		assert!(System::events().iter().any(|a| {a.event == expected_event}));
-// 		// Double check.
-// 		assert_ok!(Sudo::set_key(Origin::signed(2), 4));
-// 		let expected_event = TestEvent::sudo(RawEvent::KeyChanged(2));
-// 		assert!(System::events().iter().any(|a| {a.event == expected_event}));
-// 	});
-// }
+#[test]
+fn set_key_emits_events_correctly() {
+	new_test_ext(1).execute_with(|| {	
+		// Set block number to 1 because events are not emitted on block 0.
+		System::set_block_number(1);
+
+		// A root `key` can change the root `key`.
+		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
+		let expected_event = TestEvent::sudo(RawEvent::KeyChanged(1));
+		assert!(System::events().iter().any(|a| {a.event == expected_event}));
+		// Double check.
+		assert_ok!(Sudo::set_key(Origin::signed(2), 4));
+		let expected_event = TestEvent::sudo(RawEvent::KeyChanged(2));
+		assert!(System::events().iter().any(|a| {a.event == expected_event}));
+	});
+}
 
 #[test]
 fn sudo_as_basics() {
