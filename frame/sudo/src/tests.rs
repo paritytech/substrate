@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::{ Sudo, SudoCall, Origin, Call, Test, new_test_ext, logger, LoggerCall,
-TestEvent, System }; 
+	Logger, TestEvent, System }; 
 use frame_support::{assert_ok, assert_noop};
 
 #[test]
@@ -145,7 +145,12 @@ fn sudo_as_basics() {
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		assert_eq!(logger::log(), vec![42u64]); 
+		assert_eq!(logger::log(), vec![42u64]);
+
+		// The correct user makes the call within `sudo_as`
+		let call = Box::new(Call::Logger(LoggerCall::non_privileged_account_log()));
+		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
+		assert_eq!(Logger::last_seen_account(), 2)
 	});
 }
 

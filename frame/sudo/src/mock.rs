@@ -34,6 +34,7 @@ pub mod logger {
 	use super::*;
 	use std::cell::RefCell;
 	use frame_system::ensure_root;
+	use std::convert::From;
 
 	thread_local! {
 		static LOG: RefCell<Vec<u64>> = RefCell::new(Vec::new());
@@ -42,15 +43,17 @@ pub mod logger {
 		LOG.with(|log| log.borrow().clone())
 	}
 	pub trait Trait: system::Trait {
-		type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+		type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 	}
 	decl_storage! {
 		trait Store for Module<T: Trait> as Logger {
+			LastSeenAccount get(fn last_seen_account): T::AccountId;
 		}
 	}
 	decl_event! {
-		pub enum Event {
+		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 			Logged(u64, Weight),
+			NewAccount(AccountId),
 		}
 	}
 	decl_module! {
@@ -64,7 +67,7 @@ pub mod logger {
 			)]
 			fn log(origin, i: u64, weight: Weight){
 				ensure_root(origin)?;
-				Self::deposit_event(Event::Logged(i, weight));
+				Self::deposit_event(RawEvent::Logged(i, weight));
 				LOG.with(|log| {
 					log.borrow_mut().push(i);
 				})
@@ -76,12 +79,18 @@ pub mod logger {
 				Pays::Yes,
 			)]
 			fn non_privileged_log(origin, i: u64, weight: Weight){
-				// Ensure that the `origin` is some signed account.
+				// Ensure that the `origin` is some signed account.		
 				ensure_signed(origin)?;
-				Self::deposit_event(Event::Logged(i, weight));
-				LOG.with(|log| {
+				Self::deposit_event(RawEvent::Logged(i, weight));
+				LOG.with(|log| { 
 					log.borrow_mut().push(i);
 				})
+			}
+			#[weight = 1]
+			fn non_privileged_account_log(origin){
+				let who = ensure_signed(origin)?;
+				<LastSeenAccount<T>>::put(who.clone());
+				Self::deposit_event(RawEvent::NewAccount(who));
 			}
 		}
 	}
@@ -99,7 +108,7 @@ impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
 		sudo<T>,
-		logger,
+		logger<T>,
 	}
 }
 
