@@ -326,7 +326,7 @@ where
 			guard.as_mut().add_pending_change(
 				change,
 				&is_descendent_of,
-			).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+			).map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 		}
 
 		let applied_changes = {

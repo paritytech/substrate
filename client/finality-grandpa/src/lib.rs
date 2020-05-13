@@ -646,7 +646,7 @@ fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
 					Ok(info.finalized_number)
 				}
 			}))
-			.map_err(|err| sp_consensus::Error::InherentData(err.into()))
+			.map_err(|err| sp_consensus::Error::InherentData(err))
 	} else {
 		Ok(())
 	}
