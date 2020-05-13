@@ -1068,6 +1068,11 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
+		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
+			CryptoTypePublicPair(
+				CryptoTypeId(*b"dumm"), self.to_raw_vec(),
+			)
+		}
 	}
 	impl Pair for TestPair {
 		type Public = TestPublic;
