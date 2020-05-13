@@ -298,6 +298,21 @@ macro_rules! app_crypto_public_common {
 				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
 			}
 		}
+
+		impl From<Public> for $crate::CryptoTypePublicPair {
+			fn from(key: Public) -> Self {
+				(&key).into()
+			}
+		}
+
+		impl From<&Public> for $crate::CryptoTypePublicPair {
+			fn from(key: &Public) -> Self {
+				$crate::CryptoTypePublicPair(
+					$crypto_type,
+					$crate::Public::to_raw_vec(key),
+				)
+			}
+		}
 	}
 }
 
