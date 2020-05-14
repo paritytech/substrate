@@ -59,7 +59,7 @@ fn candidate_count<T: Trait>() -> u32 {
 	<Candidates<T>>::decode_len().unwrap_or(0usize) as u32
 }
 
-/// Get the number of voter of a voter.
+/// Get the number of votes of a voter.
 fn vote_count_of<T: Trait>(who: &T::AccountId) -> u32 {
 	<Voting<T>>::get(who).1.len() as u32
 }
