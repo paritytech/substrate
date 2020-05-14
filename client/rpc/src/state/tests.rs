@@ -31,6 +31,8 @@ use substrate_test_runtime_client::{
 	runtime,
 };
 use sp_runtime::generic::BlockId;
+use crate::testing::TaskExecutor;
+use futures::{executor, compat::Future01CompatExt};
 
 const STORAGE_KEY: &[u8] = b"child";
 
@@ -46,13 +48,12 @@ fn should_return_storage() {
 	const CHILD_VALUE: &[u8] = b"hello world !";
 
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
 		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let (client, child) = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
+	let (client, child) = new_full(Arc::new(client), Subscriptions::new(Arc::new(TaskExecutor)));
 	let key = StorageKey(KEY.to_vec());
 
 	assert_eq!(
@@ -70,9 +71,10 @@ fn should_return_storage() {
 		VALUE.len(),
 	);
 	assert_eq!(
-		core.block_on(
+		executor::block_on(
 			child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
+				.compat(),
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
 	);
@@ -82,12 +84,11 @@ fn should_return_storage() {
 #[test]
 fn should_return_child_storage() {
 	let child_info = ChildInfo::new_default(STORAGE_KEY);
-	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
 		.add_child_storage(&child_info, "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
-	let (_client, child) = new_full(client, Subscriptions::new(Arc::new(core.executor())));
+	let (_client, child) = new_full(client, Subscriptions::new(Arc::new(TaskExecutor)));
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
@@ -120,10 +121,9 @@ fn should_return_child_storage() {
 
 #[test]
 fn should_call_contract() {
-	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let genesis_hash = client.genesis_hash();
-	let (client, _child) = new_full(client, Subscriptions::new(Arc::new(core.executor())));
+	let (client, _child) = new_full(client, Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
@@ -133,18 +133,16 @@ fn should_call_contract() {
 
 #[test]
 fn should_notify_about_storage_changes() {
-	let mut core = tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push_transfer(runtime::Transfer {
@@ -158,21 +156,19 @@ fn should_notify_about_storage_changes() {
 	}
 
 	// assert notification sent to transport
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }
 
 #[test]
 fn should_send_initial_storage_changes_and_notifications() {
-	let mut core = tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
@@ -181,7 +177,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 		]).into());
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let mut builder = client.new_block(Default::default()).unwrap();
 		builder.push_transfer(runtime::Transfer {
@@ -195,20 +191,19 @@ fn should_send_initial_storage_changes_and_notifications() {
 	}
 
 	// assert initial values sent to transport
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }
 
 #[test]
 fn should_query_storage() {
 	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
-		let core = tokio::runtime::Runtime::new().unwrap();
-		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -424,10 +419,8 @@ fn should_split_ranges() {
 
 #[test]
 fn should_return_runtime_version() {
-	let core = tokio::runtime::Runtime::new().unwrap();
-
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+	let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
@@ -446,24 +439,23 @@ fn should_return_runtime_version() {
 
 #[test]
 fn should_notify_on_runtime_version_initially() {
-	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_runtime_version(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 	}
 
 	// assert initial version sent.
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 		// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }
 
 #[test]
