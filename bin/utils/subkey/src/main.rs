@@ -716,7 +716,7 @@ fn create_extrinsic<C: Crypto>(
 		function,
 		extra(index, 0),
 		(
-			VERSION.spec_version as u32,
+			VERSION.spec_version,
 			VERSION.transaction_version,
 			genesis_hash,
 			genesis_hash,
