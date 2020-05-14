@@ -892,7 +892,7 @@ pub trait Applyable: Sized + Send + Sync {
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> crate::ApplyExtrinsicResultWithPostInfo<PostDispatchInfoOf<Self::Call>>;
+	) -> crate::ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>>;
 }
 
 /// A marker trait for something that knows the type of the runtime block.

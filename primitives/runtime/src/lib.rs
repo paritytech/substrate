@@ -537,7 +537,7 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
-pub type ApplyExtrinsicResultWithPostInfo<T> =
+pub type ApplyExtrinsicResultWithInfo<T> =
 	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
