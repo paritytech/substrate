@@ -1903,6 +1903,19 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 	type OutEvent = CustomMessageOutcome<B>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+		// TODO: https://github.com/paritytech/substrate/issues/6033
+		// These functions calls that update the state of the chain are necessary because the test
+		// infrastructure doesn't call the `on_block_import` method, despite the documentation
+		// saying that you must call this function after importing a block. Calling these functions
+		// too often has no downside except degrading performances.
+		self.behaviour.set_legacy_handshake_message(
+			build_status_message(&self.config, &self.context_data.chain)
+		);
+		self.behaviour.set_notif_protocol_handshake(
+			&self.block_announces_protocol,
+			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+		);
+
 		self.behaviour.new_handler()
 	}
 
