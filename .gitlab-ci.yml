@@ -121,7 +121,7 @@ check-signed-tag:
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
-    - tags
+    - /^ci-release-.*$/
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/check_signed.sh
@@ -581,7 +581,7 @@ publish-draft-release:
   stage:                           publish
   image:                           parity/tools:latest
   only:
-    - tags
+    - /^ci-release-.*$/
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/publish_draft_release.sh
@@ -592,8 +592,8 @@ publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   only:
-    - tags
     - /^ci-release-.*$/
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
