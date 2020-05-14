@@ -7313,7 +7313,6 @@ dependencies = [
  "integer-sqrt",
  "num-traits 0.2.11",
  "parity-scale-codec",
- "primitive-types",
  "quickcheck",
  "rand 0.7.3",
  "serde",
