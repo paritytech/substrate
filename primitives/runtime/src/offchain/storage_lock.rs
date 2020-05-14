@@ -50,7 +50,7 @@
 
 use crate::offchain::storage::StorageValueRef;
 use codec::Codec;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
@@ -61,7 +61,6 @@ const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
 
 /// Snooze duration before attempting to lock again in ms.
 const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
-
 
 /// Lockable item for use with a persisted storage lock.
 ///
@@ -115,17 +114,24 @@ impl Lockable for Timestamp {
 	}
 }
 
-
 /// Lockable based on the current block number and a timestamp based deadline.
 #[derive(Debug, Copy, Clone, Encode, Decode)]
-pub struct BlockAndTime<B> where B: BlockNumberTrait {
+pub struct BlockAndTime<B>
+where
+	B: BlockNumberTrait,
+{
+	/// The block number that has to be reached in order
+	/// for the lock to be considered stale.
 	pub block_number: B,
+	/// Additional timestamp based deadline which has to be
+	/// reached in order for the lock to become stale.
 	pub timestamp: Timestamp,
 }
 
-impl<B> BlockAndTime<B> where B: BlockNumberTrait {}
-
-impl<B> Lockable for BlockAndTime<B> where B: BlockNumberTrait {
+impl<B> Lockable for BlockAndTime<B>
+where
+	B: BlockNumberTrait,
+{
 	fn current() -> Self {
 		Self {
 			block_number: B::current(),
@@ -238,7 +244,6 @@ where
 		self.value_ref.clear();
 	}
 }
-
 
 /// Extension trait for locks based on [`Timestamp`](::sp_core::offchain::Timestamp).
 ///
