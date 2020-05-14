@@ -170,6 +170,10 @@ impl<
 			offset
 		})
 	}
+
+	fn weight(_now: BlockNumber) -> Weight {
+		0
+	}
 }
 
 /// A trait for managing creation of new validator set.
@@ -784,5 +788,9 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+
+	fn weight(now: T::BlockNumber) -> Weight {
+		T::NextSessionRotation::weight(now)
 	}
 }
