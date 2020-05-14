@@ -30,7 +30,6 @@ use crate::import_queue::{
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
 
-
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
