@@ -81,7 +81,6 @@ macro_rules! new_full_start {
 					sc_consensus_babe::Config::get_or_compute(&*client)?,
 					grandpa_block_import,
 					client.clone(),
-					prometheus_registry,
 				)?;
 
 				let import_queue = sc_consensus_babe::import_queue(
@@ -344,7 +343,6 @@ pub fn new_light(config: Configuration)
 				sc_consensus_babe::Config::get_or_compute(&*client)?,
 				grandpa_block_import,
 				client.clone(),
-				registry,
 			)?;
 
 			let import_queue = sc_consensus_babe::import_queue(
@@ -355,6 +353,7 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 				inherent_data_providers.clone(),
 				spawn_task_handle,
+				registry,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))
