@@ -21,6 +21,7 @@ use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, Num
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 
 use crate::block_import::BlockOrigin;
+use crate::metrics::IMPORT_QUEUE_PROCESSED;
 use crate::import_queue::{
 	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
 	BoxJustificationImport, ImportQueue, Link, Origin,
@@ -390,6 +391,17 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 				verifier,
 			)
 		};
+
+		IMPORT_QUEUE_PROCESSED.with_label_values(&[&match import_result {
+			Err(BlockImportError::IncompleteHeader(_)) => "incomplete_header",
+			Err(BlockImportError::VerificationFailed(_,_)) => "verification_failed",
+			Err(BlockImportError::BadBlock(_)) => "bad_block",
+			Err(BlockImportError::MissingState) => "missing_state",
+			Err(BlockImportError::UnknownParent) => "unknown_parent",
+			Err(BlockImportError::Cancelled) => "cancelled",
+			Err(BlockImportError::Other(_)) => "failed",
+			Ok(_) => "success",
+		}]).inc();
 
 		if import_result.is_ok() {
 			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);
