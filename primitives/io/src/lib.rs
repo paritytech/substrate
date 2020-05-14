@@ -873,11 +873,9 @@ pub trait Logging {
 /// Interface that provides functions for profiling the runtime.
 #[runtime_interface]
 pub trait WasmTracing {
-	/// For enter_span to work correctly with the Tracing profiler,
-	/// the span `target` and `name` must also be registered in
-	/// `sp_tracing::span_dispatch::create_registered_span`.
+	/// To create and enter a `tracing` span, via `sp_tracing::proxy`
 	fn enter_span(target: &str, name: &str) -> u64 {
-		sp_tracing::proxy::create_registered_span(target, name)
+		sp_tracing::proxy::enter_span(target, name)
 	}
 
 	/// If there is a panic in the WASM VM then this may not be called.

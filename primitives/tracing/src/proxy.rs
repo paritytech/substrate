@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Proxy to allow entering tracing spans from wasm.
+//!
+//! Use `enter_span` and `exit_span` to surround the code that you wish to trace
 use std::cell::RefCell;
 use rental;
 use tracing::info_span;
@@ -33,7 +36,7 @@ thread_local! {
 
 /// Create and enter a `tracing` Span, returning the span id,
 /// which should be passed to `exit_span(id)` to signal that the span should exit.
-pub fn create_registered_span(target: &str, name: &str) -> u64 {
+pub fn enter_span(target: &str, name: &str) -> u64 {
 	PROXY.with(|proxy| proxy.borrow_mut().create_span(target, name))
 }
 
@@ -77,7 +80,6 @@ impl TracingProxy {
 	}
 }
 
-/// For spans to be recorded they must be registered in `span_dispatch`.
 impl TracingProxy {
 	// The identifiers `proxied_wasm_target` and `proxied_wasm_name` must match their associated const,
 	// WASM_TARGET_KEY and WASM_NAME_KEY.
@@ -106,34 +108,24 @@ impl TracingProxy {
 	}
 
 	fn exit_span(&mut self, id: u64) {
-		match self.spans.pop() {
-			Some(v) => {
-				let mut last_span_id = v.0;
-				if id > last_span_id {
-					log::warn!("Span id not found {}", id);
-					self.spans.push(v);
-					return;
-				}
-				while id < last_span_id {
-					log::warn!("Span ids not equal! id parameter given: {}, last span: {}", id, last_span_id);
-					if let Some(mut s) = self.spans.pop() {
-						last_span_id = s.0;
-						if id != last_span_id {
-							s.1.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
-						}
-					} else {
-						log::warn!("Span id not found {}", id);
-						return;
-					}
-				}
-			}
-			None => {
-				log::warn!("Span id: {} not found", id);
+		if self.spans.last().map(|l| id > l.0).unwrap_or(true) {
+			log::warn!("Span id not found {}", id);
+			return;
+		}
+		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop");
+		while id < last_span.0 {
+			log::warn!("Span ids not equal! id parameter given: {}, last span: {}", id, last_span.0);
+			last_span.1.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
+			if let Some(s) = self.spans.pop() {
+				last_span = s;
+			} else {
+				log::warn!("Span id not found {}", id);
 				return;
 			}
 		}
 	}
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -171,5 +163,8 @@ mod tests {
 		// try to exit span not held
 		proxy.exit_span(9);
 		assert_eq!(proxy.spans.len(), 7);
+		// exit all spans
+		proxy.exit_span(1);
+		assert_eq!(proxy.spans.len(), 0);
 	}
 }

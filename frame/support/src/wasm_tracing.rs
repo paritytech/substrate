@@ -21,7 +21,13 @@
 
 /// This holds a tracing span id and is to signal on drop that a tracing span has exited.
 /// It must be bound to a named variable eg. `_span_guard`.
-pub struct TracingSpanGuard(pub u64);
+pub struct TracingSpanGuard(u64);
+
+impl TracingSpanGuard {
+	pub fn new(span: u64) -> Self {
+		Self(span)
+	}
+}
 
 impl Drop for TracingSpanGuard {
 	fn drop(&mut self) {
@@ -41,7 +47,7 @@ impl Drop for TracingSpanGuard {
 macro_rules! wasm_tracing_span {
 	( $target:expr, $name:expr ) => {
 		#[cfg(not(feature = "std"))]
-		let __span_id__ = $crate::wasm_tracing::TracingSpanGuard(
+		let __span_id__ = $crate::wasm_tracing::TracingSpanGuard::new(
 			$crate::sp_io::wasm_tracing::enter_span($target, $name)
 		);
 	}
