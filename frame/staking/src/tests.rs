@@ -4588,3 +4588,26 @@ fn migrate_era_should_handle_errors_2() {
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 	});
 }
+
+#[test]
+fn offences_weight_calculated_correctly() {
+	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		// On offence with zero offenders: 4 Reads, 1 Write
+		let zero_offence_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1);
+		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0), Ok(zero_offence_weight));
+
+		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
+		let n_offence_unapplied_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1)
+			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 5);
+
+		let offenders: Vec<OffenceDetails<<Test as frame_system::Trait>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
+			= (1..10).map(|i|
+				OffenceDetails {
+					offender: (i, Staking::eras_stakers(Staking::active_era().unwrap().index, i)),
+					reporters: vec![],
+				}
+			).collect();
+		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), Ok(n_offence_unapplied_weight));
+
+		// On Offence with N offenders, Applied: 4 Reads, 1 Write + 4 Reads, 5 Writes
+}

@@ -3024,8 +3024,8 @@ for Module<T> where
 
 		let active_era = {
 			let active_era = Self::active_era();
+			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
-				add_db_reads_writes(1, 0);
 				// this offence need not be re-submitted.
 				return Ok(consumed_weight)
 			}
