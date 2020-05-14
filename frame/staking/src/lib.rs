@@ -1466,7 +1466,7 @@ decl_module! {
 		#[weight = T::DbWeight::get().reads_writes(6, 6)
 			.saturating_add(80 * WEIGHT_PER_MICROS)
 			.saturating_add(
-				WEIGHT_PER_MICROS.saturating_mul(2).saturating_mul(Weight::from(*num_slashing_spans))
+				(2 * WEIGHT_PER_MICROS).saturating_mul(Weight::from(*num_slashing_spans))
 			)
 			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
 			// if slashing spans is non-zero, add 1 more write
