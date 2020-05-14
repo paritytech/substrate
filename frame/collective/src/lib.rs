@@ -1243,6 +1243,35 @@ mod tests {
 	}
 
 	#[test]
+	fn correct_validate_and_get_proposal() {
+		new_test_ext().execute_with(|| {
+			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, MAX_MEMBERS));
+			let length = proposal.encode().len() as u32;
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), length));
+
+			let hash = BlakeTwo256::hash_of(&proposal);
+			let weight = proposal.get_dispatch_info().weight;
+			assert_noop!(
+				Collective::validate_and_get_proposal(&BlakeTwo256::hash_of(&vec![3; 4]), length, weight),
+				Error::<Test, Instance1>::ProposalMissing
+			);
+			assert_noop!(
+				Collective::validate_and_get_proposal(&hash, length - 2, weight),
+				Error::<Test, Instance1>::WrongProposalLength
+			);
+			assert_noop!(
+				Collective::validate_and_get_proposal(&hash, length, weight - 10),
+				Error::<Test, Instance1>::WrongProposalWeight
+			);
+			let res = Collective::validate_and_get_proposal(&hash, length, weight);
+			assert_ok!(res.clone());
+			let (retrieved_proposal, len) = res.unwrap();
+			assert_eq!(length as usize, len);
+			assert_eq!(proposal, retrieved_proposal);
+		})
+	}
+
+	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
