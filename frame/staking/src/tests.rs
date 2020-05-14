@@ -1060,7 +1060,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
-		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
+		Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] }));
 
@@ -1068,14 +1068,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		mock::start_era(3);
 
 		// nothing yet
-		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
+		Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()).unwrap();
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] }));
 
 		// trigger next era.
 		mock::start_era(5);
 
-		Staking::withdraw_unbonded(Origin::signed(10)).unwrap();
+		Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()).unwrap();
 		// Now the value is free and the staking ledger is updated.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11, total: 100, active: 100, unlocking: vec![], claimed_rewards: vec![] }));
@@ -1101,7 +1101,7 @@ fn too_many_unbond_calls_should_not_work() {
 
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
 		// free up.
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10)));
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
 
 		// Can add again.
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
@@ -1449,7 +1449,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Balances::total_balance(&11), 0);
 
 		// Reap the stash
-		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11, u32::max_value()));
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
@@ -1505,7 +1505,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Balances::total_balance(&11), 0);
 
 		// Reap the stash
-		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11, u32::max_value()));
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
@@ -1619,14 +1619,14 @@ fn bond_with_no_staked_value() {
 			mock::start_era(2);
 
 			// not yet removed.
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
+			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), u32::max_value()));
 			assert!(Staking::ledger(2).is_some());
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			mock::start_era(3);
 
 			// poof. Account 1 is removed from the staking system.
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2)));
+			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), u32::max_value()));
 			assert!(Staking::ledger(2).is_none());
 			assert_eq!(Balances::locks(&1).len(), 0);
 		});
@@ -2270,7 +2270,7 @@ fn garbage_collection_after_slashing() {
 		assert_eq!(Balances::free_balance(11), 0);
 		assert_eq!(Balances::total_balance(&11), 0);
 
-		assert_ok!(Staking::reap_stash(Origin::NONE, 11));
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11, u32::max_value()));
 
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);

@@ -1451,6 +1451,7 @@ decl_module! {
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
 		/// ---------------
+		/// Complexity O(S) where S is the number of slashing spans to remove
 		/// Base Weight:
 		/// - Update: 51.25 µs
 		///     - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
@@ -1459,8 +1460,11 @@ decl_module! {
 		///     - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin Account], Locks
 		///     - Writes: Bonded, Ledger, Payee, Validators, Nominators, [Origin Account], Locks
 		/// # </weight>
-		#[weight = 75 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(6, 6)]
-		fn withdraw_unbonded(origin) -> DispatchResultWithPostInfo {
+		#[weight = T::DbWeight::get().reads_writes(6, 6)
+			.saturating_add(75 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+		]
+		fn withdraw_unbonded(origin, num_slashing_spans: u32) -> DispatchResultWithPostInfo {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1984,13 +1988,18 @@ decl_module! {
 		/// - `stash`: The stash account to reap. Its balance must be zero.
 		///
 		/// # <weight>
+		/// Complexity: O(S) where S is the number of slashing spans on the account.
 		/// Base Weight: 68.5 µs
 		/// DB Weight:
 		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
 		/// - Writes: Bonded, Ledger, Payee, Validators, Nominators, Stash Account, Locks
+		/// - Writes Each: SpanSlash * S
 		/// # </weight>
-		#[weight = 70 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 7)]
-		fn reap_stash(_origin, stash: T::AccountId) {
+		#[weight = T::DbWeight::get().reads_writes(4, 7)
+			.saturating_add(70 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+		]
+		fn reap_stash(_origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);

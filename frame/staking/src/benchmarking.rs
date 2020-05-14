@@ -61,6 +61,16 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 	Ok(validators)
 }
 
+// Add slashing spans to a user account. Not relevant for actual use, only to benchmark
+// read and write operations.
+fn add_slashing_spans<T: Trait>(who: T::AccountId, spans: u32) {
+	let mut slashing_spans = crate::slashing::SlashingSpans::new(0);
+	for i in 0 .. spans {
+		slashing_spans.end_span(i);
+	}
+	SlashingSpans::<T>::insert(&who, slashing_spans);
+}
+
 // This function generates v validators and n nominators who are randomly nominating up to MAX_NOMINATIONS.
 pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Result<(), &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(v as usize);
@@ -200,7 +210,7 @@ benchmarks! {
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
-	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()))
+	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), u32::max_value())
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_total: BalanceOf<T> = ledger.total;
@@ -216,7 +226,7 @@ benchmarks! {
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
-	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()))
+	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), u32::max_value())
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
 	}
@@ -370,7 +380,7 @@ benchmarks! {
 		let u in 1 .. 1000;
 		let (stash, controller) = create_stash_controller::<T>(u)?;
 		T::Currency::make_free_balance_be(&stash, 0.into());
-	}: _(RawOrigin::Signed(controller), stash.clone())
+	}: _(RawOrigin::Signed(controller), stash.clone(), u32::max_value())
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
 	}
