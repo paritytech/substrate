@@ -1766,7 +1766,7 @@ decl_module! {
 		/// - Write: Unapplied Slashes
 		/// # </weight>
 		#[weight = FunctionOf(
-			|(_, slash_indices,): (&EraIndex, &Vec<u32>,)| {
+			|(_, slash_indices,): (_, &Vec<u32>,)| {
 				T::DbWeight::get().reads_writes(1, 1)
 					.saturating_add(5_870 * WEIGHT_PER_MICROS)
 					.saturating_add((35 * WEIGHT_PER_MICROS).saturating_mul(slash_indices.len() as Weight))
@@ -1879,7 +1879,7 @@ decl_module! {
 		///         ErasStakersClipped, ErasRewardPoints, ErasValidatorPrefs (8 items)
 		/// - Read Each: Bonded, Ledger, Payee, Locks, System Account (5 items)
 		/// - Write Each: System Account, Locks, Ledger (3 items)
-		/// TODO: Remove read on Migrate Era
+		// TODO: Remove read on Migrate Era
 		/// # </weight>
 		#[weight =
 			110 * WEIGHT_PER_MICROS
@@ -1946,7 +1946,7 @@ decl_module! {
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
 		#[weight = FunctionOf(
-			|(_, &items,): (&EraIndex, &u32,)| {
+			|(_, &items,): (_, &u32,)| {
 				let items = Weight::from(items);
 				T::DbWeight::get().reads_writes(2, 1)
 					.saturating_add(T::DbWeight::get().reads_writes(items, items))
