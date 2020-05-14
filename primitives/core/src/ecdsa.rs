@@ -190,11 +190,16 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Public {
+impl sp_std::fmt::Debug for Public {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.as_ref()), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -301,10 +306,15 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl sp_std::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
 	}
 }
 
