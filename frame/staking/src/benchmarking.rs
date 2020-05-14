@@ -63,12 +63,15 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
-fn add_slashing_spans<T: Trait>(who: T::AccountId, spans: u32) {
+fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
 	let mut slashing_spans = crate::slashing::SlashingSpans::new(0);
-	for i in 0 .. spans {
-		slashing_spans.end_span(i);
+	SpanSlash::<T>::insert((who, 0), crate::slashing::SpanRecord::default());
+
+	for i in 1 .. spans {
+		assert!(slashing_spans.end_span(i));
+		SpanSlash::<T>::insert((who, i), crate::slashing::SpanRecord::default());
 	}
-	SlashingSpans::<T>::insert(&who, slashing_spans);
+	SlashingSpans::<T>::insert(who, slashing_spans);
 }
 
 // This function generates v validators and n nominators who are randomly nominating up to MAX_NOMINATIONS.
@@ -501,6 +504,28 @@ mod tests {
 			let new_free_balance = Balances::free_balance(&validator_stash);
 
 			assert!(original_free_balance < new_free_balance);
+		});
+	}
+
+	#[test]
+	fn add_slashing_spans_works() {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+			let n = 10;
+
+			let validator_stash = create_validator_with_nominators::<Test>(
+				n,
+				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+			).unwrap();
+
+			// Add 20 slashing spans
+			let num_of_slashing_spans = 20;
+			add_slashing_spans::<Test>(&validator_stash, num_of_slashing_spans);
+
+			let slashing_spans = SlashingSpans::<Test>::get(&validator_stash).unwrap();
+			assert_eq!(slashing_spans.iter().count(), num_of_slashing_spans as usize);
+			for i in 0 .. num_of_slashing_spans {
+				assert!(SpanSlash::<Test>::contains_key((&validator_stash, i)));
+			}
 		});
 	}
 
