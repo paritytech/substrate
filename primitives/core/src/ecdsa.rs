@@ -37,6 +37,7 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
+use sp_runtime_interface::pass_by::PassByInner;
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
@@ -50,7 +51,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, PassByInner)]
 pub struct Public([u8; 33]);
 
 impl PartialOrd for Public {
@@ -121,6 +122,18 @@ impl TraitPublic for Public {
 
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
+	}
+}
+
+impl From<Public> for CryptoTypePublicPair {
+	fn from(key: Public) -> Self {
+		(&key).into()
+	}
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+	fn from(key: &Public) -> Self {
+		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
 	}
 }
 
@@ -208,7 +221,7 @@ impl sp_std::hash::Hash for Public {
 }
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature([u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
