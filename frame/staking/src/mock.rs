@@ -763,6 +763,18 @@ pub(crate) fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
+pub(crate) fn add_slash(who: &AccountId) {
+	on_offence_now(
+		&[
+			OffenceDetails {
+				offender: (who.clone(), Staking::eras_stakers(Staking::active_era().unwrap().index, who.clone())),
+				reporters: vec![],
+			},
+		],
+		&[Perbill::from_percent(10)],
+	);
+}
+
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
 pub(crate) fn horrible_phragmen_with_post_processing(

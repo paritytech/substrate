@@ -1166,6 +1166,8 @@ decl_error! {
 		CallNotAllowed,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,
+		/// Incorrect number of slashing spans provided.
+		IncorrectSlashingSpans,
 	}
 }
 
@@ -1451,6 +1453,7 @@ decl_module! {
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
 		/// ---------------
+		/// Complexity O(S) where S is the number of slashing spans to remove
 		/// Base Weight:
 		/// - Update: 51.25 µs
 		///     - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
@@ -1459,8 +1462,11 @@ decl_module! {
 		///     - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin Account], Locks
 		///     - Writes: Bonded, Ledger, Payee, Validators, Nominators, [Origin Account], Locks
 		/// # </weight>
-		#[weight = 75 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(6, 6)]
-		fn withdraw_unbonded(origin) -> DispatchResultWithPostInfo {
+		#[weight = T::DbWeight::get().reads_writes(6, 6)
+			.saturating_add(75 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+		]
+		fn withdraw_unbonded(origin, num_slashing_spans: u32) -> DispatchResultWithPostInfo {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1473,7 +1479,7 @@ decl_module! {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash)?;
+				Self::kill_stash(&stash, num_slashing_spans)?;
 				// remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
 				// This is worst case scenario, so we use the full weight and return None
@@ -1726,16 +1732,21 @@ decl_module! {
 		/// The dispatch origin must be Root.
 		///
 		/// # <weight>
+		/// O(S) where S is the number of slashing spans to be removed
 		/// Base Weight: 47.68 µs
 		/// Reads: Bonded, Slashing Spans, Account, Locks
 		/// Writes: Bonded, Ledger, Payee, Validators, Nominators, Account, Locks
+		/// Writes Each: SlashingSpans * S
 		/// # </weight>
-		#[weight = 48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 7)]
-		fn force_unstake(origin, stash: T::AccountId) {
+		#[weight = T::DbWeight::get().reads_writes(4, 7)
+			.saturating_add(48 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+		]
+		fn force_unstake(origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure_root(origin)?;
 
 			// remove all staking-related information.
-			Self::kill_stash(&stash)?;
+			Self::kill_stash(&stash, num_slashing_spans)?;
 
 			// remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
@@ -1984,15 +1995,20 @@ decl_module! {
 		/// - `stash`: The stash account to reap. Its balance must be zero.
 		///
 		/// # <weight>
+		/// Complexity: O(S) where S is the number of slashing spans on the account.
 		/// Base Weight: 68.5 µs
 		/// DB Weight:
 		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
 		/// - Writes: Bonded, Ledger, Payee, Validators, Nominators, Stash Account, Locks
+		/// - Writes Each: SpanSlash * S
 		/// # </weight>
-		#[weight = 70 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 7)]
-		fn reap_stash(_origin, stash: T::AccountId) {
+		#[weight = T::DbWeight::get().reads_writes(4, 7)
+			.saturating_add(70 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+		]
+		fn reap_stash(_origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
-			Self::kill_stash(&stash)?;
+			Self::kill_stash(&stash, num_slashing_spans)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
 		}
 
@@ -3006,15 +3022,17 @@ impl<T: Trait> Module<T> {
 	/// This is called:
 	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
-	fn kill_stash(stash: &T::AccountId) -> DispatchResult {
-		let controller = Bonded::<T>::take(stash).ok_or(Error::<T>::NotStash)?;
+	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
+		let controller = Bonded::<T>::get(stash).ok_or(Error::<T>::NotStash)?;
+
+		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
+
+		Bonded::<T>::remove(stash);
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
-
-		slashing::clear_stash_metadata::<T>(stash);
 
 		system::Module::<T>::dec_ref(stash);
 
