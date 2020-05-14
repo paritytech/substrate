@@ -391,6 +391,10 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
+
+	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
+		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
+	}
 }
 
 impl From<Public> for CryptoTypePublicPair {
