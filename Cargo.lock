@@ -6252,6 +6252,7 @@ dependencies = [
  "sc-client-api",
  "sc-telemetry",
  "sp-api",
+ "sp-application-crypto",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",

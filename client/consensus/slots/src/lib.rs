@@ -36,6 +36,7 @@ use futures::{prelude::*, future::{self, Either}};
 use futures_timer::Delay;
 use sp_inherents::{InherentData, InherentDataProviders};
 use log::{debug, error, info, warn};
+use sp_application_crypto::AppPublic;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_api::{ProvideRuntimeApi, ApiRef};
@@ -80,6 +81,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Data associated with a slot claim.
 	type Claim: Send + 'static;
 
+	/// Authority public key
+	type Public: AppPublic;
+
 	/// Epoch data necessary for authoring.
 	type EpochData: Send + 'static;
 
@@ -112,6 +116,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		claim: &Self::Claim,
 	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
 
+	/// Extract the claim's authority public key
+	fn publickey_from_claim(
+		&self,
+		claim: &Self::Claim,
+	) -> Self::Public;
+
 	/// Returns a function which produces a `BlockImportParams`.
 	fn block_import_params(&self) -> Box<
 		dyn Fn(
@@ -119,7 +129,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			&B::Hash,
 			Vec<B::Extrinsic>,
 			StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
-			Self::Claim,
+			Self::Public,
 			Self::EpochData,
 		) -> Result<
 				sp_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
@@ -213,6 +223,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Some(claim) => claim,
 		};
 
+		let pubkey = self.publickey_from_claim(&claim);
+
 		debug!(
 			target: self.logging_target(), "Starting authorship at slot {}; timestamp = {}",
 			slot_number,
@@ -272,7 +284,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let block_import = self.block_import();
 		let logging_target = self.logging_target();
 
-		Box::pin(proposal_work.and_then(move |(proposal, claim)| {
+		Box::pin(proposal_work.and_then(move |(proposal, _claim)| {
 			let (header, body) = proposal.block.deconstruct();
 			let header_num = *header.number();
 			let header_hash = header.hash();
@@ -283,7 +295,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				&header_hash,
 				body,
 				proposal.storage_changes,
-				claim,
+				pubkey,
 				epoch_data,
 			);
 

@@ -452,6 +452,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
+	type Public = AuthorityId;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"
@@ -515,20 +516,24 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		]
 	}
 
+	fn publickey_from_claim(&self, claim: &Self::Claim) -> Self::Public {
+		claim.1.public()
+	}
+
 	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
 		StorageChanges<I::Transaction, B>,
-		Self::Claim,
+		Self::Public,
 		Self::EpochData,
 	) -> Result<sp_consensus::BlockImportParams<B, I::Transaction>, sp_consensus::Error> + Send + 'static> {
 		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, (_, pair), epoch_descriptor| {
+		Box::new(move |header, header_hash, body, storage_changes, public, epoch_descriptor| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let public = pair.public().to_raw_vec();
-			let public_type_pair = pair.public().into();
+			let public_type_pair = public.clone().into();
+			let public = public.to_raw_vec();
 			let signature = keystore.read()
 				.sign_with(
 					<AuthorityId as AppKey>::ID,

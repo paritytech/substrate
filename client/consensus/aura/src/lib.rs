@@ -206,7 +206,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair + Send + Sync,
-	P::Public: AppPublic + Member + Encode + Decode + Hash,
+	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -219,6 +219,7 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 	type Proposer = E::Proposer;
 	type Claim = P;
 	type EpochData = Vec<AuthorityId<P>>;
+	type Public = P::Public;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"
@@ -264,20 +265,24 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		]
 	}
 
+	fn publickey_from_claim(&self, claim: &Self::Claim) -> Self::Public {
+		claim.public()
+	}
+
 	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
 		StorageChanges<sp_api::TransactionFor<C, B>, B>,
-		Self::Claim,
+		Self::Public,
 		Self::EpochData,
 	) -> Result<sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> + Send + 'static> {
 		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, pair, _epoch| {
+		Box::new(move |header, header_hash, body, storage_changes, public, _epoch| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
-			let public = pair.public().to_raw_vec();
-			let public_type_pair = pair.public().to_public_crypto_pair();
+			let public_type_pair = public.to_public_crypto_pair();
+			let public = public.to_raw_vec();
 			let signature = keystore.read()
 				.sign_with(
 					<AuthorityId<Self::Claim> as AppKey>::ID,
