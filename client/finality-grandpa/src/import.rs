@@ -295,7 +295,7 @@ where
 			}
 		}
 
-		let number = block.header.number().clone();
+		let number = *(block.header.number());
 		let maybe_change = self.check_new_change(
 			&block.header,
 			hash,
@@ -327,7 +327,7 @@ where
 			guard.as_mut().add_pending_change(
 				change,
 				&is_descendent_of,
-			).map_err(|e| ConsensusError::from(ConsensusError::ClientImport(e.to_string())))?;
+			).map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 		}
 
 		let applied_changes = {
@@ -418,14 +418,14 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
-		let number = block.header.number().clone();
+		let number = *block.header.number();
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
 		match self.inner.status(BlockId::Hash(hash)) {
 			Ok(BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
 			Ok(BlockStatus::Unknown) => {},
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 		}
 
 		// on initial sync we will restrict logging under info to avoid spam.
@@ -457,7 +457,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 						e,
 					);
 					pending_changes.revert();
-					return Err(ConsensusError::ClientImport(e.to_string()).into());
+					return Err(ConsensusError::ClientImport(e.to_string()));
 				},
 			}
 		};
@@ -467,7 +467,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
 		if do_pause {
 			let _ = self.send_voter_commands.unbounded_send(
-				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
+				VoterCommand::Pause("Forced change scheduled after inactivity".to_string())
 			);
 		}
 
@@ -634,7 +634,7 @@ where
 		);
 
 		let justification = match justification {
-			Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+			Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 			Ok(justification) => justification,
 		};
 
@@ -669,7 +669,7 @@ where
 					Error::Client(error) => ConsensusError::ClientImport(error.to_string()),
 					Error::Safety(error) => ConsensusError::ClientImport(error),
 					Error::Timer(error) => ConsensusError::ClientImport(error.to_string()),
-				}.into());
+				});
 			},
 			Ok(_) => {
 				assert!(!enacts_change, "returns Ok when no authority set change should be enacted; qed;");

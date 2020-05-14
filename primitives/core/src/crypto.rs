@@ -560,6 +560,8 @@ pub trait Public:
 
 	/// Return a slice filled with raw data.
 	fn as_slice(&self) -> &[u8] { self.as_ref() }
+	/// Return `CryptoTypePublicPair` from public key.
+	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair;
 }
 
 /// An opaque 32-byte cryptographic identifier.
@@ -707,6 +709,11 @@ mod dummy {
 		#[cfg(feature = "std")]
 		fn to_raw_vec(&self) -> Vec<u8> { vec![] }
 		fn as_slice(&self) -> &[u8] { b"" }
+		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
+			CryptoTypePublicPair(
+				CryptoTypeId(*b"dumm"), Public::to_raw_vec(self)
+			)
+		}
 	}
 
 	impl Pair for Dummy {
@@ -1007,6 +1014,8 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
+	/// Key type for equivocation reporting, built-in. Identified as `fish`.
+	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
@@ -1059,6 +1068,11 @@ mod tests {
 		}
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
+		}
+		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
+			CryptoTypePublicPair(
+				CryptoTypeId(*b"dumm"), self.to_raw_vec(),
+			)
 		}
 	}
 	impl Pair for TestPair {

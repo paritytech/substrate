@@ -46,6 +46,7 @@ impl MetricsLink {
 pub struct Metrics {
 	pub validations_scheduled: Counter<U64>,
 	pub validations_finished: Counter<U64>,
+	pub validations_invalid: Counter<U64>,
 }
 
 impl Metrics {
@@ -62,6 +63,13 @@ impl Metrics {
 				Counter::new(
 					"sub_txpool_validations_finished",
 					"Total number of transactions that finished validation",
+				)?,
+				registry,
+			)?,
+			validations_invalid: register(
+				Counter::new(
+					"sub_txpool_validations_invalid",
+					"Total number of transactions that were removed from the pool as invalid",
 				)?,
 				registry,
 			)?,
