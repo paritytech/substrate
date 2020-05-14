@@ -711,6 +711,12 @@ mod tests {
 					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap())
 						.serve(hyper::service::make_service_fn(|_| { async move {
 							Ok::<_, Infallible>(hyper::service::service_fn(move |_req| async move {
+								// Take at least *a bit* of time so that we can test the non-blocking
+								// nature of the HTTP. Sometimes we receive the answer immediately,
+								// which means we can't know if we blockingly waited for a response
+								// or we did it in a non-blocking fashion but it arrived immediately.
+								tokio::time::delay_for(std::time::Duration::from_millis(10)).await;
+
 								Ok::<_, Infallible>(
 									hyper::Response::new(hyper::Body::from("Hello World!"))
 								)
