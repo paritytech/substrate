@@ -1765,7 +1765,7 @@ decl_module! {
 		/// - Write: Unapplied Slashes
 		/// # </weight>
 		#[weight = FunctionOf(
-			|(_, slash_indices,): (&EraIndex, &Vec<u32>,)| {
+			|(_, slash_indices,): (_, &Vec<u32>,)| {
 				T::DbWeight::get().reads_writes(1, 1)
 					.saturating_add(5_870 * WEIGHT_PER_MICROS)
 					.saturating_add((35 * WEIGHT_PER_MICROS).saturating_mul(slash_indices.len() as Weight))
