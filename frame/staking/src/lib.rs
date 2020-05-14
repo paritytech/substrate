@@ -1455,16 +1455,22 @@ decl_module! {
 		/// ---------------
 		/// Complexity O(S) where S is the number of slashing spans to remove
 		/// Base Weight:
-		/// - Update: 51.25 µs
-		///     - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
-		///     - Writes: [Origin Account], Locks, Ledger
-		/// - Kill: 74.62 µs
-		///     - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin Account], Locks
-		///     - Writes: Bonded, Ledger, Payee, Validators, Nominators, [Origin Account], Locks
+		/// Update: 50.52 + .028 * S µs
+		/// - Reads: EraElectionStatus, Ledger, Current Era, Locks, [Origin Account]
+		/// - Writes: [Origin Account], Locks, Ledger
+		/// Kill: 79.41 + 2.366 * S µs
+		/// - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin Account], Locks
+		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, [Origin Account], Locks
+		/// - Writes Each: SpanSlash * S
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(6, 6)
-			.saturating_add(75 * WEIGHT_PER_MICROS)
+			.saturating_add(80 * WEIGHT_PER_MICROS)
+			.saturating_add(
+				WEIGHT_PER_MICROS.saturating_mul(2).saturating_mul(Weight::from(*num_slashing_spans))
+			)
 			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+			// if slashing spans is non-zero, add 1 more write
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans).min(1)))
 		]
 		fn withdraw_unbonded(origin, num_slashing_spans: u32) -> DispatchResultWithPostInfo {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
@@ -1723,14 +1729,19 @@ decl_module! {
 		///
 		/// # <weight>
 		/// O(S) where S is the number of slashing spans to be removed
-		/// Base Weight: 47.68 µs
+		/// Base Weight: 53.07 + 2.365 * S µs
 		/// Reads: Bonded, Slashing Spans, Account, Locks
-		/// Writes: Bonded, Ledger, Payee, Validators, Nominators, Account, Locks
-		/// Writes Each: SlashingSpans * S
+		/// Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Account, Locks
+		/// Writes Each: SpanSlash * S
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(4, 7)
 			.saturating_add(48 * WEIGHT_PER_MICROS)
+			.saturating_add(
+				WEIGHT_PER_MICROS.saturating_mul(2).saturating_mul(Weight::from(*num_slashing_spans))
+			)
 			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+			// if slashing spans is non-zero, add 1 more write
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans).min(1)))
 		]
 		fn force_unstake(origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure_root(origin)?;
@@ -1978,15 +1989,20 @@ decl_module! {
 		///
 		/// # <weight>
 		/// Complexity: O(S) where S is the number of slashing spans on the account.
-		/// Base Weight: 68.5 µs
+		/// Base Weight: 75.94 + 2.396 * S µs
 		/// DB Weight:
 		/// - Reads: Stash Account, Bonded, Slashing Spans, Locks
-		/// - Writes: Bonded, Ledger, Payee, Validators, Nominators, Stash Account, Locks
+		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, Stash Account, Locks
 		/// - Writes Each: SpanSlash * S
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(4, 7)
-			.saturating_add(70 * WEIGHT_PER_MICROS)
+			.saturating_add(76 * WEIGHT_PER_MICROS)
+			.saturating_add(
+				WEIGHT_PER_MICROS.saturating_mul(2).saturating_mul(Weight::from(*num_slashing_spans))
+			)
 			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+			// if slashing spans is non-zero, add 1 more write
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans).min(1)))
 		]
 		fn reap_stash(_origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
