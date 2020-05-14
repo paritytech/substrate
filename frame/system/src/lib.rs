@@ -55,7 +55,7 @@
 //!     signed payload of the transaction.
 //!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one used to sign the
 //!     transaction.
-//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used the
+//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used to sign the
 //!     transaction.
 //!
 //! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
