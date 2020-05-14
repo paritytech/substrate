@@ -23,14 +23,13 @@ use substrate_test_runtime_client::{
 };
 use sp_rpc::list::ListOrValue;
 use sc_block_builder::BlockBuilderProvider;
+use futures::{executor, compat::{Future01CompatExt, Stream01CompatExt}};
+use crate::testing::TaskExecutor;
 
 #[test]
 fn should_return_header() {
-	let core = tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.header(Some(client.genesis_hash()).into()).wait(),
@@ -61,11 +60,8 @@ fn should_return_header() {
 
 #[test]
 fn should_return_a_block() {
-	let core = tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
@@ -115,11 +111,8 @@ fn should_return_a_block() {
 
 #[test]
 fn should_return_block_hash() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.block_hash(None.into()),
@@ -162,11 +155,8 @@ fn should_return_block_hash() {
 
 #[test]
 fn should_return_finalized_hash() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.finalized_head(),
@@ -192,76 +182,70 @@ fn should_return_finalized_hash() {
 
 #[test]
 fn should_notify_about_latest_block() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_all_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	// assert initial head sent.
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }
 
 #[test]
 fn should_notify_about_best_block() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
 	}
 
 	// assert initial head sent.
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+	assert_eq!(executor::block_on(Stream01CompatExt::compat(next).into_future()).0, None);
 }
 
 #[test]
 fn should_notify_about_finalized_block() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -269,11 +253,11 @@ fn should_notify_about_finalized_block() {
 	}
 
 	// assert initial head sent.
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	let (notification, next) = executor::block_on(transport.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// assert notification sent to transport
-	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	let (notification, next) = executor::block_on(next.into_future().compat()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }

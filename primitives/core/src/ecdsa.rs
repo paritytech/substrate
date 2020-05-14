@@ -36,7 +36,7 @@ use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, Sec
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
+use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
@@ -117,6 +117,10 @@ impl TraitPublic for Public {
 		let mut r = [0u8; 33];
 		r.copy_from_slice(data);
 		Self(r)
+	}
+
+	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
+		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
 	}
 }
 

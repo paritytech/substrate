@@ -132,11 +132,36 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfersKeepAlive(usize),
+	RandomTransfersKeepAlive,
 	/// Bunch of random transfers that drain all of the source balance.
-	RandomTransfersReaping(usize),
+	RandomTransfersReaping,
 	/// Bunch of "no-op" calls.
-	Noop(usize),
+	Noop,
+}
+
+impl BlockType {
+	/// Create block content description with specified number of transactions.
+	pub fn to_content(self, size: Option<usize>) -> BlockContent {
+		BlockContent {
+			block_type: self,
+			size: size,
+		}
+	}
+}
+
+/// Content of the generated block.
+pub struct BlockContent {
+	block_type: BlockType,
+	size: Option<usize>,
+}
+
+impl BlockContent {
+	fn iter_while(&self, mut f: impl FnMut(usize) -> bool) {
+		match self.size {
+			Some(v) => { for i in 0..v { if !f(i) { break; }}}
+			None => { for i in 0.. { if !f(i) { break; }}}
+		}
+	}
 }
 
 /// Type of backend database.
@@ -158,15 +183,6 @@ impl DatabaseType {
 			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb {
 				path,
 			}
-		}
-	}
-}
-
-impl BlockType {
-	/// Number of transactions for this block type.
-	pub fn transactions(&self) -> usize {
-		match self {
-			Self::RandomTransfersKeepAlive(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
 		}
 	}
 }
@@ -271,7 +287,7 @@ impl BenchDb {
 	}
 
 	/// Generate new block using this database.
-	pub fn generate_block(&mut self, block_type: BlockType) -> Block {
+	pub fn generate_block(&mut self, content: BlockContent) -> Block {
 		let (client, _backend) = Self::bench_client(
 			self.database_type,
 			self.directory_guard.path(),
@@ -310,10 +326,8 @@ impl BenchDb {
 			block.push(extrinsic).expect("Push inherent failed");
 		}
 
-		let mut iteration = 0;
 		let start = std::time::Instant::now();
-		for _ in 0..block_type.transactions() {
-
+		content.iter_while(|iteration| {
 			let sender = self.keyring.at(iteration);
 			let receiver = get_account_id_from_seed::<sr25519::Public>(
 				&format!("random-user//{}", iteration)
@@ -322,8 +336,8 @@ impl BenchDb {
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
 					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
-					function: match block_type {
-						BlockType::RandomTransfersKeepAlive(_) => {
+					function: match content.block_type {
+						BlockType::RandomTransfersKeepAlive => {
 							Call::Balances(
 								BalancesCall::transfer_keep_alive(
 									pallet_indices::address::Address::Id(receiver),
@@ -331,7 +345,7 @@ impl BenchDb {
 								)
 							)
 						},
-						BlockType::RandomTransfersReaping(_) => {
+						BlockType::RandomTransfersReaping => {
 							Call::Balances(
 								BalancesCall::transfer(
 									pallet_indices::address::Address::Id(receiver),
@@ -341,7 +355,7 @@ impl BenchDb {
 								)
 							)
 						},
-						BlockType::Noop(_) => {
+						BlockType::Noop => {
 							Call::System(
 								SystemCall::remark(Vec::new())
 							)
@@ -361,13 +375,13 @@ impl BenchDb {
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
 						sp_blockchain::ApplyExtrinsicFailed::Validity(e)
 				)) if e.exhausted_resources() => {
-					break;
+					return false;
 				},
 				Err(err) => panic!("Error pushing transaction: {:?}", err),
-				Ok(_) => {},
+				Ok(_) => true,
 			}
-			iteration += 1;
-		}
+		});
+
 		let block = block.build().expect("Block build failed").block;
 
 		log::info!(

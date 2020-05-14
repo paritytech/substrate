@@ -296,7 +296,9 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 
 	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>> {
-		self.pool.validated_pool().remove_invalid(hashes)
+		let removed = self.pool.validated_pool().remove_invalid(hashes);
+		self.metrics.report(|metrics| metrics.validations_invalid.inc_by(removed.len() as u64));
+		removed
 	}
 
 	fn status(&self) -> PoolStatus {

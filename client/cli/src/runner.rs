@@ -217,12 +217,16 @@ impl<C: SubstrateCli> Runner<C> {
 		// and drop the runtime first.
 		let _telemetry = service.telemetry();
 
-		let f = service.fuse();
-		pin_mut!(f);
+		{
+			let f = service.fuse();
+			self.tokio_runtime
+				.block_on(main(f))
+				.map_err(|e| e.to_string())?;
+		}
 
-		self.tokio_runtime
-			.block_on(main(f))
-			.map_err(|e| e.to_string())?;
+		// The `service` **must** have been destroyed here for the shutdown signal to propagate
+		// to all the tasks. Dropping `tokio_runtime` will block the thread until all tasks have
+		// shut down.
 		drop(self.tokio_runtime);
 
 		Ok(())

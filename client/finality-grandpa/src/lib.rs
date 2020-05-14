@@ -74,10 +74,7 @@ use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
-use serde_json;
 use parking_lot::RwLock;
-
-use sp_finality_tracker;
 
 use finality_grandpa::Error as GrandpaError;
 use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
@@ -474,7 +471,7 @@ impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorPr
 			.and_then(|call_result| {
 				Decode::decode(&mut &call_result[..])
 					.map_err(|err| ClientError::CallResultDecode(
-						"failed to decode GRANDPA authorities set proof".into(), err
+						"failed to decode GRANDPA authorities set proof", err
 					))
 			})
 	}
@@ -649,7 +646,7 @@ fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
 					Ok(info.finalized_number)
 				}
 			}))
-			.map_err(|err| sp_consensus::Error::InherentData(err.into()))
+			.map_err(|err| sp_consensus::Error::InherentData(err))
 	} else {
 		Ok(())
 	}
@@ -731,7 +728,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
 				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
-					.unwrap_or(Default::default());
+					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => maybe_authority_id.to_string(),
@@ -841,7 +838,7 @@ where
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
-			voter_set_state: persistent_data.set_state.clone(),
+			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			_phantom: PhantomData,
 		});
@@ -868,7 +865,7 @@ where
 
 		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
 			.map(|ap| ap.public())
-			.unwrap_or(Default::default());
+			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
@@ -914,12 +911,12 @@ where
 					global_comms,
 					last_completed_round.number,
 					last_completed_round.votes.clone(),
-					last_completed_round.base.clone(),
+					last_completed_round.base,
 					last_finalized,
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				if let None = self.shared_voter_state.reset(voter.voter_state()) {
+				if self.shared_voter_state.reset(voter.voter_state()).is_none() {
 					info!(target: "afg",
 						"Timed out trying to update shared GRANDPA voter state. \
 						RPC endpoints may return stale data."
