@@ -254,7 +254,7 @@ mod weight_for {
 	) -> Weight {
 		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
 			.saturating_add(29_000_000) // constant
-			.saturating_add(3_000 * length) // B
+			.saturating_add(length.saturating_mul(3_000)) // B
 			.saturating_add(220_000 * members) // M
 			.saturating_add(proposal) // P1
 	}
@@ -269,11 +269,11 @@ mod weight_for {
 		length: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
-			+ T::DbWeight::get().reads_writes(2, 4) // `proposal` insertion
-			+ 50_000_000 // constant
-			+ 6_000 * length // B
-			+ 110_000 * members // M
-			+ 510_000 * proposals // P2
+			.saturating_add(T::DbWeight::get().reads_writes(2, 4)) // `proposal` insertion
+			.saturating_add(50_000_000) // constant
+			.saturating_add(length.saturating_mul(6_000)) // B
+			.saturating_add(110_000 * members) // M
+			.saturating_add(510_000 * proposals) // P2
 	}
 
 	/// Calculate the weight for `vote`.
@@ -317,9 +317,9 @@ mod weight_for {
 		length: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(3) // `Members`, `Voting`, `ProposalOf`
-			+ 66_000_000 // constant
-			+ 8_000 * length // B
-			+ 250_000 * members // M
+			.saturating_add(66_000_000) // constant
+			.saturating_add(length.saturating_mul(8_000)) // B
+			.saturating_add(250_000 * members) // M
 	}
 }
 
