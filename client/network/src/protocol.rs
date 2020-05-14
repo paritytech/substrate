@@ -340,7 +340,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 		let info = chain.info();
 		BlockAnnouncesHandshake {
 			genesis_hash: info.genesis_hash,
-			roles: protocol_config.roles.into(),
+			roles: protocol_config.roles,
 			best_number: info.best_number,
 			best_hash: info.best_hash,
 		}
@@ -542,7 +542,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		response: &message::BlockResponse<B>
 	) -> Option<message::BlockRequest<B>> {
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
-			if let Some(_) = peer.obsolete_requests.remove(&response.id) {
+			if peer.obsolete_requests.remove(&response.id).is_some() {
 				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id);
 				return None;
 			}
@@ -582,7 +582,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			Ok(message) => message,
 			Err(err) => {
 				debug!(target: "sync", "Couldn't decode packet sent by {}: {:?}: {}", who, data, err.what());
-				self.peerset_handle.report_peer(who.clone(), rep::BAD_MESSAGE);
+				self.peerset_handle.report_peer(who, rep::BAD_MESSAGE);
 				return CustomMessageOutcome::None;
 			}
 		};
@@ -632,7 +632,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::Consensus(msg) =>
 				return if self.protocol_name_by_engine.contains_key(&msg.engine_id) {
 					CustomMessageOutcome::NotificationsReceived {
-						remote: who.clone(),
+						remote: who,
 						messages: vec![(msg.engine_id, From::from(msg.data))],
 					}
 				} else {
@@ -654,7 +654,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 				return if !messages.is_empty() {
 					CustomMessageOutcome::NotificationsReceived {
-						remote: who.clone(),
+						remote: who,
 						messages,
 					}
 				} else {
@@ -712,7 +712,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.context_data.peers.remove(&peer)
 		};
 		if let Some(_peer_data) = removed {
-			self.sync.peer_disconnected(peer.clone());
+			self.sync.peer_disconnected(&peer);
 
 			// Notify all the notification protocols as closed.
 			CustomMessageOutcome::NotificationStreamClosed {
@@ -773,9 +773,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			if blocks.len() >= max {
 				break;
 			}
-			let number = header.number().clone();
+			let number = *header.number();
 			let hash = header.hash();
-			let parent_hash = header.parent_hash().clone();
+			let parent_hash = *header.parent_hash();
 			let justification = if get_justification {
 				self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None)
 			} else {
@@ -874,7 +874,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				return CustomMessageOutcome::None
 			}
 
-			match self.sync.on_block_data(peer, Some(request), response) {
+			match self.sync.on_block_data(&peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, req)) => {
@@ -1328,7 +1328,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			version: CURRENT_VERSION,
 			min_supported_version: MIN_VERSION,
 			genesis_hash: info.genesis_hash,
-			roles: self.config.roles.into(),
+			roles: self.config.roles,
 			best_number: info.best_number,
 			best_hash: info.best_hash,
 			chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
@@ -1354,7 +1354,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			message::BlockState::Normal => false,
 		};
 
-		match self.sync.on_block_announce(who.clone(), hash, &announce, is_their_best) {
+		match self.sync.on_block_announce(&who, hash, &announce, is_their_best) {
 			sync::OnBlockAnnounce::Nothing => {
 				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
 				// when we have all data required to import the block
@@ -1374,7 +1374,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		// to import header from announced block let's construct response to request that normally would have
 		// been sent over network (but it is not in our case)
 		let blocks_to_import = self.sync.on_block_data(
-			who.clone(),
+			&who,
 			None,
 			message::generic::BlockResponse {
 				id: 0,
@@ -1910,7 +1910,7 @@ fn send_request<B: BlockT, H: ExHashT>(
 	if let GenericMessage::BlockRequest(ref mut r) = message {
 		if let Some(ref mut peer) = peers.get_mut(who) {
 			r.id = peer.next_request_id;
-			peer.next_request_id = peer.next_request_id + 1;
+			peer.next_request_id += 1;
 			if let Some((timestamp, request)) = peer.block_request.take() {
 				trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
 				peer.obsolete_requests.insert(request.id, timestamp);
@@ -2001,7 +2001,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		for (id, r) in self.sync.block_requests() {
 			if self.use_new_block_requests_protocol {
 				let event = CustomMessageOutcome::BlockRequest {
-					target: id,
+					target: id.clone(),
 					request: r,
 				};
 				self.pending_messages.push_back(event);
@@ -2072,11 +2072,11 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 		let outcome = match event {
 			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
-				self.on_peer_connected(peer_id.clone());
+				self.on_peer_connected(peer_id);
 				CustomMessageOutcome::None
 			}
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id.clone())
+				self.on_peer_disconnected(peer_id)
 			},
 			GenericProtoOut::LegacyMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),

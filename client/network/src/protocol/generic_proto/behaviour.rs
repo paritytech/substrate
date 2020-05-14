@@ -507,7 +507,7 @@ impl GenericProto {
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+		self.peerset.discovered(peer_ids.map(|peer_id| {
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
 			peer_id
 		}));
@@ -616,8 +616,8 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: futures_timer::Delay::new(until.clone() - now),
-					timer_deadline: until.clone(),
+					timer: futures_timer::Delay::new(*until - now),
+					timer_deadline: *until,
 				};
 			},
 
@@ -639,8 +639,8 @@ impl GenericProto {
 					occ_entry.key(), banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					open,
-					timer: futures_timer::Delay::new(banned.clone() - now),
-					timer_deadline: banned.clone(),
+					timer: futures_timer::Delay::new(*banned - now),
+					timer_deadline: *banned,
 				};
 			},
 
@@ -879,7 +879,7 @@ impl NetworkBehaviour for GenericProto {
 			// this peer", and not "banned" in the sense that we would refuse the peer altogether.
 			(st @ &mut PeerState::Poisoned, endpoint @ ConnectedPoint::Listener { .. }) |
 			(st @ &mut PeerState::Banned { .. }, endpoint @ ConnectedPoint::Listener { .. }) => {
-				let incoming_id = self.next_incoming_index.clone();
+				let incoming_id = self.next_incoming_index;
 				self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
 					Some(v) => v,
 					None => {
@@ -1200,7 +1200,7 @@ impl NetworkBehaviour for GenericProto {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
 					let event = GenericProtoOut::CustomProtocolClosed {
 						reason,
-						peer_id: source.clone(),
+						peer_id: source,
 					};
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 				} else {
@@ -1384,7 +1384,7 @@ impl NetworkBehaviour for GenericProto {
 					*peer_state = PeerState::Enabled { open };
 				}
 
-				st @ _ => *peer_state = st,
+				st => *peer_state = st,
 			}
 		}
 
