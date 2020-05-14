@@ -1732,11 +1732,16 @@ decl_module! {
 		/// The dispatch origin must be Root.
 		///
 		/// # <weight>
+		/// O(S) where S is the number of slashing spans to be removed
 		/// Base Weight: 47.68 µs
 		/// Reads: Bonded, Slashing Spans, Account, Locks
 		/// Writes: Bonded, Ledger, Payee, Validators, Nominators, Account, Locks
+		/// Writes Each: SlashingSpans * S
 		/// # </weight>
-		#[weight = 48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 7)]
+		#[weight = T::DbWeight::get().reads_writes(4, 7)
+			.saturating_add(48 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans)))
+		]
 		fn force_unstake(origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure_root(origin)?;
 

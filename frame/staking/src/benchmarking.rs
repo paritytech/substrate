@@ -29,6 +29,7 @@ use frame_benchmarking::{benchmarks, account};
 use crate::Module as Staking;
 
 const SEED: u32 = 0;
+const MAX_SPANS: u32 = 100;
 
 fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
 	let user = account(string, n, SEED);
@@ -64,6 +65,9 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
 fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
+	if spans == 0 { return }
+
+	// For the first slashing span, we initialize
 	let mut slashing_spans = crate::slashing::SlashingSpans::new(0);
 	SpanSlash::<T>::insert((who, 0), crate::slashing::SpanRecord::default());
 
@@ -206,14 +210,16 @@ benchmarks! {
 
 	// Withdraw only updates the ledger
 	withdraw_unbonded_update {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+		// Slashing Spans
+		let s in 0 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 5.into(); // Half of total
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
-	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), u32::max_value())
+	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
 		let new_total: BalanceOf<T> = ledger.total;
@@ -222,14 +228,15 @@ benchmarks! {
 
 	// Worst case scenario, everything is removed after the bonding duration
 	withdraw_unbonded_kill {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+		// Slashing Spans
+		let s in 0 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
 		let amount = T::Currency::minimum_balance() * 10.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::put(EraIndex::max_value());
 		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
 		let original_total: BalanceOf<T> = ledger.total;
-	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), u32::max_value())
+	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(controller));
 	}
@@ -306,9 +313,11 @@ benchmarks! {
 	}
 
 	force_unstake {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
-	}: _(RawOrigin::Root, stash, u32::max_value())
+		// Slashing Spans
+		let s in 0 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
+	}: _(RawOrigin::Root, stash, s)
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
 	}
@@ -380,10 +389,11 @@ benchmarks! {
 	}
 
 	reap_stash {
-		let u in 1 .. 1000;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+		let s in 1 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, 0.into());
-	}: _(RawOrigin::Signed(controller), stash.clone(), u32::max_value())
+	}: _(RawOrigin::Signed(controller), stash.clone(), s)
 	verify {
 		assert!(!Bonded::<T>::contains_key(&stash));
 	}
@@ -526,6 +536,14 @@ mod tests {
 			for i in 0 .. num_of_slashing_spans {
 				assert!(SpanSlash::<Test>::contains_key((&validator_stash, i)));
 			}
+
+			// Test everything is cleaned up
+			assert_ok!(Staking::kill_stash(&validator_stash, 20));
+			assert!(SlashingSpans::<Test>::get(&validator_stash).is_none());
+			for i in 0 .. num_of_slashing_spans {
+				assert!(!SpanSlash::<Test>::contains_key((&validator_stash, i)));
+			}
+
 		});
 	}
 
