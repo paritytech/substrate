@@ -61,7 +61,7 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		ProposerFactory {
 			client,
 			transaction_pool,
-			metrics:  PrometheusMetrics::new(prometheus),
+			metrics: PrometheusMetrics::new(prometheus),
 			_phantom: PhantomData,
 		}
 	}

@@ -164,7 +164,7 @@ macro_rules! new_full {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
 				service.transaction_pool(),
-				service.prometheus_registry(),
+				service.prometheus_registry().as_ref(),
 			);
 
 			let client = service.client();
@@ -533,7 +533,8 @@ mod tests {
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
 					service.client(),
-					service.transaction_pool()
+					service.transaction_pool(),
+					None,
 				);
 
 				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(

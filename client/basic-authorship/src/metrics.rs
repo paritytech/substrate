@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Transaction pool Prometheus metrics.
+//! Authorship Prometheus metrics.
 
 use std::sync::Arc;
 
 use prometheus_endpoint::{register, PrometheusError, Registry, Histogram, HistogramOpts};
+
+/// Optional shareable link to basic authorship metrics.
 #[derive(Clone, Default)]
 pub struct MetricsLink(Arc<Option<Metrics>>);
 
@@ -39,6 +41,7 @@ impl MetricsLink {
 		}
 	}
 }
+
 /// Authorship metrics.
 pub struct Metrics {
 	pub block_constructed: Histogram,
