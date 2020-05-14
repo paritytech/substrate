@@ -17,7 +17,6 @@
 //! Proxy to allow entering tracing spans from wasm.
 //!
 //! Use `enter_span` and `exit_span` to surround the code that you wish to trace
-use std::cell::RefCell;
 use rental;
 use tracing::info_span;
 
@@ -29,21 +28,6 @@ pub const WASM_TARGET_KEY: &'static str = "proxied_wasm_target";
 pub const WASM_NAME_KEY: &'static str = "proxied_wasm_name";
 
 const MAX_SPANS_LEN: usize = 1000;
-
-thread_local! {
-	static PROXY: RefCell<TracingProxy> = RefCell::new(TracingProxy::new());
-}
-
-/// Create and enter a `tracing` Span, returning the span id,
-/// which should be passed to `exit_span(id)` to signal that the span should exit.
-pub fn enter_span(target: &str, name: &str) -> u64 {
-	PROXY.with(|proxy| proxy.borrow_mut().create_span(target, name))
-}
-
-/// Exit a span by dropping it along with it's associated guard.
-pub fn exit_span(id: u64) {
-	PROXY.with(|proxy| proxy.borrow_mut().exit_span(id));
-}
 
 rental! {
 	pub mod rent_span {
@@ -64,6 +48,7 @@ pub struct TracingProxy {
 
 impl Drop for TracingProxy {
 	fn drop(&mut self) {
+		log::debug!("Dropping TracingProxy with {} spans", self.spans.len());
 		while let Some((_, mut sg)) = self.spans.pop() {
 			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 		}
@@ -81,9 +66,11 @@ impl TracingProxy {
 }
 
 impl TracingProxy {
-	// The identifiers `proxied_wasm_target` and `proxied_wasm_name` must match their associated const,
-	// WASM_TARGET_KEY and WASM_NAME_KEY.
-	fn create_span(&mut self, proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
+	/// Create and enter a `tracing` Span, returning the span id,
+	/// which should be passed to `exit_span(id)` to signal that the span should exit.
+	pub fn enter_span(&mut self, proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
+		// The identifiers `proxied_wasm_target` and `proxied_wasm_name` must match their associated const,
+		// WASM_TARGET_KEY and WASM_NAME_KEY.
 		let span = info_span!(WASM_TRACE_IDENTIFIER, is_valid_trace = true, proxied_wasm_target, proxied_wasm_name);
 		self.next_id += 1;
 		let sg = rent_span::SpanAndGuard::new(
@@ -107,7 +94,8 @@ impl TracingProxy {
 		self.next_id
 	}
 
-	fn exit_span(&mut self, id: u64) {
+	/// Exit a span by dropping it along with it's associated guard.
+	pub fn exit_span(&mut self, id: u64) {
 		if self.spans.last().map(|l| id > l.0).unwrap_or(true) {
 			log::warn!("Span id not found {}", id);
 			return;

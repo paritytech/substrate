@@ -870,18 +870,36 @@ pub trait Logging {
 	}
 }
 
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension to allow running traces in wasm via Proxy
+	pub struct TracingProxyExt(sp_tracing::proxy::TracingProxy);
+}
+
 /// Interface that provides functions for profiling the runtime.
 #[runtime_interface]
 pub trait WasmTracing {
 	/// To create and enter a `tracing` span, via `sp_tracing::proxy`
-	fn enter_span(target: &str, name: &str) -> u64 {
-		sp_tracing::proxy::enter_span(target, name)
+	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
+		let proxy = match self.extension::<TracingProxyExt>() {
+			Some(proxy) => proxy,
+			None => {
+				self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new()))
+					.expect("Failed to register required extension: `TracingProxyExt`");
+				self.extension::<TracingProxyExt>().expect("Failed to load required extension: `TracingProxyExt`")
+			}
+		};
+		proxy.enter_span(target, name)
 	}
 
 	/// If there is a panic in the WASM VM then this may not be called.
-	fn exit_span(id: u64) {
-		sp_tracing::proxy::exit_span(id);
+	fn exit_span(&mut self, id: u64) {
+		let proxy = self.extension::<TracingProxyExt>()
+			.expect("Failed to load required extension: \
+			`TracingProxyExt` which should be loaded before calling `exit_span`");
+		proxy.exit_span(id);
 	}
+
 }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.

@@ -41,10 +41,10 @@ impl Drop for TracingSpanGuard {
 /// # Example
 ///
 /// ```
-/// frame_support::wasm_tracing_span!("target", "fn_name");
+/// frame_support::enter_span_wasm!("target", "fn_name");
 /// ```
 #[macro_export]
-macro_rules! wasm_tracing_span {
+macro_rules! enter_span_wasm {
 	( $target:expr, $name:expr ) => {
 		#[cfg(not(feature = "std"))]
 		let __span_id__ = $crate::wasm_tracing::TracingSpanGuard::new(
