@@ -513,8 +513,8 @@ impl OverlayedChanges {
 
 	/// Get an iterator over all pending and committed child tries in the overlay.
 	pub fn child_infos(&self) -> impl IntoIterator<Item=&ChildInfo> {
-		self.prospective.children_default.iter()
-			.chain(self.committed.children_default.iter())
+		self.committed.children_default.iter()
+			.chain(self.prospective.children_default.iter())
 			.map(|(_, v)| &v.1).collect::<BTreeSet<_>>()
 	}
 
