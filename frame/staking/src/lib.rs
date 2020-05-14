@@ -1762,6 +1762,9 @@ decl_module! {
 		/// Parameters: era and indices of the slashes for that era to kill.
 		///
 		/// # <weight>
+		/// Complexity: O(U + S)
+		/// with U unapplied slashes weighted with U=1000
+		/// and S is the number of slash indices to be canceled.
 		/// - Base: 5870 + 34.61 * S µs
 		/// - Read: Unapplied Slashes
 		/// - Write: Unapplied Slashes
