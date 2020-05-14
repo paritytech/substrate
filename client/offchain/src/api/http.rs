@@ -891,10 +891,10 @@ mod tests {
 	#[test]
 	fn response_headers_invalid_call() {
 		let (mut api, addr) = build_api_server!();
-		assert!(api.response_headers(HttpRequestId(0xdead)).is_empty());
+		assert_eq!(api.response_headers(HttpRequestId(0xdead)), &[]);
 
 		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		assert!(api.response_headers(id).is_empty());
+		assert_eq!(api.response_headers(id), &[]);
 
 		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_write_body(id, &[], None).unwrap();
@@ -904,12 +904,12 @@ mod tests {
 
 		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
 		api.response_wait(&[id], None);
-		assert!(!api.response_headers(id).is_empty());
+		assert_ne!(api.response_headers(id), &[]);
 
 		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
 		let mut buf = [0; 128];
 		while api.response_read_body(id, &mut buf, None).unwrap() != 0 {}
-		assert!(api.response_headers(id).is_empty());
+		assert_eq!(api.response_headers(id), &[]);
 	}
 
 	#[test]
@@ -917,11 +917,11 @@ mod tests {
 		let (mut api, addr) = build_api_server!();
 
 		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
-		assert!(api.response_headers(id).is_empty());
+		assert_eq!(api.response_headers(id), &[]);
 
 		let id = api.request_start("POST", &format!("http://{}", addr)).unwrap();
 		api.request_add_header(id, "Foo", "Bar").unwrap();
-		assert!(api.response_headers(id).is_empty());
+		assert_eq!(api.response_headers(id), &[]);
 
 		let id = api.request_start("GET", &format!("http://{}", addr)).unwrap();
 		api.request_add_header(id, "Foo", "Bar").unwrap();
@@ -930,7 +930,7 @@ mod tests {
 		// where we haven't received any response yet. This test can theoretically fail if the
 		// HTTP response comes back faster than the kernel schedules our thread, but that is highly
 		// unlikely.
-		assert!(api.response_headers(id).is_empty());
+		assert_eq!(api.response_headers(id), &[]);
 	}
 
 	#[test]
