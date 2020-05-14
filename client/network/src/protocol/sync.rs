@@ -513,10 +513,10 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Signal that `best_header` has been queued for import and update the
+	/// Signal that a new best block has been imported.
 	/// `ChainSync` state with that information.
-	pub fn update_chain_info(&mut self, best_header: &B::Header) {
-		self.on_block_queued(&best_header.hash(), *best_header.number())
+	pub fn update_chain_info(&mut self, best_hash: &B::Hash, best_number: NumberFor<B>) {
+		self.on_block_queued(best_hash, best_number);
 	}
 
 	/// Schedule a justification request for the given block.
