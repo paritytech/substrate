@@ -681,7 +681,7 @@ decl_module! {
 			.saturating_add(230_000.saturating_mul(Weight::from(*seconds_upper_bound)))
 			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 		]
-		fn second(origin, #[compact] proposal: PropIndex, seconds_upper_bound: u32) {
+		fn second(origin, #[compact] proposal: PropIndex, #[compact] seconds_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
 
 			let seconds = Self::len_of_deposit_of(proposal)
