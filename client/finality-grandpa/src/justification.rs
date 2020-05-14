@@ -157,7 +157,8 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 				},
 				_ => {
 					return Err(ClientError::BadJustification(
-						"invalid precommit ancestry proof in grandpa justification".to_string()).into());
+						"invalid precommit ancestry proof in grandpa justification".to_string()
+					).into());
 				},
 			}
 		}
@@ -169,7 +170,8 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 
 		if visited_hashes != ancestry_hashes {
 			return Err(ClientError::BadJustification(
-				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
+				"invalid precommit ancestries in grandpa justification with unused headers".to_string()
+			).into());
 		}
 
 		Ok(())

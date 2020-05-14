@@ -60,7 +60,14 @@ macro_rules! new_full_start {
 					prometheus_registry,
 				))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle, prometheus_registry| {
+			.with_import_queue(|
+				_config,
+				client,
+				mut select_chain,
+				_transaction_pool,
+				spawn_task_handle,
+				prometheus_registry
+			| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -309,7 +316,16 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, spawn_task_handle| {
+		.with_import_queue_and_fprb(|
+			_config,
+			client,
+			backend,
+			fetcher,
+			_select_chain,
+			_tx_pool,
+			spawn_task_handle,
+			registry
+		| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -328,6 +344,7 @@ pub fn new_light(config: Configuration)
 				sc_consensus_babe::Config::get_or_compute(&*client)?,
 				grandpa_block_import,
 				client.clone(),
+				registry,
 			)?;
 
 			let import_queue = sc_consensus_babe::import_queue(
