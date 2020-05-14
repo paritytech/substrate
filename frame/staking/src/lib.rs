@@ -271,7 +271,7 @@
 mod mock;
 #[cfg(test)]
 mod tests;
-#[cfg(feature = "testing-utils")]
+#[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod benchmarking;
@@ -290,7 +290,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{Weight, DispatchClass},
+	weights::{Weight, DispatchClass, FunctionOf, Pays, constants::{WEIGHT_PER_MICROS}},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -678,6 +678,22 @@ pub enum ElectionStatus<BlockNumber> {
 	/// The submission window has been open since the contained block number.
 	Open(BlockNumber),
 }
+
+/// Some indications about the size of the election. This must be submitted with the solution.
+///
+/// Note that this values must reflect the __total__ number, not only those that are present in the
+/// solution. In short, these should be the same size as the size of the values dumped in
+/// `SnapshotValidators` and `SnapshotNominators`.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
+pub struct ElectionSize {
+	/// Number of validators the snapshot of the current election round.
+	#[codec(compact)]
+	pub validators: ValidatorIndex,
+	/// Number of nominators the snapshot of the current election round.
+	#[codec(compact)]
+	pub nominators: NominatorIndex,
+}
+
 
 impl<BlockNumber: PartialEq> ElectionStatus<BlockNumber> {
 	fn is_open_at(&self, n: BlockNumber) -> bool {
@@ -1162,6 +1178,8 @@ decl_error! {
 		PhragmenBogusEdge,
 		/// The claimed score does not match with the one computed from the data.
 		PhragmenBogusScore,
+		/// The election size is invalid.
+		PhragmenBogusElectionSize,
 		/// The call is not allowed at the given time due to restrictions of election period.
 		CallNotAllowed,
 	}
@@ -1846,50 +1864,52 @@ decl_module! {
 		///    minimized (to ensure less variance)
 		///
 		/// # <weight>
-		/// E: number of edges. m: size of winner committee. n: number of nominators. d: edge degree
-		/// (16 for now) v: number of on-chain validator candidates.
-		///
-		/// NOTE: given a solution which is reduced, we can enable a new check the ensure `|E| < n +
-		/// m`. We don't do this _yet_, but our offchain worker code executes it nonetheless.
-		///
-		/// major steps (all done in `check_and_replace_solution`):
-		///
-		/// - Storage: O(1) read `ElectionStatus`.
-		/// - Storage: O(1) read `PhragmenScore`.
-		/// - Storage: O(1) read `ValidatorCount`.
-		/// - Storage: O(1) length read from `SnapshotValidators`.
-		///
-		/// - Storage: O(v) reads of `AccountId` to fetch `snapshot_validators`.
-		/// - Memory: O(m) iterations to map winner index to validator id.
-		/// - Storage: O(n) reads `AccountId` to fetch `snapshot_nominators`.
-		/// - Memory: O(n + m) reads to map index to `AccountId` for un-compact.
-		///
-		/// - Storage: O(e) accountid reads from `Nomination` to read correct nominations.
-		/// - Storage: O(e) calls into `slashable_balance_of_vote_weight` to convert ratio to staked.
-		///
-		/// - Memory: build_support_map. O(e).
-		/// - Memory: evaluate_support: O(E).
-		///
-		/// - Storage: O(e) writes to `QueuedElected`.
-		/// - Storage: O(1) write to `QueuedScore`
-		///
-		/// The weight of this call is 1/10th of the blocks total weight.
+		/// All weight notes are pertaining to the case of a better solution, in which we execute the
+		/// longest code path.
+		/// Weight: 0 + 35 * v + 25 * n
+		/// State reads:
+		/// 	- Initial checks:
+		/// 		- ElectionState, CurrentEr, QueuedScore
+		/// 		- SnapshotValidators.len()
+		/// 		- ValidatorCount
+		/// 		- SnapshotValidators
+		/// 		- SnapshotNominators
+		/// 	- Iterate over nominators:
+		/// 		- compact.len() * (Nominators(who) + SlashingSpans(who)) (self vote does not have this, yet we cannot easily know)
+		/// 	- For `assignment_ratio_to_staked`: Basically read the staked value of each stash.
+		/// 		- (winners.len() + compact.len()) * (Ledger + Bonded)
+		/// 		- TotalIssuance (read a gzillion times potentially, but well it is cached.)
+		/// - State writes:
+		/// 	- QueuedElected, QueuedScore
 		/// # </weight>
-		#[weight = 100_000_000_000]
+		#[weight = FunctionOf(
+			|(winners, compact, _, _, size): (&Vec<ValidatorIndex>, &CompactAssignments, _, _, &ElectionSize)|
+				(35 * WEIGHT_PER_MICROS * (size.validators as Weight))
+				.saturating_add(25 * WEIGHT_PER_MICROS * (size.validators as Weight))
+				.saturating_add(T::DbWeight::get().reads(7))
+				.saturating_add(T::DbWeight::get().reads(2 * (compact.len() as Weight)))
+				.saturating_add(T::DbWeight::get().reads(2 * ((winners.len() + compact.len()) as Weight)))
+				.saturating_add(T::DbWeight::get().reads(1))
+				.saturating_add(T::DbWeight::get().writes(2)),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
-			compact_assignments: CompactAssignments,
+			compact: CompactAssignments,
 			score: PhragmenScore,
 			era: EraIndex,
+			election_size: ElectionSize,
 		) {
 			let _who = ensure_signed(origin)?;
 			Self::check_and_replace_solution(
 				winners,
-				compact_assignments,
+				compact,
 				ElectionCompute::Signed,
 				score,
 				era,
+				election_size,
 			)?
 		}
 
@@ -1898,21 +1918,24 @@ decl_module! {
 		/// Note that this must pass the [`ValidateUnsigned`] check which only allows transactions
 		/// from the local node to be included. In other words, only the block author can include a
 		/// transaction in the block.
+		// TODO: put the weight here as well once final
 		#[weight = 100_000_000_000]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
-			compact_assignments: CompactAssignments,
+			compact: CompactAssignments,
 			score: PhragmenScore,
 			era: EraIndex,
+			election_size: ElectionSize,
 		) {
 			ensure_none(origin)?;
 			Self::check_and_replace_solution(
 				winners,
-				compact_assignments,
+				compact,
 				ElectionCompute::Unsigned,
 				score,
 				era,
+				election_size,
 			)?
 			// TODO: instead of returning an error, panic. This makes the entire produced block
 			// invalid.
@@ -1925,6 +1948,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
+		// Optimisation note: consider making the stake accessible through stash.
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
@@ -1939,7 +1963,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// This data is used to efficiently evaluate election results. returns `true` if the operation
 	/// is successful.
-	fn create_stakers_snapshot() -> bool {
+	pub fn create_stakers_snapshot() -> bool {
 		let validators = <Validators<T>>::iter().map(|(v, _)| v).collect::<Vec<_>>();
 		let mut nominators = <Nominators<T>>::iter().map(|(n, _)| n).collect::<Vec<_>>();
 
@@ -2294,6 +2318,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Basic and cheap checks that we perform in validate unsigned, and in the execution.
+	///
+	/// State reads: ElectionState, CurrentEr, QueuedScore
 	pub fn pre_dispatch_checks(score: PhragmenScore, era: EraIndex) -> Result<(), Error<T>> {
 		// discard solutions that are not in-time
 		// check window open
@@ -2329,6 +2355,7 @@ impl<T: Trait> Module<T> {
 		compute: ElectionCompute,
 		claimed_score: PhragmenScore,
 		era: EraIndex,
+		election_size: ElectionSize,
 	) -> Result<(), Error<T>> {
 		// Do the basic checks. era, claimed score and window open.
 		Self::pre_dispatch_checks(claimed_score, era)?;
@@ -2336,12 +2363,19 @@ impl<T: Trait> Module<T> {
 		// Check that the number of presented winners is sane. Most often we have more candidates
 		// that we need. Then it should be Self::validator_count(). Else it should be all the
 		// candidates.
-		let snapshot_length = <SnapshotValidators<T>>::decode_len()
+		let snapshot_validators_length = <SnapshotValidators<T>>::decode_len()
+			.map(|l| l as u32)
 			.ok_or_else(|| Error::<T>::SnapshotUnavailable)?;
+
+		// size of the solution must be correct.
+		ensure!(
+			snapshot_validators_length == election_size.validators.into(),
+			Error::<T>::PhragmenBogusElectionSize,
+		);
 
 		// check the winner length only here and when we know the length of the snapshot validators
 		// length.
-		let desired_winners = Self::validator_count().min(snapshot_length as u32);
+		let desired_winners = Self::validator_count().min(snapshot_validators_length);
 		ensure!(winners.len() as u32 == desired_winners, Error::<T>::PhragmenBogusWinnerCount);
 
 		// decode snapshot validators.
@@ -2357,8 +2391,14 @@ impl<T: Trait> Module<T> {
 		}).collect::<Result<Vec<T::AccountId>, Error<T>>>()?;
 
 		// decode the rest of the snapshot.
-		let snapshot_nominators = <Module<T>>::snapshot_nominators()
+		let snapshot_nominators = Self::snapshot_nominators()
 			.ok_or(Error::<T>::SnapshotUnavailable)?;
+
+		// rest of the size of the solution must be correct.
+		ensure!(
+			snapshot_nominators.len() as u32 == election_size.nominators,
+			Error::<T>::PhragmenBogusElectionSize,
+		);
 
 		// helpers
 		let nominator_at = |i: NominatorIndex| -> Option<T::AccountId> {
@@ -2411,7 +2451,7 @@ impl<T: Trait> Module<T> {
 						return Err(Error::<T>::PhragmenBogusNomination);
 					}
 
-					if <Self as Store>::SlashingSpans::get(&t).map_or(
+					if Self::SlashingSpans::get(&t).map_or(
 						false,
 						|spans| nomination.submitted_in < spans.last_nonzero_slash(),
 					) {
@@ -2455,8 +2495,9 @@ impl<T: Trait> Module<T> {
 		let exposures = Self::collect_exposure(supports);
 		log!(
 			info,
-			"💸 A better solution (with compute {:?}) has been validated and stored on chain.",
+			"💸 A better solution (with compute {:?} and score {:?}) has been validated and stored on chain.",
 			compute,
+			submitted_score,
 		);
 
 		// write new results.
@@ -2772,7 +2813,7 @@ impl<T: Trait> Module<T> {
 
 		supports.into_iter().map(|(validator, support)| {
 			// build `struct exposure` from `support`
-			let mut others = Vec::new();
+			let mut others = Vec::with_capacity(support.others);
 			let mut own: BalanceOf<T> = Zero::zero();
 			let mut total: BalanceOf<T> = Zero::zero();
 			support.voters
@@ -3134,6 +3175,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			_,
 			score,
 			era,
+			_,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
 

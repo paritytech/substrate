@@ -17,96 +17,24 @@
 //! Staking pallet benchmarking.
 
 use super::*;
-
-use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-
-use sp_runtime::traits::{Dispatchable, One};
-use sp_io::hashing::blake2_256;
-
-use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
-
 use crate::Module as Staking;
 use frame_system::Module as System;
+use testing_utils::*;
 
+use sp_runtime::traits::{Dispatchable, One};
+use frame_system::RawOrigin;
+pub use frame_benchmarking::{benchmarks, account};
 const SEED: u32 = 0;
 
-fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
-	let user = account(string, n, SEED);
-	let balance = T::Currency::minimum_balance() * 100.into();
-	T::Currency::make_free_balance_be(&user, balance);
-	user
-}
-
-pub fn create_stash_controller<T: Trait>(n: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let stash = create_funded_user::<T>("stash", n);
-	let controller = create_funded_user::<T>("controller", n);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
-	let reward_destination = RewardDestination::Staked;
-	let amount = T::Currency::minimum_balance() * 10.into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
-	return Ok((stash, controller))
-}
-
-fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
-	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
-	for i in 0 .. max {
-		let (stash, controller) = create_stash_controller::<T>(i)?;
-		let validator_prefs = ValidatorPrefs {
-			commission: Perbill::from_percent(50),
-		};
-		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash);
-		validators.push(stash_lookup);
-	}
-	Ok(validators)
-}
-
-// This function generates v validators and n nominators who are randomly nominating up to MAX_NOMINATIONS.
-pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Result<(), &'static str> {
-	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(v as usize);
-	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
-
-	// Create v validators
-	for i in 0 .. v {
-		let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
-		let validator_prefs = ValidatorPrefs {
-			commission: Perbill::from_percent(50),
-		};
-		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
-		validators.push(stash_lookup.clone());
-	}
-
-	// Create n nominators
-	for j in 0 .. n {
-		let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value() - j)?;
-
-		// Have them randomly validate
-		let mut available_validators = validators.clone();
-		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(MAX_NOMINATIONS);
-		for _ in 0 .. v.min(MAX_NOMINATIONS as u32) {
-			let selected = rng.next_u32() as usize % available_validators.len();
-			let validator = available_validators.remove(selected);
-			selected_validators.push(validator);
-		}
-		Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), selected_validators)?;
-	}
-
-	ValidatorCount::put(v);
-
-	Ok(())
-}
-
-// This function generates one validator being nominated by n nominators, and returns
-//the validator stash account. It also starts an era and creates pending payouts.
+// This function generates one validator being nominated by n nominators, and returns the validator
+// stash account. It also starts an era and creates pending payouts.
 pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> Result<T::AccountId, &'static str> {
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
 	MinimumValidatorCount::put(0);
 
-	let (v_stash, v_controller) = create_stash_controller::<T>(0)?;
+	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100)?;
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
 	};
@@ -118,7 +46,7 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0 .. upper_bound {
-		let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value() - i)?;
+		let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value() - i, 100)?;
 		if i < n {
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
 		}
@@ -155,8 +83,8 @@ benchmarks! {
 
 	bond {
 		let u in ...;
-		let stash = create_funded_user::<T>("stash",u);
-		let controller = create_funded_user::<T>("controller", u);
+		let stash = create_funded_user::<T>("stash", u, 100);
+		let controller = create_funded_user::<T>("controller", u, 100);
 		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller);
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10.into();
@@ -164,20 +92,20 @@ benchmarks! {
 
 	bond_extra {
 		let u in ...;
-		let (stash, _) = create_stash_controller::<T>(u)?;
+		let (stash, _) = create_stash_controller::<T>(u, 100)?;
 		let max_additional = T::Currency::minimum_balance() * 10.into();
 	}: _(RawOrigin::Signed(stash), max_additional)
 
 	unbond {
 		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (_, controller) = create_stash_controller::<T>(u, 100)?;
 		let amount = T::Currency::minimum_balance() * 10.into();
 	}: _(RawOrigin::Signed(controller), amount)
 
 	// Worst case scenario, everything is removed after the bonding duration
 	withdraw_unbonded {
 		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+		let (stash, controller) = create_stash_controller::<T>(u, 100)?;
 		let amount = T::Currency::minimum_balance() * 10.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		let current_block = System::<T>::block_number();
@@ -187,31 +115,31 @@ benchmarks! {
 
 	validate {
 		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (_, controller) = create_stash_controller::<T>(u, 100)?;
 		let prefs = ValidatorPrefs::default();
 	}: _(RawOrigin::Signed(controller), prefs)
 
 	// Worst case scenario, MAX_NOMINATIONS
 	nominate {
 		let n in 1 .. MAX_NOMINATIONS as u32;
-		let (_, controller) = create_stash_controller::<T>(n + 1)?;
-		let validators = create_validators::<T>(n)?;
+		let (_, controller) = create_stash_controller::<T>(n + 1, 100)?;
+		let validators = create_validators::<T>(n, 100)?;
 	}: _(RawOrigin::Signed(controller), validators)
 
 	chill {
 		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (_, controller) = create_stash_controller::<T>(u, 100)?;
 	}: _(RawOrigin::Signed(controller))
 
 	set_payee {
 		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (_, controller) = create_stash_controller::<T>(u, 100)?;
 	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
 
 	set_controller {
 		let u in ...;
-		let (stash, _) = create_stash_controller::<T>(u)?;
-		let new_controller = create_funded_user::<T>("new_controller", u);
+		let (stash, _) = create_stash_controller::<T>(u, 100)?;
+		let new_controller = create_funded_user::<T>("new_controller", u, 100);
 		let new_controller_lookup = T::Lookup::unlookup(new_controller);
 	}: _(RawOrigin::Signed(stash), new_controller_lookup)
 
@@ -236,7 +164,7 @@ benchmarks! {
 
 	force_unstake {
 		let u in ...;
-		let (stash, _) = create_stash_controller::<T>(u)?;
+		let (stash, _) = create_stash_controller::<T>(u, 100)?;
 	}: _(RawOrigin::Root, stash)
 
 	cancel_deferred_slash {
@@ -260,7 +188,7 @@ benchmarks! {
 
 	rebond {
 		let l in 1 .. 1000;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (_, controller) = create_stash_controller::<T>(u, 100)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value: 1.into(),
@@ -289,7 +217,7 @@ benchmarks! {
 
 	reap_stash {
 		let u in 1 .. 1000;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+		let (stash, controller) = create_stash_controller::<T>(u, 100)?;
 		T::Currency::make_free_balance_be(&stash, 0.into());
 	}: _(RawOrigin::Signed(controller), stash)
 
@@ -297,7 +225,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
@@ -306,7 +234,7 @@ benchmarks! {
 
 	do_slash {
 		let l in 1 .. 1000;
-		let (stash, controller) = create_stash_controller::<T>(0)?;
+		let (stash, controller) = create_stash_controller::<T>(0, 100)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value: 1.into(),
@@ -330,7 +258,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 		assert!(new_validators.len() == v as usize);
@@ -364,6 +292,130 @@ benchmarks! {
 			call.dispatch(RawOrigin::Signed(caller.clone()).into())?;
 		}
 	}
+
+	submit_solution_initial {
+		let v in 1 .. 10;
+		let n in 1 .. 100;
+
+		MinimumValidatorCount::put(0);
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+
+		// needed for the solution to be generates.
+		assert!(<Staking<T>>::create_stakers_snapshot());
+		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+
+		// needed for the solution to be accepted
+		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+
+		let era = <Staking<T>>::current_era().unwrap_or(0);
+		let caller: T::AccountId = account("caller", n, SEED);
+	}: {
+		assert!(
+			<Staking<T>>::submit_election_solution(
+				RawOrigin::Signed(caller.clone()).into(),
+				winners,
+				compact,
+				score.clone(),
+				era,
+				size,
+		).is_ok());
+		// new solution has been accepted.
+		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	}
+
+	submit_solution_weaker {
+		// TODO: whatever this weight ends up being, so how it will pan our for a solution which has
+		// 1000 validators, and like 100,000 nominators
+		let v in 1 .. 10;
+		let n in 1 .. 100;
+
+		MinimumValidatorCount::put(0);
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+
+		// needed for the solution to be generates.
+		assert!(<Staking<T>>::create_stakers_snapshot());
+
+		// needed for the solution to be accepted
+		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+		let caller: T::AccountId = account("caller", n, SEED);
+		let era = <Staking<T>>::current_era().unwrap_or(0);
+
+		// submit a seq-phragmen will all the good stuff on chain
+		{
+			let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+			assert!(
+				<Staking<T>>::submit_election_solution(
+					RawOrigin::Signed(caller.clone()).into(),
+					winners,
+					compact,
+					score.clone(),
+					era,
+					size,
+			).is_ok());
+
+			// new solution has been accepted.
+			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+		}
+
+		// prepare a bad solution
+		let (winners, compact, score, size) = get_weak_solution::<T>(true);
+	}: {
+		assert!(
+			<Staking<T>>::submit_election_solution(
+				RawOrigin::Signed(caller.clone()).into(),
+				winners,
+				compact,
+				score.clone(),
+				era,
+				size,
+		).is_err());
+	}
+
+	submit_solution_better {
+		let v in 1 .. 10;
+		let n in 1 .. 100;
+
+		MinimumValidatorCount::put(0);
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+
+		// needed for the solution to be generates.
+		assert!(<Staking<T>>::create_stakers_snapshot());
+
+		// needed for the solution to be accepted
+		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+		let caller: T::AccountId = account("caller", n, SEED);
+		let era = <Staking<T>>::current_era().unwrap_or(0);
+
+		// submit a weak-phragmen.
+		{
+			let (winners, compact, score, size) = get_weak_solution::<T>(true);
+			assert!(
+				<Staking<T>>::submit_election_solution(
+					RawOrigin::Signed(caller.clone()).into(),
+					winners,
+					compact,
+					score.clone(),
+					era,
+					size,
+			).is_ok());
+
+			// new solution has been accepted.
+			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+		}
+
+		// prepare a seq-phragmen.
+		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+	}: {
+		assert!(
+			<Staking<T>>::submit_election_solution(
+				RawOrigin::Signed(caller.clone()).into(),
+				winners,
+				compact,
+				score.clone(),
+				era,
+				size,
+		).is_ok());
+	}
 }
 
 #[cfg(test)]
@@ -378,7 +430,7 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v,n).unwrap();
+			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false).unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
@@ -452,6 +504,9 @@ mod tests {
 			assert_ok!(test_benchmark_new_era::<Test>());
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
+			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
+			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
+			assert_ok!(test_benchmark_submit_solution_better::<Test>());
 		});
 	}
 }

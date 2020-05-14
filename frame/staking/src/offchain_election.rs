@@ -19,6 +19,7 @@
 use codec::Decode;
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
+	ElectionSize,
 };
 use frame_system::offchain::SubmitTransaction;
 use sp_phragmen::{
@@ -112,7 +113,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		.ok_or(OffchainElectionError::ElectionFailed)?;
 
 	// process and prepare it for submission.
-	let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
+	let (winners, compact, score, size) = prepare_submission::<T>(assignments, winners, true)?;
 
 	// defensive-only: current era can never be none except genesis.
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
@@ -123,11 +124,13 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		compact,
 		score,
 		current_era,
+		size,
 	).into();
 
 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
+
 
 /// Takes a phragmen result and spits out some data that can be submitted to the chain.
 ///
@@ -136,7 +139,12 @@ pub fn prepare_submission<T: Trait>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore), OffchainElectionError> where
+) -> Result<(
+		Vec<ValidatorIndex>,
+		CompactAssignments,
+		PhragmenScore,
+		ElectionSize,
+	), OffchainElectionError> where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
 	// make sure that the snapshot is available.
@@ -234,6 +242,12 @@ pub fn prepare_submission<T: Trait>(
 		}
 	}
 
+	// both conversions are safe; snapshots are not created if they exceed.
+	let size = ElectionSize {
+		validators: snapshot_validators.len() as ValidatorIndex,
+		nominators: snapshot_nominators.len() as NominatorIndex,
+	};
+
 	debug::native::debug!(
 		target: "staking",
 		"prepared solution after {} equalization iterations with score {:?}",
@@ -241,5 +255,5 @@ pub fn prepare_submission<T: Trait>(
 		score,
 	);
 
-	Ok((winners_indexed, compact, score))
+	Ok((winners_indexed, compact, score, size))
 }

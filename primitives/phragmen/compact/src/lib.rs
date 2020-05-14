@@ -157,6 +157,14 @@ fn struct_def(
 		)
 	}).collect::<TokenStream2>();
 
+
+	let len_impl = (1..=count).map(|c| {
+		let field_name = field_name_for(c);
+		quote!(
+			all_len = all_len.saturating_add(self.#field_name.len());
+		)
+	}).collect::<TokenStream2>();
+
 	Ok(quote! (
 		/// A struct to encode a Phragmen assignment in a compact way.
 		#[derive(
@@ -179,6 +187,15 @@ fn struct_def(
 		for #ident<#voter_type, #target_type, #weight_type>
 		{
 			const LIMIT: usize = #count;
+		}
+
+		impl<#voter_type, #target_type, #weight_type> #ident<#voter_type, #target_type, #weight_type> {
+			/// Get the length of all the assignments that this type is encoding.
+			pub fn len(&self) -> usize {
+				let mut all_len = 0usize;
+				#len_impl
+				all_len
+			}
 		}
 	))
 }
