@@ -34,19 +34,41 @@ fn force_unstake_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Account 11 is stashed and locked, and account 10 is the controller
 		assert_eq!(Staking::bonded(&11), Some(10));
+		// Adds 2 slashing spans
+		add_slash(&11);
 		// Cant transfer
 		assert_noop!(
 			Balances::transfer(Origin::signed(11), 1, 10),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		// Force unstake requires root.
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, u32::max_value()), BadOrigin);
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 2), BadOrigin);
+		// Force unstake needs correct number of slashing spans (for weight calculation)
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 0), BadOrigin);
 		// We now force them to unstake
-		assert_ok!(Staking::force_unstake(Origin::ROOT, 11, u32::max_value()));
+		assert_ok!(Staking::force_unstake(Origin::ROOT, 11, 2));
 		// No longer bonded.
 		assert_eq!(Staking::bonded(&11), None);
 		// Transfer works.
 		assert_ok!(Balances::transfer(Origin::signed(11), 1, 10));
+	});
+}
+
+#[test]
+fn kill_stash_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// Account 11 is stashed and locked, and account 10 is the controller
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Adds 2 slashing spans
+		add_slash(&11);
+		// Only can kill a stash account
+		assert_noop!(Staking::kill_stash(&12, 0), Error::<Test>::NotStash);
+		// Respects slashing span count
+		assert_noop!(Staking::kill_stash(&11, 0), Error::<Test>::IncorrectSlashingSpans);
+		// Correct inputs, everything works
+		assert_ok!(Staking::kill_stash(&11, 2));
+		// No longer bonded.
+		assert_eq!(Staking::bonded(&11), None);
 	});
 }
 
@@ -1060,7 +1082,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
-		Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()).unwrap();
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] }));
 
@@ -1068,14 +1090,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		mock::start_era(3);
 
 		// nothing yet
-		Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()).unwrap();
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] }));
 
 		// trigger next era.
 		mock::start_era(5);
 
-		Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()).unwrap();
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
 		// Now the value is free and the staking ledger is updated.
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
 			stash: 11, total: 100, active: 100, unlocking: vec![], claimed_rewards: vec![] }));
