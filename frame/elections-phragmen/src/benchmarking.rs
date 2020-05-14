@@ -43,7 +43,7 @@ fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	account
 }
 
-/// Account ot lookup type of system trait.
+/// Account to lookup type of system trait.
 fn as_lookup<T: Trait>(account: T::AccountId) -> Lookup<T> {
 	T::Lookup::unlookup(account)
 }
