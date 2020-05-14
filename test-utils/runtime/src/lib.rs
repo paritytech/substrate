@@ -26,7 +26,7 @@ use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
 use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
-use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
+use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
@@ -956,6 +956,7 @@ fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
 	assert!(all.contains(&public2));
 
 	let signature = public0.sign(&"ecdsa").expect("Generates a valid `ecdsa` signature.");
+
 	assert!(public0.verify(&"ecdsa", &signature));
 	(signature, public0)
 }
