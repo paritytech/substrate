@@ -116,7 +116,7 @@ fn main() {
 								winners,
 								compact,
 								score,
-								active_era::<Test>(),
+								current_era::<Test>(),
 								size,
 							)
 						);
@@ -131,7 +131,7 @@ fn main() {
 								winners,
 								compact,
 								score,
-								active_era::<Test>(),
+								current_era::<Test>(),
 								size,
 							)
 						);
@@ -149,7 +149,7 @@ fn main() {
 					winners,
 					compact,
 					score,
-					active_era::<Test>(),
+					current_era::<Test>(),
 					size,
 				);
 

@@ -250,8 +250,8 @@ pub fn get_seq_phragmen_solution<T: Trait>(
 }
 
 /// get the active era.
-pub fn active_era<T: Trait>() -> EraIndex {
-	<Module<T>>::active_era().unwrap().index
+pub fn current_era<T: Trait>() -> EraIndex {
+	<Module<T>>::current_era().unwrap_or(0)
 }
 
 /// initialize the first era.

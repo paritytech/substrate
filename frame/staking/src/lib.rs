@@ -1866,16 +1866,17 @@ decl_module! {
 		/// # <weight>
 		/// All weight notes are pertaining to the case of a better solution, in which we execute the
 		/// longest code path.
-		/// Weight: 0 + 35 * v + 25 * n
+		/// Weight: 0 + (35 μs * v) + (25 μs * n)
 		/// State reads:
 		/// 	- Initial checks:
-		/// 		- ElectionState, CurrentEr, QueuedScore
+		/// 		- ElectionState, CurrentEra, QueuedScore
 		/// 		- SnapshotValidators.len()
 		/// 		- ValidatorCount
 		/// 		- SnapshotValidators
 		/// 		- SnapshotNominators
 		/// 	- Iterate over nominators:
-		/// 		- compact.len() * (Nominators(who) + SlashingSpans(who)) (self vote does not have this, yet we cannot easily know)
+		/// 		- compact.len() * Nominators(who)
+		/// 		- (compact.len() - winners.len()) * avg_edge_count * SlashingSpans
 		/// 	- For `assignment_ratio_to_staked`: Basically read the staked value of each stash.
 		/// 		- (winners.len() + compact.len()) * (Ledger + Bonded)
 		/// 		- TotalIssuance (read a gzillion times potentially, but well it is cached.)
@@ -1887,7 +1888,15 @@ decl_module! {
 				(35 * WEIGHT_PER_MICROS * (size.validators as Weight))
 				.saturating_add(25 * WEIGHT_PER_MICROS * (size.validators as Weight))
 				.saturating_add(T::DbWeight::get().reads(7))
-				.saturating_add(T::DbWeight::get().reads(2 * (compact.len() as Weight)))
+				.saturating_add(T::DbWeight::get().reads(compact.len() as Weight)) // Nominators
+				.saturating_add( // SlashingSpans
+					T::DbWeight::get().reads(
+						compact.len()
+							.saturating_sub(winners.len())
+							.saturating_mul(compact.average_edge_count())
+							as Weight
+					)
+				)
 				.saturating_add(T::DbWeight::get().reads(2 * ((winners.len() + compact.len()) as Weight)))
 				.saturating_add(T::DbWeight::get().reads(1))
 				.saturating_add(T::DbWeight::get().writes(2)),
@@ -2337,6 +2346,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
+		// TODO: errors up to here need refund
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
 				is_score_better(queued_score, score),
@@ -2451,12 +2461,14 @@ impl<T: Trait> Module<T> {
 						return Err(Error::<T>::PhragmenBogusNomination);
 					}
 
-					if Self::SlashingSpans::get(&t).map_or(
+					if <Self as Store>::SlashingSpans::get(&t).map_or(
 						false,
 						|spans| nomination.submitted_in < spans.last_nonzero_slash(),
 					) {
 						return Err(Error::<T>::PhragmenSlashedNomination);
 					}
+
+					// TODO: we can either do an average, or do a refund here.
 				}
 			} else {
 				// a self vote
@@ -2813,7 +2825,7 @@ impl<T: Trait> Module<T> {
 
 		supports.into_iter().map(|(validator, support)| {
 			// build `struct exposure` from `support`
-			let mut others = Vec::with_capacity(support.others);
+			let mut others = Vec::with_capacity(support.voters.len());
 			let mut own: BalanceOf<T> = Zero::zero();
 			let mut total: BalanceOf<T> = Zero::zero();
 			support.voters

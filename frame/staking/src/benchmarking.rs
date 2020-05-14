@@ -319,6 +319,8 @@ benchmarks! {
 				era,
 				size,
 		).is_ok());
+	}
+	verify {
 		// new solution has been accepted.
 		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
 	}
@@ -415,6 +417,10 @@ benchmarks! {
 				era,
 				size,
 		).is_ok());
+	}
+	verify {
+		// new solution has been accepted.
+		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
 	}
 }
 
