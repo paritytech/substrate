@@ -163,7 +163,8 @@ macro_rules! new_full {
 		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
-				service.transaction_pool()
+				service.transaction_pool(),
+				service.prometheus_registry(),
 			);
 
 			let client = service.client();
