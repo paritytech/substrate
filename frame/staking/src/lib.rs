@@ -290,7 +290,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{Weight, DispatchClass, Pays, FunctionOf, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo},
 	traits::{
@@ -1547,15 +1547,10 @@ decl_module! {
 		/// - Reads: Era Election Status, Ledger, Current Era
 		/// - Writes: Validators, Nominators
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(targets,): (&Vec<<T::Lookup as StaticLookup>::Source>,)| {
-				T::DbWeight::get().reads_writes(3, 2)
-					.saturating_add(22 * WEIGHT_PER_MICROS)
-					.saturating_add((360 * WEIGHT_PER_NANOS).saturating_mul(targets.len() as Weight))
-			},
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = T::DbWeight::get().reads_writes(3, 2)
+			.saturating_add(22 * WEIGHT_PER_MICROS)
+			.saturating_add((360 * WEIGHT_PER_NANOS).saturating_mul(targets.len() as Weight))
+		]
 		pub fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1713,15 +1708,10 @@ decl_module! {
 		/// - Base Weight: 2.208 + .006 * V µs
 		/// - Write: Invulnerables
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(validators,): (&Vec<T::AccountId>,)| {
-				T::DbWeight::get().writes(1)
-					.saturating_add(2 * WEIGHT_PER_MICROS)
-					.saturating_add((6 * WEIGHT_PER_NANOS).saturating_mul(validators.len() as Weight))
-			},
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = T::DbWeight::get().writes(1)
+			.saturating_add(2 * WEIGHT_PER_MICROS)
+			.saturating_add((6 * WEIGHT_PER_NANOS).saturating_mul(validators.len() as Weight))
+		]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
@@ -1780,15 +1770,10 @@ decl_module! {
 		/// - Read: Unapplied Slashes
 		/// - Write: Unapplied Slashes
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, slash_indices,): (_, &Vec<u32>,)| {
-				T::DbWeight::get().reads_writes(1, 1)
-					.saturating_add(5_870 * WEIGHT_PER_MICROS)
-					.saturating_add((35 * WEIGHT_PER_MICROS).saturating_mul(slash_indices.len() as Weight))
-			},
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(5_870 * WEIGHT_PER_MICROS)
+			.saturating_add((35 * WEIGHT_PER_MICROS).saturating_mul(slash_indices.len() as Weight))
+		]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
@@ -1960,15 +1945,12 @@ decl_module! {
 		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &items,): (_, &u32,)| {
-				let items = Weight::from(items);
-				T::DbWeight::get().reads_writes(2, 1)
-					.saturating_add(T::DbWeight::get().reads_writes(items, items))
-			},
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = {
+			let items = Weight::from(*_era_items_deleted);
+			T::DbWeight::get().reads_writes(2, 1)
+				.saturating_add(T::DbWeight::get().reads_writes(items, items))
+
+		}]
 		fn set_history_depth(origin,
 			#[compact] new_history_depth: EraIndex,
 			#[compact] _era_items_deleted: u32,
@@ -2160,7 +2142,7 @@ impl<T: Trait> Module<T> {
 
 		let num_validators = validators.len();
 		let num_nominators = nominators.len();
-		add_db_reads_writes((num_validators + num_nominators) as u64, 0);
+		add_db_reads_writes((num_validators + num_nominators) as Weight, 0);
 
 		if
 			num_validators > MAX_VALIDATORS ||
