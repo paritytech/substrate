@@ -183,7 +183,7 @@ impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProo
 		let request: FinalityProofRequest<Block::Hash> = Decode::decode(&mut &request[..])
 			.map_err(|e| {
 				warn!(target: "afg", "Unable to decode finality proof request: {}", e.what());
-				ClientError::Backend(format!("Invalid finality proof request"))
+				ClientError::Backend("Invalid finality proof request".to_string())
 			})?;
 		match request {
 			FinalityProofRequest::Original(request) => prove_finality::<_, _, GrandpaJustification<Block>>(
@@ -397,7 +397,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 		}
 
 		// else search for the next justification
-		current_number = current_number + One::one();
+		current_number += One::one();
 	}
 
 	if finality_proof.is_empty() {
@@ -513,7 +513,7 @@ fn check_finality_proof_fragment<Block: BlockT, B, J>(
 			new_authorities_proof,
 		)?;
 
-		current_set_id = current_set_id + 1;
+		current_set_id += 1;
 	}
 
 	Ok(AuthoritiesOrEffects::Effects(FinalityEffects {

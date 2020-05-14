@@ -236,16 +236,14 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let (neighbor_packet_worker, neighbor_packet_sender) = periodic::NeighborPacketWorker::new();
 
-		let bridge = NetworkBridge {
+		NetworkBridge {
 			service,
 			gossip_engine,
 			validator,
 			neighbor_sender: neighbor_packet_sender,
 			neighbor_packet_worker: Arc::new(Mutex::new(neighbor_packet_worker)),
 			gossip_validator_report_stream: Arc::new(Mutex::new(report_stream)),
-		};
-
-		bridge
+		}
 	}
 
 	/// Note the beginning of a new round to the `GossipValidator`.
@@ -304,7 +302,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 				match decoded {
 					Err(ref e) => {
 						debug!(target: "afg", "Skipping malformed message {:?}: {}", notification, e);
-						return future::ready(None);
+						future::ready(None)
 					}
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
@@ -343,7 +341,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					}
 					_ => {
 						debug!(target: "afg", "Skipping unknown message type");
-						return future::ready(None);
+						future::ready(None)
 					}
 				}
 			});
@@ -666,7 +664,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 
 		// when locals exist, sign messages on import
 		if let Some((ref pair, _)) = self.locals {
-			let target_hash = msg.target().0.clone();
+			let target_hash = *(msg.target().0);
 			let signed = sp_finality_grandpa::sign_message(
 				msg,
 				pair,

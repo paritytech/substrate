@@ -38,6 +38,8 @@ pub trait AppKey: 'static + Send + Sync + Sized + CryptoType + Clone {
 
 	/// An identifier for this application-specific key type.
 	const ID: KeyTypeId;
+	/// The identifier of the crypto type of this application-specific key type.
+	const CRYPTO_ID: CryptoTypeId;
 }
 
 /// Type which implements Hash in std, not when no-std (std variant).
