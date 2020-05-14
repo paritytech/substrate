@@ -231,6 +231,7 @@ benchmarks! {
 		// Slashing Spans
 		let s in 0 .. MAX_SPANS;
 		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 10.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
 		CurrentEra::put(EraIndex::max_value());
