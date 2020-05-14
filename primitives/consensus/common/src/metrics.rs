@@ -28,14 +28,14 @@
 
 use lazy_static::lazy_static;
 use prometheus::{
-    Opts,
+	Opts,
 	core::{ AtomicU64, GenericCounterVec },
 };
 
 lazy_static! {
-    /// Blocks processed and their result
-    pub static ref IMPORT_QUEUE_PROCESSED : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
-        Opts::new("import_queue_processed", "Blocks processed by import queue"),
-        &["result"] // 'success or failure
-    ).expect("Creating of statics doesn't fail. qed");
+	/// Blocks processed and their result
+	pub static ref IMPORT_QUEUE_PROCESSED : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
+		Opts::new("import_queue_processed", "Blocks processed by import queue"),
+		&["result"] // 'success or failure
+	).expect("Creating of statics doesn't fail. qed");
 }
