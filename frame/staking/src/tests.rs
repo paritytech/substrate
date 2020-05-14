@@ -24,7 +24,7 @@ use sp_runtime::{
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop, StorageMap,
-	traits::{Currency, ReservableCurrency, OnInitialize},
+	traits::{Currency, ReservableCurrency, OnInitialize, OnFinalize},
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
@@ -2705,7 +2705,7 @@ mod offchain_phragmen {
 
 	/// setup a new set of validators and nominator storage items independent of the parent mock
 	/// file. This produces a edge graph that can be reduced.
-	fn build_offchain_phragmen_test_ext() {
+	pub fn build_offchain_phragmen_test_ext() {
 		for i in (10..=40).step_by(10) {
 			// Note: we respect the convention of the mock (10, 11 pairs etc.) since these accounts
 			// have corresponding keys in session which makes everything more ergonomic and
@@ -4596,5 +4596,38 @@ fn migrate_era_should_handle_errors_2() {
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+	});
+}
+
+#[test]
+fn on_initialize_weight_is_correct() {
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		assert_eq!(Validators::<Test>::iter().count(), 0);
+		assert_eq!(Nominators::<Test>::iter().count(), 0);
+		// When this pallet has nothing, we do 4 reads each block
+		let base_weight = <Test as frame_system::Trait>::DbWeight::get().reads(4);
+		assert_eq!(base_weight, Staking::on_initialize(0));
+	});
+
+	ExtBuilder::default()
+	.offchain_phragmen_ext()
+	.validator_count(4)
+	.has_stakers(false)
+	.build()
+	.execute_with(|| {
+		crate::tests::offchain_phragmen::build_offchain_phragmen_test_ext();
+		run_to_block(11);
+		Staking::on_finalize(System::block_number());
+		System::set_block_number((System::block_number() + 1).into());
+		Timestamp::set_timestamp(System::block_number() * 1000 + INIT_TIMESTAMP);
+		Session::on_initialize(System::block_number());
+
+		assert_eq!(Validators::<Test>::iter().count(), 4);
+		assert_eq!(Nominators::<Test>::iter().count(), 5);
+		// With 4 validators and 5 nominator, we should increase weight by:
+		// - (4 + 5) reads
+		// - 3 Writes
+		let final_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4 + 9, 3);
+		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
 	});
 }

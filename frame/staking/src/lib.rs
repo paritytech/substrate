@@ -1221,6 +1221,7 @@ decl_module! {
 					log!(warn, "💸 Estimating next session change failed.");
 				}
 			}
+			// For `era_election_status`, `is_current_session_final`, `will_era_be_forced`
 			add_weight(3, 0, 0);
 			// Additional read from `on_finalize`
 			add_weight(1, 0, 0);
