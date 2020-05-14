@@ -19,7 +19,7 @@
 //!
 //! The membership can be provided in one of two ways: either directly, using the Root-dispatchable
 //! function `set_members`, or indirectly, through implementing the `ChangeMembers`.
-//! The pallet assumes that the amount of members stays at or below `MAX_MEMBERS` for its weight 
+//! The pallet assumes that the amount of members stays at or below `MAX_MEMBERS` for its weight
 //! calculations, but enforces this neither in `set_members` nor in `change_members_sorted`.
 //!
 //! A "prime" member may be set allowing their vote to act as the default vote in case of any
@@ -210,7 +210,7 @@ mod weight_for {
 	///
 	/// Note: The complexity of `set_members` is quadratic (`O(MP + N)`), so the linear approximation
 	/// of the benchmark is not always permissible. It is here, though, because the linear approximation
-	/// covered the range of possible values and we estimate weight via the worst case (max paramter 
+	/// covered the range of possible values and we estimate weight via the worst case (max paramter
 	/// values) before execution so we can be sure that we are only overestimating.
 	pub(crate) fn set_members<T: Trait<I>, I: Instance>(
 		old_count: Weight,
@@ -238,7 +238,7 @@ mod weight_for {
 	) -> Weight {
 		T::DbWeight::get().reads(1) // read members for `is_member`
 			.saturating_add(23_000_000) // constant
-			.saturating_add(4_000 * length) // B
+			.saturating_add(length.saturating_mul(4_000)) // B
 			.saturating_add(120_000 * members) // M
 			.saturating_add(proposal) // P
 	}
@@ -367,7 +367,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (
 			weight_for::set_members::<T, I>(
-				*old_count as Weight, // M
+				(*old_count).into(), // M
 				new_members.len() as Weight, // N
 				T::MaxProposals::get().into(), // P
 			),
@@ -604,7 +604,7 @@ decl_module! {
 		/// If called before the end of the voting period it will only close the vote if it is
 		/// has enough votes to be approved or disapproved.
 		///
-		/// If called after the end of the voting period abstentions are counted as rejections 
+		/// If called after the end of the voting period abstentions are counted as rejections
 		/// unless there is a prime member set and the prime member cast an approval.
 		///
 		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed proposal.
@@ -665,10 +665,10 @@ decl_module! {
 
 			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
-		
+
 			// default to true only if there's a prime and they voted in favour.
 			let default = Self::prime().map_or(false, |who| voting.ayes.iter().any(|a| a == &who));
-		
+
 			let abstentions = seats - (yes_votes + no_votes);
 			match default {
 				true => yes_votes += abstentions,
