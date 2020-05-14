@@ -16,23 +16,21 @@
 
 //! Authorship Prometheus metrics.
 
-use std::sync::Arc;
-
 use prometheus_endpoint::{register, PrometheusError, Registry, Histogram, HistogramOpts};
 
 /// Optional shareable link to basic authorship metrics.
 #[derive(Clone, Default)]
-pub struct MetricsLink(Arc<Option<Metrics>>);
+pub struct MetricsLink(Option<Metrics>);
 
 impl MetricsLink {
 	pub fn new(registry: Option<&Registry>) -> Self {
-		Self(Arc::new(
+		Self(
 			registry.and_then(|registry|
 				Metrics::register(registry)
 					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
 					.ok()
 			)
-		))
+		)
 	}
 
 	pub fn report(&self, do_this: impl FnOnce(&Metrics)) {
@@ -43,6 +41,7 @@ impl MetricsLink {
 }
 
 /// Authorship metrics.
+#[derive(Clone)]
 pub struct Metrics {
 	pub block_constructed: Histogram,
 }
