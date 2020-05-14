@@ -715,10 +715,10 @@ pub trait Offchain {
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
-	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
 		self.extension::<OffchainExt>()
-			.expect("local_storage_remove can be called only in the offchain worker context")
-			.local_storage_remove(kind, key)
+			.expect("local_storage_clear can be called only in the offchain worker context")
+			.local_storage_clear(kind, key)
 	}
 
 	/// Sets a value in the local storage if it matches current value.

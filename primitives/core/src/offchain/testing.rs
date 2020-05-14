@@ -178,7 +178,7 @@ impl offchain::Externalities for TestOffchainExt {
 		}.set(b"", key, value);
 	}
 
-	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
 		let mut state = self.0.write();
 		match kind {
 			StorageKind::LOCAL => &mut state.local_storage,

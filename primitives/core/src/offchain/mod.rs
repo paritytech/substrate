@@ -355,7 +355,7 @@ pub trait Externalities: Send {
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
-	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]);
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]);
 
 	/// Sets a value in the local storage if it matches current value.
 	///
@@ -521,8 +521,8 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).local_storage_set(kind, key, value)
 	}
 
-	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
-		(&mut **self).local_storage_remove(kind, key)
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		(&mut **self).local_storage_clear(kind, key)
 	}
 
 	fn local_storage_compare_and_set(
@@ -630,9 +630,9 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.local_storage_set(kind, key, value)
 	}
 
-	fn local_storage_remove(&mut self, kind: StorageKind, key: &[u8]) {
-		self.check(Capability::OffchainWorkerDbWrite, "local_storage_remove");
-		self.externalities.local_storage_remove(kind, key)
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		self.check(Capability::OffchainWorkerDbWrite, "local_storage_clear");
+		self.externalities.local_storage_clear(kind, key)
 	}
 
 	fn local_storage_compare_and_set(
