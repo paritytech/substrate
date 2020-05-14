@@ -31,7 +31,7 @@ use fnv::FnvHashMap;
 use futures::{prelude::*, future, channel::mpsc};
 use log::error;
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
-use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
+use std::{convert::TryFrom, fmt, io::Read as _, pin::Pin, task::{Context, Poll}};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
@@ -151,8 +151,8 @@ impl HttpApi {
 			_ => return Err(())
 		};
 
-		let name = hyper::header::HeaderName::from_bytes(name.as_bytes()).map_err(|_| ())?;
-		let value = hyper::header::HeaderValue::from_str(value).map_err(|_| ())?;
+		let name = hyper::header::HeaderName::try_from(name).map_err(drop)?;
+		let value = hyper::header::HeaderValue::try_from(value).map_err(drop)?;
 		// Note that we're always appending headers and never replacing old values.
 		// We assume here that the user knows what they're doing.
 		request.headers_mut().append(name, value);
@@ -585,25 +585,21 @@ impl Future for HttpWorker {
 			match request {
 				HttpWorkerRequest::Dispatched(mut future) => {
 					// Check for an HTTP response from the Internet.
-					let mut response = match Future::poll(Pin::new(&mut future), cx) {
+					let response = match Future::poll(Pin::new(&mut future), cx) {
 						Poll::Pending => {
 							me.requests.push((id, HttpWorkerRequest::Dispatched(future)));
 							continue
 						},
 						Poll::Ready(Ok(response)) => response,
-						Poll::Ready(Err(err)) => {
-							let _ = me.to_api.unbounded_send(WorkerToApi::Fail {
-								id,
-								error: err,
-							});
+						Poll::Ready(Err(error)) => {
+							let _ = me.to_api.unbounded_send(WorkerToApi::Fail { id, error });
 							continue;		// don't insert the request back
 						}
 					};
 
 					// We received a response! Decompose it into its parts.
-					let status_code = response.status();
-					let headers = mem::replace(response.headers_mut(), hyper::HeaderMap::new());
-					let body = response.into_body();
+					let (head, body) = response.into_parts();
+					let (status_code, headers) = (head.status, head.headers);
 
 					let (body_tx, body_rx) = mpsc::channel(3);
 					let _ = me.to_api.unbounded_send(WorkerToApi::Response {
