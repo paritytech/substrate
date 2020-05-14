@@ -20,3 +20,5 @@
 mod ed25519;
 #[cfg(test)]
 mod sr25519;
+#[cfg(test)]
+mod ecdsa;
