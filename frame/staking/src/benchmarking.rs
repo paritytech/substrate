@@ -305,7 +305,7 @@ benchmarks! {
 	force_unstake {
 		let u in ...;
 		let (stash, controller) = create_stash_controller::<T>(u)?;
-	}: _(RawOrigin::Root, stash)
+	}: _(RawOrigin::Root, stash, u32::max_value())
 	verify {
 		assert!(!Ledger::<T>::contains_key(&controller));
 	}

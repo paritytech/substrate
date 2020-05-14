@@ -50,11 +50,11 @@
 
 use super::{
 	EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
-	NegativeImbalanceOf, UnappliedSlash,
+	NegativeImbalanceOf, UnappliedSlash, Error,
 };
-use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug};
+use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug, DispatchResult};
 use frame_support::{
-	StorageMap, StorageDoubleMap,
+	StorageMap, StorageDoubleMap, ensure,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
 use sp_std::vec::Vec;
@@ -547,11 +547,18 @@ pub(crate) fn clear_era_metadata<T: Trait>(obsolete_era: EraIndex) {
 }
 
 /// Clear slashing metadata for a dead account.
-pub(crate) fn clear_stash_metadata<T: Trait>(stash: &T::AccountId) {
-	let spans = match <Module<T> as Store>::SlashingSpans::take(stash) {
-		None => return,
+pub(crate) fn clear_stash_metadata<T: Trait>(
+	stash: &T::AccountId,
+	num_slashing_spans: u32,
+) -> DispatchResult {
+	let spans = match <Module<T> as Store>::SlashingSpans::get(stash) {
+		None => return Ok(()),
 		Some(s) => s,
 	};
+
+	ensure!(num_slashing_spans as usize >= spans.iter().count(), Error::<T>::IncorrectSlashingSpans);
+
+	<Module<T> as Store>::SlashingSpans::remove(stash);
 
 	// kill slashing-span metadata for account.
 	//
@@ -561,6 +568,8 @@ pub(crate) fn clear_stash_metadata<T: Trait>(stash: &T::AccountId) {
 	for span in spans.iter() {
 		<Module<T> as Store>::SpanSlash::remove(&(stash.clone(), span.index));
 	}
+
+	Ok(())
 }
 
 // apply the slash to a stash account, deducting any missing funds from the reward

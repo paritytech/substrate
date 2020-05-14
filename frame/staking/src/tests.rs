@@ -40,9 +40,9 @@ fn force_unstake_works() {
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		// Force unstake requires root.
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11), BadOrigin);
+		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, u32::max_value()), BadOrigin);
 		// We now force them to unstake
-		assert_ok!(Staking::force_unstake(Origin::ROOT, 11));
+		assert_ok!(Staking::force_unstake(Origin::ROOT, 11, u32::max_value()));
 		// No longer bonded.
 		assert_eq!(Staking::bonded(&11), None);
 		// Transfer works.

@@ -1166,6 +1166,8 @@ decl_error! {
 		CallNotAllowed,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,
+		/// Incorrect number of slashing spans provided.
+		IncorrectSlashingSpans,
 	}
 }
 
@@ -1477,7 +1479,7 @@ decl_module! {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash)?;
+				Self::kill_stash(&stash, num_slashing_spans)?;
 				// remove the lock.
 				T::Currency::remove_lock(STAKING_ID, &stash);
 				// This is worst case scenario, so we use the full weight and return None
@@ -1735,11 +1737,11 @@ decl_module! {
 		/// Writes: Bonded, Ledger, Payee, Validators, Nominators, Account, Locks
 		/// # </weight>
 		#[weight = 48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 7)]
-		fn force_unstake(origin, stash: T::AccountId) {
+		fn force_unstake(origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure_root(origin)?;
 
 			// remove all staking-related information.
-			Self::kill_stash(&stash)?;
+			Self::kill_stash(&stash, num_slashing_spans)?;
 
 			// remove the lock.
 			T::Currency::remove_lock(STAKING_ID, &stash);
@@ -2001,7 +2003,7 @@ decl_module! {
 		]
 		fn reap_stash(_origin, stash: T::AccountId, num_slashing_spans: u32) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
-			Self::kill_stash(&stash)?;
+			Self::kill_stash(&stash, num_slashing_spans)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
 		}
 
@@ -3015,15 +3017,17 @@ impl<T: Trait> Module<T> {
 	/// This is called:
 	/// - after a `withdraw_unbond()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
-	fn kill_stash(stash: &T::AccountId) -> DispatchResult {
-		let controller = Bonded::<T>::take(stash).ok_or(Error::<T>::NotStash)?;
+	fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
+		let controller = Bonded::<T>::get(stash).ok_or(Error::<T>::NotStash)?;
+
+		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
+
+		Bonded::<T>::remove(stash);
 		<Ledger<T>>::remove(&controller);
 
 		<Payee<T>>::remove(stash);
 		<Validators<T>>::remove(stash);
 		<Nominators<T>>::remove(stash);
-
-		slashing::clear_stash_metadata::<T>(stash);
 
 		system::Module::<T>::dec_ref(stash);
 
