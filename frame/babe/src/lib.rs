@@ -555,7 +555,7 @@ impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber
 	}
 
 	// This function depends on the implementation of `estimate_next_session_rotation`
-	fn weight() -> Weight {
+	fn weight(_now: T::BlockNumber) -> Weight {
 		// Read: Current Slot, Epoch Index, Genesis Slot
 		T::DbWeight::get().reads(3)
 	}
