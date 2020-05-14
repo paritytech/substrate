@@ -95,6 +95,11 @@ use frame_support::{
 use frame_support::weights::{Weight, GetDispatchInfo, FunctionOf, Pays};
 use frame_system::{self as system, ensure_signed};
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
