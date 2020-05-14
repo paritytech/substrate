@@ -239,7 +239,7 @@ mod weight_for {
 		T::DbWeight::get().reads(1) // read members for `is_member`
 			.saturating_add(23_000_000) // constant
 			.saturating_add(length.saturating_mul(4_000)) // B
-			.saturating_add(120_000 * members) // M
+			.saturating_add(members.saturating_mul(120_000)) // M
 			.saturating_add(proposal) // P
 	}
 
@@ -255,7 +255,7 @@ mod weight_for {
 		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
 			.saturating_add(29_000_000) // constant
 			.saturating_add(length.saturating_mul(3_000)) // B
-			.saturating_add(220_000 * members) // M
+			.saturating_add(members.saturating_mul(220_000)) // M
 			.saturating_add(proposal) // P1
 	}
 
@@ -272,8 +272,8 @@ mod weight_for {
 			.saturating_add(T::DbWeight::get().reads_writes(2, 4)) // `proposal` insertion
 			.saturating_add(50_000_000) // constant
 			.saturating_add(length.saturating_mul(6_000)) // B
-			.saturating_add(110_000 * members) // M
-			.saturating_add(510_000 * proposals) // P2
+			.saturating_add(members.saturating_mul(110_000)) // M
+			.saturating_add(proposals.saturating_mul(510_000)) // P2
 	}
 
 	/// Calculate the weight for `vote`.
@@ -284,9 +284,9 @@ mod weight_for {
 		members: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(1) // read `Members`
-			+ T::DbWeight::get().reads_writes(1, 1) // mutate `Voting`
-			+ 30_000_000 // constant
-			+ 500_000 * members // M
+			.saturating_add(T::DbWeight::get().reads_writes(1, 1)) // mutate `Voting`
+			.saturating_add(30_000_000) // constant
+			.saturating_add(members.saturating_mul(500_000)) // M
 	}
 
 	/// Calculate the weight for `close`.
@@ -308,7 +308,7 @@ mod weight_for {
 			.saturating_add(db.writes(1)) // `Proposals`
 			.saturating_add(db.writes(1)) // `Voting`
 			.saturating_add(proposal_weight) // P1
-			.saturating_add(490_000 * proposals) // P2
+			.saturating_add(proposals.saturating_mul(490_000)) // P2
 	}
 
 	/// Calculate the weight for `close` without the call to `finalize_proposal`.
@@ -319,7 +319,7 @@ mod weight_for {
 		T::DbWeight::get().reads(3) // `Members`, `Voting`, `ProposalOf`
 			.saturating_add(66_000_000) // constant
 			.saturating_add(length.saturating_mul(8_000)) // B
-			.saturating_add(250_000 * members) // M
+			.saturating_add(members.saturating_mul(250_000)) // M
 	}
 }
 
