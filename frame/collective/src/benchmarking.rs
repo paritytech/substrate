@@ -24,6 +24,7 @@ use frame_benchmarking::{benchmarks_instance, account};
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
+use frame_system::Call as SystemCall;
 use frame_system::Module as System;
 use crate::Module as Collective;
 
@@ -70,7 +71,7 @@ benchmarks_instance! {
 		let length = 100;
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; length]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; length]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(last_old_member.clone()).into(),
 				threshold,
@@ -126,13 +127,15 @@ benchmarks_instance! {
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
 
-		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![1; b as usize]).into();
+		let proposal: T::Proposal = SystemCall::<T>::remark(vec![1; b as usize]).into();
 
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.clone()), bytes_in_storage)
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
-		assert_last_event::<T, I>(RawEvent::MemberExecuted(proposal_hash, Err(DispatchError::BadOrigin)).into());
+		assert_last_event::<T, I>(
+			RawEvent::MemberExecuted(proposal_hash, Err(DispatchError::BadOrigin)).into()
+		);
 	}
 
 	// This tests when execution would happen immediately after proposal
@@ -154,14 +157,16 @@ benchmarks_instance! {
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, MAX_MEMBERS)?;
 
-		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![1; b as usize]).into();
+		let proposal: T::Proposal = SystemCall::<T>::remark(vec![1; b as usize]).into();
 		let threshold = 1;
 
 	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
-		assert_last_event::<T, I>(RawEvent::Executed(proposal_hash, Err(DispatchError::BadOrigin)).into());
+		assert_last_event::<T, I>(
+			RawEvent::Executed(proposal_hash, Err(DispatchError::BadOrigin)).into()
+		);
 	}
 
 	// This tests when proposal is created and queued as "proposed"
@@ -186,7 +191,7 @@ benchmarks_instance! {
 		// Add previous proposals.
 		for i in 0 .. p - 1 {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -197,7 +202,7 @@ benchmarks_instance! {
 
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 
-		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![p as u8; b as usize]).into();
+		let proposal: T::Proposal = SystemCall::<T>::remark(vec![p as u8; b as usize]).into();
 
 	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
@@ -234,7 +239,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -307,7 +312,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -382,7 +387,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -468,7 +473,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -540,7 +545,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,

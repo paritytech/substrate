@@ -425,7 +425,10 @@ decl_module! {
 			),
 			DispatchClass::Operational
 		)]
-		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>, #[compact] length_bound: u32) -> DispatchResultWithPostInfo {
+		fn execute(origin,
+			proposal: Box<<T as Trait<I>>::Proposal>,
+			#[compact] length_bound: u32,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
@@ -434,7 +437,9 @@ decl_module! {
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
-			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(
+				RawEvent::MemberExecuted(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
+			);
 
 			Ok(get_result_weight(result).map(|w| weight_for::execute::<T, I>(
 				members.len() as Weight,
@@ -503,7 +508,9 @@ decl_module! {
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
 				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
-				Self::deposit_event(RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
+				Self::deposit_event(
+					RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
+				);
 
 				Ok(get_result_weight(result).map(|w| weight_for::propose_execute::<T, I>(
 					members.len() as Weight, // M
@@ -749,7 +756,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			let dispatch_weight = proposal.get_dispatch_info().weight;
 			let origin = RawOrigin::Members(voting.threshold, seats).into();
 			let result = proposal.dispatch(origin);
-			Self::deposit_event(RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(
+				RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
+			);
 			weight = weight.saturating_add(
 				// default to the dispatch info weight for safety
 				get_result_weight(result).unwrap_or(dispatch_weight) // P1
