@@ -30,6 +30,8 @@ use crate::Module as Staking;
 
 const SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
+const MAX_VALIDATORS: u32 = 1000;
+const MAX_SLASHES: u32 = 1000;
 
 fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
 	let user = account(string, n, SEED);
@@ -286,7 +288,7 @@ benchmarks! {
 	}
 
 	set_validator_count {
-		let c in 0 .. 1000;
+		let c in 0 .. MAX_VALIDATORS;
 	}: _(RawOrigin::Root, c)
 	verify {
 		assert_eq!(ValidatorCount::get(), c);
@@ -303,7 +305,7 @@ benchmarks! {
 
 	// Worst case scenario, the list of invulnerables is very long.
 	set_invulnerables {
-		let v in 0 .. 1000;
+		let v in 0 .. MAX_VALIDATORS;
 		let mut invulnerables = Vec::new();
 		for i in 0 .. v {
 			invulnerables.push(account("invulnerable", i, SEED));
@@ -324,10 +326,10 @@ benchmarks! {
 	}
 
 	cancel_deferred_slash {
-		let s in 1 .. 1000;
+		let s in 1 .. MAX_SLASHES;
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
-		for _ in 0 .. 1000 {
+		for _ in 0 .. MAX_SLASHES {
 			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
 		}
 		UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
@@ -335,7 +337,7 @@ benchmarks! {
 		let slash_indices: Vec<u32> = (0 .. s).collect();
 	}: _(RawOrigin::Root, era, slash_indices)
 	verify {
-		assert_eq!(UnappliedSlashes::<T>::get(&era).len(), (1000 - s) as usize);
+		assert_eq!(UnappliedSlashes::<T>::get(&era).len(), (MAX_SLASHES - s) as usize);
 	}
 
 	payout_stakers {
@@ -352,7 +354,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. 1000;
+		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
 		let (_, controller) = create_stash_controller::<T>(u)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -411,7 +413,7 @@ benchmarks! {
 	}
 
 	do_slash {
-		let l in 1 .. 1000;
+		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
 		let (stash, controller) = create_stash_controller::<T>(0)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
