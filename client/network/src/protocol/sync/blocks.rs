@@ -185,8 +185,7 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	pub fn clear_peer_download(&mut self, who: &PeerId) {
-		if let Entry::Occupied(entry) = self.peer_requests.entry(who.clone()) {
-			let start = entry.remove();
+		if let Some(start) = self.peer_requests.remove(who) {
 			let remove = match self.blocks.get_mut(&start) {
 				Some(&mut BlockRangeState::Downloading { ref mut downloading, .. }) if *downloading > 1 => {
 					*downloading -= 1;
