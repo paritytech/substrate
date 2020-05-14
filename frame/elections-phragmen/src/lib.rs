@@ -316,22 +316,22 @@ decl_module! {
 		/// and keep some for further transactions.
 		///
 		/// # <weight>
-		/// Base weight: 50us
+		/// Base weight: if would_create { 47.93 µs } else { 38.46 µs }
 		/// State reads:
 		/// 	- Candidates.len() + Members.len() + RunnersUp.len()
 		/// 	- Voting (is_voter)
-		/// 	- AccountBalance(who) (unreserve + total_balance)
+		/// 	- [AccountBalance(who) (unreserve + total_balance)]
 		/// State writes:
 		/// 	- Voting
 		/// 	- Lock
-		/// 	-  AccountBalance(who) (unreserve -- only when would_create is true)
+		/// 	- [AccountBalance(who) (unreserve -- only when would_create is true)]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, _, would_create): (_, _, &bool)|
-				50 * WEIGHT_PER_MICROS + if *would_create {
-					T::DbWeight::get().reads_writes(5, 3)
+				if *would_create {
+					50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
 				} else {
-					T::DbWeight::get().reads_writes(5, 2)
+					40 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
 				},
 			DispatchClass::Normal,
 			Pays::Yes,
@@ -383,17 +383,17 @@ decl_module! {
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
 		///
 		/// # <weight>
-		/// Base weight: 35us
+		/// Base weight: 36.8 µs
 		/// All state access is from do_remove_voter.
 		/// State reads:
 		/// 	- Voting
-		/// 	- AccountData(who)
+		/// 	- [AccountData(who)]
 		/// State writes:
 		/// 	- Voting
 		/// 	- Locks
-		/// 	- AccountData(who)
+		/// 	- [AccountData(who)]
 		/// # </weight>
-		#[weight = 35 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(2, 3)]
+		#[weight = 35 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 2)]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
@@ -410,13 +410,13 @@ decl_module! {
 		///     longer a candidate nor an active member or a runner-up.
 		///
 		///
-		/// The origin must provide the number of current candidates and votes of the reported target 
+		/// The origin must provide the number of current candidates and votes of the reported target
 		/// for the purpose of accurate weight calculation.
 		///
 		/// # <weight>
 		/// No Base weight based on min square analysis.
-		/// Complexity of candidate_count: 1.755 us
-		/// Complexity of vote_count: 17.97us
+		/// Complexity of candidate_count: 1.755 µs
+		/// Complexity of vote_count: 18.51 µs
 		/// State reads:
 		///  	- Voting(reporter)
 		///  	- Candidate.len()
@@ -424,15 +424,15 @@ decl_module! {
 		///  	- Candidates, Members, RunnersUp (is_defunct_voter) [and Voting(Target) -- already counted]
 		/// State writes:
 		/// 	- Lock(reporter || target)
-		/// 	- AccountBalance(reporter) + AccountBalance(target)
+		/// 	- [AccountBalance(reporter)] + AccountBalance(target)
 		/// 	- Voting(reporter || target)
 		/// Note: the db access is worse with respect to db, which is when the report is correct.
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(defunct,): (&DefunctVoter<<T::Lookup as StaticLookup>::Source>,)|
 				defunct.candidate_count as Weight * (2 * WEIGHT_PER_MICROS) +
-				defunct.vote_count as Weight * (18 * WEIGHT_PER_MICROS) +
-				T::DbWeight::get().reads_writes(6, 4),
+				defunct.vote_count as Weight * (19 * WEIGHT_PER_MICROS) +
+				T::DbWeight::get().reads_writes(6, 3),
 			DispatchClass::Normal,
 			Pays::Yes,
 		)]
@@ -484,23 +484,23 @@ decl_module! {
 		///     removed.
 		///
 		/// # <weight>
-		/// Base weight = 35us
-		/// Complexity of candidate_count: 0.373us
+		/// Base weight = 33.33 µs
+		/// Complexity of candidate_count: 0.375 µs
 		/// State reads:
 		/// 	- Candidates.len()
 		/// 	- Candidates
 		/// 	- Members
 		/// 	- RunnersUp
-		/// 	- AccountBalance(who)
+		/// 	- [AccountBalance(who)]
 		/// State writes:
-		/// 	- AccountBalance(who)
+		/// 	- [AccountBalance(who)]
 		/// 	- Candidates
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(candidate_count,): (&u32,)|
 				35 * WEIGHT_PER_MICROS +
 				*candidate_count as Weight * (375 * WEIGHT_PER_NANOS) +
-				T::DbWeight::get().reads_writes(5, 2),
+				T::DbWeight::get().reads_writes(4, 1),
 			DispatchClass::Normal,
 			Pays::Yes,
 		)]
@@ -539,47 +539,47 @@ decl_module! {
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
 		/// <weight>
 		/// If a candidate is renouncing:
-		/// 	Base weight: 16.57us
-		/// 	Complexity of candidate_count: 0.235
+		/// 	Base weight: 17.28 µs
+		/// 	Complexity of candidate_count: 0.235 µs
 		/// 	State reads:
 		/// 		- Candidates
-		/// 		- AccountBalance(who) (unreserve)
+		/// 		- [AccountBalance(who) (unreserve)]
 		/// 	State writes:
 		/// 		- Candidates
-		/// 		- AccountBalance(who) (unreserve)
+		/// 		- [AccountBalance(who) (unreserve)]
 		/// If member is renouncing:
-		/// 	Base weight: 46.25
+		/// 	Base weight: 46.25 µs
 		/// 	State reads:
 		/// 		- Members, RunnersUp (remove_and_replace_member),
-		/// 		- AccountData(who) (unreserve)
+		/// 		- [AccountData(who) (unreserve)]
 		/// 	State writes:
 		/// 		- Members, RunnersUp (remove_and_replace_member),
-		/// 		- AccountData(who) (unreserve)
+		/// 		- [AccountData(who) (unreserve)]
 		/// If runner is renouncing:
-		/// 	Base weight: 46.25
+		/// 	Base weight: 46.25 µs
 		/// 	State reads:
 		/// 		- RunnersUp (remove_and_replace_member),
-		/// 		- AccountData(who) (unreserve)
+		/// 		- [AccountData(who) (unreserve)]
 		/// 	State writes:
 		/// 		- RunnersUp (remove_and_replace_member),
-		/// 		- AccountData(who) (unreserve)
+		/// 		- [AccountData(who) (unreserve)]
 		///
 		/// TODO: and calls into ChangeMembers??
 		/// </weight>
 		#[weight = FunctionOf(
 			|(renouncing,): (&Renouncing,)| match *renouncing {
 				Renouncing::Candidate(count) => {
-					16 * WEIGHT_PER_MICROS +
+					18 * WEIGHT_PER_MICROS +
 					(count as Weight) * 235 * WEIGHT_PER_NANOS +
-					T::DbWeight::get().reads_writes(2, 2)
+					T::DbWeight::get().reads_writes(1, 1)
 				},
 				Renouncing::Member => {
-					47 * WEIGHT_PER_MICROS +
-					T::DbWeight::get().reads_writes(3, 3)
+					46 * WEIGHT_PER_MICROS +
+					T::DbWeight::get().reads_writes(2, 2)
 				},
 				Renouncing::RunnerUp => {
-					47 * WEIGHT_PER_MICROS +
-					T::DbWeight::get().reads_writes(2, 2)
+					46 * WEIGHT_PER_MICROS +
+					T::DbWeight::get().reads_writes(1, 1)
 				}
 			},
 			DispatchClass::Normal,
@@ -635,7 +635,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// If we have a replacement:
-		/// 	- Base weight: 47.15 us
+		/// 	- Base weight: 50.93 µs
 		/// 	- State reads:
 		/// 		- RunnersUp.len()
 		/// 		- Members, RunnersUp (remove_and_replace_member)
@@ -645,7 +645,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, has_replacement): (_, &bool)| if *has_replacement {
-				48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
+				50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
 			} else {
 				T::MaximumBlockWeight::get()
 			},
@@ -674,9 +674,9 @@ decl_module! {
 					// prediction was that we will NOT have a replacement, and now this call is
 					// aborting whilst charging a metric ton of weight. Refund and abort.
 					return Err(Error::<T>::InvalidReplacement.with_weight(
-						// refund to the variant where we have a replacement. This still an
-						// overestimate but fine for now.
-						48 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
+						// refund. The weight value comes from a benchmark which is special to this.
+						//  5.751 µs
+						6 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
 					).into());
 				}
 			}
