@@ -139,7 +139,7 @@ impl<B> Lockable for BlockAndTime<B> where B: BlockNumberTrait {
 
 	fn expired(&self, reference: &Self) -> bool {
 		let current = <Self as Lockable>::current();
-		current.timestamp > reference.timestamp || current.block_number > reference.block_number
+		current.timestamp > reference.timestamp && current.block_number > reference.block_number
 	}
 
 	fn snooze(&self, deadline: &Self) {
