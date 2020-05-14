@@ -2270,7 +2270,12 @@ fn garbage_collection_after_slashing() {
 		assert_eq!(Balances::free_balance(11), 0);
 		assert_eq!(Balances::total_balance(&11), 0);
 
-		assert_ok!(Staking::reap_stash(Origin::NONE, 11, u32::max_value()));
+		let slashing_spans = <Staking as crate::Store>::SlashingSpans::get(&11).unwrap();
+		assert_eq!(slashing_spans.iter().count(), 2);
+
+		// reap_stash respects num_slashing_spans so that weight is accurate
+		assert_noop!(Staking::reap_stash(Origin::NONE, 11, 0), Error::<Test>::IncorrectSlashingSpans);
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11, 2));
 
 		assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 		assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount_slashed(), &0);

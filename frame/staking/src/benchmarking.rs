@@ -539,7 +539,7 @@ mod tests {
 			}
 
 			// Test everything is cleaned up
-			assert_ok!(Staking::kill_stash(&validator_stash, 20));
+			assert_ok!(Staking::kill_stash(&validator_stash, num_of_slashing_spans));
 			assert!(SlashingSpans::<Test>::get(&validator_stash).is_none());
 			for i in 0 .. num_of_slashing_spans {
 				assert!(!SpanSlash::<Test>::contains_key((&validator_stash, i)));
