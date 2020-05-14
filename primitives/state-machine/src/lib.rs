@@ -349,7 +349,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.set_pending(pending_changes);
+			self.overlay.replace_pending(pending_changes);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -385,7 +385,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		if !was_native || result.is_ok() {
 			result
 		} else {
-			self.overlay.set_pending(pending_changes);
+			self.overlay.replace_pending(pending_changes);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
