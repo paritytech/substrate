@@ -185,7 +185,7 @@ impl HttpApi {
 				future::MaybeDone::Done(Err(_)) => return Err(HttpError::IoError),
 				future::MaybeDone::Future(_) |
 				future::MaybeDone::Gone => {
-					debug_assert!(if let future::MaybeDone::Done(_) = deadline { true } else { false });
+					debug_assert!(matches!(deadline, future::MaybeDone::Done(..)));
 					return Err(HttpError::DeadlineReached)
 				}
 			};
@@ -347,7 +347,7 @@ impl HttpApi {
 				if let future::MaybeDone::Done(msg) = next_msg {
 					msg
 				} else {
-					debug_assert!(if let future::MaybeDone::Done(_) = deadline { true } else { false });
+					debug_assert!(matches!(deadline, future::MaybeDone::Done(..)));
 					continue
 				}
 			};
