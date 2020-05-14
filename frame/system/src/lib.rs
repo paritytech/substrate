@@ -53,7 +53,9 @@
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
-//!   - [`CheckVersion`]: Checks that the runtime version is the same as the one encoded in the
+//!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one used to sign the
+//!     transaction.
+//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used to sign the
 //!     transaction.
 //!
 //! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
@@ -1735,14 +1737,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	}
 }
 
-/// Ensure the runtime version registered in the transaction is the same as at present.
+/// Ensure the transaction version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
+pub struct CheckTxVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
+impl<T: Trait + Send + Sync> Debug for CheckTxVersion<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckVersion")
+		write!(f, "CheckTxVersion")
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1751,19 +1753,54 @@ impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> CheckVersion<T> {
+impl<T: Trait + Send + Sync> CheckTxVersion<T> {
+	/// Create new `SignedExtension` to check transaction version.
+	pub fn new() -> Self {
+		Self(sp_std::marker::PhantomData)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckTxVersion<T> {
+	type AccountId = T::AccountId;
+	type Call = <T as Trait>::Call;
+	type AdditionalSigned = u32;
+	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckTxVersion";
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(<Module<T>>::runtime_version().transaction_version)
+	}
+}
+
+/// Ensure the runtime version registered in the transaction is the same as at present.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckSpecVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
+
+impl<T: Trait + Send + Sync> Debug for CheckSpecVersion<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "CheckSpecVersion")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
+impl<T: Trait + Send + Sync> CheckSpecVersion<T> {
 	/// Create new `SignedExtension` to check runtime version.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckSpecVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
 	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckVersion";
+	const IDENTIFIER: &'static str = "CheckSpecVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::runtime_version().spec_version)
