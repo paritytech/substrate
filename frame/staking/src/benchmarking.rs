@@ -543,7 +543,6 @@ mod tests {
 			for i in 0 .. num_of_slashing_spans {
 				assert!(!SpanSlash::<Test>::contains_key((&validator_stash, i)));
 			}
-
 		});
 	}
 
