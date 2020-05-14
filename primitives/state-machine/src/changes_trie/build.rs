@@ -433,6 +433,8 @@ mod test {
 		changes.set_extrinsic_index(2);
 		changes.set_child_storage(&child_info_2, vec![100], Some(vec![200]));
 
+		changes.set_extrinsic_index(1);
+
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
 		(backend, storage, changes, config)
