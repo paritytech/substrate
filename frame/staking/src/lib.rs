@@ -1878,7 +1878,7 @@ decl_module! {
 		///         ErasStakersClipped, ErasRewardPoints, ErasValidatorPrefs (8 items)
 		/// - Read Each: Bonded, Ledger, Payee, Locks, System Account (5 items)
 		/// - Write Each: System Account, Locks, Ledger (3 items)
-		/// TODO: Remove read on Migrate Era
+		// TODO: Remove read on Migrate Era
 		/// # </weight>
 		#[weight =
 			110 * WEIGHT_PER_MICROS
