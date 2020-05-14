@@ -87,6 +87,7 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 use futures::channel::mpsc;
+use rand::Rng;
 
 #[cfg(feature="test-helpers")]
 use {
@@ -661,8 +662,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
-				use rand::Rng;
-
 				// don't send telemetry block import events during initial sync for every
 				// block to avoid spamming the telemetry server, these events will be randomly
 				// sent at a rate of 1/10.
@@ -954,7 +953,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// we'll send notifications spuriously in that case.
 			const MAX_TO_NOTIFY: usize = 256;
 			let enacted = route_from_finalized.enacted();
-			let start = enacted.len() - ::std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
+			let start = enacted.len() - std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
 			for finalized in &enacted[start..] {
 				operation.notify_finalized.push(finalized.hash);
 			}
@@ -978,14 +977,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		for finalized_hash in notify_finalized {
-			let header = self.header(&BlockId::Hash(finalized_hash))?
-				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
+		// We assume the list is sorted and only want to inform the
+		// telemetry once about the finalized block.
+		if let Some(last) = notify_finalized.last() {
+			let header = self.header(&BlockId::Hash(*last))?
+				.expect(
+					"Header already known to exist in DB because it is \
+					 indicated in the tree route; qed"
+				);
 
 			telemetry!(SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
-				"best" => ?finalized_hash,
+				"best" => ?last,
 			);
+		}
+
+		for finalized_hash in notify_finalized {
+			let header = self.header(&BlockId::Hash(finalized_hash))?
+				.expect(
+					"Header already known to exist in DB because it is \
+					 indicated in the tree route; qed"
+				);
 
 			let notification = FinalityNotification {
 				header,

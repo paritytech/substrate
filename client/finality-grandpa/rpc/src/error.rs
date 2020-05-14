@@ -33,7 +33,7 @@ pub enum Error {
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		jsonrpc_core::Error {
-			message: format!("{}", error).into(),
+			message: format!("{}", error),
 			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
 			data: None,
 		}

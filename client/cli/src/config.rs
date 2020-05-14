@@ -472,9 +472,12 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the filters for the logging.
 	///
+	/// This should be a list of comma-separated values.
+	/// Example: `foo=trace,bar=debug,baz=info`
+	///
 	/// By default this is retrieved from `SharedParams`.
-	fn log_filters(&self) -> Result<Option<String>> {
-		Ok(self.shared_params().log_filters())
+	fn log_filters(&self) -> Result<String> {
+		Ok(self.shared_params().log_filters().join(","))
 	}
 
 	/// Initialize substrate. This must be done only once.
@@ -485,12 +488,12 @@ pub trait CliConfiguration: Sized {
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log_filters()?.unwrap_or_default();
+		let logger_pattern = self.log_filters()?;
 
 		sp_panic_handler::set(C::support_url(), C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(logger_pattern.as_str());
+		init_logger(&logger_pattern);
 
 		Ok(())
 	}
