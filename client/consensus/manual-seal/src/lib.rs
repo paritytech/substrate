@@ -28,6 +28,7 @@ use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
+use prometheus_endpoint::Registry;
 
 mod error;
 mod finalize_block;
@@ -68,6 +69,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 pub fn import_queue<Block, Transaction>(
 	block_import: BoxBlockImport<Block, Transaction>,
 	spawner: &impl sp_core::traits::SpawnBlocking,
+	registry: Option<&Registry>,
 ) -> BasicQueue<Block, Transaction>
 	where
 		Block: BlockT,
@@ -79,6 +81,7 @@ pub fn import_queue<Block, Transaction>(
 		None,
 		None,
 		spawner,
+		registry,
 	)
 }
 

@@ -23,7 +23,6 @@ use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedI
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
 use sc_client_api::ClientInfo;
-use sp_consensus::metrics::IMPORT_QUEUE_PROCESSED;
 
 use sysinfo::{self, ProcessExt, SystemExt};
 
@@ -77,8 +76,6 @@ impl PrometheusMetrics {
 		)?, &registry)?.set(roles);
 
 		register_globals(registry)?;
-
-		registry.register(Box::new(IMPORT_QUEUE_PROCESSED.clone()))?;
 
 		Ok(Self {
 			// system

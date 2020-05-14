@@ -14,20 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
+use std::{mem, pin::Pin, collections::HashMap, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
+use prometheus_endpoint::Registry;
 
 use crate::block_import::BlockOrigin;
-use crate::metrics::IMPORT_QUEUE_PROCESSED;
+use crate::metrics::Metrics;
 use crate::import_queue::{
 	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
 	BoxJustificationImport, ImportQueue, Link, Origin,
 	IncomingBlock, import_single_block,
 	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
 };
+
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with plugable verification.
@@ -58,14 +60,17 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 		spawner: &impl sp_core::traits::SpawnBlocking,
+		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
+		let metrics = prometheus_registry.and_then(|r| Metrics::register(r).ok());
 		let (future, worker_sender) = BlockImportWorker::new(
 			result_sender,
 			verifier,
 			block_import,
 			justification_import,
 			finality_proof_import,
+			metrics,
 		);
 
 		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
@@ -133,6 +138,7 @@ struct BlockImportWorker<B: BlockT, Transaction> {
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	delay_between_blocks: Duration,
+	metrics: Option<Metrics>,
 	_phantom: PhantomData<Transaction>,
 }
 
@@ -143,6 +149,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
+		metrics: Option<Metrics>
 	) -> (impl Future<Output = ()> + Send, TracingUnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
 
@@ -151,6 +158,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 			justification_import,
 			finality_proof_import,
 			delay_between_blocks: Duration::new(0, 0),
+			metrics,
 			_phantom: PhantomData,
 		};
 
@@ -241,9 +249,30 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		blocks: Vec<IncomingBlock<B>>
 	) -> impl Future<Output = (BoxBlockImport<B, Transaction>, V)> {
 		let mut result_sender = self.result_sender.clone();
+		let metrics = self.metrics.clone();
 
 		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks)
 			.then(move |(imported, count, results, block_import, verifier)| {
+				if let Some(metrics) = metrics {
+					let updates = results.iter().fold(HashMap::new(), |mut acc, result| {
+						acc.entry(match result.0 {
+							Err(BlockImportError::IncompleteHeader(_)) => "incomplete_header",
+							Err(BlockImportError::VerificationFailed(_,_)) => "verification_failed",
+							Err(BlockImportError::BadBlock(_)) => "bad_block",
+							Err(BlockImportError::MissingState) => "missing_state",
+							Err(BlockImportError::UnknownParent) => "unknown_parent",
+							Err(BlockImportError::Cancelled) => "cancelled",
+							Err(BlockImportError::Other(_)) => "failed",
+							Ok(_) => "success",
+						})
+						.and_modify(|e| { *e += 1})
+						.or_insert(1u64);
+						acc
+					});
+					for (entry, amount) in updates.iter() {
+						metrics.import_queue_processed.with_label_values(&[&entry]).inc_by(*amount)
+					};
+				}
 				result_sender.blocks_processed(imported, count, results);
 				future::ready((block_import, verifier))
 			})
@@ -391,17 +420,6 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 				verifier,
 			)
 		};
-
-		IMPORT_QUEUE_PROCESSED.with_label_values(&[&match import_result {
-			Err(BlockImportError::IncompleteHeader(_)) => "incomplete_header",
-			Err(BlockImportError::VerificationFailed(_,_)) => "verification_failed",
-			Err(BlockImportError::BadBlock(_)) => "bad_block",
-			Err(BlockImportError::MissingState) => "missing_state",
-			Err(BlockImportError::UnknownParent) => "unknown_parent",
-			Err(BlockImportError::Cancelled) => "cancelled",
-			Err(BlockImportError::Other(_)) => "failed",
-			Ok(_) => "success",
-		}]).inc();
 
 		if import_result.is_ok() {
 			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);

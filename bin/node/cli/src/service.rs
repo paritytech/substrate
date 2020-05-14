@@ -60,7 +60,7 @@ macro_rules! new_full_start {
 					prometheus_registry,
 				))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle, prometheus_registry| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -74,6 +74,7 @@ macro_rules! new_full_start {
 					sc_consensus_babe::Config::get_or_compute(&*client)?,
 					grandpa_block_import,
 					client.clone(),
+					prometheus_registry,
 				)?;
 
 				let import_queue = sc_consensus_babe::import_queue(
@@ -84,6 +85,7 @@ macro_rules! new_full_start {
 					client,
 					inherent_data_providers.clone(),
 					spawn_task_handle,
+					prometheus_registry,
 				)?;
 
 				import_setup = Some((block_import, grandpa_link, babe_link));

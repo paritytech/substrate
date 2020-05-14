@@ -86,6 +86,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		None,
 		None,
 		&sp_core::testing::SpawnBlockingExecutor::new(),
+		None,
 	));
 
 	let worker = NetworkWorker::new(config::Params {

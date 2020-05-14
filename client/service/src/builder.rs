@@ -484,7 +484,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		self,
-		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &SpawnTaskHandle)
+		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &SpawnTaskHandle, Option<&Registry>)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
@@ -495,6 +495,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.select_chain.clone(),
 			self.transaction_pool.clone(),
 			&self.task_manager.spawn_handle(),
+			self.config.prometheus_config.as_ref().map(|config| &config.registry),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -585,6 +586,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TSc>,
 			Arc<TExPool>,
 			&SpawnTaskHandle,
+			Option<&Registry>,
 		) -> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 		TExPool, TRpc, Backend>, Error>
@@ -597,6 +599,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.select_chain.clone(),
 			self.transaction_pool.clone(),
 			&self.task_manager.spawn_handle(),
+			self.config.prometheus_config.as_ref().map(|config| &config.registry),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -629,12 +632,13 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TSc>,
 			Arc<TExPool>,
 			&SpawnTaskHandle,
+			Option<&Registry>,
 		) -> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx, tb|
-			builder(cfg, cl, b, f, sc, tx, tb)
+		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx, tb, pr|
+			builder(cfg, cl, b, f, sc, tx, tb, pr)
 				.map(|(q, f)| (q, Some(f)))
 		)
 	}

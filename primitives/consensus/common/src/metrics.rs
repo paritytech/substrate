@@ -26,16 +26,24 @@
 //! process or service. This is expected to be done from the outside.
 //! If you are using sc-service, this is already done for you.
 
-use lazy_static::lazy_static;
-use prometheus::{
-	Opts,
-	core::{ AtomicU64, GenericCounterVec },
-};
+use prometheus_endpoint::{register, U64, Registry, PrometheusError, Opts, CounterVec};
 
-lazy_static! {
-	/// Blocks processed and their result
-	pub static ref IMPORT_QUEUE_PROCESSED : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
-		Opts::new("import_queue_processed", "Blocks processed by import queue"),
-		&["result"] // 'success or failure
-	).expect("Creating of statics doesn't fail. qed");
+/// generic prometheus metrics for common consensus functionality.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	pub import_queue_processed: CounterVec<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			import_queue_processed: register(
+				CounterVec::new(
+					Opts::new("import_queue_processed", "Blocks processed by import queue"),
+					&["result"] // 'success or failure
+				)?,
+				registry,
+			)?,
+		})
+	}
 }

@@ -44,7 +44,7 @@ pub mod block_import;
 mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
-pub mod metrics;
+mod metrics;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
