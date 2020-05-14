@@ -6241,6 +6241,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-timestamp",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]

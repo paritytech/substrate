@@ -53,6 +53,7 @@ use sp_consensus::import_queue::{
 	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
 };
 use codec::{Encode, Decode};
+use prometheus_endpoint::Registry;
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
@@ -464,6 +465,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnBlocking,
+	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
@@ -482,6 +484,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		justification_import,
 		finality_proof_import,
 		spawner,
+		registry
 	))
 }
 
