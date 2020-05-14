@@ -1945,7 +1945,7 @@ decl_module! {
 		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake, ErasStartSessionIndex
 		/// # </weight>
 		#[weight = FunctionOf(
-			|(_, &items,): (&EraIndex, &u32,)| {
+			|(_, &items,): (_, &u32,)| {
 				let items = Weight::from(items);
 				T::DbWeight::get().reads_writes(2, 1)
 					.saturating_add(T::DbWeight::get().reads_writes(items, items))
