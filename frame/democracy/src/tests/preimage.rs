@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! The preimage tests.
 
@@ -76,11 +77,11 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
+				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::max_value()),
 				Error::<Test>::TooEarly
 			);
 		next_block();
-		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
+		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::max_value()));
 
 		assert_eq!(Balances::free_balance(6), 60);
 		assert_eq!(Balances::reserved_balance(6), 0);
@@ -91,7 +92,7 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 fn preimage_deposit_should_be_reapable() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()),
 				Error::<Test>::PreimageMissing
 			);
 
@@ -103,12 +104,12 @@ fn preimage_deposit_should_be_reapable() {
 		next_block();
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()),
 				Error::<Test>::TooEarly
 			);
 
 		next_block();
-		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
+		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()));
 		assert_eq!(Balances::reserved_balance(6), 0);
 		assert_eq!(Balances::free_balance(6), 48);
 		assert_eq!(Balances::free_balance(5), 62);
@@ -152,6 +153,6 @@ fn reaping_imminent_preimage_should_fail() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		next_block();
 		next_block();
-		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h), Error::<Test>::Imminent);
+		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h, u32::max_value()), Error::<Test>::Imminent);
 	});
 }

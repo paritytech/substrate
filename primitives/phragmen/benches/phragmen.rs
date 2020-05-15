@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 //! Benchmarks of the phragmen election algorithm.
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
