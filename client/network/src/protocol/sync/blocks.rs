@@ -17,7 +17,6 @@
 use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
-use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
