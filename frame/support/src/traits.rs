@@ -29,6 +29,7 @@ use sp_runtime::{
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
@@ -147,11 +148,18 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	///
 	/// None should be returned if the estimation fails to come to an answer
 	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
+
+	/// Return the weight of calling `estimate_next_session_rotation`
+	fn weight(now: BlockNumber) -> Weight;
 }
 
 impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
+	}
+
+	fn weight(_: BlockNumber) -> Weight {
+		0
 	}
 }
 
@@ -160,11 +168,18 @@ impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the block number at which the next new session is estimated to happen.
 	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
+
+	/// Return the weight of calling `estimate_next_new_session`
+	fn weight(now: BlockNumber) -> Weight;
 }
 
 impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
 	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
+	}
+
+	fn weight(_: BlockNumber) -> Weight {
+		0
 	}
 }
 
