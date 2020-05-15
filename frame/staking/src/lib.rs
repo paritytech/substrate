@@ -293,7 +293,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
-	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo},
+	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo, WithPostDispatchInfo},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
 		UnixTime, EstimateNextNewSession, EnsureOrigin,
@@ -2124,7 +2124,7 @@ decl_module! {
 			score: PhragmenScore,
 			era: EraIndex,
 			size: ElectionSize,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let _who = ensure_signed(origin)?;
 			Self::check_and_replace_solution(
 				winners,
@@ -2133,7 +2133,7 @@ decl_module! {
 				score,
 				era,
 				size,
-			)?
+			)
 		}
 
 		/// Unsigned version of `submit_election_solution`.
@@ -2150,7 +2150,7 @@ decl_module! {
 			score: PhragmenScore,
 			era: EraIndex,
 			size: ElectionSize,
-		) {
+		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
 			Self::check_and_replace_solution(
 				winners,
@@ -2159,7 +2159,7 @@ decl_module! {
 				score,
 				era,
 				size,
-			)?
+			)
 			// TODO: instead of returning an error, panic. This makes the entire produced block
 			// invalid.
 			// This ensures that block authors will not ever try and submit a solution which is not
@@ -2549,33 +2549,35 @@ impl<T: Trait> Module<T> {
 
 	/// Basic and cheap checks that we perform in validate unsigned, and in the execution.
 	///
-	/// State reads: ElectionState, CurrentEr, QueuedScore
-	pub fn pre_dispatch_checks(score: PhragmenScore, era: EraIndex) -> Result<(), Error<T>> {
+	/// State reads: ElectionState, CurrentEr, QueuedScore.
+	///
+	/// This function does weight refund in case of errors, which is based upon the fact that it is
+	/// called at the very beginning of the call site's function.
+	pub fn pre_dispatch_checks(score: PhragmenScore, era: EraIndex) -> DispatchResultWithPostInfo {
 		// discard solutions that are not in-time
 		// check window open
 		ensure!(
 			Self::era_election_status().is_open(),
-			Error::<T>::PhragmenEarlySubmission,
+			Error::<T>::PhragmenEarlySubmission.with_weight(T::DbWeight::get().reads(1)),
 		);
 
 		// check current era.
 		if let Some(current_era) = Self::current_era() {
 			ensure!(
 				current_era == era,
-				Error::<T>::PhragmenEarlySubmission,
+				Error::<T>::PhragmenEarlySubmission.with_weight(T::DbWeight::get().reads(2)),
 			)
 		}
 
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
-		// TODO: errors up to here need refund
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
 				is_score_better(queued_score, score),
-				Error::<T>::PhragmenWeakSubmission,
+				Error::<T>::PhragmenWeakSubmission.with_weight(T::DbWeight::get().reads(3)),
 			)
 		}
 
-		Ok(())
+		Ok(None.into())
 	}
 
 	/// Checks a given solution and if correct and improved, writes it on chain as the queued result
@@ -2587,7 +2589,7 @@ impl<T: Trait> Module<T> {
 		claimed_score: PhragmenScore,
 		era: EraIndex,
 		election_size: ElectionSize,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResultWithPostInfo {
 		// Do the basic checks. era, claimed score and window open.
 		Self::pre_dispatch_checks(claimed_score, era)?;
 
@@ -2662,7 +2664,7 @@ impl<T: Trait> Module<T> {
 				// have bigger problems.
 				log!(error, "💸 detected an error in the staking locking and snapshot.");
 				// abort.
-				return Err(Error::<T>::PhragmenBogusNominator);
+				return Err(Error::<T>::PhragmenBogusNominator.into());
 			}
 
 			if !is_validator {
@@ -2679,14 +2681,14 @@ impl<T: Trait> Module<T> {
 					// each target in the provided distribution must be actually nominated by the
 					// nominator after the last non-zero slash.
 					if nomination.targets.iter().find(|&tt| tt == t).is_none() {
-						return Err(Error::<T>::PhragmenBogusNomination);
+						return Err(Error::<T>::PhragmenBogusNomination.into());
 					}
 
 					if <Self as Store>::SlashingSpans::get(&t).map_or(
 						false,
 						|spans| nomination.submitted_in < spans.last_nonzero_slash(),
 					) {
-						return Err(Error::<T>::PhragmenSlashedNomination);
+						return Err(Error::<T>::PhragmenSlashedNomination.into());
 					}
 				}
 			} else {
@@ -2739,7 +2741,7 @@ impl<T: Trait> Module<T> {
 		});
 		QueuedScore::put(submitted_score);
 
-		Ok(())
+		Ok(None.into())
 
 	}
 
@@ -3393,12 +3395,6 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	}
 }
 
-impl<T: Trait> From<Error<T>> for InvalidTransaction {
-	fn from(e: Error<T>) -> Self {
-		InvalidTransaction::Custom(e.as_u8())
-	}
-}
-
 #[allow(deprecated)]
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
@@ -3411,6 +3407,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			_,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
+			use sp_runtime::DispatchError;
 
 			// discard solution not coming from the local OCW.
 			match source {
@@ -3421,9 +3418,18 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				}
 			}
 
-			if let Err(e) = Self::pre_dispatch_checks(*score, *era) {
-				log!(debug, "validate unsigned pre dispatch checks failed due to {:?}.", e);
-				return InvalidTransaction::from(e).into();
+			if let Err(error_with_post_info) = Self::pre_dispatch_checks(*score, *era) {
+				let error = error_with_post_info.error;
+				let error_number = match error {
+					DispatchError::Module { error, ..} => error,
+					_ => 0,
+				};
+				log!(
+					debug,
+					"validate unsigned pre dispatch checks failed due to module error #{:?}.",
+					error,
+				);
+				return InvalidTransaction::Custom(error_number).into();
 			}
 
 			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);

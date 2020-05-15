@@ -2753,7 +2753,10 @@ fn remove_multi_deferred() {
 mod offchain_phragmen {
 	use crate::*;
 	use codec::Encode;
-	use frame_support::{assert_noop, assert_ok, dispatch::DispatchResult};
+	use frame_support::{
+		assert_noop, assert_ok, assert_err_with_weight,
+		dispatch::DispatchResultWithPostInfo,
+	};
 	use sp_runtime::transaction_validity::TransactionSource;
 	use mock::*;
 	use parking_lot::RwLock;
@@ -2820,7 +2823,7 @@ mod offchain_phragmen {
 		winners: Vec<ValidatorIndex>,
 		compact: CompactAssignments,
 		score: PhragmenScore,
-	) -> DispatchResult {
+	) -> DispatchResultWithPostInfo {
 		Staking::submit_election_solution(
 			origin,
 			winners,
@@ -3104,16 +3107,17 @@ mod offchain_phragmen {
 				let (compact, winners, score) = prepare_submission_with(true, 2, |_| {});
 				Staking::kill_stakers_snapshot();
 
-				assert_noop!(
+				assert_err_with_weight!(
 					Staking::submit_election_solution(
 						Origin::signed(10),
-						winners,
-						compact,
+						winners.clone(),
+						compact.clone(),
 						score,
 						current_era(),
 						ElectionSize::default(),
 					),
 					Error::<Test>::PhragmenEarlySubmission,
+					Some(<Test as frame_system::Trait>::DbWeight::get().reads(1)),
 				);
 			})
 	}
@@ -3141,14 +3145,15 @@ mod offchain_phragmen {
 
 				// a bad solution
 				let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
-				assert_noop!(
+				assert_err_with_weight!(
 					submit_solution(
 						Origin::signed(10),
-						winners,
-						compact,
+						winners.clone(),
+						compact.clone(),
 						score,
 					),
 					Error::<Test>::PhragmenWeakSubmission,
+					Some(<Test as frame_system::Trait>::DbWeight::get().reads(3))
 				);
 			})
 	}
