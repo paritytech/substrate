@@ -42,7 +42,7 @@ pub mod proxy;
 
 /// Flag to signal whether we need to run wasm tracing, inc host-function calls
 #[cfg(feature = "std")]
-pub const WASM_TRACING_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub static WASM_TRACING_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
