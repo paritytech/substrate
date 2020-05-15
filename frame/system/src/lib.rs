@@ -1016,7 +1016,6 @@ impl<T: Trait> Module<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::kill();
-		println!("SHOULD BE KILLED");
 		AllExtrinsicsLen::kill();
 
 		// Kill inspectable storage entries in state when `InitKind::Full`.
