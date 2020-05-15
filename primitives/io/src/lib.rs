@@ -880,7 +880,8 @@ sp_externalities::decl_extension! {
 #[runtime_interface]
 pub trait WasmTracing {
 	/// To create and enter a `tracing` span, via `sp_tracing::proxy`
-	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
+	fn enter_span(&mut self, target: &str, name: &str) -> Option<u64> {
+		if !sp_tracing::WASM_TRACING_ENABLED.load(std::sync::atomic::Ordering::Relaxed) { return None }
 		let proxy = match self.extension::<TracingProxyExt>() {
 			Some(proxy) => proxy,
 			None => {
@@ -889,7 +890,7 @@ pub trait WasmTracing {
 				self.extension::<TracingProxyExt>().expect("Failed to load required extension: `TracingProxyExt`")
 			}
 		};
-		proxy.enter_span(target, name)
+		Some(proxy.enter_span(target, name))
 	}
 
 	/// If there is a panic in the WASM VM then this may not be called.

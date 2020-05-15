@@ -18,7 +18,6 @@
 //!
 //! Facilitated by `sp_io::wasm_tracing`
 
-
 /// This holds a tracing span id and is to signal on drop that a tracing span has exited.
 /// It must be bound to a named variable eg. `_span_guard`.
 pub struct TracingSpanGuard(u64);
@@ -47,12 +46,21 @@ impl Drop for TracingSpanGuard {
 macro_rules! enter_span {
 	( $name:expr ) => {
 		#[cfg(not(feature = "std"))]
-		let __span_id__ = $crate::wasm_tracing::TracingSpanGuard::new(
-			$crate::sp_io::wasm_tracing::enter_span(
-				module_path!(),
-				&[$name, "_wasm"].concat()
-			)
-		);
+		{
+			let __span_id__;
+			if frame_support::WASM_TRACING_ENABLED.get() {
+				if let Some(__id__) = $crate::sp_io::wasm_tracing::enter_span(
+						module_path!(),
+						&[$name, "_wasm"].concat()
+					){
+					__span_id__ = $crate::wasm_tracing::TracingSpanGuard::new(
+						__id__
+					);
+				} else {
+					frame_support::WASM_TRACING_ENABLED.set(false);
+				}
+			}
+		}
 		#[cfg(feature = "std")]
 		$crate::sp_tracing::enter_span!($name);
 	}
