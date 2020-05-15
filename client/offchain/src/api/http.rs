@@ -687,15 +687,12 @@ mod tests {
 	use crate::api::timestamp;
 	use super::http;
 	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
+	use futures::future;
 
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
 		() => {{
-			fn tokio_run<T>(future: impl std::future::Future<Output = T>) {
-				let _ = tokio::runtime::Runtime::new().unwrap().block_on(future);
-			}
-
 			// We spawn quite a bit of HTTP servers here due to how async API
 			// works for offchain workers, so be sure to raise the FD limit
 			// (particularly useful for macOS where the default soft limit may
@@ -703,28 +700,24 @@ mod tests {
 			fdlimit::raise_fd_limit();
 
 			let (api, worker) = http();
-			std::thread::spawn(move || tokio_run(worker));
 
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();
 			std::thread::spawn(move || {
-				tokio_run(async move {
+				let mut rt = tokio::runtime::Runtime::new().unwrap();
+				let worker = rt.spawn(worker);
+				let server = rt.spawn(async move {
 					let server = hyper::Server::bind(&"127.0.0.1:0".parse().unwrap())
 						.serve(hyper::service::make_service_fn(|_| { async move {
 							Ok::<_, Infallible>(hyper::service::service_fn(move |_req| async move {
-								// Take at least *a bit* of time so that we can test the non-blocking
-								// nature of the HTTP. Sometimes we receive the answer immediately,
-								// which means we can't know if we blockingly waited for a response
-								// or we did it in a non-blocking fashion but it arrived immediately.
-								tokio::time::delay_for(std::time::Duration::from_millis(10)).await;
-
 								Ok::<_, Infallible>(
 									hyper::Response::new(hyper::Body::from("Hello World!"))
 								)
 							}))
 						}}));
 					let _ = addr_tx.send(server.local_addr());
-					server.await
+					server.await.map_err(drop)
 				});
+				let _ = rt.block_on(future::join(worker, server));
 			});
 			(api, addr_rx.recv().unwrap())
 		}};
