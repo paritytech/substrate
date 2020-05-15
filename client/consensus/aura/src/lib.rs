@@ -60,10 +60,7 @@ use sp_runtime::{
 };
 use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
-use sp_core::{
-	traits::BareCryptoStore,
-	crypto::Pair
-};
+use sp_core::{traits::BareCryptoStore, crypto::Pair};
 use sp_inherents::{InherentDataProviders, InherentData};
 use sp_timestamp::{
 	TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError
