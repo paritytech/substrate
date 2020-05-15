@@ -329,7 +329,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 					protocol: self.block_requests.protocol_name().to_vec(),
 					request_duration,
 				});
-				self.substrate.disconnect_peer(&peer);
+				self.substrate.on_block_request_failed(&peer);
 			}
 		}
 	}

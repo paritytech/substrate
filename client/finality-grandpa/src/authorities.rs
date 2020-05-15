@@ -229,8 +229,8 @@ where
 			   (&number, &hash), pending.delay);
 
 		self.pending_standard_changes.import(
-			hash.clone(),
-			number.clone(),
+			hash,
+			number,
 			pending,
 			is_descendent_of,
 		)?;

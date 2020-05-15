@@ -602,12 +602,16 @@ mod tests {
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
 				let best_block_id = BlockId::number(service.client().chain_info().best_number);
-				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
+				let (spec_version, transaction_version) = {
+					let version = service.client().runtime_version_at(&best_block_id).unwrap();
+					(version.spec_version, version.transaction_version)
+				};
 				let signer = charlie.clone();
 
 				let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-				let check_version = frame_system::CheckVersion::new();
+				let check_spec_version = frame_system::CheckSpecVersion::new();
+				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
 				let check_era = frame_system::CheckEra::from(Era::Immortal);
 				let check_nonce = frame_system::CheckNonce::from(index);
@@ -615,7 +619,8 @@ mod tests {
 				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
 				let validate_grandpa_equivocation = pallet_grandpa::ValidateEquivocationReport::new();
 				let extra = (
-					check_version,
+					check_spec_version,
+					check_tx_version,
 					check_genesis,
 					check_era,
 					check_nonce,
@@ -626,7 +631,7 @@ mod tests {
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), ())
+					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

@@ -39,7 +39,9 @@ const COMPACT_CODE: &[u8] = node_runtime::WASM_BINARY;
 
 const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
-const VERSION: u32 = node_runtime::VERSION.spec_version;
+const TRANSACTION_VERSION: u32 = node_runtime::VERSION.transaction_version;
+
+const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
 
 const HEAP_PAGES: u64 = 20;
 
@@ -52,7 +54,7 @@ enum ExecutionMethod {
 }
 
 fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-	node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
+	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 
 fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256> {
