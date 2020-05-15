@@ -111,7 +111,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 			Err(e) => return future::err(e.into()),
 		};
 
-		if let Some(_) = validation_result.ghost() {
+		if validation_result.ghost().is_some() {
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 
@@ -189,7 +189,7 @@ where
 		client,
 		network,
 		persistent_data,
-		config.keystore.clone(),
+		config.keystore,
 		voter_commands_rx
 	);
 

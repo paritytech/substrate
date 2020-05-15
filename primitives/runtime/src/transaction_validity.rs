@@ -43,12 +43,21 @@ pub enum InvalidTransaction {
 	/// General error to do with the transaction being outdated (e.g. nonce too low).
 	Stale,
 	/// General error to do with the transaction's proofs (e.g. signature).
+	///
+	/// # Possible causes
+	///
+	/// When using a signed extension that provides additional data for signing, it is required
+	/// that the signing and the verifying side use the same additional data. Additional
+	/// data will only be used to generate the signature, but will not be part of the transaction
+	/// itself. As the verifying side does not know which additional data was used while signing
+	/// it will only be able to assume a bad signature and cannot express a more meaningful error.
 	BadProof,
 	/// The transaction birth block is ancient.
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
-	/// The transaction might be valid, but there are not enough resources left in the current block.
+	/// The transaction might be valid, but there are not enough resources
+	/// left in the current block.
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),

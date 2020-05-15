@@ -43,7 +43,7 @@ fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	account
 }
 
-/// Account ot lookup type of system trait.
+/// Account to lookup type of system trait.
 fn as_lookup<T: Trait>(account: T::AccountId) -> Lookup<T> {
 	T::Lookup::unlookup(account)
 }
@@ -59,7 +59,7 @@ fn candidate_count<T: Trait>() -> u32 {
 	<Candidates<T>>::decode_len().unwrap_or(0usize) as u32
 }
 
-/// Get the number of voter of a voter.
+/// Get the number of votes of a voter.
 fn vote_count_of<T: Trait>(who: &T::AccountId) -> u32 {
 	<Voting<T>>::get(who).1.len() as u32
 }

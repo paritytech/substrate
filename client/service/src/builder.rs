@@ -1161,7 +1161,14 @@ ServiceBuilder<
 		// This is used internally, so don't restrict access to unsafe RPC
 		let rpc_handlers = gen_handler(sc_rpc::DenyUnsafe::No);
 
-		spawn_handle.spawn(
+		// The network worker is responsible for gathering all network messages and processing
+		// them. This is quite a heavy task, and at the time of the writing of this comment it
+		// frequently happens that this future takes several seconds or in some situations
+		// even more than a minute until it has processed its entire queue. This is clearly an
+		// issue, and ideally we would like to fix the network future to take as little time as
+		// possible, but we also take the extra harm-prevention measure to execute the networking
+		// future using `spawn_blocking`.
+		spawn_handle.spawn_blocking(
 			"network-worker",
 			build_network_future(
 				config.role.clone(),
