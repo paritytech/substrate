@@ -4619,5 +4619,25 @@ fn offences_weight_calculated_correctly() {
 			).collect();
 		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0), Ok(n_offence_unapplied_weight));
 
-		// On Offence with N offenders, Applied: 4 Reads, 1 Write + 4 Reads, 5 Writes
+		// On Offence with one offenders, Applied
+		let one_offender = [
+			OffenceDetails {
+				offender: (11, Staking::eras_stakers(Staking::active_era().unwrap().index, 11)),
+				reporters: vec![1],
+			},
+		];
+
+		let n = 1; // Number of offenders
+		let rw = 3 + 3 * n; // rw reads and writes
+		let one_offence_unapplied_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4, 1)
+			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(rw, rw)
+			// One `slash_cost`
+			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(6, 5)
+			// `slash_cost` * nominators (1)
+			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(6, 5)
+			// `reward_cost` * reporters (1)
+			+ <Test as frame_system::Trait>::DbWeight::get().reads_writes(2, 2);
+
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0), Ok(one_offence_unapplied_weight));
+	});
 }
