@@ -135,6 +135,9 @@ use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
+use sp_runtime::traits::SaturatedConversion;
+use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating}};
+use smallvec::{smallvec, SmallVec};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -527,6 +530,59 @@ impl RuntimeDbWeight {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
 		read_weight.saturating_add(write_weight)
+	}
+}
+
+#[derive(Clone, Encode, Decode)]
+pub struct WeightToFeeCoefficient<Balance> {
+	pub coeff_integer: Balance,
+	pub coeff_frac: Perbill,
+	pub negative: bool,
+	pub degree: u8,
+}
+
+pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
+
+pub trait WeightToFeePolynomial {
+	type Balance: BaseArithmetic + From<u32> + Copy;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance>;
+
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
+			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
+
+			// The sum could get negative. Therefore we only sum with the accumulator. 
+			let frac = args.coeff_frac.mul_ceil(w);
+			let integer = args.coeff_integer.saturating_mul(w);
+
+			if args.negative {
+				acc = acc.saturating_sub(frac);
+				acc = acc.saturating_sub(integer);
+			} else {
+				acc = acc.saturating_add(frac);
+				acc = acc.saturating_add(integer);
+			}
+
+			acc
+		})
+	}
+}
+
+pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
+
+impl<T> WeightToFeePolynomial for IdentityFee<T> where
+	T: BaseArithmetic + From<u32> + Copy
+{
+	type Balance = T;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+		smallvec!(WeightToFeeCoefficient {
+			coeff_integer: 1u32.into(),
+			coeff_frac: Perbill::zero(),
+			negative: false,
+			degree: 1,
+		})
 	}
 }
 
