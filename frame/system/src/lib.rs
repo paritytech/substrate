@@ -1023,7 +1023,7 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
 
-		/// Kill inspectable storage entries in state when `InitKind::Full`.
+		// Kill inspectable storage entries in state when `InitKind::Full`.
 		if let InitKind::Full = kind {
 			<Events<T>>::kill();
 			EventCount::kill();
