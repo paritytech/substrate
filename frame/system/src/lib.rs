@@ -1019,6 +1019,11 @@ impl<T: Trait> Module<T> {
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 
+		// Remove previous block data from storage
+		AllExtrinsicsWeight::kill();
+		AllExtrinsicsLen::kill();
+
+		/// Kill inspectable storage entries in state when `InitKind::Full`.
 		if let InitKind::Full = kind {
 			<Events<T>>::kill();
 			EventCount::kill();
@@ -1030,8 +1035,6 @@ impl<T: Trait> Module<T> {
 	pub fn finalize() -> T::Header {
 		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
-		AllExtrinsicsWeight::kill();
-		AllExtrinsicsLen::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
