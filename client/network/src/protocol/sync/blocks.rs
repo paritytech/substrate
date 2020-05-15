@@ -18,7 +18,6 @@
 use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
-use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
@@ -117,17 +116,17 @@ impl<B: BlockT> BlockCollection<B> {
 			let mut prev: Option<(&NumberFor<B>, &BlockRangeState<B>)> = None;
 			loop {
 				let next = downloading_iter.next();
-				break match &(prev, next) {
-					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _)
+				break match (prev, next) {
+					(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _)
 						if downloading < max_parallel =>
 						(*start .. *start + *len, downloading),
-					&(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
+					(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
-					&(Some((start, r)), None) =>
+					(Some((start, r)), None) =>
 						(*start + r.len() .. *start + r.len() + count, 0), // last range
-					&(None, None) =>
+					(None, None) =>
 						(first_different .. first_different + count, 0), // empty
-					&(None, Some((start, _))) if *start > first_different =>
+					(None, Some((start, _))) if *start > first_different =>
 						(first_different .. cmp::min(first_different + count, *start), 0), // gap at the start
 					_ => {
 						prev = next;
@@ -168,7 +167,7 @@ impl<B: BlockT> BlockCollection<B> {
 		let mut prev = from;
 		for (start, range_data) in &mut self.blocks {
 			match range_data {
-				&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
+				BlockRangeState::Complete(blocks) if *start <= prev => {
 					prev = *start + (blocks.len() as u32).into();
 					// Remove all elements from `blocks` and add them to `drained`
 					drained.append(blocks);
@@ -186,26 +185,22 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	pub fn clear_peer_download(&mut self, who: &PeerId) {
-		match self.peer_requests.entry(who.clone()) {
-			Entry::Occupied(entry) => {
-				let start = entry.remove();
-				let remove = match self.blocks.get_mut(&start) {
-					Some(&mut BlockRangeState::Downloading { ref mut downloading, .. }) if *downloading > 1 => {
-						*downloading = *downloading - 1;
-						false
-					},
-					Some(&mut BlockRangeState::Downloading { .. }) => {
-						true
-					},
-					_ => {
-						false
-					}
-				};
-				if remove {
-					self.blocks.remove(&start);
+		if let Some(start) = self.peer_requests.remove(who) {
+			let remove = match self.blocks.get_mut(&start) {
+				Some(&mut BlockRangeState::Downloading { ref mut downloading, .. }) if *downloading > 1 => {
+					*downloading -= 1;
+					false
+				},
+				Some(&mut BlockRangeState::Downloading { .. }) => {
+					true
+				},
+				_ => {
+					false
 				}
-			},
-			_ => (),
+			};
+			if remove {
+				self.blocks.remove(&start);
+			}
 		}
 	}
 }
