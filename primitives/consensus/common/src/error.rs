@@ -17,7 +17,7 @@
 
 //! Error types in Consensus
 use sp_version::RuntimeVersion;
-use sp_core::ed25519::{Public, Signature};
+use sp_core::ed25519::Public;
 use std::error;
 
 /// Result type alias.
@@ -49,7 +49,7 @@ pub enum Error {
 	CannotPropose,
 	/// Error checking signature
 	#[display(fmt="Message signature {:?} by {:?} is invalid.", _0, _1)]
-	InvalidSignature(Signature, Public),
+	InvalidSignature(Vec<u8>, Vec<u8>),
 	/// Invalid authorities set received from the runtime.
 	#[display(fmt="Current state of blockchain has invalid authorities set")]
 	InvalidAuthoritiesSet,
@@ -80,6 +80,9 @@ pub enum Error {
 	#[display(fmt="Chain lookup failed: {}", _0)]
 	#[from(ignore)]
 	ChainLookup(String),
+	/// Signing failed
+	#[display(fmt="Failed to sign using key: {:?}. Reason: {}", _0, _1)]
+	CannotSign(Vec<u8>, String)
 }
 
 impl error::Error for Error {

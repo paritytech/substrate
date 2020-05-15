@@ -34,7 +34,11 @@ pub use codec;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use sp_std::{ops::Deref, vec::Vec};
+pub use sp_std::{
+	convert::TryFrom,
+	ops::Deref,
+	vec::Vec,
+};
 
 pub mod ed25519;
 pub mod sr25519;
@@ -456,6 +460,14 @@ macro_rules! app_crypto_signature_common {
 
 		impl $crate::AppSignature for Signature {
 			type Generic = $sig;
+		}
+
+		impl $crate::TryFrom<$crate::Vec<u8>> for Signature {
+			type Error = ();
+
+			fn try_from(data: $crate::Vec<u8>) -> Result<Self, Self::Error> {
+				Ok(<$sig>::try_from(data.as_slice())?.into())
+			}
 		}
 	}
 }

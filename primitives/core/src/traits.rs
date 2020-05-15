@@ -32,17 +32,22 @@ use std::{
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// BareCryptoStore error
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display)]
 pub enum BareCryptoStoreError {
 	/// Public key type is not supported
+	#[display(fmt="Key not supported: {:?}", _0)]
 	KeyNotSupported(KeyTypeId),
 	/// Pair not found for public key and KeyTypeId
+	#[display(fmt="Pair was not found: {}", _0)]
 	PairNotFound(String),
 	/// Validation error
+	#[display(fmt="Validation error: {}", _0)]
 	ValidationError(String),
 	/// Keystore unavailable
+	#[display(fmt="Keystore unavailable")]
 	Unavailable,
 	/// Programming errors
+	#[display(fmt="An unknown keystore error occurred: {}", _0)]
 	Other(String)
 }
 
