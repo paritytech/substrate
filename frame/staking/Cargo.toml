@@ -1,6 +1,6 @@
 [package]
 name = "pallet-staking"
-version = "2.0.0-alpha.8"
+version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,35 +14,35 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
-sp-std = { version = "2.0.0-alpha.8", default-features = false, path = "../../primitives/std" }
-sp-phragmen = { version = "2.0.0-alpha.8", default-features = false, path = "../../primitives/phragmen" }
-sp-io ={ version = "2.0.0-alpha.8", path = "../../primitives/io", default-features = false }
-sp-runtime = { version = "2.0.0-alpha.8", default-features = false, path = "../../primitives/runtime" }
-sp-staking = { version = "2.0.0-alpha.8", default-features = false, path = "../../primitives/staking" }
-frame-support = { version = "2.0.0-alpha.8", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.8", default-features = false, path = "../system" }
-pallet-session = { version = "2.0.0-alpha.8", features = ["historical"], path = "../session", default-features = false }
-pallet-authorship = { version = "2.0.0-alpha.8", default-features = false, path = "../authorship" }
-sp-application-crypto = { version = "2.0.0-alpha.8", default-features = false, path = "../../primitives/application-crypto" }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-phragmen = { version = "2.0.0-dev", default-features = false, path = "../../primitives/phragmen" }
+sp-io ={ version = "2.0.0-dev", path = "../../primitives/io", default-features = false }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-staking = { version = "2.0.0-dev", default-features = false, path = "../../primitives/staking" }
+frame-support = { version = "2.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
+pallet-session = { version = "2.0.0-dev", features = ["historical"], path = "../session", default-features = false }
+pallet-authorship = { version = "2.0.0-dev", default-features = false, path = "../authorship" }
+sp-application-crypto = { version = "2.0.0-dev", default-features = false, path = "../../primitives/application-crypto" }
 static_assertions = "1.1.0"
 
 # Optional imports for tesing-utils feature
-pallet-indices = { version = "2.0.0-alpha.8", optional = true, path = "../indices", default-features = false }
-sp-core = { version = "2.0.0-alpha.8", optional = true, path = "../../primitives/core", default-features = false }
+pallet-indices = { version = "2.0.0-dev", optional = true, path = "../indices", default-features = false }
+sp-core = { version = "2.0.0-dev", optional = true, path = "../../primitives/core", default-features = false }
 rand = { version = "0.7.3", optional = true, default-features = false }
 
 # Optional imports for benchmarking
-frame-benchmarking = { version = "2.0.0-alpha.8", default-features = false, path = "../benchmarking", optional = true }
+frame-benchmarking = { version = "2.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0-alpha.8", path = "../../primitives/core" }
-sp-storage = { version = "2.0.0-alpha.8", path = "../../primitives/storage" }
-pallet-balances = { version = "2.0.0-alpha.8", path = "../balances" }
-pallet-timestamp = { version = "2.0.0-alpha.8", path = "../timestamp" }
-pallet-staking-reward-curve = { version = "2.0.0-alpha.8",  path = "../staking/reward-curve" }
-substrate-test-utils = { version = "2.0.0-alpha.8", path = "../../test-utils" }
-frame-benchmarking = { version = "2.0.0-alpha.8", path = "../benchmarking" }
+sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
+sp-storage = { version = "2.0.0-dev", path = "../../primitives/storage" }
+pallet-balances = { version = "2.0.0-dev", path = "../balances" }
+pallet-timestamp = { version = "2.0.0-dev", path = "../timestamp" }
+pallet-staking-reward-curve = { version = "2.0.0-dev",  path = "../staking/reward-curve" }
+substrate-test-utils = { version = "2.0.0-dev", path = "../../test-utils" }
+frame-benchmarking = { version = "2.0.0-dev", path = "../benchmarking" }
 rand_chacha = { version = "0.2" }
 parking_lot = "0.10.2"
 env_logger = "0.7.1"
