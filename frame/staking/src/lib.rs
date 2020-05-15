@@ -2171,7 +2171,7 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
-		// Optimisation note: consider making the stake accessible through stash.
+		// Weight note: consider making the stake accessible through stash.
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
