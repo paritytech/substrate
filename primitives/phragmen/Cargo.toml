@@ -1,6 +1,6 @@
 [package]
 name = "sp-phragmen"
-version = "2.0.0-dev"
+version = "2.0.0-alpha.8"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,15 +14,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
-sp-phragmen-compact = { version = "2.0.0-dev", path = "./compact" }
-sp-arithmetic = { version = "2.0.0-dev", default-features = false, path = "../arithmetic" }
+sp-std = { version = "2.0.0-alpha.8", default-features = false, path = "../std" }
+sp-phragmen-compact = { version = "2.0.0-alpha.8", path = "./compact" }
+sp-arithmetic = { version = "2.0.0-alpha.8", default-features = false, path = "../arithmetic" }
 
 [dev-dependencies]
-substrate-test-utils = { version = "2.0.0-dev", path = "../../test-utils" }
+substrate-test-utils = { version = "2.0.0-alpha.8", path = "../../test-utils" }
 rand = "0.7.3"
-sp-phragmen = { version = "2.0.0-dev", path = "." }
-sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
+sp-phragmen = { version = "2.0.0-alpha.8", path = "." }
+sp-runtime = { version = "2.0.0-alpha.8", path = "../../primitives/runtime" }
 
 [features]
 default = ["std"]
