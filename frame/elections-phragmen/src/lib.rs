@@ -90,10 +90,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{
-		Weight, DispatchClass, Pays, FunctionOf,
-		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
-	},
+	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::{StorageMap, IterableStorageMap},
 	dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo},
 	traits::{
@@ -326,16 +323,11 @@ decl_module! {
 		/// 	- Lock
 		/// 	- [AccountBalance(who) (unreserve -- only when would_create is true)]
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, _, would_create): (_, _, &bool)|
-				if *would_create {
-					50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
-				} else {
-					40 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
-				},
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight = if *would_create {
+			50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
+		} else {
+			40 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
+		}]
 		fn vote(
 			origin,
 			votes: Vec<T::AccountId>,
@@ -428,14 +420,11 @@ decl_module! {
 		/// 	- Voting(reporter || target)
 		/// Note: the db access is worse with respect to db, which is when the report is correct.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(defunct,): (&DefunctVoter<<T::Lookup as StaticLookup>::Source>,)|
-				defunct.candidate_count as Weight * (2 * WEIGHT_PER_MICROS) +
-				defunct.vote_count as Weight * (19 * WEIGHT_PER_MICROS) +
-				T::DbWeight::get().reads_writes(6, 3),
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight =
+			defunct.candidate_count as Weight * (2 * WEIGHT_PER_MICROS) +
+			defunct.vote_count as Weight * (19 * WEIGHT_PER_MICROS) +
+			T::DbWeight::get().reads_writes(6, 3)
+		]
 		fn report_defunct_voter(
 			origin,
 			defunct: DefunctVoter<<T::Lookup as StaticLookup>::Source>,
@@ -496,14 +485,11 @@ decl_module! {
 		/// 	- [AccountBalance(who)]
 		/// 	- Candidates
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(candidate_count,): (&u32,)|
-				35 * WEIGHT_PER_MICROS +
-				*candidate_count as Weight * (375 * WEIGHT_PER_NANOS) +
-				T::DbWeight::get().reads_writes(4, 1),
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight =
+			35 * WEIGHT_PER_MICROS +
+			*candidate_count as Weight * (375 * WEIGHT_PER_NANOS) +
+			T::DbWeight::get().reads_writes(4, 1)
+		]
 		fn submit_candidacy(origin, #[compact] candidate_count: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -566,25 +552,21 @@ decl_module! {
 		///
 		/// TODO: and calls into ChangeMembers??
 		/// </weight>
-		#[weight = FunctionOf(
-			|(renouncing,): (&Renouncing,)| match *renouncing {
-				Renouncing::Candidate(count) => {
-					18 * WEIGHT_PER_MICROS +
-					(count as Weight) * 235 * WEIGHT_PER_NANOS +
-					T::DbWeight::get().reads_writes(1, 1)
-				},
-				Renouncing::Member => {
-					46 * WEIGHT_PER_MICROS +
-					T::DbWeight::get().reads_writes(2, 2)
-				},
-				Renouncing::RunnerUp => {
-					46 * WEIGHT_PER_MICROS +
-					T::DbWeight::get().reads_writes(1, 1)
-				}
+		#[weight =  match *renouncing {
+			Renouncing::Candidate(count) => {
+				18 * WEIGHT_PER_MICROS +
+				(count as Weight) * 235 * WEIGHT_PER_NANOS +
+				T::DbWeight::get().reads_writes(1, 1)
 			},
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+			Renouncing::Member => {
+				46 * WEIGHT_PER_MICROS +
+				T::DbWeight::get().reads_writes(2, 2)
+			},
+			Renouncing::RunnerUp => {
+				46 * WEIGHT_PER_MICROS +
+				T::DbWeight::get().reads_writes(1, 1)
+			}
+		}]
 		fn renounce_candidacy(origin, renouncing: Renouncing) {
 			let who = ensure_signed(origin)?;
 			match renouncing {
@@ -643,15 +625,11 @@ decl_module! {
 		/// 		- Members, RunnersUp (remove_and_replace_member)
 		/// Else, since this is a root call and will go into phragmen, we assume full block for now.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, has_replacement): (_, &bool)| if *has_replacement {
-				50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
-			} else {
-				T::MaximumBlockWeight::get()
-			},
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight = if *has_replacement {
+			50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
+		} else {
+			T::MaximumBlockWeight::get()
+		}]
 		fn remove_member(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -661,26 +639,14 @@ decl_module! {
 			let who = T::Lookup::lookup(who)?;
 
 			let will_have_replacement = <RunnersUp<T>>::decode_len().unwrap_or(0) > 0;
-			match (will_have_replacement, has_replacement) {
-				(true, true) | (false, false) => {
-					// correct prediction. nothing
-				}
-				(false, true) => {
-					// prediction was that we will have a replacement, so we don't charge a whole
-					// lot of weight. just abort.
-					return Err(Error::<T>::InvalidReplacement.into());
-				}
-				(true, false) => {
-					// prediction was that we will NOT have a replacement, and now this call is
-					// aborting whilst charging a metric ton of weight. Refund and abort.
-					return Err(Error::<T>::InvalidReplacement.with_weight(
-						// refund. The weight value comes from a benchmark which is special to this.
-						//  5.751 µs
-						6 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
-					).into());
-				}
-			}
-
+			if will_have_replacement != has_replacement {
+				// In both cases, we will change more weight than neede. Refund and abort.
+				return Err(Error::<T>::InvalidReplacement.with_weight(
+					// refund. The weight value comes from a benchmark which is special to this.
+					//  5.751 µs
+					6 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 0)
+				));
+			} // else, prediction was correct.
 
 			Self::remove_and_replace_member(&who).map(|had_replacement| {
 				let (imbalance, _) = T::Currency::slash_reserved(&who, T::CandidacyBond::get());
@@ -2446,9 +2412,10 @@ mod tests {
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
 
 			// no replacement yet.
-			assert_noop!(
+			assert_err_with_weight!(
 				Elections::remove_member(Origin::ROOT, 4, true),
 				Error::<Test>::InvalidReplacement,
+				Some(6000000),
 			);
 		});
 
@@ -2470,7 +2437,7 @@ mod tests {
 			assert_err_with_weight!(
 				Elections::remove_member(Origin::ROOT, 4, false),
 				Error::<Test>::InvalidReplacement,
-				Some(48000000) // only thing that matters for now is that it is NOT the full block.
+				Some(6000000) // only thing that matters for now is that it is NOT the full block.
 			);
 		});
 	}
