@@ -97,7 +97,7 @@ fn main() {
 					true,
 				));
 				<EraElectionStatus<Test>>::put(ElectionStatus::Open(1));
-				assert!(<Staking<Test>>::create_stakers_snapshot());
+				assert!(<Staking<Test>>::create_stakers_snapshot().0);
 				let origin = RawOrigin::Signed(create_funded_user::<Test>("fuzzer", 0, 100));
 
 				println!("++ Chain setup done.");
