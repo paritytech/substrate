@@ -556,7 +556,7 @@ decl_module! {
 		/// 		- RunnersUp (remove_and_replace_member),
 		/// 		- [AccountData(who) (unreserve)]
 		///
-		/// TODO: and calls into ChangeMembers??
+		/// Weight note: The call into changeMembers need to be accounted for.
 		/// </weight>
 		#[weight =  match *renouncing {
 			Renouncing::Candidate(count) => {
@@ -2808,7 +2808,6 @@ mod tests {
 	#[test]
 	fn behavior_with_dupe_candidate() {
 		ExtBuilder::default().desired_runners_up(2).build_and_execute(|| {
-			// TODD: this is a demonstration and should be fixed with #4593
 			<Candidates<Test>>::put(vec![1, 1, 2, 3, 4]);
 
 			assert_ok!(vote(Origin::signed(5), vec![1], 50));
