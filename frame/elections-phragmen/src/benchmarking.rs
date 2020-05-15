@@ -104,7 +104,7 @@ fn submit_candidates_with_self_vote<T: Trait>(c: u32, prefix: &'static str)
 fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake: BalanceOf<T>)
 	-> Result<(), &'static str>
 {
-	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake, true)
+	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
 		.map_err(|_| "failed to submit vote")
 }
 
@@ -173,7 +173,7 @@ benchmarks! {
 		// vote for all of them.
 		let votes = all_candidates.into_iter().take(v).collect();
 
-	}: _(RawOrigin::Signed(caller), votes, stake, true)
+	}: _(RawOrigin::Signed(caller), votes, stake)
 
 	vote_update {
 		let u in ...;
@@ -192,7 +192,7 @@ benchmarks! {
 		submit_voter::<T>(caller.clone(), votes.clone(), stake)?;
 		// new votes.
 		votes.rotate_left(1);
-	}: vote(RawOrigin::Signed(caller), votes, stake, false)
+	}: vote(RawOrigin::Signed(caller), votes, stake)
 
 	remove_voter {
 		let u in ...;

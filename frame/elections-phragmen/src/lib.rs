@@ -1375,8 +1375,8 @@ mod tests {
 	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResult {
 		// historical note: helper function was created in a period of time in which the API of vote
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
-		// Nonetheless, totally harmless
-		if let Origin::system(frame_system::RawOrigin::Signed(account)) = origin {
+		// Nonetheless, totally harmless.
+		if let Origin::system(frame_system::RawOrigin::Signed(_account)) = origin {
 			Elections::vote(origin, votes, stake)
 		} else {
 			panic!("vote origin must be signed");
