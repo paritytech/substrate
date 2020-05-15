@@ -38,6 +38,7 @@ use node_runtime::{
 use node_primitives::{Balance, Hash};
 use wabt;
 use node_testing::keyring::*;
+use assert_matches::assert_matches;
 
 pub mod common;
 use self::common::{*, sign};
@@ -355,7 +356,18 @@ fn full_native_block_import_works() {
 				topics: vec![],
 			},
 		];
-		assert_eq!(System::events(), events);
+		let mut is_events = System::events();
+		assert_matches!(
+			is_events.remove(0),
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::pallet_transaction_payment(
+					pallet_transaction_payment::Event::PaymentParameters(_)
+				),
+				topics: top
+			} if top == vec![]
+		);
+		assert_eq!(is_events, events);
 	});
 
 	fm = t.execute_with(TransactionPayment::next_fee_multiplier);
@@ -436,7 +448,18 @@ fn full_native_block_import_works() {
 				topics: vec![],
 			},
 		];
-		assert_eq!(System::events(), events);
+		let mut is_events = System::events();
+		assert_matches!(
+			is_events.remove(0),
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::pallet_transaction_payment(
+					pallet_transaction_payment::Event::PaymentParameters(_)
+				),
+				topics: top
+			} if top == vec![]
+		);
+		assert_eq!(is_events, events);
 	});
 }
 

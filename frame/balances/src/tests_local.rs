@@ -83,6 +83,7 @@ parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
+	type Event = ();
 	type Currency = Module<Test>;
 	type OnTransactionPayment = ();
 	type TransactionByteFee = TransactionByteFee;

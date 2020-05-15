@@ -52,12 +52,14 @@ mod contracts {
 }
 
 use pallet_balances as balances;
+use pallet_transaction_payment as payment;
 
 impl_outer_event! {
 	pub enum MetaEvent for Test {
 		system<T>,
 		balances<T>,
 		contracts<T>,
+		payment,
 	}
 }
 impl_outer_origin! {
@@ -148,6 +150,7 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 }
 
 impl pallet_transaction_payment::Trait for Test {
+	type Event = MetaEvent;
 	type Currency = Balances;
 	type OnTransactionPayment = ();
 	type TransactionByteFee = TransactionByteFee;
