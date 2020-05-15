@@ -146,7 +146,7 @@ struct BlockImportWorker<B: BlockT, Transaction> {
 }
 
 const METRIC_SUCCESS_FIELDS: [&'static str; 8] = [
-	"success","incomplete_header", "verification_failed", "bad_block",
+	"success", "incomplete_header", "verification_failed", "bad_block",
 	"missing_state", "unknown_parent", "cancelled", "failed"
 ];
 
