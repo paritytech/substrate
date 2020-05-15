@@ -14,10 +14,7 @@ error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is 
 ...  |
 26 | |     }
 27 | | }
-   | | ^
-   | | |
-   | |_the trait `std::convert::From<std::string::String>` is not implemented for `u32`
-   |   in this macro invocation
+   | |_^ the trait `std::convert::From<std::string::String>` is not implemented for `u32`
    |
    = help: the following implementations were found:
              <u32 as std::convert::From<bool>>
@@ -25,3 +22,4 @@ error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is 
              <u32 as std::convert::From<h2::frame::reason::Reason>>
              <u32 as std::convert::From<h2::frame::reason::Reason>>
            and 18 others
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

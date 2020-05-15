@@ -71,12 +71,14 @@ pub const COMPACT_CODE: &[u8] = node_runtime::WASM_BINARY;
 
 pub const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
-pub const VERSION: u32 = node_runtime::VERSION.spec_version;
+pub const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
+
+pub const TRANSACTION_VERSION: u32 = node_runtime::VERSION.transaction_version;
 
 pub type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
 pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-	node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
+	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 
 pub fn default_transfer_call() -> pallet_balances::Call<Runtime> {

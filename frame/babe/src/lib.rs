@@ -349,6 +349,9 @@ impl<T: Trait> Module<T> {
 	// -------------- IMPORTANT NOTE --------------
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	//
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
+	// this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -549,6 +552,12 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
+	}
+
+	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
+	fn weight(_now: T::BlockNumber) -> Weight {
+		// Read: Current Slot, Epoch Index, Genesis Slot
+		T::DbWeight::get().reads(3)
 	}
 }
 

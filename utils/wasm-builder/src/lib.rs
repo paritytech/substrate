@@ -166,8 +166,8 @@ pub fn build_project_with_default_rustflags(
 				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
 				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
 			"#,
-			wasm_binary = wasm_binary.wasm_binary_path(),
-			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path(),
+			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
+			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
 		),
 	);
 }

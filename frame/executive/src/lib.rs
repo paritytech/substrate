@@ -116,7 +116,7 @@
 
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
-	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo},
+	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
 };
 use sp_runtime::{
@@ -235,7 +235,7 @@ where
 			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
-			<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
+			<frame_system::Module<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -247,7 +247,7 @@ where
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
 			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
-		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight);
+		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 
 		frame_system::Module::<System>::note_finished_initialize();
 	}
@@ -785,7 +785,7 @@ mod tests {
 				Digest::default(),
 			));
 			// Base block execution weight + `on_initialize` weight from the custom module.
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), base_block_weight);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight().total(), base_block_weight);
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = TestXt::new(
@@ -795,7 +795,7 @@ mod tests {
 				if nonce != num_to_exhaust_block {
 					assert!(res.is_ok());
 					assert_eq!(
-						<frame_system::Module<Runtime>>::all_extrinsics_weight(),
+						<frame_system::Module<Runtime>>::all_extrinsics_weight().total(),
 						//--------------------- on_initialize + block_execution + extrinsic_base weight
 						(encoded_len + 5) * (nonce + 1) + base_block_weight,
 					);
@@ -815,7 +815,7 @@ mod tests {
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight().total(), 0);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 			assert!(Executive::apply_extrinsic(xt.clone()).unwrap().is_ok());
@@ -824,14 +824,14 @@ mod tests {
 
 			// default weight for `TestXt` == encoded length.
 			assert_eq!(
-				<frame_system::Module<Runtime>>::all_extrinsics_weight(),
+				<frame_system::Module<Runtime>>::all_extrinsics_weight().total(),
 				3 * (len as Weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get()),
 			);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <frame_system::Module<Runtime>>::finalize();
 
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 0);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight().total(), 0);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
 		});
 	}
@@ -903,7 +903,7 @@ mod tests {
 			// NOTE: might need updates over time if new weights are introduced.
 			// For now it only accounts for the base block execution weight and
 			// the `on_initialize` weight defined in the custom test module.
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 175 + 10);
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight().total(), 175 + 10);
 		})
 	}
 

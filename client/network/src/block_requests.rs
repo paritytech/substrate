@@ -708,12 +708,12 @@ where
 			}
 		}
 
-		while let Poll::Ready(Some((peer, total_handling_time))) = self.outgoing.poll_next_unpin(cx) {
+		if let Poll::Ready(Some((peer, total_handling_time))) = self.outgoing.poll_next_unpin(cx) {
 			let ev = Event::AnsweredRequest {
 				peer,
 				total_handling_time,
 			};
-			self.pending_events.push_back(NetworkBehaviourAction::GenerateEvent(ev));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
 		Poll::Pending
