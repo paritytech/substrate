@@ -195,7 +195,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
-			.unwrap_or(Arc::new(AlwaysBadChecker));
+			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
@@ -320,7 +320,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
-			to_worker: to_worker.clone(),
+			to_worker,
 			_marker: PhantomData,
 		});
 
@@ -447,7 +447,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				Some((peer_id.to_base58(), NetworkStatePeer {
 					endpoint,
 					version_string: swarm.node(peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+						.and_then(|i| i.client_version().map(|s| s.to_owned())),
 					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
 					enabled: swarm.user_protocol().is_enabled(&peer_id),
 					open: swarm.user_protocol().is_open(&peer_id),
@@ -463,7 +463,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			list.into_iter().map(move |peer_id| {
 				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
 					version_string: swarm.node(&peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+						.and_then(|i| i.client_version().map(|s| s.to_owned())),
 					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
 					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
 						.into_iter().collect(),
@@ -608,7 +608,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(hash.clone(), number));
+			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
 	}
 
 	/// Are we in the process of downloading the chain?

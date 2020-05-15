@@ -675,7 +675,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								continue;
 							}
 
-							self.discoveries.extend(list.into_iter().map(|(peer_id, _)| peer_id));
+							self.discoveries.extend(list.map(|(peer_id, _)| peer_id));
 							if let Some(peer_id) = self.discoveries.pop_front() {
 								let ev = DiscoveryOut::Discovered(peer_id);
 								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
