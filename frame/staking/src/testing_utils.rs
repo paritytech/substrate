@@ -28,9 +28,7 @@ use frame_benchmarking::{account};
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use sp_phragmen::{
-	build_support_map, evaluate_support, reduce, Assignment, PhragmenScore, StakedAssignment,
-};
+use sp_phragmen::*;
 
 const SEED: u32 = 0;
 
@@ -180,10 +178,10 @@ pub fn get_weak_solution<T: Trait>(
 			.position(|x| x == a)
 			.and_then(|i| <usize as TryInto<ValidatorIndex>>::try_into(i).ok())
 	};
-	let stake_of = |who: &T::AccountId| -> ExtendedBalance {
+	let stake_of = |who: &T::AccountId| -> VoteWeight {
 		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
 			<Module<T>>::slashable_balance_of(who),
-		) as ExtendedBalance
+		)
 	};
 
 	// convert back to ratio assignment. This takes less space.
@@ -195,13 +193,10 @@ pub fn get_weak_solution<T: Trait>(
 
 	// re-calculate score based on what the chain will decode.
 	let score = {
-		let staked: Vec<StakedAssignment<T::AccountId>> = low_accuracy_assignment
-			.iter()
-			.map(|a| {
-				let stake = stake_of(&a.who);
-				a.clone().into_staked(stake, true)
-			})
-			.collect();
+		let staked = assignment_ratio_to_staked::<_, OffchainAccuracy, _>(
+			low_accuracy_assignment.clone(),
+			stake_of
+		);
 
 		let (support_map, _) =
 			build_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice());
@@ -253,6 +248,79 @@ pub fn get_seq_phragmen_solution<T: Trait>(
 /// get the active era.
 pub fn current_era<T: Trait>() -> EraIndex {
 	<Module<T>>::current_era().unwrap_or(0)
+}
+
+/// Trims a compact assignment to contain only up to the given count edges.
+pub fn trim_compact_to_assignments<T: Trait>(
+	mut compact: CompactAssignments,
+	winners: Vec<ValidatorIndex>,
+	n: usize,
+) -> Result<(CompactAssignments, PhragmenScore), &'static str> {
+	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
+	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
+
+	let validator_at = |index: ValidatorIndex| -> Option<T::AccountId> {
+		snapshot_validators.get(index as usize).cloned()
+	};
+	let nominator_at = |index: NominatorIndex| -> Option<T::AccountId> {
+		snapshot_nominators.get(index as usize).cloned()
+	};
+
+	let self_votes_len = compact.votes1.iter().filter(|x|
+		nominator_at(x.0) == validator_at(x.1)
+	).count();
+
+	if n < self_votes_len {
+		return Err("cannot have a < w");
+	}
+
+	if compact.len() > n {
+		let mut index = 0;
+		loop {
+			match index + 1 {
+				1 => if let Some(pos) = compact.votes1.iter().position(|x| nominator_at(x.0) != validator_at(x.1)) {
+					compact.votes1.remove(pos);
+				}
+				2 => if compact.votes2.len() > 0 { let _ = compact.votes2.pop(); }
+				3 => if compact.votes3.len() > 0 { let _ = compact.votes3.pop(); }
+				4 => if compact.votes4.len() > 0 { let _ = compact.votes4.pop(); }
+				5 => if compact.votes5.len() > 0 { let _ = compact.votes5.pop(); }
+				6 => if compact.votes6.len() > 0 { let _ = compact.votes6.pop(); }
+				7 => if compact.votes7.len() > 0 { let _ = compact.votes7.pop(); }
+				8 => if compact.votes8.len() > 0 { let _ = compact.votes8.pop(); }
+				9 => if compact.votes9.len() > 0 { let _ = compact.votes9.pop(); }
+				10 => if compact.votes10.len() > 0 { let _ = compact.votes10.pop(); }
+				11 => if compact.votes11.len() > 0 { let _ = compact.votes11.pop(); }
+				12 => if compact.votes12.len() > 0 { let _ = compact.votes12.pop(); }
+				13 => if compact.votes13.len() > 0 { let _ = compact.votes13.pop(); }
+				14 => if compact.votes14.len() > 0 { let _ = compact.votes14.pop(); }
+				15 => if compact.votes15.len() > 0 { let _ = compact.votes15.pop(); }
+				16 => if compact.votes16.len() > 0 { let _ = compact.votes16.pop(); }
+				_ => unreachable!()
+			}
+
+			if compact.len() <= n { break; }
+			index = index + 1;
+			index = index % 16;
+		}
+	}
+
+	// now re-compute the score all over again...
+	let stake_of = |who: &T::AccountId| -> VoteWeight {
+		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+			<Module<T>>::slashable_balance_of(who),
+		)
+	};
+
+	let score = {
+		let winners = winners.into_iter().map(|idx| validator_at(idx).unwrap()).collect::<Vec<_>>();
+		let assignments = compact.clone().into_assignment(nominator_at, validator_at).unwrap();
+		let staked = assignment_ratio_to_staked::<_, OffchainAccuracy, _>(assignments, stake_of);
+		let (support_map, _) = build_support_map::<T::AccountId>(winners.as_slice(), staked.as_slice());
+		evaluate_support::<T::AccountId>(&support_map)
+	};
+
+	Ok((compact, score))
 }
 
 /// initialize the first era.

@@ -407,15 +407,35 @@ benchmarks! {
 	}
 
 	submit_solution_initial {
-		let v in 1 .. 10;
-		let n in 1 .. 100;
+		// NOTE: this benchmark requires: `v > w`, `n > a` and `a > w`. Talk to @kianenigma if you
+		// want to know why.
+		// number of validator intentions
+		let v in 50 .. 100;
+		// number of nominators
+		let n in 200 .. 500;
+		// number of winners.
+		let w in 10 .. 40;
+		// number of assignments. Basically, number of active nominators.
+		let a in 50 .. 200;
+		// NOTE: we could make the edge per assignment also variable, but 1. unlikely to bring much
+		// accuracy change 2. makes the setup of the bench a few orders of magnitude more annoying.
 
 		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
 
+		// override the number of winners that we desire.
+		ValidatorCount::put(w);
+
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
 		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+
+		// trim some edges.
+		let (new_compact, new_score) = trim_compact_to_assignments::<T>(
+			compact,
+			winners.clone(),
+			a as usize,
+		)?;
 
 		// needed for the solution to be accepted
 		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
@@ -423,19 +443,19 @@ benchmarks! {
 		let era = <Staking<T>>::current_era().unwrap_or(0);
 		let caller: T::AccountId = account("caller", n, SEED);
 	}: {
-		assert!(
-			<Staking<T>>::submit_election_solution(
-				RawOrigin::Signed(caller.clone()).into(),
-				winners,
-				compact,
-				score.clone(),
-				era,
-				size,
-		).is_ok());
+		let result = <Staking<T>>::submit_election_solution(
+			RawOrigin::Signed(caller.clone()).into(),
+			winners,
+			new_compact,
+			new_score.clone(),
+			era,
+			size,
+		);
+		assert_eq!(result, Ok(().into()));
 	}
 	verify {
 		// new solution has been accepted.
-		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+		assert_eq!(<Staking<T>>::queued_score().unwrap(), new_score);
 	}
 
 	submit_solution_weaker {
