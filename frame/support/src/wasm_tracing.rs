@@ -20,17 +20,19 @@
 
 /// This holds a tracing span id and is to signal on drop that a tracing span has exited.
 /// It must be bound to a named variable eg. `_span_guard`.
-pub struct TracingSpanGuard(u64);
+pub struct TracingSpanGuard(Option<u64>);
 
 impl TracingSpanGuard {
-	pub fn new(span: u64) -> Self {
+	pub fn new(span: Option<u64>) -> Self {
 		Self(span)
 	}
 }
 
 impl Drop for TracingSpanGuard {
 	fn drop(&mut self) {
-		crate::sp_io::wasm_tracing::exit_span(self.0);
+		if let Some(id) = self.0 {
+			crate::sp_io::wasm_tracing::exit_span(id);
+		}
 	}
 }
 
@@ -46,22 +48,22 @@ impl Drop for TracingSpanGuard {
 macro_rules! enter_span {
 	( $name:expr ) => {
 		#[cfg(not(feature = "std"))]
-		{
-			let __span_id__;
-			if frame_support::WASM_TRACING_ENABLED.get() {
+		let __span_id__ = match unsafe { frame_support::WASM_TRACING_ENABLED } {
+			false => $crate::wasm_tracing::TracingSpanGuard::new(None),
+			true => {
 				if let Some(__id__) = $crate::sp_io::wasm_tracing::enter_span(
 						module_path!(),
 						&[$name, "_wasm"].concat()
-					){
-					__span_id__ = $crate::wasm_tracing::TracingSpanGuard::new(
-						__id__
-					);
+					) {
+					$crate::wasm_tracing::TracingSpanGuard::new(Some(__id__))
 				} else {
-					frame_support::WASM_TRACING_ENABLED.set(false);
+					unsafe { frame_support::WASM_TRACING_ENABLED = false; }
+					$crate::wasm_tracing::TracingSpanGuard::new(None)
 				}
 			}
-		}
+		};
 		#[cfg(feature = "std")]
 		$crate::sp_tracing::enter_span!($name);
 	}
 }
+

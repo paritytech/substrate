@@ -83,7 +83,7 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
-pub const WASM_TRACING_ENABLED: sp_std::cell::Cell<bool> = sp_std::cell::Cell::new(true);
+pub static mut WASM_TRACING_ENABLED: bool = true;
 
 /// A type that cannot be instantiated.
 #[derive(Debug)]
