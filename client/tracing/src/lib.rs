@@ -252,7 +252,7 @@ impl Subscriber for ProfilingSubscriber {
 		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
+					span_datum.name = [&n, "_wasm"].concat();
 				}
 				if let Some(t) = span_datum.values.0.remove(WASM_TARGET_KEY) {
 					span_datum.target = t;

@@ -56,7 +56,7 @@ macro_rules! enter_span {
 			true => {
 				let __id__ = $crate::sp_io::wasm_tracing::enter_span(
 						module_path!(),
-						&[$name, "_wasm"].concat()
+						$name
 					);
 				if __id__ == 0 {
 					unsafe { frame_support::WASM_TRACING_ENABLED = false; }
