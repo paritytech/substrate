@@ -38,6 +38,7 @@ use std::{
 use futures::prelude::*;
 use parking_lot::Mutex;
 use log::{debug, info, trace};
+use prometheus_endpoint::Registry;
 
 use codec::{Encode, Decode, Codec};
 
@@ -816,6 +817,7 @@ pub fn import_queue<B, I, C, P, S>(
 	client: Arc<C>,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
+	registry: Option<&Registry>,
 ) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
@@ -842,6 +844,7 @@ pub fn import_queue<B, I, C, P, S>(
 		justification_import,
 		finality_proof_import,
 		spawner,
+		registry,
 	))
 }
 

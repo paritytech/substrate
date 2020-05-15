@@ -38,6 +38,7 @@ sc-consensus-uncles = { version = "0.8.0-dev", path = "../uncles" }
 sc-consensus-slots = { version = "0.8.0-dev", path = "../slots" }
 sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
 fork-tree = { version = "2.0.0-dev", path = "../../../utils/fork-tree" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-dev"}
 futures = "0.3.4"
 futures-timer = "3.0.1"
 parking_lot = "0.10.0"
