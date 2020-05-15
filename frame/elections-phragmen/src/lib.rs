@@ -230,7 +230,6 @@ decl_storage! {
 					T::Origin::from(Some(member.clone()).into()),
 					vec![member.clone()],
 					*stake,
-					true,
 				).expect("Genesis member could not vote.");
 
 				member.clone()
@@ -279,8 +278,6 @@ decl_error! {
 		InvalidRenouncing,
 		/// Prediction regarding replacement after member removal is wrong.
 		InvalidReplacement,
-		/// The vote's would_create flag is invalid.
-		InvalidWouldCreate,
 	}
 }
 
@@ -298,8 +295,7 @@ decl_module! {
 		const ModuleId: LockIdentifier  = T::ModuleId::get();
 
 		/// Vote for a set of candidates for the upcoming round of election. This can be called to
-		/// set the initial votes, with `would_create = true`, or update already existing votes
-		/// with `would_create = false`.
+		/// set the initial votes, or update already existing votes.
 		///
 		/// Upon initial voting, `value` units of `who`'s balance is locked and a bond amount is
 		/// reserved.
@@ -313,7 +309,7 @@ decl_module! {
 		/// and keep some for further transactions.
 		///
 		/// # <weight>
-		/// Base weight: if would_create { 47.93 µs } else { 38.46 µs }
+		/// Base weight: 47.93 µs
 		/// State reads:
 		/// 	- Candidates.len() + Members.len() + RunnersUp.len()
 		/// 	- Voting (is_voter)
@@ -321,18 +317,13 @@ decl_module! {
 		/// State writes:
 		/// 	- Voting
 		/// 	- Lock
-		/// 	- [AccountBalance(who) (unreserve -- only when would_create is true)]
+		/// 	- [AccountBalance(who) (unreserve -- only when creating a new voter)]
 		/// # </weight>
-		#[weight = if *would_create {
-			50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
-		} else {
-			40 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)
-		}]
+		#[weight = 50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(4, 2)]
 		fn vote(
 			origin,
 			votes: Vec<T::AccountId>,
 			#[compact] value: BalanceOf<T>,
-			would_create: bool,
 		) {
 			let who = ensure_signed(origin)?;
 
@@ -350,10 +341,9 @@ decl_module! {
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
 
 			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
-			ensure!(Self::is_voter(&who) == !would_create, Error::<T>::InvalidWouldCreate);
 
 			// first time voter. Reserve bond.
-			if would_create {
+			if !Self::is_voter(&who) {
 				T::Currency::reserve(&who, T::VotingBond::get())
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
 			}
@@ -421,9 +411,9 @@ decl_module! {
 		/// Note: the db access is worse with respect to db, which is when the report is correct.
 		/// # </weight>
 		#[weight =
-			defunct.candidate_count as Weight * (2 * WEIGHT_PER_MICROS) +
-			defunct.vote_count as Weight * (19 * WEIGHT_PER_MICROS) +
-			T::DbWeight::get().reads_writes(6, 3)
+			Weight::from(defunct.candidate_count).saturating_mul(2 * WEIGHT_PER_MICROS)
+			.saturating_add(Weight::from(defunct.vote_count).saturating_mul(19 * WEIGHT_PER_MICROS))
+			.saturating_add(T::DbWeight::get().reads_writes(6, 3))
 		]
 		fn report_defunct_voter(
 			origin,
@@ -492,9 +482,9 @@ decl_module! {
 		/// 	- Candidates
 		/// # </weight>
 		#[weight =
-			35 * WEIGHT_PER_MICROS +
-			*candidate_count as Weight * (375 * WEIGHT_PER_NANOS) +
-			T::DbWeight::get().reads_writes(4, 1)
+			(35 * WEIGHT_PER_MICROS)
+			.saturating_add(Weight::from(*candidate_count).saturating_mul(375 * WEIGHT_PER_NANOS))
+			.saturating_add(T::DbWeight::get().reads_writes(4, 1))
 		]
 		fn submit_candidacy(origin, #[compact] candidate_count: u32) {
 			let who = ensure_signed(origin)?;
@@ -560,9 +550,9 @@ decl_module! {
 		/// </weight>
 		#[weight =  match *renouncing {
 			Renouncing::Candidate(count) => {
-				18 * WEIGHT_PER_MICROS +
-				(count as Weight) * 235 * WEIGHT_PER_NANOS +
-				T::DbWeight::get().reads_writes(1, 1)
+				(18 * WEIGHT_PER_MICROS)
+				.saturating_add(Weight::from(count).saturating_mul(235 * WEIGHT_PER_NANOS))
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			},
 			Renouncing::Member => {
 				46 * WEIGHT_PER_MICROS +
@@ -1383,9 +1373,11 @@ mod tests {
 	}
 
 	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResult {
+		// historical note: helper function was created in a period of time in which the API of vote
+		// call was changing. Currently it is a wrapper for the original call and does not do much.
+		// Nonetheless, totally harmless
 		if let Origin::system(frame_system::RawOrigin::Signed(account)) = origin {
-			let would_create = !Elections::is_voter(&account);
-			Elections::vote(origin, votes, stake, would_create)
+			Elections::vote(origin, votes, stake)
 		} else {
 			panic!("vote origin must be signed");
 		}
@@ -1674,28 +1666,6 @@ mod tests {
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 15);
 			assert_eq!(Elections::locked_stake_of(&2), 15);
-		});
-	}
-
-	#[test]
-	fn vote_update_need_to_set_flag() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(balances(&2), (20, 0));
-
-			assert_ok!(submit_candidacy(Origin::signed(5)));
-			assert_ok!(submit_candidacy(Origin::signed(4)));
-			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20, true));
-
-			assert_eq!(balances(&2), (18, 2));
-			assert_eq!(has_lock(&2), 20);
-			assert_eq!(Elections::locked_stake_of(&2), 20);
-
-			// can update only with correct flag
-			assert_noop!(
-				Elections::vote(Origin::signed(2), vec![5], 20, true),
-				Error::<Test>::InvalidWouldCreate,
-			);
-			assert_ok!(Elections::vote(Origin::signed(2), vec![5], 20, false));
 		});
 	}
 
