@@ -518,7 +518,10 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		StorageChanges<I::Transaction, B>,
 		Self::Claim,
 		Self::EpochData,
-	) -> Result<sp_consensus::BlockImportParams<B, I::Transaction>, sp_consensus::Error> + Send + 'static> {
+	) -> Result<
+		sp_consensus::BlockImportParams<B, I::Transaction>,
+		sp_consensus::Error> + Send + 'static>
+	{
 		let keystore = self.keystore.clone();
 		Box::new(move |header, header_hash, body, storage_changes, (_, public), epoch_descriptor| {
 			// sign the pre-sealed hash of the block and then

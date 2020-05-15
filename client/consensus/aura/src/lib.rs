@@ -263,7 +263,10 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		StorageChanges<sp_api::TransactionFor<C, B>, B>,
 		Self::Claim,
 		Self::EpochData,
-	) -> Result<sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> + Send + 'static> {
+	) -> Result<
+		sp_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
+		sp_consensus::Error> + Send + 'static>
+	{
 		let keystore = self.keystore.clone();
 		Box::new(move |header, header_hash, body, storage_changes, public, _epoch| {
 			// sign the pre-sealed hash of the block and then
