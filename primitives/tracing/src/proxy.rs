@@ -122,7 +122,7 @@ mod tests {
 	fn create_spans(proxy: &mut TracingProxy, qty: usize) -> Vec<u64> {
 		let mut spans = Vec::new();
 		for n in 0..qty {
-			spans.push(proxy.create_span("target", &format!("{}", n)));
+			spans.push(proxy.enter_span("target", &format!("{}", n)));
 		}
 		spans
 	}
