@@ -41,17 +41,14 @@ impl KeyValueDB for ParityDbWrapper {
 	}
 
 	/// Write a transaction of changes to the buffer.
-	fn write_buffered(&self, transaction: DBTransaction) {
+	fn write(&self, transaction: DBTransaction) -> io::Result<()> {
 		self.0.commit(
 			transaction.ops.iter().map(|op| match op {
 				kvdb::DBOp::Insert { col, key, value } => (*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
 				kvdb::DBOp::Delete { col, key } => (*col as u8, &key[key.len() - 32..], None),
+				kvdb::DBOp::DeletePrefix { col: _, prefix: _ } => unimplemented!()
 			})
 		).expect("db error");
-	}
-
-	/// Flush all buffered data.
-	fn flush(&self) -> io::Result<()> {
 		Ok(())
 	}
 
@@ -61,7 +58,7 @@ impl KeyValueDB for ParityDbWrapper {
 	}
 
 	/// Iterate over flushed data for a given column, starting from a given prefix.
-	fn iter_from_prefix<'a>(
+	fn iter_with_prefix<'a>(
 		&'a self,
 		_col: u32,
 		_prefix: &'a [u8],

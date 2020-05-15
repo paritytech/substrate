@@ -11,4 +11,4 @@ documentation = "https://docs.rs/sp-database"
 
 [dependencies]
 parking_lot = "0.10.0"
-kvdb = "0.5.0"
+kvdb = "0.6.0"
