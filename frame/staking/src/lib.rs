@@ -2688,8 +2688,6 @@ impl<T: Trait> Module<T> {
 					) {
 						return Err(Error::<T>::PhragmenSlashedNomination);
 					}
-
-					// TODO: we can either do an average, or do a refund here.
 				}
 			} else {
 				// a self vote
