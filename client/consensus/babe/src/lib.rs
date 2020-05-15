@@ -109,6 +109,7 @@ use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
+use prometheus_endpoint::Registry;
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
@@ -1291,6 +1292,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 	client: Arc<Client>,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnBlocking,
+	registry: Option<&Registry>,
 ) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
@@ -1314,6 +1316,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 		justification_import,
 		finality_proof_import,
 		spawner,
+		registry,
 	))
 }
 

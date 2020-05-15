@@ -93,6 +93,7 @@ fn async_import_queue_drops() {
 			None,
 			None,
 			&executor,
+			None,
 		);
 		drop(queue);
 	}
