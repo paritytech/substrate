@@ -3329,10 +3329,8 @@ for Module<T> where
 						let slash_cost = (6, 5);
 						let reward_cost = (2, 2);
 						add_db_reads_writes(
-							slash_cost.0 + nominators_len * slash_cost.0
-								+ reward_cost.0 * reporters_len,
-							slash_cost.1 + nominators_len * slash_cost.1
-								+ reward_cost.1 * reporters_len
+							(1 + nominators_len) * slash_cost.0 + reward_cost.0 * reporters_len,
+							(1 + nominators_len) * slash_cost.1 + reward_cost.1 * reporters_len
 						);
 					}
 				} else {
