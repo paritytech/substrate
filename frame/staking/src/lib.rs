@@ -1462,6 +1462,7 @@ decl_module! {
 		/// - Reads: EraElectionStatus, Ledger, Current Era, Bonded, Slashing Spans, [Origin Account], Locks
 		/// - Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators, [Origin Account], Locks
 		/// - Writes Each: SpanSlash * S
+		/// NOTE: Weight annotation is the kill scenario, we refund otherwise.
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(6, 6)
 			.saturating_add(80 * WEIGHT_PER_MICROS)
@@ -1544,11 +1545,12 @@ decl_module! {
 		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
-		/// - The transaction's complexity is proportional to the size of `targets`,
+		/// - The transaction's complexity is proportional to the size of `targets` (N)
 		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
 		/// - Both the reads and writes follow a similar pattern.
 		/// ---------
-		/// Base Weight: 22.34 + .36 * n µs
+		/// Base Weight: 22.34 + .36 * N µs
+		/// where N is the number of targets
 		/// DB Weight:
 		/// - Reads: Era Election Status, Ledger, Current Era
 		/// - Writes: Validators, Nominators
@@ -1735,7 +1737,7 @@ decl_module! {
 		/// Writes Each: SpanSlash * S
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(4, 7)
-			.saturating_add(48 * WEIGHT_PER_MICROS)
+			.saturating_add(53 * WEIGHT_PER_MICROS)
 			.saturating_add(
 				WEIGHT_PER_MICROS.saturating_mul(2).saturating_mul(Weight::from(*num_slashing_spans))
 			)
@@ -1925,7 +1927,7 @@ decl_module! {
 			+ 50 * WEIGHT_PER_NANOS * (MAX_UNLOCKING_CHUNKS as Weight)
 			+ T::DbWeight::get().reads_writes(3, 2)
 		]
-		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+		fn rebond(origin, #[compact] value: BalanceOf<T>) -> DispatchResultWithPostInfo {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1933,6 +1935,11 @@ decl_module! {
 
 			let ledger = ledger.rebond(value);
 			Self::update_ledger(&controller, &ledger);
+			Ok(Some(
+				35 * WEIGHT_PER_MICROS
+				+ 50 * WEIGHT_PER_NANOS * (ledger.unlocking.len() as Weight)
+				+ T::DbWeight::get().reads_writes(3, 2)
+			).into())
 		}
 
 		/// Set `HistoryDepth` value. This function will delete any history information

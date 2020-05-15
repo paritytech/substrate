@@ -172,7 +172,7 @@ impl<
 	}
 
 	fn weight(_now: BlockNumber) -> Weight {
-		// `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
 		// There should be no risk to the chain having this weight value be zero for now.
 		// However, this value of zero was not properly calculated, and so it would be reasonable
 		// to come back here and properly calculate the weight of this function.
