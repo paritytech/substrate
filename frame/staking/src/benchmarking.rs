@@ -27,9 +27,11 @@ use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
 
 use crate::Module as Staking;
-use frame_system::Module as System;
 
 const SEED: u32 = 0;
+const MAX_SPANS: u32 = 100;
+const MAX_VALIDATORS: u32 = 1000;
+const MAX_SLASHES: u32 = 1000;
 
 fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
 	let user = account(string, n, SEED);
@@ -60,6 +62,22 @@ fn create_validators<T: Trait>(max: u32) -> Result<Vec<<T::Lookup as StaticLooku
 		validators.push(stash_lookup);
 	}
 	Ok(validators)
+}
+
+// Add slashing spans to a user account. Not relevant for actual use, only to benchmark
+// read and write operations.
+fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
+	if spans == 0 { return }
+
+	// For the first slashing span, we initialize
+	let mut slashing_spans = crate::slashing::SlashingSpans::new(0);
+	SpanSlash::<T>::insert((who, 0), crate::slashing::SpanRecord::default());
+
+	for i in 1 .. spans {
+		assert!(slashing_spans.end_span(i));
+		SpanSlash::<T>::insert((who, i), crate::slashing::SpanRecord::default());
+	}
+	SlashingSpans::<T>::insert(who, slashing_spans);
 }
 
 // This function generates v validators and n nominators who are randomly nominating up to MAX_NOMINATIONS.
@@ -157,46 +175,93 @@ benchmarks! {
 		let u in ...;
 		let stash = create_funded_user::<T>("stash",u);
 		let controller = create_funded_user::<T>("controller", u);
-		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller);
+		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 		let reward_destination = RewardDestination::Staked;
 		let amount = T::Currency::minimum_balance() * 10.into();
-	}: _(RawOrigin::Signed(stash), controller_lookup, amount, reward_destination)
+	}: _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination)
+	verify {
+		assert!(Bonded::<T>::contains_key(stash));
+		assert!(Ledger::<T>::contains_key(controller));
+	}
 
 	bond_extra {
 		let u in ...;
-		let (stash, _) = create_stash_controller::<T>(u)?;
+		let (stash, controller) = create_stash_controller::<T>(u)?;
 		let max_additional = T::Currency::minimum_balance() * 10.into();
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
+		let original_bonded: BalanceOf<T> = ledger.active;
 	}: _(RawOrigin::Signed(stash), max_additional)
+	verify {
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
+		let new_bonded: BalanceOf<T> = ledger.active;
+		assert!(original_bonded < new_bonded);
+	}
 
 	unbond {
 		let u in ...;
 		let (_, controller) = create_stash_controller::<T>(u)?;
 		let amount = T::Currency::minimum_balance() * 10.into();
-	}: _(RawOrigin::Signed(controller), amount)
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
+		let original_bonded: BalanceOf<T> = ledger.active;
+	}: _(RawOrigin::Signed(controller.clone()), amount)
+	verify {
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
+		let new_bonded: BalanceOf<T> = ledger.active;
+		assert!(original_bonded > new_bonded);
+	}
+
+	// Withdraw only updates the ledger
+	withdraw_unbonded_update {
+		// Slashing Spans
+		let s in 0 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
+		let amount = T::Currency::minimum_balance() * 5.into(); // Half of total
+		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
+		CurrentEra::put(EraIndex::max_value());
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
+		let original_total: BalanceOf<T> = ledger.total;
+	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
+	verify {
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
+		let new_total: BalanceOf<T> = ledger.total;
+		assert!(original_total > new_total);
+	}
 
 	// Worst case scenario, everything is removed after the bonding duration
-	withdraw_unbonded {
-		let u in ...;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+	withdraw_unbonded_kill {
+		// Slashing Spans
+		let s in 0 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
 		let amount = T::Currency::minimum_balance() * 10.into();
 		Staking::<T>::unbond(RawOrigin::Signed(controller.clone()).into(), amount)?;
-		let current_block = System::<T>::block_number();
-		// let unbond_block = current_block + T::BondingDuration::get().into() + 10.into();
-		// System::<T>::set_block_number(unbond_block);
-	}: _(RawOrigin::Signed(controller))
+		CurrentEra::put(EraIndex::max_value());
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
+		let original_total: BalanceOf<T> = ledger.total;
+	}: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
+	verify {
+		assert!(!Ledger::<T>::contains_key(controller));
+	}
 
 	validate {
 		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (stash, controller) = create_stash_controller::<T>(u)?;
 		let prefs = ValidatorPrefs::default();
 	}: _(RawOrigin::Signed(controller), prefs)
+	verify {
+		assert!(Validators::<T>::contains_key(stash));
+	}
 
 	// Worst case scenario, MAX_NOMINATIONS
 	nominate {
 		let n in 1 .. MAX_NOMINATIONS as u32;
-		let (_, controller) = create_stash_controller::<T>(n + 1)?;
+		let (stash, controller) = create_stash_controller::<T>(n + 1)?;
 		let validators = create_validators::<T>(n)?;
 	}: _(RawOrigin::Signed(controller), validators)
+	verify {
+		assert!(Nominators::<T>::contains_key(stash));
+	}
 
 	chill {
 		let u in ...;
@@ -205,61 +270,91 @@ benchmarks! {
 
 	set_payee {
 		let u in ...;
-		let (_, controller) = create_stash_controller::<T>(u)?;
+		let (stash, controller) = create_stash_controller::<T>(u)?;
+		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
 	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
+	verify {
+		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
+	}
 
 	set_controller {
 		let u in ...;
 		let (stash, _) = create_stash_controller::<T>(u)?;
 		let new_controller = create_funded_user::<T>("new_controller", u);
-		let new_controller_lookup = T::Lookup::unlookup(new_controller);
+		let new_controller_lookup = T::Lookup::unlookup(new_controller.clone());
 	}: _(RawOrigin::Signed(stash), new_controller_lookup)
+	verify {
+		assert!(Ledger::<T>::contains_key(&new_controller));
+	}
 
 	set_validator_count {
-		let c in 0 .. 1000;
+		let c in 0 .. MAX_VALIDATORS;
 	}: _(RawOrigin::Root, c)
+	verify {
+		assert_eq!(ValidatorCount::get(), c);
+	}
 
 	force_no_eras { let i in 0 .. 1; }: _(RawOrigin::Root)
+	verify { assert_eq!(ForceEra::get(), Forcing::ForceNone); }
 
 	force_new_era {let i in 0 .. 1; }: _(RawOrigin::Root)
+	verify { assert_eq!(ForceEra::get(), Forcing::ForceNew); }
 
 	force_new_era_always { let i in 0 .. 1; }: _(RawOrigin::Root)
+	verify { assert_eq!(ForceEra::get(), Forcing::ForceAlways); }
 
 	// Worst case scenario, the list of invulnerables is very long.
 	set_invulnerables {
-		let v in 0 .. 1000;
+		let v in 0 .. MAX_VALIDATORS;
 		let mut invulnerables = Vec::new();
 		for i in 0 .. v {
 			invulnerables.push(account("invulnerable", i, SEED));
 		}
 	}: _(RawOrigin::Root, invulnerables)
+	verify {
+		assert_eq!(Invulnerables::<T>::get().len(), v as usize);
+	}
 
 	force_unstake {
-		let u in ...;
-		let (stash, _) = create_stash_controller::<T>(u)?;
-	}: _(RawOrigin::Root, stash)
+		// Slashing Spans
+		let s in 0 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
+	}: _(RawOrigin::Root, stash, s)
+	verify {
+		assert!(!Ledger::<T>::contains_key(&controller));
+	}
 
 	cancel_deferred_slash {
-		let s in 1 .. 1000;
+		let s in 1 .. MAX_SLASHES;
 		let mut unapplied_slashes = Vec::new();
 		let era = EraIndex::one();
-		for _ in 0 .. 1000 {
+		for _ in 0 .. MAX_SLASHES {
 			unapplied_slashes.push(UnappliedSlash::<T::AccountId, BalanceOf<T>>::default());
 		}
 		UnappliedSlashes::<T>::insert(era, &unapplied_slashes);
 
 		let slash_indices: Vec<u32> = (0 .. s).collect();
 	}: _(RawOrigin::Root, era, slash_indices)
+	verify {
+		assert_eq!(UnappliedSlashes::<T>::get(&era).len(), (MAX_SLASHES - s) as usize);
+	}
 
 	payout_stakers {
-		let n in 1 .. MAX_NOMINATIONS as u32;
-		let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
+		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32)?;
 		let current_era = CurrentEra::get().unwrap();
-		let caller = account("caller", n, SEED);
-	}: _(RawOrigin::Signed(caller), validator, current_era)
+		let caller = account("caller", 0, SEED);
+		let balance_before = T::Currency::free_balance(&validator);
+	}: _(RawOrigin::Signed(caller), validator.clone(), current_era)
+	verify {
+		// Validator has been paid!
+		let balance_after = T::Currency::free_balance(&validator);
+		assert!(balance_before < balance_after);
+	}
 
 	rebond {
-		let l in 1 .. 1000;
+		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
 		let (_, controller) = create_stash_controller::<T>(u)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -269,8 +364,14 @@ benchmarks! {
 		for _ in 0 .. l {
 			staking_ledger.unlocking.push(unlock_chunk.clone())
 		}
-		Ledger::<T>::insert(controller.clone(), staking_ledger);
-	}: _(RawOrigin::Signed(controller), (l + 100).into())
+		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
+		let original_bonded: BalanceOf<T> = staking_ledger.active;
+	}: _(RawOrigin::Signed(controller.clone()), (l + 100).into())
+	verify {
+		let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
+		let new_bonded: BalanceOf<T> = ledger.active;
+		assert!(original_bonded < new_bonded);
+	}
 
 	set_history_depth {
 		let e in 1 .. 100;
@@ -285,13 +386,20 @@ benchmarks! {
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
 			ErasStartSessionIndex::insert(i, i);
 		}
-	}: _(RawOrigin::Root, EraIndex::zero())
+	}: _(RawOrigin::Root, EraIndex::zero(), u32::max_value())
+	verify {
+		assert_eq!(HistoryDepth::get(), 0);
+	}
 
 	reap_stash {
-		let u in 1 .. 1000;
-		let (stash, controller) = create_stash_controller::<T>(u)?;
+		let s in 1 .. MAX_SPANS;
+		let (stash, controller) = create_stash_controller::<T>(0)?;
+		add_slashing_spans::<T>(&stash, s);
 		T::Currency::make_free_balance_be(&stash, 0.into());
-	}: _(RawOrigin::Signed(controller), stash)
+	}: _(RawOrigin::Signed(controller), stash.clone(), s)
+	verify {
+		assert!(!Bonded::<T>::contains_key(&stash));
+	}
 
 	new_era {
 		let v in 1 .. 10;
@@ -305,7 +413,7 @@ benchmarks! {
 	}
 
 	do_slash {
-		let l in 1 .. 1000;
+		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
 		let (stash, controller) = create_stash_controller::<T>(0)?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -317,6 +425,7 @@ benchmarks! {
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let slash_amount = T::Currency::minimum_balance() * 10.into();
+		let balance_before = T::Currency::free_balance(&stash);
 	}: {
 		crate::slashing::do_slash::<T>(
 			&stash,
@@ -324,6 +433,9 @@ benchmarks! {
 			&mut BalanceOf::<T>::zero(),
 			&mut NegativeImbalanceOf::<T>::zero()
 		);
+	} verify {
+		let balance_after = T::Currency::free_balance(&stash);
+		assert!(balance_before > balance_after);
 	}
 
 	payout_all {
@@ -395,7 +507,7 @@ mod tests {
 
 			let validator_stash = create_validator_with_nominators::<Test>(
 				n,
-				MAX_NOMINATIONS as u32,
+				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
 			).unwrap();
 
 			let current_era = CurrentEra::get().unwrap();
@@ -405,6 +517,35 @@ mod tests {
 			let new_free_balance = Balances::free_balance(&validator_stash);
 
 			assert!(original_free_balance < new_free_balance);
+		});
+	}
+
+	#[test]
+	fn add_slashing_spans_works() {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+			let n = 10;
+
+			let validator_stash = create_validator_with_nominators::<Test>(
+				n,
+				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+			).unwrap();
+
+			// Add 20 slashing spans
+			let num_of_slashing_spans = 20;
+			add_slashing_spans::<Test>(&validator_stash, num_of_slashing_spans);
+
+			let slashing_spans = SlashingSpans::<Test>::get(&validator_stash).unwrap();
+			assert_eq!(slashing_spans.iter().count(), num_of_slashing_spans as usize);
+			for i in 0 .. num_of_slashing_spans {
+				assert!(SpanSlash::<Test>::contains_key((&validator_stash, i)));
+			}
+
+			// Test everything is cleaned up
+			assert_ok!(Staking::kill_stash(&validator_stash, num_of_slashing_spans));
+			assert!(SlashingSpans::<Test>::get(&validator_stash).is_none());
+			for i in 0 .. num_of_slashing_spans {
+				assert!(!SpanSlash::<Test>::contains_key((&validator_stash, i)));
+			}
 		});
 	}
 
@@ -432,7 +573,8 @@ mod tests {
 			assert_ok!(test_benchmark_bond::<Test>());
 			assert_ok!(test_benchmark_bond_extra::<Test>());
 			assert_ok!(test_benchmark_unbond::<Test>());
-			assert_ok!(test_benchmark_withdraw_unbonded::<Test>());
+			assert_ok!(test_benchmark_withdraw_unbonded_update::<Test>());
+			assert_ok!(test_benchmark_withdraw_unbonded_kill::<Test>());
 			assert_ok!(test_benchmark_validate::<Test>());
 			assert_ok!(test_benchmark_nominate::<Test>());
 			assert_ok!(test_benchmark_chill::<Test>());
