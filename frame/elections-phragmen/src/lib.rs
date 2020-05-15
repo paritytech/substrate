@@ -413,7 +413,7 @@ decl_module! {
 		///  	- Voting(reporter)
 		///  	- Candidate.len()
 		///  	- Voting(Target)
-		///  	- Candidates, Members, RunnersUp (is_defunct_voter) [and Voting(Target) -- already counted]
+		///  	- Candidates, Members, RunnersUp (is_defunct_voter)
 		/// State writes:
 		/// 	- Lock(reporter || target)
 		/// 	- [AccountBalance(reporter)] + AccountBalance(target)
@@ -441,14 +441,20 @@ decl_module! {
 				<Candidates<T>>::decode_len().unwrap_or(0) as u32 <= candidate_count,
 				Error::<T>::InvalidCandidateCount,
 			);
-			// Optimisation Note: We read this again in is_defunct_voter, still duplicate overlay
-			// read.
+
+			let (_, votes) = <Voting<T>>::get(&target);
+			// indirect way to ensure target is a voter. We could call into `::contains()`, but it
+			// would have the same effect with one extra db access. Note that votes cannot be
+			// submitted with length 0. Hence, a non-zero length means that the target is a voter.
+			ensure!(votes.len() > 0, Error::<T>::MustBeVoter);
+
+			// ensure that the size of votes that need to be searched is correct.
 			ensure!(
-				<Voting<T>>::get(&target).1.len() as u32 <= vote_count,
+				votes.len() as u32 <= vote_count,
 				Error::<T>::InvalidVoteCount,
 			);
 
-			let valid = Self::is_defunct_voter(&target);
+			let valid = Self::is_defunct_voter(&votes);
 			if valid {
 				// reporter will get the voting bond of the target
 				T::Currency::repatriate_reserved(&target, &reporter, T::VotingBond::get(), BalanceStatus::Free)?;
@@ -792,22 +798,15 @@ impl<T: Trait> Module<T> {
 		Self::runners_up().into_iter().map(|(r, _)| r).collect::<Vec<T::AccountId>>()
 	}
 
-	/// Check if `who` is a defunct voter.
-	///
-	/// Note that false is returned if `who` is not a voter at all.
+	/// Check if `votes` will correspond to a defunct voter. As no origin is part of the inputs,
+	/// this function does not check the origin at all.
 	///
 	/// O(NLogM) with M candidates and `who` having voted for `N` of them.
 	/// Reads Members, RunnersUp, Candidates and Voting(who) from database.
-	fn is_defunct_voter(who: &T::AccountId) -> bool {
-		if Self::is_voter(who) {
-			Self::votes_of(who)
-				.iter()
-				.all(|v|
-					!Self::is_member(v) && !Self::is_runner_up(v) && !Self::is_candidate(v).is_ok()
-				)
-		} else {
-			false
-		}
+	fn is_defunct_voter(votes: &[T::AccountId]) -> bool {
+		votes.iter().all(|v|
+			!Self::is_member(v) && !Self::is_runner_up(v) && !Self::is_candidate(v).is_ok()
+		)
 	}
 
 	/// Remove a certain someone as a voter.
@@ -830,11 +829,6 @@ impl<T: Trait> Module<T> {
 	/// The locked stake of a voter.
 	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
 		Voting::<T>::get(who).0
-	}
-
-	/// The locked stake of a voter.
-	fn votes_of(who: &T::AccountId) -> Vec<T::AccountId> {
-		Voting::<T>::get(who).1
 	}
 
 	/// Check there's nothing to do this block.
@@ -1397,11 +1391,15 @@ mod tests {
 		}
 	}
 
+	fn votes_of(who: &u64) -> Vec<u64> {
+		Voting::<Test>::get(who).1
+	}
+
 	fn defunct_for(who: u64) -> DefunctVoter<u64> {
 		DefunctVoter {
 			who,
 			candidate_count: Elections::candidates().len() as u32,
-			vote_count: Elections::votes_of(&who).len() as u32
+			vote_count: votes_of(&who).len() as u32
 		}
 	}
 
@@ -1420,7 +1418,7 @@ mod tests {
 			assert!(Elections::is_candidate(&1).is_err());
 
 			assert_eq!(all_voters(), vec![]);
-			assert_eq!(Elections::votes_of(&1), vec![]);
+			assert_eq!(votes_of(&1), vec![]);
 		});
 	}
 
@@ -1851,13 +1849,13 @@ mod tests {
 			assert_eq_uvec!(all_voters(), vec![2, 3]);
 			assert_eq!(Elections::locked_stake_of(&2), 20);
 			assert_eq!(Elections::locked_stake_of(&3), 30);
-			assert_eq!(Elections::votes_of(&2), vec![5]);
-			assert_eq!(Elections::votes_of(&3), vec![5]);
+			assert_eq!(votes_of(&2), vec![5]);
+			assert_eq!(votes_of(&3), vec![5]);
 
 			assert_ok!(Elections::remove_voter(Origin::signed(2)));
 
 			assert_eq_uvec!(all_voters(), vec![3]);
-			assert_eq!(Elections::votes_of(&2), vec![]);
+			assert_eq!(votes_of(&2), vec![]);
 			assert_eq!(Elections::locked_stake_of(&2), 0);
 
 			assert_eq!(balances(&2), (20, 0));
@@ -1992,19 +1990,19 @@ mod tests {
 			assert_eq!(Elections::candidates(), vec![]);
 
 			// all of them have a member or runner-up that they voted for.
-			assert_eq!(Elections::is_defunct_voter(&5), false);
-			assert_eq!(Elections::is_defunct_voter(&4), false);
-			assert_eq!(Elections::is_defunct_voter(&2), false);
-			assert_eq!(Elections::is_defunct_voter(&6), false);
+			assert_eq!(Elections::is_defunct_voter(&votes_of(&5)), false);
+			assert_eq!(Elections::is_defunct_voter(&votes_of(&4)), false);
+			assert_eq!(Elections::is_defunct_voter(&votes_of(&2)), false);
+			assert_eq!(Elections::is_defunct_voter(&votes_of(&6)), false);
 
 			// defunct
-			assert_eq!(Elections::is_defunct_voter(&3), true);
+			assert_eq!(Elections::is_defunct_voter(&votes_of(&3)), true);
 
 			assert_ok!(submit_candidacy(Origin::signed(1)));
 			assert_ok!(vote(Origin::signed(1), vec![1], 10));
 
 			// has a candidate voted for.
-			assert_eq!(Elections::is_defunct_voter(&1), false);
+			assert_eq!(Elections::is_defunct_voter(&votes_of(&1)), false);
 
 		});
 	}
@@ -2081,9 +2079,9 @@ mod tests {
 
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 
-			assert_eq!(Elections::votes_of(&2), vec![5]);
-			assert_eq!(Elections::votes_of(&3), vec![3]);
-			assert_eq!(Elections::votes_of(&4), vec![4]);
+			assert_eq!(votes_of(&2), vec![5]);
+			assert_eq!(votes_of(&3), vec![3]);
+			assert_eq!(votes_of(&4), vec![4]);
 
 			assert_eq!(Elections::candidates(), vec![3, 4, 5]);
 			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 3);
