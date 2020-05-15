@@ -93,7 +93,6 @@ use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use sp_core::{
 	traits::BareCryptoStore,
-	Pair
 };
 use sp_inherents::{InherentDataProviders, InherentData};
 use sc_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG};
@@ -445,14 +444,13 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
-	type Claim = (PreDigest, AuthorityPair);
+	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;
 	type CreateProposer = Pin<Box<
 		dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static
 	>>;
 	type Proposer = E::Proposer;
 	type BlockImport = I;
-	type Public = AuthorityId;
 
 	fn logging_target(&self) -> &'static str {
 		"babe"
@@ -516,20 +514,16 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		]
 	}
 
-	fn publickey_from_claim(&self, claim: &Self::Claim) -> Self::Public {
-		claim.1.public()
-	}
-
 	fn block_import_params(&self) -> Box<dyn Fn(
 		B::Header,
 		&B::Hash,
 		Vec<B::Extrinsic>,
 		StorageChanges<I::Transaction, B>,
-		Self::Public,
+		Self::Claim,
 		Self::EpochData,
 	) -> Result<sp_consensus::BlockImportParams<B, I::Transaction>, sp_consensus::Error> + Send + 'static> {
 		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, public, epoch_descriptor| {
+		Box::new(move |header, header_hash, body, storage_changes, (_, public), epoch_descriptor| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let public_type_pair = public.clone().into();
