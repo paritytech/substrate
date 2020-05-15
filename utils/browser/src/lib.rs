@@ -92,6 +92,7 @@ where
 		state_cache_size: Default::default(),
 		tracing_receiver: Default::default(),
 		tracing_targets: Default::default(),
+		wasm_tracing: Default::default(),
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,

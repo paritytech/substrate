@@ -48,7 +48,7 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::{
 	collections::HashMap,
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, pin::Pin
+	marker::PhantomData, sync::{Arc, atomic::Ordering}, pin::Pin
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -1227,6 +1227,8 @@ ServiceBuilder<
 			let subscriber = sc_tracing::ProfilingSubscriber::new(
 				config.tracing_receiver, tracing_targets
 			);
+			sp_tracing::WASM_TRACING_ENABLED.store(config.wasm_tracing, Ordering::Relaxed);
+			log::debug!(target: "sp_tracing", "WASM_TRACING = {}", config.wasm_tracing	);
 			match tracing::subscriber::set_global_default(subscriber) {
 				Ok(_) => (),
 				Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),

@@ -368,6 +368,15 @@ pub trait CliConfiguration: Sized {
 			.unwrap_or(Default::default()))
 	}
 
+	/// Returns `Ok(true)` if wasm tracing should be enabled
+	///
+	/// By default this is `false`.
+	fn wasm_tracing(&self) -> Result<bool> {
+		Ok(self.import_params()
+			.map(|x| x.wasm_tracing())
+			.unwrap_or(Default::default()))
+	}
+
 	/// Get the node key from the current object
 	///
 	/// By default this is retrieved from `NodeKeyParams` if it is available. Otherwise its
@@ -463,6 +472,7 @@ pub trait CliConfiguration: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
+			wasm_tracing: self.wasm_tracing()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,

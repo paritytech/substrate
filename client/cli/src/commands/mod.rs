@@ -383,6 +383,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn wasm_tracing(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.wasm_tracing()),*
+				}
+			}
+
 			fn node_key(&self, net_config_dir: &::std::path::PathBuf)
 			-> $crate::Result<::sc_service::config::NodeKeyConfig> {
 				match self {
