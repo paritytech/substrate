@@ -423,8 +423,8 @@ decl_storage! {
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
 
-		/// Total weight for all extrinsics for the current block.
-		AllExtrinsicsWeight: ExtrinsicsWeight;
+		/// The current weight for the block.
+		BlockWeight get(fn block_weight): ExtrinsicsWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -972,11 +972,6 @@ impl<T: Trait> Module<T> {
 		ExtrinsicCount::get().unwrap_or_default()
 	}
 
-	/// Gets the weight of all executed extrinsics.
-	pub fn all_extrinsics_weight() -> ExtrinsicsWeight {
-		AllExtrinsicsWeight::get()
-	}
-
 	pub fn all_extrinsics_len() -> u32 {
 		AllExtrinsicsLen::get().unwrap_or_default()
 	}
@@ -997,7 +992,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
 	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
-		AllExtrinsicsWeight::mutate(|current_weight| {
+		BlockWeight::mutate(|current_weight| {
 			current_weight.add(weight, class);
 		});
 	}
@@ -1020,7 +1015,8 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 
 		// Remove previous block data from storage
-		AllExtrinsicsWeight::kill();
+		BlockWeight::kill();
+		println!("SHOULD BE KILLED");
 		AllExtrinsicsLen::kill();
 
 		// Kill inspectable storage entries in state when `InitKind::Full`.
@@ -1123,7 +1119,7 @@ impl<T: Trait> Module<T> {
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_limits(weight: Weight, len: usize) {
-		AllExtrinsicsWeight::mutate(|current_weight| {
+		BlockWeight::mutate(|current_weight| {
 			current_weight.put(weight, DispatchClass::Normal)
 		});
 		AllExtrinsicsLen::put(len as u32);
@@ -1360,7 +1356,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
-		let mut all_weight = Module::<T>::all_extrinsics_weight();
+		let mut all_weight = Module::<T>::block_weight();
 		match info.class {
 			// If we have a dispatch that must be included in the block, it ignores all the limits.
 			DispatchClass::Mandatory => {
@@ -1449,7 +1445,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let next_len = Self::check_block_length(info, len)?;
 		let next_weight = Self::check_weight(info)?;
 		AllExtrinsicsLen::put(next_len);
-		AllExtrinsicsWeight::put(next_weight);
+		BlockWeight::put(next_weight);
 		Ok(())
 	}
 
@@ -1537,7 +1533,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 
 		let unspent = post_info.calc_unspent(info);
 		if unspent > 0 {
-			AllExtrinsicsWeight::mutate(|current_weight| {
+			BlockWeight::mutate(|current_weight| {
 				current_weight.sub(unspent, info.class);
 			})
 		}
@@ -2156,7 +2152,7 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			let reset_check_weight = |i, f, s| {
-				AllExtrinsicsWeight::mutate(|current_weight| {
+				BlockWeight::mutate(|current_weight| {
 					current_weight.put(s, DispatchClass::Normal)
 				});
 				let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, i, len);
@@ -2178,19 +2174,19 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
-			AllExtrinsicsWeight::mutate(|current_weight| {
+			BlockWeight::mutate(|current_weight| {
 				current_weight.put(256 - <Test as Trait>::ExtrinsicBaseWeight::get(), DispatchClass::Normal)
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
-			assert_eq!(AllExtrinsicsWeight::get().total(), info.weight + 256);
+			assert_eq!(BlockWeight::get().total(), info.weight + 256);
 
 			assert!(
 				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
 				.is_ok()
 			);
 			assert_eq!(
-				AllExtrinsicsWeight::get().total(),
+				BlockWeight::get().total(),
 				post_info.actual_weight.unwrap() + 256,
 			);
 		})
@@ -2203,13 +2199,13 @@ pub(crate) mod tests {
 			let post_info = PostDispatchInfo { actual_weight: Some(700), };
 			let len = 0_usize;
 
-			AllExtrinsicsWeight::mutate(|current_weight| {
+			BlockWeight::mutate(|current_weight| {
 				current_weight.put(128, DispatchClass::Normal)
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
-				AllExtrinsicsWeight::get().total(),
+				BlockWeight::get().total(),
 				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
 			);
 
@@ -2218,7 +2214,7 @@ pub(crate) mod tests {
 				.is_ok()
 			);
 			assert_eq!(
-				AllExtrinsicsWeight::get().total(),
+				BlockWeight::get().total(),
 				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
 			);
 		})
@@ -2231,11 +2227,11 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			// Initial weight from `BlockExecutionWeight`
-			assert_eq!(System::all_extrinsics_weight().total(), <Test as Trait>::BlockExecutionWeight::get());
+			assert_eq!(System::block_weight().total(), <Test as Trait>::BlockExecutionWeight::get());
 			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
 			assert!(r.is_ok());
 			assert_eq!(
-				System::all_extrinsics_weight().total(),
+				System::block_weight().total(),
 				<Test as Trait>::ExtrinsicBaseWeight::get() + <Test as Trait>::BlockExecutionWeight::get()
 			);
 		})
@@ -2252,8 +2248,8 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_eq!(System::all_extrinsics_weight().total(), Weight::max_value());
-			assert!(System::all_extrinsics_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+			assert_eq!(System::block_weight().total(), Weight::max_value());
+			assert!(System::block_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
 		});
 	}
 
@@ -2261,8 +2257,8 @@ pub(crate) mod tests {
 	fn register_extra_weight_unchecked_doesnt_care_about_limits() {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Normal);
-			assert_eq!(System::all_extrinsics_weight().total(), Weight::max_value());
-			assert!(System::all_extrinsics_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+			assert_eq!(System::block_weight().total(), Weight::max_value());
+			assert!(System::block_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
 		});
 	}
 
@@ -2280,10 +2276,10 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(System::all_extrinsics_weight().total(), 768);
+			assert_eq!(System::block_weight().total(), 768);
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
 			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
-			assert_eq!(System::all_extrinsics_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
 		});
 	}
 
@@ -2298,10 +2294,10 @@ pub(crate) mod tests {
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
 			// Extra 15 here from block execution + base extrinsic weight
-			assert_eq!(System::all_extrinsics_weight().total(), 266);
+			assert_eq!(System::block_weight().total(), 266);
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
-			assert_eq!(System::all_extrinsics_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
 		});
 	}
 
@@ -2331,7 +2327,7 @@ pub(crate) mod tests {
 			let normal_limit = normal_weight_limit();
 
 			// given almost full block
-			AllExtrinsicsWeight::mutate(|current_weight| {
+			BlockWeight::mutate(|current_weight| {
 				current_weight.put(normal_limit, DispatchClass::Normal)
 			});
 			// will not fit.
