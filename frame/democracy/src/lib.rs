@@ -169,14 +169,16 @@ use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
 	traits::{Zero, Hash, Dispatchable, Saturating},
 };
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
+	storage::IterableStorageMap,
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
-	}
+	},
+	dispatch::DispatchResultWithPostInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -196,6 +198,11 @@ mod tests;
 pub mod benchmarking;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
+
+/// The maximum number of vetoers on a single proposal used to compute Weight.
+///
+/// NOTE: This is not enforced by any logic.
+pub const MAX_VETOERS: Weight = 100;
 
 /// A proposal index.
 pub type PropIndex = u32;
@@ -265,6 +272,11 @@ pub trait Trait: frame_system::Trait + Sized {
 	type CancellationOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin for anyone able to veto proposals.
+	///
+	/// # Warning
+	///
+	/// The number of Vetoers for a proposal must be small, extrinsics are weighted according to
+	/// [MAX_VETOERS](./const.MAX_VETOERS.html)
 	type VetoOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
 
 	/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
@@ -278,6 +290,12 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// The Scheduler.
 	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
+
+	/// The maximum number of votes for an account.
+	///
+	/// Also used to compute weight, an overly big value can
+	/// lead to extrinsic with very big weight: see `delegate` for instance.
+	type MaxVotes: Get<u32>;
 }
 
 #[derive(Clone, Encode, Decode, RuntimeDebug)]
@@ -304,6 +322,14 @@ impl<AccountId, Balance, BlockNumber> PreimageStatus<AccountId, Balance, BlockNu
 	}
 }
 
+// A value placed in storage that represents the current version of the Democracy storage.
+// This value is used by the `on_runtime_upgrade` logic to determine whether we run
+// storage migration logic.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	V1,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
 		// TODO: Refactor public proposal queue into its own pallet.
@@ -314,7 +340,7 @@ decl_storage! {
 		pub PublicProps get(fn public_props): Vec<(PropIndex, T::Hash, T::AccountId)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(fn deposit_of):
-			map hasher(twox_64_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+			map hasher(twox_64_concat) PropIndex => Option<(Vec<T::AccountId>, BalanceOf<T>)>;
 
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
@@ -368,6 +394,11 @@ decl_storage! {
 
 		/// Record of all proposals that have been subject to emergency cancellation.
 		pub Cancellations: map hasher(identity) T::Hash => bool;
+
+		/// Storage version of the pallet.
+		///
+		/// New networks start with last version.
+		StorageVersion build(|_| Some(Releases::V1)): Option<Releases>;
 	}
 }
 
@@ -492,6 +523,62 @@ decl_error! {
 		InstantNotAllowed,
 		/// Delegation to oneself makes no sense.
 		Nonsense,
+		/// Invalid upper bound.
+		WrongUpperBound,
+		/// Maximum number of votes reached.
+		MaxVotesReached,
+	}
+}
+
+/// Functions for calcuating the weight of some dispatchables.
+mod weight_for {
+	use frame_support::{traits::Get, weights::Weight};
+	use super::Trait;
+
+	/// Calculate the weight for `delegate`.
+	/// - Db reads: 2*`VotingOf`, `balances locks`
+	/// - Db writes: 2*`VotingOf`, `balances locks`
+	/// - Db reads per votes: `ReferendumInfoOf`
+	/// - Db writes per votes: `ReferendumInfoOf`
+	/// - Base Weight: 65.78 + 8.229 * R µs
+	// NOTE: weight must cover an incorrect voting of origin with 100 votes.
+	pub(crate) fn delegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(3))
+			.saturating_add(66_000_000)
+			.saturating_add(votes.saturating_mul(8_100_000))
+	}
+
+	/// Calculate the weight for `undelegate`.
+	/// - Db reads: 2*`VotingOf`
+	/// - Db writes: 2*`VotingOf`
+	/// - Db reads per votes: `ReferendumInfoOf`
+	/// - Db writes per votes: `ReferendumInfoOf`
+	/// - Base Weight: 33.29 + 8.104 * R µs
+	pub(crate) fn undelegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(2), votes.saturating_add(2))
+			.saturating_add(33_000_000)
+			.saturating_add(votes.saturating_mul(8_000_000))
+	}
+
+	/// Calculate the weight for `proxy_delegate`.
+	/// same as `delegate with additional:
+	/// - Db reads: `Proxy`, `proxy account`
+	/// - Db writes: `proxy account`
+	/// - Base Weight: 68.61 + 8.039 * R µs
+	pub(crate) fn proxy_delegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(5), votes.saturating_add(4))
+			.saturating_add(69_000_000)
+			.saturating_add(votes.saturating_mul(8_000_000))
+	}
+
+	/// Calculate the weight for `proxy_undelegate`.
+	/// same as `undelegate with additional:
+	/// Db reads: `Proxy`
+	/// Base Weight: 39 + 7.958 * R µs
+	pub(crate) fn proxy_undelegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(2))
+			.saturating_add(40_000_000)
+			.saturating_add(votes.saturating_mul(8_000_000))
 	}
 }
 
@@ -526,6 +613,22 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		fn on_runtime_upgrade() -> Weight {
+			if let None = StorageVersion::get() {
+				StorageVersion::put(Releases::V1);
+
+				DepositOf::<T>::translate::<
+					(BalanceOf<T>, Vec<T::AccountId>), _
+				>(|_, (balance, accounts)| {
+					Some((accounts, balance))
+				});
+
+				T::MaximumBlockWeight::get()
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+
 		/// Propose a sensitive action to be taken.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the sender must
@@ -537,22 +640,22 @@ decl_module! {
 		/// Emits `Proposed`.
 		///
 		/// # <weight>
-		/// - `O(P)`
-		/// - P is the number proposals in the `PublicProps` vec.
-		/// - Two DB changes, one DB entry.
+		/// - Complexity: `O(1)`
+		/// - Db reads: `PublicPropCount`, `PublicProps`
+		/// - Db writes: `PublicPropCount`, `PublicProps`, `DepositOf`
+		/// -------------------
+		/// Base Weight: 42.58 + .127 * P µs with `P` the number of proposals `PublicProps`
 		/// # </weight>
-		#[weight = 5_000_000_000]
-		fn propose(origin,
-			proposal_hash: T::Hash,
-			#[compact] value: BalanceOf<T>
-		) {
+		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 3)]
+		fn propose(origin, proposal_hash: T::Hash, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
+
 			T::Currency::reserve(&who, value)?;
 
 			let index = Self::public_prop_count();
 			PublicPropCount::put(index + 1);
-			<DepositOf<T>>::insert(index, (value, &[&who][..]));
+			<DepositOf<T>>::insert(index, (&[&who][..], value));
 
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
@@ -565,19 +668,30 @@ decl_module! {
 		/// must have funds to cover the deposit, equal to the original deposit.
 		///
 		/// - `proposal`: The index of the proposal to second.
+		/// - `seconds_upper_bound`: an upper bound on the current number of seconds on this
+		///   proposal. Extrinsic is weighted according to this value with no refund.
 		///
 		/// # <weight>
-		/// - `O(S)`.
-		/// - S is the number of seconds a proposal already has.
-		/// - One DB entry.
+		/// - Complexity: `O(S)` where S is the number of seconds a proposal already has.
+		/// - Db reads: `DepositOf`
+		/// - Db writes: `DepositOf`
+		/// ---------
+		/// - Base Weight: 22.28 + .229 * S µs
 		/// # </weight>
-		#[weight = 5_000_000_000]
-		fn second(origin, #[compact] proposal: PropIndex) {
+		#[weight = 23_000_000
+			.saturating_add(230_000.saturating_mul(Weight::from(*seconds_upper_bound)))
+			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+		]
+		fn second(origin, #[compact] proposal: PropIndex, #[compact] seconds_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
+
+			let seconds = Self::len_of_deposit_of(proposal)
+				.ok_or_else(|| Error::<T>::ProposalMissing)?;
+			ensure!(seconds <= seconds_upper_bound, Error::<T>::WrongUpperBound);
 			let mut deposit = Self::deposit_of(proposal)
 				.ok_or(Error::<T>::ProposalMissing)?;
-			T::Currency::reserve(&who, deposit.0)?;
-			deposit.1.push(who);
+			T::Currency::reserve(&who, deposit.1)?;
+			deposit.0.push(who);
 			<DepositOf<T>>::insert(proposal, deposit);
 		}
 
@@ -590,11 +704,16 @@ decl_module! {
 		/// - `vote`: The vote configuration.
 		///
 		/// # <weight>
-		/// - `O(R)`.
-		/// - R is the number of referendums the voter has voted on.
-		/// - One DB change, one DB entry.
+		/// - Complexity: `O(R)` where R is the number of referendums the voter has voted on.
+		///   weight is charged as if maximum votes.
+		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `balances locks`
+		/// - Db writes: `ReferendumInfoOf`, `VotingOf`, `balances locks`
+		/// --------------------
+		/// - Base Weight:
+		///     - Vote New: 49.24 + .333 * R µs
+		///     - Vote Existing: 49.94 + .343 * R µs
 		/// # </weight>
-		#[weight = 200_000_000]
+		#[weight = 50_000_000 + 350_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(3, 3)]
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -612,10 +731,16 @@ decl_module! {
 		/// - `vote`: The vote configuration.
 		///
 		/// # <weight>
-		/// - `O(1)`.
-		/// - One DB change, one DB entry.
+		/// - Complexity: `O(R)` where R is the number of referendums the proxy has voted on.
+		///   weight is charged as if maximum votes.
+		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `balances locks`, `Proxy`, `proxy account`
+		/// - Db writes: `ReferendumInfoOf`, `VotingOf`, `balances locks`
+		/// ------------
+		/// - Base Weight:
+		///     - Proxy Vote New: 54.35 + .344 * R µs
+		///     - Proxy Vote Existing: 54.35 + .35 * R µs
 		/// # </weight>
-		#[weight = 200_000_000]
+		#[weight = 55_000_000 + 350_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(5, 3)]
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -633,9 +758,13 @@ decl_module! {
 		/// -`ref_index`: The index of the referendum to cancel.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - Complexity: `O(1)`.
+		/// - Db reads: `ReferendumInfoOf`, `Cancellations`
+		/// - Db writes: `ReferendumInfoOf`, `Cancellations`
+		/// -------------
+		/// - Base Weight: 34.25 µs
 		/// # </weight>
-		#[weight = (500_000_000, DispatchClass::Operational)]
+		#[weight = (35_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
@@ -655,10 +784,13 @@ decl_module! {
 		/// - `proposal_hash`: The preimage hash of the proposal.
 		///
 		/// # <weight>
-		/// - `O(1)`.
-		/// - One DB change.
+		/// - Complexity `O(V)` with V number of vetoers in the blacklist of proposal.
+		///   Decoding vec of length V. Charged as maximum
+		/// - Db reads: `NextExternal`, `Blacklist`
+		/// - Db writes: `NextExternal`
+		/// - Base Weight: 13.8 + .106 * V µs
 		/// # </weight>
-		#[weight = 5_000_000_000]
+		#[weight = 15_000_000 + 110_000 * MAX_VETOERS + T::DbWeight::get().reads_writes(2, 1)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
@@ -682,10 +814,11 @@ decl_module! {
 		/// pre-scheduled `external_propose` call.
 		///
 		/// # <weight>
-		/// - `O(1)`.
-		/// - One DB change.
+		/// - Complexity: `O(1)`
+		/// - Db write: `NextExternal`
+		/// - Base Weight: 3.065 µs
 		/// # </weight>
-		#[weight = 5_000_000_000]
+		#[weight = 3_100_000 + T::DbWeight::get().writes(1)]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SimpleMajority));
@@ -702,10 +835,11 @@ decl_module! {
 		/// pre-scheduled `external_propose` call.
 		///
 		/// # <weight>
-		/// - `O(1)`.
-		/// - One DB change.
+		/// - Complexity: `O(1)`
+		/// - Db write: `NextExternal`
+		/// - Base Weight: 3.087 µs
 		/// # </weight>
-		#[weight = 5_000_000_000]
+		#[weight = 3_100_000 + T::DbWeight::get().writes(1)]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SuperMajorityAgainst));
@@ -726,11 +860,12 @@ decl_module! {
 		/// Emits `Started`.
 		///
 		/// # <weight>
-		/// - One DB clear.
-		/// - One DB change.
-		/// - One extra DB entry.
+		/// - Complexity: `O(1)`
+		/// - Db reads: `NextExternal`, `ReferendumCount`
+		/// - Db writes: `NextExternal`, `ReferendumCount`, `ReferendumInfoOf`
+		/// - Base Weight: 30.1 µs
 		/// # </weight>
-		#[weight = 200_000_000]
+		#[weight = 30_000_000 + T::DbWeight::get().reads_writes(2, 3)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
 			voting_period: T::BlockNumber,
@@ -775,13 +910,13 @@ decl_module! {
 		/// Emits `Vetoed`.
 		///
 		/// # <weight>
-		/// - Two DB entries.
-		/// - One DB clear.
-		/// - Performs a binary search on `existing_vetoers` which should not
-		///   be very large.
-		/// - O(log v), v is number of `existing_vetoers`
+		/// - Complexity: `O(V + log(V))` where V is number of `existing vetoers`
+		///   Performs a binary search on `existing_vetoers` which should not be very large.
+		/// - Db reads: `NextExternal`, `Blacklist`
+		/// - Db writes: `NextExternal`, `Blacklist`
+		/// - Base Weight: 29.87 + .188 * V µs
 		/// # </weight>
-		#[weight = 200_000_000]
+		#[weight = 30_000_000 + 180_000 * MAX_VETOERS + T::DbWeight::get().reads_writes(2, 2)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
 
@@ -812,9 +947,11 @@ decl_module! {
 		/// - `ref_index`: The index of the referendum to cancel.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - Complexity: `O(1)`.
+		/// - Db writes: `ReferendumInfoOf`
+		/// - Base Weight: 21.57 µs
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = (22_000_000 + T::DbWeight::get().writes(1), DispatchClass::Operational)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
@@ -827,22 +964,24 @@ decl_module! {
 		/// - `which`: The index of the referendum to cancel.
 		///
 		/// # <weight>
-		/// - One DB change.
-		/// - O(d) where d is the items in the dispatch queue.
+		/// - `O(D)` where `D` is the items in the dispatch queue. Weighted as `D = 10`.
+		/// - Db reads: `scheduler lookup`, scheduler agenda`
+		/// - Db writes: `scheduler lookup`, scheduler agenda`
+		/// - Base Weight: 36.78 + 3.277 * D µs
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = (68_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
 			T::Scheduler::cancel_named((DEMOCRACY_ID, which).encode())
 				.map_err(|_| Error::<T>::ProposalMissing)?;
 		}
 
+		/// Weight: see `begin_block`
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			if let Err(e) = Self::begin_block(n) {
+			Self::begin_block(n).unwrap_or_else(|e| {
 				sp_runtime::print(e);
-			}
-
-			0
+				0
+			})
 		}
 
 		/// Specify a proxy that is already open to us. Called by the stash.
@@ -854,9 +993,12 @@ decl_module! {
 		/// - `proxy`: The account that will be activated as proxy.
 		///
 		/// # <weight>
-		/// - One extra DB entry.
+		/// - Complexity: `O(1)`
+		/// - Db reads: `Proxy`
+		/// - Db writes: `Proxy`
+		/// - Base Weight: 7.972 µs
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = 8_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn activate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
@@ -877,9 +1019,12 @@ decl_module! {
 		/// The dispatch origin of this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - One DB clear.
+		/// - Complexity: `O(1)`
+		/// - Db reads: `Proxy`, `sender account`
+		/// - Db writes: `Proxy`, `sender account`
+		/// - Base Weight: 15.41 µs
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = 16_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn close_proxy(origin) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::mutate(&who, |a| {
@@ -901,9 +1046,12 @@ decl_module! {
 		/// - `proxy`: The account that will be deactivated as proxy.
 		///
 		/// # <weight>
-		/// - One DB clear.
+		/// - Complexity: `O(1)`
+		/// - Db reads: `Proxy`
+		/// - Db writes: `Proxy`
+		/// - Base Weight: 8.03 µs
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = 8_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn deactivate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
@@ -935,11 +1083,26 @@ decl_module! {
 		/// Emits `Delegated`.
 		///
 		/// # <weight>
+		/// - Complexity: `O(R)` where R is the number of referendums the voter delegating to has
+		///   voted on. Weight is charged as if maximum votes.
+		/// - Db reads: 2*`VotingOf`, `balances locks`
+		/// - Db writes: 2*`VotingOf`, `balances locks`
+		/// - Db reads per votes: `ReferendumInfoOf`
+		/// - Db writes per votes: `ReferendumInfoOf`
+		/// - Base Weight: 65.78 + 8.229 * R µs
+		// NOTE: weight must cover an incorrect voting of origin with 100 votes.
 		/// # </weight>
-		#[weight = 500_000_000]
-		pub fn delegate(origin, to: T::AccountId, conviction: Conviction, balance: BalanceOf<T>) {
+		#[weight = weight_for::delegate::<T>(T::MaxVotes::get().into())]
+		pub fn delegate(
+			origin,
+			to: T::AccountId,
+			conviction: Conviction,
+			balance: BalanceOf<T>
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::try_delegate(who, to, conviction, balance)?;
+			let votes = Self::try_delegate(who, to, conviction, balance)?;
+
+			Ok(Some(weight_for::delegate::<T>(votes.into())).into())
 		}
 
 		/// Undelegate the voting power of the sending account.
@@ -953,12 +1116,20 @@ decl_module! {
 		/// Emits `Undelegated`.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// - Complexity: `O(R)` where R is the number of referendums the voter delegating to has
+		///   voted on. Weight is charged as if maximum votes.
+		/// - Db reads: 2*`VotingOf`
+		/// - Db writes: 2*`VotingOf`
+		/// - Db reads per votes: `ReferendumInfoOf`
+		/// - Db writes per votes: `ReferendumInfoOf`
+		/// - Base Weight: 33.29 + 8.104 * R µs
+		// NOTE: weight must cover an incorrect voting of origin with 100 votes.
 		/// # </weight>
-		#[weight = 500_000_000]
-		fn undelegate(origin) {
+		#[weight = weight_for::undelegate::<T>(T::MaxVotes::get().into())]
+		fn undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::try_undelegate(who)?;
+			let votes = Self::try_undelegate(who)?;
+			Ok(Some(weight_for::undelegate::<T>(votes.into())).into())
 		}
 
 		/// Clears all public proposals.
@@ -967,12 +1138,12 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - One DB clear.
+		/// - Db writes: `PublicProps`
+		/// - Base Weight: 2.505 µs
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 2_500_000 + T::DbWeight::get().writes(1)]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
-
 			<PublicProps<T>>::kill();
 		}
 
@@ -986,10 +1157,13 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Dependent on the size of `encoded_proposal` but protected by a
-		///   required deposit.
+		/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
+		/// - Db reads: `Preimages`
+		/// - Db writes: `Preimages`
+		/// - Base Weight: 37.93 + .004 * b µs
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = 38_000_000 + 4_000 * Weight::from(encoded_proposal.len() as u32)
+			+ T::DbWeight::get().reads_writes(1, 1)]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -1022,12 +1196,17 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Dependent on the size of `encoded_proposal` and length of dispatch queue.
+		/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
+		/// - Db reads: `Preimages`
+		/// - Db writes: `Preimages`
+		/// - Base Weight: 28.04 + .003 * b µs
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = 28_000_000 + 3_000 * Weight::from(encoded_proposal.len() as u32)
+			+ T::DbWeight::get().reads_writes(1, 1)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+			Self::check_pre_image_is_missing(proposal_hash)?;
 			let status = Preimages::<T>::get(&proposal_hash).ok_or(Error::<T>::NotImminent)?;
 			let expiry = status.to_missing_expiry().ok_or(Error::<T>::DuplicatePreimage)?;
 
@@ -1050,6 +1229,8 @@ decl_module! {
 		/// The dispatch origin of this call must be _Signed_.
 		///
 		/// - `proposal_hash`: The preimage hash of a proposal.
+		/// - `proposal_length_upper_bound`: an upper bound on length of the proposal.
+		///   Extrinsic is weighted according to this value with no refund.
 		///
 		/// This will only work after `VotingPeriod` blocks from the time that the preimage was
 		/// noted, if it's the same account doing it. If it's a different account, then it'll only
@@ -1058,11 +1239,21 @@ decl_module! {
 		/// Emits `PreimageReaped`.
 		///
 		/// # <weight>
-		/// - One DB clear.
+		/// - Complexity: `O(D)` where D is length of proposal.
+		/// - Db reads: `Preimages`
+		/// - Db writes: `Preimages`
+		/// - Base Weight: 39.31 + .003 * b µs
 		/// # </weight>
-		#[weight = 0]
-		fn reap_preimage(origin, proposal_hash: T::Hash) {
+		#[weight = (39_000_000 + T::DbWeight::get().reads_writes(1, 1))
+			.saturating_add(3_000.saturating_mul(Weight::from(*proposal_len_upper_bound)))]
+		fn reap_preimage(origin, proposal_hash: T::Hash, #[compact] proposal_len_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
+
+			ensure!(
+				Self::pre_image_data_len(proposal_hash)? <= proposal_len_upper_bound,
+				Error::<T>::WrongUpperBound,
+			);
+
 			let (provider, deposit, since, expiry) = <Preimages<T>>::get(&proposal_hash)
 				.and_then(|m| match m {
 					PreimageStatus::Available { provider, deposit, since, expiry, .. }
@@ -1088,9 +1279,15 @@ decl_module! {
 		/// - `target`: The account to remove the lock on.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - Complexity `O(R)` with R number of vote of target.
+		/// - Db reads: `VotingOf`, `balances locks`, `target account`
+		/// - Db writes: `VotingOf`, `balances locks`, `target account`
+		/// - Base Weight:
+		///     - Unlock Remove: 42.96 + .048 * R
+		///     - Unlock Set: 37.63 + .327 * R
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 43_000_000 + 330_000 * Weight::from(T::MaxVotes::get())
+			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
 			Self::update_lock(&target);
@@ -1107,9 +1304,12 @@ decl_module! {
 		/// `close_proxy` must be called before the account can be destroyed.
 		///
 		/// # <weight>
-		/// - One extra DB entry.
+		/// - Complexity: O(1)
+		/// - Db reads: `Proxy`, `proxy account`
+		/// - Db writes: `Proxy`, `proxy account`
+		/// - Base Weight: 14.86 µs
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = 15_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn open_proxy(origin, target: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::mutate(&who, |a| {
@@ -1147,8 +1347,12 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		///   Weight is calculated for the maximum number of vote.
+		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
+		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
+		/// - Base Weight: 21.03 + .359 * R
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 21_000_000 + 360_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
 		fn remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, UnvoteScope::Any)
@@ -1169,8 +1373,12 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		///   Weight is calculated for the maximum number of vote.
+		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
+		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
+		/// - Base Weight: 19.15 + .372 * R
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 19_000_000 + 370_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
@@ -1200,16 +1408,22 @@ decl_module! {
 		/// Emits `Delegated`.
 		///
 		/// # <weight>
+		/// same as `delegate with additional:
+		/// - Db reads: `Proxy`, `proxy account`
+		/// - Db writes: `proxy account`
+		/// - Base Weight: 68.61 + 8.039 * R µs
 		/// # </weight>
-		#[weight = 500_000_000]
+		#[weight = weight_for::proxy_delegate::<T>(T::MaxVotes::get().into())]
 		pub fn proxy_delegate(origin,
 			to: T::AccountId,
 			conviction: Conviction,
 			balance: BalanceOf<T>,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_delegate(target, to, conviction, balance)?;
+			let votes = Self::try_delegate(target, to, conviction, balance)?;
+
+			Ok(Some(weight_for::proxy_delegate::<T>(votes.into())).into())
 		}
 
 		/// Undelegate the voting power of a proxied account.
@@ -1223,13 +1437,17 @@ decl_module! {
 		/// Emits `Undelegated`.
 		///
 		/// # <weight>
-		/// - O(1).
+		/// same as `undelegate with additional:
+		/// Db reads: `Proxy`
+		/// Base Weight: 39 + 7.958 * R µs
 		/// # </weight>
-		#[weight = 500_000_000]
-		fn proxy_undelegate(origin) {
+		#[weight = weight_for::proxy_undelegate::<T>(T::MaxVotes::get().into())]
+		fn proxy_undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_undelegate(target)?;
+			let votes = Self::try_undelegate(target)?;
+
+			Ok(Some(weight_for::proxy_undelegate::<T>(votes.into())).into())
 		}
 
 		/// Remove a proxied vote for a referendum.
@@ -1244,8 +1462,12 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		///   Weight is calculated for the maximum number of vote.
+		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `Proxy`
+		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
+		/// - Base Weight: 26.35 + .36 * R µs
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 26_000_000 + 360_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 3)]
 		fn proxy_remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
@@ -1267,7 +1489,7 @@ impl<T: Trait> Module<T> {
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
 	pub fn backing_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
-		Self::deposit_of(proposal).map(|(d, l)| d * (l.len() as u32).into())
+		Self::deposit_of(proposal).map(|(l, d)| d * (l.len() as u32).into())
 	}
 
 	/// Get all referenda ready for tally at block `n`.
@@ -1276,7 +1498,14 @@ impl<T: Trait> Module<T> {
 	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>)> {
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
-		(next..last).into_iter()
+		Self::maturing_referenda_at_inner(n, next..last)
+	}
+
+	fn maturing_referenda_at_inner(
+		n: T::BlockNumber,
+		range: core::ops::Range<PropIndex>,
+	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>)> {
+		range.into_iter()
 			.map(|i| (i, Self::referendum_info(i)))
 			.filter_map(|(i, maybe_info)| match maybe_info {
 				Some(ReferendumInfo::Ongoing(status)) => Some((i, status)),
@@ -1353,7 +1582,10 @@ impl<T: Trait> Module<T> {
 						}
 						votes[i].1 = vote;
 					}
-					Err(i) => votes.insert(i, (ref_index, vote)),
+					Err(i) => {
+						ensure!(votes.len() as u32 <= T::MaxVotes::get(), Error::<T>::MaxVotesReached);
+						votes.insert(i, (ref_index, vote));
+					}
 				}
 				// Shouldn't be possible to fail, but we handle it gracefully.
 				status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
@@ -1416,11 +1648,14 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) {
+	/// Return the number of votes for `who`
+	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
-			Voting::Delegating { delegations, .. } =>
+			Voting::Delegating { delegations, .. } => {
 				// We don't support second level delegating, so we don't need to do anything more.
-				*delegations = delegations.saturating_add(amount),
+				*delegations = delegations.saturating_add(amount);
+				1
+			},
 			Voting::Direct { votes, delegations, .. } => {
 				*delegations = delegations.saturating_add(amount);
 				for &(ref_index, account_vote) in votes.iter() {
@@ -1432,15 +1667,19 @@ impl<T: Trait> Module<T> {
 						);
 					}
 				}
+				votes.len() as u32
 			}
 		})
 	}
 
-	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) {
+	/// Return the number of votes for `who`
+	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
-			Voting::Delegating { delegations, .. } =>
-			// We don't support second level delegating, so we don't need to do anything more.
-				*delegations = delegations.saturating_sub(amount),
+			Voting::Delegating { delegations, .. } => {
+				// We don't support second level delegating, so we don't need to do anything more.
+				*delegations = delegations.saturating_sub(amount);
+				1
+			}
 			Voting::Direct { votes, delegations, .. } => {
 				*delegations = delegations.saturating_sub(amount);
 				for &(ref_index, account_vote) in votes.iter() {
@@ -1452,20 +1691,23 @@ impl<T: Trait> Module<T> {
 						);
 					}
 				}
+				votes.len() as u32
 			}
 		})
 	}
 
 	/// Attempt to delegate `balance` times `conviction` of voting power from `who` to `target`.
+	///
+	/// Return the upstream number of votes.
 	fn try_delegate(
 		who: T::AccountId,
 		target: T::AccountId,
 		conviction: Conviction,
 		balance: BalanceOf<T>,
-	) -> DispatchResult {
+	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
-		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::Delegating {
 				balance,
 				target: target.clone(),
@@ -1486,7 +1728,7 @@ impl<T: Trait> Module<T> {
 					voting.set_common(delegations, prior);
 				}
 			}
-			Self::increase_upstream_delegation(&target, conviction.votes(balance));
+			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
 			T::Currency::extend_lock(
@@ -1495,15 +1737,17 @@ impl<T: Trait> Module<T> {
 				balance,
 				WithdrawReason::Transfer.into()
 			);
-			Ok(())
+			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
-		Ok(())
+		Ok(votes)
 	}
 
 	/// Attempt to end the current delegation.
-	fn try_undelegate(who: T::AccountId) -> DispatchResult {
-		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+	///
+	/// Return the number of votes of upstream.
+	fn try_undelegate(who: T::AccountId) -> Result<u32, DispatchError> {
+		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::default();
 			sp_std::mem::swap(&mut old, voting);
 			match old {
@@ -1515,20 +1759,21 @@ impl<T: Trait> Module<T> {
 					mut prior,
 				} => {
 					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
+					let votes = Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					let now = system::Module::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
 					prior.accumulate(now + T::EnactmentPeriod::get() * lock_periods, balance);
 					voting.set_common(delegations, prior);
+
+					Ok(votes)
 				}
 				Voting::Direct { .. } => {
-					return Err(Error::<T>::NotDelegating.into())
+					Err(Error::<T>::NotDelegating.into())
 				}
 			}
-			Ok(())
 		})?;
 		Self::deposit_event(Event::<T>::Undelegated(who));
-		Ok(())
+		Ok(votes)
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
@@ -1598,7 +1843,7 @@ impl<T: Trait> Module<T> {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);
 
-			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
+			if let Some((depositors, deposit)) = <DepositOf<T>>::take(prop_index) {
 				// refund depositors
 				for d in &depositors {
 					T::Currency::unreserve(d, deposit);
@@ -1677,19 +1922,132 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Current era is ending; we should finish up any proposals.
-	fn begin_block(now: T::BlockNumber) -> DispatchResult {
+	///
+	///
+	/// # <weight>
+	/// If a referendum is launched or maturing take full block weight. Otherwise:
+	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
+	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
+	///   `ReferendumCount`, `LowestUnbaked`
+	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
+	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
+	/// - Base Weight: 58.58 + 10.9 * R µs
+	/// # </weight>
+	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
+		let mut weight = 60_000_000 + T::DbWeight::get().reads_writes(6, 5);
+
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
 			// we did, there is nothing we can do here.
 			let _ = Self::launch_next(now);
+			weight = T::MaximumBlockWeight::get();
 		}
 
 		// tally up votes for any expiring referenda.
-		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
+		let next = Self::lowest_unbaked();
+		let last = Self::referendum_count();
+		let r = Weight::from(last.saturating_sub(next));
+		weight += 11_000_000 * r + T::DbWeight::get().reads(2 * r);
+		for (index, info) in Self::maturing_referenda_at_inner(now, next..last).into_iter() {
 			let approved = Self::bake_referendum(now, index, info)?;
 			ReferendumInfoOf::<T>::insert(index, ReferendumInfo::Finished { end: now, approved });
+			weight = T::MaximumBlockWeight::get();
 		}
-		Ok(())
+
+		Ok(weight)
+	}
+
+	/// Reads the length of account in DepositOf without getting the complete value in the runtime.
+	///
+	/// Return 0 if no deposit for this proposal.
+	fn len_of_deposit_of(proposal: PropIndex) -> Option<u32> {
+		// DepositOf first tuple element is a vec, decoding its len is equivalent to decode a
+		// `Compact<u32>`.
+		decode_compact_u32_at(&<DepositOf<T>>::hashed_key_for(proposal))
+	}
+
+	/// Check that pre image exists and its value is variant `PreimageStatus::Missing`.
+	///
+	/// This check is done without getting the complete value in the runtime to avoid copying a big
+	/// value in the runtime.
+	fn check_pre_image_is_missing(proposal_hash: T::Hash) -> DispatchResult {
+		// To decode the enum variant we only need the first byte.
+		let mut buf = [0u8; 1];
+		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
+		let bytes = match sp_io::storage::read(&key, &mut buf, 0) {
+			Some(bytes) => bytes,
+			None => return Err(Error::<T>::NotImminent.into()),
+		};
+		// The value may be smaller that 1 byte.
+		let mut input = &buf[0..buf.len().min(bytes as usize)];
+
+		match input.read_byte() {
+			Ok(0) => Ok(()), // PreimageStatus::Missing is variant 0
+			Ok(1) => Err(Error::<T>::DuplicatePreimage.into()),
+			_ => {
+				sp_runtime::print("Failed to decode `PreimageStatus` variant");
+				Err(Error::<T>::NotImminent.into())
+			}
+		}
+	}
+
+	/// Check that pre image exists, its value is variant `PreimageStatus::Available` and decode
+	/// the length of `data: Vec<u8>` fields.
+	///
+	/// This check is done without getting the complete value in the runtime to avoid copying a big
+	/// value in the runtime.
+	///
+	/// If the pre image is missing variant or doesn't exist then the error `PreimageMissing` is
+	/// returned.
+	fn pre_image_data_len(proposal_hash: T::Hash) -> Result<u32, DispatchError> {
+		// To decode the `data` field of Available variant we need:
+		// * one byte for the variant
+		// * at most 5 bytes to decode a `Compact<u32>`
+		let mut buf = [0u8; 6];
+		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
+		let bytes = match sp_io::storage::read(&key, &mut buf, 0) {
+			Some(bytes) => bytes,
+			None => return Err(Error::<T>::PreimageMissing.into()),
+		};
+		// The value may be smaller that 6 bytes.
+		let mut input = &buf[0..buf.len().min(bytes as usize)];
+
+		match input.read_byte() {
+			Ok(1) => (), // Check that input exists and is second variant.
+			Ok(0) => return Err(Error::<T>::PreimageMissing.into()),
+			_ => {
+				sp_runtime::print("Failed to decode `PreimageStatus` variant");
+				return Err(Error::<T>::PreimageMissing.into());
+			}
+		}
+
+		// Decode the length of the vector.
+		let len = codec::Compact::<u32>::decode(&mut input).map_err(|_| {
+			sp_runtime::print("Failed to decode `PreimageStatus` variant");
+			DispatchError::from(Error::<T>::PreimageMissing)
+		})?.0;
+
+		Ok(len)
+	}
+}
+
+/// Decode `Compact<u32>` from the trie at given key.
+fn decode_compact_u32_at(key: &[u8]) -> Option<u32> {
+	// `Compact<u32>` takes at most 5 bytes.
+	let mut buf = [0u8; 5];
+	let bytes = match sp_io::storage::read(&key, &mut buf, 0) {
+		Some(bytes) => bytes,
+		None => return None,
+	};
+	// The value may be smaller than 5 bytes.
+	let mut input = &buf[0..buf.len().min(bytes as usize)];
+	match codec::Compact::<u32>::decode(&mut input) {
+		Ok(c) => Some(c.0),
+		Err(_) => {
+			sp_runtime::print("Failed to decode compact u32 at:");
+			sp_runtime::print(key);
+			None
+		}
 	}
 }
