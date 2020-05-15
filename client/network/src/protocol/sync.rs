@@ -713,9 +713,12 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// If this corresponds to a valid block, this outputs the block that
 	/// must be imported in the import queue.
-	pub fn on_block_data
-		(&mut self, who: &PeerId, request: Option<BlockRequest<B>>, response: BlockResponse<B>) -> Result<OnBlockData<B>, BadPeer>
-	{
+	pub fn on_block_data(
+		&mut self,
+		who: &PeerId,
+		request: Option<BlockRequest<B>>,
+		response: BlockResponse<B>
+	) -> Result<OnBlockData<B>, BadPeer> {
 		let mut new_blocks: Vec<IncomingBlock<B>> =
 			if let Some(peer) = self.peers.get_mut(who) {
 				let mut blocks = response.blocks;
