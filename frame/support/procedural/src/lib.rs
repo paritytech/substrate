@@ -144,12 +144,12 @@ use proc_macro::TokenStream;
 ///
 /// * `#vis`: Set the visibility of the structure. `pub` or nothing.
 /// * `#name`: Name of the storage item, used as a prefix in storage.
-/// * [optional] `get(fn #getter)`: Implements the function #getter to `Module`.
-/// * [optional] `config(#field_name)`: `field_name` is optional if get is set.
+/// * \[optional\] `get(fn #getter)`: Implements the function #getter to `Module`.
+/// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
-/// * [optional] `build(#closure)`: Closure called with storage overlays.
+/// * \[optional\] `build(#closure)`: Closure called with storage overlays.
 /// * `#type`: Storage type.
-/// * [optional] `#default`: Value returned when none.
+/// * \[optional\] `#default`: Value returned when none.
 ///
 /// Storage items are accessible in multiple ways:
 ///

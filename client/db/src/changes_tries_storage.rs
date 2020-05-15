@@ -24,7 +24,7 @@ use parking_lot::RwLock;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_trie::MemoryDB;
 use sc_client_api::backend::PrunableStateChangesTrieStorage;
-use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
+use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache, HeaderMetadataCache};
 use sp_core::{ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
 use sp_core::storage::PrefixedStorageKey;
 use sp_database::Transaction;
@@ -114,6 +114,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Create new changes trie storage.
 	pub fn new(
 		db: Arc<dyn Database<DbHash>>,
+		header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 		meta_column: u32,
 		changes_tries_column: u32,
 		key_lookup_column: u32,
@@ -137,6 +138,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			min_blocks_to_keep,
 			cache: DbCacheSync(RwLock::new(DbCache::new(
 				db.clone(),
+				header_metadata_cache,
 				key_lookup_column,
 				header_column,
 				cache_column,

@@ -42,7 +42,6 @@ pub use self::{
 	error::Error,
 	rpc::{EngineCommand, CreatedBlock},
 };
-use sc_client_api::{TransactionFor, Backend};
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -66,17 +65,17 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<Block, B>(
-	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>,
+pub fn import_queue<Block, Transaction>(
+	block_import: BoxBlockImport<Block, Transaction>,
 	spawner: &impl sp_core::traits::SpawnBlocking,
-) -> BasicQueue<Block, TransactionFor<B, Block>>
+) -> BasicQueue<Block, Transaction>
 	where
 		Block: BlockT,
-		B: Backend<Block> + 'static,
+		Transaction: Send + Sync + 'static,
 {
 	BasicQueue::new(
 		ManualSealVerifier,
-		Box::new(block_import),
+		block_import,
 		None,
 		None,
 		spawner,

@@ -22,24 +22,11 @@ use sp_std::vec::Vec;
 
 mod app {
 	use sp_application_crypto::{
-		CryptoTypePublicPair,
 		key_types::AUTHORITY_DISCOVERY,
-		Public as _,
 		app_crypto,
-		sr25519};
+		sr25519,
+	};
 	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
-
-	impl From<Public> for CryptoTypePublicPair {
-		fn from(key: Public) -> Self {
-			(&key).into()
-		}
-	}
-
-	impl From<&Public> for CryptoTypePublicPair {
-		fn from(key: &Public) -> Self {
-			CryptoTypePublicPair(sr25519::CRYPTO_ID, key.to_raw_vec())
-		}
-	}
 }
 
 sp_application_crypto::with_pair! {

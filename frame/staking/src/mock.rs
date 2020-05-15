@@ -27,7 +27,7 @@ use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
 	StorageValue, StorageMap, StorageDoubleMap, IterableStorageMap,
 	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize},
-	weights::Weight,
+	weights::{Weight, constants::RocksDbWeight},
 };
 use sp_io;
 use sp_phragmen::{
@@ -36,7 +36,7 @@ use sp_phragmen::{
 };
 use crate::*;
 
-const INIT_TIMESTAMP: u64 = 30_000;
+pub const INIT_TIMESTAMP: u64 = 30_000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -211,7 +211,7 @@ impl frame_system::Trait for Test {
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
+	type DbWeight = RocksDbWeight;
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
@@ -473,7 +473,7 @@ impl ExtBuilder {
 				(41, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
-				// This allow us to have a total_payout different from 0.
+				// This allows us to have a total_payout different from 0.
 				(999, 1_000_000_000_000),
 			],
 		}.assimilate_storage(&mut storage);
@@ -763,6 +763,18 @@ pub(crate) fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
+pub(crate) fn add_slash(who: &AccountId) {
+	on_offence_now(
+		&[
+			OffenceDetails {
+				offender: (who.clone(), Staking::eras_stakers(Staking::active_era().unwrap().index, who.clone())),
+				reporters: vec![],
+			},
+		],
+		&[Perbill::from_percent(10)],
+	);
+}
+
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
 pub(crate) fn horrible_phragmen_with_post_processing(
@@ -1034,4 +1046,8 @@ pub(crate) fn staking_events() -> Vec<Event<Test>> {
 			None
 		}
 	}).collect()
+}
+
+pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

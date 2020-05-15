@@ -18,9 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
-use sc_client_api::{
-	backend::{AuxStore, Backend, Finalizer, TransactionFor},
-};
+use sc_client_api::backend::{AuxStore, Backend, Finalizer, TransactionFor};
 use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use parity_scale_codec::{Encode, Decode};
 use sp_consensus::{
@@ -171,7 +169,7 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 			if *pending_number > chain_info.finalized_number
 				&& *pending_number <= chain_info.best_number
 			{
-				out.push((pending_hash.clone(), *pending_number));
+				out.push((*pending_hash, *pending_number));
 			}
 		}
 
@@ -220,7 +218,7 @@ impl LightAuthoritySet {
 	/// Set new authorities set.
 	pub fn update(&mut self, set_id: u64, authorities: AuthorityList) {
 		self.set_id = set_id;
-		std::mem::replace(&mut self.authorities, authorities);
+		self.authorities = authorities;
 	}
 }
 
@@ -255,7 +253,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 		J: ProvableJustification<Block::Header>,
 {
 	let hash = block.post_hash();
-	let number = block.header.number().clone();
+	let number = *block.header.number();
 
 	// we don't want to finalize on `inner.import_block`
 	let justification = block.justification.take();
@@ -265,7 +263,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 	let mut imported_aux = match import_result {
 		Ok(ImportResult::Imported(aux)) => aux,
 		Ok(r) => return Ok(r),
-		Err(e) => return Err(ConsensusError::ClientImport(e.to_string()).into()),
+		Err(e) => return Err(ConsensusError::ClientImport(e.to_string())),
 	};
 
 	match justification {
@@ -437,7 +435,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 				hash,
 			);
 
-			return Err(ConsensusError::ClientImport(e.to_string()).into());
+			return Err(ConsensusError::ClientImport(e.to_string()));
 		},
 		Ok(justification) => {
 			trace!(

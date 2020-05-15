@@ -593,38 +593,40 @@ mod test_append_and_len {
 		});
 	}
 
+	// `decode_len` should always return `None` for default assigments
+	// in `decl_storage!`.
 	#[test]
-	fn len_works_for_default() {
+	fn len_works_ignores_default_assignment() {
 		TestExternalities::default().execute_with(|| {
 			// vec
 			assert_eq!(JustVec::get(), vec![]);
-			assert_eq!(JustVec::decode_len(), Ok(0));
+			assert_eq!(JustVec::decode_len(), None);
 
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
+			assert_eq!(JustVecWithDefault::decode_len(), None);
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(OptionVec::decode_len(), Ok(0));
+			assert_eq!(OptionVec::decode_len(), None);
 
 			// map
 			assert_eq!(MapVec::get(0), vec![]);
-			assert_eq!(MapVec::decode_len(0), Ok(0));
+			assert_eq!(MapVec::decode_len(0), None);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+			assert_eq!(MapVecWithDefault::decode_len(0), None);
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+			assert_eq!(OptionMapVec::decode_len(0), None);
 
 			// Double map
 			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
-			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(DoubleMapVec::decode_len(0, 1), None);
 
 			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
-			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
+			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), None);
 
 			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
-			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), None);
 		});
 	}
 }

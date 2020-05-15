@@ -134,7 +134,7 @@ benchmarks! {
 		let value = storage::unhashed::get_raw(&last_key).ok_or("No value stored")?;
 		assert_eq!(value, last_key);
 
-	}: _(RawOrigin::Root, prefix)
+	}: _(RawOrigin::Root, prefix, p)
 	verify {
 		assert_eq!(storage::unhashed::get_raw(&last_key), None);
 	}
