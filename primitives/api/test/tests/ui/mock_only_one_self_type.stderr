@@ -10,10 +10,10 @@ error: First self type found here
 17 |     impl Api<Block> for MockApi {
    |                         ^^^^^^^
 
-warning: unused import: `substrate_test_runtime_client::runtime::Block`
+error: unused import: `substrate_test_runtime_client::runtime::Block`
  --> $DIR/mock_only_one_self_type.rs:1:5
   |
 1 | use substrate_test_runtime_client::runtime::Block;
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: `#[warn(unused_imports)]` on by default
+  = note: `-D unused-imports` implied by `-D warnings`

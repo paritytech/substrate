@@ -4,10 +4,10 @@ error: Two traits with the same name detected! The trait name is used to generat
 32 |     impl second::Api<Block> for Runtime {
    |                  ^^^
 
-warning: unused import: `super::*`
+error: unused import: `super::*`
   --> $DIR/impl_two_traits_with_same_name.rs:18:6
    |
 18 |     use super::*;
    |         ^^^^^^^^
    |
-   = note: `#[warn(unused_imports)]` on by default
+   = note: `-D unused-imports` implied by `-D warnings`
