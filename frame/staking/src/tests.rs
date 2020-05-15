@@ -1045,7 +1045,10 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			unlocking: vec![],
 			claimed_rewards: vec![],
 		}));
-		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11), Exposure { total: 1000, own: 1000, others: vec![] });
+		assert_eq!(
+			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Exposure { total: 1000, own: 1000, others: vec![] }
+		);
 
 		// deposit the extra 100 units
 		Staking::bond_extra(Origin::signed(11), 100).unwrap();
@@ -1058,7 +1061,10 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			claimed_rewards: vec![],
 		}));
 		// Exposure is a snapshot! only updated after the next era update.
-		assert_ne!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_ne!(
+			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
+		);
 
 		// trigger next era.
 		mock::start_era(2);
@@ -1073,34 +1079,68 @@ fn bond_extra_and_withdraw_unbonded_works() {
 			claimed_rewards: vec![],
 		}));
 		// Exposure is now updated.
-		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
+		assert_eq!(
+			Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
+			Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] }
+		);
 
 		// Unbond almost all of the funds in stash.
 		Staking::unbond(Origin::signed(10), 1000).unwrap();
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] })
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000 + 100,
+				active: 100,
+				unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}],
+				claimed_rewards: vec![]
+			}),
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] }));
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000 + 100,
+				active: 100,
+				unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}],
+				claimed_rewards: vec![]
+			}),
+		);
 
 		// trigger next era.
 		mock::start_era(3);
 
 		// nothing yet
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 1000 + 100, active: 100, unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}], claimed_rewards: vec![] }));
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000 + 100,
+				active: 100,
+				unlocking: vec![UnlockChunk{ value: 1000, era: 2 + 3}],
+				claimed_rewards: vec![]
+			}),
+		);
 
 		// trigger next era.
 		mock::start_era(5);
 
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
 		// Now the value is free and the staking ledger is updated.
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger {
-			stash: 11, total: 100, active: 100, unlocking: vec![], claimed_rewards: vec![] }));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 100,
+				active: 100,
+				unlocking: vec![],
+				claimed_rewards: vec![]
+			}),
+		);
 	})
 }
 
@@ -1123,7 +1163,7 @@ fn too_many_unbond_calls_should_not_work() {
 
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
 		// free up.
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), u32::max_value()));
+		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
 
 		// Can add again.
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
@@ -1471,7 +1511,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Balances::total_balance(&11), 0);
 
 		// Reap the stash
-		assert_ok!(Staking::reap_stash(Origin::NONE, 11, u32::max_value()));
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11, 0));
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
@@ -1527,7 +1567,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Balances::total_balance(&11), 0);
 
 		// Reap the stash
-		assert_ok!(Staking::reap_stash(Origin::NONE, 11, u32::max_value()));
+		assert_ok!(Staking::reap_stash(Origin::NONE, 11, 0));
 
 		// Check storage items do not exist
 		assert!(!<Ledger<Test>>::contains_key(&10));
@@ -1641,14 +1681,14 @@ fn bond_with_no_staked_value() {
 			mock::start_era(2);
 
 			// not yet removed.
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), u32::max_value()));
+			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), 0));
 			assert!(Staking::ledger(2).is_some());
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			mock::start_era(3);
 
 			// poof. Account 1 is removed from the staking system.
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), u32::max_value()));
+			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), 0));
 			assert!(Staking::ledger(2).is_none());
 			assert_eq!(Balances::locks(&1).len(), 0);
 		});
@@ -4119,16 +4159,16 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 fn set_history_depth_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		mock::start_era(10);
-		Staking::set_history_depth(Origin::ROOT, 20, u32::max_value()).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 20, 0).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 4, u32::max_value()).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 4, 0).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 3, u32::max_value()).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 3, 0).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::ROOT, 8, u32::max_value()).unwrap();
+		Staking::set_history_depth(Origin::ROOT, 8, 0).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
