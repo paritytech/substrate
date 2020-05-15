@@ -50,19 +50,19 @@ pub enum SizeType {
 	#[display(fmt = "full")]
 	Full,
 	#[display(fmt = "custom")]
-	Custom,
+	Custom(usize),
 }
 
 impl SizeType {
-	pub fn transactions(&self) -> usize {
+	pub fn transactions(&self) -> Option<usize> {
 		match self {
-			SizeType::Empty => 0,
-			SizeType::Small => 10,
-			SizeType::Medium => 100,
-			SizeType::Large => 500,
-			SizeType::Full => 4000,
+			SizeType::Empty => Some(0),
+			SizeType::Small => Some(10),
+			SizeType::Medium => Some(100),
+			SizeType::Large => Some(500),
+			SizeType::Full => None,
 			// Custom SizeType will use the `--transactions` input parameter
-			SizeType::Custom => 0,
+			SizeType::Custom(val) => Some(*val),
 		}
 	}
 }
@@ -97,9 +97,9 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 		}
 
 		match self.block_type {
-			BlockType::RandomTransfersKeepAlive(_) => path.push("transfer_keep_alive"),
-			BlockType::RandomTransfersReaping(_) => path.push("transfer_reaping"),
-			BlockType::Noop(_) => path.push("noop"),
+			BlockType::RandomTransfersKeepAlive => path.push("transfer_keep_alive"),
+			BlockType::RandomTransfersReaping => path.push("transfer_reaping"),
+			BlockType::Noop => path.push("noop"),
 		}
 
 		match self.database_type {
@@ -119,7 +119,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			50_000,
 			self.key_types
 		);
-		let block = bench_db.generate_block(self.block_type);
+		let block = bench_db.generate_block(self.block_type.to_content(self.size.transactions()));
 		Box::new(ImportBenchmark {
 			database: bench_db,
 			block,

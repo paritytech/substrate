@@ -387,7 +387,7 @@ impl From<pallet_balances::Event<Runtime>> for Event {
 }
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 250;
+	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
@@ -410,14 +410,14 @@ impl pallet_balances::Trait for Runtime {
 
 impl RuntimeAdapter for Runtime {
 	type Extra = (
-		frame_system::CheckVersion<Runtime>,
+		frame_system::CheckTxVersion<Runtime>,
 		frame_system::CheckGenesis<Runtime>,
 		frame_system::CheckEra<Runtime>,
 	);
 
 	fn build_extra(_index: IndexFor<Self>) -> Self::Extra {
 		(
-			frame_system::CheckVersion::new(),
+			frame_system::CheckTxVersion::new(),
 			frame_system::CheckGenesis::new(),
 			frame_system::CheckEra::from(Era::Immortal),
 		)

@@ -258,7 +258,7 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 				Poll::Ready(Some(notification)) => {
 					// new block imported. queue up all messages tied to that hash.
 					if let Some((_, _, messages)) = this.pending.remove(&notification.hash) {
-						let canon_number = notification.header.number().clone();
+						let canon_number = *notification.header.number();
 						let ready_messages = messages.into_iter()
 							.filter_map(|m| m.wait_completed(canon_number));
 
@@ -359,7 +359,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 			}
 		}
 
-		return Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
+		Ok(DiscardWaitOrReady::Wait(vec![(target_hash, target_number, msg)]))
 	}
 
 	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked> {
@@ -430,7 +430,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 			let mut query_known = |target_hash, perceived_number| -> Result<bool, Error> {
 				// check integrity: all votes for same hash have same number.
 				let canon_number = match checked_hashes.entry(target_hash) {
-					Entry::Occupied(entry) => entry.get().number().clone(),
+					Entry::Occupied(entry) => *entry.get().number(),
 					Entry::Vacant(entry) => {
 						if let Some(number) = status_check.block_number(target_hash)? {
 							entry.insert(KnownOrUnknown::Known(number));
