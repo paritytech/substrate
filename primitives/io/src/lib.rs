@@ -880,30 +880,35 @@ sp_externalities::decl_extension! {
 #[runtime_interface]
 pub trait WasmTracing {
 	/// To create and enter a `tracing` span, via `sp_tracing::proxy`
-	fn enter_span(&mut self, target: &str, name: &str) -> Option<u64> {
+	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
 		if !sp_tracing::WASM_TRACING_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
 			log::debug!(
 				target: "sp_tracing",
 				"Notify to runtime that tracing is disabled."
 			);
-			return None
+			return 0
 		}
 		let proxy = match self.extension::<TracingProxyExt>() {
 			Some(proxy) => proxy,
 			None => {
 				self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new()))
 					.expect("Failed to register required extension: `TracingProxyExt`");
-				self.extension::<TracingProxyExt>().expect("Failed to load required extension: `TracingProxyExt`")
+				self.extension::<TracingProxyExt>().expect("Failed to load required extension `TracingProxyExt` on enter_span")
 			}
 		};
-		Some(proxy.enter_span(target, name))
+		proxy.enter_span(target, name)
 	}
 
 	/// If there is a panic in the WASM VM then this may not be called.
 	fn exit_span(&mut self, id: u64) {
-		let proxy = self.extension::<TracingProxyExt>()
-			.expect("Failed to load required extension: \
-			`TracingProxyExt` which should be loaded before calling `exit_span`");
+		let proxy = match self.extension::<TracingProxyExt>() {
+			Some(proxy) => proxy,
+			None => {
+				self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new()))
+					.expect("Failed to register required extension: `TracingProxyExt`");
+				self.extension::<TracingProxyExt>().expect("Failed to load required extension `TracingProxyExt` on exit_span")
+			}
+		};
 		proxy.exit_span(id);
 	}
 
