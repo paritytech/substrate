@@ -41,14 +41,19 @@ impl Drop for TracingSpanGuard {
 /// # Example
 ///
 /// ```
-/// frame_support::enter_span_wasm!("target", "fn_name");
+/// frame_support::enter_span!("fn_name");
 /// ```
 #[macro_export]
-macro_rules! enter_span_wasm {
-	( $target:expr, $name:expr ) => {
+macro_rules! enter_span {
+	( $name:expr ) => {
 		#[cfg(not(feature = "std"))]
 		let __span_id__ = $crate::wasm_tracing::TracingSpanGuard::new(
-			$crate::sp_io::wasm_tracing::enter_span($target, $name)
+			$crate::sp_io::wasm_tracing::enter_span(
+				module_path!(),
+				&[$name, "_wasm"].concat()
+			)
 		);
+		#[cfg(feature = "std")]
+		$crate::sp_tracing::enter_span!($name);
 	}
 }
