@@ -262,36 +262,3 @@ fn should_notify_about_finalized_block() {
 	// no more notifications on this channel
 	assert_eq!(executor::block_on(next.into_future().compat()).unwrap().0, None);
 }
-
-#[test]
-fn should_notify_about_finality_event() {
-	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-	let (subscriber, id, transport) = Subscriber::new_test("test");
-
-	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
-
-		api.subscribe_finality(Default::default(), subscriber);
-
-		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
-
-		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		client.import(BlockOrigin::Own, block).unwrap();
-		// Do I need some way to trigger a "justification" event aside from
-		// simply finalizing a block?
-		// Maybe something to do with a voting round ending?
-		client.finalize_block(BlockId::number(1), None).unwrap();
-	}
-
-	// assert initial head sent.
-	let (notification, next) = core.block_on(transport.into_future()).unwrap();
-	assert!(notification.is_some());
-	// assert notification sent to transport
-	let (notification, next) = core.block_on(next.into_future()).unwrap();
-	assert!(notification.is_some());
-	// no more notifications on this channel
-	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
-}

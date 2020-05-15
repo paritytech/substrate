@@ -171,36 +171,6 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
 	}
-
-	/// Subscribe to finality events.
-	///
-	/// Informs subscribers about blocks with have beeen explicitly finalized
-	/// by Grandpa and thus contain a justification.
-	fn subscribe_finality(
-		&self,
-		metadata: crate::metadata::Metadata,
-		subscriber: Subscriber<JustificationNotification<Block>>
-	) {
-		// TODO: Figure out how to get access to channel here
-		let justification_stream = self.grandpa_subscription().justification_notification_stream();
-
-		self.subscriptions().add(subscriber, |sink| {
-			sink
-				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(stream)
-				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-				.map(|_| ())
-		});
-	}
-
-	/// Unsubscribe to finality events.
-	fn unsubscribe_finality(
-		&self,
-		metadata: Option<crate::metadata::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.Subscriptions.cancel(id))
-	}
 }
 
 /// Create new state API that works on full node.
@@ -302,15 +272,6 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 
 	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		self.backend.unsubscribe_finalized_heads(metadata, id)
-	}
-
-	// TODO: Figure out what `T` should be for `Subscriber`
-	fn subscribe_finality(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
-		self.backend.subscribe_finality(metadata, subscriber)
-	}
-
-	fn unsubscribe_finality(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
-		self.backend.unsubscribe_finality(metadata, id)
 	}
 }
 
