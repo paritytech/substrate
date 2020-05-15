@@ -14,9 +14,9 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-phragmen = { version = "2.0.0-dev", path = ".." }
-sp-std = { version = "2.0.0-dev", path = "../../std" }
-sp-runtime = { version = "2.0.0-dev", path = "../../runtime" }
+sp-phragmen = { version = "2.0.0-alpha.8", path = ".." }
+sp-std = { version = "2.0.0-alpha.8", path = "../../std" }
+sp-runtime = { version = "2.0.0-alpha.8", path = "../../runtime" }
 honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 
