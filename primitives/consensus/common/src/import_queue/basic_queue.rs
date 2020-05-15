@@ -148,7 +148,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-		metrics: Option<Metrics>
+		metrics: Option<Metrics>,
 	) -> (impl Future<Output = ()> + Send, TracingUnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
 

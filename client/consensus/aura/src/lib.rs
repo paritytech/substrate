@@ -824,7 +824,7 @@ pub fn import_queue<B, I, C, P, S>(
 		justification_import,
 		finality_proof_import,
 		spawner,
-		registry
+		registry,
 	))
 }
 

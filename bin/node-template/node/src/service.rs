@@ -214,7 +214,7 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 			_select_chain,
 			_tx_pool,
 			spawn_task_handle,
-			prometheus_registry
+			prometheus_registry,
 		| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())

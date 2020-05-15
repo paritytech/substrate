@@ -484,7 +484,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		justification_import,
 		finality_proof_import,
 		spawner,
-		registry
+		registry,
 	))
 }
 

@@ -66,7 +66,7 @@ macro_rules! new_full_start {
 				mut select_chain,
 				_transaction_pool,
 				spawn_task_handle,
-				prometheus_registry
+				prometheus_registry,
 			| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
@@ -323,7 +323,7 @@ pub fn new_light(config: Configuration)
 			_select_chain,
 			_tx_pool,
 			spawn_task_handle,
-			registry
+			registry,
 		| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
