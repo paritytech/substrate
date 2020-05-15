@@ -374,16 +374,16 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
-/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibilty
-/// reasons. The new return type is `DispatchResultWithInfo`.
-/// FRAME runtimes should use frame_support::dispatch::DispatchResult
+/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibility reasons.
+/// The new return type is `DispatchResultWithInfo`. FRAME runtimes should use
+/// `frame_support::dispatch::DispatchResult`.
 pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 
 /// Return type of a `Dispatchable` which contains the `DispatchResult` and additional information
 /// about the `Dispatchable` that is only known post dispatch.
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
-/// Reason why a dispatch call failed
+/// Reason why a dispatch call failed.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize))]
 pub enum DispatchError {
@@ -393,11 +393,11 @@ pub enum DispatchError {
 	CannotLookup,
 	/// A bad origin.
 	BadOrigin,
-	/// A custom error in a module
+	/// A custom error in a module.
 	Module {
-		/// Module index, matching the metadata module index
+		/// Module index, matching the metadata module index.
 		index: u8,
-		/// Module specific error value
+		/// Module specific error value.
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
@@ -405,15 +405,15 @@ pub enum DispatchError {
 	},
 }
 
-/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information
-/// about the `Dispatchable` that is only known post dispatch.
+/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
+/// the `Dispatchable` that is only known post dispatch.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub struct DispatchErrorWithPostInfo<Info> where
 	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
 {
-	/// Addditional information about the `Dispatchable` which is only known post dispatch.
+	/// Additional information about the `Dispatchable` which is only known post dispatch.
 	pub post_info: Info,
-	/// The actual `DispatchResult` indicating whether the dispatch was succesfull.
+	/// The actual `DispatchResult` indicating whether the dispatch was successful.
 	pub error: DispatchError,
 }
 

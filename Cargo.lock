@@ -4171,11 +4171,11 @@ dependencies = [
 name = "pallet-elections-phragmen"
 version = "2.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
  "pallet-balances",
- "pallet-scheduler",
  "parity-scale-codec",
  "serde",
  "sp-core",
