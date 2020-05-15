@@ -344,6 +344,7 @@ parameter_types! {
 	pub const CooloffPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	// One cent: $10,000 / MB
 	pub const PreimageByteDeposit: Balance = 1 * CENTS;
+	pub const MaxVotes: u32 = 100;
 }
 
 impl pallet_democracy::Trait for Runtime {
@@ -376,6 +377,7 @@ impl pallet_democracy::Trait for Runtime {
 	type PreimageByteDeposit = PreimageByteDeposit;
 	type Slash = Treasury;
 	type Scheduler = Scheduler;
+	type MaxVotes = MaxVotes;
 }
 
 parameter_types! {

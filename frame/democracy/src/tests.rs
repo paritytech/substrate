@@ -42,6 +42,8 @@ mod proxying;
 mod public_proposals;
 mod scheduling;
 mod voting;
+mod migration;
+mod decoders;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
@@ -132,6 +134,7 @@ parameter_types! {
 	pub const MinimumDeposit: u64 = 1;
 	pub const EnactmentPeriod: u64 = 2;
 	pub const CooloffPeriod: u64 = 2;
+	pub const MaxVotes: u32 = 100;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -182,6 +185,7 @@ impl super::Trait for Test {
 	type InstantOrigin = EnsureSignedBy<Six, u64>;
 	type InstantAllowed = InstantAllowed;
 	type Scheduler = Scheduler;
+	type MaxVotes = MaxVotes;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -232,7 +236,7 @@ fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Democracy::propose(
 		Origin::signed(who),
 		set_balance_proposal_hash(value),
-		delay
+		delay,
 	)
 }
 
@@ -240,14 +244,14 @@ fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchRes
 	Democracy::propose(
 		Origin::signed(who),
 		set_balance_proposal_hash_and_note(value),
-		delay
+		delay,
 	)
 }
 
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	Scheduler::on_initialize(System::block_number());
-	assert_eq!(Democracy::begin_block(System::block_number()), Ok(()));
+	assert!(Democracy::begin_block(System::block_number()).is_ok());
 }
 
 fn fast_forward_to(n: u64) {

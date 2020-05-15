@@ -21,8 +21,8 @@ use frame_support::{
 	traits::Currency,
 	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight},
 };
-use sp_core::{NeverNativeValue, map, storage::Storage};
-use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
+use sp_core::NeverNativeValue;
+use sp_runtime::{Fixed128, Perbill, traits::Convert};
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
 	TransactionByteFee, WeightFeeCoefficient,
@@ -131,21 +131,20 @@ fn transaction_fee_is_correct_ultimate() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-			},
-			<frame_system::Account<Runtime>>::hashed_key_for(bob()) => {
-				(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(110 * DOLLARS).encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+	);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+	);
+	t.insert(
+		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
+		(110 * DOLLARS).encode()
+	);
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let tip = 1_000_000;
 	let xt = sign(CheckedExtrinsic {

@@ -77,11 +77,11 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
+				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::max_value()),
 				Error::<Test>::TooEarly
 			);
 		next_block();
-		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
+		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2), u32::max_value()));
 
 		assert_eq!(Balances::free_balance(6), 60);
 		assert_eq!(Balances::reserved_balance(6), 0);
@@ -92,7 +92,7 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 fn preimage_deposit_should_be_reapable() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()),
 				Error::<Test>::PreimageMissing
 			);
 
@@ -104,12 +104,12 @@ fn preimage_deposit_should_be_reapable() {
 		next_block();
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()),
 				Error::<Test>::TooEarly
 			);
 
 		next_block();
-		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
+		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2), u32::max_value()));
 		assert_eq!(Balances::reserved_balance(6), 0);
 		assert_eq!(Balances::free_balance(6), 48);
 		assert_eq!(Balances::free_balance(5), 62);
@@ -153,6 +153,6 @@ fn reaping_imminent_preimage_should_fail() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		next_block();
 		next_block();
-		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h), Error::<Test>::Imminent);
+		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h, u32::max_value()), Error::<Test>::Imminent);
 	});
 }
