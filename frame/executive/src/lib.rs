@@ -816,7 +816,18 @@ mod tests {
 		let len = xt.clone().encode().len() as u32;
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
-			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), 0);
+			// Block execution weight + on_initialize weight from custom module
+			let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
+
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), base_block_weight);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
 
 			assert!(Executive::apply_extrinsic(xt.clone()).unwrap().is_ok());
@@ -824,12 +835,14 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
+			let extrinsic_weight = len as Weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get();
 			assert_eq!(
 				<frame_system::Module<Runtime>>::block_weight().total(),
-				3 * (len as Weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get()),
+				base_block_weight + 3 * extrinsic_weight,
 			);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
+			// New Block
 			Executive::initialize_block(&Header::new(
 				2,
 				H256::default(),
@@ -840,8 +853,6 @@ mod tests {
 
 			// Values cleaned up on `System::initalize`
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
-			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
 			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), base_block_weight);
 		});
 	}
