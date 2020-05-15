@@ -1,7 +1,7 @@
 [package]
 description = "Connectivity manager based on reputation"
 homepage = "http://parity.io"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 name = "sc-peerset"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
