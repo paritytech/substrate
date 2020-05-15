@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Integration tests for runtime interface primitives
 #![cfg(test)]
@@ -31,7 +32,10 @@ use std::{collections::HashSet, sync::{Arc, Mutex}};
 
 type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
-fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
+fn call_wasm_method_with_result<HF: HostFunctionsT>(
+	binary: &[u8],
+	method: &str,
+) -> Result<TestExternalities, String> {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
 	let mut host_functions = HF::host_functions();
@@ -50,9 +54,13 @@ fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExte
 		&[],
 		&mut ext_ext,
 		sp_core::traits::MissingHostFunctions::Disallow,
-	).expect(&format!("Executes `{}`", method));
+	).map_err(|e| format!("Failed to execute `{}`: {}", method, e))?;
 
-	ext
+	Ok(ext)
+}
+
+fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
+	call_wasm_method_with_result::<HF>(binary, method).unwrap()
 }
 
 #[test]
@@ -94,20 +102,15 @@ fn test_return_input_public_key() {
 }
 
 #[test]
-#[should_panic(
-	expected = "Instantiation: Export ext_test_api_return_input_version_1 not found"
-)]
 fn host_function_not_found() {
-	call_wasm_method::<()>(&WASM_BINARY[..], "test_return_data");
+	let err = call_wasm_method_with_result::<()>(&WASM_BINARY[..], "test_return_data").unwrap_err();
+
+	assert!(err.contains("Instantiation: Export "));
+	assert!(err.contains(" not found"));
 }
 
 #[test]
-#[should_panic(
-	expected =
-		"Executes `test_invalid_utf8_data_should_return_an_error`: \
-		\"Trap: Trap { kind: Host(FunctionExecution(\\\"ext_test_api_invalid_utf8_data_version_1\\\", \
-		\\\"Invalid utf8 data provided\\\")) }\""
-)]
+#[should_panic(expected = "Invalid utf8 data provided")]
 fn test_invalid_utf8_data_should_return_an_error() {
 	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_invalid_utf8_data_should_return_an_error");
 }

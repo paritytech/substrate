@@ -1,24 +1,25 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Shareable Substrate traits.
 
 use crate::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
-	ed25519, sr25519,
+	ed25519, sr25519, ecdsa,
 };
 
 use std::{
@@ -31,17 +32,22 @@ use std::{
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
 /// BareCryptoStore error
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display)]
 pub enum BareCryptoStoreError {
 	/// Public key type is not supported
+	#[display(fmt="Key not supported: {:?}", _0)]
 	KeyNotSupported(KeyTypeId),
 	/// Pair not found for public key and KeyTypeId
+	#[display(fmt="Pair was not found: {}", _0)]
 	PairNotFound(String),
 	/// Validation error
+	#[display(fmt="Validation error: {}", _0)]
 	ValidationError(String),
 	/// Keystore unavailable
+	#[display(fmt="Keystore unavailable")]
 	Unavailable,
 	/// Programming errors
+	#[display(fmt="An unknown keystore error occurred: {}", _0)]
 	Other(String)
 }
 
@@ -71,6 +77,18 @@ pub trait BareCryptoStore: Send + Sync {
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, BareCryptoStoreError>;
+	/// Returns all ecdsa public keys for the given key type.
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
+	/// Generate a new ecdsa key pair for the given key type and an optional seed.
+	///
+	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
+	///
+	/// Returns the public key of the generated key pair.
+	fn ecdsa_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, BareCryptoStoreError>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.

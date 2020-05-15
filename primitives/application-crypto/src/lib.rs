@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Traits and macros for constructing application specific strongly typed crypto wrappers.
 
@@ -25,7 +26,7 @@ pub use sp_core::{self, crypto::{CryptoType, CryptoTypePublicPair, Public, Deriv
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
 pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use sp_core::crypto::{KeyTypeId, key_types};
+pub use sp_core::crypto::{KeyTypeId, CryptoTypeId, key_types};
 
 #[doc(hidden)]
 pub use codec;
@@ -33,10 +34,15 @@ pub use codec;
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
-pub use sp_std::{ops::Deref, vec::Vec};
+pub use sp_std::{
+	convert::TryFrom,
+	ops::Deref,
+	vec::Vec,
+};
 
 pub mod ed25519;
 pub mod sr25519;
+pub mod ecdsa;
 mod traits;
 
 pub use traits::*;
@@ -54,11 +60,11 @@ pub use traits::*;
 #[macro_export]
 macro_rules! app_crypto {
 	($module:ident, $key_type:expr) => {
-		$crate::app_crypto_public_full_crypto!($module::Public, $key_type);
-		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type);
-		$crate::app_crypto_signature_full_crypto!($module::Signature, $key_type);
+		$crate::app_crypto_public_full_crypto!($module::Public, $key_type, $module::CRYPTO_ID);
+		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type, $module::CRYPTO_ID);
+		$crate::app_crypto_signature_full_crypto!($module::Signature, $key_type, $module::CRYPTO_ID);
 		$crate::app_crypto_signature_common!($module::Signature, $key_type);
-		$crate::app_crypto_pair!($module::Pair, $key_type);
+		$crate::app_crypto_pair!($module::Pair, $key_type, $module::CRYPTO_ID);
 	};
 }
 
@@ -75,9 +81,9 @@ macro_rules! app_crypto {
 #[macro_export]
 macro_rules! app_crypto {
 	($module:ident, $key_type:expr) => {
-		$crate::app_crypto_public_not_full_crypto!($module::Public, $key_type);
-		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type);
-		$crate::app_crypto_signature_not_full_crypto!($module::Signature, $key_type);
+		$crate::app_crypto_public_not_full_crypto!($module::Public, $key_type, $module::CRYPTO_ID);
+		$crate::app_crypto_public_common!($module::Public, $module::Signature, $key_type, $module::CRYPTO_ID);
+		$crate::app_crypto_signature_not_full_crypto!($module::Signature, $key_type, $module::CRYPTO_ID);
 		$crate::app_crypto_signature_common!($module::Signature, $key_type);
 	};
 }
@@ -86,7 +92,7 @@ macro_rules! app_crypto {
 /// Application-specific type whose identifier is `$key_type`.
 #[macro_export]
 macro_rules! app_crypto_pair {
-	($pair:ty, $key_type:expr) => {
+	($pair:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $pair crypto; this has no specific App.
 			#[derive(Clone)]
@@ -141,6 +147,7 @@ macro_rules! app_crypto_pair {
 			type Pair = Pair;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
+			const CRYPTO_ID: $crate::CryptoTypeId = $crypto_type;
 		}
 
 		impl $crate::AppPair for Pair {
@@ -183,7 +190,7 @@ macro_rules! app_crypto_pair_functions_if_std {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_full_crypto {
-	($public:ty, $key_type:expr) => {
+	($public:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
@@ -206,6 +213,7 @@ macro_rules! app_crypto_public_full_crypto {
 			type Pair = Pair;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
+			const CRYPTO_ID: $crate::CryptoTypeId = $crypto_type;
 		}
 	}
 }
@@ -217,7 +225,7 @@ macro_rules! app_crypto_public_full_crypto {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_not_full_crypto {
-	($public:ty, $key_type:expr) => {
+	($public:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap!{
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(
@@ -236,6 +244,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 			type Public = Public;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
+			const CRYPTO_ID: $crate::CryptoTypeId = $crypto_type;
 		}
 	}
 }
@@ -246,7 +255,7 @@ macro_rules! app_crypto_public_not_full_crypto {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_common {
-	($public:ty, $sig:ty, $key_type:expr) => {
+	($public:ty, $sig:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::app_crypto_public_common_if_std!();
 
 		impl AsRef<[u8]> for Public {
@@ -259,6 +268,10 @@ macro_rules! app_crypto_public_common {
 
 		impl $crate::Public for Public {
 			fn from_slice(x: &[u8]) -> Self { Self(<$public>::from_slice(x)) }
+
+			fn to_public_crypto_pair(&self) -> $crate::CryptoTypePublicPair {
+				$crate::CryptoTypePublicPair($crypto_type, self.to_raw_vec())
+			}
 		}
 
 		impl $crate::AppPublic for Public {
@@ -267,6 +280,8 @@ macro_rules! app_crypto_public_common {
 
 		impl $crate::RuntimeAppPublic for Public where $public: $crate::RuntimePublic<Signature=$sig> {
 			const ID: $crate::KeyTypeId = $key_type;
+			const CRYPTO_ID: $crate::CryptoTypeId = $crypto_type;
+
 			type Signature = Signature;
 
 			fn all() -> $crate::Vec<Self> {
@@ -291,6 +306,21 @@ macro_rules! app_crypto_public_common {
 
 			fn to_raw_vec(&self) -> $crate::Vec<u8> {
 				<$public as $crate::RuntimePublic>::to_raw_vec(&self.0)
+			}
+		}
+
+		impl From<Public> for $crate::CryptoTypePublicPair {
+			fn from(key: Public) -> Self {
+				(&key).into()
+			}
+		}
+
+		impl From<&Public> for $crate::CryptoTypePublicPair {
+			fn from(key: &Public) -> Self {
+				$crate::CryptoTypePublicPair(
+					$crypto_type,
+					$crate::Public::to_raw_vec(key),
+				)
 			}
 		}
 	}
@@ -355,7 +385,7 @@ macro_rules! app_crypto_public_common_if_std {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_signature_full_crypto {
-	($sig:ty, $key_type:expr) => {
+	($sig:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq,
@@ -377,6 +407,7 @@ macro_rules! app_crypto_signature_full_crypto {
 			type Pair = Pair;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
+			const CRYPTO_ID: $crate::CryptoTypeId = $crypto_type;
 		}
 	}
 }
@@ -388,7 +419,7 @@ macro_rules! app_crypto_signature_full_crypto {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_signature_not_full_crypto {
-	($sig:ty, $key_type:expr) => {
+	($sig:ty, $key_type:expr, $crypto_type:expr) => {
 		$crate::wrap! {
 			/// A generic `AppPublic` wrapper type over $public crypto; this has no specific App.
 			#[derive(Clone, Default, Eq, PartialEq,
@@ -406,6 +437,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 			type Public = Public;
 			type Signature = Signature;
 			const ID: $crate::KeyTypeId = $key_type;
+			const CRYPTO_ID: $crate::CryptoTypeId = $crypto_type;
 		}
 	}
 }
@@ -429,6 +461,14 @@ macro_rules! app_crypto_signature_common {
 
 		impl $crate::AppSignature for Signature {
 			type Generic = $sig;
+		}
+
+		impl $crate::TryFrom<$crate::Vec<u8>> for Signature {
+			type Error = ();
+
+			fn try_from(data: $crate::Vec<u8>) -> Result<Self, Self::Error> {
+				Ok(<$sig>::try_from(data.as_slice())?.into())
+			}
 		}
 	}
 }

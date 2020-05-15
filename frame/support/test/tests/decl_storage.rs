@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
@@ -593,38 +594,40 @@ mod test_append_and_len {
 		});
 	}
 
+	// `decode_len` should always return `None` for default assigments
+	// in `decl_storage!`.
 	#[test]
-	fn len_works_for_default() {
+	fn len_works_ignores_default_assignment() {
 		TestExternalities::default().execute_with(|| {
 			// vec
 			assert_eq!(JustVec::get(), vec![]);
-			assert_eq!(JustVec::decode_len(), Ok(0));
+			assert_eq!(JustVec::decode_len(), None);
 
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
+			assert_eq!(JustVecWithDefault::decode_len(), None);
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(OptionVec::decode_len(), Ok(0));
+			assert_eq!(OptionVec::decode_len(), None);
 
 			// map
 			assert_eq!(MapVec::get(0), vec![]);
-			assert_eq!(MapVec::decode_len(0), Ok(0));
+			assert_eq!(MapVec::decode_len(0), None);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+			assert_eq!(MapVecWithDefault::decode_len(0), None);
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
+			assert_eq!(OptionMapVec::decode_len(0), None);
 
 			// Double map
 			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
-			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(DoubleMapVec::decode_len(0, 1), None);
 
 			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
-			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
+			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), None);
 
 			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
-			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), None);
 		});
 	}
 }
