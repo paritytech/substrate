@@ -64,7 +64,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		let (result_sender, result_port) = buffered_link::buffered_link();
 		let metrics = prometheus_registry.and_then(|r|
 			Metrics::register(r)
-			.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
+			.map_err(|err| { log::warn!("Failed to register Prometheus metrics: {}", err); })
 			.ok()
 		);
 		let (future, worker_sender) = BlockImportWorker::new(

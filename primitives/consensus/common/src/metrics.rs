@@ -18,7 +18,7 @@
 
 use prometheus_endpoint::{register, U64, Registry, PrometheusError, Opts, CounterVec};
 
-/// generic prometheus metrics for common consensus functionality.
+/// Generic Prometheus metrics for common consensus functionality.
 #[derive(Clone)]
 pub(crate) struct Metrics {
 	pub import_queue_processed: CounterVec<U64>,
@@ -29,7 +29,7 @@ impl Metrics {
 		Ok(Self {
 			import_queue_processed: register(
 				CounterVec::new(
-					Opts::new("import_queue_processed", "Blocks processed by import queue"),
+					Opts::new("import_queue_processed_total", "Blocks processed by import queue"),
 					&["result"] // 'success or failure
 				)?,
 				registry,
