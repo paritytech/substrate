@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Test utilities
 
@@ -27,7 +28,7 @@ use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
 	StorageValue, StorageMap, StorageDoubleMap, IterableStorageMap,
 	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize},
-	weights::Weight,
+	weights::{Weight, constants::RocksDbWeight},
 };
 use sp_io;
 use sp_phragmen::{
@@ -36,7 +37,7 @@ use sp_phragmen::{
 };
 use crate::*;
 
-const INIT_TIMESTAMP: u64 = 30_000;
+pub const INIT_TIMESTAMP: u64 = 30_000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -211,7 +212,7 @@ impl frame_system::Trait for Test {
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
+	type DbWeight = RocksDbWeight;
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
@@ -473,7 +474,7 @@ impl ExtBuilder {
 				(41, balance_factor * 2000),
 				(100, 2000 * balance_factor),
 				(101, 2000 * balance_factor),
-				// This allow us to have a total_payout different from 0.
+				// This allows us to have a total_payout different from 0.
 				(999, 1_000_000_000_000),
 			],
 		}.assimilate_storage(&mut storage);
@@ -763,6 +764,18 @@ pub(crate) fn on_offence_now(
 	on_offence_in_era(offenders, slash_fraction, now)
 }
 
+pub(crate) fn add_slash(who: &AccountId) {
+	on_offence_now(
+		&[
+			OffenceDetails {
+				offender: (who.clone(), Staking::eras_stakers(Staking::active_era().unwrap().index, who.clone())),
+				reporters: vec![],
+			},
+		],
+		&[Perbill::from_percent(10)],
+	);
+}
+
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
 pub(crate) fn horrible_phragmen_with_post_processing(
@@ -1034,4 +1047,8 @@ pub(crate) fn staking_events() -> Vec<Event<Test>> {
 			None
 		}
 	}).collect()
+}
+
+pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

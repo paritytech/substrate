@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! GRANDPA Consensus module for runtime.
 //!
@@ -184,6 +185,10 @@ decl_error! {
 		ChangePending,
 		/// Cannot signal forced change so soon after last.
 		TooSoon,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
 	}
 }
 
@@ -228,8 +233,9 @@ decl_module! {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		///
-		/// Since the weight is 0 in order to avoid DoS pre-validation is implemented in a
-		/// `SignedExtension`.
+		/// Since the weight of the extrinsic is 0, in order to avoid DoS by
+		/// submission of invalid equivocation reports, a mandatory pre-validation of
+		/// the extrinsic is implemented in a `SignedExtension`.
 		#[weight = 0]
 		fn report_equivocation(
 			origin,
@@ -249,7 +255,7 @@ decl_module! {
 				T::KeyOwnerProofSystem::check_proof(
 					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
 					key_owner_proof,
-				).ok_or("Invalid key ownership proof.")?;
+				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 			// the set id and round when the offence happened
 			let set_id = equivocation_proof.set_id();
@@ -265,7 +271,7 @@ decl_module! {
 					set_id,
 					round,
 				),
-			).map_err(|_| "Duplicate offence report.")?;
+			).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -440,9 +446,9 @@ impl<T: Trait> Module<T> {
 			Self::set_grandpa_authorities(authorities);
 		}
 
-		// NOTE: initialize first session of first set. this is necessary
-		// because we only update this `on_new_session` which isn't called
-		// for the genesis session.
+		// NOTE: initialize first session of first set. this is necessary for
+		// the genesis set and session since we only update the set -> session
+		// mapping whenever a new session starts, i.e. through `on_new_session`.
 		SetIdSession::insert(0, 0);
 	}
 
@@ -454,10 +460,7 @@ impl<T: Trait> Module<T> {
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof)
-			.ok()?;
-
-		Some(())
+		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof).ok()
 	}
 }
 
