@@ -170,6 +170,14 @@ impl<
 			offset
 		})
 	}
+
+	fn weight(_now: BlockNumber) -> Weight {
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
+		// There should be no risk to the chain having this weight value be zero for now.
+		// However, this value of zero was not properly calculated, and so it would be reasonable
+		// to come back here and properly calculate the weight of this function.
+		0
+	}
 }
 
 /// A trait for managing creation of new validator set.
@@ -784,5 +792,9 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+
+	fn weight(now: T::BlockNumber) -> Weight {
+		T::NextSessionRotation::weight(now)
 	}
 }
