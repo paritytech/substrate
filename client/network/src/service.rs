@@ -411,7 +411,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol_mut().update_chain();
 	}
 
-
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
 		Swarm::<B, H>::local_peer_id(&self.network_service)
