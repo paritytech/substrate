@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{mem, pin::Pin, collections::HashMap, time::Duration, marker::PhantomData};
+use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
@@ -62,7 +62,11 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
-		let metrics = prometheus_registry.and_then(|r| Metrics::register(r).ok());
+		let metrics = prometheus_registry.and_then(|r|
+			Metrics::register(r)
+			.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
+			.ok()
+		);
 		let (future, worker_sender) = BlockImportWorker::new(
 			result_sender,
 			verifier,
@@ -140,6 +144,11 @@ struct BlockImportWorker<B: BlockT, Transaction> {
 	metrics: Option<Metrics>,
 	_phantom: PhantomData<Transaction>,
 }
+
+const METRIC_SUCCESS_FIELDS: [&'static str; 8] = [
+	"success","incomplete_header", "verification_failed", "bad_block",
+	"missing_state", "unknown_parent", "cancelled", "failed"
+];
 
 impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 	fn new<V: 'static + Verifier<B>>(
@@ -253,23 +262,24 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks)
 			.then(move |(imported, count, results, block_import, verifier)| {
 				if let Some(metrics) = metrics {
-					let updates = results.iter().fold(HashMap::new(), |mut acc, result| {
-						acc.entry(match result.0 {
-							Err(BlockImportError::IncompleteHeader(_)) => "incomplete_header",
-							Err(BlockImportError::VerificationFailed(_,_)) => "verification_failed",
-							Err(BlockImportError::BadBlock(_)) => "bad_block",
-							Err(BlockImportError::MissingState) => "missing_state",
-							Err(BlockImportError::UnknownParent) => "unknown_parent",
-							Err(BlockImportError::Cancelled) => "cancelled",
-							Err(BlockImportError::Other(_)) => "failed",
-							Ok(_) => "success",
-						})
-						.and_modify(|e| { *e += 1})
-						.or_insert(1u64);
+					let amounts = results.iter().fold([0u64; 8], |mut acc, result| {
+						match result.0 {
+							Ok(_) => acc[0] += 1,
+							Err(BlockImportError::IncompleteHeader(_)) => acc[1] += 1,
+							Err(BlockImportError::VerificationFailed(_,_)) => acc[2] += 1,
+							Err(BlockImportError::BadBlock(_)) => acc[3] += 1,
+							Err(BlockImportError::MissingState) => acc[4] += 1,
+							Err(BlockImportError::UnknownParent) => acc[5] += 1,
+							Err(BlockImportError::Cancelled) => acc[6] += 1,
+							Err(BlockImportError::Other(_)) => acc[7] += 1,
+						};
 						acc
 					});
-					for (entry, amount) in updates.iter() {
-						metrics.import_queue_processed.with_label_values(&[&entry]).inc_by(*amount)
+					for (idx, field) in METRIC_SUCCESS_FIELDS.iter().enumerate() {
+						let amount = amounts[idx];
+						if amount > 0 {
+							metrics.import_queue_processed.with_label_values(&[&field]).inc_by(amount)
+						}
 					};
 				}
 				result_sender.blocks_processed(imported, count, results);
