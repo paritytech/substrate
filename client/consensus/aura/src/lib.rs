@@ -246,7 +246,13 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		slot_number: u64,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
-		slot_author::<P>(slot_number, epoch_data).cloned()
+		let expected_author = slot_author::<P>(slot_number, epoch_data);
+		expected_author.and_then(|p| {
+			self.keystore.read()
+				.key_pair_by_type::<P>(&p, sp_application_crypto::key_types::AURA).ok()
+		}).and_then(|p| {
+			Some(p.public())
+		})
 	}
 
 	fn pre_digest_data(
@@ -859,8 +865,11 @@ mod tests {
 	use sp_keyring::sr25519::Keyring;
 	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
+	use sc_consensus_slots::SimpleSlotWorker;
 	use std::task::Poll;
 	use sc_block_builder::BlockBuilderProvider;
+	use sp_runtime::traits::Header as _;
+	use substrate_test_runtime_client::runtime::{Header, H256};
 
 	type Error = sp_blockchain::Error;
 
@@ -1043,5 +1052,56 @@ mod tests {
 			Keyring::Bob.public().into(),
 			Keyring::Charlie.public().into()
 		]);
+	}
+
+	#[test]
+	fn current_node_authority_should_claim_slot() {
+		let net = AuraTestNet::new(4);
+
+		let mut authorities = vec![
+			Keyring::Alice.public().into(),
+			Keyring::Bob.public().into(),
+			Keyring::Charlie.public().into()
+		];
+
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore = sc_keystore::Store::open(keystore_path.path(), None).expect("Creates keystore.");
+		let my_key = keystore.write()
+			.generate_by_type::<AuthorityPair>(AuthorityPair::ID)
+			.expect("Key should be created");
+		authorities.push(my_key.public());
+
+		let net = Arc::new(Mutex::new(net));
+
+		let mut net = net.lock();
+		let peer = net.peer(3);
+		let client = peer.client().as_full().expect("full clients are created").clone();
+		let environ = DummyFactory(client.clone());
+
+		let worker = AuraWorker {
+			client: client.clone(),
+			block_import: Arc::new(Mutex::new(client)),
+			env: environ,
+			keystore,
+			sync_oracle: DummyOracle.clone(),
+			force_authoring: false,
+			_key_type: PhantomData::<AuthorityPair>,
+		};
+
+		let head = Header::new(
+			1,
+			H256::from_low_u64_be(0),
+			H256::from_low_u64_be(0),
+			Default::default(),
+			Default::default()
+		);
+		assert!(worker.claim_slot(&head, 0, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 1, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 2, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 3, &authorities).is_some());
+		assert!(worker.claim_slot(&head, 4, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 5, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 6, &authorities).is_none());
+		assert!(worker.claim_slot(&head, 7, &authorities).is_some());
 	}
 }
