@@ -33,7 +33,6 @@ use sp_consensus_babe::{
 use serde::{Deserialize, Serialize};
 use sc_keystore::KeyStorePtr;
 use sp_api::{ProvideRuntimeApi, BlockId};
-use sp_core::crypto::Pair;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
@@ -136,13 +135,13 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
-							claims.entry(key.public()).or_default().primary.push(slot_number);
+							claims.entry(key).or_default().primary.push(slot_number);
 						}
 						PreDigest::SecondaryPlain { .. } => {
-							claims.entry(key.public()).or_default().secondary.push(slot_number);
+							claims.entry(key).or_default().secondary.push(slot_number);
 						}
 						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key.public()).or_default().secondary_vrf.push(slot_number);
+							claims.entry(key).or_default().secondary_vrf.push(slot_number);
 						},
 					};
 				}

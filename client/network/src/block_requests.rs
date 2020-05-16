@@ -398,9 +398,9 @@ where
 				break
 			}
 
-			let number = header.number().clone();
+			let number = *header.number();
 			let hash = header.hash();
-			let parent_hash = header.parent_hash().clone();
+			let parent_hash = *header.parent_hash();
 			let justification = if get_justification {
 				self.chain.justification(&BlockId::Hash(hash))?
 			} else {
