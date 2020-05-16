@@ -246,7 +246,13 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		slot_number: u64,
 		epoch_data: &Self::EpochData,
 	) -> Option<Self::Claim> {
-		slot_author::<P>(slot_number, epoch_data).cloned()
+		let expected_author = slot_author::<P>(slot_number, epoch_data);
+		expected_author.and_then(|p| {
+			self.keystore.read()
+				.key_pair_by_type::<P>(&p, sp_application_crypto::key_types::AURA).ok()
+		}).and_then(|p| {
+			Some(p.public())
+		})
 	}
 
 	fn pre_digest_data(
