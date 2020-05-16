@@ -400,14 +400,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		&self.service
 	}
 
-	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, is_best);
-	}
-
 	/// You must call this when a new block is finalized by the client.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
+	}
+
+	/// This should be called when blocks are added to the
+	/// chain by something other than the import queue.
+	/// Currently this is only useful for tests.
+	pub fn update_chain(&mut self) {
+		self.network_service.user_protocol_mut().update_chain();
 	}
 
 	/// Returns the local `PeerId`.
@@ -1349,7 +1351,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		self.protocol.user_protocol_mut().blocks_processed(imported, count, results)
+		self.protocol.user_protocol_mut().on_blocks_processed(imported, count, results)
 	}
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
