@@ -220,7 +220,7 @@ impl<T> Future for RemoteResponse<T> {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		match self.receiver.poll_unpin(cx) {
 			Poll::Ready(Ok(res)) => Poll::Ready(res),
-			Poll::Ready(Err(_)) => Poll::Ready(Err(From::from(ClientError::RemoteFetchCancelled))),
+			Poll::Ready(Err(_)) => Poll::Ready(Err(ClientError::RemoteFetchCancelled)),
 			Poll::Pending => Poll::Pending,
 		}
 	}

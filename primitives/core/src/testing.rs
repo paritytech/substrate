@@ -21,7 +21,7 @@ use crate::crypto::KeyTypeId;
 #[cfg(feature = "std")]
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
-	ed25519, sr25519,
+	ed25519, sr25519, ecdsa,
 	traits::BareCryptoStoreError
 };
 #[cfg(feature = "std")]
@@ -30,6 +30,8 @@ use std::collections::HashSet;
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
+/// Key type for generic Sr 25519 key.
+pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
 
 /// A keystore implementation usable in tests.
 #[cfg(feature = "std")]
@@ -62,6 +64,14 @@ impl KeyStore {
 			)
 	}
 
+	fn ecdsa_key_pair(&self, id: KeyTypeId, pub_key: &ecdsa::Public) -> Option<ecdsa::Pair> {
+		self.keys.get(&id)
+			.and_then(|inner|
+				inner.get(pub_key.as_slice())
+					.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
+			)
+	}
+
 }
 
 #[cfg(feature = "std")]
@@ -74,6 +84,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 					.fold(Vec::new(), |mut v, k| {
 						v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
 						v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+						v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k.clone()));
 						v
 					}))
 			})
@@ -142,6 +153,37 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}
 	}
 
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.keys.get(&id)
+			.map(|keys|
+				keys.values()
+					.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
+					.map(|p| p.public())
+					.collect()
+			)
+			.unwrap_or_default()
+	}
+
+	fn ecdsa_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, BareCryptoStoreError> {
+		match seed {
+			Some(seed) => {
+				let pair = ecdsa::Pair::from_string(seed, None)
+					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `ecdsa` pair.".to_owned()))?;
+				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				Ok(pair.public())
+			},
+			None => {
+				let (pair, phrase, _) = ecdsa::Pair::generate_with_phrase(None);
+				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				Ok(pair.public())
+			}
+		}
+	}
+
 	fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys.entry(id).or_default().insert(public.to_owned(), suri.to_string());
 		Ok(())
@@ -185,6 +227,12 @@ impl crate::traits::BareCryptoStore for KeyStore {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
 					.ok_or(BareCryptoStoreError::PairNotFound("sr25519".to_owned()))?;
+				return Ok(key_pair.sign(msg).encode());
+			}
+			ecdsa::CRYPTO_ID => {
+				let key_pair: ecdsa::Pair = self
+					.ecdsa_key_pair(id, &ecdsa::Public::from_slice(key.1.as_slice()))
+					.ok_or(BareCryptoStoreError::PairNotFound("ecdsa".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
 			_ => Err(BareCryptoStoreError::KeyNotSupported(id))

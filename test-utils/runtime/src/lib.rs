@@ -27,7 +27,7 @@ use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
 use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
-use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
+use sp_application_crypto::{ed25519, sr25519, ecdsa, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
 use sp_trie::trie_types::{TrieDB, TrieDBMut};
@@ -305,6 +305,10 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Test that `ecdsa` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ecdsa`.
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
 			}
@@ -347,6 +351,10 @@ cfg_if! {
 				///
 				/// Returns the signature generated for the message `sr25519`.
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic);
+				/// Test that `ecdsa` crypto works in the runtime.
+				///
+				/// Returns the signature generated for the message `ecdsa`.
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
 			}
@@ -485,6 +493,7 @@ impl_opaque_keys! {
 	pub struct SessionKeys {
 		pub ed25519: ed25519::AppPublic,
 		pub sr25519: sr25519::AppPublic,
+		pub ecdsa: ecdsa::AppPublic,
 	}
 }
 
@@ -618,6 +627,10 @@ cfg_if! {
 
 				fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 					test_sr25519_crypto()
+				}
+
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
+					test_ecdsa_crypto()
 				}
 
 				fn test_storage() {
@@ -837,6 +850,10 @@ cfg_if! {
 					test_sr25519_crypto()
 				}
 
+				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
+					test_ecdsa_crypto()
+				}
+
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
@@ -926,6 +943,22 @@ fn test_sr25519_crypto() -> (sr25519::AppSignature, sr25519::AppPublic) {
 
 	let signature = public0.sign(&"sr25519").expect("Generates a valid `sr25519` signature.");
 	assert!(public0.verify(&"sr25519", &signature));
+	(signature, public0)
+}
+
+fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic) {
+	let public0 = ecdsa::AppPublic::generate_pair(None);
+	let public1 = ecdsa::AppPublic::generate_pair(None);
+	let public2 = ecdsa::AppPublic::generate_pair(None);
+
+	let all = ecdsa::AppPublic::all();
+	assert!(all.contains(&public0));
+	assert!(all.contains(&public1));
+	assert!(all.contains(&public2));
+
+	let signature = public0.sign(&"ecdsa").expect("Generates a valid `ecdsa` signature.");
+
+	assert!(public0.verify(&"ecdsa", &signature));
 	(signature, public0)
 }
 

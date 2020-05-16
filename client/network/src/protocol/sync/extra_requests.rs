@@ -103,11 +103,9 @@ impl<B: BlockT> ExtraRequests<B> {
 				// we have finalized further than the given request, presumably
 				// by some other part of the system (not sync). we can safely
 				// ignore the `Revert` error.
-				return;
 			},
 			Err(err) => {
 				debug!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
-				return;
 			}
 			_ => ()
 		}

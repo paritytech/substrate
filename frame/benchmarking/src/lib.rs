@@ -922,6 +922,10 @@ macro_rules! impl_benchmark_tests {
 					let selected_benchmark = SelectedBenchmark::$name;
 					let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
 
+					assert!(
+						components.len() != 0,
+						"You need to add components to your benchmark!",
+					);
 					for (_, (name, low, high)) in components.iter().enumerate() {
 						// Test only the low and high value, assuming values in the middle won't break
 						for component_value in vec![low, high] {

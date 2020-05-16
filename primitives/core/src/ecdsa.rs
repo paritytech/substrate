@@ -38,6 +38,7 @@ use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
+use sp_runtime_interface::pass_by::PassByInner;
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
 
@@ -51,7 +52,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, PassByInner)]
 pub struct Public([u8; 33]);
 
 impl PartialOrd for Public {
@@ -125,6 +126,18 @@ impl TraitPublic for Public {
 	}
 }
 
+impl From<Public> for CryptoTypePublicPair {
+	fn from(key: Public) -> Self {
+		(&key).into()
+	}
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+	fn from(key: &Public) -> Self {
+		CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+	}
+}
+
 impl Derive for Public {}
 
 impl Default for Public {
@@ -178,11 +191,16 @@ impl std::fmt::Display for Public {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Public {
+impl sp_std::fmt::Debug for Public {
+	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.as_ref()), &s[0..8])
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
 	}
 }
 
@@ -209,7 +227,7 @@ impl sp_std::hash::Hash for Public {
 }
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature([u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -289,10 +307,15 @@ impl AsMut<[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Debug for Signature {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl sp_std::fmt::Debug for Signature {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
 	}
 }
 
