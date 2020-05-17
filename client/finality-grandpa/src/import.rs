@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -62,7 +62,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
-	finality_subscription: Option<GrandpaJustificationSender<Block>>,
+	justification_sender: GrandpaJustificationSender<Block>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -77,7 +77,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			send_voter_commands: self.send_voter_commands.clone(),
 			consensus_changes: self.consensus_changes.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
-			finality_subscription: self.finality_subscription.clone(),
+			justification_sender: self.justification_sender.clone(),
 			_phantom: PhantomData,
 		}
 	}
@@ -562,7 +562,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
-		finality_subscription: Option<GrandpaJustificationSender<Block>>,
+		justification_sender: GrandpaJustificationSender<Block>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.
@@ -606,7 +606,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			send_voter_commands,
 			consensus_changes,
 			authority_set_hard_forks,
-			finality_subscription,
+			justification_sender,
 			_phantom: PhantomData,
 		}
 	}
@@ -652,7 +652,7 @@ where
 			number,
 			justification.into(),
 			initial_sync,
-			&self.finality_subscription,
+			&self.justification_sender,
 		);
 
 		match result {

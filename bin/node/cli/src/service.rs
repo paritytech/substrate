@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -53,13 +53,6 @@ macro_rules! new_full_start {
 		let mut import_setup = None;
 		let mut rpc_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
-		// Q: Is there any way to enforce that they point to the same set of notifiers?
-		let finality_notifiers = Arc::new(Mutex::new(vec![]));
-		let justification_receiver =
-			grandpa::GrandpaJustificationReceiver::new(finality_notifiers.clone());
-		let justification_sender =
-			grandpa::GrandpaJustificationSender::new(finality_notifiers.clone());
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -115,9 +108,12 @@ macro_rules! new_full_start {
 			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("BabeLink is present for full services or set up failed; qed.");
+
 				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
 					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
 				let shared_authority_set = grandpa_link.shared_authority_set();
+				let justification_receiver = grandpa_link.justification_receiver();
+
 				let shared_voter_state = grandpa::SharedVoterState::empty();
 				let deps = node_rpc::FullDeps {
 					client: builder.client().clone(),
@@ -132,7 +128,7 @@ macro_rules! new_full_start {
 					grandpa: node_rpc::GrandpaDeps {
 						shared_voter_state: shared_voter_state.clone(),
 						shared_authority_set: shared_authority_set.clone(),
-						justification_receiver
+						justification_receiver,
 					},
 				};
 				rpc_setup = Some((shared_voter_state));
@@ -282,7 +278,6 @@ macro_rules! new_full {
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				prometheus_registry: service.prometheus_registry(),
 				shared_voter_state,
-				finality_subscription: Some(justification_sender),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.

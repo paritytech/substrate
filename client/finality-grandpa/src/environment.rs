@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -404,7 +404,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
-	pub(crate) finality_subscription: Option<GrandpaJustificationSender<Block>>,
+	pub(crate) justification_sender: GrandpaJustificationSender<Block>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -1009,7 +1009,7 @@ where
 			number,
 			(round, commit).into(),
 			false,
-			&self.finality_subscription,
+			&self.justification_sender,
 		)
 	}
 
@@ -1074,7 +1074,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
-	finality_subscription: &Option<GrandpaJustificationSender<Block>>,
+	justification_sender: &GrandpaJustificationSender<Block>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
@@ -1181,19 +1181,17 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			},
 		};
 
-		if let Some(subscription) = finality_subscription {
-			// Q: We `finalized()` this at L37, so can I be sure
-			// that it's fine to unwrap here?
-			if let Some(justification) = justification.clone() {
-				let header = client.header(BlockId::Hash(hash))?
-					.expect("");
-				let notification = JustificationNotification {
-					header,
-					justification,
-				};
+		// Q: We `finalized()` this at L37, so can I be sure
+		// that it's fine to unwrap here?
+		if let Some(justification) = justification.clone() {
+			let header = client.header(BlockId::Hash(hash))?
+				.expect("");
+			let notification = JustificationNotification {
+				header,
+				justification,
+			};
 
-                                subscription.notify(notification);
-			}
+			justification_sender.notify(notification);
 		}
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);

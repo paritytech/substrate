@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -75,7 +75,7 @@ use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 
 use finality_grandpa::Error as GrandpaError;
 use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
@@ -131,7 +131,7 @@ use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
-use crate::finality_proof::GrandpaJustificationSender;
+use crate::finality_proof::{GrandpaJustificationSender, GrandpaJustificationReceiver};
 
 // Re-export these two because it's just so damn convenient.
 pub use sp_finality_grandpa::{AuthorityId, GrandpaApi, ScheduledChange};
@@ -440,12 +440,24 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	justification_sender: GrandpaJustificationSender<Block>,
+	justification_receiver: GrandpaJustificationReceiver<Block>,
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
 	/// Get the shared authority set.
 	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<Block::Hash, NumberFor<Block>> {
 		&self.persistent_data.authority_set
+	}
+
+	/// Get the sender end of justification notifications.
+	pub fn justification_sender(&self) -> GrandpaJustificationSender<Block> {
+		self.justification_sender.clone()
+	}
+
+	/// Get the receiving end of justification notifications.
+	pub fn justification_receiver(&self) -> GrandpaJustificationReceiver<Block> {
+		self.justification_receiver.clone()
 	}
 }
 
@@ -545,6 +557,13 @@ where
 
 	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
 
+	// Q: Is there any way to enforce that they point to the same set of notifiers?
+	let finality_notifiers = Arc::new(Mutex::new(vec![]));
+	let justification_receiver =
+		GrandpaJustificationReceiver::new(finality_notifiers.clone());
+	let justification_sender =
+		GrandpaJustificationSender::new(finality_notifiers.clone());
+
 	// create pending change objects with 0 delay and enacted on finality
 	// (i.e. standard changes) for each authority set hard fork.
 	let authority_set_hard_forks = authority_set_hard_forks
@@ -571,13 +590,15 @@ where
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
-			None, //finality_notifiers.clone(), // TODO: Figure out how to get subs here
+			justification_sender.clone(),
 		),
 		LinkHalf {
 			client,
 			select_chain,
 			persistent_data,
 			voter_commands_rx,
+			justification_sender,
+			justification_receiver,
 		},
 	))
 }
@@ -673,8 +694,6 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
 	pub shared_voter_state: SharedVoterState,
-	/// A subscription to new block justifications
-	pub finality_subscription: Option<GrandpaJustificationSender<Block>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -701,7 +720,6 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
-		finality_subscription,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -715,6 +733,8 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		select_chain,
 		persistent_data,
 		voter_commands_rx,
+		justification_sender,
+		justification_receiver: _,
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -763,7 +783,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		voter_commands_rx,
 		prometheus_registry,
 		shared_voter_state,
-		finality_subscription,
+		justification_sender,
 	);
 
 	let voter_work = voter_work
@@ -824,7 +844,7 @@ where
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
-		finality_subscription: Option<GrandpaJustificationSender<Block>>,
+		justification_sender: GrandpaJustificationSender<Block>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -848,7 +868,7 @@ where
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
-			finality_subscription,
+			justification_sender,
 			_phantom: PhantomData,
 		});
 
@@ -988,7 +1008,7 @@ where
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
-					finality_subscription: self.env.finality_subscription.clone(),
+					justification_sender: self.env.justification_sender.clone(),
 					_phantom: PhantomData,
 				});
 

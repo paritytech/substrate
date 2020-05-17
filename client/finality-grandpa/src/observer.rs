@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -39,6 +39,7 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
+use crate::finality_proof::GrandpaJustificationSender;
 use sp_finality_grandpa::AuthorityId;
 use std::marker::{PhantomData, Unpin};
 
@@ -68,6 +69,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
+	justification_sender: &GrandpaJustificationSender<Block>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
@@ -84,6 +86,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	let consensus_changes = consensus_changes.clone();
 	let client = client.clone();
 	let voters = voters.clone();
+	let justification_sender = justification_sender.clone();
 
 	let observer = commits.try_fold(last_finalized_number, move |last_finalized_number, global| {
 		let (round, commit, callback) = match global {
@@ -126,7 +129,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_number,
 				(round, commit).into(),
 				false,
-				&None, // TODO: Should I include the finality_subscribers here?
+				&justification_sender,
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
@@ -177,6 +180,7 @@ where
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		justification_sender,
 		..
 	} = link;
 
@@ -192,7 +196,8 @@ where
 		network,
 		persistent_data,
 		config.keystore,
-		voter_commands_rx
+		voter_commands_rx,
+		justification_sender,
 	);
 
 	let observer_work = observer_work
@@ -213,6 +218,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	persistent_data: PersistentData<B>,
 	keystore: Option<sc_keystore::KeyStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+	justification_sender: GrandpaJustificationSender<B>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -230,6 +236,7 @@ where
 		persistent_data: PersistentData<B>,
 		keystore: Option<sc_keystore::KeyStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+		justification_sender: GrandpaJustificationSender<B>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -241,6 +248,7 @@ where
 			persistent_data,
 			keystore,
 			voter_commands_rx,
+			justification_sender,
 			_phantom: PhantomData,
 		};
 		work.rebuild_observer();
@@ -287,6 +295,7 @@ where
 			&self.persistent_data.authority_set,
 			&self.persistent_data.consensus_changes,
 			&voters,
+			&self.justification_sender,
 			last_finalized_number,
 			global_in,
 			note_round,
