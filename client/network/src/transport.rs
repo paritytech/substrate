@@ -55,8 +55,8 @@ pub fn build_transport(
 				rare panic here is basically zero");
 
 		core::upgrade::SelectUpgrade::new(
-			noise::NoiseConfig::ix(noise_keypair_legacy),
-			noise::NoiseConfig::xx(noise_keypair_spec)
+			noise::NoiseConfig::xx(noise_keypair_spec),
+			noise::NoiseConfig::ix(noise_keypair_legacy)
 		)
 	};
 
