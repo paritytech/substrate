@@ -211,6 +211,11 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
 	type ExtrinsicBaseWeight: Get<Weight>;
 
+	/// The maximal weight of a single Extrinsic. This should be set to at most
+	/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
+	/// containing `Normal` dispatch class calls.
+	type MaxExtrinsicWeight: Get<Weight>;
+
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
 
@@ -1350,10 +1355,29 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		}
 	}
 
+	/// Checks if the current extrinsic does not exceed `MaxExtrinsicWeight` limit.
+	fn check_extrinsic_weight(
+		info: &DispatchInfoOf<T::Call>,
+	) -> Result<(), TransactionValidityError> {
+		match info.class {
+			// Mandatory and Operational transactions does not
+			DispatchClass::Mandatory | DispatchClass::Operational => Ok(()),
+			DispatchClass::Normal => {
+				let maximum_weight = T::MaxExtrinsicWeight::get();
+				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
+				if extrinsic_weight > maximum_weight {
+					Err(InvalidTransaction::ExhaustsResources.into())
+				} else {
+					Ok(())
+				}
+			}
+		}
+	}
+
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_weight(
+	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
@@ -1444,7 +1468,9 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
-		let next_weight = Self::check_weight(info)?;
+		let next_weight = Self::check_block_weight(info)?;
+		Self::check_extrinsic_weight(info)?;
+
 		AllExtrinsicsLen::put(next_len);
 		AllExtrinsicsWeight::put(next_weight);
 		Ok(())
@@ -1457,9 +1483,12 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
+		// ignore the next length. If they return `Ok`, then it is below the limit.
 		let _ = Self::check_block_length(info, len)?;
-		let _ = Self::check_weight(info)?;
+		// during validation we skip block limit check. Since the `validate_transaction`
+		// call runs on an empty block anyway, by this we prevent `on_initialize` weight
+		// consumption from causing false negatives.
+		Self::check_extrinsic_weight(info)?;
 
 		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
 	}
@@ -2345,7 +2374,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn signed_ext_check_weight_priority_works() {
+	fn signed_ext() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
@@ -2518,5 +2547,10 @@ pub(crate) mod tests {
 			System::on_created_account(Default::default());
 			assert!(System::events().len() == 1);
 		});
+	}
+
+	#[test]
+	fn validation_not_taking_all_extrinsics_len_into_account() {
+		assert_eq!(true, false);
 	}
 }
