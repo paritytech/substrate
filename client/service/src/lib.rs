@@ -369,8 +369,6 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.header, notification.is_new_best);
-
 			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
 			}
