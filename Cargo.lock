@@ -666,6 +666,8 @@ version = "2.0.0-dev"
 dependencies = [
  "frame-system",
  "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
  "sp-runtime",
 ]
 
@@ -6083,11 +6085,9 @@ dependencies = [
  "bip39",
  "chrono",
  "clap",
- "cli-utils",
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
- "futures 0.1.29",
  "futures 0.3.5",
  "hex",
  "hyper 0.12.35",

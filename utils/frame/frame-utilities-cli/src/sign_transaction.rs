@@ -17,14 +17,14 @@
 //! Implementation of the `sign-transaction` subcommand
 use sc_cli::{
 	Error, CliConfiguration, KeystoreParams, SharedParams,
-	pair_from_suri, decode_hex,with_crypto_scheme, create_extrinsic_for,
+	pair_from_suri, decode_hex,with_crypto_scheme,
 	CryptoSchemeFlag,
 };
 use structopt::StructOpt;
 use codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
 use sp_runtime::MultiSigner;
-use cli_utils::{RuntimeAdapter, IndexFor, CallFor};
+use cli_utils::{RuntimeAdapter, IndexFor, CallFor, create_extrinsic_for};
 
 type Call = Vec<u8>;
 

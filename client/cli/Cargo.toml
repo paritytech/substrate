@@ -24,7 +24,6 @@ lazy_static = "1.4.0"
 app_dirs = "1.2.1"
 tokio = { version = "0.2.9", features = [ "signal", "rt-core", "rt-threaded" ] }
 futures = "0.3.4"
-futures01 = { package = "futures", version = "0.1.29" }
 fdlimit = "0.1.4"
 serde = "1.0.106"
 libp2p = "0.18.1"
@@ -54,7 +53,6 @@ structopt = "0.3.8"
 sc-tracing = { version = "2.0.0-dev", path = "../tracing" }
 chrono = "0.4.10"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
-cli-utils = { path = "../../utils/cli-utils" , version = "2.0.0-dev" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"

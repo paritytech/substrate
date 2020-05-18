@@ -10,9 +10,11 @@ description = "CLI utils"
 documentation = "https://docs.rs/cli-utils"
 
 [dependencies]
-frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../../frame/system" }
-pallet-balances = { version = "2.0.0-alpha.4", default-features = false, path = "../../frame/balances" }
-sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
+frame-system = { version = "2.0.0-alpha.7", default-features = false, path = "../../frame/system" }
+pallet-balances = { version = "2.0.0-alpha.7", default-features = false, path = "../../frame/balances" }
+sp-runtime = { version = "2.0.0-alpha.7", default-features = false, path = "../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.7", default-features = false, path = "../../primitives/core" }
+codec = { version = "1.3.0", package = "parity-scale-codec" }
 
 [features]
 default = ["std"]
@@ -20,4 +22,5 @@ std = [
     "frame-system/std",
     "pallet-balances/std",
     "sp-runtime/std",
+	"sp-core/std",
 ]

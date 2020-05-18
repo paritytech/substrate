@@ -20,5 +20,5 @@ hex = "0.4.2"
 
 [dev-dependencies]
 sp-io = { version = "2.0.0-dev", path = "../../../primitives/io" }
-frame-system = { version = "2.0.0-alpha.4", path = "../../../frame/system" }
+frame-system = { version = "2.0.0-alpha.7", path = "../../../frame/system" }
 substrate-test-runtime = { version = "2.0.0-dev", features = ["indices-lookup"], path = "../../../test-utils/runtime" }

@@ -18,7 +18,7 @@
 //! Implementation of the `transfer` cli subcommand for nodes that use the pallet-balances crate.
 
 use sc_cli::{
-    Error, SharedParams, pair_from_suri, create_extrinsic_for, with_crypto_scheme,
+    Error, SharedParams, pair_from_suri, with_crypto_scheme,
     CryptoSchemeFlag, decode_hex, CliConfiguration, KeystoreParams,
 };
 use structopt::StructOpt;
@@ -27,7 +27,7 @@ use codec::Encode;
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
-use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, RuntimeAdapter};
+use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, RuntimeAdapter, create_extrinsic_for};
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]

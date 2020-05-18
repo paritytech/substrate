@@ -22,12 +22,9 @@ use sp_core::{
 	Pair, hexdisplay::HexDisplay,
 	crypto::{Ss58Codec, Ss58AddressFormat},
 };
-use sp_runtime::{MultiSigner, traits::IdentifyAccount, AccountId32};
+use sp_runtime::{MultiSigner, traits::IdentifyAccount};
 use crate::{OutputType, error::{self, Error}};
 use serde_json::json;
-use cli_utils::{IndexFor, RuntimeAdapter};
-use sp_runtime::generic::{UncheckedExtrinsic, SignedPayload};
-use parity_scale_codec::Encode;
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
@@ -224,31 +221,3 @@ macro_rules! with_crypto_scheme {
 	};
 }
 
-/// create an extrinsic for the runtime.
-pub fn create_extrinsic_for<Pair, RA, Call>(
-	call: Call,
-	nonce:  IndexFor<RA>,
-	signer: Pair,
-) -> Result<UncheckedExtrinsic<AccountId32, Call, Pair::Signature, RA::Extra>, &'static str>
-	where
-		Call: Encode,
-		Pair: sp_core::Pair,
-		Pair::Public: Into<MultiSigner>,
-		Pair::Signature: Encode,
-		RA: RuntimeAdapter,
-{
-	let extra = RA::build_extra(nonce);
-	let payload = SignedPayload::new(call, extra)
-		.map_err(|_| "Transaction validity error")?;
-
-	let signature = payload.using_encoded(|payload| signer.sign(payload));
-	let signer = signer.public().into().into_account();
-	let (function, extra, _) = payload.deconstruct();
-
-	Ok(UncheckedExtrinsic::new_signed(
-		function,
-		signer,
-		signature,
-		extra,
-	))
-}
