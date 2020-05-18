@@ -18,11 +18,14 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
+	core::either::{EitherError, EitherOutput},
 	mplex, identity, bandwidth, wasm_ext, noise
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket};
-use libp2p::core::{self, either::{EitherError, EitherOutput}, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
+use libp2p::{
+	core::{self, muxing::StreamMuxerBox, transport::{boxed::Boxed, OptionalTransport}, upgrade},
+	tcp, dns, websocket
+};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
