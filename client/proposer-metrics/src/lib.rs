@@ -27,7 +27,7 @@ impl MetricsLink {
 		Self(
 			registry.and_then(|registry|
 				Metrics::register(registry)
-					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
+					.map_err(|err| log::warn!("Failed to register proposer prometheus metrics: {}", err))
 					.ok()
 			)
 		)
