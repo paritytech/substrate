@@ -121,10 +121,7 @@ impl Lockable for Timestamp {
 
 /// Lockable based on the current block number and a timestamp based deadline.
 #[derive(Debug, Copy, Clone, Encode, Decode)]
-pub struct BlockAndTime<B>
-where
-	B: BlockNumberTrait,
-{
+pub struct BlockAndTime<B: BlockNumberTrait> {
 	/// The block number that has to be reached in order
 	/// for the lock to be considered stale.
 	pub block_number: B,
@@ -304,13 +301,11 @@ impl<'a, B> BlockAndTimeLock<'a, B> for StorageLock<'a, BlockAndTime<B>>
 where
 	B: BlockNumberTrait,
 {
-	fn with_block_and_time_deadline<'k>(
-		key: &'k [u8],
+	fn with_block_and_time_deadline(
+		key: &'a [u8],
 		block_deadline: B,
 		time_deadline: Timestamp,
 	) -> Self
-	where
-		'k: 'a,
 	{
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
@@ -323,17 +318,11 @@ where
 }
 
 /// RAII style guard for a lock.
-pub struct StorageLockGuard<'a, 'b, L>
-where
-	L: Lockable,
-{
+pub struct StorageLockGuard<'a, 'b, L: Lockable> {
 	lock: Option<&'b mut StorageLock<'a, L>>,
 }
 
-impl<'a, 'b, L> StorageLockGuard<'a, 'b, L>
-where
-	L: Lockable,
-{
+impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
 	/// Consume the guard but DO NOT unlock the underlying lock.
 	pub fn forget(mut self) {
 		let _ = self.lock.take();
