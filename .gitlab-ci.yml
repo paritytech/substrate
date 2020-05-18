@@ -175,6 +175,8 @@ cargo-check-benches:
   <<:                              *docker-env
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
+    - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
+    - cargo run --release -p node-bench -- ::trie::read::small
     - sccache -s
 
 cargo-check-subkey:

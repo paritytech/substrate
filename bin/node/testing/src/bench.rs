@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -49,6 +49,7 @@ use node_runtime::{
 	BalancesCall,
 	AccountId,
 	Signature,
+	RuntimeVersion,
 };
 use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
 use sp_api::ProvideRuntimeApi;
@@ -297,9 +298,8 @@ impl BenchDb {
 			&self.keyring,
 		);
 
-		let version = client.runtime_version_at(&BlockId::number(0))
-			.expect("There should be runtime version at 0")
-			.spec_version;
+		let RuntimeVersion { spec_version, transaction_version, .. } = client.runtime_version_at(&BlockId::number(0))
+			.expect("There should be runtime version at 0");
 
 		let genesis_hash = client.block_hash(Zero::zero())
 			.expect("Database error?")
@@ -364,7 +364,8 @@ impl BenchDb {
 						},
 					},
 				},
-				version,
+				spec_version,
+				transaction_version,
 				genesis_hash,
 			);
 
@@ -462,10 +463,10 @@ impl BenchKeyring {
 	}
 
 	/// Sign transaction with keypair from this keyring.
-	pub fn sign(&self, xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
+	pub fn sign(&self, xt: CheckedExtrinsic, spec_version: u32, tx_version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), version, genesis_hash, genesis_hash);
+				let payload = (xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
 				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
