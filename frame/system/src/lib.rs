@@ -214,7 +214,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The maximal weight of a single Extrinsic. This should be set to at most
 	/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
 	/// containing `Normal` dispatch class calls.
-	type MaxExtrinsicWeight: Get<Weight>;
+	type MaximumExtrinsicWeight: Get<Weight>;
 
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
@@ -1355,7 +1355,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		}
 	}
 
-	/// Checks if the current extrinsic does not exceed `MaxExtrinsicWeight` limit.
+	/// Checks if the current extrinsic does not exceed `MaximumExtrinsicWeight` limit.
 	fn check_extrinsic_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<(), TransactionValidityError> {
@@ -1363,7 +1363,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			// Mandatory and Operational transactions does not
 			DispatchClass::Mandatory | DispatchClass::Operational => Ok(()),
 			DispatchClass::Normal => {
-				let maximum_weight = T::MaxExtrinsicWeight::get();
+				let maximum_weight = T::MaximumExtrinsicWeight::get();
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 				if extrinsic_weight > maximum_weight {
 					Err(InvalidTransaction::ExhaustsResources.into())
@@ -1929,6 +1929,7 @@ pub(crate) mod tests {
 		type DbWeight = DbWeight;
 		type BlockExecutionWeight = BlockExecutionWeight;
 		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
