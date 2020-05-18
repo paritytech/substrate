@@ -18,17 +18,18 @@
 //!
 //! A storage-based lock with a defined expiry time.
 //!
-//! The lock is using Local Storage and allows synchronizing
-//! access to critical section of your code for concurrently running Off-chain Workers.
-//! Usage of `PERSISTENT` variant of the storage persists the lock value even in case of re-orgs.
+//! The lock is using Local Storage and allows synchronizing access to critical
+//! section of your code for concurrently running Off-chain Workers. Usage of
+//! `PERSISTENT` variant of the storage persists the lock value even in case of
+//! re-orgs.
 //!
-//! A use case for the lock is to make sure that a particular section of the code is only run
-//! by one Off-chain Worker at the time. This may include performing a side-effect (i.e. an HTTP call)
-//! or alteration of single or multiple Local Storage entries.
+//! A use case for the lock is to make sure that a particular section of the
+//! code is only run by one Off-chain Worker at the time. This may include
+//! performing a side-effect (i.e. an HTTP call) or alteration of single or
+//! multiple Local Storage entries.
 //!
-//! One use case would be collective updates of multiple data items
-//! or append / remove of i.e. sets, vectors which are stored in
-//! the offchain storage DB.
+//! One use case would be collective updates of multiple data items or append /
+//! remove of i.e. sets, vectors which are stored in the offchain storage DB.
 //!
 //! ## Example:
 //!
