@@ -5885,6 +5885,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "sc-block-builder",
  "sc-client-api",
+ "sc-proposer-metrics",
  "sc-telemetry",
  "sc-transaction-pool",
  "sp-api",
@@ -5894,6 +5895,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-transaction-pool",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tokio-executor 0.2.0-alpha.6",
 ]
@@ -6599,6 +6601,14 @@ dependencies = [
  "serde_json",
  "sp-utils",
  "wasm-timer",
+]
+
+[[package]]
+name = "sc-proposer-metrics"
+version = "0.8.0-dev"
+dependencies = [
+ "log",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
