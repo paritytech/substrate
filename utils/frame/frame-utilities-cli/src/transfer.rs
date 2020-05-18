@@ -27,7 +27,8 @@ use codec::Encode;
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
-use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, RuntimeAdapter, create_extrinsic_for};
+use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, RuntimeAdapter};
+use crate::utils::create_extrinsic_for;
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]

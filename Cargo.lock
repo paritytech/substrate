@@ -1618,6 +1618,7 @@ version = "2.0.0-dev"
 dependencies = [
  "bip39",
  "cli-utils",
+ "frame-system",
  "futures 0.1.29",
  "hex",
  "hyper 0.12.35",
@@ -1633,6 +1634,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "structopt",
+ "substrate-test-runtime",
  "tempfile",
 ]
 
@@ -3515,7 +3517,6 @@ dependencies = [
  "node-runtime",
  "pallet-authority-discovery",
  "pallet-balances",
- "pallet-balances-cli",
  "pallet-contracts",
  "pallet-grandpa",
  "pallet-im-online",
@@ -4128,22 +4129,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
-]
-
-[[package]]
-name = "pallet-balances-cli"
-version = "2.0.0-dev"
-dependencies = [
- "cli-utils",
- "frame-system",
- "hex",
- "parity-scale-codec",
- "sc-cli",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "structopt",
- "substrate-test-runtime",
 ]
 
 [[package]]

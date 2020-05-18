@@ -21,7 +21,6 @@ use structopt::StructOpt;
 use cli_utils::{HashFor, RuntimeAdapter};
 use serde::{de::DeserializeOwned, Serialize};
 
-
 use crate::{
 	generate_node_key::GenerateNodeIdCmd,
 	generate::GenerateCmd,

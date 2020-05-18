@@ -18,12 +18,7 @@
 //! Utilities for cli.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_runtime::{
-	MultiSigner, AccountId32, 
-	traits::{StaticLookup, SignedExtension, IdentifyAccount},
-	generic::{UncheckedExtrinsic, SignedPayload},
-};
-use codec::Encode;
+use sp_runtime::traits::{StaticLookup, SignedExtension};
 pub use pallet_balances::Call as BalancesCall;
 
 /// AccountIndex type for Runtime
@@ -48,32 +43,3 @@ pub trait RuntimeAdapter: frame_system::Trait + pallet_balances::Trait {
     fn build_extra(index: IndexFor<Self>) -> Self::Extra;
 }
 
-
-/// create an extrinsic for the runtime.
-pub fn create_extrinsic_for<Pair, RA, Call>(
-	call: Call,
-	nonce:  IndexFor<RA>,
-	signer: Pair,
-) -> Result<UncheckedExtrinsic<AccountId32, Call, Pair::Signature, RA::Extra>, &'static str>
-	where
-		Call: Encode,
-		Pair: sp_core::Pair,
-		Pair::Public: Into<MultiSigner>,
-		Pair::Signature: Encode,
-		RA: RuntimeAdapter,
-{
-	let extra = RA::build_extra(nonce);
-	let payload = SignedPayload::new(call, extra)
-		.map_err(|_| "Transaction validity error")?;
-
-	let signature = payload.using_encoded(|payload| signer.sign(payload));
-	let signer = signer.public().into().into_account();
-	let (function, extra, _) = payload.deconstruct();
-
-	Ok(UncheckedExtrinsic::new_signed(
-		function,
-		signer,
-		signature,
-		extra,
-	))
-}

@@ -18,8 +18,7 @@
 
 use sc_cli::RunCmd;
 use structopt::StructOpt;
-use pallet_balances_cli::TransferCmd;
-use frame_utilities_cli::{KeySubcommand, SignTransactionCmd};
+use frame_utilities_cli::{KeySubcommand, SignTransactionCmd, TransferCmd};
 
 /// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]

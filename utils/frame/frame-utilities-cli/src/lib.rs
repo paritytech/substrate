@@ -21,9 +21,15 @@ mod generate_node_key;
 mod insert;
 mod inspect;
 mod key;
+mod utils;
 mod sign_transaction;
+#[cfg(feature = "pallet-balances")]
+mod transfer;
+#[cfg(feature = "pallet-balances")]
+pub use	transfer::TransferCmd;
 
 pub use {key::KeySubcommand, sign_transaction::SignTransactionCmd};
+
 
 #[cfg(test)]
 mod tests {

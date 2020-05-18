@@ -30,3 +30,8 @@ futures01 = { package = "futures", version = "0.1.29" }
 [dev-dependencies]
 tempfile = "3.1.0"
 sp-io = { version = "2.0.0-dev", path = "../../../primitives/io" }
+frame-system = { version = "2.0.0-alpha.7", path = "../../../frame/system" }
+substrate-test-runtime = { version = "2.0.0-dev", features = ["indices-lookup"], path = "../../../test-utils/runtime" }
+
+[features]
+pallet-balances = []
