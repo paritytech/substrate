@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # System Module
 //!
@@ -53,7 +54,9 @@
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
-//!   - [`CheckVersion`]: Checks that the runtime version is the same as the one encoded in the
+//!   - [`CheckSpecVersion`]: Checks that the runtime version is the same as the one used to sign the
+//!     transaction.
+//!   - [`CheckTxVersion`]: Checks that the transaction version is the same as the one used to sign the
 //!     transaction.
 //!
 //! Lookup the runtime aggregator file (e.g. `node/runtime`) to see the full list of signed
@@ -1735,14 +1738,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	}
 }
 
-/// Ensure the runtime version registered in the transaction is the same as at present.
+/// Ensure the transaction version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
+pub struct CheckTxVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
+impl<T: Trait + Send + Sync> Debug for CheckTxVersion<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckVersion")
+		write!(f, "CheckTxVersion")
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1751,19 +1754,54 @@ impl<T: Trait + Send + Sync> Debug for CheckVersion<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> CheckVersion<T> {
+impl<T: Trait + Send + Sync> CheckTxVersion<T> {
+	/// Create new `SignedExtension` to check transaction version.
+	pub fn new() -> Self {
+		Self(sp_std::marker::PhantomData)
+	}
+}
+
+impl<T: Trait + Send + Sync> SignedExtension for CheckTxVersion<T> {
+	type AccountId = T::AccountId;
+	type Call = <T as Trait>::Call;
+	type AdditionalSigned = u32;
+	type Pre = ();
+	const IDENTIFIER: &'static str = "CheckTxVersion";
+
+	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(<Module<T>>::runtime_version().transaction_version)
+	}
+}
+
+/// Ensure the runtime version registered in the transaction is the same as at present.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct CheckSpecVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
+
+impl<T: Trait + Send + Sync> Debug for CheckSpecVersion<T> {
+	#[cfg(feature = "std")]
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "CheckSpecVersion")
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		Ok(())
+	}
+}
+
+impl<T: Trait + Send + Sync> CheckSpecVersion<T> {
 	/// Create new `SignedExtension` to check runtime version.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckSpecVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
 	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckVersion";
+	const IDENTIFIER: &'static str = "CheckSpecVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		Ok(<Module<T>>::runtime_version().spec_version)

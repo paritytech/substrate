@@ -2,7 +2,7 @@
 description = "Substrate offchain workers primitives"
 name = "sp-offchain"
 version = "2.0.0-dev"
-license = "GPL-3.0"
+license = "Apache-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"

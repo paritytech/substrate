@@ -113,7 +113,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	) -> Self {
 		Behaviour {
 			substrate,
-			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
+			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
 			block_requests,
 			finality_proof_requests,
@@ -369,7 +369,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEv
 		for addr in &info.listen_addrs {
 			self.discovery.add_self_reported_address(&peer_id, addr.clone());
 		}
-		self.substrate.add_discovered_nodes(iter::once(peer_id.clone()));
+		self.substrate.add_discovered_nodes(iter::once(peer_id));
 	}
 }
 
