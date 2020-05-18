@@ -14,7 +14,7 @@ frame-system = { version = "2.0.0-alpha.7", default-features = false, path = "..
 pallet-balances = { version = "2.0.0-alpha.7", default-features = false, path = "../../frame/balances" }
 sp-runtime = { version = "2.0.0-alpha.7", default-features = false, path = "../../primitives/runtime" }
 sp-core = { version = "2.0.0-alpha.7", default-features = false, path = "../../primitives/core" }
-codec = { version = "1.3.0", package = "parity-scale-codec" }
+codec = { version = "1.3.0", default-features = false, package = "parity-scale-codec" }
 
 [features]
 default = ["std"]
