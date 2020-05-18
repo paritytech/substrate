@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -42,7 +42,7 @@ pub fn build_transport(
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
 	let noise_config = {
-		let noise_keypair = noise::Keypair::new().into_authentic(&keypair)
+		let noise_keypair = noise::Keypair::<noise::X25519>::new().into_authentic(&keypair)
 			// For more information about this panic, see in "On the Importance of Checking
 			// Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
 			// and Richard J. Lipton.
