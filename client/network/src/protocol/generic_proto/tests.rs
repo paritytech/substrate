@@ -42,6 +42,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 	for index in 0 .. 2 {
 		let keypair = keypairs[index].clone();
+		let local_peer_id = keypair.public().into_peer_id();
 		let transport = libp2p::core::transport::MemoryTransport
 			.and_then(move |out, endpoint| {
 				let secio = libp2p::secio::SecioConfig::new(keypair);
@@ -82,7 +83,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(&b"test"[..], &[1], peerset, None),
+			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], peerset, None),
 			addrs: addrs
 				.iter()
 				.enumerate()
