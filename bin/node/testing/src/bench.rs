@@ -49,7 +49,6 @@ use node_runtime::{
 	BalancesCall,
 	AccountId,
 	Signature,
-	RuntimeVersion,
 };
 use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
 use sp_api::ProvideRuntimeApi;
@@ -298,7 +297,7 @@ impl BenchDb {
 			&self.keyring,
 		);
 
-		let RuntimeVersion { spec_version, transaction_version, .. } = client.runtime_version_at(&BlockId::number(0))
+		let runtime_version = client.runtime_version_at(&BlockId::number(0))
 			.expect("There should be runtime version at 0");
 
 		let genesis_hash = client.block_hash(Zero::zero())
@@ -364,8 +363,8 @@ impl BenchDb {
 						},
 					},
 				},
-				spec_version,
-				transaction_version,
+				runtime_version.spec_version,
+				runtime_version.transaction_version,
 				genesis_hash,
 			);
 
