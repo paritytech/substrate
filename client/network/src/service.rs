@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -63,6 +63,7 @@ use std::{
 	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
+	num:: NonZeroUsize,
 	pin::Pin,
 	str,
 	sync::{
@@ -286,7 +287,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
-				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER);
+				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
+				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
+				.connection_event_buffer_size(128);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
