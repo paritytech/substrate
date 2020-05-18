@@ -222,7 +222,10 @@ fn epoch_data<B, C, SC>(
 mod tests {
 	use super::*;
 	use substrate_test_runtime_client::{
+		runtime::Block,
+		Backend,
 		DefaultTestClientBuilderExt,
+		TestClient,
 		TestClientBuilderExt,
 		TestClientBuilder,
 	};
@@ -244,8 +247,9 @@ mod tests {
 		(keystore, keystore_path)
 	}
 
-	#[test]
-	fn rpc() {
+	fn test_babe_rpc_handler(
+		deny_unsafe: DenyUnsafe
+	) -> BabeRPCHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -257,9 +261,21 @@ mod tests {
 		).expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();
-		let select_chain = longest_chain;
 		let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
-		let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain);
+
+		BabeRPCHandler::new(
+			client.clone(),
+			epoch_changes,
+			keystore,
+			config,
+			longest_chain,
+			deny_unsafe,
+		)
+	}
+
+	#[test]
+	fn epoch_authorship_works() {
+		let handler = test_babe_rpc_handler(DenyUnsafe::No);
 		let mut io = IoHandler::new();
 
 		io.extend_with(BabeApi::to_delegate(handler));
@@ -267,5 +283,20 @@ mod tests {
 		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+	}
+
+	#[test]
+	fn epoch_authorship_is_unsafe() {
+		let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
+		let mut io = IoHandler::new();
+
+		io.extend_with(BabeApi::to_delegate(handler));
+		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+
+		let response = io.handle_request_sync(request).unwrap();
+		let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();
+		let error: RpcError = serde_json::from_value(response["error"].take()).unwrap();
+
+		assert_eq!(error, RpcError::method_not_found())
 	}
 }
