@@ -363,6 +363,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
+		local_peer_id: PeerId,
 		chain: Arc<dyn Client<B>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
@@ -396,7 +397,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let mut behaviour = GenericProto::new(protocol_id.clone(), versions, peerset, queue_size_report);
+		let mut behaviour = GenericProto::new(
+			local_peer_id,
+			protocol_id.clone(),
+			versions,
+			peerset,
+			queue_size_report
+		);
 
 		let mut legacy_equiv_by_name = HashMap::new();
 
@@ -2193,6 +2200,7 @@ mod tests {
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
 			ProtocolConfig::default(),
+			PeerId::random(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,

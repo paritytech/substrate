@@ -204,6 +204,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
+			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider.clone(),
