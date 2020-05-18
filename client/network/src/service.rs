@@ -59,10 +59,11 @@ use sp_runtime::{
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-	borrow::Cow,
+	borrow::{Borrow, Cow},
 	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
+	num:: NonZeroUsize,
 	pin::Pin,
 	str,
 	sync::{
@@ -185,7 +186,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
+		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
+		info!(
+			target: "sub-libp2p",
+			"🏷  Local node identity is: {} (legacy representation: {})",
+			local_peer_id.to_base58(),
+			local_peer_id_legacy
+		);
 
 		// Initialize the metrics.
 		let metrics = match &params.metrics_registry {
@@ -287,7 +294,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
-				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER);
+				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
+				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
+				.connection_event_buffer_size(128);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {

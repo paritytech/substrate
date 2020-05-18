@@ -452,9 +452,9 @@ dependencies = [
 
 [[package]]
 name = "bs58"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b170cd256a3f9fa6b9edae3e44a7dfdfc77e8124dbc3e2612d75f9c3e2396dae"
+checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
 
 [[package]]
 name = "bstr"
@@ -2598,9 +2598,9 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "libp2p"
-version = "0.18.1"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32ea742c86405b659c358223a8f0f9f5a9eb27bb6083894c6340959b05269662"
+checksum = "3ec214d189b57e4412f079ac5a1442578d06b12ca7282ba4696104cc92ab96c1"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -2627,7 +2627,7 @@ dependencies = [
  "libp2p-websocket",
  "libp2p-yamux",
  "multihash",
- "parity-multiaddr 0.8.0",
+ "parity-multiaddr 0.9.0",
  "parking_lot 0.10.2",
  "pin-project",
  "smallvec 1.3.0",
@@ -2636,9 +2636,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-core"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d2c17158c4dca984a77a5927aac6f0862d7f50c013470a415f93be498b5739"
+checksum = "80a6000296bdbff540b6c00ef82108ef23aa68d195b9333823ea491562c338d7"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -2652,7 +2652,7 @@ dependencies = [
  "log",
  "multihash",
  "multistream-select",
- "parity-multiaddr 0.8.0",
+ "parity-multiaddr 0.9.0",
  "parking_lot 0.10.2",
  "pin-project",
  "prost",
@@ -2670,9 +2670,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-core-derive"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "329127858e4728db5ab60c33d5ae352a999325fdf190ed022ec7d3a4685ae2e6"
+checksum = "67f0d915bee5d457a6d113377101e1f06e86a4286778aa4c6939553e9a4d7033"
 dependencies = [
  "quote 1.0.3",
  "syn 1.0.17",
@@ -2680,9 +2680,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-deflate"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ad32b006ea922da8cc66e537cf2df4b0fad8ebaa467d2a8c63d7784ac252ec6"
+checksum = "975c847575ef9b3d63f9c11d465e9a9b0ea940cfa408b93cc6981bbc3b1bac40"
 dependencies = [
  "flate2",
  "futures 0.3.4",
@@ -2691,9 +2691,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-dns"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0d0993481203d68e5ce2f787d033fb0cac6b850659ed6c784612db678977c71"
+checksum = "3cc186d9a941fd0207cf8f08ef225a735e2d7296258f570155e525f6ee732f87"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2702,9 +2702,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-floodsub"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3673153ca967c179d745fadf047d069355d6669ecf7f261b450fbaebf1bffd3d"
+checksum = "c6dd8cc558e0edde2d4a423d017efd6b36c1b6bf97f4304c83076895c5edaed8"
 dependencies = [
  "cuckoofilter",
  "fnv",
@@ -2719,9 +2719,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-gossipsub"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f7f3f79f060864db0317cc47641b7d35276dee52a0ffa91553fbd0c153863a3"
+checksum = "ce48659363fe765c09d77eb5b2248e04362557b11bba3701f05879ad34919ccd"
 dependencies = [
  "base64 0.11.0",
  "byteorder 1.3.4",
@@ -2744,9 +2744,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identify"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a38ca3eb807789e26f41c82ca7cd2b3843c66c5587b8b5f709a2f421f3061414"
+checksum = "6a455af71c59473444eba05e83dbaa20262bdbd9b4154f22389510fbac16f201"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2760,9 +2760,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-kad"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92cda1fb8149ea64d092a2b99d2bd7a2c309eee38ea322d02e4480bd6ee1759"
+checksum = "41d6c1d5100973527ae70d82687465b17049c1b717a7964de38b8e65000878ff"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
@@ -2787,9 +2787,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mdns"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e908d2aaf8ff0ec6ad1f02fe1844fd777fb0b03a68a226423630750ab99471"
+checksum = "d5bc788d92111802cb0c92d2e032fa6f46333aaeb5650c2f37b5d3eba78cabe6"
 dependencies = [
  "async-std",
  "data-encoding",
@@ -2809,9 +2809,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mplex"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0832882b06619b2e81d74e71447753ea3c068164a0bca67847d272e856a04a02"
+checksum = "4095bce2100f840883f1f75dbd010c966ee4ad323ae9f82026396da5cf6cce68"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -2825,9 +2825,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-noise"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "918e94a649e1139c24ee9f1f8c1f2adaba6d157b9471af787f2d9beac8c29c77"
+checksum = "84fd504e27b0eadd451e06b67694ef714bd8374044e7db339bb0cdb83755ddf4"
 dependencies = [
  "curve25519-dalek",
  "futures 0.3.4",
@@ -2846,9 +2846,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-ping"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9bfbf87eebb492d040f9899c5c81c9738730465ac5e78d9b7a7d086d0f07230"
+checksum = "82930c36490008b1ef2f26c237a2c205c38ef6edc263738d0528b842740ab09f"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2861,9 +2861,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-plaintext"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabb00553a49bf6d4a8ce362f6eefac410227a14d03c3acffbb8cc3f022ea019"
+checksum = "ad28fe7beaa3e516ee8ba2af8c4f6820f269afa60d661831e879f2afea64f4a0"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -2879,9 +2879,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-pnet"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f81b8b37ff529e1f51c20c396dac657def2108da174c1d27e57e72c9fe2d411"
+checksum = "dabaa2194e1ce3c51cd78d734dd4c81dc5c7b150b309cbf9029df044034ac261"
 dependencies = [
  "futures 0.3.4",
  "log",
@@ -2893,9 +2893,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-secio"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a0509a7e47245259954fef58b85b81bf4d29ae33a4365e38d718a866698774"
+checksum = "22e30b873276846181fa9c04126653678c2797cb1556361d01b7b7fd6bf24682"
 dependencies = [
  "aes-ctr",
  "ctr",
@@ -2923,9 +2923,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm"
-version = "0.18.1"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44ab289ae44cc691da0a6fe96aefa43f26c86c6c7813998e203f6d80f1860f18"
+checksum = "b4a8101a0e0d5f04562137a476bf5f5423cd5bdab2f7e43a75909668e63cb102"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2938,9 +2938,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-tcp"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b37ea44823d3ed223e4605da94b50177bc520f05ae2452286700549a32d81669"
+checksum = "4462bd96b97cac3f3a83b1b343ad3c3460cebbc8d929c040b1520c30e3611e08"
 dependencies = [
  "async-std",
  "futures 0.3.4",
@@ -2949,13 +2949,14 @@ dependencies = [
  "ipnet",
  "libp2p-core",
  "log",
+ "socket2",
 ]
 
 [[package]]
 name = "libp2p-uds"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "281c18ea2faacb9c8a6ff76c4405df5918d9a263770e3847bf03f099abadc010"
+checksum = "69660d235449bb2d99333b9892c9176d06fd2b380490cb8213feb5b015678cf1"
 dependencies = [
  "async-std",
  "futures 0.3.4",
@@ -2965,9 +2966,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-wasm-ext"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ac7dbde0f88cad191dcdfd073b8bae28d01823e8ca313f117b6ecb914160c3"
+checksum = "f59fdbb5706f2723ca108c088b1c7a37f735a8c328021f0508007162627e9885"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -2979,9 +2980,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-websocket"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6874c9069ce93d899df9dc7b29f129c706b2a0fdc048f11d878935352b580190"
+checksum = "085fbe4c05c4116c2164ab4d5a521eb6e00516c444f61b3ee9f68c7b1e53580b"
 dependencies = [
  "async-tls",
  "bytes 0.5.4",
@@ -3000,9 +3001,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-yamux"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f91aea50f6571e0bc6c058dc0e9b270afd41ec28dd94e9e4bf607e78b9ab87"
+checksum = "0b305d3a8981e68f11c0e17f2d11d5c52fae95e0d7c283f9e462b5b2dab413b2"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -3269,9 +3270,9 @@ checksum = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
 
 [[package]]
 name = "multihash"
-version = "0.10.1"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47fbc227f7e2b1cb701f95404579ecb2668abbdd3c7ef7a6cbb3cc0d3b236869"
+checksum = "ae32179a9904ccc6e063de8beee7f5dd55fae85ecb851ca923d55722bc28cf5d"
 dependencies = [
  "blake2b_simd",
  "blake2s_simd",
@@ -4773,9 +4774,9 @@ dependencies = [
 
 [[package]]
 name = "parity-multiaddr"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4db35e222f783ef4e6661873f6c165c4eb7b65e0c408349818517d5705c2d7d3"
+checksum = "12ca96399f4a01aa89c59220c4f52ac371940eb4e53e3ce990da796f364bdf69"
 dependencies = [
  "arrayref",
  "bs58",
@@ -6461,6 +6462,7 @@ dependencies = [
  "assert_matches",
  "async-std",
  "bitflags",
+ "bs58",
  "bytes 0.5.4",
  "derive_more",
  "either",
@@ -7216,6 +7218,18 @@ dependencies = [
  "sha2",
  "subtle 2.2.2",
  "x25519-dalek",
+]
+
+[[package]]
+name = "socket2"
+version = "0.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03088793f677dce356f3ccc2edb1b314ad191ab702a5de3faf49304f7e104918"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "winapi 0.3.8",
 ]
 
 [[package]]
