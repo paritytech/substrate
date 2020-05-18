@@ -748,7 +748,7 @@ pub trait ServiceBuilderCommand {
 	/// Starts the process of importing blocks.
 	fn import_blocks(
 		self,
-		input: impl Read + Seek + Send + Sync +'static,
+		input: impl Read + Seek + Send + 'static,
 		force: bool,
 		binary: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;

@@ -174,13 +174,12 @@ fn importing_is_done(num_expected_blocks: Option<u64>, read_block_count: u64, im
 	}
 }
 
-// Logs information regarding the current importing status.
-fn log_importing_status_updates<R, T>(block_iter: &BlockIter<R, T>, blocks_before: u64, imported_blocks: u64)
+/// Logs information regarding the number of blocks that were added to the queue.
+fn log_added_blocks<R, T>(block_iter: &BlockIter<R, T>)
 where
 	R: Read + Seek + 'static,
 	T: BlockT + MaybeSerializeDeserialize,
 {
-	let num_expected_blocks = block_iter.num_expected_blocks();
 	let read_block_count = block_iter.read_block_count();
 	
 	// Notify every 1000 blocks to let the user know everything is running smoothly.
@@ -190,21 +189,17 @@ where
 			read_block_count
 		);
 	}
+}
 
+/// Logs information regarding the number of blocks processed by the importing queue.
+fn log_queue_progress(blocks_before: u64, imported_blocks: u64)
+{
 	// Notify every time we import an additional 1000 blocks.
 	if imported_blocks / 1000 != blocks_before / 1000 {
-		if let Some(num_expected_blocks) = num_expected_blocks {
-			info!(
-				"#{} blocks were imported (#{} left)",
-				imported_blocks,
-				num_expected_blocks - imported_blocks
-			)
-		} else {
-			info!(
-				"{} blocks were imported, other are still being processed",
-				imported_blocks,
-			)
-		}
+		info!(
+			"{} blocks were imported, other are still being processed",
+			imported_blocks,
+		)
 	}
 }
 
@@ -240,7 +235,7 @@ impl<
 
 	fn import_blocks(
 		mut self,
-		input: impl Read + Seek + Send + 'static + Sync,
+		input: impl Read + Seek + Send + 'static,
 		force: bool,
 		binary: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
@@ -313,10 +308,12 @@ impl<
 							let read_block_count = block_iter.read_block_count();
 							match block_result {
 								Ok(block) => {
-									if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+									if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
 										state = Some(ImportState::WaitingForImportQueueToCatchUp(block_iter, 1, block));
 									} else {
 										import_block_to_queue(block, queue, force);
+										log_added_blocks(&block_iter);
+										state = Some(ImportState::Reading(block_iter));
 									}
 								}
 								Err(e) => {
@@ -329,11 +326,12 @@ impl<
 				},
 				ImportState::WaitingForImportQueueToCatchUp(block_iter, delay, block) => {
 					let read_block_count = block_iter.read_block_count();
-					if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
-						import_block_to_queue(block, queue, force);
-						state = Some(ImportState::Reading(block_iter));
-					} else {
+					if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
 						state = Some(ImportState::WaitingForImportQueueToCatchUp(block_iter, 1, block));
+					} else {
+						import_block_to_queue(block, queue, force);
+						log_added_blocks(&block_iter);
+						state = Some(ImportState::Reading(block_iter));
 					}
 				},
 				ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, delay) => {
@@ -344,10 +342,11 @@ impl<
 						);
 						return std::task::Poll::Ready(Ok(()))
 					}
+					state = Some(ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, delay));
 				}
 			}
 
-		let blocks_before = link.imported_blocks;
+			let blocks_before = link.imported_blocks;
 			queue.poll_actions(cx, &mut link);
 
 			if link.has_error {
@@ -358,7 +357,7 @@ impl<
 				))
 			}
 
-			log_importing_status_updates(&block_iter, blocks_before, link.imported_blocks);
+			log_queue_progress(blocks_before, link.imported_blocks);
 
 
 			cx.waker().wake_by_ref();
