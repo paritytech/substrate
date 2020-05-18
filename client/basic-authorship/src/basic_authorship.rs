@@ -67,16 +67,6 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 			_phantom: PhantomData,
 		}
 	}
-
-	#[cfg(test)]
-	fn new_test(client: Arc<C>, transaction_pool: Arc<A>) -> Self {
-		ProposerFactory {
-			client,
-			transaction_pool,
-			metrics:  PrometheusMetrics::new(None),
-			_phantom: PhantomData,
-		}
-	}
 }
 
 impl<B, Block, C, A> ProposerFactory<A, B, C>
