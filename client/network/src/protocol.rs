@@ -2194,6 +2194,7 @@ mod tests {
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
 			ProtocolConfig::default(),
+			PeerId::random(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,
