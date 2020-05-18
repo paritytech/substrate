@@ -8289,9 +8289,9 @@ version = "1.0.6"
 
 [[package]]
 name = "substrate-wasmtime"
-version = "0.16.0-threadsafe.2"
+version = "0.16.0-threadsafe.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b40a6f3d5d3c00754e348863fead4f37763c32eedf950f5b23df87769882311"
+checksum = "9b0d8eca5d0186e98c8d13399423853e2356b593e028b53e43b2aa35e9105a82"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -8312,9 +8312,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasmtime-jit"
-version = "0.16.0-threadsafe.2"
+version = "0.16.0-threadsafe.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09712de4f56a2c2912bee7763b0877d17d72cfb2237987d63ab78956907e7692"
+checksum = "e95772b1778186e4f5c9ae9148bab9911cddf563805a403dee418780e2ed14b4"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -8339,9 +8339,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasmtime-profiling"
-version = "0.16.0-threadsafe.2"
+version = "0.16.0-threadsafe.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31505dd221f001634a54ea51472bc0058bcbde9186eaf8dd31d0859638121385"
+checksum = "1f8a0bf9ca20bee7d83338470247a3f1823158382ebd51fadefcc986e0a6c3de"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -8358,9 +8358,9 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasmtime-runtime"
-version = "0.16.0-threadsafe.2"
+version = "0.16.0-threadsafe.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3708081f04d9216d4dee487abf94872065f930cf82e287bd0c5bdb57895460ba"
+checksum = "a559895fe1efab16d1c490199225ae35c153ed432ef87ebc177fb37edbd20c7c"
 dependencies = [
  "backtrace",
  "cc",
