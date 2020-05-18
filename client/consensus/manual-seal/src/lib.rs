@@ -225,7 +225,8 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
@@ -289,7 +290,8 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
@@ -358,6 +360,7 @@ mod tests {
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);

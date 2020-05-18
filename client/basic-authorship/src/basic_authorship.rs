@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME #1021 move this into sp-consensus
@@ -38,21 +39,31 @@ use futures::{executor, future, future::Either};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
+use prometheus_endpoint::Registry as PrometheusRegistry;
+use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
+
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
 	/// The client instance.
 	client: Arc<C>,
 	/// The transaction pool.
 	transaction_pool: Arc<A>,
+	/// Prometheus Link,
+	metrics: PrometheusMetrics,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C> {
-	pub fn new(client: Arc<C>, transaction_pool: Arc<A>) -> Self {
+	pub fn new(
+		client: Arc<C>,
+		transaction_pool: Arc<A>,
+		prometheus: Option<&PrometheusRegistry>,
+	) -> Self {
 		ProposerFactory {
 			client,
 			transaction_pool,
+			metrics: PrometheusMetrics::new(prometheus),
 			_phantom: PhantomData,
 		}
 	}
@@ -87,6 +98,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 				parent_number: *parent_header.number(),
 				transaction_pool: self.transaction_pool.clone(),
 				now,
+				metrics: self.metrics.clone(),
 				_phantom: PhantomData,
 			}),
 		};
@@ -131,6 +143,7 @@ struct ProposerInner<B, Block: BlockT, C, A: TransactionPool> {
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	metrics: PrometheusMetrics,
 	_phantom: PhantomData<B>,
 }
 
@@ -219,6 +232,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		}
 
 		// proceed with transactions
+		let block_timer = self.metrics.report(|metrics| metrics.block_constructed.start_timer());
 		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -288,6 +302,9 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+
+		drop(block_timer);
+		self.metrics.report(|metrics| metrics.number_of_transactions.set(block.extrinsics().len() as u64));
 
 		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
@@ -379,7 +396,7 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let mut proposer = proposer_factory.init_with_now(
@@ -420,7 +437,7 @@ mod tests {
 			).0
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let mut proposer = proposer_factory.init_with_now(
@@ -470,7 +487,7 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -536,7 +553,7 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 		let mut propose_block = |
 			client: &TestClient,
 			number,
