@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -525,7 +525,7 @@ where
 
 			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
 			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
-			
+
 			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
 		}
 		_ => print_usage(&matches),
