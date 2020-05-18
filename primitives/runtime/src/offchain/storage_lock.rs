@@ -39,7 +39,10 @@
 //! // in your off-chain worker code
 //!
 //! fn append_to_in_storage_vec<'k, T>(key: &'k [u8], _: T) where T: Encode {
-//!    let mut lock = StorageLock::new(b"x::lock");
+//!    // `access::lock` defines the storage entry which is used for
+//!    // persisting the lock in the underlying database.
+//!    // The entry name _must_ be unique and can be seen as mutex instance reference.
+//!    let mut lock = StorageLock::new(b"access::lock");
 //!    {
 //!         let _guard = lock.spin_lock();
 //!         let acc = StorageValueRef::persistent(key);
