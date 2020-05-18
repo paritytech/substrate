@@ -426,7 +426,7 @@ benchmarks! {
 		// override the number of winners that we desire.
 		ValidatorCount::put(w);
 
-		// needed for the solution to be generates.
+		// needed for the solution to be generated.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
 		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
 
