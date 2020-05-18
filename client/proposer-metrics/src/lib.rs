@@ -23,10 +23,10 @@ use prometheus_endpoint::{register, PrometheusError, Registry, Histogram, Histog
 pub struct MetricsLink(Option<Metrics>);
 
 impl MetricsLink {
-	pub fn new(prefix: &str, registry: Option<&Registry>) -> Self {
+	pub fn new(registry: Option<&Registry>) -> Self {
 		Self(
 			registry.and_then(|registry|
-				Metrics::register(prefix, registry)
+				Metrics::register(registry)
 					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
 					.ok()
 			)
@@ -48,19 +48,19 @@ pub struct Metrics {
 }
 
 impl Metrics {
-	pub fn register(prefix: &str, registry: &Registry) -> Result<Self, PrometheusError> {
+	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			block_constructed: register(
 				Histogram::with_opts(HistogramOpts::new(
-					&format!("{}_proposer_block_constructed", prefix),
-					&"Histogram of time taken to construct new block".to_string(),
+					"proposer_block_constructed",
+					"Histogram of time taken to construct new block",
 				))?,
 				registry,
             )?,
             number_of_transactions: register(
                 Gauge::new(
-                    &format!("{}_proposer_number_of_transactions", prefix),
-                    &"Number of transacion proposer includes in his own block".to_string(),
+                    "proposer_number_of_transactions",
+                    "Number of transacion proposer includes in his own block",
                 )?,
                 registry,
             )?,
