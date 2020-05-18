@@ -886,7 +886,6 @@ pub trait WasmTracing {
 				target: "sp_tracing",
 				"Notify to runtime that tracing is disabled."
 			);
-			// Zero indicates tracing is disabled in wasm
 			return 0
 		}
 		let proxy = match self.extension::<TracingProxyExt>() {

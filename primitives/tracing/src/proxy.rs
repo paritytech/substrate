@@ -59,8 +59,7 @@ impl TracingProxy {
 	pub fn new() -> TracingProxy {
 		let spans: Vec<(u64, rent_span::SpanAndGuard)> = Vec::new();
 		TracingProxy {
-			// Important to start at 1, 0 will not record a trace
-			next_id: 1,
+			next_id: 0,
 			spans,
 		}
 	}
@@ -98,10 +97,7 @@ impl TracingProxy {
 	/// Exit a span by dropping it along with it's associated guard.
 	pub fn exit_span(&mut self, id: u64) {
 		if self.spans.last().map(|l| id > l.0).unwrap_or(true) {
-			// 0 is special case to indicate no wasm tracing
-			if id != 0 {
-				log::warn!("Span id not found {}", id);
-			}
+			log::warn!("Span id not found {}", id);
 			return;
 		}
 		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop");
