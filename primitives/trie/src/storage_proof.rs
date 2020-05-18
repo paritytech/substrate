@@ -366,7 +366,6 @@ type ProofCompacted = Vec<Vec<u8>>;
 pub enum StorageProof {
 	/// Single flattened proof component, all default child trie are flattened over a same
 	/// container, no child trie information is provided.
-	/// This is the same representation as the `LegacyStorageProof`.
 	Flatten(ProofNodes),
 
 	/// This skip encoding of hashes that are
@@ -408,31 +407,6 @@ pub enum StorageProof {
 	/// `TrieSkipHashes` but do not merge the content in a single memorydb backend.
 	///	This is mainly provided for test purpose and extensibility.
 	TrieSkipHashesFull(ChildrenProofMap<ProofCompacted>),
-}
-
-/// A legacy encoding of proof, it is the same as the inner encoding
-/// of `StorageProof::Flatten`.
-/// TODO EMCH consider removing, encoding adapter should be enough.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct LegacyStorageProof {
-	trie_nodes: Vec<Vec<u8>>,
-}
-
-impl LegacyStorageProof {
-	/// Create a empty proof.
-	pub fn empty() -> Self {
-		LegacyStorageProof { trie_nodes: Default::default() }
-	}
-
-	/// Create a proof from encoded trie nodes.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		LegacyStorageProof { trie_nodes }
-	}
-
-	/// Convert to a `StorageProof`.
-	pub fn to_storage_proof(self) -> StorageProof {
-		StorageProof::Flatten(self.trie_nodes)
-	}
 }
 
 impl Decode for StorageProof {
@@ -1017,15 +991,6 @@ impl StorageProof {
 		}
 		Ok(db)
 	}
-
-	/// Cast a flatten proof to a legacy one.
-	pub fn legacy(self) -> Result<LegacyStorageProof> {
-		if let StorageProof::Flatten(trie_nodes) = self {
-			Ok(LegacyStorageProof{ trie_nodes })
-		} else {
-			Err(error("Cannot use as legacy proof"))
-		}
-	}
 }
 
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
@@ -1190,20 +1155,16 @@ fn legacy_proof_codec() {
 	// random content for proof, we test serialization
 	let content = vec![b"first".to_vec(), b"second".to_vec()];
 
-	let legacy = LegacyStorageProof::new(content.clone());
-	let encoded_legacy = legacy.encode();
 	let proof = StorageProof::Flatten(content.clone());
 	let encoded_proof = proof.encode();
 
-	assert_eq!(StorageProof::decode(&mut &encoded_proof[..]).unwrap(), proof);
-	// test encoded minus first bytes equal to storage proof
-	assert_eq!(&encoded_legacy[..], &encoded_proof[1..]);
-
 	// test adapter
 	let encoded_adapter = LegacyEncodeAdapter(&proof).encode();
+
+	assert_eq!(StorageProof::decode(&mut &encoded_proof[..]).unwrap(), proof);
 	assert_eq!(encoded_adapter[0], 0);
 	assert_eq!(&encoded_adapter[1..], &encoded_proof[..]);
+
 	let adapter_proof = LegacyDecodeAdapter(proof);
-	assert_eq!(LegacyDecodeAdapter::decode(&mut &encoded_legacy[..]).unwrap(), adapter_proof);
 	assert_eq!(LegacyDecodeAdapter::decode(&mut &encoded_adapter[..]).unwrap(), adapter_proof);
 }

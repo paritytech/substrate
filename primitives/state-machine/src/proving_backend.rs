@@ -195,8 +195,6 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 
 	/// Extracting the gathered unordered proof.
-	/// TODO remove or make it consiming: here it is doable to get
-	/// intermediate proof, not sure if of any use.
 	pub fn extract_proof(&mut self) -> Result<StorageProof, String> {
 		self.update_input()?;
 		self.trie_backend.essence().backend_storage().proof_recorder

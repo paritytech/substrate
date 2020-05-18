@@ -23,6 +23,3 @@ sp-debug-derive = { version = "2.0.0-dev", path = "../debug-derive" }
 [features]
 default = [ "std" ]
 std = [ "sp-std/std", "serde", "impl-serde", "codec/std" ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
