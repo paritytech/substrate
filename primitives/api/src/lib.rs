@@ -301,10 +301,6 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// ```
 pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
-/// A type that records all accessed trie nodes and generates a proof out of it.
-#[cfg(feature = "std")]
-pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<HashFor<B>>;
-
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
 pub type StorageTransactionCache<Block, Backend> =
@@ -385,7 +381,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// This stops the proof recording.
 	///
 	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(&mut self, input: ProofInput) -> Option<StorageProof>;
+	fn extract_proof(&mut self) -> Option<StorageProof>;
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
@@ -447,7 +443,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 	/// The context this function is executed in.
 	pub context: ExecutionContext,
 	/// The optional proof recorder for recording storage accesses.
-	pub recorder: Option<&'a RefCell<RuntimeApiProofRecorder<Block>>>,
+	pub recorder: Option<&'a RefCell<ProofRecorder<Block>>>,
 }
 
 /// Something that can call into the an api at a given block.
@@ -526,12 +522,28 @@ pub trait RuntimeApiInfo {
 }
 
 /// Inner struct for storage of proof management.
-/// TODO consider renaming to ProofRecorder (if type alias is not use)
 #[cfg(feature = "std")]
-pub struct RuntimeApiProofRecorder<Block: BlockT> {
-	pub recorder: ProofRecorder<Block>,
+pub struct ProofRecorder<Block: BlockT> {
+	pub recorder: sp_state_machine::ProofRecorder<HashFor<Block>>,
 	pub kind: StorageProofKind,
 	pub input: ProofInput,
+}
+
+#[cfg(feature = "std")]
+impl<B: BlockT> From<StorageProofKind> for ProofRecorder<B> {
+	fn from(kind: StorageProofKind) -> Self {
+		let recorder = if kind.need_register_full() {
+			sp_state_machine::ProofRecorder::<HashFor<B>>::Full(Default::default())
+		} else {
+			sp_state_machine::ProofRecorder::<HashFor<B>>::Flat(Default::default())
+		};
+
+		ProofRecorder {
+			recorder,
+			kind,
+			input: ProofInput::None,
+		}
+	}
 }
 
 /// Extracts the `Api::Error` for a type that provides a runtime api.

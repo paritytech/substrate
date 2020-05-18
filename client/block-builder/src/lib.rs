@@ -33,7 +33,7 @@ use sp_runtime::{
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
-use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof, ProofInput};
+use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
 use sp_consensus::RecordProof;
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -190,7 +190,7 @@ where
 			),
 		);
 
-		let proof = self.api.extract_proof(ProofInput::None);
+		let proof = self.api.extract_proof();
 
 		let state = self.backend.state_at(self.block_id)?;
 		let changes_trie_state = backend::changes_tries_state_at_block(

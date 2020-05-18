@@ -34,7 +34,7 @@ use sp_state_machine::{
 };
 use hash_db::Hasher;
 
-use sp_api::{RuntimeApiProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -115,7 +115,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
+		recorder: Option<&RefCell<ProofRecorder<Block>>>,
 		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node

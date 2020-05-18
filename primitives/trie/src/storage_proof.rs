@@ -28,10 +28,10 @@ use trie_db::DBValue;
 // no_std use of trie_db.
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;
-	
+
 #[cfg(feature = "std")]
 use std::collections::HashMap;
-	
+
 type Result<T> = sp_std::result::Result<T, Error>;
 type CodecResult<T> = sp_std::result::Result<T, codec::Error>;
 
@@ -123,7 +123,7 @@ pub enum StorageProofKind {
 	KnownQueryPlanAndValues,
 
 	/// Technical only
-	
+
 	/// Kind for `StorageProof::TrieSkipHashesForMerge`.
 	TrieSkipHashesForMerge = 125,
 

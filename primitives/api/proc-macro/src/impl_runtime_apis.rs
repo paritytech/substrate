@@ -212,7 +212,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
-			recorder: Option<std::cell::RefCell<#crate_::RuntimeApiProofRecorder<Block>>>,
+			recorder: Option<std::cell::RefCell<#crate_::ProofRecorder<Block>>>,
 		}
 
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
@@ -282,23 +282,14 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn record_proof(&mut self, kind: #crate_::StorageProofKind) {
-				let recorder = if kind.need_register_full() {
-					#crate_::ProofRecorder::<Block>::Full(Default::default())
-				} else {
-					#crate_::ProofRecorder::<Block>::Flat(Default::default())
-				};
-				self.recorder = Some(std::cell::RefCell::new(#crate_::RuntimeApiProofRecorder {
-					recorder,
-					kind,
-					input: #crate_::ProofInput::None,
-				}))
+				self.recorder = Some(std::cell::RefCell::new(kind.into()));
 			}
 
-			fn extract_proof(&mut self, input: #crate_::ProofInput) -> Option<#crate_::StorageProof> {
+			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
 				self.recorder
 					.take()
 					.and_then(|recorder| {
-						let #crate_::RuntimeApiProofRecorder{ recorder, kind, input } = &mut *recorder.borrow_mut();
+						let #crate_::ProofRecorder{ recorder, kind, input } = &mut *recorder.borrow_mut();
 						let input = std::mem::replace(input, #crate_::ProofInput::None);
 						recorder.extract_proof(*kind, input).ok()
 					})
@@ -366,7 +357,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
-					Option<&std::cell::RefCell<#crate_::RuntimeApiProofRecorder<Block>>>,
+					Option<&std::cell::RefCell<#crate_::ProofRecorder<Block>>>,
 				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
 				E,
 			>(

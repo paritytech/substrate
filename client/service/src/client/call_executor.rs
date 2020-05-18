@@ -27,7 +27,7 @@ use sp_state_machine::{
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor, offchain::storage::OffchainOverlayedChanges};
-use sp_api::{RuntimeApiProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor, CloneableSpawn};
 use super::client::ClientConfig;
 
@@ -139,7 +139,7 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
+		recorder: Option<&RefCell<ProofRecorder<Block>>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -161,7 +161,7 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let RuntimeApiProofRecorder{ recorder, kind, input} = &mut *recorder.borrow_mut();
+				let ProofRecorder{ recorder, kind, input} = &mut *recorder.borrow_mut();
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>

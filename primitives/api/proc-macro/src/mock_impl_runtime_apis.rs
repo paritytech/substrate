@@ -99,7 +99,7 @@ fn implement_common_api_traits(
 				unimplemented!("`record_proof` not implemented for runtime api mocks")
 			}
 
-			fn extract_proof(&mut self, _input: #crate_::ProofInput) -> Option<#crate_::StorageProof> {
+			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
 				unimplemented!("`extract_proof` not implemented for runtime api mocks")
 			}
 

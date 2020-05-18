@@ -30,7 +30,7 @@ use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{NativeOrEncoded,offchain::storage::OffchainOverlayedChanges};
 
-use sp_api::{RuntimeApiProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
 
 /// Executor Provider
@@ -93,7 +93,7 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		proof_recorder: Option<&RefCell<RuntimeApiProofRecorder<B>>>,
+		proof_recorder: Option<&RefCell<ProofRecorder<B>>>,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 

@@ -36,7 +36,7 @@ use parking_lot::Mutex;
 use substrate_test_runtime_client::{
 	runtime::{Hash, Block, Header}, TestClient, ClientBlockImportExt,
 };
-use sp_api::{InitializeBlock, StorageTransactionCache, RuntimeApiProofRecorder, OffchainOverlayedChanges};
+use sp_api::{InitializeBlock, StorageTransactionCache, ProofRecorder, OffchainOverlayedChanges};
 use sp_consensus::{BlockOrigin};
 use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVersion};
 use sp_core::{H256, tasks::executor as tasks_executor, NativeOrEncoded};
@@ -226,7 +226,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_initialize_block: InitializeBlock<'a, Block>,
 		_execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
-		_proof_recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
+		_proof_recorder: Option<&RefCell<ProofRecorder<Block>>>,
 		_extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		unreachable!()
