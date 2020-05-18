@@ -38,7 +38,7 @@
 //! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
 //!
-//! fn append_to_in_storage_vec<'k, T>(key: &'k [u8], _: T) where T: Encode {
+//! fn append_to_in_storage_vec<'a, T>(key: &'a [u8], _: T) where T: Encode {
 //!    // `access::lock` defines the storage entry which is used for
 //!    // persisting the lock in the underlying database.
 //!    // The entry name _must_ be unique and can be seen as mutex instance reference.
@@ -288,13 +288,11 @@ trait BlockAndTimeLock<'a, B>: Sized
 where
 	B: BlockNumberTrait,
 {
-	fn with_block_and_time_deadline<'k>(
-		key: &'k [u8],
+	fn with_block_and_time_deadline(
+		key: &'a [u8],
 		block_deadline: B,
 		time_deadline: Timestamp,
-	) -> Self
-	where
-		'k: 'a;
+	) -> Self;
 }
 
 impl<'a, B> BlockAndTimeLock<'a, B> for StorageLock<'a, BlockAndTime<B>>
