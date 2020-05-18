@@ -42,7 +42,7 @@ use sc_keystore::KeyStorePtr;
 use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRPCHandler;
+use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
@@ -146,7 +146,7 @@ pub fn create_full<C, P, M, SC>(
 	);
 	io.extend_with(
 		sc_consensus_babe_rpc::BabeApi::to_delegate(
-			BabeRPCHandler::new(
+			BabeRpcHandler::new(
 				client,
 				shared_epoch_changes,
 				keystore,

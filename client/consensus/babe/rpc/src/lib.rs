@@ -50,8 +50,8 @@ pub trait BabeApi {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
 }
 
-/// Implements the BabeRPC trait for interacting with Babe.
-pub struct BabeRPCHandler<B: BlockT, C, SC> {
+/// Implements the BabeRpc trait for interacting with Babe.
+pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to EpochChanges
@@ -66,7 +66,7 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
+impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	/// Creates a new instance of the BabeRpc handler.
 	pub fn new(
 		client: Arc<C>,
@@ -87,7 +87,7 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 	}
 }
 
-impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
+impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 	where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
@@ -249,7 +249,7 @@ mod tests {
 
 	fn test_babe_rpc_handler(
 		deny_unsafe: DenyUnsafe
-	) -> BabeRPCHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
+	) -> BabeRpcHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -263,7 +263,7 @@ mod tests {
 		let epoch_changes = link.epoch_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
 
-		BabeRPCHandler::new(
+		BabeRpcHandler::new(
 			client.clone(),
 			epoch_changes,
 			keystore,
