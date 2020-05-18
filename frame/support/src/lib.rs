@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Support code for the runtime.
 
@@ -213,7 +214,20 @@ macro_rules! assert_err {
 #[cfg(feature = "std")]
 macro_rules! assert_err_ignore_postinfo {
 	( $x:expr , $y:expr $(,)? ) => {
-		assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_with_weight {
+	($call:expr, $err:expr, $weight:expr $(,)? ) => {
+		if let Err(dispatch_err_with_post) = $call {
+			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
+			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight.into());
+		} else {
+			panic!("expected Err(_), got Ok(_).")
+		}
 	}
 }
 
