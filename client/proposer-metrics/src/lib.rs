@@ -62,7 +62,7 @@ impl Metrics {
             number_of_transactions: register(
                 Gauge::new(
                     "proposer_number_of_transactions",
-                    "Number of transacion proposer includes in his own block",
+                    "Number of transactions included in block",
                 )?,
                 registry,
             )?,
