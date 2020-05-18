@@ -452,9 +452,9 @@ dependencies = [
 
 [[package]]
 name = "bs58"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b170cd256a3f9fa6b9edae3e44a7dfdfc77e8124dbc3e2612d75f9c3e2396dae"
+checksum = "476e9cd489f9e121e02ffa6014a8ef220ecb15c05ed23fc34cca13925dc283fb"
 
 [[package]]
 name = "bstr"
@@ -6801,6 +6801,7 @@ dependencies = [
  "assert_matches",
  "async-std",
  "bitflags",
+ "bs58",
  "bytes 0.5.4",
  "derive_more",
  "either",

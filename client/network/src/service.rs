@@ -59,7 +59,7 @@ use sp_runtime::{
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-	borrow::Cow,
+	borrow::{Borrow, Cow},
 	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
@@ -186,7 +186,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
+		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
+		info!(
+			target: "sub-libp2p",
+			"🏷  Local node identity is: {} (legacy representation: {})",
+			local_peer_id.to_base58(),
+			local_peer_id_legacy
+		);
 
 		// Initialize the metrics.
 		let metrics = match &params.metrics_registry {
