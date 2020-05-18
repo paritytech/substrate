@@ -34,9 +34,11 @@
 //! ## Example:
 //!
 //! ```rust
+//! # use crate::offchain::storage::StorageValueRef;
+//! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
 //!
-//! fn append_to_in_storage_vec<'k, T>(key: &'k [u8], T) where T: Encode {
+//! fn append_to_in_storage_vec<'k, T>(key: &'k [u8], _: T) where T: Encode {
 //!    let mut lock = StorageLock::new(b"x::lock");
 //!    {
 //!         let _guard = lock.spin_lock();
@@ -50,8 +52,7 @@
 //! ```
 
 use crate::offchain::storage::StorageValueRef;
-use codec::Codec;
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
@@ -280,7 +281,7 @@ pub trait BlockNumberTrait: Codec + Copy + Clone + Ord + Eq {
 	/// Returns the current block number.
 	///
 	/// Commonly this will be implemented as
-	/// ```rust
+	/// ```ignore
 	/// fn current() -> Self {
 	///     frame_system::Module<Trait>::block_number()
 	/// }
@@ -361,39 +362,92 @@ mod tests {
 	use sp_core::offchain::{testing, OffchainExt, OffchainStorage};
 	use sp_io::TestExternalities;
 
+	const VAL_1: u32 = 0u32;
+	const VAL_2: u32 = 0xFFFF_FFFFu32;
+
 	#[test]
-	fn simple_lock_write_unlock_lock_read_unlock() {
+	fn storage_lock_write_unlock_lock_read_unlock() {
 		let (offchain, state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
 		t.register_extension(OffchainExt::new(offchain));
 
 		t.execute_with(|| {
-			let val1 = 0u32;
-			let val2 = 0xFFFF_FFFFu32;
-
-			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock");
+			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock_1");
 
 			let val = StorageValueRef::persistent(b"protected_value");
 
 			{
 				let _guard = lock.spin_lock();
 
-				val.set(&val1);
+				val.set(&VAL_1);
 
-				assert_eq!(val.get::<u32>(), Some(Some(val1)));
+				assert_eq!(val.get::<u32>(), Some(Some(VAL_1)));
 			}
 
 			{
 				let _guard = lock.spin_lock();
-				val.set(&val2);
+				val.set(&VAL_2);
 
-				assert_eq!(val.get::<u32>(), Some(Some(val2)));
+				assert_eq!(val.get::<u32>(), Some(Some(VAL_2)));
 			}
 		});
 		// lock must have been cleared at this point
-		assert_eq!(
-			state.read().persistent_storage.get(b"Storage", b"lock"),
-			None
-		);
+		assert_eq!(state.read().persistent_storage.get(b"", b"lock_1"), None);
+	}
+
+	#[test]
+	fn storage_lock_and_forget() {
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainExt::new(offchain));
+
+		t.execute_with(|| {
+			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock_2");
+
+			let val = StorageValueRef::persistent(b"protected_value");
+
+			let guard = lock.spin_lock();
+
+			val.set(&VAL_1);
+
+			assert_eq!(val.get::<u32>(), Some(Some(VAL_1)));
+
+			guard.forget();
+		});
+		// lock must have been cleared at this point
+		let opt = state.read().persistent_storage.get(b"", b"lock_2");
+		assert!(opt.is_some());
+	}
+
+	#[test]
+	fn storage_lock_and_let_expire_and_lock_again() {
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainExt::new(offchain));
+
+		t.execute_with(|| {
+			let sleep_until = Timestamp::current().add(Duration::from_millis(500));
+			let lock_expiration = Timestamp::current().add(Duration::from_millis(200));
+
+			let mut lock = StorageLock::<'_, Timestamp>::with_deadline(b"lock_3", lock_expiration);
+
+			{
+				let guard = lock.spin_lock();
+				guard.forget();
+			}
+
+			// assure the lock expires
+			offchain::sleep_until(sleep_until);
+
+			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock_3");
+			let res = lock.try_lock();
+			assert!(res.is_ok());
+			let guard = res.unwrap();
+			guard.forget();
+		});
+
+		// lock must have been cleared at this point
+		let opt = state.read().persistent_storage.get(b"", b"lock_3");
+		assert!(opt.is_some());
 	}
 }
