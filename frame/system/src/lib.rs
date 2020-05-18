@@ -1871,6 +1871,7 @@ pub(crate) mod tests {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 10;
 		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumExtrinsicWeight: Weight = 768;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
 		pub const Version: RuntimeVersion = RuntimeVersion {
@@ -1929,7 +1930,7 @@ pub(crate) mod tests {
 		type DbWeight = DbWeight;
 		type BlockExecutionWeight = BlockExecutionWeight;
 		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
+		type MaximumExtrinsicWeight = MaximumExtrinsicWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
@@ -2270,17 +2271,43 @@ pub(crate) mod tests {
 
 	#[test]
 	fn mandatory_extrinsic_doesnt_care_about_limits() {
+		fn check(call: impl FnOnce(&DispatchInfo, usize)) {
+			new_test_ext().execute_with(|| {
+				let max = DispatchInfo {
+					weight: Weight::max_value(),
+					class: DispatchClass::Mandatory,
+					..Default::default()
+				};
+				let len = 0_usize;
+
+				call(&max, len);
+			});
+		}
+
+		check(|max, len| {
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
+			assert_eq!(System::all_extrinsics_weight().total(), Weight::max_value());
+			assert!(System::all_extrinsics_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+		});
+		check(|max, len| {
+			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
+		});
+	}
+
+	#[test]
+	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
-				weight: Weight::max_value(),
-				class: DispatchClass::Mandatory,
+				weight: MaximumExtrinsicWeight::get() + 1,
+				class: DispatchClass::Normal,
 				..Default::default()
 			};
 			let len = 0_usize;
 
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_eq!(System::all_extrinsics_weight().total(), Weight::max_value());
-			assert!(System::all_extrinsics_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+			assert_noop!(
+				CheckWeight::<Test>::do_validate(&max, len),
+				InvalidTransaction::ExhaustsResources
+			);
 		});
 	}
 
@@ -2548,10 +2575,5 @@ pub(crate) mod tests {
 			System::on_created_account(Default::default());
 			assert!(System::events().len() == 1);
 		});
-	}
-
-	#[test]
-	fn validation_not_taking_all_extrinsics_len_into_account() {
-		assert_eq!(true, false);
 	}
 }
