@@ -125,6 +125,7 @@ macro_rules! new_full_start {
 						client: client.clone(),
 						pool: pool.clone(),
 						select_chain: select_chain.clone(),
+						deny_unsafe,
 						babe: node_rpc::BabeDeps {
 							babe_config: babe_config.clone(),
 							shared_epoch_changes: shared_epoch_changes.clone(),
@@ -393,7 +394,7 @@ pub fn new_light(config: Configuration)
 			let client = builder.client().clone();
 			let pool = builder.pool().clone();
 
-			Ok(move |deny_unsafe| -> RpcExtension {
+			Ok(move |_| -> RpcExtension {
 				let light_deps = node_rpc::LightDeps {
 					remote_blockchain: remote_blockchain.clone(),
 					fetcher: fetcher.clone(),
