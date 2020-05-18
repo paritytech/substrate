@@ -83,6 +83,7 @@ pub use self::storage::{
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 
+/// Indicates whether to run traces in wasm
 pub static mut WASM_TRACING_ENABLED: bool = true;
 
 /// A type that cannot be instantiated.
