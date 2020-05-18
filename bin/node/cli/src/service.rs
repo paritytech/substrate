@@ -99,30 +99,45 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
-				let babe_link = import_setup.as_ref().map(|s| &s.2)
-					.expect("BabeLink is present for full services or set up failed; qed.");
+			.with_rpc_extensions(|builder| {
 				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
 					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
-				let shared_authority_set = grandpa_link.shared_authority_set();
+
+				let shared_authority_set = grandpa_link.shared_authority_set().clone();
 				let shared_voter_state = grandpa::SharedVoterState::empty();
-				let deps = node_rpc::FullDeps {
-					client: builder.client().clone(),
-					pool: builder.pool(),
-					select_chain: builder.select_chain().cloned()
-						.expect("SelectChain is present for full services or set up failed; qed."),
-					babe: node_rpc::BabeDeps {
-						keystore: builder.keystore(),
-						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
-						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
-					},
-					grandpa: node_rpc::GrandpaDeps {
-						shared_voter_state: shared_voter_state.clone(),
-						shared_authority_set: shared_authority_set.clone(),
-					},
-				};
-				rpc_setup = Some((shared_voter_state));
-				Ok(node_rpc::create_full(deps))
+
+				rpc_setup = Some((shared_voter_state.clone()));
+
+				let babe_link = import_setup.as_ref().map(|s| &s.2)
+					.expect("BabeLink is present for full services or set up failed; qed.");
+
+				let babe_config = babe_link.config().clone();
+				let shared_epoch_changes = babe_link.epoch_changes().clone();
+
+				let client = builder.client().clone();
+				let pool = builder.pool().clone();
+				let select_chain = builder.select_chain().cloned()
+					.expect("SelectChain is present for full services or set up failed; qed.");
+				let keystore = builder.keystore().clone();
+
+				Ok(move |deny_unsafe| -> RpcExtension {
+					let deps = node_rpc::FullDeps {
+						client: client.clone(),
+						pool: pool.clone(),
+						select_chain: select_chain.clone(),
+						babe: node_rpc::BabeDeps {
+							babe_config: babe_config.clone(),
+							shared_epoch_changes: shared_epoch_changes.clone(),
+							keystore: keystore.clone(),
+						},
+						grandpa: node_rpc::GrandpaDeps {
+							shared_voter_state: shared_voter_state.clone(),
+							shared_authority_set: shared_authority_set.clone(),
+						},
+					};
+
+					node_rpc::create_full(deps)
+				})
 			})?;
 
 		(builder, import_setup, inherent_data_providers, rpc_setup)
@@ -366,21 +381,28 @@ pub fn new_light(config: Configuration)
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
-		.with_rpc_extensions(|builder,| ->
-			Result<RpcExtension, _>
-		{
+		.with_rpc_extensions(|builder| {
 			let fetcher = builder.fetcher()
-				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
-			let remote_blockchain = builder.remote_backend()
-				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
+				.ok_or_else(|| "Trying to start node RPC without active fetcher")?
+				.clone();
 
-			let light_deps = node_rpc::LightDeps {
-				remote_blockchain,
-				fetcher,
-				client: builder.client().clone(),
-				pool: builder.pool(),
-			};
-			Ok(node_rpc::create_light(light_deps))
+			let remote_blockchain = builder.remote_backend()
+				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?
+				.clone();
+
+			let client = builder.client().clone();
+			let pool = builder.pool().clone();
+
+			Ok(move |deny_unsafe| -> RpcExtension {
+				let light_deps = node_rpc::LightDeps {
+					remote_blockchain: remote_blockchain.clone(),
+					fetcher: fetcher.clone(),
+					client: client.clone(),
+					pool: pool.clone(),
+				};
+
+				node_rpc::create_light(light_deps)
+			})
 		})?
 		.build()?;
 

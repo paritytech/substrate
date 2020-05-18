@@ -95,7 +95,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	finality_proof_request_builder: Option<TFprb>,
 	finality_proof_provider: Option<TFpp>,
 	transaction_pool: Arc<TExPool>,
-	rpc_extensions: TRpc,
+	rpc_extensions_builder: Box<dyn Fn(sc_rpc::DenyUnsafe) -> TRpc + Send>,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
@@ -310,7 +310,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			finality_proof_request_builder: None,
 			finality_proof_provider: None,
 			transaction_pool: Arc::new(()),
-			rpc_extensions: Default::default(),
+			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: None,
 			block_announce_validator_builder: None,
 			marker: PhantomData,
@@ -393,7 +393,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			finality_proof_request_builder: None,
 			finality_proof_provider: None,
 			transaction_pool: Arc::new(()),
-			rpc_extensions: Default::default(),
+			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
 			marker: PhantomData,
@@ -466,7 +466,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
+			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -511,7 +511,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
+			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -549,7 +549,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider,
 			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
+			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -615,7 +615,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: fprb,
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
+			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -679,7 +679,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: Arc::new(transaction_pool),
-			rpc_extensions: self.rpc_extensions,
+			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -687,13 +687,19 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	}
 
 	/// Defines the RPC extensions to use.
-	pub fn with_rpc_extensions<URpc>(
+	pub fn with_rpc_extensions<URpcBuilder, URpc>(
 		self,
-		rpc_ext_builder: impl FnOnce(&Self) -> Result<URpc, Error>,
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		TExPool, URpc, Backend>, Error>
-	where TSc: Clone, TFchr: Clone {
-		let rpc_extensions = rpc_ext_builder(&self)?;
+		rpc_ext_builder: impl FnOnce(&Self) -> Result<URpcBuilder, Error>,
+	) -> Result<
+		ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, URpc, Backend>,
+		Error,
+	>
+	where
+		TSc: Clone,
+		TFchr: Clone,
+		URpcBuilder: Fn(sc_rpc::DenyUnsafe) -> URpc + Send + 'static,
+	{
+		let rpc_extensions_builder = Box::new(rpc_ext_builder(&self)?);
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -707,7 +713,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: self.transaction_pool,
-			rpc_extensions,
+			rpc_extensions_builder: rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -735,7 +741,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: self.transaction_pool,
-			rpc_extensions: self.rpc_extensions,
+			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
 			marker: self.marker,
@@ -853,7 +859,7 @@ ServiceBuilder<
 			finality_proof_request_builder,
 			finality_proof_provider,
 			transaction_pool,
-			rpc_extensions,
+			rpc_extensions_builder,
 			remote_backend,
 			block_announce_validator_builder,
 		} = self;
@@ -1159,7 +1165,7 @@ ServiceBuilder<
 				maybe_offchain_rpc,
 				author::AuthorApi::to_delegate(author),
 				system::SystemApi::to_delegate(system),
-				rpc_extensions.clone(),
+				rpc_extensions_builder(deny_unsafe),
 			))
 		};
 		let rpc = start_rpc_servers(&config, gen_handler)?;
