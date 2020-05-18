@@ -80,7 +80,7 @@ pub struct ImportParams {
 	pub tracing_receiver: TracingReceiver,
 
 	/// Enable wasm tracing
-	#[structopt(long = "wasm-tracing")]
+	#[structopt(long)]
 	pub wasm_tracing: bool,
 }
 
