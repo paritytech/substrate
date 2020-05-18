@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,16 +15,22 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 
 mod error;
 mod report;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+
+use sc_finality_grandpa::GrandpaJustificationReceiver;
+use sc_rpc::Metadata;
+use sp_runtime::traits::Block as BlockT;
 
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
@@ -35,37 +41,66 @@ type FutureResult<T> =
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
 pub trait GrandpaApi {
+	/// RPC Metadata
+	type Metadata;
+
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
 	#[rpc(name = "grandpa_roundState")]
 	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
+
+	/// Returns the block most recently finalized by Grandpa, alongside
+	/// side its justification.
+	#[pubsub(subscription = "grandpa_justifications", subscribe, name = "grandpa_subscribeJustifications")]
+	fn justification_subscription(&self, metadata: Self::Metadata, subscriber: Subscriber<bool>);
+
+	/// Unsubscribe from receiving notifications about recently finalized blocks.
+	#[pubsub(subscription = "grandpa_justifications", unsubscribe, name = "grandpa_unsubscribeJustifications")]
+	fn unsubscribe_justifications(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
-pub struct GrandpaRpcHandler<AuthoritySet, VoterState> {
+pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
+	justification_receiver: GrandpaJustificationReceiver<Block>,
 }
 
-impl<AuthoritySet, VoterState> GrandpaRpcHandler<AuthoritySet, VoterState> {
+impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
 	/// Creates a new GrandpaRpcHander instance.
-	pub fn new(authority_set: AuthoritySet, voter_state: VoterState) -> Self {
+	pub fn new(
+		authority_set: AuthoritySet,
+		voter_state: VoterState,
+		justification_receiver: GrandpaJustificationReceiver<Block>,
+	) -> Self {
 		Self {
 			authority_set,
 			voter_state,
+			justification_receiver,
 		}
 	}
 }
 
-impl<AuthoritySet, VoterState> GrandpaApi for GrandpaRpcHandler<AuthoritySet, VoterState>
+impl<AuthoritySet, VoterState, Block> GrandpaApi for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
+	Block: BlockT,
 {
+	type Metadata = Metadata;
+
 	fn round_state(&self) -> FutureResult<ReportedRoundStates> {
 		let round_states = ReportedRoundStates::from(&self.authority_set, &self.voter_state);
 		let future = async move { round_states }.boxed();
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
+	}
+
+	fn justification_subscription(&self, _metadata: Self::Metadata, _subscriber: Subscriber<bool>) {
+		todo!()
+	}
+
+	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, _id: SubscriptionId) -> FutureResult<bool> {
+		todo!()
 	}
 }
 

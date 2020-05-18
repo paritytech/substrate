@@ -129,9 +129,8 @@ pub fn create_full<C, P, M, SC>(
 	let GrandpaDeps {
 		shared_voter_state,
 		shared_authority_set,
+		justification_receiver,
 	} = grandpa;
-
-	let GrandpaDeps { justification_receiver } = grandpa;
 
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
@@ -152,7 +151,7 @@ pub fn create_full<C, P, M, SC>(
 	);
 	io.extend_with(
 		sc_finality_grandpa_rpc::GrandpaApi::to_delegate(
-			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state)
+			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state, justification_receiver)
 		)
 	);
 

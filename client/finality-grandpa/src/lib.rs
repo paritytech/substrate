@@ -117,7 +117,10 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
-pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
+pub use finality_proof::{
+	FinalityProofProvider, StorageAndProofProvider,
+	GrandpaJustificationSender, GrandpaJustificationReceiver
+};
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
@@ -131,7 +134,6 @@ use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
-use crate::finality_proof::{GrandpaJustificationSender, GrandpaJustificationReceiver};
 
 // Re-export these two because it's just so damn convenient.
 pub use sp_finality_grandpa::{AuthorityId, GrandpaApi, ScheduledChange};

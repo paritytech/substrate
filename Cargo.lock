@@ -6414,11 +6414,14 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "jsonrpc-pubsub",
  "log",
  "sc-finality-grandpa",
+ "sc-rpc",
  "serde",
  "serde_json",
  "sp-core",
+ "sp-runtime",
 ]
 
 [[package]]
