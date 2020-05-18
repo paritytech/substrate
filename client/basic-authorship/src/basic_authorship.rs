@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME #1021 move this into sp-consensus
@@ -39,7 +40,7 @@ use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyE
 use std::marker::PhantomData;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use crate::metrics::MetricsLink as PrometheusMetrics;
+use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
@@ -62,7 +63,7 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		ProposerFactory {
 			client,
 			transaction_pool,
-			metrics: PrometheusMetrics::new(prometheus),
+			metrics: PrometheusMetrics::new("substrate", prometheus),
 			_phantom: PhantomData,
 		}
 	}
@@ -72,7 +73,7 @@ impl<A, B, C> ProposerFactory<A, B, C> {
 		ProposerFactory {
 			client,
 			transaction_pool,
-			metrics:  PrometheusMetrics::new(None),
+			metrics:  PrometheusMetrics::new("substrte", None),
 			_phantom: PhantomData,
 		}
 	}
@@ -312,7 +313,10 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		self.metrics.report(move |metrics| metrics.block_constructed.observe(started.elapsed().as_secs_f64()));
+		self.metrics.report(|metrics| {
+			metrics.block_constructed.observe(started.elapsed().as_secs_f64());
+			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
+		});
 
 		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),

@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Authorship Prometheus metrics.
+//! Prometheus basic proposer metrics.
 
-use prometheus_endpoint::{register, PrometheusError, Registry, Histogram, HistogramOpts};
+use prometheus_endpoint::{register, PrometheusError, Registry, Histogram, HistogramOpts, Gauge, U64};
 
 /// Optional shareable link to basic authorship metrics.
 #[derive(Clone, Default)]
 pub struct MetricsLink(Option<Metrics>);
 
 impl MetricsLink {
-	pub fn new(registry: Option<&Registry>) -> Self {
+	pub fn new(prefix: &str, registry: Option<&Registry>) -> Self {
 		Self(
 			registry.and_then(|registry|
-				Metrics::register(registry)
+				Metrics::register(prefix, registry)
 					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
 					.ok()
 			)
@@ -43,19 +43,27 @@ impl MetricsLink {
 /// Authorship metrics.
 #[derive(Clone)]
 pub struct Metrics {
-	pub block_constructed: Histogram,
+    pub block_constructed: Histogram,
+    pub number_of_transactions: Gauge<U64>,
 }
 
 impl Metrics {
-	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+	pub fn register(prefix: &str, registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			block_constructed: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"sub_proposer_block_constructed",
-					"Histogram of time taken to construct new block",
+					&format!("{}_proposer_block_constructed", prefix),
+					&"Histogram of time taken to construct new block".to_string(),
 				))?,
 				registry,
-			)?,
+            )?,
+            number_of_transactions: register(
+                Gauge::new(
+                    &format!("{}_proposer_number_of_transactions", prefix),
+                    &"Number of transacion proposer includes in his own block".to_string(),
+                )?,
+                registry,
+            )?,
 		})
-	}
+    }
 }
