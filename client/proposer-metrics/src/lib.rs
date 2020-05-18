@@ -34,11 +34,7 @@ impl MetricsLink {
 	}
 
 	pub fn report<O>(&self, do_this: impl FnOnce(&Metrics) -> O) -> Option<O> {
-		if let Some(v) = self.0.as_ref() {
-			Some(do_this(v))
-		} else {
-			None
-		}
+		Some(do_this(self.0.as_ref()?))
 	}
 }
 
