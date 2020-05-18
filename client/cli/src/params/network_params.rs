@@ -124,6 +124,9 @@ impl NetworkParams {
 		let listen_addresses = if self.listen_addr.is_empty() {
 			vec![
 				Multiaddr::empty()
+					.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
+					.with(Protocol::Tcp(port)),
+				Multiaddr::empty()
 					.with(Protocol::Ip4([0, 0, 0, 0].into()))
 					.with(Protocol::Tcp(port)),
 			]
