@@ -256,19 +256,14 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			Self::execute_evm(
+			Self::execute_call(
 				source,
+				target,
+				input,
 				value,
 				gas_limit,
 				gas_price,
 				nonce,
-				|executor| ((), executor.transact_call(
-					source,
-					target,
-					value,
-					input,
-					gas_limit as usize,
-				)),
 			).map_err(Into::into)
 		}
 
@@ -291,22 +286,13 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			let create_address = Self::execute_evm(
+			let create_address = Self::execute_create(
 				source,
+				init,
 				value,
 				gas_limit,
 				gas_price,
-				nonce,
-				|executor| {
-					(executor.create_address(
-						evm::CreateScheme::Legacy { caller: source },
-					), executor.transact_create(
-						source,
-						value,
-						init,
-						gas_limit as usize,
-					))
-				},
+				nonce
 			)?;
 
 			Module::<T>::deposit_event(Event::<T>::Created(create_address));
@@ -332,24 +318,14 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
-			let create_address = Self::execute_evm(
+			let create_address = Self::execute_create2(
 				source,
+				init,
+				salt,
 				value,
 				gas_limit,
 				gas_price,
-				nonce,
-				|executor| {
-					(executor.create_address(
-						evm::CreateScheme::Create2 { caller: source, code_hash, salt },
-					), executor.transact_create2(
-						source,
-						value,
-						init,
-						salt,
-						gas_limit as usize,
-					))
-				},
+				nonce
 			)?;
 
 			Module::<T>::deposit_event(Event::<T>::Created(create_address));
@@ -389,6 +365,91 @@ impl<T: Trait> Module<T> {
 		Accounts::remove(address);
 		AccountCodes::remove(address);
 		AccountStorages::remove_prefix(address);
+	}
+
+	/// Execute a create transaction on behalf of given sender.
+	pub fn execute_create(
+		source: H160,
+		init: Vec<u8>,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>
+	) -> Result<H160, Error<T>> {
+		Self::execute_evm(
+			source,
+			value,
+			gas_limit,
+			gas_price,
+			nonce,
+			|executor| {
+				(executor.create_address(
+					evm::CreateScheme::Legacy { caller: source },
+				), executor.transact_create(
+					source,
+					value,
+					init,
+					gas_limit as usize,
+				))
+			},
+		)
+	}
+
+	/// Execute a create2 transaction on behalf of a given sender.
+	pub fn execute_create2(
+		source: H160,
+		init: Vec<u8>,
+		salt: H256,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>
+	) -> Result<H160, Error<T>> {
+		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
+		Self::execute_evm(
+			source,
+			value,
+			gas_limit,
+			gas_price,
+			nonce,
+			|executor| {
+				(executor.create_address(
+					evm::CreateScheme::Create2 { caller: source, code_hash, salt },
+				), executor.transact_create2(
+					source,
+					value,
+					init,
+					salt,
+					gas_limit as usize,
+				))
+			},
+		)
+	}
+
+	/// Execute a call transaction on behalf of a given sender.
+	pub fn execute_call(
+		source: H160,
+		target: H160,
+		input: Vec<u8>,
+		value: U256,
+		gas_limit: u32,
+		gas_price: U256,
+		nonce: Option<U256>,
+	) -> Result<(), Error<T>> {
+		Self::execute_evm(
+			source,
+			value,
+			gas_limit,
+			gas_price,
+			nonce,
+			|executor| ((), executor.transact_call(
+				source,
+				target,
+				value,
+				input,
+				gas_limit as usize,
+			)),
+		)
 	}
 
 	/// Execute an EVM operation.
