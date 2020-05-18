@@ -87,7 +87,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 		};
 
 		let storage_name_bstr = syn::LitByteStr::new(
-			&line.name.to_string().into_bytes()[..],
+			line.name.to_string().as_ref(),
 			line.name.span()
 		);
 
