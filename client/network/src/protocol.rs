@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -111,7 +111,7 @@ mod rep {
 	/// reputation change should be refunded with `ANY_EXTRINSIC_REFUND`
 	pub const ANY_EXTRINSIC: Rep = Rep::new(-(1 << 4), "Any extrinsic");
 	/// Reputation change when a peer sends us any extrinsic that is not invalid.
- 	pub const ANY_EXTRINSIC_REFUND: Rep = Rep::new(1 << 4, "Any extrinsic (refund)");
+	pub const ANY_EXTRINSIC_REFUND: Rep = Rep::new(1 << 4, "Any extrinsic (refund)");
 	/// Reputation change when a peer sends us an extrinsic that we didn't know about.
 	pub const GOOD_EXTRINSIC: Rep = Rep::new(1 << 7, "Good extrinsic");
 	/// Reputation change when a peer sends us a bad extrinsic.
@@ -363,6 +363,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
+		local_peer_id: PeerId,
 		chain: Arc<dyn Client<B>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
@@ -396,7 +397,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let mut behaviour = GenericProto::new(protocol_id.clone(), versions, peerset, queue_size_report);
+		let mut behaviour = GenericProto::new(
+			local_peer_id,
+			protocol_id.clone(),
+			versions,
+			peerset,
+			queue_size_report
+		);
 
 		let mut legacy_equiv_by_name = HashMap::new();
 
@@ -533,6 +540,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Number of active sync requests.
 	pub fn num_sync_requests(&self) -> usize {
 		self.sync.num_sync_requests()
+	}
+
+	/// Sync local state with the blockchain state.
+	pub fn update_chain(&mut self) {
+		let info = self.context_data.chain.info();
+		self.sync.update_chain_info(&info.best_hash, info.best_number);
 	}
 
 	/// Accepts a response from the legacy substream and determines what the corresponding
@@ -1419,17 +1432,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Call this when a block has been imported in the import queue
-	pub fn on_block_imported(&mut self, header: &B::Header, is_best: bool) {
-		if is_best {
-			self.sync.update_chain_info(header);
-			self.behaviour.set_notif_protocol_handshake(
-				&self.block_announces_protocol,
-				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
-			);
-		}
-	}
-
 	/// Call this when a block has been finalized. The sync layer may have some additional
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
@@ -1494,12 +1496,23 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the importqueue, with or without
 	/// errors.
-	pub fn blocks_processed(
+	pub fn on_blocks_processed(
 		&mut self,
 		imported: usize,
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
+		let new_best = results.iter().rev().find_map(|r| match r {
+			(Ok(BlockImportResult::ImportedUnknown(n, aux, _)), hash) if aux.is_new_best => Some((*n, hash.clone())),
+			_ => None,
+		});
+		if let Some((best_num, best_hash)) = new_best {
+			self.sync.update_chain_info(&best_hash, best_num);
+			self.behaviour.set_notif_protocol_handshake(
+				&self.block_announces_protocol,
+				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+			);
+		}
 		let results = self.sync.on_blocks_processed(
 			imported,
 			count,
@@ -2187,6 +2200,7 @@ mod tests {
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
 			ProtocolConfig::default(),
+			PeerId::random(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,
