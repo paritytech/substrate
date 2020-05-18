@@ -1,5 +1,3 @@
-use substrate_test_runtime_client::runtime::Block;
-
 struct Block2;
 
 sp_api::decl_runtime_apis! {

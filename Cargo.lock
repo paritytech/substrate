@@ -4257,6 +4257,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-storage",
+ "substrate-test-utils",
 ]
 
 [[package]]
@@ -4279,11 +4280,11 @@ dependencies = [
 name = "pallet-elections-phragmen"
 version = "2.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
  "pallet-balances",
- "pallet-scheduler",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -6240,6 +6241,7 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "sp-version",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
 ]
@@ -6289,6 +6291,7 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "sp-version",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
 ]
@@ -6353,6 +6356,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-transaction-pool",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tempfile",
@@ -6377,6 +6381,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-timestamp",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -6391,6 +6396,7 @@ dependencies = [
  "sc-client-api",
  "sc-telemetry",
  "sp-api",
+ "sp-application-crypto",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -7553,6 +7559,7 @@ dependencies = [
  "sp-test-primitives",
  "sp-utils",
  "sp-version",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -7614,6 +7621,7 @@ dependencies = [
  "blake2-rfc",
  "byteorder 1.3.4",
  "criterion 0.2.11",
+ "derive_more",
  "ed25519-dalek",
  "futures 0.3.5",
  "hash-db",
