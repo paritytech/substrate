@@ -156,10 +156,11 @@ where
 	}
 }
 
-/// A persisted guard state.
+/// Storage based lock.
 ///
-/// An in DB persistent mutex for multi access items which are modified
-/// i.e. vecs or sets.
+/// A lock that is persisted in the DB and provides a mutex behaviour
+/// with a defined safety expirey deadline based on a [`Lockable`](Self::Lockable)
+/// implementation.
 pub struct StorageLock<'a, L>
 where
 	L: Sized + Lockable,
