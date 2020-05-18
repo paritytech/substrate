@@ -134,7 +134,7 @@ use sp_runtime::{
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
-use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -279,6 +279,14 @@ impl PostDispatchInfo {
 			0
 		}
 	}
+}
+
+/// Extract the actual weight from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+	match result {
+		Ok(post_info) => &post_info.actual_weight,
+		Err(err) => &err.post_info.actual_weight,
+	}.unwrap_or_else(|| info.weight).min(info.weight)
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {
@@ -615,5 +623,32 @@ mod tests {
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
 		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
+	}
+
+	#[test]
+	fn extract_actual_weight_works() {
+		let pre = DispatchInfo {
+			weight: 1000,
+			.. Default::default()
+		};
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), 7);
+		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), 1000);
+		assert_eq!(
+			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre),
+			9
+		);
+	}
+
+	#[test]
+	fn extract_actual_weight_caps_at_pre_weight() {
+		let pre = DispatchInfo {
+			weight: 1000,
+			.. Default::default()
+		};
+		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), 1000);
+		assert_eq!(
+			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
+			1000
+		);
 	}
 }
