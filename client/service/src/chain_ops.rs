@@ -203,14 +203,17 @@ fn log_queue_progress(blocks_before: u64, imported_blocks: u64)
 	}
 }
 
-/// SCOTT
+/// Different State that the `import_blocks` future could be in.
 enum ImportState<R, B>
 where 
 	R: Read + Seek + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
+	/// We are reading from the BlockIter structure, adding those blocks to the queue if possible.
 	Reading(BlockIter<R, B>),
+	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it to catch up.
 	WaitingForImportQueueToCatchUp(BlockIter<R, B>, u64, SignedBlock<B>),
+	// We have added all the blocks to the queue but they are still being processed.
 	WaitingForImportQueueToFinish(Option<u64>, u64, u64),
 }
 
@@ -300,6 +303,7 @@ impl<
 				ImportState::Reading(mut block_iter) => {
 					match block_iter.next() {
 						None => {
+							// The iterator is over: we now need to wait for the import queue to finish.
 							let num_expected_blocks = block_iter.num_expected_blocks();
 							let read_block_count = block_iter.read_block_count();
 							state = Some(ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, 1))
@@ -309,8 +313,11 @@ impl<
 							match block_result {
 								Ok(block) => {
 									if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
+										// The queue is full, so do not add this block and simply wait until
+										// the queue has made some progress.
 										state = Some(ImportState::WaitingForImportQueueToCatchUp(block_iter, 1, block));
 									} else {
+										// Queue is not full, we can keep on adding blocks to the queue.
 										import_block_to_queue(block, queue, force);
 										log_added_blocks(&block_iter);
 										state = Some(ImportState::Reading(block_iter));
@@ -318,7 +325,7 @@ impl<
 								}
 								Err(e) => {
 									return std::task::Poll::Ready(
-										Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e))))
+										Err(Error::Other(format!("Error reading block #{}: {}", read_block_count, e))))
 								}
 							}
 						}
@@ -327,22 +334,31 @@ impl<
 				ImportState::WaitingForImportQueueToCatchUp(block_iter, delay, block) => {
 					let read_block_count = block_iter.read_block_count();
 					if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
+						// Queue is still full, so wait until there is room to insert our block.
 						state = Some(ImportState::WaitingForImportQueueToCatchUp(block_iter, 1, block));
 					} else {
+						// Queue is no longer full, so we can add our block to the queue and 
+						// switch back to the Reading State.
 						import_block_to_queue(block, queue, force);
 						log_added_blocks(&block_iter);
 						state = Some(ImportState::Reading(block_iter));
 					}
 				},
 				ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, delay) => {
+					// All the blocks have been added to the queue, which doesn't mean they 
+					// have all been properly imported.
 					if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
+						// Importing is done, we can log the result and return.
 						info!(
 							"🎉 Imported {} blocks. Best: #{}",
 							read_block_count, client.chain_info().best_number
 						);
 						return std::task::Poll::Ready(Ok(()))
 					}
-					state = Some(ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, delay));
+					else {
+						// Importing is not done, we still have to wait for the queue to finish.
+						state = Some(ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, delay));
+					}
 				}
 			}
 
@@ -358,7 +374,6 @@ impl<
 			}
 
 			log_queue_progress(blocks_before, link.imported_blocks);
-
 
 			cx.waker().wake_by_ref();
 			std::task::Poll::Pending
