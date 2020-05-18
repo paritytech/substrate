@@ -533,21 +533,50 @@ impl RuntimeDbWeight {
 	}
 }
 
+/// One coefficient and its position in the `WeightToFeePolynomial`.
+///
+/// One term of polynomial is calculated as:
+///
+/// ```
+/// coeff_integer * x^(degree) + coeff_frac * x^(degree)
+/// ```
+///
+/// The `negative` value encodes whether the term is added or substracted from the
+/// overall polynomial result.
 #[derive(Clone, Encode, Decode)]
 pub struct WeightToFeeCoefficient<Balance> {
+	/// The integral part of the coefficient.
 	pub coeff_integer: Balance,
+	/// The fractional part of the coefficient.
 	pub coeff_frac: Perbill,
+	/// True iff the coefficient should be interpreted as negative.
 	pub negative: bool,
+	/// Degree/exponent of the term.
 	pub degree: u8,
 }
 
+/// A list of coefficients that represent one polynomial.
 pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 
+/// A trait that describes the weight to fee calculation as polynomial.
+///
+/// An implementor should only implement the `polynomial` function.
 pub trait WeightToFeePolynomial {
+	/// The type that is returned as result from polynomial evaluation.
 	type Balance: BaseArithmetic + From<u32> + Copy;
 
+	/// Returns a polynomial that describes the weight to fee conversion.
+	///
+	/// This is the only function that should be manually implemented. Please note
+	/// that all calculation is done in the probably unsigned `Balance` type. This means
+	/// that the order of coefficients is important as putting the negative coefficients
+	/// first will most likely saturate the result to zero mid evaluation.
 	fn polynomial() -> WeightToFeeCoefficients<Self::Balance>;
 
+	/// Calculates the fee from the passed `weight` according to the `polynomial`.
+	///
+	/// This should not be overriden in most circumstances. Calculation is done in the
+	/// `Balance` type and never overflows. All evaluation is saturating.
 	fn calc(weight: &Weight) -> Self::Balance {
 		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
 			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
@@ -569,6 +598,7 @@ pub trait WeightToFeePolynomial {
 	}
 }
 
+/// Implementor of `WeightToFeePolynomial` that maps one unit of weight to one unit of fee.
 pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> WeightToFeePolynomial for IdentityFee<T> where
