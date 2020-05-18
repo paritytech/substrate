@@ -911,7 +911,6 @@ pub trait WasmTracing {
 		};
 		proxy.exit_span(id);
 	}
-
 }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.
