@@ -176,9 +176,7 @@ where
 	L: Lockable,
 {
 	/// Create a new storage lock with [default expiry duration](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
-	pub fn new<'k>(key: &'k [u8]) -> Self
-	where
-		'k: 'a,
+	pub fn new(key: &'a [u8]) -> Self
 	{
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
@@ -186,7 +184,6 @@ where
 		}
 	}
 
-	#[inline]
 	fn try_lock_inner(&mut self, new_deadline: L) -> Result<(), Option<L>> {
 		let now = L::current();
 		let res = self
@@ -227,7 +224,7 @@ where
 	/// Try grabbing the lock until its expiry is reached.
 	///
 	/// Returns an error if the lock expired before it could be caught.
-	pub fn spin_lock<'b, 'c>(&'b mut self) -> StorageLockGuard<'a, 'b, L>
+	pub fn spin_lock<'b>(&'b mut self) -> StorageLockGuard<'a, 'b, L>
 	where
 		'a: 'b,
 	{
@@ -256,16 +253,11 @@ where
 pub trait TimeLock<'a>: Sized {
 	/// Provide an explicit deadline timestamp at which the locked state of the lock
 	/// becomes stale and may be dismissed by `fn try_lock(..)`, `fn spin_lock(..)` and others.
-	fn with_deadline<'k>(key: &'k [u8], lock_deadline: Timestamp) -> Self
-	where
-		'k: 'a;
+	fn with_deadline(key: &'a [u8], lock_deadline: Timestamp) -> Self;
 }
 
 impl<'a> TimeLock<'a> for StorageLock<'a, Timestamp> {
-	fn with_deadline<'k>(key: &'k [u8], lock_deadline: Timestamp) -> Self
-	where
-		'k: 'a,
-	{
+	fn with_deadline(key: &'a [u8], lock_deadline: Timestamp) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
 			deadline: lock_deadline,
