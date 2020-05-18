@@ -31,21 +31,20 @@ pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFa
 /// ```nocompile
 /// impl_outer_inherent! {
 ///     impl Inherents where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
-///         timestamp: Timestamp,
-///         consensus: Consensus,
-///         /// Aura module using the `Timestamp` call.
-///         aura: Timestamp,
+///         timestamp,
+///         consensus,
+///         aura,
 ///     }
 /// }
 /// ```
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
-		impl Inherents for $runtime:ident where
+		impl Inherents where
 			Block = $block:ident,
 			UncheckedExtrinsic = $uncheckedextrinsic:ident
 		{
-			$( $module:ident: $call:ident, )*
+			$( $module:ident, )*
 		}
 	) => {
 		trait InherentDataExt {
