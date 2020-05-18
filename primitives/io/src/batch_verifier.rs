@@ -17,7 +17,7 @@
 
 //! Batch/parallel verification.
 
-use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
+use sp_core::{ed25519, sr25519, ecdsa, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
 
@@ -121,6 +121,29 @@ impl BatchVerifier {
 			}
 		}
 
+		true
+	}
+
+	/// Push ecdsa signature to verify.
+	///
+	/// Returns false if some of the pushed signatures before already failed the check
+	/// (in this case it won't verify anything else)
+	pub fn push_ecdsa(
+		&mut self,
+		signature: ecdsa::Signature,
+		pub_key: ecdsa::Public,
+		message: Vec<u8>,
+	) -> bool {
+		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
+
+		if self.spawn_verification_task(move || ecdsa::Pair::verify(&signature, &message, &pub_key)).is_err() {
+			log::debug!(
+				target: "runtime",
+				"Batch-verification returns false because failed to spawn background task.",
+			);
+
+			return false;
+		}
 		true
 	}
 

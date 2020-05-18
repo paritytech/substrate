@@ -295,11 +295,11 @@ impl<D> Peer<D> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(header, true);
 			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
 		}
 
+		self.network.update_chain();
 		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}
@@ -613,6 +613,7 @@ pub trait TestNetFactory: Sized {
 			justification_import,
 			finality_proof_import,
 			&sp_core::testing::SpawnBlockingExecutor::new(),
+			None,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -691,6 +692,7 @@ pub trait TestNetFactory: Sized {
 			justification_import,
 			finality_proof_import,
 			&sp_core::testing::SpawnBlockingExecutor::new(),
+			None,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -811,10 +813,6 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
-					peer.network.on_block_imported(
-						notification.header,
-						true,
-					);
 					peer.network.service().announce_block(notification.hash, Vec::new());
 				}
 
