@@ -102,7 +102,7 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchOutcome, DispatchError, DispatchResult,
+	RuntimeDebug, Perbill, DispatchError, DispatchResult,
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -126,8 +126,9 @@ use frame_support::{
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
-		FunctionOf, Pays,
-	}
+		FunctionOf, Pays, extract_actual_weight,
+	},
+	dispatch::DispatchResultWithPostInfo,
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -1150,13 +1151,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &DispatchOutcome, _encoded_len: u32, info: DispatchInfo) {
+	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
+		info.weight = extract_actual_weight(r, &info);
 		Self::deposit_event(
 			match r {
-				Ok(()) => RawEvent::ExtrinsicSuccess(info),
+				Ok(_) => RawEvent::ExtrinsicSuccess(info),
 				Err(err) => {
 					sp_runtime::print(err);
-					RawEvent::ExtrinsicFailed(err.clone(), info)
+					RawEvent::ExtrinsicFailed(err.error, info)
 				},
 			}
 		);
@@ -1830,7 +1832,10 @@ pub(crate) mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_noop};
+	use frame_support::{
+		impl_outer_origin, parameter_types, assert_ok, assert_noop,
+		weights::WithPostDispatchInfo,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -1894,7 +1899,7 @@ pub(crate) mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = u16;
+		type Event = Event<Self>;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = DbWeight;
@@ -1909,18 +1914,8 @@ pub(crate) mod tests {
 		type OnKilledAccount = RecordKilled;
 	}
 
-	impl From<Event<Test>> for u16 {
-		fn from(e: Event<Test>) -> u16 {
-			match e {
-				Event::<Test>::ExtrinsicSuccess(..) => 100,
-				Event::<Test>::ExtrinsicFailed(..) => 101,
-				Event::<Test>::CodeUpdated => 102,
-				_ => 103,
-			}
-		}
-	}
-
 	type System = Module<Test>;
+	type SysEvent = <Test as Trait>::Event;
 
 	const CALL: &<Test as Trait>::Call = &Call;
 
@@ -1978,14 +1973,14 @@ pub(crate) mod tests {
 				InitKind::Full,
 			);
 			System::note_finished_extrinsics();
-			System::deposit_event(1u16);
+			System::deposit_event(SysEvent::CodeUpdated);
 			System::finalize();
 			assert_eq!(
 				System::events(),
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 1u16,
+						event: SysEvent::CodeUpdated,
 						topics: vec![],
 					}
 				]
@@ -1998,22 +1993,131 @@ pub(crate) mod tests {
 				&Default::default(),
 				InitKind::Full,
 			);
-			System::deposit_event(32u16);
+			System::deposit_event(SysEvent::NewAccount(32));
 			System::note_finished_initialize();
-			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
-			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
+			System::deposit_event(SysEvent::KilledAccount(42));
+			System::note_applied_extrinsic(&Ok(().into()), Default::default());
+			System::note_applied_extrinsic(
+				&Err(DispatchError::BadOrigin.into()),
+				Default::default()
+			);
 			System::note_finished_extrinsics();
-			System::deposit_event(3u16);
+			System::deposit_event(SysEvent::NewAccount(3));
 			System::finalize();
 			assert_eq!(
 				System::events(),
 				vec![
-					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
-					EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
+					EventRecord {
+						phase: Phase::Initialization,
+						event: SysEvent::NewAccount(32),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(0),
+						event: SysEvent::KilledAccount(42),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(0),
+						event: SysEvent::ExtrinsicSuccess(Default::default()),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(1),
+						event: SysEvent::ExtrinsicFailed(
+							DispatchError::BadOrigin.into(),
+							Default::default()
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: SysEvent::NewAccount(3),
+						topics: vec![]
+					},
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn deposit_event_uses_actual_weight() {
+		new_test_ext().execute_with(|| {
+			System::initialize(
+				&1,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
+			System::note_finished_initialize();
+
+			let pre_info = DispatchInfo {
+				weight: 1000,
+				.. Default::default()
+			};
+			System::note_applied_extrinsic(
+				&Ok(Some(300).into()),
+				pre_info,
+			);
+			System::note_applied_extrinsic(
+				&Ok(Some(1000).into()),
+				pre_info,
+			);
+			System::note_applied_extrinsic(
+				// values over the pre info should be capped at pre dispatch value
+				&Ok(Some(1200).into()),
+				pre_info,
+			);
+			System::note_applied_extrinsic(
+				&Err(DispatchError::BadOrigin.with_weight(999)),
+				pre_info,
+			);
+
+			assert_eq!(
+				System::events(),
+				vec![
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(0),
+						event: SysEvent::ExtrinsicSuccess(
+							DispatchInfo {
+								weight: 300,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(1),
+						event: SysEvent::ExtrinsicSuccess(
+							DispatchInfo {
+								weight: 1000,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(2),
+						event: SysEvent::ExtrinsicSuccess(
+							DispatchInfo {
+								weight: 1000,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(3),
+						event: SysEvent::ExtrinsicFailed(
+							DispatchError::BadOrigin.into(),
+							DispatchInfo {
+								weight: 999,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
 				]
 			);
 		});
@@ -2040,9 +2144,9 @@ pub(crate) mod tests {
 			];
 
 			// We deposit a few events with different sets of topics.
-			System::deposit_event_indexed(&topics[0..3], 1u16);
-			System::deposit_event_indexed(&topics[0..1], 2u16);
-			System::deposit_event_indexed(&topics[1..2], 3u16);
+			System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1));
+			System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2));
+			System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3));
 
 			System::finalize();
 
@@ -2052,17 +2156,17 @@ pub(crate) mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 1u16,
+						event: SysEvent::NewAccount(1),
 						topics: topics[0..3].to_vec(),
 					},
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 2u16,
+						event: SysEvent::NewAccount(2),
 						topics: topics[0..1].to_vec(),
 					},
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 3u16,
+						event: SysEvent::NewAccount(3),
 						topics: topics[1..2].to_vec(),
 					}
 				]
@@ -2485,7 +2589,11 @@ pub(crate) mod tests {
 
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
+				vec![EventRecord {
+					phase: Phase::Initialization,
+					event: SysEvent::CodeUpdated,
+					topics: vec![],
+				}],
 			);
 		});
 	}

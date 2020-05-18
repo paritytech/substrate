@@ -626,19 +626,33 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let threads: Vec<_> = (0..8).map(|_| std::thread::spawn(move || {
-		let mut ext = TestExternalities::default();
-		let mut ext = ext.ext();
-		assert_eq!(
-			call_in_wasm(
-				"test_twox_128",
-				&[0],
-				wasm_method.clone(),
-				&mut ext,
-			).unwrap(),
-			hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
-		);
-	})).collect();
+	let executor = std::sync::Arc::new(crate::WasmExecutor::new(
+		wasm_method,
+		Some(1024),
+		HostFunctions::host_functions(),
+		8,
+	));
+	let code_hash = blake2_256(WASM_BINARY).to_vec();
+	let threads: Vec<_> = (0..8).map(|_|
+		{
+			let executor = executor.clone();
+			let code_hash = code_hash.clone();
+			std::thread::spawn(move || {
+				let mut ext = TestExternalities::default();
+				let mut ext = ext.ext();
+				assert_eq!(
+					executor.call_in_wasm(
+						&WASM_BINARY[..],
+						Some(code_hash.clone()),
+						"test_twox_128",
+						&[0],
+						&mut ext,
+						sp_core::traits::MissingHostFunctions::Allow,
+					).unwrap(),
+					hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
+				);
+			})
+		}).collect();
 
 	for t in threads.into_iter() {
 		t.join().unwrap();

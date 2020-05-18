@@ -45,6 +45,7 @@ members = [
 	"client/network-gossip",
 	"client/offchain",
 	"client/peerset",
+	"client/proposer-metrics",
 	"client/rpc-servers",
 	"client/rpc",
 	"client/rpc-api",
