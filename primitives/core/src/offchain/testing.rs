@@ -72,8 +72,6 @@ pub struct OffchainState {
 	pub persistent_storage: InMemOffchainStorage,
 	/// Local storage
 	pub local_storage: InMemOffchainStorage,
-	/// Current timestamp (unix millis)
-	pub timestamp: u64,
 	/// A supposedly random seed.
 	pub seed: [u8; 32],
 }
@@ -159,11 +157,21 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		Timestamp::from_unix_millis(self.0.read().timestamp)
+		use std::convert::TryInto;
+		let millis = std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.expect("Calculating unix epoch in millis for tests must succeed. qed")
+			.as_millis().try_into()
+			.expect("Calculating unix epoch in millis exceeded u64. qed");
+		Timestamp(millis)
 	}
 
-	fn sleep_until(&mut self, _deadline: Timestamp) {
-		unimplemented!("not needed in tests so far")
+	fn sleep_until(&mut self, deadline: Timestamp) {
+		let now = self.timestamp();
+		if deadline > now {
+			let dur = deadline.diff(&now);
+			std::thread::sleep(std::time::Duration::from_millis(dur.millis()));
+		}
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
