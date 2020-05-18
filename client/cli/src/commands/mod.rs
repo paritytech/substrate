@@ -20,16 +20,10 @@ mod export_blocks_cmd;
 mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
-mod generate_node_key;
-mod generate;
-mod inspect;
-mod key;
 mod sign;
-mod sign_transaction;
 mod utils;
 mod verify;
 mod vanity;
-mod insert;
 mod revert_cmd;
 mod run_cmd;
 
@@ -47,20 +41,13 @@ pub use self::{
 	export_state_cmd::ExportStateCmd,
 	import_blocks_cmd::ImportBlocksCmd,
 	purge_chain_cmd::PurgeChainCmd,
-	generate::GenerateCmd,
-	generate_node_key::GenerateNodeIdCmd,
-	insert::InsertCmd,
 	sign::SignCmd,
 	vanity::VanityCmd,
-	sign_transaction::SignTransactionCmd,
 	verify::VerifyCmd,
 	revert_cmd::RevertCmd,
 	run_cmd::RunCmd,
-	inspect::InspectCmd,
-	key::KeySubcommand,
 	utils::*
 };
-use cli_utils::{IndexFor, CallFor};
 
 /// All core commands that are provided by default.
 ///
@@ -90,14 +77,8 @@ pub enum Subcommand {
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
 
-	/// Subcommand for key utilities, eg. generate-node-key, inspect.
-	Key(KeySubcommand),
-
 	/// Sign a message, with a given (secret) key
 	Sign(SignCmd),
-
-	/// Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
-	SignTransaction(SignTransactionCmd),
 
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(VerifyCmd),
@@ -457,9 +438,7 @@ substrate_cli_subcommands!(
 	CheckBlock,
 	Revert,
 	PurgeChain,
-	Key,
 	Sign,
-	SignTransaction,
 	Verify,
 	Vanity
 );

@@ -15,16 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign-transaction` subcommand
-use crate::{
-	error, CliConfiguration, KeystoreParams,
-	with_crypto_scheme, create_extrinsic_for, CryptoSchemeFlag
+use sc_cli::{
+	Error, CliConfiguration, KeystoreParams, SharedParams,
+	pair_from_suri, decode_hex,with_crypto_scheme, create_extrinsic_for,
+	CryptoSchemeFlag,
 };
-use super::{SharedParams, IndexFor, CallFor, pair_from_suri, decode_hex};
 use structopt::StructOpt;
-use parity_scale_codec::{Codec, Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
 use sp_runtime::MultiSigner;
-use cli_utils::RuntimeAdapter;
+use cli_utils::{RuntimeAdapter, IndexFor, CallFor};
 
 type Call = Vec<u8>;
 
@@ -62,7 +62,7 @@ pub struct SignTransactionCmd {
 
 impl SignTransactionCmd {
 	/// Run the command
-	pub fn run<RA>(&self) -> error::Result<()>
+	pub fn run<RA>(&self) -> Result<(), Error>
 		where
 			RA: RuntimeAdapter,
 			<IndexFor<RA> as FromStr>::Err: Display,
@@ -73,10 +73,7 @@ impl SignTransactionCmd {
 		let call = CallFor::<RA>::decode(&mut &self.call[..])?;
 		let pass = self.keystore_params.read_password()?;
 
-		with_crypto_scheme!(
-			self.crypto_scheme.scheme,
-			print_ext<RA>(&self.suri, &pass, call, nonce)
-		)
+		with_crypto_scheme!(self.crypto_scheme.scheme, print_ext<RA>(&self.suri, &pass, call, nonce))
 	}
 }
 
@@ -92,7 +89,7 @@ impl CliConfiguration for SignTransactionCmd {
 }
 
 
-fn print_ext<Pair, RA>(uri: &str, pass: &str, call: CallFor<RA>, nonce: IndexFor<RA>) -> error::Result<()>
+fn print_ext<Pair, RA>(uri: &str, pass: &str, call: CallFor<RA>, nonce: IndexFor<RA>) -> Result<(), Error>
 	where
 		Pair: sp_core::Pair,
 		Pair::Public: Into<MultiSigner>,

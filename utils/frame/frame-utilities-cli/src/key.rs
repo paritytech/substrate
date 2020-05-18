@@ -13,11 +13,21 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-use crate::{error, substrate_cli_subcommands};
+
+//! Key related CLI utilities
+
+use sc_cli::{Error, substrate_cli_subcommands};
 use structopt::StructOpt;
 use cli_utils::{HashFor, RuntimeAdapter};
 use serde::{de::DeserializeOwned, Serialize};
-use super::{GenerateNodeIdCmd, GenerateCmd, InspectCmd, InsertCmd};
+
+
+use crate::{
+	generate_node_key::GenerateNodeIdCmd,
+	generate::GenerateCmd,
+	inspect::InspectCmd,
+	insert::InsertCmd
+};
 
 /// key utilities for the cli.
 #[derive(Debug, Clone, StructOpt)]
@@ -37,7 +47,7 @@ pub enum KeySubcommand {
 
 impl KeySubcommand {
 	/// run the key subcommands
-	pub fn run<RA>(&self) -> error::Result<()>
+	pub fn run<RA>(&self) -> Result<(), Error>
 		where
 			RA: RuntimeAdapter,
 			HashFor<RA>: DeserializeOwned + Serialize + Send + Sync,

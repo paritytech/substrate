@@ -16,8 +16,11 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{error, pair_from_suri, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
-use super::{SharedParams, read_uri};
+use sc_cli::{
+	Error, pair_from_suri, CliConfiguration,
+	KeystoreParams, with_crypto_scheme,
+	CryptoSchemeFlag, SharedParams, read_uri,
+};
 use structopt::StructOpt;
 use sp_core::{crypto::KeyTypeId, Bytes};
 use std::convert::TryFrom;
@@ -26,7 +29,7 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
-use cli_utils::{HashFor, RuntimeAdapter,};
+use cli_utils::{HashFor, RuntimeAdapter};
 
 /// The `insert` command
 #[derive(Debug, StructOpt, Clone)]
@@ -64,7 +67,7 @@ pub struct InsertCmd {
 
 impl InsertCmd {
 	/// Run the command
-	pub fn run<RA>(&self) -> error::Result<()>
+	pub fn run<RA>(&self) -> Result<(), Error>
 		where
 			RA: RuntimeAdapter,
 			HashFor<RA>: DeserializeOwned + Serialize + Send + Sync,
@@ -85,7 +88,7 @@ impl InsertCmd {
 		// Just checking
 		let _key_type_id = KeyTypeId::try_from(key_type.as_str())
 			.map_err(|_| {
-				error::Error::Other("Cannot convert argument to keytype: argument should be 4-character string".into())
+				Error::Other("Cannot convert argument to keytype: argument should be 4-character string".into())
 			})?;
 
 

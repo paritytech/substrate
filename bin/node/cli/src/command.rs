@@ -90,6 +90,16 @@ pub fn run() -> Result<()> {
 				Ok(())
 			}
 		}
+		Some(Subcommand::Key(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+
+			runner.sync_run(|_| cmd.run::<Runtime>())
+		},
+		Some(Subcommand::SignTransaction(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+
+			runner.sync_run(|_| cmd.run::<Runtime>())
+		}
 		Some(Subcommand::Transfer(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 
@@ -98,7 +108,7 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
 
-			runner.run_subcommand::<Runtime, _, _, _>(
+			runner.run_subcommand(
 				subcommand,
 				|config| Ok(new_full_start!(config).0)
 			)

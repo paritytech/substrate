@@ -26,14 +26,7 @@ use log::info;
 use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use cli_utils::{AccountIdFor, AddressFor, IndexFor, BalanceFor, CallFor, RuntimeAdapter};
-use std::convert::TryFrom;
-use sp_core::crypto::Ss58Codec;
-use parity_scale_codec::Codec;
-use std::{
-	str::FromStr, marker::PhantomData,
-	sync::Arc, fmt::{Debug, Display}
-};
+use std::{str::FromStr, marker::PhantomData, sync::Arc, fmt::Debug};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -183,7 +176,7 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<RA, B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
+	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
 	where
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
@@ -191,12 +184,6 @@ impl<C: SubstrateCli> Runner<C> {
 		<<<BB as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 		<BB as BlockT>::Hash: FromStr,
 		<<BB as BlockT>::Hash as FromStr>::Err: Debug,
-		RA: RuntimeAdapter,
-		AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
-		AddressFor<RA>: From<AccountIdFor<RA>>,
-		<IndexFor<RA> as FromStr>::Err: Display,
-		<BalanceFor<RA> as FromStr>::Err: Display,
-		CallFor<RA>: Codec,
 	{
 		match subcommand {
 			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
@@ -210,13 +197,11 @@ impl<C: SubstrateCli> Runner<C> {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
 			}
 			Subcommand::ExportState(cmd) => cmd.run(self.config, builder),
-			Subcommand::Key(cmd) => cmd.run::<RA>(),
 			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
 			Subcommand::Sign(cmd) => cmd.run(),
 			Subcommand::Verify(cmd) => cmd.run(),
 			Subcommand::Vanity(cmd) => cmd.run(),
-			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
 		}
 	}
 

@@ -17,6 +17,7 @@
 use sc_cli::RunCmd;
 use structopt::StructOpt;
 use pallet_balances_cli::TransferCmd;
+use frame_utilities_cli::{KeySubcommand, SignTransactionCmd};
 
 /// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
@@ -38,6 +39,12 @@ pub enum Subcommand {
 
 	/// prints hex-encoded, signed, transfer extrinsic with given arguments.
 	Transfer(TransferCmd),
+
+	/// key utilities
+	Key(KeySubcommand),
+
+	/// sign transaction
+	SignTransaction(SignTransactionCmd),
 
 	/// The custom inspect subcommmand for decoding blocks and extrinsics.
 	#[structopt(

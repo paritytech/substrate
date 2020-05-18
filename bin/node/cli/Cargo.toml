@@ -98,6 +98,7 @@ node-executor = { version = "2.0.0-dev", path = "../executor" }
 # CLI-specific dependencies
 sc-cli = { version = "0.8.0-dev", optional = true, path = "../../../client/cli" }
 pallet-balances-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/pallet-balances-cli" }
+frame-utilities-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 
@@ -131,6 +132,7 @@ node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "2.0.0-dev", optional = true, path = "../../../utils/build-script-utils" }
 pallet-balances-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/pallet-balances-cli" }
+frame-utilities-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/frame-utilities-cli" }
 
 [build-dependencies.sc-cli]
 version = "0.8.0-dev"
@@ -151,6 +153,7 @@ cli = [
 	"sc-cli",
 	"pallet-balances-cli",
 	"frame-benchmarking-cli",
+	"frame-utilities-cli",
 	"sc-service/db",
 	"structopt",
 	"substrate-build-script-utils",

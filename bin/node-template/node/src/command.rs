@@ -18,7 +18,6 @@ use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
 use sc_cli::SubstrateCli;
-use node_template_runtime::Runtime;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -67,7 +66,7 @@ pub fn run() -> sc_cli::Result<()> {
 	match cli.subcommand {
 		Some(ref subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
-			runner.run_subcommand::<Runtime, _, _, _>(
+			runner.run_subcommand(
 				subcommand,
 				|config| Ok(new_full_start!(config).0)
 			)

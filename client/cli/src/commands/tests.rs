@@ -14,42 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::*;
-use tempfile::Builder;
-use std::io::Read;
-use crate::commands::inspect::InspectCmd;
+use super::{SignCmd, VanityCmd};
+use structopt::StructOpt;
 use crate::Error;
 
-#[test]
-fn generate() {
-	let generate = GenerateCmd::from_iter(&["generate", "--password", "12345"]);
-	assert!(generate.run().is_ok())
-}
-
-#[test]
-fn generate_node_key() {
-	let mut file = Builder::new()
-		.prefix("keyfile")
-		.tempfile()
-		.unwrap();
-	let generate = GenerateNodeIdCmd::from_iter(&["generate-node-key", "--file", "/tmp/keyfile"]);
-	assert!(generate.run().is_ok());
-	let mut buf = String::new();
-	assert!(file.read_to_string(&mut buf).is_ok());
-	assert!(hex::decode(buf).is_ok());
-}
-
-#[test]
-fn inspect() {
-	let words = "remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
-	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
-
-	let inspect = InspectCmd::from_iter(&["inspect-key", "--uri", words, "--password", "12345"]);
-	assert!(inspect.run().is_ok());
-
-	let inspect = InspectCmd::from_iter(&["inspect-key", "--uri", seed]);
-	assert!(inspect.run().is_ok());
-}
 
 #[test]
 fn sign() {

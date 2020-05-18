@@ -16,7 +16,7 @@
 
 //! Implementation of the `generate-node-key` subcommand
 
-use crate::{error, SharedParams, CliConfiguration};
+use sc_cli::{Error, SharedParams, CliConfiguration};
 use structopt::StructOpt;
 use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
@@ -39,7 +39,7 @@ pub struct GenerateNodeIdCmd {
 
 impl GenerateNodeIdCmd {
 	/// Run the command
-	pub fn run(&self) -> error::Result<()> {
+	pub fn run(&self) -> Result<(), Error> {
 		let file = &self.file;
 
 		let keypair = libp2p_ed25519::Keypair::generate();

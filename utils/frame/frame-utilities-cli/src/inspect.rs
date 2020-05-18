@@ -14,24 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Implementation of the `generate` subcommand
+//! Implementation of the `inspect` subcommand
 
-use super::{SharedParams};
-use crate::error::{self, Error};
-use bip39::{MnemonicType, Mnemonic, Language};
-use structopt::StructOpt;
-use crate::{
-	print_from_uri, CliConfiguration, KeystoreParams,
-	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
+use sc_cli::{
+	print_from_uri, CliConfiguration, KeystoreParams, SharedParams, read_uri,
+	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag, Error,
 };
+use structopt::StructOpt;
 
-/// The `generate` command
+/// The `inspect` command
 #[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "generate", about = "Generate a random account")]
-pub struct GenerateCmd {
-	/// The number of words in the phrase to generate. One of 12 default), 15, 18, 21 and 24.
-	#[structopt(long, short = "w", value_name = "WORDS")]
-	words: Option<usize>,
+#[structopt(
+	name = "inspect-key",
+	about = "Gets a public key and a SS58 address from the provided Secret URI"
+)]
+pub struct InspectCmd {
+	/// A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or
+	/// public URI. If the value is a file, the file content is used as URI.
+	/// If not given, you will be prompted for the URI.
+	#[structopt(long)]
+	uri: Option<String>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -54,37 +56,27 @@ pub struct GenerateCmd {
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
-impl GenerateCmd {
+impl InspectCmd {
 	/// Run the command
-	pub fn run(&self) -> error::Result<()> {
-		let words = match self.words {
-			Some(words) => {
-				MnemonicType::for_word_count(words)
-					.map_err(|_| {
-						Error::Input("Invalid number of words given for phrase: must be 12/15/18/21/24".into())
-					})?
-			},
-			None => MnemonicType::Words12,
-		};
-		let mnemonic = Mnemonic::new(words, Language::English);
-		let password = self.keystore_params.read_password()?;
-		let maybe_network = self.network_scheme.network.clone();
-		let output = self.output_scheme.output_type.clone();
+	pub fn run(&self) -> Result<(), Error> {
+		let uri = read_uri(self.uri.as_ref())?;
+		let pass = self.keystore_params.read_password().ok();
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
-				mnemonic.phrase(),
-				Some(password.as_str()),
-				maybe_network,
-				output
+				&uri,
+				pass.as_ref().map(String::as_str),
+				self.network_scheme.network.clone(),
+				self.output_scheme.output_type.clone()
 			)
 		);
+
 		Ok(())
 	}
 }
 
-impl CliConfiguration for GenerateCmd {
+impl CliConfiguration for InspectCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}
