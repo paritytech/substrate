@@ -44,8 +44,13 @@ impl FixedPointOperand for u16 {}
 impl FixedPointOperand for i8 {}
 impl FixedPointOperand for u8 {}
 
-/// Something that implements a fixed point with an arbitrary precision `DIV`,
-/// i.e. `1 / DIV` can be represented. `DIV` should be a power of `10`.
+/// Something that implements a decimal fixed point number.
+///
+/// The precision is given by `Self::DIV`, i.e. `1 / DIV` can be represented.
+///
+/// Each type can store numbers from `Self::Inner::min_value() / Self::DIV`
+/// to `Self::Inner::max_value() / Self::DIV`.
+/// This is also referred to as the _accuracy_ of the type in the documentation.
 pub trait FixedPointNumber:
 	Sized + Copy + Default + Debug
 	+ Saturating + Bounded
@@ -56,10 +61,10 @@ pub trait FixedPointNumber:
 	/// The underlying data type used for this fixed point number.
 	type Inner: Debug + One + CheckedMul + CheckedDiv + CheckedNeg + Signed + FixedPointOperand;
 
-	/// The accuracy of this fixed point number.
+	/// Precision of this fixed point implementation. It should be a power of `10`.
 	const DIV: Self::Inner;
 
-	/// Accuracy of this `Fixed` implementation.
+	/// Precision of this fixed point implementation.
 	fn accuracy() -> Self::Inner {
 		Self::DIV
 	}
@@ -629,6 +634,12 @@ macro_rules! implement_fixed {
 				// Pos + Pos => Max.
 				assert_eq!(to_bound::<_, _, i32>(a, b), i32::max_value());
 
+				let a = -1i32;
+				let b = -1i32;
+
+				// Neg + Neg => Max.
+				assert_eq!(to_bound::<_, _, i32>(a, b), i32::max_value());
+
 				let a = 1i32;
 				let b = -1i32;
 
@@ -640,12 +651,6 @@ macro_rules! implement_fixed {
 
 				// Neg + Pos => Min.
 				assert_eq!(to_bound::<_, _, i32>(a, b), i32::min_value());
-
-				let a = 1i32;
-				let b = 1i32;
-
-				// Pos + Pos => Max.
-				assert_eq!(to_bound::<_, _, u32>(a, b), u32::max_value());
 
 				let a = 1i32;
 				let b = -1i32;

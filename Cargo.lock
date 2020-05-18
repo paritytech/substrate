@@ -7314,7 +7314,7 @@ dependencies = [
  "integer-sqrt",
  "num-traits 0.2.11",
  "parity-scale-codec",
- "quickcheck",
+ "primitive-types",
  "rand 0.7.3",
  "serde",
  "serde_json",
