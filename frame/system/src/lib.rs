@@ -1832,7 +1832,10 @@ pub(crate) mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_noop};
+	use frame_support::{
+		impl_outer_origin, parameter_types, assert_ok, assert_noop,
+		weights::WithPostDispatchInfo,
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -2030,6 +2033,89 @@ pub(crate) mod tests {
 					EventRecord {
 						phase: Phase::Finalization,
 						event: SysEvent::NewAccount(3),
+						topics: vec![]
+					},
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn deposit_event_uses_actual_weight() {
+		new_test_ext().execute_with(|| {
+			System::initialize(
+				&1,
+				&[0u8; 32].into(),
+				&[0u8; 32].into(),
+				&Default::default(),
+				InitKind::Full,
+			);
+			System::note_finished_initialize();
+
+			let pre_info = DispatchInfo {
+				weight: 1000,
+				.. Default::default()
+			};
+			System::note_applied_extrinsic(
+				&Ok(Some(300).into()),
+				pre_info,
+			);
+			System::note_applied_extrinsic(
+				&Ok(Some(1000).into()),
+				pre_info,
+			);
+			System::note_applied_extrinsic(
+				// values over the pre info should be capped at pre dispatch value
+				&Ok(Some(1200).into()),
+				pre_info,
+			);
+			System::note_applied_extrinsic(
+				&Err(DispatchError::BadOrigin.with_weight(999)),
+				pre_info,
+			);
+
+			assert_eq!(
+				System::events(),
+				vec![
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(0),
+						event: SysEvent::ExtrinsicSuccess(
+							DispatchInfo {
+								weight: 300,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(1),
+						event: SysEvent::ExtrinsicSuccess(
+							DispatchInfo {
+								weight: 1000,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(2),
+						event: SysEvent::ExtrinsicSuccess(
+							DispatchInfo {
+								weight: 1000,
+								.. Default::default()
+							},
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(3),
+						event: SysEvent::ExtrinsicFailed(
+							DispatchError::BadOrigin.into(),
+							DispatchInfo {
+								weight: 999,
+								.. Default::default()
+							},
+						),
 						topics: vec![]
 					},
 				]
