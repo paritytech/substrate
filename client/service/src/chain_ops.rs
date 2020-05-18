@@ -208,6 +208,17 @@ where
 	}
 }
 
+/// SCOTT
+enum ImportState<R, B>
+where 
+	R: Read + Seek + 'static,
+	B: BlockT + MaybeSerializeDeserialize,
+{
+	Reading(BlockIter<R, B>),
+	WaitingForImportQueueToCatchUp(BlockIter<R, B>, u64, SignedBlock<B>),
+	WaitingForImportQueueToFinish(Option<u64>, u64, u64),
+}
+
 impl<
 	TBl, TRtApi, TBackend,
 	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
@@ -229,7 +240,7 @@ impl<
 
 	fn import_blocks(
 		mut self,
-		input: impl Read + Seek + Send + 'static,
+		input: impl Read + Seek + Send + 'static + Sync,
 		force: bool,
 		binary: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
@@ -269,7 +280,7 @@ impl<
 		let mut link = WaitLink::new();
 		let block_iter_res: Result<BlockIter<_, Self::Block>, String> = BlockIter::new(input, binary);
 
-		let mut block_iter = match block_iter_res {
+		let block_iter = match block_iter_res {
 			Ok(block_iter) => block_iter,
 			Err(e) => {
 				// We've encountered an error while creating the block iterator 
@@ -277,6 +288,8 @@ impl<
 				return future::ready(Err(Error::Other(e))).boxed()
 			}
 		};
+
+		let mut state = Some(ImportState::Reading(block_iter));
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -288,32 +301,24 @@ impl<
 		let import = future::poll_fn(move |cx| {
 			let client = &self.client;
 			let queue = &mut self.import_queue;
-			let read_block_count = block_iter.read_block_count();
-
-			// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
-			// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
-			if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
-				// Read blocks from the input.
-				match block_iter.next() {
-					None => {
-						let read_block_count = block_iter.read_block_count();
-						let num_expected_blocks = block_iter.num_expected_blocks();
-
-						if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
-							info!(
-								"🎉 Imported {} blocks. Best: #{}",
-								read_block_count, client.chain_info().best_number
-							);
-							return std::task::Poll::Ready(Ok(()))
-						}
-					},
-					Some(block_result) => {
-						let read_block_count = block_iter.read_block_count();
-						// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
-						// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
-						if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+			match state.take().expect("state should never be None; qed") {
+				ImportState::Reading(mut block_iter) => {
+					match block_iter.next() {
+						None => {
+							let num_expected_blocks = block_iter.num_expected_blocks();
+							let read_block_count = block_iter.read_block_count();
+							state = Some(ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, 1))
+						},
+						Some(block_result) => {
+							let read_block_count = block_iter.read_block_count();
 							match block_result {
-								Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
+								Ok(block) => {
+									if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+										state = Some(ImportState::WaitingForImportQueueToCatchUp(block_iter, 1, block));
+									} else {
+										import_block_to_queue(block, queue, force);
+									}
+								}
 								Err(e) => {
 									return std::task::Poll::Ready(
 										Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e))))
@@ -321,10 +326,28 @@ impl<
 							}
 						}
 					}
+				},
+				ImportState::WaitingForImportQueueToCatchUp(block_iter, delay, block) => {
+					let read_block_count = block_iter.read_block_count();
+					if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+						import_block_to_queue(block, queue, force);
+						state = Some(ImportState::Reading(block_iter));
+					} else {
+						state = Some(ImportState::WaitingForImportQueueToCatchUp(block_iter, 1, block));
+					}
+				},
+				ImportState::WaitingForImportQueueToFinish(num_expected_blocks, read_block_count, delay) => {
+					if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
+						info!(
+							"🎉 Imported {} blocks. Best: #{}",
+							read_block_count, client.chain_info().best_number
+						);
+						return std::task::Poll::Ready(Ok(()))
+					}
 				}
 			}
 
-			let blocks_before = link.imported_blocks;
+		let blocks_before = link.imported_blocks;
 			queue.poll_actions(cx, &mut link);
 
 			if link.has_error {
