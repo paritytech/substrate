@@ -553,7 +553,7 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new_test(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 		let mut propose_block = |
 			client: &TestClient,
 			number,
