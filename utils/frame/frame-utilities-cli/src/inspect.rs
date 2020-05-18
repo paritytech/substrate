@@ -29,8 +29,9 @@ use structopt::StructOpt;
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
 pub struct InspectCmd {
-	/// A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or
-	/// public URI. If the value is a file, the file content is used as URI.
+	/// A Key URI to be inspected. May be a secret seed, secret URI
+	/// (with derivation paths and password), SS58 or public URI.
+	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
 	#[structopt(long)]
 	uri: Option<String>,

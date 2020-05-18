@@ -32,7 +32,8 @@ type Call = Vec<u8>;
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "sign-transaction",
-	about = "Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex."
+	about = "Sign transaction from encoded Call.\
+	Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex."
 )]
 pub struct SignTransactionCmd {
 	/// The secret key URI.
