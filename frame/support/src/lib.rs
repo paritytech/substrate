@@ -218,6 +218,7 @@ macro_rules! assert_err_ignore_postinfo {
 	}
 }
 
+/// Assert an expression returns error with the given weight.
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! assert_err_with_weight {
@@ -246,6 +247,7 @@ macro_rules! assert_ok {
 		}
 	};
 	( $x:expr, $y:expr $(,)? ) => {
+		dbg!(&$x);
 		assert_eq!($x, Ok($y));
 	}
 }

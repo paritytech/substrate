@@ -303,6 +303,8 @@ pub fn trim_compact_to_assignments<T: Trait>(
 			index = index + 1;
 			index = index % 16;
 		}
+	} else {
+		panic!("This solution is already smaller!");
 	}
 
 	// now re-compute the score all over again...

@@ -759,6 +759,43 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 	}
 }
 
+pub mod weight {
+	use super::*;
+
+	/// All weight notes are pertaining to the case of a better solution, in which we execute
+	/// the longest code path.
+	/// Weight: 0 + (35 μs * v) + (25 μs * n)
+	/// State reads:
+	/// 	- Initial checks:
+	/// 		- ElectionState, CurrentEra, QueuedScore
+	/// 		- SnapshotValidators.len()
+	/// 		- ValidatorCount
+	/// 		- SnapshotValidators
+	/// 		- SnapshotNominators
+	/// 	- Iterate over nominators:
+	/// 		- compact.len() * Nominators(who)
+	/// 		- (non_self_vote_edges) * SlashingSpans
+	/// 	- For `assignment_ratio_to_staked`: Basically read the staked value of each stash.
+	/// 		- (winners.len() + compact.len()) * (Ledger + Bonded)
+	/// 		- TotalIssuance (read a gzillion times potentially, but well it is cached.)
+	/// - State writes:
+	/// 	- QueuedElected, QueuedScore
+	pub fn weight_for_submit_solution<T: Trait>(
+		winners: &Vec<ValidatorIndex>,
+		compact: &CompactAssignments,
+		size: &ElectionSize,
+	) -> Weight {
+		(35 * WEIGHT_PER_MICROS * (size.validators as Weight))
+			.saturating_add(25 * WEIGHT_PER_MICROS * (size.validators as Weight))
+			.saturating_add(T::DbWeight::get().reads(7))
+			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight)) // Nominators
+			.saturating_add(T::DbWeight::get().reads(compact.edge_count() as Weight))  // SlashingSpans
+			.saturating_add(T::DbWeight::get().reads(2 * ((winners.len() + compact.len()) as Weight)))
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(2))
+	}
+}
+
 pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
@@ -2081,42 +2118,9 @@ decl_module! {
 		///    minimized (to ensure less variance)
 		///
 		/// # <weight>
-		/// All weight notes are pertaining to the case of a better solution, in which we execute
-		/// the longest code path.
-		/// Weight: 0 + (35 μs * v) + (25 μs * n)
-		/// State reads:
-		/// 	- Initial checks:
-		/// 		- ElectionState, CurrentEra, QueuedScore
-		/// 		- SnapshotValidators.len()
-		/// 		- ValidatorCount
-		/// 		- SnapshotValidators
-		/// 		- SnapshotNominators
-		/// 	- Iterate over nominators:
-		/// 		- compact.len() * Nominators(who)
-		/// 		- (compact.len() - winners.len()) * avg_edge_count * SlashingSpans
-		/// 	- For `assignment_ratio_to_staked`: Basically read the staked value of each stash.
-		/// 		- (winners.len() + compact.len()) * (Ledger + Bonded)
-		/// 		- TotalIssuance (read a gzillion times potentially, but well it is cached.)
-		/// - State writes:
-		/// 	- QueuedElected, QueuedScore
+		/// See `crate::weight` module.
 		/// # </weight>
-		#[weight =
-			(35 * WEIGHT_PER_MICROS * (size.validators as Weight))
-			.saturating_add(25 * WEIGHT_PER_MICROS * (size.validators as Weight))
-			.saturating_add(T::DbWeight::get().reads(7))
-			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight)) // Nominators
-			.saturating_add( // SlashingSpans
-				T::DbWeight::get().reads(
-					compact.len()
-						.saturating_sub(winners.len())
-						.saturating_mul(compact.average_edge_count())
-						as Weight
-				)
-			)
-			.saturating_add(T::DbWeight::get().reads(2 * ((winners.len() + compact.len()) as Weight)))
-			.saturating_add(T::DbWeight::get().reads(1))
-			.saturating_add(T::DbWeight::get().writes(2))
-		]
+		#[weight = weight::weight_for_submit_solution::<T>(winners, compact, size)]
 		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
@@ -2141,8 +2145,11 @@ decl_module! {
 		/// Note that this must pass the [`ValidateUnsigned`] check which only allows transactions
 		/// from the local node to be included. In other words, only the block author can include a
 		/// transaction in the block.
-		// TODO: put the weight here as well once final
-		#[weight = 100_000_000_000]
+		///
+		/// # <weight>
+		/// See `crate::weight` module.
+		/// # </weight>
+		#[weight = weight::weight_for_submit_solution::<T>(winners, compact, size)]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
@@ -2592,6 +2599,17 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResultWithPostInfo {
 		// Do the basic checks. era, claimed score and window open.
 		Self::pre_dispatch_checks(claimed_score, era)?;
+		// utilities for refund.
+		// Weight note: sadly we have to recompute the original weight here. Maybe we can optimise
+		// it someday.
+		let original_weight = weight::weight_for_submit_solution::<T>(
+			&winners,
+			&compact_assignments,
+			&election_size,
+		);
+		let mut refund: Weight = 0;
+		let mut accumulate_read_refund = ||
+			refund = refund.saturating_add(T::DbWeight::get().reads(1));
 
 		// Check that the number of presented winners is sane. Most often we have more candidates
 		// that we need. Then it should be Self::validator_count(). Else it should be all the
@@ -2701,6 +2719,8 @@ impl<T: Trait> Module<T> {
 					distribution[0].1 == OffchainAccuracy::one(),
 					Error::<T>::PhragmenBogusSelfVote,
 				);
+				// all good. We can refund some weight now.
+				accumulate_read_refund();
 			}
 		}
 
@@ -2741,8 +2761,7 @@ impl<T: Trait> Module<T> {
 		});
 		QueuedScore::put(submitted_score);
 
-		Ok(None.into())
-
+		Ok(Some(original_weight.saturating_sub(refund)).into())
 	}
 
 	/// Start a session potentially starting an era.

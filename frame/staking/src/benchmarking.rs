@@ -410,13 +410,21 @@ benchmarks! {
 		// NOTE: this benchmark requires: `v > w`, `n > a` and `a > w`. Talk to @kianenigma if you
 		// want to know why.
 		// number of validator intentions
-		let v in 50 .. 100;
+		let v in 200 .. 400;
 		// number of nominators
-		let n in 200 .. 500;
+		let n in 500 .. 1000;
 		// number of winners.
-		let w in 10 .. 40;
+		let w in 100 .. 199;
 		// number of assignments. Basically, number of active nominators.
-		let a in 50 .. 200;
+		let a in 200 .. 499;
+
+		// let v in 50 .. 100;
+		// // number of nominators
+		// let n in 200 .. 500;
+		// // number of winners.
+		// let w in 10 .. 40;
+		// // number of assignments. Basically, number of active nominators.
+		// let a in 50 .. 200;
 		// NOTE: we could make the edge per assignment also variable, but 1. unlikely to bring much
 		// accuracy change 2. makes the setup of the bench a few orders of magnitude more annoying.
 
@@ -442,16 +450,17 @@ benchmarks! {
 
 		let era = <Staking<T>>::current_era().unwrap_or(0);
 		let caller: T::AccountId = account("caller", n, SEED);
+		// no score already.
+		assert_eq!(<Staking<T>>::queued_score(), None);
 	}: {
-		let result = <Staking<T>>::submit_election_solution(
+		assert!(<Staking<T>>::submit_election_solution(
 			RawOrigin::Signed(caller.clone()).into(),
 			winners,
 			new_compact,
 			new_score.clone(),
 			era,
 			size,
-		);
-		assert_eq!(result, Ok(().into()));
+		).is_ok())
 	}
 	verify {
 		// new solution has been accepted.
