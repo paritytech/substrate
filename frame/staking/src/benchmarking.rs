@@ -467,7 +467,7 @@ benchmarks! {
 		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
 
-		// needed for the solution to be generates.
+		// needed for the solution to be generated.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
 
 		// needed for the solution to be accepted
