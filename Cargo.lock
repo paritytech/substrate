@@ -6167,6 +6167,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-keystore",
+ "sc-rpc-api",
  "serde",
  "sp-api",
  "sp-application-crypto",

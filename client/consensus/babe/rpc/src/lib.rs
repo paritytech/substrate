@@ -32,6 +32,7 @@ use sp_consensus_babe::{
 };
 use serde::{Deserialize, Serialize};
 use sc_keystore::KeyStorePtr;
+use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
@@ -61,6 +62,8 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	babe_config: Config,
 	/// The SelectChain strategy
 	select_chain: SC,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
 }
 
 impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
@@ -71,6 +74,7 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		keystore: KeyStorePtr,
 		babe_config: Config,
 		select_chain: SC,
+		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Self {
 			client,
@@ -78,6 +82,7 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 			keystore,
 			babe_config,
 			select_chain,
+			deny_unsafe,
 		}
 	}
 }
@@ -91,6 +96,10 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 		SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(rpc_future::err(err.into()));
+		}
+
 		let (
 			babe_config,
 			keystore,
