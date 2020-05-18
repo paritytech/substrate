@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Fuzzing for staking pallet.
 
@@ -23,8 +24,9 @@ use pallet_staking::testing_utils::{
 	USER, get_seq_phragmen_solution, get_weak_solution, setup_chain_stakers,
 	set_validator_count, signed_account,
 };
-use frame_support::assert_ok;
+use frame_support::{assert_ok, storage::StorageValue};
 use sp_runtime::{traits::Dispatchable, DispatchError};
+use sp_core::offchain::{testing::TestOffchainExt, OffchainExt};
 
 mod mock;
 
@@ -40,8 +42,19 @@ enum Mode {
 	WeakerSubmission,
 }
 
-pub fn new_test_ext() -> Result<sp_io::TestExternalities, std::string::String> {
-	frame_system::GenesisConfig::default().build_storage::<mock::Test>().map(Into::into)
+pub fn new_test_ext(iterations: u32) -> sp_io::TestExternalities {
+	let mut ext: sp_io::TestExternalities = frame_system::GenesisConfig::default().build_storage::<mock::Test>().map(Into::into)
+		.expect("Failed to create test externalities.");
+
+	let (offchain, offchain_state) = TestOffchainExt::new();
+
+	let mut seed = [0u8; 32];
+	seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+	offchain_state.write().seed = seed;
+
+	ext.register_extension(OffchainExt::new(offchain));
+
+	ext
 }
 
 fn main() {
@@ -56,7 +69,7 @@ fn main() {
 	loop {
 		fuzz!(|data: (u32, u32, u32, u32, u32)| {
 			let (mut num_validators, mut num_nominators, mut edge_per_voter, mut to_elect, mode_u32) = data;
-			let ext = new_test_ext();
+			let mut ext = new_test_ext(5);
 			let mode: Mode = unsafe { std::mem::transmute(mode_u32) };
 			num_validators = to_range(num_validators, 50, 1000);
 			num_nominators = to_range(num_nominators, 50, 2000);
@@ -73,7 +86,7 @@ fn main() {
 				to_elect,
 			);
 
-			ext.unwrap_or_default().execute_with(|| {
+			ext.execute_with(|| {
 				// initial setup
 				set_validator_count::<Test>(to_elect);
 				pallet_staking::testing_utils::init_active_era();
@@ -82,6 +95,7 @@ fn main() {
 					num_nominators,
 					edge_per_voter,
 				);
+				<pallet_staking::EraElectionStatus<Test>>::put(pallet_staking::ElectionStatus::Open(1));
 
 				println!("++ Chain setup done.");
 
@@ -140,7 +154,7 @@ fn main() {
 					Mode::WeakerSubmission => {
 						assert_eq!(
 							call.dispatch(caller.into()).unwrap_err().error,
-							DispatchError::Module { index: 0, error: 15, message: Some("PhragmenWeakSubmission") },
+							DispatchError::Module { index: 0, error: 16, message: Some("PhragmenWeakSubmission") },
 						);
 					},
 					// NOTE: so exhaustive pattern doesn't work here.. maybe some rust issue? or due to `#[repr(u32)]`?

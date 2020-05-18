@@ -1,26 +1,27 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
+// the Free Software Foundation, either version 3 of the License, or 
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! DB-backed cache of blockchain data.
 
 use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 
 use sc_client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
-use sp_blockchain::Result as ClientResult;
+use sp_blockchain::{Result as ClientResult, HeaderMetadataCache};
 use sp_database::{Database, Transaction};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
@@ -78,6 +79,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
+	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	db: Arc<dyn Database<DbHash>>,
 	key_lookup_column: u32,
 	header_column: u32,
@@ -90,6 +92,7 @@ impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
 		db: Arc<dyn Database<DbHash>>,
+		header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 		key_lookup_column: u32,
 		header_column: u32,
 		cache_column: u32,
@@ -99,6 +102,7 @@ impl<Block: BlockT> DbCache<Block> {
 		Self {
 			cache_at: HashMap::new(),
 			db,
+			header_metadata_cache,
 			key_lookup_column,
 			header_column,
 			cache_column,
@@ -348,18 +352,24 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		at: &BlockId<Block>,
 	) -> ClientResult<Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>> {
 		let mut cache = self.0.write();
+		let header_metadata_cache = cache.header_metadata_cache.clone();
 		let cache = cache.get_cache(*key)?;
 		let storage = cache.storage();
 		let db = storage.db();
 		let columns = storage.columns();
 		let at = match *at {
 			BlockId::Hash(hash) => {
-				let header = utils::require_header::<Block>(
-					&**db,
-					columns.key_lookup,
-					columns.header,
-					BlockId::Hash(hash.clone()))?;
-				ComplexBlockId::new(hash, *header.number())
+				match header_metadata_cache.header_metadata(hash) {
+					Some(metadata) => ComplexBlockId::new(hash, metadata.number),
+					None => {
+						let header = utils::require_header::<Block>(
+							&**db,
+							columns.key_lookup,
+							columns.header,
+							BlockId::Hash(hash.clone()))?;
+						ComplexBlockId::new(hash, *header.number())
+					}
+				}
 			},
 			BlockId::Number(number) => {
 				let hash = utils::require_header::<Block>(

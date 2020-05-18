@@ -1,19 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
+// the Free Software Foundation, either version 3 of the License, or 
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
@@ -29,9 +30,7 @@ use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof,
-	StorageProofKind, ProvideRuntimeApi,
-};
+use sp_api::{ApiRef, StorageProof, StorageProofKind, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
@@ -42,7 +41,7 @@ use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
@@ -215,6 +214,20 @@ sp_api::mock_impl_runtime_apis! {
 
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
+		}
+
+		fn submit_report_equivocation_extrinsic(
+			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
+			_key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			None
+		}
+
+		fn generate_key_ownership_proof(
+			_set_id: SetId,
+			_authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof> {
+			None
 		}
 	}
 }
@@ -1666,7 +1679,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		};
 
 		let msg = finality_grandpa::Message::Precommit(precommit.clone());
-		let encoded = communication::localized_payload(round, set_id, &msg);
+		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
 		let signature = peers[0].sign(&encoded[..]).into();
 
 		let precommit = finality_grandpa::SignedPrecommit {

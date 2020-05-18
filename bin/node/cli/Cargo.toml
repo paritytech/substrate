@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 default-run = "substrate"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
@@ -85,8 +85,9 @@ pallet-balances = { version = "2.0.0-dev", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "2.0.0-dev", path = "../../../frame/transaction-payment" }
 frame-support = { version = "2.0.0-dev", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "2.0.0-dev", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { version = "2.0.0-dev",  path = "../../../frame/authority-discovery" }
-pallet-staking = { version = "2.0.0-dev",  path = "../../../frame/staking" }
+pallet-authority-discovery = { version = "2.0.0-dev", path = "../../../frame/authority-discovery" }
+pallet-staking = { version = "2.0.0-dev", path = "../../../frame/staking" }
+pallet-grandpa = { version = "2.0.0-dev", path = "../../../frame/grandpa" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0-dev", path = "../runtime" }
@@ -97,7 +98,6 @@ node-executor = { version = "2.0.0-dev", path = "../executor" }
 # CLI-specific dependencies
 sc-cli = { version = "0.8.0-dev", optional = true, path = "../../../client/cli" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
-node-transaction-factory = { version = "0.8.0-dev", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 
 # WASM-specific dependencies
@@ -126,7 +126,6 @@ platforms = "0.2.1"
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
-node-transaction-factory = { version = "0.8.0-dev", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "2.0.0-dev", optional = true, path = "../../../utils/build-script-utils" }
@@ -147,7 +146,6 @@ browser = [
 cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",
-	"node-transaction-factory",
 	"sc-cli",
 	"frame-benchmarking-cli",
 	"sc-service/db",

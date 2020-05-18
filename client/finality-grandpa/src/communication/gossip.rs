@@ -814,7 +814,7 @@ impl<Block: BlockT> Inner<Block> {
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
-		if let Err(()) = super::check_message_sig::<Block>(
+		if let Err(()) = sp_finality_grandpa::check_message_signature(
 			&full.message.message,
 			&full.message.id,
 			&full.message.signature,
@@ -887,7 +887,7 @@ impl<Block: BlockT> Inner<Block> {
 				// any catch up requests until we import this one (either with a
 				// success or failure).
 				self.pending_catch_up = PendingCatchUp::Processing {
-					instant: instant.clone(),
+					instant: *instant,
 				};
 
 				// always discard catch up messages, they're point-to-point
@@ -1281,7 +1281,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
 			report_sender: tx,
-			metrics: metrics,
+			metrics,
 		};
 
 		(val, rx)

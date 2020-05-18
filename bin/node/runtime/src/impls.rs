@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
@@ -70,8 +71,8 @@ pub struct TargetedFeeAdjustment<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<T> {
 	fn convert(multiplier: Fixed128) -> Fixed128 {
-		let block_weight = System::all_extrinsics_weight();
 		let max_weight = MaximumBlockWeight::get();
+		let block_weight = System::all_extrinsics_weight().total().min(max_weight);
 		let target_weight = (T::get() * max_weight) as u128;
 		let block_weight = block_weight as u128;
 
@@ -132,11 +133,12 @@ mod tests {
 
 	// poc reference implementation.
 	fn fee_multiplier_update(block_weight: Weight, previous: Fixed128) -> Fixed128  {
-		let block_weight = block_weight as f64;
-		let v: f64 = 0.00004;
-
 		// maximum tx weight
 		let m = max() as f64;
+		// block weight always truncated to max weight
+		let block_weight = (block_weight as f64).min(m);
+		let v: f64 = 0.00004;
+
 		// Ideal saturation in terms of weight
 		let ss = target() as f64;
 		// Current saturation in terms of weight

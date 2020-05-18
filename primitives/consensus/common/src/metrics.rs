@@ -14,27 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![cfg(unix)]
+//! Metering tools for consensus
 
-use assert_cmd::cargo::cargo_bin;
-use std::process::{Command, Stdio};
-use tempfile::tempdir;
+use prometheus_endpoint::{register, U64, Registry, PrometheusError, Opts, CounterVec};
 
-mod common;
+/// Generic Prometheus metrics for common consensus functionality.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	pub import_queue_processed: CounterVec<U64>,
+}
 
-#[test]
-fn factory_works() {
-	let base_path = tempdir().expect("could not create a temp dir");
-
-	let status = Command::new(cargo_bin("substrate"))
-		.stdout(Stdio::null())
-		.args(&["factory", "--dev", "-d"])
-		.arg(base_path.path())
-		.status()
-		.unwrap();
-	assert!(status.success());
-
-	// Make sure that the `dev` chain folder exists & `db`
-	assert!(base_path.path().join("chains/dev/").exists());
-	assert!(base_path.path().join("chains/dev/db").exists());
+impl Metrics {
+	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			import_queue_processed: register(
+				CounterVec::new(
+					Opts::new("import_queue_processed_total", "Blocks processed by import queue"),
+					&["result"] // 'success or failure
+				)?,
+				registry,
+			)?,
+		})
+	}
 }

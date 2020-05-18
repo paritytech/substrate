@@ -86,7 +86,7 @@ impl DebugInfoBehaviour {
 	) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
-			Identify::new(proto_version, user_agent, local_public_key.clone())
+			Identify::new(proto_version, user_agent, local_public_key)
 		};
 
 		DebugInfoBehaviour {

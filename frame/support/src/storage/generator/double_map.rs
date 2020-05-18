@@ -1,23 +1,24 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, traits::Len, Never};
+use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
+use crate::{storage::{self, unhashed, StorageAppend}, Never};
 use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
@@ -245,70 +246,19 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		ret
 	}
 
-	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
+	fn append<Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,
-		items: Items,
-	) -> Result<(), &'static str> where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator
-	{
-		let final_key = Self::storage_double_map_final_key(k1, k2);
-
-		let encoded_value = unhashed::get_raw(&final_key)
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => Vec::new(),
-				}
-			});
-
-		let new_val = V::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(&final_key, &new_val);
-
-		Ok(())
-	}
-
-	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: KArg1,
-		k2: KArg2,
-		items: Items,
+		item: EncodeLikeItem,
 	) where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator
+		V: StorageAppend<Item>,
 	{
-		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
-			.unwrap_or_else(|_| Self::insert(k1, k2, items));
-	}
-
-	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str> where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		V: codec::DecodeLength + Len,
-	{
-		let final_key = Self::storage_double_map_final_key(key1, key2);
-		if let Some(v) = unhashed::get_raw(&final_key) {
-			<V as codec::DecodeLength>::len(&v).map_err(|e| e.what())
-		} else {
-			let len = G::from_query_to_optional_value(G::from_optional_value_to_query(None))
-				.map(|v| v.len())
-				.unwrap_or(0);
-
-			Ok(len)
-		}
+		let final_key = Self::storage_double_map_final_key(k1, k2);
+		sp_io::storage::append(&final_key, item.encode());
 	}
 
 	fn migrate_keys<

@@ -2,7 +2,7 @@
 description = "Substrate network protocol"
 name = "sc-network"
 version = "0.8.0-dev"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
@@ -52,7 +52,6 @@ smallvec = "0.6.10"
 sp-arithmetic = { version = "2.0.0-dev", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
-sp-consensus-babe = { version = "0.8.0-dev", path = "../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }

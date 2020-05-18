@@ -1,25 +1,29 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Democracy pallet benchmarking.
 
 use super::*;
 
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get, EnsureOrigin, OnInitialize};
+use frame_support::{
+	IterableStorageMap,
+	traits::{Currency, Get, EnsureOrigin, OnInitialize},
+};
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
@@ -30,7 +34,6 @@ const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
 const MAX_SECONDERS: u32 = 100;
-const MAX_VETOERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
 fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
@@ -52,7 +55,11 @@ fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
 	let value = T::MinimumDeposit::get();
 	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 
-	Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value.into())?;
+	Democracy::<T>::propose(
+		RawOrigin::Signed(other).into(),
+		proposal_hash,
+		value.into(),
+	)?;
 
 	Ok(proposal_hash)
 }
@@ -69,7 +76,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
 	let _ = T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index),
+		(DEMOCRACY_ID, referendum_index).encode(),
 		0.into(),
 		None,
 		63,
@@ -130,15 +137,15 @@ benchmarks! {
 		// Create s existing "seconds"
 		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
-			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
+			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0, u32::max_value())?;
 		}
 
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
-		assert_eq!(deposits.1.len(), (s + 1) as usize, "Seconds not recorded");
-	}: _(RawOrigin::Signed(caller), 0)
+		assert_eq!(deposits.0.len(), (s + 1) as usize, "Seconds not recorded");
+	}: _(RawOrigin::Signed(caller), 0, u32::max_value())
 	verify {
 		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
-		assert_eq!(deposits.1.len(), (s + 2) as usize, "`second` benchmark did not work");
+		assert_eq!(deposits.0.len(), (s + 2) as usize, "`second` benchmark did not work");
 	}
 
 	vote_new {
@@ -296,13 +303,14 @@ benchmarks! {
 	// Worst case scenario, we external propose a previously blacklisted proposal
 	external_propose {
 		let p in 1 .. MAX_PROPOSALS;
+		let v in 1 .. MAX_VETOERS as u32;
 
 		let origin = T::ExternalOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&p);
 		// Add proposal to blacklist with block number 0
 		Blacklist::<T>::insert(
 			proposal_hash,
-			(T::BlockNumber::zero(), vec![T::AccountId::default()])
+			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
 
 		let call = Call::<T>::external_propose(proposal_hash);
@@ -356,7 +364,7 @@ benchmarks! {
 
 	veto_external {
 		// Existing veto-ers
-		let v in 0 .. MAX_VETOERS;
+		let v in 0 .. MAX_VETOERS as u32;
 
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
 
@@ -462,6 +470,36 @@ benchmarks! {
 				match value {
 					ReferendumInfo::Finished { .. } => (),
 					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished"),
+				}
+			}
+		}
+	}
+
+	on_initialize_no_launch_no_maturing {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
+
+		for (key, mut info) in ReferendumInfoOf::<T>::iter() {
+			if let ReferendumInfo::Ongoing(ref mut status) = info {
+				status.end += 100.into();
+			}
+			ReferendumInfoOf::<T>::insert(key, info);
+		}
+
+		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
+		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
+
+	}: { Democracy::<T>::on_initialize(0.into()) }
+	verify {
+		// All should be on going
+		for i in 0 .. r {
+			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+				match value {
+					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished"),
+					ReferendumInfo::Ongoing(_) => (),
 				}
 			}
 		}
@@ -650,7 +688,7 @@ benchmarks! {
 		assert!(Preimages::<T>::contains_key(proposal_hash));
 
 		let caller = funded_account::<T>("caller", 0);
-	}: _(RawOrigin::Signed(caller), proposal_hash.clone())
+	}: _(RawOrigin::Signed(caller), proposal_hash.clone(), u32::max_value())
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		assert!(!Preimages::<T>::contains_key(proposal_hash));
@@ -986,6 +1024,7 @@ mod tests {
 			assert_ok!(test_benchmark_cancel_queued::<Test>());
 			assert_ok!(test_benchmark_on_initialize_external::<Test>());
 			assert_ok!(test_benchmark_on_initialize_public::<Test>());
+			assert_ok!(test_benchmark_on_initialize_no_launch_no_maturing::<Test>());
 			assert_ok!(test_benchmark_open_proxy::<Test>());
 			assert_ok!(test_benchmark_activate_proxy::<Test>());
 			assert_ok!(test_benchmark_close_proxy::<Test>());

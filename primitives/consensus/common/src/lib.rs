@@ -45,6 +45,7 @@ pub mod block_import;
 mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
+mod metrics;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
@@ -177,7 +178,7 @@ pub trait Proposer<B: BlockT> {
 	///
 	/// # Return
 	///
-	/// Returns a future that resolves to a [`Proposal`] or to [`Self::Error`].
+	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
 	fn propose(
 		&mut self,
 		inherent_data: InherentData,
