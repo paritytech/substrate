@@ -348,13 +348,13 @@ pub trait Externalities: Send {
 	/// Sets a value in the local storage.
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
 
 	/// Removes a value in the local storage.
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]);
 
 	/// Sets a value in the local storage if it matches current value.
@@ -365,7 +365,7 @@ pub trait Externalities: Send {
 	/// Returns `true` if the value has been set, `false` otherwise.
 	///
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_compare_and_set(
 		&mut self,
 		kind: StorageKind,
@@ -378,7 +378,7 @@ pub trait Externalities: Send {
 	///
 	/// If the value does not exist in the storage `None` will be returned.
 	/// Note this storage is not part of the consensus, it's only accessible by
-	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	/// offchain worker tasks running on the same machine. It _is_ persisted between runs.
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Initiates a http request given HTTP verb and the URL.
