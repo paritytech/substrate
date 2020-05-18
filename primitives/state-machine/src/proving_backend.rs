@@ -146,14 +146,14 @@ impl<H: Hasher> Clone for ProofRecorder<H> {
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	trie_backend: TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
-	previous_input: ProofInput, // TODO consider &'a mut previous_input
+	previous_input: ProofInput,
 	proof_kind: StorageProofKind,
 }
 
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
-	proof_recorder: ProofRecorder<H>, // TODO if removing rwlock, consider &'a mut
+	proof_recorder: ProofRecorder<H>,
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>

@@ -412,6 +412,7 @@ pub enum StorageProof {
 
 /// A legacy encoding of proof, it is the same as the inner encoding
 /// of `StorageProof::Flatten`.
+/// TODO EMCH consider removing, encoding adapter should be enough.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct LegacyStorageProof {
 	trie_nodes: Vec<Vec<u8>>,

@@ -390,7 +390,6 @@ fn execution_proof_is_generated_and_checked() {
 	let kinds = [
 		StorageProofKind::Flatten,
 		StorageProofKind::TrieSkipHashes,
-		//StorageProofKind::KnownQueryPlanAndValues,
 	];
 
 	for kind in &kinds {
@@ -461,7 +460,6 @@ const KINDS: [StorageProofKind; 4] = [
 	StorageProofKind::Full,
 	StorageProofKind::TrieSkipHashes,
 	StorageProofKind::TrieSkipHashesFull,
-	//StorageProofKind::KnownQueryPlanAndValues, // this is currently unsupported
 ];
 
 type TestChecker = LightDataChecker<

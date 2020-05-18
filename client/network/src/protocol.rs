@@ -1446,7 +1446,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
-			StorageProofKind::TrieSkipHashes,
+			StorageProofKind::Flatten,
 		) {
 			Ok((_, proof)) => proof,
 			Err(error) => {
@@ -1593,7 +1593,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let proof = match self.context_data.chain.read_proof(
 			&BlockId::Hash(request.block),
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::TrieSkipHashes,
+			StorageProofKind::Flatten,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1649,7 +1649,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::TrieSkipHashes,
+			StorageProofKind::Flatten,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
