@@ -242,7 +242,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		}
 
 		// proceed with transactions
-		let started = std::time::Instant::now();
+		let block_timer = self.metrics.report(|metrics| metrics.block_constructed.start_timer());
 		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -313,10 +313,8 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		self.metrics.report(|metrics| {
-			metrics.block_constructed.observe(started.elapsed().as_secs_f64());
-			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
-		});
+		drop(block_timer);
+		self.metrics.report(|metrics| metrics.number_of_transactions.set(block.extrinsics().len() as u64));
 
 		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
