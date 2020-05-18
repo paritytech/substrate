@@ -158,7 +158,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}
 	}
 
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
 		self.keys.get(&id)
 			.map(|keys|
 				keys.values()
@@ -169,7 +169,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
-	fn ecdsa_generate_new(
+	async fn ecdsa_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,

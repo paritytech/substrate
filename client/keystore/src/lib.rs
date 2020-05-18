@@ -408,7 +408,7 @@ impl BareCryptoStore for Store {
 		Ok(pair.public())
 	}
 
-	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
+	async fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
 		self.raw_public_keys(key_type)
 			.map(|v| {
 				v.into_iter()
@@ -418,7 +418,7 @@ impl BareCryptoStore for Store {
 			.unwrap_or_default()
 	}
 
-	fn ecdsa_generate_new(
+	async fn ecdsa_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,

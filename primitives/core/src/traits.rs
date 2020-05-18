@@ -81,13 +81,13 @@ pub trait BareCryptoStore: Send + Sync {
 		seed: Option<&str>,
 	) -> Result<ed25519::Public, Error>;
 	/// Returns all ecdsa public keys for the given key type.
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
+	async fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
 	/// Generate a new ecdsa key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
 	///
 	/// Returns the public key of the generated key pair.
-	fn ecdsa_generate_new(
+	async fn ecdsa_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
