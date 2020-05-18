@@ -462,7 +462,13 @@ impl BenchKeyring {
 	}
 
 	/// Sign transaction with keypair from this keyring.
-	pub fn sign(&self, xt: CheckedExtrinsic, spec_version: u32, tx_version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
+	pub fn sign(
+		&self,
+		xt: CheckedExtrinsic,
+		spec_version: u32,
+		tx_version: u32,
+		genesis_hash: [u8; 32]
+	) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
 				let payload = (xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
