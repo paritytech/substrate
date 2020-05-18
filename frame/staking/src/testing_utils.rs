@@ -72,12 +72,17 @@ pub fn create_validators<T: Trait>(max: u32, balance_factor: u32) -> Result<Vec<
 
 /// This function generates v validators and n nominators who are randomly nominating
 /// `e` random validators.
+///
+/// `to_nominate` is the number of validator to nominate.
+///
+/// return the validators choosen to be nominated.
 pub fn create_validators_with_nominators_for_era<T: Trait>(
 	v: u32,
 	n: u32,
 	e: usize,
 	randomized: bool,
-) -> Result<(), &'static str> {
+	to_nominate: Option<u32>,
+) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(v as usize);
 	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
 
@@ -93,6 +98,9 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 		validators.push(stash_lookup.clone());
 	}
 
+	let to_nominate = to_nominate.unwrap_or(validators.len() as u32) as usize;
+	let validator_choosen = validators[0..to_nominate].to_vec();
+
 	// Create n nominators
 	for j in 0 .. n {
 		let balance_factor = if randomized { rng.next_u32() % 255 + 10 } else { 100u32 };
@@ -102,7 +110,7 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 		)?;
 
 		// Have them randomly validate
-		let mut available_validators = validators.clone();
+		let mut available_validators = validator_choosen.clone();
 		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(e);
 		for _ in 0 .. v.min(e as u32) {
 			let selected = rng.next_u32() as usize % available_validators.len();
@@ -114,7 +122,7 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 
 	ValidatorCount::put(v);
 
-	Ok(())
+	Ok(validator_choosen)
 }
 
 
