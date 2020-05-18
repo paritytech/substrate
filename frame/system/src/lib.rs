@@ -1896,7 +1896,7 @@ pub(crate) mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = u16;
+		type Event = Event<Self>;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = DbWeight;
@@ -1911,18 +1911,8 @@ pub(crate) mod tests {
 		type OnKilledAccount = RecordKilled;
 	}
 
-	impl From<Event<Test>> for u16 {
-		fn from(e: Event<Test>) -> u16 {
-			match e {
-				Event::<Test>::ExtrinsicSuccess(..) => 100,
-				Event::<Test>::ExtrinsicFailed(..) => 101,
-				Event::<Test>::CodeUpdated => 102,
-				_ => 103,
-			}
-		}
-	}
-
 	type System = Module<Test>;
+	type SysEvent = <Test as Trait>::Event;
 
 	const CALL: &<Test as Trait>::Call = &Call;
 
@@ -1980,14 +1970,14 @@ pub(crate) mod tests {
 				InitKind::Full,
 			);
 			System::note_finished_extrinsics();
-			System::deposit_event(1u16);
+			System::deposit_event(SysEvent::CodeUpdated);
 			System::finalize();
 			assert_eq!(
 				System::events(),
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 1u16,
+						event: SysEvent::CodeUpdated,
 						topics: vec![],
 					}
 				]
@@ -2000,25 +1990,48 @@ pub(crate) mod tests {
 				&Default::default(),
 				InitKind::Full,
 			);
-			System::deposit_event(32u16);
+			System::deposit_event(SysEvent::NewAccount(32));
 			System::note_finished_initialize();
-			System::deposit_event(42u16);
+			System::deposit_event(SysEvent::KilledAccount(42));
 			System::note_applied_extrinsic(&Ok(().into()), Default::default());
 			System::note_applied_extrinsic(
 				&Err(DispatchError::BadOrigin.into()),
 				Default::default()
 			);
 			System::note_finished_extrinsics();
-			System::deposit_event(3u16);
+			System::deposit_event(SysEvent::NewAccount(3));
 			System::finalize();
 			assert_eq!(
 				System::events(),
 				vec![
-					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
-					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
-					EventRecord { phase: Phase::Finalization, event: 3u16, topics: vec![] }
+					EventRecord {
+						phase: Phase::Initialization,
+						event: SysEvent::NewAccount(32),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(0),
+						event: SysEvent::KilledAccount(42),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(0),
+						event: SysEvent::ExtrinsicSuccess(Default::default()),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::ApplyExtrinsic(1),
+						event: SysEvent::ExtrinsicFailed(
+							DispatchError::BadOrigin.into(),
+							Default::default()
+						),
+						topics: vec![]
+					},
+					EventRecord {
+						phase: Phase::Finalization,
+						event: SysEvent::NewAccount(3),
+						topics: vec![]
+					},
 				]
 			);
 		});
@@ -2045,9 +2058,9 @@ pub(crate) mod tests {
 			];
 
 			// We deposit a few events with different sets of topics.
-			System::deposit_event_indexed(&topics[0..3], 1u16);
-			System::deposit_event_indexed(&topics[0..1], 2u16);
-			System::deposit_event_indexed(&topics[1..2], 3u16);
+			System::deposit_event_indexed(&topics[0..3], SysEvent::NewAccount(1));
+			System::deposit_event_indexed(&topics[0..1], SysEvent::NewAccount(2));
+			System::deposit_event_indexed(&topics[1..2], SysEvent::NewAccount(3));
 
 			System::finalize();
 
@@ -2057,17 +2070,17 @@ pub(crate) mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 1u16,
+						event: SysEvent::NewAccount(1),
 						topics: topics[0..3].to_vec(),
 					},
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 2u16,
+						event: SysEvent::NewAccount(2),
 						topics: topics[0..1].to_vec(),
 					},
 					EventRecord {
 						phase: Phase::Finalization,
-						event: 3u16,
+						event: SysEvent::NewAccount(3),
 						topics: topics[1..2].to_vec(),
 					}
 				]
@@ -2490,7 +2503,11 @@ pub(crate) mod tests {
 
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
+				vec![EventRecord {
+					phase: Phase::Initialization,
+					event: SysEvent::CodeUpdated,
+					topics: vec![],
+				}],
 			);
 		});
 	}
