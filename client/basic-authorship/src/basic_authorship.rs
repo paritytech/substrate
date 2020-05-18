@@ -437,7 +437,7 @@ mod tests {
 			).0
 		);
 
-		let mut proposer_factory = ProposerFactory::new_test(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let mut proposer = proposer_factory.init_with_now(
