@@ -56,8 +56,7 @@ use libp2p::{
 use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client_api::{
-	StorageProof, StorageProofKind, LegacyDecodeAdapter,
-	FlattenEncodeAdapter as LegacyEncodeAdapter,
+	StorageProof, StorageProofKind,
 	light::{
 		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
 		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
@@ -445,7 +444,7 @@ where
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
 				if let Request::Call { request , .. } = request {
-					let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+					let proof = StorageProof::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_execution_proof(request, proof)?;
 					Ok(Reply::VecU8(reply))
 				} else {
@@ -454,12 +453,12 @@ where
 			Some(Response::RemoteReadResponse(response)) =>
 				match request {
 					Request::Read { request, .. } => {
-						let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+						let proof = StorageProof::decode(&mut response.proof.as_ref())?;
 						let reply = self.checker.check_read_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
 					Request::ReadChild { request, .. } => {
-						let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+						let proof = StorageProof::decode(&mut response.proof.as_ref())?;
 						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
@@ -468,7 +467,7 @@ where
 			Some(Response::RemoteChangesResponse(response)) =>
 				if let Request::Changes { request, .. } = request {
 					let max_block = Decode::decode(&mut response.max.as_ref())?;
-					let roots_proof = LegacyDecodeAdapter::decode(&mut response.roots_proof.as_ref())?.0;
+					let roots_proof = StorageProof::decode(&mut response.roots_proof.as_ref())?;
 					let roots = {
 						let mut r = BTreeMap::new();
 						for pair in response.roots {
@@ -496,7 +495,7 @@ where
 						} else {
 							Some(Decode::decode(&mut response.header.as_ref())?)
 						};
-					let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+					let proof = StorageProof::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_header_proof(&request, header, proof)?;
 					Ok(Reply::Header(reply))
 				} else {
@@ -550,7 +549,7 @@ where
 			&BlockId::Hash(block),
 			&request.method,
 			&request.data,
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
@@ -565,7 +564,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteCallResponse { proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteCallResponse(r)
 		};
 
@@ -593,7 +592,7 @@ where
 		let proof = match self.chain.read_proof(
 			&BlockId::Hash(block),
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -607,7 +606,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteReadResponse { proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteReadResponse(r)
 		};
 
@@ -642,7 +641,7 @@ where
 			&BlockId::Hash(block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -657,7 +656,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteReadResponse { proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteReadResponse(r)
 		};
 
@@ -685,7 +684,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteHeaderResponse { header, proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteHeaderResponse { header, proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteHeaderResponse(r)
 		};
 
@@ -745,7 +744,7 @@ where
 				roots: proof.roots.into_iter()
 					.map(|(k, v)| schema::v1::light::Pair { fst: k.encode(), snd: v.encode() })
 					.collect(),
-				roots_proof: LegacyEncodeAdapter(&proof.roots_proof).encode(),
+				roots_proof: proof.roots_proof.encode(),
 			};
 			schema::v1::light::response::Response::RemoteChangesResponse(r)
 		};
@@ -1353,7 +1352,7 @@ mod tests {
 	type Swarm = libp2p::swarm::Swarm<Handler>;
 
 	fn empty_proof() -> Vec<u8> {
-		LegacyEncodeAdapter(&StorageProof::empty()).encode()
+		StorageProof::empty().encode()
 	}
 
 	fn make_swarm(ok: bool, ps: sc_peerset::PeersetHandle, cf: super::Config) -> Swarm {

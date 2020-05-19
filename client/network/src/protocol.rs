@@ -1446,7 +1446,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		) {
 			Ok((_, proof)) => proof,
 			Err(error) => {
@@ -1467,7 +1467,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
 				id: request.id,
-				proof: proof.expect_flatten_content(),
+				proof,
 			}),
 		);
 	}
@@ -1593,7 +1593,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let proof = match self.context_data.chain.read_proof(
 			&BlockId::Hash(request.block),
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1612,7 +1612,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof: proof.expect_flatten_content(),
+				proof,
 			}),
 		);
 	}
@@ -1649,7 +1649,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1669,7 +1669,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof: proof.expect_flatten_content(),
+				proof,
 			}),
 		);
 	}
@@ -1699,7 +1699,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::RemoteHeaderResponse(message::RemoteHeaderResponse {
 				id: request.id,
 				header,
-				proof: proof.expect_flatten_content(),
+				proof,
 			}),
 		);
 	}
@@ -1762,7 +1762,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				max: proof.max_block,
 				proof: proof.proof,
 				roots: proof.roots.into_iter().collect(),
-				roots_proof: proof.roots_proof.expect_flatten_content(),
+				roots_proof: proof.roots_proof,
 			}),
 		);
 	}
