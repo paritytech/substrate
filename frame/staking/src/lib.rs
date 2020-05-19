@@ -3230,7 +3230,7 @@ for Module<T> where
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Trait>::AccountId>,
 	T::ValidatorIdOf: Convert<
 		<T as frame_system::Trait>::AccountId,
-		Option<<T as frame_system::Trait>::AccountId>
+		Option<<T as frame_system::Trait>::AccountId>,
 	>,
 {
 	fn on_offence(
