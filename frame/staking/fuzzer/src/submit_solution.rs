@@ -95,6 +95,7 @@ fn main() {
 					num_nominators,
 					edge_per_voter as usize,
 					true,
+					None,
 				));
 				<EraElectionStatus<Test>>::put(ElectionStatus::Open(1));
 				assert!(<Staking<Test>>::create_stakers_snapshot().0);

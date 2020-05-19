@@ -461,7 +461,7 @@ benchmarks! {
 	}
 
 	// This benchmark create `v` validators intent, `n` nominators intent, each nominator nominate
-	// the validators in 0..w
+	// MAX_NOMINATIONS in the set of the first `w` validators.
 	// It builds a solution with `w` winners composed of nominated validators randomly nominated,
 	// `a` assignment with MAX_NOMINATIONS.
 	submit_solution_initial_2 {
@@ -497,10 +497,9 @@ benchmarks! {
 		ensure!(assignments.len() == a as usize, "must bench for `a` assignments");
 
 		let winners = winners.into_iter().map(|v| {
-			let v = <T::Lookup as StaticLookup>::lookup(v).unwrap();
-			let extended_balance = <Module<T>>::slashable_balance_of_vote_weight(&v).into();
-			(v, extended_balance)
+			(<T::Lookup as StaticLookup>::lookup(v).unwrap(), 0)
 		}).collect();
+
 		let (
 			winners,
 			compact,
