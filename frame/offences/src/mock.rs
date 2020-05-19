@@ -45,22 +45,23 @@ pub struct OnOffenceHandler;
 thread_local! {
 	pub static ON_OFFENCE_PERBILL: RefCell<Vec<Perbill>> = RefCell::new(Default::default());
 	pub static CAN_REPORT: RefCell<bool> = RefCell::new(true);
+	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
 }
 
-impl<Reporter, Offender, Res: Default>
-	offence::OnOffenceHandler<Reporter, Offender, Res> for OnOffenceHandler
+impl<Reporter, Offender>
+	offence::OnOffenceHandler<Reporter, Offender, Weight> for OnOffenceHandler
 {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
-	) -> Result<Res, ()> {
-		if <Self as offence::OnOffenceHandler<Reporter, Offender, Res>>::can_report() {
+	) -> Result<Weight, ()> {
+		if <Self as offence::OnOffenceHandler<Reporter, Offender, Weight>>::can_report() {
 			ON_OFFENCE_PERBILL.with(|f| {
 				*f.borrow_mut() = slash_fraction.to_vec();
 			});
 
-			Ok(Default::default())
+			Ok(OFFENCE_WEIGHT.with(|w| *w.borrow()))
 		} else {
 			Err(())
 		}
@@ -79,6 +80,10 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 	ON_OFFENCE_PERBILL.with(|fractions| {
 		f(&mut *fractions.borrow_mut())
 	})
+}
+
+pub fn set_offence_weight(new: Weight) {
+	OFFENCE_WEIGHT.with(|w| *w.borrow_mut() = new);
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
