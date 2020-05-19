@@ -406,71 +406,17 @@ benchmarks! {
 		}
 	}
 
-	submit_solution_initial {
-		// NOTE: this benchmark requires: `v > w`, `n > a` and `a > w`. Talk to @kianenigma if you
-		// want to know why.
-		// number of validator intentions
-		let v in 200 .. 400;
-		// number of nominators
-		let n in 300 .. 600;
-		// number of winners.
-		let w in 100 .. 199;
-		// number of assignments. Basically, number of active nominators.
-		let a in 200 .. 499;
-
-		// NOTE: we could make the edge per assignment also variable, but 1. unlikely to bring much
-		// accuracy change 2. makes the setup of the bench a few orders of magnitude more annoying.
-
-		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
-
-		// override the number of winners that we desire.
-		ValidatorCount::put(w);
-
-		// needed for the solution to be generates.
-		assert!(<Staking<T>>::create_stakers_snapshot().0);
-		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(false);
-
-		// trim some edges.
-		let (new_compact, new_score) = trim_compact_to_assignments::<T>(
-			compact,
-			winners.clone(),
-			a as usize,
-		)?;
-
-		// needed for the solution to be accepted
-		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
-
-		let era = <Staking<T>>::current_era().unwrap_or(0);
-		let caller: T::AccountId = account("caller", n, SEED);
-		// no score already.
-		assert_eq!(<Staking<T>>::queued_score(), None);
-	}: {
-		assert!(<Staking<T>>::submit_election_solution(
-			RawOrigin::Signed(caller.clone()).into(),
-			winners,
-			new_compact,
-			new_score.clone(),
-			era,
-			size,
-		).is_ok())
-	}
-	verify {
-		// new solution has been accepted.
-		assert_eq!(<Staking<T>>::queued_score().unwrap(), new_score);
-	}
-
 	// This benchmark create `v` validators intent, `n` nominators intent, each nominator nominate
 	// MAX_NOMINATIONS in the set of the first `w` validators.
 	// It builds a solution with `w` winners composed of nominated validators randomly nominated,
 	// `a` assignment with MAX_NOMINATIONS.
-	submit_solution_initial_2 {
+	submit_solution_initial {
 		// number of validator intent
-		let v in 2000 .. 3000;
+		let v in 1000 .. 2000;
 		// number of nominator intent
-		let n in 2000 .. 3000;
+		let n in 1000 .. 2000;
 		// number of assignments. Basically, number of active nominators.
-		let a in 500 .. 1000;
+		let a in 200 .. 500;
 		// number of winners, also ValidatorCount
 		let w in 16 .. 100;
 
@@ -521,7 +467,7 @@ benchmarks! {
 			era,
 			size,
 		);
-		assert_eq!(result, Ok(().into()));
+		assert!(result.is_ok());
 	}
 	verify {
 		// new solution has been accepted.
@@ -745,7 +691,6 @@ mod tests {
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
 			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
-			assert_ok!(test_benchmark_submit_solution_initial_2::<Test>());
 			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
 			assert_ok!(test_benchmark_submit_solution_better::<Test>());
 		});
