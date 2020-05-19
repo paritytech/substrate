@@ -764,7 +764,12 @@ pub mod weight {
 
 	/// All weight notes are pertaining to the case of a better solution, in which we execute
 	/// the longest code path.
-	/// Weight: 0 + (35 μs * v) + (25 μs * n)
+	/// Weight: 0 + (2.2 μs * v) + (2.4 μs * n) + (120 μs * a ) + (7.6 μs * w ) with:
+	/// * v validators in snapshot validators,
+	/// * n nominators in snapshot nominators,
+	/// * a assignment in the submitted solution
+	/// * w winners in the submitted solution
+	///
 	/// State reads:
 	/// 	- Initial checks:
 	/// 		- ElectionState, CurrentEra, QueuedScore
@@ -785,13 +790,20 @@ pub mod weight {
 		compact: &CompactAssignments,
 		size: &ElectionSize,
 	) -> Weight {
-		(35 * WEIGHT_PER_MICROS).saturating_mul(size.validators as Weight)
-			.saturating_add((25 * WEIGHT_PER_MICROS).saturating_mul(size.nominators as Weight))
+		(2_200 * WEIGHT_PER_NANOS).saturating_mul(size.validators as Weight)
+			.saturating_add((2_400 * WEIGHT_PER_NANOS).saturating_mul(size.nominators as Weight))
+			.saturating_add((120 * WEIGHT_PER_MICROS).saturating_mul(compact.len() as Weight))
+			.saturating_add((7_600 * WEIGHT_PER_NANOS).saturating_mul(winners.len() as Weight))
+			// Initial checks
 			.saturating_add(T::DbWeight::get().reads(7))
-			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight)) // Nominators
-			.saturating_add(T::DbWeight::get().reads(compact.edge_count() as Weight))  // SlashingSpans
+			// Nominators
+			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight))
+			// SlashingSpans (upper bound for invalid solution)
+			.saturating_add(T::DbWeight::get().reads(compact.edge_count() as Weight))
+			// `assignment_ratio_to_staked`
 			.saturating_add(T::DbWeight::get().reads(2 * ((winners.len() + compact.len()) as Weight)))
 			.saturating_add(T::DbWeight::get().reads(1))
+			// write queued score and elected
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 }
