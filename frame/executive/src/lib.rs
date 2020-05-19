@@ -119,6 +119,7 @@ use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
+	dispatch::PostDispatchInfo,
 };
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
@@ -174,7 +175,7 @@ where
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable +
 		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
+	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -200,7 +201,7 @@ where
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable +
 		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
+	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -368,9 +369,9 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
-		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
+		<frame_system::Module<System>>::note_applied_extrinsic(&r, dispatch_info);
 
-		Ok(r)
+		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}
 
 	fn final_checks(header: &System::Header) {

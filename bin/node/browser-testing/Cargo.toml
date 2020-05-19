@@ -8,7 +8,7 @@ license = "Apache-2.0"
 
 [dependencies]
 futures-timer = "3.0.2"
-libp2p = { version = "0.18.0", default-features = false }
+libp2p = { version = "0.19.0", default-features = false }
 jsonrpc-core = "14.0.5"
 serde = "1.0.106"
 serde_json = "1.0.48"

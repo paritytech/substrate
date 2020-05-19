@@ -52,7 +52,7 @@ use ip_network::IpNetwork;
 use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
 use libp2p::swarm::protocols_handler::multi::MultiHandler;
-use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
+use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, QueryResult, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::handler::KademliaHandler;
 use libp2p::kad::QueryId;
@@ -177,7 +177,7 @@ impl DiscoveryConfig {
 			kademlias: self.kademlias,
 			next_kad_random_query: Delay::new(Duration::new(0, 0)),
 			duration_to_next_kad: Duration::from_secs(1),
-			discoveries: VecDeque::new(),
+			pending_events: VecDeque::new(),
 			local_peer_id: self.local_peer_id,
 			num_connections: 0,
 			allow_private_ipv4: self.allow_private_ipv4,
@@ -213,8 +213,8 @@ pub struct DiscoveryBehaviour {
 	next_kad_random_query: Delay,
 	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
 	duration_to_next_kad: Duration,
-	/// Discovered nodes to return.
-	discoveries: VecDeque<PeerId>,
+	/// Events to return in priority when polled.
+	pending_events: VecDeque<DiscoveryOut>,
 	/// Identity of our local node.
 	local_peer_id: PeerId,
 	/// Number of nodes we're currently connected to.
@@ -248,7 +248,7 @@ impl DiscoveryBehaviour {
 			for k in self.kademlias.values_mut() {
 				k.add_address(&peer_id, addr.clone())
 			}
-			self.discoveries.push_back(peer_id.clone());
+			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id.clone()));
 			self.user_defined.push((peer_id, addr));
 		}
 	}
@@ -272,7 +272,7 @@ impl DiscoveryBehaviour {
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
 	pub fn get_value(&mut self, key: &record::Key) {
 		for k in self.kademlias.values_mut() {
-			k.get_record(key, Quorum::One)
+			k.get_record(key, Quorum::One);
 		}
 	}
 
@@ -282,7 +282,10 @@ impl DiscoveryBehaviour {
 	/// A corresponding `ValuePut` or `ValuePutFailed` event will later be generated.
 	pub fn put_value(&mut self, key: record::Key, value: Vec<u8>) {
 		for k in self.kademlias.values_mut() {
-			k.put_record(Record::new(key.clone(), value.clone()), Quorum::All)
+			if let Err(e) = k.put_record(Record::new(key.clone(), value.clone()), Quorum::All) {
+				warn!(target: "sub-libp2p", "Libp2p => Failed to put record: {:?}", e);
+				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone()));
+			}
 		}
 	}
 
@@ -528,8 +531,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		>,
 	> {
 		// Immediately process the content of `discovered`.
-		if let Some(peer_id) = self.discoveries.pop_front() {
-			let ev = DiscoveryOut::Discovered(peer_id);
+		if let Some(ev) = self.pending_events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
@@ -541,7 +543,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					"Libp2p <= Starting random Kademlia request for {:?}",
 					random_peer_id);
 				for k in self.kademlias.values_mut() {
-					k.get_closest_peers(random_peer_id.clone())
+					k.get_closest_peers(random_peer_id.clone());
 				}
 				true
 			} else {
@@ -578,7 +580,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = DiscoveryOut::Discovered(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::GetClosestPeersResult(res) => {
+						KademliaEvent::QueryResult { result: QueryResult::GetClosestPeers(res), .. } => {
 							match res {
 								Err(GetClosestPeersError::Timeout { key, peers }) => {
 									debug!(target: "sub-libp2p",
@@ -596,7 +598,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								}
 							}
 						}
-						KademliaEvent::GetRecordResult(res) => {
+						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), .. } => {
 							let ev = match res {
 								Ok(ok) => {
 									let results = ok.records
@@ -619,7 +621,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::PutRecordResult(res) => {
+						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), .. } => {
 							let ev = match res {
 								Ok(ok) => DiscoveryOut::ValuePut(ok.key),
 								Err(e) => {
@@ -630,7 +632,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::RepublishRecordResult(res) => {
+						KademliaEvent::QueryResult { result: QueryResult::RepublishRecord(res), .. } => {
 							match res {
 								Ok(ok) => debug!(target: "sub-libp2p",
 									"Libp2p => Record republished: {:?}",
@@ -675,9 +677,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								continue;
 							}
 
-							self.discoveries.extend(list.map(|(peer_id, _)| peer_id));
-							if let Some(peer_id) = self.discoveries.pop_front() {
-								let ev = DiscoveryOut::Discovered(peer_id);
+							self.pending_events.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
+							if let Some(ev) = self.pending_events.pop_front() {
 								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 							}
 						},
