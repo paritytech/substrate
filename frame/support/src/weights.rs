@@ -537,7 +537,7 @@ impl RuntimeDbWeight {
 ///
 /// One term of polynomial is calculated as:
 ///
-/// ```
+/// ```ignore
 /// coeff_integer * x^(degree) + coeff_frac * x^(degree)
 /// ```
 ///
