@@ -70,41 +70,58 @@ pub fn create_validators<T: Trait>(max: u32, balance_factor: u32) -> Result<Vec<
 	Ok(validators)
 }
 
-/// This function generates v validators and n nominators who are randomly nominating
-/// `e` random validators.
+/// This function generates validators and nominators who are randomly nominating
+/// `edge_per_nominator` random validators (until `to_nominate` if provided).
+///
+/// Parameters:
+/// - `validators`: number of bonded validators
+/// - `nominators`: number of bonded nominators.
+/// - `edge_per_nominator`: number of edge (vote) per nominator.
+/// - `randomize_stake`: whether to randomize the stakes.
+/// - `to_nominate`: if `Some(n)`, only the first `n` bonded validator are voted upon.
+///    Else, all of them are considered and `edge_per_nominator` random validators are voted for.
+///
+/// Return the validators choosen to be nominated.
 pub fn create_validators_with_nominators_for_era<T: Trait>(
-	v: u32,
-	n: u32,
-	e: usize,
-	randomized: bool,
-) -> Result<(), &'static str> {
-	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(v as usize);
+	validators: u32,
+	nominators: u32,
+	edge_per_nominator: usize,
+	randomize_stake: bool,
+	to_nominate: Option<u32>,
+) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+	let mut validators_stash: Vec<<T::Lookup as StaticLookup>::Source>
+		= Vec::with_capacity(validators as usize);
 	let mut rng = ChaChaRng::from_seed(SEED.using_encoded(blake2_256));
 
-	// Create v validators
-	for i in 0 .. v {
-		let balance_factor = if randomized { rng.next_u32() % 255 + 10 } else { 100u32 };
+	// Create validators
+	for i in 0 .. validators {
+		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
 		let (v_stash, v_controller) = create_stash_controller::<T>(i, balance_factor)?;
 		let validator_prefs = ValidatorPrefs {
 			commission: Perbill::from_percent(50),
 		};
 		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
 		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
-		validators.push(stash_lookup.clone());
+		validators_stash.push(stash_lookup.clone());
 	}
 
-	// Create n nominators
-	for j in 0 .. n {
-		let balance_factor = if randomized { rng.next_u32() % 255 + 10 } else { 100u32 };
+	let to_nominate = to_nominate.unwrap_or(validators_stash.len() as u32) as usize;
+	let validator_choosen = validators_stash[0..to_nominate].to_vec();
+
+	// Create nominators
+	for j in 0 .. nominators {
+		let balance_factor = if randomize_stake { rng.next_u32() % 255 + 10 } else { 100u32 };
 		let (_n_stash, n_controller) = create_stash_controller::<T>(
 			u32::max_value() - j,
 			balance_factor,
 		)?;
 
 		// Have them randomly validate
-		let mut available_validators = validators.clone();
-		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(e);
-		for _ in 0 .. v.min(e as u32) {
+		let mut available_validators = validator_choosen.clone();
+		let mut selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
+			Vec::with_capacity(edge_per_nominator);
+
+		for _ in 0 .. validators.min(edge_per_nominator as u32) {
 			let selected = rng.next_u32() as usize % available_validators.len();
 			let validator = available_validators.remove(selected);
 			selected_validators.push(validator);
@@ -112,9 +129,9 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 		Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), selected_validators)?;
 	}
 
-	ValidatorCount::put(v);
+	ValidatorCount::put(validators);
 
-	Ok(())
+	Ok(validator_choosen)
 }
 
 

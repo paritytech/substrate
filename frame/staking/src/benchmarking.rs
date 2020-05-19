@@ -21,7 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
-use sp_runtime::traits::{Dispatchable, One};
+use sp_runtime::{PerU16, traits::{Dispatchable, One}};
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account};
 const SEED: u32 = 0;
@@ -334,7 +334,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 		let session_index = SessionIndex::one();
 	}: {
 		let validators = Staking::<T>::new_era(session_index).ok_or("`new_era` failed")?;
@@ -371,7 +371,7 @@ benchmarks! {
 		let v in 1 .. 10;
 		let n in 1 .. 100;
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 		// Start a new Era
 		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
 		assert!(new_validators.len() == v as usize);
@@ -422,7 +422,7 @@ benchmarks! {
 		// accuracy change 2. makes the setup of the bench a few orders of magnitude more annoying.
 
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
 		// override the number of winners that we desire.
 		ValidatorCount::put(w);
@@ -460,6 +460,74 @@ benchmarks! {
 		assert_eq!(<Staking<T>>::queued_score().unwrap(), new_score);
 	}
 
+	// This benchmark create `v` validators intent, `n` nominators intent, each nominator nominate
+	// MAX_NOMINATIONS in the set of the first `w` validators.
+	// It builds a solution with `w` winners composed of nominated validators randomly nominated,
+	// `a` assignment with MAX_NOMINATIONS.
+	submit_solution_initial_2 {
+		// number of validator intent
+		let v in 2000 .. 3000;
+		// number of nominator intent
+		let n in 2000 .. 3000;
+		// number of assignments. Basically, number of active nominators.
+		let a in 500 .. 1000;
+		// number of winners, also ValidatorCount
+		let w in 16 .. 100;
+
+		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+
+		let winners = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, Some(w))?;
+
+		// needed for the solution to be generates.
+		assert!(<Staking<T>>::create_stakers_snapshot().0);
+
+		// set number of winners
+		ValidatorCount::put(w);
+
+		let ratio = PerU16::from_rational_approximation(1, MAX_NOMINATIONS);
+		// final assignments
+		let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
+			.take(a as usize)
+			.map(|(n, t)| Assignment {
+				who: n,
+				distribution: t.targets.iter().map(|v| (v.clone(), ratio)).collect(),
+			})
+			.collect();
+
+		ensure!(assignments.len() == a as usize, "must bench for `a` assignments");
+
+		let winners = winners.into_iter().map(|v| {
+			(<T::Lookup as StaticLookup>::lookup(v).unwrap(), 0)
+		}).collect();
+
+		let (
+			winners,
+			compact,
+			score,
+			size
+		) = offchain_election::prepare_submission::<T>(assignments, winners, false).unwrap();
+
+		// needed for the solution to be accepted
+		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+
+		let era = <Staking<T>>::current_era().unwrap_or(0);
+		let caller: T::AccountId = account("caller", n, SEED);
+	}: {
+		let result = <Staking<T>>::submit_election_solution(
+			RawOrigin::Signed(caller.clone()).into(),
+			winners,
+			compact,
+			score.clone(),
+			era,
+			size,
+		);
+		assert_eq!(result, Ok(().into()));
+	}
+	verify {
+		// new solution has been accepted.
+		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	}
+
 	submit_solution_weaker {
 		// TODO: whatever this weight ends up being, so how it will pan our for a solution which has
 		// 1000 validators, and like 100,000 nominators
@@ -467,7 +535,7 @@ benchmarks! {
 		let n in 1 .. 100;
 
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
@@ -513,7 +581,7 @@ benchmarks! {
 		let n in 1 .. 100;
 
 		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false)?;
+		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
@@ -571,7 +639,8 @@ mod tests {
 			let v = 10;
 			let n = 100;
 
-			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false).unwrap();
+			create_validators_with_nominators_for_era::<Test>(v, n, MAX_NOMINATIONS, false, None)
+				.unwrap();
 
 			let count_validators = Validators::<Test>::iter().count();
 			let count_nominators = Nominators::<Test>::iter().count();
@@ -676,6 +745,7 @@ mod tests {
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
 			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
+			assert_ok!(test_benchmark_submit_solution_initial_2::<Test>());
 			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
 			assert_ok!(test_benchmark_submit_solution_better::<Test>());
 		});
