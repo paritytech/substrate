@@ -51,9 +51,6 @@ pub struct PeersState {
 
 	/// Priority groups. Each group is identified by a string ID and contains a set of peer IDs.
 	priority_nodes: HashMap<String, HashSet<PeerId>>,
-
-	/// Only allow connections to/from peers in a priority group.
-	priority_only: bool,
 }
 
 /// State of a single node that we know about.
@@ -106,7 +103,7 @@ impl ConnectionState {
 
 impl PeersState {
 	/// Builds a new empty `PeersState`.
-	pub fn new(in_peers: u32, out_peers: u32, priority_only: bool) -> Self {
+	pub fn new(in_peers: u32, out_peers: u32) -> Self {
 		PeersState {
 			nodes: HashMap::new(),
 			num_in: 0,
@@ -114,7 +111,6 @@ impl PeersState {
 			max_in: in_peers,
 			max_out: out_peers,
 			priority_nodes: HashMap::new(),
-			priority_only,
 		}
 	}
 
@@ -265,15 +261,6 @@ impl PeersState {
 	/// Get priority group content.
 	pub fn get_priority_group(&self, group_id: &str) -> Option<HashSet<PeerId>> {
 		self.priority_nodes.get(group_id).cloned()
-	}
-
-	/// Set whether to only allow connections to/from peers in a priority group.
-	/// Calling this method does not affect any existing connection, e.g.
-	/// enabling priority only will not disconnect from any non-priority peers
-	/// we are already connected to, only future incoming/outgoing connection
-	/// attempts will be affected.
-	pub fn set_priority_only(&mut self, priority: bool) {
-		self.priority_only = priority;
 	}
 
 	/// Check that node is any priority group.
@@ -451,11 +438,6 @@ impl<'a> NotConnectedPeer<'a> {
 	pub fn try_outgoing(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
 		let is_priority = self.state.is_priority(&self.peer_id);
 
-		// We are only accepting connections from priority nodes.
-		if !is_priority && self.state.priority_only {
-			return Err(self);
-		}
-
 		// Note that it is possible for num_out to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
 		if self.state.num_out >= self.state.max_out && !is_priority {
@@ -485,11 +467,6 @@ impl<'a> NotConnectedPeer<'a> {
 	/// Note that priority nodes don't count towards the number of slots.
 	pub fn try_accept_incoming(self) -> Result<ConnectedPeer<'a>, NotConnectedPeer<'a>> {
 		let is_priority = self.state.is_priority(&self.peer_id);
-
-		// We are only accepting connections from priority nodes.
-		if !is_priority && self.state.priority_only {
-			return Err(self);
-		}
 
 		// Note that it is possible for num_in to be strictly superior to the max, in case we were
 		// connected to reserved node then marked them as not reserved.
@@ -588,7 +565,7 @@ mod tests {
 
 	#[test]
 	fn full_slots_in() {
-		let mut peers_state = PeersState::new(1, 1, false);
+		let mut peers_state = PeersState::new(1, 1);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -603,7 +580,7 @@ mod tests {
 
 	#[test]
 	fn priority_node_doesnt_use_slot() {
-		let mut peers_state = PeersState::new(1, 1, false);
+		let mut peers_state = PeersState::new(1, 1);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -619,7 +596,7 @@ mod tests {
 
 	#[test]
 	fn disconnecting_frees_slot() {
-		let mut peers_state = PeersState::new(1, 1, false);
+		let mut peers_state = PeersState::new(1, 1);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -631,7 +608,7 @@ mod tests {
 
 	#[test]
 	fn priority_not_connected_peer() {
-		let mut peers_state = PeersState::new(25, 25, false);
+		let mut peers_state = PeersState::new(25, 25);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -650,7 +627,7 @@ mod tests {
 
 	#[test]
 	fn highest_not_connected_peer() {
-		let mut peers_state = PeersState::new(25, 25, false);
+		let mut peers_state = PeersState::new(25, 25);
 		let id1 = PeerId::random();
 		let id2 = PeerId::random();
 
@@ -671,7 +648,7 @@ mod tests {
 
 	#[test]
 	fn disconnect_priority_doesnt_panic() {
-		let mut peers_state = PeersState::new(1, 1, false);
+		let mut peers_state = PeersState::new(1, 1);
 		let id = PeerId::random();
 		peers_state.set_priority_group("test", vec![id.clone()].into_iter().collect());
 		let peer = peers_state.peer(&id).into_not_connected().unwrap().try_outgoing().unwrap();
@@ -680,7 +657,7 @@ mod tests {
 
 	#[test]
 	fn multiple_priority_groups_slot_count() {
-		let mut peers_state = PeersState::new(1, 1, false);
+		let mut peers_state = PeersState::new(1, 1);
 		let id = PeerId::random();
 
 		if let Peer::Unknown(p) = peers_state.peer(&id) {
@@ -696,61 +673,5 @@ mod tests {
 		assert_eq!(peers_state.num_in, 0);
 		peers_state.set_priority_group("test2", vec![].into_iter().collect());
 		assert_eq!(peers_state.num_in, 1);
-	}
-
-	#[test]
-	fn priority_only_mode_ignores_drops_unknown_nodes() {
-		// test whether connection to/from given peer is allowed
-		let test_connection = |peers_state: &mut PeersState, id| {
-			if let Peer::Unknown(p) = peers_state.peer(id) {
-				p.discover();
-			}
-
-			let incoming = if let Peer::NotConnected(p) = peers_state.peer(id) {
-				p.try_accept_incoming().is_ok()
-			} else {
-				panic!()
-			};
-
-			if incoming {
-				peers_state.peer(id).into_connected().map(|p| p.disconnect());
-			}
-
-			let outgoing = if let Peer::NotConnected(p) = peers_state.peer(id) {
-				p.try_outgoing().is_ok()
-			} else {
-				panic!()
-			};
-
-			if outgoing {
-				peers_state.peer(id).into_connected().map(|p| p.disconnect());
-			}
-
-			incoming || outgoing
-		};
-
-		let mut peers_state = PeersState::new(1, 1, true);
-		let id = PeerId::random();
-
-		// this is an unknown peer and our peer state is set to only allow
-		// priority peers so any connection attempt should be denied.
-		assert!(!test_connection(&mut peers_state, &id));
-
-		// disabling priority only mode should allow the connection to go
-		// through.
-		peers_state.set_priority_only(false);
-		assert!(test_connection(&mut peers_state, &id));
-
-		// re-enabling it we should again deny connections from the peer.
-		peers_state.set_priority_only(true);
-		assert!(!test_connection(&mut peers_state, &id));
-
-		// but if we add the peer to a priority group it should be accepted.
-		peers_state.set_priority_group("TEST_GROUP", vec![id.clone()].into_iter().collect());
-		assert!(test_connection(&mut peers_state, &id));
-
-		// and removing it will cause the connection to once again be denied.
-		peers_state.remove_from_priority_group("TEST_GROUP", &id);
-		assert!(!test_connection(&mut peers_state, &id));
 	}
 }

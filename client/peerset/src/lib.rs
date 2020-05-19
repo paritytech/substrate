@@ -208,7 +208,7 @@ impl Peerset {
 		let now = Instant::now();
 
 		let mut peerset = Peerset {
-			data: peersstate::PeersState::new(config.in_peers, config.out_peers, config.reserved_only),
+			data: peersstate::PeersState::new(config.in_peers, config.out_peers),
 			tx,
 			rx,
 			reserved_only: config.reserved_only,
@@ -258,7 +258,6 @@ impl Peerset {
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
 		self.reserved_only = reserved_only;
-		self.data.set_priority_only(reserved_only);
 
 		if self.reserved_only {
 			// Disconnect non-reserved nodes.
