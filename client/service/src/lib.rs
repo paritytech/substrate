@@ -553,8 +553,8 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 		})
 	}
 
-	fn deny_unsafe(addr: &Option<SocketAddr>, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
-		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
+	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
+		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
 			| (_, RpcMethods::Unsafe)
 			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
@@ -568,7 +568,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_http, &config.rpc_methods)),
+				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -577,7 +577,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_ws, &config.rpc_methods)),
+				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
