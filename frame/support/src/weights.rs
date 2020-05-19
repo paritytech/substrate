@@ -738,4 +738,64 @@ mod tests {
 			1000
 		);
 	}
+
+	type Balance = u64;
+
+	// 0.5x^3 + 2.333x2 + 7x - 10_000
+	struct Poly;
+	impl WeightToFeePolynomial for Poly {
+		type Balance = Balance;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![
+				WeightToFeeCoefficient {
+					coeff_integer: 0,
+					coeff_frac: Perbill::from_fraction(0.5),
+					negative: false,
+					degree: 3
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 2,
+					coeff_frac: Perbill::from_rational_approximation(1u32, 3u32),
+					negative: false,
+					degree: 2
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 7,
+					coeff_frac: Perbill::zero(),
+					negative: false,
+					degree: 1
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 10_000,
+					coeff_frac: Perbill::zero(),
+					negative: true,
+					degree: 0
+				},
+			]
+		}
+	}
+
+	#[test]
+	fn polynomial_works() {
+		assert_eq!(Poly::calc(&100), 514033);
+		assert_eq!(Poly::calc(&10_123), 518917034928);
+	}
+
+	#[test]
+	fn polynomial_does_not_underflow() {
+		assert_eq!(Poly::calc(&0), 0);
+	}
+
+	#[test]
+	fn polynomial_does_not_overflow() {
+		assert_eq!(Poly::calc(&Weight::max_value()), Balance::max_value() - 10_000);
+	}
+
+	#[test]
+	fn identity_fee_works() {
+		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
+		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
+		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
+	}
 }
