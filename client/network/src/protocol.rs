@@ -2211,6 +2211,7 @@ mod tests {
 				out_peers: 10,
 				bootnodes: Vec::new(),
 				reserved_only: false,
+				reserved_nodes: Default::default(),
 				priority_groups: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),

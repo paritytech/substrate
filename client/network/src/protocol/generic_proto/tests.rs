@@ -79,6 +79,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				vec![]
 			},
 			reserved_only: false,
+			reserved_nodes: Default::default(),
 			priority_groups: Vec::new(),
 		});
 

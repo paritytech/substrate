@@ -144,7 +144,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			)?;
 
 		// Initialize the peers we should always be connected to.
-		let priority_groups = {
+		let (reserved_nodes, priority_groups) = {
 			let mut reserved_nodes = HashSet::new();
 			for reserved in params.network_config.reserved_nodes.iter() {
 				reserved_nodes.insert(reserved.peer_id.clone());
@@ -155,12 +155,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			match &params.role {
 				Role::Sentry { validators } => {
 					for validator in validators {
+						reserved_nodes.insert(validator.peer_id.clone());
 						sentries_and_validators.insert(validator.peer_id.clone());
 						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
 					}
 				}
 				Role::Authority { sentry_nodes } => {
 					for sentry_node in sentry_nodes {
+						reserved_nodes.insert(sentry_node.peer_id.clone());
 						sentries_and_validators.insert(sentry_node.peer_id.clone());
 						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
 					}
@@ -168,16 +170,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				_ => {}
 			}
 
-			vec![
-				("reserved".to_owned(), reserved_nodes),
+			let priority_groups = vec![
 				("sentries_and_validators".to_owned(), sentries_and_validators),
-			]
+			];
+
+			(reserved_nodes, priority_groups)
 		};
 
 		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
+			reserved_nodes,
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
 			priority_groups,
 		};
