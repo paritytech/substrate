@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
 
@@ -368,8 +369,6 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.header, notification.is_new_best);
-
 			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
 			}
@@ -554,8 +553,8 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 		})
 	}
 
-	fn deny_unsafe(addr: &Option<SocketAddr>, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
-		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
+	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
+		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
 			| (_, RpcMethods::Unsafe)
 			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
@@ -569,7 +568,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_http, &config.rpc_methods)),
+				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -578,7 +577,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_ws, &config.rpc_methods)),
+				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))

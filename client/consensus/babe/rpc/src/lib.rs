@@ -1,19 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! RPC api for babe.
 
 use sc_consensus_babe::{Epoch, authorship, Config};
@@ -32,7 +33,6 @@ use sp_consensus_babe::{
 use serde::{Deserialize, Serialize};
 use sc_keystore::KeyStorePtr;
 use sp_api::{ProvideRuntimeApi, BlockId};
-use sp_core::crypto::Pair;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
@@ -135,13 +135,13 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
-							claims.entry(key.public()).or_default().primary.push(slot_number);
+							claims.entry(key).or_default().primary.push(slot_number);
 						}
 						PreDigest::SecondaryPlain { .. } => {
-							claims.entry(key.public()).or_default().secondary.push(slot_number);
+							claims.entry(key).or_default().secondary.push(slot_number);
 						}
 						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key.public()).or_default().secondary_vrf.push(slot_number);
+							claims.entry(key).or_default().secondary_vrf.push(slot_number);
 						},
 					};
 				}

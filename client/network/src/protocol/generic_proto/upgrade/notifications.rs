@@ -390,8 +390,8 @@ pub enum NotificationsOutError {
 	/// Remote doesn't process our messages quickly enough.
 	///
 	/// > **Note**: This is not necessarily the remote's fault, and could also be caused by the
-	/// >			local node sending data too quickly. Properly doing back-pressure, however,
-	/// > 			would require a deep refactoring effort in Substrate as a whole.
+	/// >           local node sending data too quickly. Properly doing back-pressure, however,
+	/// >           would require a deep refactoring effort in Substrate as a whole.
 	Clogged,
 }
 

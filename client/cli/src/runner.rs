@@ -1,19 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::CliConfiguration;
 use crate::Result;
 use crate::SubstrateCli;
@@ -217,12 +218,16 @@ impl<C: SubstrateCli> Runner<C> {
 		// and drop the runtime first.
 		let _telemetry = service.telemetry();
 
-		let f = service.fuse();
-		pin_mut!(f);
+		{
+			let f = service.fuse();
+			self.tokio_runtime
+				.block_on(main(f))
+				.map_err(|e| e.to_string())?;
+		}
 
-		self.tokio_runtime
-			.block_on(main(f))
-			.map_err(|e| e.to_string())?;
+		// The `service` **must** have been destroyed here for the shutdown signal to propagate
+		// to all the tasks. Dropping `tokio_runtime` will block the thread until all tasks have
+		// shut down.
 		drop(self.tokio_runtime);
 
 		Ok(())

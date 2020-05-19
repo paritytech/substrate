@@ -3,7 +3,7 @@ name = "frame-system-benchmarking"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME System benchmarking"
@@ -22,7 +22,7 @@ sp-core = { version = "2.0.0-dev", default-features = false, path = "../../../pr
 
 [dev-dependencies]
 serde = { version = "1.0.101" }
-sp-io ={ path = "../../../primitives/io", version = "2.0.0-dev"}
+sp-io ={ version = "2.0.0-dev", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

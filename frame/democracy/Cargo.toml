@@ -3,7 +3,7 @@ name = "pallet-democracy"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME pallet for democracy"
@@ -26,6 +26,7 @@ sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "2.0.0-dev", path = "../scheduler" }
 sp-storage = { version = "2.0.0-dev", path = "../../primitives/storage" }
+substrate-test-utils = { version = "2.0.0-dev", path = "../../test-utils" }
 hex-literal = "0.2.1"
 
 [features]
@@ -43,5 +44,6 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-system/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]

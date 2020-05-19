@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Traits for FRAME.
 //!
@@ -29,6 +30,7 @@ use sp_runtime::{
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
@@ -147,11 +149,18 @@ pub trait EstimateNextSessionRotation<BlockNumber> {
 	///
 	/// None should be returned if the estimation fails to come to an answer
 	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
+
+	/// Return the weight of calling `estimate_next_session_rotation`
+	fn weight(now: BlockNumber) -> Weight;
 }
 
 impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
+	}
+
+	fn weight(_: BlockNumber) -> Weight {
+		0
 	}
 }
 
@@ -160,11 +169,18 @@ impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
 pub trait EstimateNextNewSession<BlockNumber> {
 	/// Return the block number at which the next new session is estimated to happen.
 	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
+
+	/// Return the weight of calling `estimate_next_new_session`
+	fn weight(now: BlockNumber) -> Weight;
 }
 
 impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
 	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
 		Default::default()
+	}
+
+	fn weight(_: BlockNumber) -> Weight {
+		0
 	}
 }
 
