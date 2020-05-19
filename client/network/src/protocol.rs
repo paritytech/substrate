@@ -1467,7 +1467,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
 				id: request.id,
-				proof,
+				proof: proof.expect_flatten_content(),
 			}),
 		);
 	}
@@ -1612,7 +1612,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof,
+				proof: proof.expect_flatten_content(),
 			}),
 		);
 	}
@@ -1669,7 +1669,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof,
+				proof: proof.expect_flatten_content(),
 			}),
 		);
 	}
@@ -1699,7 +1699,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::RemoteHeaderResponse(message::RemoteHeaderResponse {
 				id: request.id,
 				header,
-				proof,
+				proof: proof.expect_flatten_content(),
 			}),
 		);
 	}
@@ -1762,7 +1762,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				max: proof.max_block,
 				proof: proof.proof,
 				roots: proof.roots.into_iter().collect(),
-				roots_proof: proof.roots_proof,
+				roots_proof: proof.roots_proof.expect_flatten_content(),
 			}),
 		);
 	}
