@@ -659,7 +659,6 @@ mod tests {
 			assert_eq!(message, expected_message);
 			peerset = p;
 		}
-		assert!(peerset.message_queue.is_empty(), peerset.message_queue);
 		peerset
 	}
 
