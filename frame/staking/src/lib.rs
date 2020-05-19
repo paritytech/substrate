@@ -682,15 +682,15 @@ pub enum ElectionStatus<BlockNumber> {
 
 /// Some indications about the size of the election. This must be submitted with the solution.
 ///
-/// Note that this values must reflect the __total__ number, not only those that are present in the
+/// Note that these values must reflect the __total__ number, not only those that are present in the
 /// solution. In short, these should be the same size as the size of the values dumped in
 /// `SnapshotValidators` and `SnapshotNominators`.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default)]
 pub struct ElectionSize {
-	/// Number of validators the snapshot of the current election round.
+	/// Number of validators in the snapshot of the current election round.
 	#[codec(compact)]
 	pub validators: ValidatorIndex,
-	/// Number of nominators the snapshot of the current election round.
+	/// Number of nominators in the snapshot of the current election round.
 	#[codec(compact)]
 	pub nominators: NominatorIndex,
 }
@@ -786,7 +786,7 @@ pub mod weight {
 		size: &ElectionSize,
 	) -> Weight {
 		(35 * WEIGHT_PER_MICROS * (size.validators as Weight))
-			.saturating_add(25 * WEIGHT_PER_MICROS * (size.validators as Weight))
+			.saturating_add(25 * WEIGHT_PER_MICROS * (size.nominators as Weight))
 			.saturating_add(T::DbWeight::get().reads(7))
 			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight)) // Nominators
 			.saturating_add(T::DbWeight::get().reads(compact.edge_count() as Weight))  // SlashingSpans
@@ -2612,7 +2612,7 @@ impl<T: Trait> Module<T> {
 			refund = refund.saturating_add(T::DbWeight::get().reads(1));
 
 		// Check that the number of presented winners is sane. Most often we have more candidates
-		// that we need. Then it should be Self::validator_count(). Else it should be all the
+		// than we need. Then it should be `Self::validator_count()`. Else it should be all the
 		// candidates.
 		let snapshot_validators_length = <SnapshotValidators<T>>::decode_len()
 			.map(|l| l as u32)

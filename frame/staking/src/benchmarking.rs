@@ -412,19 +412,12 @@ benchmarks! {
 		// number of validator intentions
 		let v in 200 .. 400;
 		// number of nominators
-		let n in 500 .. 1000;
+		let n in 300 .. 600;
 		// number of winners.
 		let w in 100 .. 199;
 		// number of assignments. Basically, number of active nominators.
 		let a in 200 .. 499;
 
-		// let v in 50 .. 100;
-		// // number of nominators
-		// let n in 200 .. 500;
-		// // number of winners.
-		// let w in 10 .. 40;
-		// // number of assignments. Basically, number of active nominators.
-		// let a in 50 .. 200;
 		// NOTE: we could make the edge per assignment also variable, but 1. unlikely to bring much
 		// accuracy change 2. makes the setup of the bench a few orders of magnitude more annoying.
 
@@ -436,7 +429,7 @@ benchmarks! {
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
-		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
+		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(false);
 
 		// trim some edges.
 		let (new_compact, new_score) = trim_compact_to_assignments::<T>(
