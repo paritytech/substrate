@@ -363,7 +363,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 						.read_proof(
 							&BlockId::Hash(block),
 							&mut keys.iter().map(|key| key.0.as_ref()),
-							StorageProofKind::TrieSkipHashes,
+							StorageProofKind::Flatten,
 						)
 						// A new version of this rpc could return a proof with skiped hashes.
 						.map(|proof| proof.iter_nodes_flatten().map(|node| node.into()).collect())

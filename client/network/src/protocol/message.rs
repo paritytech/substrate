@@ -27,7 +27,10 @@ pub use self::generic::{
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest, Roles,
 };
-use sc_client_api::StorageProof;
+
+/// Forme storage proof type, to be replace by
+/// `use sc_client_api::StorageProof`;
+type StorageProof = Vec<Vec<u8>>;
 
 /// A unique ID of a request.
 pub type RequestId = u64;
