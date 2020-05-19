@@ -38,14 +38,19 @@ use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageC
 use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
 use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
-use std::{thread, time::Duration};
+use std::{thread, time::{Duration, Instant}};
 use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
+use std::convert::{TryFrom, TryInto};
+use sp_runtime::traits::{CheckedDiv, Saturating};
 
 /// Number of blocks we will add to the queue before waiting for the queue to catch up.
-const MAX_PENDING_BLOCKS: u64 = 1024;
+const MAX_PENDING_BLOCKS: u64 = 1_024;
 
 /// Number of milliseconds to wait until next poll.
-const DELAY_TIME: u64 = 10_000;
+const DELAY_TIME: u64 = 2_000;
+
+/// Number of milliseconds that must have passed between two updates.
+const TIME_BETWEEN_UPDATES: u64 = 3_000;
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
@@ -180,32 +185,75 @@ fn importing_is_done(num_expected_blocks: Option<u64>, read_block_count: u64, im
 	}
 }
 
-/// Logs information regarding the number of blocks that were added to the queue.
-fn log_added_blocks<R, T>(block_iter: &BlockIter<R, T>)
-where
-	R: Read + Seek + 'static,
-	T: BlockT + MaybeSerializeDeserialize,
-{
-	let read_block_count = block_iter.read_block_count();
-	
-	// Notify every 1000 blocks to let the user know everything is running smoothly.
-	if read_block_count % 1000 == 0 {
-		info!(
-			"#{} blocks were added to the queue",
-			read_block_count
-		);
-	}
+/// Structure used to log the block importing speed.
+struct Speedometer<B: BlockT> {
+	best_number: NumberFor<B>,
+	last_number: Option<NumberFor<B>>,
+	last_update: Instant,
 }
 
-/// Logs information regarding the number of blocks processed by the importing queue.
-fn log_queue_progress(blocks_before: u64, imported_blocks: u64)
-{
-	// Notify every time we import an additional 1000 blocks.
-	if imported_blocks / 1000 != blocks_before / 1000 {
-		info!(
-			"{} blocks were imported, other are still being processed",
-			imported_blocks,
-		)
+impl<B: BlockT> Speedometer<B> {
+	/// Creates a fresh Speedometer.
+	fn new() -> Self {
+		Self {
+			best_number: NumberFor::<B>::from(0),
+			last_number: None,
+			last_update: Instant::now(),
+		}
+	}
+
+	/// Calculates `(best_number - last_number) / (now - last_update)` and 
+	/// logs the speed of import.
+	fn display_speed(&self) {
+		// Number of milliseconds elapsed since last time.
+		let elapsed_ms = {
+			let elapsed = self.last_update.elapsed();
+			let since_last_millis = elapsed.as_secs() * 1000;
+			let since_last_subsec_millis = elapsed.subsec_millis() as u64;
+			since_last_millis + since_last_subsec_millis
+		};
+
+		// Number of blocks that have been imported since last time.
+		let diff = match self.last_number {
+			None => return,
+			Some(n) => self.best_number.saturating_sub(n)
+		};
+
+		if let Ok(diff) = TryInto::<u128>::try_into(diff) {
+			// If the number of blocks can be converted to a regular integer, then it's easy: just
+			// do the math and turn it into a `f64`.
+			let speed = diff.saturating_mul(10_000).checked_div(u128::from(elapsed_ms))
+				.map_or(0.0, |s| s as f64) / 10.0;
+			info!("📦 Current best block: {} ({:4.1} bps)", self.best_number, speed);
+		} else {
+			// If the number of blocks can't be converted to a regular integer, then we need a more
+			// algebraic approach and we stay within the realm of integers.
+			let one_thousand = NumberFor::<B>::from(1_000);
+			let elapsed = NumberFor::<B>::from(
+				<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
+			);
+
+			let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)
+				.unwrap_or_else(Zero::zero);
+			info!("📦 Current best block: {} ({} bps)", self.best_number, speed)
+		}
+	}
+
+	/// Updates the Speedometer.
+	fn update(&mut self, best_number: NumberFor<B>) {
+		self.last_number = Some(self.best_number);
+		self.best_number = best_number;
+		self.last_update = Instant::now();
+	}
+
+	// If more than TIME_BETWEEN_UPDATES has elapsed since last update,
+	// then print and update the speedometer.
+	fn notify_user(&mut self, best_number: NumberFor<B>) {
+		let delta = Duration::from_millis(TIME_BETWEEN_UPDATES);
+		if Instant::now().duration_since(self.last_update) >= delta {
+			self.display_speed();
+			self.update(best_number);
+		}
 	}
 }
 
@@ -302,6 +350,7 @@ impl<
 		};
 
 		let mut state = Some(ImportState::Reading{block_iter});
+		let mut speedometer = Speedometer::<TBl>::new();
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -335,7 +384,6 @@ impl<
 									} else {
 										// Queue is not full, we can keep on adding blocks to the queue.
 										import_block_to_queue(block, queue, force);
-										log_added_blocks(&block_iter);
 										state = Some(ImportState::Reading{block_iter});
 									}
 								}
@@ -354,10 +402,9 @@ impl<
 						// Queue is still full, so wait until there is room to insert our block.
 						state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
 					} else {
-						// Queue is no longer full, so we can add our block to the queue and 
-						// switch back to the Reading State.
+						// Queue is no longer full, so we can add our block to the queue.
 						import_block_to_queue(block, queue, force);
-						log_added_blocks(&block_iter);
+						// Switch back to Reading state.
 						state = Some(ImportState::Reading{block_iter});
 					}
 				},
@@ -380,8 +427,10 @@ impl<
 				}
 			}
 
-			let blocks_before = link.imported_blocks;
 			queue.poll_actions(cx, &mut link);
+
+			let best_number = client.chain_info().best_number;
+			speedometer.notify_user(best_number);
 
 			if link.has_error {
 				return std::task::Poll::Ready(Err(
@@ -390,8 +439,6 @@ impl<
 					)
 				))
 			}
-
-			log_queue_progress(blocks_before, link.imported_blocks);
 
 			cx.waker().wake_by_ref();
 			std::task::Poll::Pending
