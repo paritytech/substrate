@@ -233,7 +233,6 @@ parameter_types! {
 }
 
 impl transaction_payment::Trait for Runtime {
-	type Event = Event;
 	type Currency = balances::Module<Runtime>;
 	type OnTransactionPayment = ();
 	type TransactionByteFee = TransactionByteFee;
@@ -263,7 +262,7 @@ construct_runtime!(
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
 		Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: transaction_payment::{Module, Storage, Event},
+		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},

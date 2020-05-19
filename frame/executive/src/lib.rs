@@ -512,7 +512,6 @@ mod tests {
 	type Custom = custom::Module<Runtime>;
 
 	use pallet_balances as balances;
-	use pallet_transaction_payment as payment;
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime { }
@@ -522,7 +521,6 @@ mod tests {
 		pub enum MetaEvent for Runtime {
 			system<T>,
 			balances<T>,
-			payment,
 		}
 	}
 	impl_outer_dispatch! {
@@ -587,7 +585,6 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
-		type Event = MetaEvent;
 		type Currency = Balances;
 		type OnTransactionPayment = ();
 		type TransactionByteFee = TransactionByteFee;

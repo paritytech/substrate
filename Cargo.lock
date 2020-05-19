@@ -3492,7 +3492,6 @@ dependencies = [
 name = "node-executor"
 version = "2.0.0-dev"
 dependencies = [
- "assert_matches",
  "criterion 0.3.1",
  "frame-benchmarking",
  "frame-support",

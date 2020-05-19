@@ -35,7 +35,7 @@
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use frame_support::{
-	decl_storage, decl_module, decl_event,
+	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
 	weights::{
 		Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays, WeightToFeePolynomial,
@@ -55,7 +55,6 @@ use sp_runtime::{
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-use frame_system as system;
 
 type Multiplier = Fixed128;
 type BalanceOf<T> =
@@ -64,9 +63,6 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: frame_system::Trait {
-	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
-
 	/// The currency type in which fees will be paid.
 	type Currency: Currency<Self::AccountId> + Send + Sync;
 
@@ -91,13 +87,6 @@ decl_storage! {
 	}
 }
 
-decl_event!(
-	pub enum Event {
-		/// Per block event that exposes parameters needed to calculate fees off-chain.
-		PaymentParameters(Multiplier),
-	}
-);
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The fee to be paid for making a transaction; the per-byte portion.
@@ -106,13 +95,6 @@ decl_module! {
 		/// The polynomial that is applied in order to derive fee from weight.
 		const WeightToFee: Vec<WeightToFeeCoefficient<BalanceOf<T>>> =
 			T::WeightToFee::polynomial().to_vec();
-
-		fn deposit_event() = default;
-
-		fn on_initialize() -> Weight {
-			Self::deposit_event(Event::PaymentParameters(NextFeeMultiplier::get()));
-			0
-		}
 
 		fn on_finalize() {
 			NextFeeMultiplier::mutate(|fm| {
@@ -454,7 +436,6 @@ mod tests {
 	}
 
 	impl Trait for Runtime {
-		type Event = ();
 		type Currency = pallet_balances::Module<Runtime>;
 		type OnTransactionPayment = ();
 		type TransactionByteFee = TransactionByteFee;
