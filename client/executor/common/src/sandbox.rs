@@ -251,7 +251,7 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		{
 			deallocate(self, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
 			return Err(trap("Can't write invoke args into memory"));
-		};
+		}
 
 		let result = self.supervisor_externals.invoke(
 			&self.sandbox_instance.dispatch_thunk,
@@ -274,12 +274,12 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			(Pointer::new(ptr), len)
 		};
 
-		let read_result = self.supervisor_externals
+		let serialized_result_val = self.supervisor_externals
 			.read_memory(serialized_result_val_ptr, serialized_result_val_len)
 			.map_err(|_| trap("Can't read the serialized result from dispatch thunk"));
 
 		deallocate(self, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
-			.and_then(|_| read_result)
+			.and_then(|_| serialized_result_val)
 			.and_then(|serialized_result_val| deserialize_result(&serialized_result_val))
 	}
 }
