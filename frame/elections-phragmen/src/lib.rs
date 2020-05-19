@@ -197,6 +197,8 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes and locked stake of a particular voter.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash
 		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up

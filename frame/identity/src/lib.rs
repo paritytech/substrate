@@ -389,6 +389,8 @@ pub struct RegistrarInfo<
 decl_storage! {
 	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
+		///
+		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 		pub IdentityOf get(fn identity):
 			map hasher(twox_64_concat) T::AccountId => Option<Registration<BalanceOf<T>>>;
 
@@ -400,6 +402,8 @@ decl_storage! {
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
+		///
+		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 		pub SubsOf get(fn subs_of):
 			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
