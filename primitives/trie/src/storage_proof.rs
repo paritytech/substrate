@@ -23,9 +23,9 @@ use hash_db::{Hasher, HashDB, HashDBRef, EMPTY_PREFIX};
 use crate::{MemoryDB, Layout};
 use sp_storage::{ChildInfoProof, ChildType, ChildrenMap};
 use trie_db::DBValue;
-// we are not using std as this use in no_std is
-// only allowed here because it is already use in
-// no_std use of trie_db.
+// We are not including it to sp_std, this hash map
+// usage is restricted here to proof.
+// In practice it is already use internally by no_std trie_db.
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;
 
@@ -40,18 +40,18 @@ type CodecResult<T> = sp_std::result::Result<T, codec::Error>;
 pub enum Error {
 	/// Error produce by storage proof logic.
 	/// It is formatted in std to simplify type.
-	Trie(String),
-	/// Error produce by trie manipulation.
 	Proof(&'static str),
+	/// Error produce by trie manipulation.
+	Trie(String),
 }
 
 #[cfg(not(feature = "std"))]
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Error {
 	/// Error produce by storage proof logic.
-	Trie,
-	/// Error produce by trie manipulation.
 	Proof,
+	/// Error produce by trie manipulation.
+	Trie,
 }
 
 #[cfg(feature = "std")]
@@ -67,7 +67,7 @@ impl sp_std::fmt::Display for Error {
 #[cfg(feature = "std")]
 impl<E: sp_std::fmt::Display> sp_std::convert::From<sp_std::boxed::Box<E>> for Error {
 	fn from(e: sp_std::boxed::Box<E>) -> Self {
-		// currently only trie error is build from box
+		// Only trie error is build from box so we use a tiny shortcut here.
 		Error::Trie(format!("{}", e))
 	}
 }
@@ -110,6 +110,8 @@ const fn no_partial_db_support() -> Error {
 /// Different kind of proof representation are allowed.
 /// This definition is used as input parameter when producing
 /// a storage proof.
+/// Some kind are reserved for test or internal use and will
+/// not be usable when decoding proof.
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StorageProofKind {
@@ -137,8 +139,8 @@ pub enum StorageProofKind {
 }
 
 impl StorageProofKind {
-	/// Decode a byte value representing the storage byte.
-	/// Return `None` if value does not exists.
+	/// Decode a byte value representing the storage kind.
+	/// Return `None` if the kind does not exists or is not allowed.
 	#[cfg(test)]
 	pub fn read_from_byte(encoded: u8) -> Option<Self> {
 		Some(match encoded {
@@ -156,8 +158,8 @@ impl StorageProofKind {
 		})
 	}
 
-	/// Decode a byte value representing the storage byte.
-	/// Return `None` if value does not exists.
+	/// Decode a byte value representing the storage kind.
+	/// Return `None` if the kind does not exists or is not allowed.
 	#[cfg(not(test))]
 	pub fn read_from_byte(encoded: u8) -> Option<Self> {
 		Some(match encoded {
@@ -171,9 +173,9 @@ impl StorageProofKind {
 }
 
 #[derive(Clone)]
-/// Additional information needed for packing or unpacking.
+/// Additional information needed for packing or unpacking storage proof.
 /// These do not need to be part of the proof but are required
-/// when using the proof.
+/// when processing the proof.
 pub enum Input {
 	/// Proof is self contained.
 	None,
@@ -191,14 +193,14 @@ pub enum Input {
 }
 
 impl Input {
-	#[must_use]
 	/// Update input with new content.
 	/// Return false on failure.
-	/// Fail when the content differs, except for `None` input
+	/// Fails when the input type differs, except for `None` input
 	/// that is always reassignable.
 	///
-	/// Not that currently all query plan input are not mergeable
-	/// even if it could in the future.
+	/// Not that currently query plan inputs are not mergeable
+	/// even if doable (just unimplemented).
+	#[must_use]
 	pub fn consolidate(&mut self, other: Self) -> bool {
 		match self {
 			Input::None => {
@@ -230,7 +232,7 @@ impl Input {
 	}
 }
 
-/// Kind for designing an `Input` variant.
+/// Kind for a `Input` variant.
 pub enum InputKind {
 	/// `Input::None` kind.
 	None,
@@ -246,9 +248,8 @@ pub enum InputKind {
 }
 
 impl StorageProofKind {
-	/// Some proof variants requires more than just the collected
-	/// encoded nodes.
-	pub fn processing_input_kind(&self) -> InputKind {
+	/// Input kind needed for processing (create) the proof.
+	pub fn process_input_kind(&self) -> InputKind {
 		match self {
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlan,
 			StorageProofKind::TrieSkipHashesForMerge
@@ -259,7 +260,7 @@ impl StorageProofKind {
 		}
 	}
 
-	/// Same as `need_additional_info_to_produce` but for reading.
+	/// Input kind needed for verifying the proof.
 	pub fn verify_input_kind(&self) -> InputKind {
 		match self {
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanWithValues,
@@ -271,20 +272,7 @@ impl StorageProofKind {
 		}
 	}
 
-	/// Some proof can get unpack into another proof representation.
-	pub fn can_unpack(&self) -> bool {
-		match self {
-			StorageProofKind::KnownQueryPlanAndValues => false,
-			StorageProofKind::TrieSkipHashes
-				| StorageProofKind::TrieSkipHashesFull => true,
-			StorageProofKind::Full
-				| StorageProofKind::TrieSkipHashesForMerge
-				| StorageProofKind::Flatten => false,
-		}
-	}
-
-	/// Indicates if we need to record proof with splitted child trie information
-	/// or can simply record on a single collection.
+	/// Indicates what variant of proof recorder should be use.
 	pub fn need_register_full(&self) -> bool {
 		match self {
 			StorageProofKind::Flatten => false,
@@ -311,16 +299,10 @@ impl StorageProofKind {
 
 	/// Proof that should be use with `verify` method.
 	pub fn can_use_verify(&self) -> bool {
-		match self {
-			StorageProofKind::KnownQueryPlanAndValues => true,
-			_ => false,
-		}
+		matches!(self.verify_input_kind(), InputKind::None)
 	}
 
-	/// Can be use as a db backend for proof check and
-	/// result fetch.
-	/// If false `StorageProof` `as_partial_db` method
-	/// failure is related to an unsupported capability.
+	/// Can be use as a trie db backend.
 	pub fn can_use_as_partial_db(&self) -> bool {
 		match self {
 			StorageProofKind::KnownQueryPlanAndValues => false,
@@ -328,83 +310,79 @@ impl StorageProofKind {
 		}
 	}
 
-	/// Can be use as a db backend without child trie
-	/// distinction.
-	/// If false `StorageProof` `as_partial_flat_db` method
-	/// failure is related to an unsupported capability.
-	pub fn can_use_as_flat_partial_db(&self) -> bool {
-		self.can_use_as_partial_db()
-	}
-
-	/// Return the best kind to use for merging later, and
-	/// wether the merge should produce full proof, and if
-	/// we are recursing.
-	pub fn mergeable_kind(&self) -> (Self, bool, bool) {
+	/// Return the best kind to use for merging later,
+	/// a boolean indicationg if merge should produce full proof.
+	pub fn mergeable_kind(&self) -> (Self, bool) {
 		match self {
-			StorageProofKind::TrieSkipHashes => (StorageProofKind::TrieSkipHashesForMerge, false, false),
-			StorageProofKind::TrieSkipHashesFull => (StorageProofKind::TrieSkipHashesForMerge, true, false),
-			StorageProofKind::TrieSkipHashesForMerge => (StorageProofKind::TrieSkipHashesForMerge, true, true),
-			s => (*s, s.use_full_partial_db().unwrap_or(false), false)
+			StorageProofKind::TrieSkipHashes => (StorageProofKind::TrieSkipHashesForMerge, false),
+			StorageProofKind::TrieSkipHashesFull => (StorageProofKind::TrieSkipHashesForMerge, true),
+			StorageProofKind::TrieSkipHashesForMerge => (StorageProofKind::TrieSkipHashesForMerge, true),
+			s => (*s, s.use_full_partial_db().unwrap_or(false))
 		}
 	}
 }
 
 /// A collection on encoded trie nodes.
 type ProofNodes = Vec<Vec<u8>>;
-/// A sorted by trie nodes order collection on encoded trie nodes
-/// with possibly ommitted content or special compacted encoding.
+
+/// A collection on encoded and compacted trie nodes.
+/// Nodes are sorted by trie node iteration order, and some hash
+/// and/or values are ommitted (they can be either calculated from
+/// proof content or completed by proof input).
 type ProofCompacted = Vec<Vec<u8>>;
 
-/// A proof that some set of key-value pairs are included in the storage trie. The proof contains
-/// the storage values so that the partial storage backend can be reconstructed by a verifier that
-/// does not already have access to the key-value pairs.
+/// A proof that some set of key-value pairs are included in the storage state. The proof contains
+/// either values so that the partial storage backend can be reconstructed by a verifier that
+/// does not already have access to the key-value pairs, or can be verified with `verify` method.
 ///
-/// For default trie, the proof component consists of the set of serialized nodes in the storage trie
-/// accessed when looking up the keys covered by the proof. Verifying the proof requires constructing
-/// the partial trie from the serialized nodes and performing the key lookups.
+/// For instance for default trie and flatten storage proof kind, the proof component consists of the set of
+/// serialized nodes in the storage trie accessed when looking up the keys covered by the proof.
+/// Verifying the proof requires constructing the partial trie from the serialized nodes and
+/// performing the key lookups. The proof carries additional information (the result of the query).
+///
+/// For know query plan and value, the proof is simply verified by running verify method since we
+/// are not getting additional information from the proof.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StorageProof {
 	/// Single flattened proof component, all default child trie are flattened over a same
 	/// container, no child trie information is provided.
 	Flatten(ProofNodes),
 
-	/// This skip encoding of hashes that are
-	/// calculated when reading the structue
-	/// of the trie.
-	/// It requires that the proof is collected with
-	/// child trie separation, will encode to struct that
-	/// separate child trie but do not keep information about
-	/// them (for compactness) and will therefore produce a flatten
-	/// verification backend.
+	/// This works as `Flatten`, but skips encoding of hashes
+	/// that can be calculated when reading the child nodes
+	/// in the proof (nodes ordering hold the trie structure information).
+	/// This requires that the proof is collected with
+	/// child trie separation and each child trie roots as additional
+	/// input.
+	/// We remove child trie info when encoding because it is not strictly needed
+	/// when decoding.
 	TrieSkipHashes(Vec<ProofCompacted>),
 
-	/// This skip encoding of hashes, but need to know the key
-	/// values that are targetted by the operation.
-	/// As `TrieSkipHashes`, it does not pack hash that can be
-	/// calculated, so it requires a specific call to a custom
-	/// verify function with additional input.
-	/// This needs to be check for every children proofs.
+	/// This skips encoding of hashes in a similar way as `TrieSkipHashes`.
+	/// This also skips values in the proof, and can therefore only be
+	/// use to check if there was a change of content.
+	/// This needs to be check for every children proofs, and needs to keep
+	/// trace of every child trie origin.
 	KnownQueryPlanAndValues(ChildrenProofMap<ProofCompacted>),
 
-	// Techincal variant
+	// Technical variants
 
 	/// This is an intermediate representation that keep trace of
-	/// input, in order merge into a `TrieSkipHashes` or a `TrieSkipHashesFull`
-	/// proof
+	/// input and is therefore mergeable into compact representation.
+	/// Compatible with `TrieSkipHashes` and `TrieSkipHashesFull` proofs.
 	TrieSkipHashesForMerge(ChildrenProofMap<(ProofMapTrieNodes, Vec<u8>)>),
 
 	// Following variants are only for testing, they still can be use but
 	// decoding is not implemented.
 
-	///	Fully described proof, it includes the child trie individual description and split its
-	///	content by child trie.
-	///	Currently Full variant is unused as all our child trie kind can share a same memory db
-	///	(a bit more compact).
-	///	This is mainly provided for test purpose and extensibility.
+	///	Proof with full child trie description.
+	///	Currently Full variant is unused as all our proof kind can share a same memory db
+	///	(which is a bit more compact).
+	///	This currently mainly provided for test purpose and extensibility.
 	Full(ChildrenProofMap<ProofNodes>),
 
 	/// Compact form of proofs split by child trie, this is using the same compaction as
-	/// `TrieSkipHashes` but do not merge the content in a single memorydb backend.
+	/// `TrieSkipHashes` but keep trace of child trie origin.
 	///	This is mainly provided for test purpose and extensibility.
 	TrieSkipHashesFull(ChildrenProofMap<ProofCompacted>),
 }
@@ -443,16 +421,13 @@ impl Encode for StorageProof {
 			StorageProof::KnownQueryPlanAndValues(p) => p.encode_to(dest),
 			StorageProof::Full(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashesFull(p) => p.encode_to(dest),
-			StorageProof::TrieSkipHashesForMerge(..) => (),
+			StorageProof::TrieSkipHashesForMerge(..) => panic!("merge did not recurse as told"),
 		}
 	}
 }
 
 /// This encodes the full proof capabillity under
-/// legacy proof format by disabling the empty proof
-/// from it (empty proof should not happen because
-/// the empty trie still got a empty node recorded in
-/// all its proof).
+/// legacy proof format.
 pub struct LegacyEncodeAdapter<'a>(pub &'a StorageProof);
 
 impl<'a> Encode for LegacyEncodeAdapter<'a> {
@@ -462,8 +437,9 @@ impl<'a> Encode for LegacyEncodeAdapter<'a> {
 	}
 }
 
-/// This encodes only if storage proof if it is guarantied
-/// to be a flatten proof.
+/// This encodes only if storage proof is a flatten proof.
+/// It panics otherwhise, so it should only be use when we
+/// got strong guaranties of the proof kind.
 pub struct FlattenEncodeAdapter<'a>(pub &'a StorageProof);
 
 impl<'a> Encode for FlattenEncodeAdapter<'a> {
@@ -479,7 +455,7 @@ impl<'a> Encode for FlattenEncodeAdapter<'a> {
 /// Decode variant of `LegacyEncodeAdapter`.
 pub struct LegacyDecodeAdapter(pub StorageProof);
 
-/// Allow read ahead on input.
+/// Allow read ahead on input by chaining back some already consumed data.
 pub struct InputRevertPeek<'a, I>(pub &'a mut &'a [u8], pub &'a mut I);
 
 impl<'a, I: CodecInput> CodecInput for InputRevertPeek<'a, I> {
@@ -551,7 +527,7 @@ impl StorageProof {
 		}
 	}
 
-	/// Returns whether this is an empty proof.
+	/// Check if proof is empty for any kind of proof.
 	pub fn is_empty(&self) -> bool {
 		match self {
 			StorageProof::Flatten(data) => data.is_empty(),
@@ -603,7 +579,7 @@ impl StorageProof {
 		}
 	}
 
-	/// This run proof validation when the proof allows immediate
+	/// Run proof validation when the proof allows immediate
 	/// verification (`StorageProofKind::can_use_verify`).
 	pub fn verify<H: Hasher>(
 		self,
@@ -642,7 +618,7 @@ impl StorageProof {
 		}
 	}
 
-	/// This produce the proof from collected information.
+	/// Produces the proof from collected information.
 	pub fn extract_proof<H: Hasher>(
 		collected: &ChildrenMap<RecordMapTrieNodes<H>>,
 		kind: StorageProofKind,
@@ -751,7 +727,7 @@ impl StorageProof {
 		})
 	}
 
-	/// This produce the proof from collected information on a flat backend.
+	/// Produce the proof from collected information on a flat backend.
 	pub fn extract_proof_from_flat<H: Hasher>(
 		collected: &RecordMapTrieNodes<H>,
 		kind: StorageProofKind,
@@ -771,14 +747,15 @@ impl StorageProof {
 		})
 	}
 
-	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
-	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
+	/// Merges multiple storage proofs.
+	/// The merged proof output may be smaller than the aggregate size of the input
 	/// proofs due to deduplication of trie nodes.
-	/// Merge to `Flatten` if one of the item is flatten (we cannot unflatten), if not `Flatten` we output to
-	/// non compact form.
+	/// Merge result in a `Flatten` storage proof if any of the item is flatten (we cannot unflatten).
 	/// The function cannot pack back proof as it does not have reference to additional information
-	/// needed. So for this the additional information need to be merged separately and the result
-	/// of this merge be packed with it afterward.
+	/// needed.
+	/// So packing back need to be done in a next step with aggregated proof inputs.
+	/// Using a technical mergeable type is also possible (see `StorageProofKind::TrieSkipHashesForMerge`
+	/// and `mergeable_kind`).
 	pub fn merge<H, I>(proofs: I, prefer_full: bool, recurse: bool) -> Result<StorageProof>
 		where
 			I: IntoIterator<Item=StorageProof>,
@@ -887,7 +864,7 @@ impl StorageProof {
 		})
 	}
 
-	/// Get kind description for the storage proof variant.
+	/// Get kind type for the storage proof variant.
 	pub fn kind(&self) -> StorageProofKind {
 		match self {
 			StorageProof::Flatten(_) => StorageProofKind::Flatten,
@@ -1013,6 +990,9 @@ impl StorageProof {
 	}
 
 	/// Get flatten content form proof.
+	/// This panic on non flatten proof and should only be
+	/// use when we got strong guarantie the proof is a `Flatten`
+	/// proof.
 	pub fn expect_flatten_content(self) -> Vec<Vec<u8>> {
 		match self {
 			StorageProof::Flatten(proof) => proof,

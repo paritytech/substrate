@@ -43,7 +43,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 		}
 	}
 
-	/// Activate storage of roots (can be use
+	/// Create a trie backend that also record visited trie roots.
 	/// to pack proofs and does small caching of child trie root)).
 	pub fn new_with_roots(storage: S, root: H::Out) -> Self {
 		let register_roots = Some(RwLock::new(Default::default()));
@@ -52,7 +52,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 		}
 	}
 
-	/// Get registered roots
+	/// Get registered roots. Empty input is returned when the backend is
+	/// not configured to register roots.
 	pub fn extract_registered_roots(&self) -> ProofInput {
 		if let Some(register_roots) = self.essence.register_roots.as_ref() {
 			let mut dest = ChildrenProofMap::default();

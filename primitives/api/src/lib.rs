@@ -521,11 +521,14 @@ pub trait RuntimeApiInfo {
 	const VERSION: u32;
 }
 
-/// Inner struct for storage of proof management.
+/// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
 pub struct ProofRecorder<Block: BlockT> {
+	/// The recorder to use over the db use by trie db.
 	pub recorder: sp_state_machine::ProofRecorder<HashFor<Block>>,
+	/// The kind of proof to produce.
 	pub kind: StorageProofKind,
+	/// The additional input needed for the proof.
 	pub input: ProofInput,
 }
 

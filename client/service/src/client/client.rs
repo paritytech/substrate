@@ -1209,7 +1209,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		call_data: &[u8],
 		kind: StorageProofKind,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let (merge_kind, prefer_full, recurse) = kind.mergeable_kind();
+		let (merge_kind, prefer_full) = kind.mergeable_kind();
 		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
 		//
@@ -1229,11 +1229,12 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			method,
 			call_data,
 			merge_kind,
+			true,
 		).and_then(|(r, p)| {
 			Ok((r, StorageProof::merge::<HashFor<Block>, _>(
 				vec![p, code_proof],
 				prefer_full,
-				recurse,
+				false,
 			).map_err(|e| format!("{}", e))?))
 		})
 	}

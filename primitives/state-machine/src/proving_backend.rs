@@ -115,14 +115,16 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	}
 }
 
-/// Global proof recorder, act as a layer over a hash db for recording queried
-/// data.
+/// A type that records all accessed trie nodes.
 pub enum ProofRecorder<H: Hasher> {
-	// root of each child is added to be able to pack.
-	/// Proof keep a separation between child trie content, this is usually useless,
-	/// but when we use proof compression we want this separation.
+	/// Records are separated by child trie, this is needed for
+	/// proof compaction.
 	Full(Arc<RwLock<ChildrenMap<RecordMapTrieNodes<H>>>>),
-	/// Single level of storage for all recoded nodes.
+	/// Single storage for all recoded nodes (as in
+	/// state db column).
+	/// That this variant exists only for performance
+	/// (on less map access than in `Full`), but is not strictly
+	/// necessary.
 	Flat(Arc<RwLock<RecordMapTrieNodes<H>>>),
 }
 
@@ -182,7 +184,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		let trie_backend = if let ProofInputKind::ChildTrieRoots = proof_kind.processing_input_kind() {
+		let trie_backend = if let ProofInputKind::ChildTrieRoots = proof_kind.process_input_kind() {
 			TrieBackend::new_with_roots(recorder, root)
 		} else {
 			TrieBackend::new(recorder, root)
@@ -202,7 +204,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 
 	fn update_input(&mut self) -> Result<(), String> {
-		let input = match self.proof_kind.processing_input_kind() {
+		let input = match self.proof_kind.process_input_kind() {
 			ProofInputKind::ChildTrieRoots => {
 				self.trie_backend.extract_registered_roots()
 			},
@@ -215,7 +217,8 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		}
 	}
 
-	/// Drop the backend, but keep the state to use it again afterward
+	/// Extract current recording state, this allows using the state back when recording
+	/// multiple operations.
 	pub fn recording_state(mut self) -> Result<(ProofRecorder<H>, ProofInput), String> {
 		self.update_input()?;
 		Ok((
@@ -229,7 +232,7 @@ impl<H: Hasher> ProofRecorder<H>
 	where
 		H::Out: Codec,
 {
-	/// Extracts the gathered unordered proof.
+	/// Extracts and transform the gathered unordered content.
 	pub fn extract_proof(
 		&self,
 		kind: StorageProofKind,

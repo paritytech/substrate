@@ -162,16 +162,15 @@ pub mod well_known_keys {
 
 /// Child information needed for proof construction.
 ///
-/// It is similar to standard child information but can
-/// be a bit more lightweight as long term storage is not
-/// needed in proof.
+/// It contains `ChildInfo` strictly needed for proofs.
 ///
-/// One can also use this information to use different compaction
-/// strategy in a same proof.
+/// It could also be use for specific proof usage.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
 pub enum ChildInfoProof {
-	/// A child using the default trie layout, identified by its
-	/// unprefixed location in the first level trie.
+	/// By default a child only need to be defined by its location in
+	/// the block top trie.
+	/// This variant is reserved for child trie of `ParentKeyId` type
+	/// and do not require to store the full parent key.
 	/// Empty location is reserved for the top level trie of the proof.
 	Default(ChildTrieParentKeyId),
 }
@@ -207,14 +206,13 @@ impl ChildInfo {
 		}
 	}
 
-	/// Top trie defined as the unique crypto id trie with
-	/// 0 length unique id.
+	/// ChildInfo definition for top trie.
+	/// The top trie is defined as a default trie with an empty key.
 	pub fn top_trie() -> Self {
 		Self::new_default(&[])
 	}
 
-	/// Top trie defined as the unique crypto id trie with
-	/// 0 length unique id.
+	/// Test if the child info is the block top trie. 
 	pub fn is_top_trie(&self) -> bool {
 		match self {
 			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => data.len() == 0,
@@ -271,7 +269,7 @@ impl ChildInfo {
 		}
 	}
 
-	/// Get corresponding info for proof definition.
+	/// Get default corresponding info to use with proof.
 	pub fn proof_info(&self) -> ChildInfoProof {
 		match self {
 			ChildInfo::ParentKeyId(parent) => ChildInfoProof::Default(parent.clone()),
@@ -280,14 +278,13 @@ impl ChildInfo {
 }
 
 impl ChildInfoProof {
-	/// Top trie defined as the unique crypto id trie with
-	/// 0 length unique id.
+	/// ChildInfoProof definition for top trie.
+	/// Same as `ChildInfo::top_trie().proof_info()`.
 	pub fn top_trie() -> Self {
 		ChildInfoProof::Default(ChildTrieParentKeyId { data: Vec::new() })
 	}
 
-	/// Top trie defined as the unique crypto id trie with
-	/// 0 length unique id.
+	/// Test if the child info proof is the block top trie. 
 	pub fn is_top_trie(&self) -> bool {
 		match self {
 			ChildInfoProof::Default(ChildTrieParentKeyId { data }) => data.len() == 0,
@@ -391,39 +388,8 @@ impl ChildTrieParentKeyId {
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-/// Type for storing a map of child trie related information.
-/// A few utilities methods are defined.
-pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);
-
-impl<T> sp_std::ops::Deref for ChildrenMap<T> {
-	type Target = BTreeMap<ChildInfo, T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<T> sp_std::ops::DerefMut for ChildrenMap<T> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-impl<T> sp_std::default::Default for ChildrenMap<T> {
-	fn default() -> Self {
-		ChildrenMap(BTreeMap::new())
-	}
-}
-
-impl<T> IntoIterator for ChildrenMap<T> {
-	type Item = (ChildInfo, T);
-	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfo, T>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		self.0.into_iter()
-	}
-}
+/// Map of child trie information stored by `ChildInfo`.
+pub type ChildrenMap<T> = BTreeMap<ChildInfo, T>;
 
 const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
 

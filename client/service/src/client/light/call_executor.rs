@@ -183,6 +183,7 @@ pub fn prove_execution<Block, S, E>(
 	method: &str,
 	call_data: &[u8],
 	kind: StorageProofKind,
+	proof_used_in_other: bool,
 ) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
 		Block: BlockT,
@@ -195,7 +196,7 @@ pub fn prove_execution<Block, S, E>(
 				Box<dyn sp_state_machine::Error>
 		)?;
 
-	let (merge_kind, prefer_full, recurse) = kind.mergeable_kind();
+	let (merge_kind, prefer_full) = kind.mergeable_kind();
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
 	let (_, init_proof) = executor.prove_at_trie_state(
@@ -217,7 +218,7 @@ pub fn prove_execution<Block, S, E>(
 	let total_proof = StorageProof::merge::<HashFor<Block>, _>(
 		vec![init_proof, exec_proof],
 		prefer_full,
-		recurse,
+		proof_used_in_other,
 	).map_err(|e| format!("{}", e))?;
 
 	Ok((result, total_proof))
