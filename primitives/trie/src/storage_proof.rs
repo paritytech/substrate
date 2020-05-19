@@ -1011,6 +1011,14 @@ impl StorageProof {
 		}
 		Ok(db)
 	}
+
+	/// Get flatten content form proof.
+	pub fn expect_flatten_content(self) -> Vec<Vec<u8>> {
+		match self {
+			StorageProof::Flatten(proof) => proof,
+			_ => panic!("Flat proof expected"),
+		}
+	}
 }
 
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
