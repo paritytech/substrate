@@ -114,13 +114,13 @@ const fn no_partial_db_support() -> Error {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StorageProofKind {
 	/// Kind for `StorageProof::Flatten`.
-	Flatten,
+	Flatten = 1,
 
 	/// Kind for `StorageProof::TrieSkipHashes`.
-	TrieSkipHashes,
+	TrieSkipHashes = 2,
 
 	/// Kind for `StorageProof::KnownQueryPlanAndValues`.
-	KnownQueryPlanAndValues,
+	KnownQueryPlanAndValues = 3,
 
 	/// Technical only
 
@@ -459,6 +459,19 @@ impl<'a> Encode for LegacyEncodeAdapter<'a> {
 	fn encode_to<T: CodecOutput>(&self, dest: &mut T) {
 		0u8.encode_to(dest);
 		self.0.encode_to(dest);
+	}
+}
+
+/// This encodes only if storage proof if it is guarantied
+/// to be a flatten proof.
+pub struct FlattenEncodeAdapter<'a>(pub &'a StorageProof);
+
+impl<'a> Encode for FlattenEncodeAdapter<'a> {
+	fn encode_to<T: CodecOutput>(&self, dest: &mut T) {
+		match self.0 {
+			StorageProof::Flatten(nodes) => nodes.encode_to(dest),
+			_ => panic!("Usage of flatten encoder on non flatten proof"),
+		}
 	}
 }
 

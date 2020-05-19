@@ -38,7 +38,7 @@ pub use notifications::*;
 pub use proof_provider::*;
 
 pub use sp_state_machine::{StorageProof, LegacyDecodeAdapter, LegacyEncodeAdapter,
-	StorageProofKind, ExecutionStrategy, CloneableSpawn};
+	FlattenEncodeAdapter, StorageProofKind, ExecutionStrategy, CloneableSpawn};
 
 /// Usage Information Provider interface
 ///

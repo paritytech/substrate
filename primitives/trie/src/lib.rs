@@ -38,7 +38,7 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 pub use storage_proof::{StorageProof, ChildrenProofMap,
 	StorageProofKind, Input as ProofInput, InputKind as ProofInputKind,
-	RecordMapTrieNodes, LegacyDecodeAdapter, LegacyEncodeAdapter};
+	RecordMapTrieNodes, LegacyDecodeAdapter, LegacyEncodeAdapter, FlattenEncodeAdapter};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,
