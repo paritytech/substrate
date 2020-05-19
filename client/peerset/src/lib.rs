@@ -193,7 +193,6 @@ pub struct Peerset {
 	/// Is kept in sync with the list of reserved nodes in [`Peerset::data`].
 	reserved_nodes: HashSet<PeerId>,
 	/// Lists of nodes we should always be connected to.
-	/// Is kept in sync with the list of reserved nodes in [`Peerset::data`].
 	priority_groups: HashMap<String, HashSet<PeerId>>,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
 	rx: TracingUnboundedReceiver<Action>,
