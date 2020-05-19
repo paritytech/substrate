@@ -269,7 +269,7 @@ impl Peerset {
 		if self.reserved_only {
 			// Disconnect non-reserved nodes.
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
-				if !self.is_priority(&peer_id) {
+				if self.reserved_nodes.contains(&peer_id) {
 					continue;
 				}
 
@@ -329,11 +329,6 @@ impl Peerset {
 			peersstate::Peer::NotConnected(mut peer) => peer.add_reputation(change.value),
 			peersstate::Peer::Unknown(peer) => peer.discover().add_reputation(change.value),
 		}
-	}
-
-	/// Check that node is any priority group.
-	fn is_priority(&self, peer_id: &PeerId) -> bool {
-		self.priority_groups.iter().any(|(_, group)| group.contains(peer_id))
 	}
 
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
