@@ -18,11 +18,14 @@
 use futures::prelude::*;
 use libp2p::{
 	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
+	core::{
+		self, either::{EitherError, EitherOutput}, muxing::StreamMuxerBox,
+		transport::{boxed::Boxed, OptionalTransport}, upgrade
+	},
 	mplex, identity, bandwidth, wasm_ext, noise
 };
 #[cfg(not(target_os = "unknown"))]
 use libp2p::{tcp, dns, websocket};
-use libp2p::core::{self, upgrade, transport::boxed::Boxed, transport::OptionalTransport, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -42,14 +45,22 @@ pub fn build_transport(
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
 	let noise_config = {
-		let noise_keypair = noise::Keypair::new().into_authentic(&keypair)
-			// For more information about this panic, see in "On the Importance of Checking
-			// Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
-			// and Richard J. Lipton.
+		// For more information about these two panics, see in "On the Importance of
+		// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
+		// and Richard J. Lipton.
+		let noise_keypair_legacy = noise::Keypair::<noise::X25519>::new().into_authentic(&keypair)
 			.expect("can only fail in case of a hardware bug; since this signing is performed only \
 				once and at initialization, we're taking the bet that the inconvenience of a very \
 				rare panic here is basically zero");
-		noise::NoiseConfig::ix(noise_keypair)
+		let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
+			.expect("can only fail in case of a hardware bug; since this signing is performed only \
+				once and at initialization, we're taking the bet that the inconvenience of a very \
+				rare panic here is basically zero");
+
+		core::upgrade::SelectUpgrade::new(
+			noise::NoiseConfig::xx(noise_keypair_spec),
+			noise::NoiseConfig::ix(noise_keypair_legacy)
+		)
 	};
 
 	// Build configuration objects for multiplexing mechanisms.
@@ -97,10 +108,21 @@ pub fn build_transport(
 	// Encryption
 	let transport = transport.and_then(move |stream, endpoint| {
 		core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
-			.and_then(|(remote_id, out)| async move {
-				let remote_key = match remote_id {
-					noise::RemoteIdentity::IdentityKey(key) => key,
+			.map_err(|err|
+				err.map_err(|err| match err {
+					EitherError::A(err) => err,
+					EitherError::B(err) => err,
+				})
+			)
+			.and_then(|result| async move {
+				let remote_key = match &result {
+					EitherOutput::First((noise::RemoteIdentity::IdentityKey(key), _)) => key.clone(),
+					EitherOutput::Second((noise::RemoteIdentity::IdentityKey(key), _)) => key.clone(),
 					_ => return Err(upgrade::UpgradeError::Apply(noise::NoiseError::InvalidKey))
+				};
+				let out = match result {
+					EitherOutput::First((_, o)) => o,
+					EitherOutput::Second((_, o)) => o,
 				};
 				Ok((out, remote_key.into_peer_id()))
 			})
