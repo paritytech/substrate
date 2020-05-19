@@ -1,19 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Configuration trait for a CLI based on substrate
 
 use crate::arg_enums::Database;
@@ -472,9 +473,12 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the filters for the logging.
 	///
+	/// This should be a list of comma-separated values.
+	/// Example: `foo=trace,bar=debug,baz=info`
+	///
 	/// By default this is retrieved from `SharedParams`.
-	fn log_filters(&self) -> Result<Option<String>> {
-		Ok(self.shared_params().log_filters())
+	fn log_filters(&self) -> Result<String> {
+		Ok(self.shared_params().log_filters().join(","))
 	}
 
 	/// Initialize substrate. This must be done only once.
@@ -485,12 +489,12 @@ pub trait CliConfiguration: Sized {
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log_filters()?.unwrap_or_default();
+		let logger_pattern = self.log_filters()?;
 
 		sp_panic_handler::set(C::support_url(), C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(logger_pattern.as_str());
+		init_logger(&logger_pattern);
 
 		Ok(())
 	}

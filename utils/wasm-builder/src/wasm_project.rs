@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::write_file_if_changed;
 
@@ -37,9 +38,9 @@ use itertools::Itertools;
 pub struct WasmBinaryBloaty(PathBuf);
 
 impl WasmBinaryBloaty {
-	/// Returns the path to the bloaty wasm binary.
-	pub fn wasm_binary_bloaty_path(&self) -> String {
-		self.0.display().to_string().replace('\\', "/")
+	/// Returns the escaped path to the bloaty wasm binary.
+	pub fn wasm_binary_bloaty_path_escaped(&self) -> String {
+		self.0.display().to_string().escape_default().to_string()
 	}
 }
 
@@ -48,8 +49,13 @@ pub struct WasmBinary(PathBuf);
 
 impl WasmBinary {
 	/// Returns the path to the wasm binary.
-	pub fn wasm_binary_path(&self) -> String {
-		self.0.display().to_string().replace('\\', "/")
+	pub fn wasm_binary_path(&self) -> &Path {
+		&self.0
+	}
+
+	/// Returns the escaped path to the wasm binary.
+	pub fn wasm_binary_path_escaped(&self) -> String {
+		self.0.display().to_string().escape_default().to_string()
 	}
 }
 

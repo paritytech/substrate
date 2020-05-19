@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle};
 use crate::status_sinks;
@@ -484,7 +485,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		self,
-		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &SpawnTaskHandle)
+		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &SpawnTaskHandle, Option<&Registry>)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
@@ -495,6 +496,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.select_chain.clone(),
 			self.transaction_pool.clone(),
 			&self.task_manager.spawn_handle(),
+			self.config.prometheus_config.as_ref().map(|config| &config.registry),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -585,6 +587,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TSc>,
 			Arc<TExPool>,
 			&SpawnTaskHandle,
+			Option<&Registry>,
 		) -> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 		TExPool, TRpc, Backend>, Error>
@@ -597,6 +600,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.select_chain.clone(),
 			self.transaction_pool.clone(),
 			&self.task_manager.spawn_handle(),
+			self.config.prometheus_config.as_ref().map(|config| &config.registry),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -629,12 +633,13 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TSc>,
 			Arc<TExPool>,
 			&SpawnTaskHandle,
+			Option<&Registry>,
 		) -> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx, tb|
-			builder(cfg, cl, b, f, sc, tx, tb)
+		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx, tb, pr|
+			builder(cfg, cl, b, f, sc, tx, tb, pr)
 				.map(|(q, f)| (q, Some(f)))
 		)
 	}
@@ -883,7 +888,6 @@ ServiceBuilder<
 			imports_external_transactions: !matches!(config.role, Role::Light),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			executor: task_manager.spawn_handle(),
 		});
 
 		let protocol_id = {
@@ -1162,7 +1166,14 @@ ServiceBuilder<
 		// This is used internally, so don't restrict access to unsafe RPC
 		let rpc_handlers = gen_handler(sc_rpc::DenyUnsafe::No);
 
-		spawn_handle.spawn(
+		// The network worker is responsible for gathering all network messages and processing
+		// them. This is quite a heavy task, and at the time of the writing of this comment it
+		// frequently happens that this future takes several seconds or in some situations
+		// even more than a minute until it has processed its entire queue. This is clearly an
+		// issue, and ideally we would like to fix the network future to take as little time as
+		// possible, but we also take the extra harm-prevention measure to execute the networking
+		// future using `spawn_blocking`.
+		spawn_handle.spawn_blocking(
 			"network-worker",
 			build_network_future(
 				config.role.clone(),

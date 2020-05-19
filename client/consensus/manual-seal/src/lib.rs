@@ -1,19 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
@@ -28,6 +29,7 @@ use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
 use std::{sync::Arc, marker::PhantomData};
+use prometheus_endpoint::Registry;
 
 mod error;
 mod finalize_block;
@@ -68,6 +70,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 pub fn import_queue<Block, Transaction>(
 	block_import: BoxBlockImport<Block, Transaction>,
 	spawner: &impl sp_core::traits::SpawnBlocking,
+	registry: Option<&Registry>,
 ) -> BasicQueue<Block, Transaction>
 	where
 		Block: BlockT,
@@ -79,6 +82,7 @@ pub fn import_queue<Block, Transaction>(
 		None,
 		None,
 		spawner,
+		registry,
 	)
 }
 
@@ -221,7 +225,8 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
@@ -285,7 +290,8 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
@@ -354,6 +360,7 @@ mod tests {
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);

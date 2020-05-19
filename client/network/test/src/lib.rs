@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 #![allow(missing_docs)]
 
 #[cfg(test)]
@@ -294,11 +295,11 @@ impl<D> Peer<D> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(header, true);
 			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
 		}
 
+		self.network.update_chain();
 		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}
@@ -612,6 +613,7 @@ pub trait TestNetFactory: Sized {
 			justification_import,
 			finality_proof_import,
 			&sp_core::testing::SpawnBlockingExecutor::new(),
+			None,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -690,6 +692,7 @@ pub trait TestNetFactory: Sized {
 			justification_import,
 			finality_proof_import,
 			&sp_core::testing::SpawnBlockingExecutor::new(),
+			None,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -810,10 +813,6 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
-					peer.network.on_block_imported(
-						notification.header,
-						true,
-					);
 					peer.network.service().announce_block(notification.hash, Vec::new());
 				}
 

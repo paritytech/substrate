@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Substrate CLI library.
 
 #![warn(missing_docs)]
@@ -129,7 +130,27 @@ pub trait SubstrateCli: Sized {
 				AppSettings::SubcommandsNegateReqs,
 			]);
 
-		<Self as StructOpt>::from_clap(&app.get_matches_from(iter))
+		let matches = match app.get_matches_from_safe(iter) {
+			Ok(matches) => matches,
+			Err(mut e) => {
+				// To support pipes, we can not use `writeln!` as any error
+				// results in a "broken pipe" error.
+				//
+				// Instead we write directly to `stdout` and ignore any error
+				// as we exit afterwards anyway.
+				e.message.extend("\n".chars());
+
+				if e.use_stderr() {
+					let _ = std::io::stderr().write_all(e.message.as_bytes());
+					std::process::exit(1);
+				} else {
+					let _ = std::io::stdout().write_all(e.message.as_bytes());
+					std::process::exit(0);
+				}
+			},
+		};
+
+		<Self as StructOpt>::from_clap(&matches)
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
@@ -197,6 +218,7 @@ pub fn init_logger(pattern: &str) {
 	let mut builder = env_logger::Builder::new();
 	// Disable info logging by default for some modules:
 	builder.filter(Some("ws"), log::LevelFilter::Off);
+	builder.filter(Some("yamux"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
 	// Always log the special target `sc_tracing`, overrides global level
@@ -263,22 +285,4 @@ fn kill_color(s: &str) -> String {
 		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
 	}
 	RE.replace_all(s, "").to_string()
-}
-
-/// Reset the signal pipe (`SIGPIPE`) handler to the default one provided by the system.
-/// This will end the program on `SIGPIPE` instead of panicking.
-///
-/// This should be called before calling any cli method or printing any output.
-pub fn reset_signal_pipe_handler() -> Result<()> {
-	#[cfg(target_family = "unix")]
-	{
-		use nix::sys::signal;
-
-		unsafe {
-			signal::signal(signal::Signal::SIGPIPE, signal::SigHandler::SigDfl)
-				.map_err(|e| Error::Other(e.to_string()))?;
-		}
-	}
-
-	Ok(())
 }

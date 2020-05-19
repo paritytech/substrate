@@ -3,7 +3,7 @@ name = "subkey"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
@@ -33,7 +33,7 @@ derive_more = { version = "0.99.2" }
 sc-rpc = { version = "2.0.0-dev", path = "../../../client/rpc" }
 jsonrpc-core-client = { version = "14.0.3", features = ["http"] }
 hyper = "0.12.35"
-libp2p = "0.18.1"
+libp2p = "0.19.0"
 serde_json = "1.0"
 
 [features]

@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Configuration of the networking layer.
 //!
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
@@ -28,14 +29,14 @@ pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multia
 #[doc(hidden)]
 pub use crate::protocol::ProtocolConfig;
 
-use crate::{ExHashT, ReportHandle};
+use crate::ExHashT;
 
 use core::{fmt, iter};
+use futures::future;
 use libp2p::identity::{ed25519, Keypair};
 use libp2p::wasm_ext;
 use libp2p::{multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
-use sc_peerset::ReputationChange;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
@@ -167,6 +168,22 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuil
 /// Shared finality proof request builder struct used by the queue.
 pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
+/// Result of the transaction import.
+#[derive(Clone, Copy, Debug)]
+pub enum TransactionImport {
+	/// Transaction is good but already known by the transaction pool.
+	KnownGood,
+	/// Transaction is good and not yet known.
+	NewGood,
+	/// Transaction is invalid.
+	Bad,
+	/// Transaction import was not performed.
+	None,
+}
+
+/// Fuure resolving to transaction import result.
+pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
+
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
@@ -175,15 +192,11 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
 	/// Import a transaction into the pool.
 	///
-	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
+	/// This will return future.
 	fn import(
 		&self,
-		report_handle: ReportHandle,
-		who: PeerId,
-		reputation_change_good: ReputationChange,
-		reputation_change_bad: ReputationChange,
 		transaction: B::Extrinsic,
-	);
+	) -> TransactionImportFuture;
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
 	/// Get transaction by hash.
@@ -209,12 +222,10 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 
 	fn import(
 		&self,
-		_report_handle: ReportHandle,
-		_who: PeerId,
-		_rep_change_good: ReputationChange,
-		_rep_change_bad: ReputationChange,
 		_transaction: B::Extrinsic
-	) {}
+	) -> TransactionImportFuture {
+		Box::pin(future::ready(TransactionImport::KnownGood))
+	}
 
 	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
 
