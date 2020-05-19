@@ -1352,7 +1352,7 @@ mod tests {
 	type Swarm = libp2p::swarm::Swarm<Handler>;
 
 	fn empty_proof() -> Vec<u8> {
-		StorageProof::empty().encode()
+		LegacyEncodeAdapter(&StorageProof::empty()).encode()
 	}
 
 	fn make_swarm(ok: bool, ps: sc_peerset::PeersetHandle, cf: super::Config) -> Swarm {

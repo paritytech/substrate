@@ -411,7 +411,14 @@ pub enum StorageProof {
 
 impl Decode for StorageProof {
 	fn decode<I: CodecInput>(value: &mut I) -> CodecResult<Self> {
-		let kind = value.read_byte()?;
+		let kind = match value.read_byte() {
+			Ok(kind) => kind,
+			Err(_) => {
+				// we allow empty proof to decode to encoded empty proof for
+				// compatibility with legacy encoding.
+				return Ok(StorageProof::Flatten(Vec::new()));
+			},
+		};
 		Ok(match StorageProofKind::read_from_byte(kind)
 			.ok_or_else(|| codec::Error::from("Invalid storage kind"))? {
 				StorageProofKind::Flatten => StorageProof::Flatten(Decode::decode(value)?),
@@ -1152,6 +1159,30 @@ impl<H: Hasher> HashDBRef<H, DBValue> for ProofMapTrieNodes
 
 #[test]
 fn legacy_proof_codec() {
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	struct OldStorageProof {
+		trie_nodes: Vec<Vec<u8>>,
+	}
+
+	let old_empty = OldStorageProof {
+		trie_nodes: Default::default(),
+	}.encode();
+
+	assert_eq!(&old_empty[..], &[0][..]);
+
+	let adapter_proof = LegacyDecodeAdapter(StorageProof::Flatten(Vec::new()));
+	assert_eq!(LegacyDecodeAdapter::decode(&mut &old_empty[..]).unwrap(), adapter_proof);
+
+	let old_one = OldStorageProof {
+		trie_nodes: vec![vec![4u8, 5u8]],
+	}.encode();
+
+	assert_eq!(&old_one[..], &[4, 8, 4, 5][..]);
+
+	let adapter_proof = LegacyDecodeAdapter(StorageProof::Flatten(vec![vec![4u8, 5u8]]));
+	assert_eq!(LegacyDecodeAdapter::decode(&mut &old_one[..]).unwrap(), adapter_proof);
+
+
 	// random content for proof, we test serialization
 	let content = vec![b"first".to_vec(), b"second".to_vec()];
 
