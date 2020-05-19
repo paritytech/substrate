@@ -374,7 +374,7 @@ pub trait CliConfiguration: Sized {
 	fn wasm_tracing(&self) -> Result<bool> {
 		Ok(self.import_params()
 			.map(|x| x.wasm_tracing())
-			.unwrap_or(Default::default()))
+			.unwrap_or_default())
 	}
 
 	/// Get the node key from the current object
