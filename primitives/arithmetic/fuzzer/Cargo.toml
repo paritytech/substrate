@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-arithmetic = { version = "2.0.0-dev", path = ".." }
-honggfuzz = "0.5"
+honggfuzz = "0.5.49"
 primitive-types = "0.7.0"
 num-bigint = "0.2"
 num-traits = "0.2"
@@ -31,3 +31,7 @@ path = "src/per_thing_rational.rs"
 [[bin]]
 name = "rational128"
 path = "src/rational128.rs"
+
+[[bin]]
+name = "fixed"
+path = "src/fixed.rs"

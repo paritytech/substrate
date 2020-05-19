@@ -1275,22 +1275,23 @@ macro_rules! implement_fixed {
 				assert_eq!($name::saturating_from_integer(2).saturating_pow(1), $name::saturating_from_integer(2));
 				assert_eq!($name::saturating_from_integer(2).saturating_pow(2), $name::saturating_from_integer(4));
 				assert_eq!($name::saturating_from_integer(2).saturating_pow(3), $name::saturating_from_integer(8));
-				assert_eq!($name::saturating_from_integer(2).saturating_pow(50), $name::saturating_from_integer(1125899906842624i64));
+				assert_eq!($name::saturating_from_integer(2).saturating_pow(50),
+					$name::saturating_from_integer(1125899906842624i64));
 
 				// Saturating.
 				assert_eq!($name::saturating_from_integer(2).saturating_pow(68), $name::max_value());
 
-				assert_eq!($name::saturating_from_integer(1).saturating_pow(1000), $name::saturating_from_integer(1));
-				assert_eq!($name::saturating_from_integer(-1).saturating_pow(1000), $name::saturating_from_integer(1));
-				assert_eq!($name::saturating_from_integer(-1).saturating_pow(1001), $name::saturating_from_integer(-1));
-				assert_eq!($name::saturating_from_integer(1).saturating_pow(usize::max_value()), $name::saturating_from_integer(1));
-				assert_eq!($name::saturating_from_integer(-1).saturating_pow(usize::max_value()), $name::saturating_from_integer(-1));
-				assert_eq!($name::saturating_from_integer(-1).saturating_pow(usize::max_value() - 1), $name::saturating_from_integer(1));
+				assert_eq!($name::saturating_from_integer(1).saturating_pow(1000), (1).into());
+				assert_eq!($name::saturating_from_integer(-1).saturating_pow(1000), (1).into());
+				assert_eq!($name::saturating_from_integer(-1).saturating_pow(1001), (-1).into());
+				assert_eq!($name::saturating_from_integer(1).saturating_pow(usize::max_value()), (1).into());
+				assert_eq!($name::saturating_from_integer(-1).saturating_pow(usize::max_value()), (-1).into());
+				assert_eq!($name::saturating_from_integer(-1).saturating_pow(usize::max_value() - 1), (1).into());
 
 				assert_eq!($name::saturating_from_integer(114209).saturating_pow(5), $name::max_value());
 
-				assert_eq!($name::saturating_from_integer(1).saturating_pow(usize::max_value()), $name::saturating_from_integer(1));
-				assert_eq!($name::saturating_from_integer(0).saturating_pow(usize::max_value()), $name::saturating_from_integer(0));
+				assert_eq!($name::saturating_from_integer(1).saturating_pow(usize::max_value()), (1).into());
+				assert_eq!($name::saturating_from_integer(0).saturating_pow(usize::max_value()), (0).into());
 				assert_eq!($name::saturating_from_integer(2).saturating_pow(usize::max_value()), $name::max_value());
 			}
 
