@@ -603,6 +603,11 @@ impl Peerset {
 	pub fn num_discovered_peers(&self) -> usize {
 		self.data.peers().len()
 	}
+
+	/// Returns the content of a priority group.
+	pub fn priority_group(&self, group_id: &str) -> Option<impl ExactSizeIterator<Item = &PeerId>> {
+		self.priority_groups.get(group_id).map(|l| l.iter())
+	}
 }
 
 impl Stream for Peerset {
