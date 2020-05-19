@@ -785,8 +785,8 @@ pub mod weight {
 		compact: &CompactAssignments,
 		size: &ElectionSize,
 	) -> Weight {
-		(35 * WEIGHT_PER_MICROS * (size.validators as Weight))
-			.saturating_add(25 * WEIGHT_PER_MICROS * (size.nominators as Weight))
+		(35 * WEIGHT_PER_MICROS).saturating_mul(size.validators as Weight)
+			.saturating_add((25 * WEIGHT_PER_MICROS).saturating_mul(size.nominators as Weight))
 			.saturating_add(T::DbWeight::get().reads(7))
 			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight)) // Nominators
 			.saturating_add(T::DbWeight::get().reads(compact.edge_count() as Weight))  // SlashingSpans
