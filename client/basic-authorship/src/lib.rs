@@ -45,7 +45,7 @@
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Duration::from_secs(2),
-//! 	RecordProof::Yes(StorageProofKind::Flatten),
+//! 	RecordProof::Yes(StorageProofKind::TrieSkipHashes),
 //! );
 //!
 //! // We wait until the proposition is performed.

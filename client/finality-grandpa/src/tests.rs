@@ -248,7 +248,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
-		let proof = prove_read(backend, vec![b"authorities"], StorageProofKind::Flatten)
+		let proof = prove_read(backend, vec![b"authorities"], StorageProofKind::TrieSkipHashes)
 			.expect("failure proving read from in-memory storage backend");
 		Ok(proof)
 	}

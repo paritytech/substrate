@@ -231,7 +231,7 @@ mod tests {
 			&client,
 			client.info().best_hash,
 			client.info().best_number,
-			RecordProof::Yes(sp_api::StorageProofKind::Flatten),
+			RecordProof::Yes(sp_api::StorageProofKind::TrieSkipHashes),
 			Default::default(),
 			&*backend,
 		).unwrap().build().unwrap();
