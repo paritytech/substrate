@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
@@ -210,6 +211,12 @@ pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
+	let db_open_error = |feat| Err(
+		sp_blockchain::Error::Backend(
+			format!("`{}` feature not enabled, database can not be opened", feat),
+		),
+	);
+
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
 		#[cfg(any(feature = "kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
@@ -247,21 +254,29 @@ pub fn open_database<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
+		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
+		DatabaseSettingsSrc::RocksDb { .. } => {
+			return db_open_error("kvdb-rocksdb");
+		},
 		#[cfg(feature = "subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
 			crate::subdb::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
+		},
+		#[cfg(not(feature = "subdb"))]
+		DatabaseSettingsSrc::SubDb { .. } => {
+			return db_open_error("subdb");
 		},
 		#[cfg(feature = "parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		DatabaseSettingsSrc::Custom(db) => db.clone(),
-		_ => {
-			let msg = "Trying to open a unsupported database".into();
-			return Err(sp_blockchain::Error::Backend(msg));
+		#[cfg(not(feature = "parity-db"))]
+		DatabaseSettingsSrc::ParityDb { .. } => {
+			return db_open_error("parity-db");
 		},
+		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
 	check_database_type(&*db, db_type)?;

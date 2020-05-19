@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #[macro_use] mod core;
 mod import;
@@ -26,7 +28,7 @@ use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use crate::tempdb::DatabaseType;
 use import::{ImportBenchmarkDescription, SizeType};
 use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
-use node_testing::bench::{Profile, KeyTypes, BlockType};
+use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -79,29 +81,28 @@ fn main() {
 			SizeType::Medium,
 			SizeType::Large,
 			SizeType::Full,
-			SizeType::Custom,
+			SizeType::Custom(opt.transactions.unwrap_or(0)),
 		].iter() {
-			let txs = match size {
-				SizeType::Custom => opt.transactions.unwrap_or(0),
-				_ => size.transactions()
-			};
 			for block_type in [
-				BlockType::RandomTransfersKeepAlive(txs),
-				BlockType::RandomTransfersReaping(txs),
-				BlockType::Noop(txs),
+				BlockType::RandomTransfersKeepAlive,
+				BlockType::RandomTransfersReaping,
+				BlockType::Noop,
 			].iter() {
-				import_benchmarks.push((profile.clone(), size.clone(), block_type.clone()));
+				for database_type in [BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb].iter() {
+					import_benchmarks.push((profile, size.clone(), block_type.clone(), database_type));
+				}
 			}
 		}
 	}
 
 	let benchmarks = matrix!(
-		(profile, size, block_type) in import_benchmarks.iter() =>
+		(profile, size, block_type, database_type) in import_benchmarks.into_iter() =>
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
-				size: *size,
-				block_type: *block_type,
+				size: size,
+				block_type: block_type,
+				database_type: *database_type,
 			},
 		(size, db_type) in
 			[
@@ -128,8 +129,14 @@ fn main() {
 	);
 
 	if opt.list {
+		println!("Available benchmarks:");
+		if let Some(filter) = opt.filter.as_ref() {
+			println!("\t(filtered by \"{}\")", filter);
+		}
 		for benchmark in benchmarks.iter() {
-			log::info!("{}: {}", benchmark.name(), benchmark.path().full())
+			if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {
+				println!("{}: {}", benchmark.name(), benchmark.path().full())
+			}
 		}
 		return;
 	}

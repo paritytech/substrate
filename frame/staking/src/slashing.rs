@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! A slashing implementation for NPoS systems.
 //!
@@ -50,11 +51,11 @@
 
 use super::{
 	EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
-	NegativeImbalanceOf, UnappliedSlash,
+	NegativeImbalanceOf, UnappliedSlash, Error,
 };
-use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug};
+use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug, DispatchResult};
 use frame_support::{
-	StorageMap, StorageDoubleMap,
+	StorageMap, StorageDoubleMap, ensure,
 	traits::{Currency, OnUnbalanced, Imbalance},
 };
 use sp_std::vec::Vec;
@@ -100,7 +101,7 @@ pub struct SlashingSpans {
 impl SlashingSpans {
 	// creates a new record of slashing spans for a stash, starting at the beginning
 	// of the bonding period, relative to now.
-	fn new(window_start: EraIndex) -> Self {
+	pub(crate) fn new(window_start: EraIndex) -> Self {
 		SlashingSpans {
 			span_index: 0,
 			last_start: window_start,
@@ -115,7 +116,7 @@ impl SlashingSpans {
 	// update the slashing spans to reflect the start of a new span at the era after `now`
 	// returns `true` if a new span was started, `false` otherwise. `false` indicates
 	// that internal state is unchanged.
-	fn end_span(&mut self, now: EraIndex) -> bool {
+	pub(crate) fn end_span(&mut self, now: EraIndex) -> bool {
 		let next_start = now + 1;
 		if next_start <= self.last_start { return false }
 
@@ -547,11 +548,18 @@ pub(crate) fn clear_era_metadata<T: Trait>(obsolete_era: EraIndex) {
 }
 
 /// Clear slashing metadata for a dead account.
-pub(crate) fn clear_stash_metadata<T: Trait>(stash: &T::AccountId) {
-	let spans = match <Module<T> as Store>::SlashingSpans::take(stash) {
-		None => return,
+pub(crate) fn clear_stash_metadata<T: Trait>(
+	stash: &T::AccountId,
+	num_slashing_spans: u32,
+) -> DispatchResult {
+	let spans = match <Module<T> as Store>::SlashingSpans::get(stash) {
+		None => return Ok(()),
 		Some(s) => s,
 	};
+
+	ensure!(num_slashing_spans as usize >= spans.iter().count(), Error::<T>::IncorrectSlashingSpans);
+
+	<Module<T> as Store>::SlashingSpans::remove(stash);
 
 	// kill slashing-span metadata for account.
 	//
@@ -561,6 +569,8 @@ pub(crate) fn clear_stash_metadata<T: Trait>(stash: &T::AccountId) {
 	for span in spans.iter() {
 		<Module<T> as Store>::SpanSlash::remove(&(stash.clone(), span.index));
 	}
+
+	Ok(())
 }
 
 // apply the slash to a stash account, deducting any missing funds from the reward

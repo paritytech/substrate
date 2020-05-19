@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Main entry point of the sc-network crate.
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
@@ -58,10 +59,11 @@ use sp_runtime::{
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-	borrow::Cow,
+	borrow::{Borrow, Cow},
 	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
+	num:: NonZeroUsize,
 	pin::Pin,
 	str,
 	sync::{
@@ -184,7 +186,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
+		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
+		info!(
+			target: "sub-libp2p",
+			"🏷  Local node identity is: {} (legacy representation: {})",
+			local_peer_id.to_base58(),
+			local_peer_id_legacy
+		);
 
 		// Initialize the metrics.
 		let metrics = match &params.metrics_registry {
@@ -194,7 +202,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
-			.unwrap_or(Arc::new(AlwaysBadChecker));
+			.unwrap_or_else(|| Arc::new(AlwaysBadChecker));
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
@@ -203,6 +211,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
+			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider.clone(),
@@ -285,7 +294,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
-				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER);
+				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
+				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
+				.connection_event_buffer_size(128);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
@@ -319,7 +330,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
-			to_worker: to_worker.clone(),
+			to_worker,
 			_marker: PhantomData,
 		});
 
@@ -399,14 +410,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		&self.service
 	}
 
-	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, is_best);
-	}
-
 	/// You must call this when a new block is finalized by the client.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
+	}
+
+	/// This should be called when blocks are added to the
+	/// chain by something other than the import queue.
+	/// Currently this is only useful for tests.
+	pub fn update_chain(&mut self) {
+		self.network_service.user_protocol_mut().update_chain();
 	}
 
 	/// Returns the local `PeerId`.
@@ -446,7 +459,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				Some((peer_id.to_base58(), NetworkStatePeer {
 					endpoint,
 					version_string: swarm.node(peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+						.and_then(|i| i.client_version().map(|s| s.to_owned())),
 					latest_ping_time: swarm.node(peer_id).and_then(|i| i.latest_ping()),
 					enabled: swarm.user_protocol().is_enabled(&peer_id),
 					open: swarm.user_protocol().is_open(&peer_id),
@@ -462,7 +475,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			list.into_iter().map(move |peer_id| {
 				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
 					version_string: swarm.node(&peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())).clone(),
+						.and_then(|i| i.client_version().map(|s| s.to_owned())),
 					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
 					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
 						.into_iter().collect(),
@@ -607,7 +620,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::RequestJustification(hash.clone(), number));
+			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
 	}
 
 	/// Are we in the process of downloading the chain?
@@ -1348,7 +1361,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		self.protocol.user_protocol_mut().blocks_processed(imported, count, results)
+		self.protocol.user_protocol_mut().on_blocks_processed(imported, count, results)
 	}
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);

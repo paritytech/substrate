@@ -398,9 +398,9 @@ where
 				break
 			}
 
-			let number = header.number().clone();
+			let number = *header.number();
 			let hash = header.hash();
-			let parent_hash = header.parent_hash().clone();
+			let parent_hash = *header.parent_hash();
 			let justification = if get_justification {
 				self.chain.justification(&BlockId::Hash(hash))?
 			} else {
@@ -594,6 +594,10 @@ where
 						} else {
 							// We remove from `self.peers` requests we're no longer interested in,
 							// so this can legitimately happen.
+							log::trace!(
+								target: "sync",
+								"Response discarded because it concerns an obsolete request"
+							);
 							return;
 						}
 					} else {
@@ -704,12 +708,12 @@ where
 			}
 		}
 
-		while let Poll::Ready(Some((peer, total_handling_time))) = self.outgoing.poll_next_unpin(cx) {
+		if let Poll::Ready(Some((peer, total_handling_time))) = self.outgoing.poll_next_unpin(cx) {
 			let ev = Event::AnsweredRequest {
 				peer,
 				total_handling_time,
 			};
-			self.pending_events.push_back(NetworkBehaviourAction::GenerateEvent(ev));
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 		}
 
 		Poll::Pending

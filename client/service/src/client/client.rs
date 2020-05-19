@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Substrate Client
 
 use std::{
@@ -87,6 +88,7 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 use futures::channel::mpsc;
+use rand::Rng;
 
 #[cfg(feature="test-helpers")]
 use {
@@ -661,8 +663,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
-				use rand::Rng;
-
 				// don't send telemetry block import events during initial sync for every
 				// block to avoid spamming the telemetry server, these events will be randomly
 				// sent at a rate of 1/10.
@@ -954,7 +954,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// we'll send notifications spuriously in that case.
 			const MAX_TO_NOTIFY: usize = 256;
 			let enacted = route_from_finalized.enacted();
-			let start = enacted.len() - ::std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
+			let start = enacted.len() - std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
 			for finalized in &enacted[start..] {
 				operation.notify_finalized.push(finalized.hash);
 			}
@@ -978,14 +978,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			return Ok(());
 		}
 
-		for finalized_hash in notify_finalized {
-			let header = self.header(&BlockId::Hash(finalized_hash))?
-				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
+		// We assume the list is sorted and only want to inform the
+		// telemetry once about the finalized block.
+		if let Some(last) = notify_finalized.last() {
+			let header = self.header(&BlockId::Hash(*last))?
+				.expect(
+					"Header already known to exist in DB because it is \
+					 indicated in the tree route; qed"
+				);
 
 			telemetry!(SUBSTRATE_INFO; "notify.finalized";
 				"height" => format!("{}", header.number()),
-				"best" => ?finalized_hash,
+				"best" => ?last,
 			);
+		}
+
+		for finalized_hash in notify_finalized {
+			let header = self.header(&BlockId::Hash(finalized_hash))?
+				.expect(
+					"Header already known to exist in DB because it is \
+					 indicated in the tree route; qed"
+				);
 
 			let notification = FinalityNotification {
 				header,

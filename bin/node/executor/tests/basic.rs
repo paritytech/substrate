@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use codec::{Encode, Decode, Joiner};
 use frame_support::{
@@ -20,12 +21,10 @@ use frame_support::{
 	traits::Currency,
 	weights::{GetDispatchInfo, DispatchInfo, DispatchClass, constants::ExtrinsicBaseWeight},
 };
-use sp_core::{
-	NeverNativeValue, map, traits::Externalities, storage::{well_known_keys, Storage},
-};
+use sp_core::{NeverNativeValue, traits::Externalities, storage::well_known_keys};
 use sp_runtime::{
 	ApplyExtrinsicResult, Fixed128,
-	traits::{Hash as HashT, Convert, BlakeTwo256},
+	traits::{Hash as HashT, Convert},
 	transaction_validity::InvalidTransaction,
 };
 use pallet_contracts::ContractAddressFor;
@@ -158,20 +157,13 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 
 #[test]
 fn panic_execution_with_foreign_code_gives_error() {
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(BLOATY_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(69u128, 0u8, 0u128, 0u128, 0u128).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				69_u128.encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => {
-				vec![0u8; 32]
-			}
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(BLOATY_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(69u128, 0u8, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -194,20 +186,13 @@ fn panic_execution_with_foreign_code_gives_error() {
 
 #[test]
 fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 69u128, 0u128, 0u128, 0u128).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				69_u128.encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => {
-				vec![0u8; 32]
-			}
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 69u128, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -230,18 +215,20 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 
 #[test]
 fn successful_execution_with_native_equivalent_code_gives_ok() {
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(111 * DOLLARS).encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(
+		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
+		(111 * DOLLARS).encode()
+	);
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -272,18 +259,20 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 
 #[test]
 fn successful_execution_with_foreign_code_gives_ok() {
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(BLOATY_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(111 * DOLLARS).encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(BLOATY_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(
+		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
+		(111 * DOLLARS).encode()
+	);
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -337,9 +326,9 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				// timestamp set call with weight 9_000_000 + 2 read + 1 write
+				// timestamp set call with weight 8_000_000 + 2 read + 1 write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 9_000_000 + 2 * 25_000_000 + 1 * 100_000_000, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: 8_000_000 + 2 * 25_000_000 + 1 * 100_000_000, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -392,9 +381,9 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				// timestamp set call with weight 9_000_000 + 2 read + 1 write
+				// timestamp set call with weight 8_000_000 + 2 read + 1 write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 9_000_000 + 2 * 25_000_000 + 1 * 100_000_000, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: 8_000_000 + 2 * 25_000_000 + 1 * 100_000_000, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -707,15 +696,13 @@ fn native_big_block_import_fails_on_fallback() {
 
 #[test]
 fn panic_execution_gives_error() {
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(BLOATY_CODE, Storage {
-		top: map![
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				0_u128.encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(BLOATY_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 0_u128.encode());
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -738,18 +725,20 @@ fn panic_execution_gives_error() {
 
 #[test]
 fn successful_execution_gives_ok() {
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(111 * DOLLARS).encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children_default: map![],
-	});
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
+	);
+	t.insert(
+		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
+		(111 * DOLLARS).encode()
+	);
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -759,7 +748,12 @@ fn successful_execution_gives_ok() {
 		None,
 	).0;
 	assert!(r.is_ok());
+	t.execute_with(|| {
+		assert_eq!(Balances::total_balance(&alice()), 111 * DOLLARS);
+	});
+
 	let fm = t.execute_with(TransactionPayment::next_fee_multiplier);
+
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
 		"BlockBuilder_apply_extrinsic",

@@ -1,19 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
 //! This crate is unstable and the API and usage may change.
@@ -74,10 +75,7 @@ use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
-use serde_json;
 use parking_lot::RwLock;
-
-use sp_finality_tracker;
 
 use finality_grandpa::Error as GrandpaError;
 use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
@@ -120,6 +118,7 @@ mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
+pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
@@ -129,7 +128,6 @@ pub use finality_grandpa::voter::report;
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
-use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
@@ -474,7 +472,7 @@ impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorPr
 			.and_then(|call_result| {
 				Decode::decode(&mut &call_result[..])
 					.map_err(|err| ClientError::CallResultDecode(
-						"failed to decode GRANDPA authorities set proof".into(), err
+						"failed to decode GRANDPA authorities set proof", err
 					))
 			})
 	}
@@ -649,7 +647,7 @@ fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
 					Ok(info.finalized_number)
 				}
 			}))
-			.map_err(|err| sp_consensus::Error::InherentData(err.into()))
+			.map_err(|err| sp_consensus::Error::InherentData(err))
 	} else {
 		Ok(())
 	}
@@ -731,7 +729,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
 				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
-					.unwrap_or(Default::default());
+					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
 					"authority_id" => maybe_authority_id.to_string(),
@@ -841,7 +839,7 @@ where
 			set_id: persistent_data.authority_set.set_id(),
 			authority_set: persistent_data.authority_set.clone(),
 			consensus_changes: persistent_data.consensus_changes.clone(),
-			voter_set_state: persistent_data.set_state.clone(),
+			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			_phantom: PhantomData,
 		});
@@ -868,7 +866,7 @@ where
 
 		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
 			.map(|ap| ap.public())
-			.unwrap_or(Default::default());
+			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
@@ -914,12 +912,12 @@ where
 					global_comms,
 					last_completed_round.number,
 					last_completed_round.votes.clone(),
-					last_completed_round.base.clone(),
+					last_completed_round.base,
 					last_finalized,
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				if let None = self.shared_voter_state.reset(voter.voter_state()) {
+				if self.shared_voter_state.reset(voter.voter_state()).is_none() {
 					info!(target: "afg",
 						"Timed out trying to update shared GRANDPA voter state. \
 						RPC endpoints may return stale data."

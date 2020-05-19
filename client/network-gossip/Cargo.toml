@@ -2,7 +2,7 @@
 description = "Gossiping for the Substrate network protocol"
 name = "sc-network-gossip"
 version = "0.8.0-dev"
-license = "GPL-3.0"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 futures = "0.3.4"
 futures-timer = "3.0.1"
-libp2p = { version = "0.18.1", default-features = false, features = ["websocket"] }
+libp2p = { version = "0.19.0", default-features = false, features = ["websocket"] }
 log = "0.4.8"
 lru = "0.4.3"
 sc-network = { version = "0.8.0-dev", path = "../network" }

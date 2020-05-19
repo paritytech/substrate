@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Sudo Module
 //!
@@ -92,8 +93,13 @@ use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{GetDispatchInfo, FunctionOf, Pays};
+use frame_support::weights::{Weight, GetDispatchInfo, FunctionOf, Pays};
 use frame_system::{self as system, ensure_signed};
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -104,7 +110,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
+	/// Sudo module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
@@ -126,6 +132,30 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+
+			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+		}
+
+		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
+		/// This function does not check the weight of the call, and instead allows the
+		/// Sudo user to specify the weight of the call.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - The weight of this call is defined by the caller.
+		/// # </weight>
+		#[weight = FunctionOf(
+			|(_, &weight): (&Box<<T as Trait>::Call>,&Weight,)| weight,
+			|(call, _): (&Box<<T as Trait>::Call>,&Weight,)| call.get_dispatch_info().class,
+			Pays::Yes,
+		)]
+		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);

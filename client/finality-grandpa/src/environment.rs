@@ -1,19 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::pin::Pin;
@@ -108,7 +109,7 @@ impl<Block: BlockT> Decode for CompletedRounds<Block> {
 	fn decode<I: parity_scale_codec::Input>(value: &mut I) -> Result<Self, parity_scale_codec::Error> {
 		<(Vec<CompletedRound<Block>>, SetId, Vec<AuthorityId>)>::decode(value)
 			.map(|(rounds, set_id, voters)| CompletedRounds {
-				rounds: rounds.into(),
+				rounds,
 				set_id,
 				voters,
 			})
@@ -248,14 +249,14 @@ impl<Block: BlockT> VoterSetState<Block> {
 	{
 		if let VoterSetState::Live { completed_rounds, current_rounds } = self {
 			if current_rounds.contains_key(&round) {
-				return Ok((completed_rounds, current_rounds));
+				Ok((completed_rounds, current_rounds))
 			} else {
 				let msg = "Voter acting on a live round we are not tracking.";
-				return Err(Error::Safety(msg.to_string()));
+				Err(Error::Safety(msg.to_string()))
 			}
 		} else {
 			let msg = "Voter acting while in paused state.";
-			return Err(Error::Safety(msg.to_string()));
+			Err(Error::Safety(msg.to_string()))
 		}
 	}
 }
@@ -622,7 +623,7 @@ where
 						restricted_number >= base_header.number() &&
 							restricted_number < target_header.number()
 					})
-					.or(Some((target_header.hash(), *target_header.number())))
+					.or_else(|| Some((target_header.hash(), *target_header.number())))
 			},
 			Ok(None) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
