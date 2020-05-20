@@ -28,8 +28,8 @@ use sp_core::{
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
 use parking_lot::RwLock;
-
-mod proxy;
+/// Proxy module
+pub mod proxy;
 
 /// Keystore pointer
 pub type KeyStorePtr = Arc<RwLock<Store>>;
