@@ -764,7 +764,7 @@ pub mod weight {
 
 	/// All weight notes are pertaining to the case of a better solution, in which we execute
 	/// the longest code path.
-	/// Weight: 0 + (2.2 μs * v) + (2.4 μs * n) + (120 μs * a ) + (7.6 μs * w ) with:
+	/// Weight: 0 + (0.63 μs * v) + (0.36 μs * n) + (96.53 μs * a ) + (8 μs * w ) with:
 	/// * v validators in snapshot validators,
 	/// * n nominators in snapshot nominators,
 	/// * a assignment in the submitted solution
@@ -790,10 +790,10 @@ pub mod weight {
 		compact: &CompactAssignments,
 		size: &ElectionSize,
 	) -> Weight {
-		(2_200 * WEIGHT_PER_NANOS).saturating_mul(size.validators as Weight)
-			.saturating_add((2_400 * WEIGHT_PER_NANOS).saturating_mul(size.nominators as Weight))
-			.saturating_add((120 * WEIGHT_PER_MICROS).saturating_mul(compact.len() as Weight))
-			.saturating_add((7_600 * WEIGHT_PER_NANOS).saturating_mul(winners.len() as Weight))
+		(630 * WEIGHT_PER_NANOS).saturating_mul(size.validators as Weight)
+			.saturating_add((360 * WEIGHT_PER_NANOS).saturating_mul(size.nominators as Weight))
+			.saturating_add((96 * WEIGHT_PER_MICROS).saturating_mul(compact.len() as Weight))
+			.saturating_add((8 * WEIGHT_PER_MICROS).saturating_mul(winners.len() as Weight))
 			// Initial checks
 			.saturating_add(T::DbWeight::get().reads(8))
 			// Nominators
