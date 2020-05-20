@@ -724,7 +724,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// Defines the RPC extensions to use.
 	pub fn with_rpc_extensions<URpc>(
 		self,
-		rpc_extensions_builder: impl FnOnce(&Self) -> Result<URpc, Error>,
+		rpc_extensions: impl FnOnce(&Self) -> Result<URpc, Error>,
 	) -> Result<
 		ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, URpc, Backend>,
 		Error,
@@ -734,25 +734,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		TFchr: Clone,
 		URpc: Clone + sc_rpc::RpcExtension<sc_rpc::Metadata> + Send + 'static,
 	{
-		let rpc_extensions = rpc_extensions_builder(&self)?;
-
-		Ok(ServiceBuilder {
-			config: self.config,
-			client: self.client,
-			backend: self.backend,
-			task_manager: self.task_manager,
-			keystore: self.keystore,
-			fetcher: self.fetcher,
-			select_chain: self.select_chain,
-			import_queue: self.import_queue,
-			finality_proof_request_builder: self.finality_proof_request_builder,
-			finality_proof_provider: self.finality_proof_provider,
-			transaction_pool: self.transaction_pool,
-			rpc_extensions_builder: Box::new(NoopRpcExtensionBuilder::from(rpc_extensions)),
-			remote_backend: self.remote_backend,
-			block_announce_validator_builder: self.block_announce_validator_builder,
-			marker: self.marker,
-		})
+		let rpc_extensions = rpc_extensions(&self)?;
+		self.with_rpc_extensions_builder(|_| Ok(NoopRpcExtensionBuilder::from(rpc_extensions)))
 	}
 
 	/// Defines the `BlockAnnounceValidator` to use. `DefaultBlockAnnounceValidator` will be used by
