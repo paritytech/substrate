@@ -24,10 +24,11 @@ mod backend;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use sp_std::{vec::Vec, marker::PhantomData, collections::btree_map::BTreeMap};
+use sp_std::{vec::Vec, marker::PhantomData};
+#[cfg(feature = "std")]
+use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use codec::{Encode, Decode};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, DispatchClass, FunctionOf, Pays};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
@@ -140,8 +141,8 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg(feature = "std")]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Debug, Serialize, Deserialize)]
 /// Account definition used for genesis block construction.
 pub struct GenesisAccount {
 	/// Account nonce.
@@ -149,7 +150,7 @@ pub struct GenesisAccount {
 	/// Account balance.
 	pub balance: U256,
 	/// Full account storage.
-	pub storage: BTreeMap<H256, H256>,
+	pub storage: std::collections::BTreeMap<H256, H256>,
 	/// Account code.
 	pub code: Vec<u8>,
 }
@@ -162,7 +163,7 @@ decl_storage! {
 	}
 
 	add_extra_genesis {
-		config(accounts): BTreeMap<H160, GenesisAccount>;
+		config(accounts): std::collections::BTreeMap<H160, GenesisAccount>;
 		build(|config: &GenesisConfig| {
 			for (address, account) in &config.accounts {
 				Accounts::insert(address, Account {
