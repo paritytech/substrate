@@ -241,11 +241,16 @@ pub struct Bounty<AccountId, Balance> {
 	description: Vec<u8>,
 }
 
+/// The status of a bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum BountyStatus {
+	/// The bounty is proposed and waiting for approval.
 	Proposed,
+	/// The bounty is approved and waiting to become active at next spend period.
 	Approved,
+	/// The bounty is active and waiting to be awarded.
 	Active,
+	/// The bounty is awarded and waiting to released after a delay.
 	PendingPayout,
 }
 
