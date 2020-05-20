@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! State database maintenance. Handles canonicalization and pruning in the database. The input to
 //! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.

@@ -57,6 +57,7 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = (Balances,);
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;

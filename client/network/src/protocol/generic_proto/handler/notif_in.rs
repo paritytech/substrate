@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Implementations of the `IntoProtocolsHandler` and `ProtocolsHandler` traits for ingoing
 //! substreams for a single gossiping protocol.
 //!

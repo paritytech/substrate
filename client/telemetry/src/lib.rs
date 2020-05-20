@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Telemetry utilities.
 //!
 //! Calling `init_telemetry` registers a global `slog` logger using `slog_scope::set_global_logger`.

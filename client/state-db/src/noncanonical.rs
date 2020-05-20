@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Canonicalization window.
 //! Maintains trees of block overlays and allows discarding trees/roots
 //! The overlays are added in `insert` and removed in `canonicalize`.

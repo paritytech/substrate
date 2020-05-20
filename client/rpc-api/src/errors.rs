@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use log::warn;
 
 pub fn internal<E: ::std::fmt::Debug>(e: E) -> jsonrpc_core::Error {
