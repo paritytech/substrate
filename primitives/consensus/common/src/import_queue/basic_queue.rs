@@ -1,26 +1,29 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::{mem, pin::Pin, time::Duration, marker::PhantomData};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
+use prometheus_endpoint::Registry;
 
 use crate::block_import::BlockOrigin;
+use crate::metrics::Metrics;
 use crate::import_queue::{
 	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
 	BoxJustificationImport, ImportQueue, Link, Origin,
@@ -57,14 +60,21 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
 		spawner: &impl sp_core::traits::SpawnBlocking,
+		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
+		let metrics = prometheus_registry.and_then(|r|
+			Metrics::register(r)
+			.map_err(|err| { log::warn!("Failed to register Prometheus metrics: {}", err); })
+			.ok()
+		);
 		let (future, worker_sender) = BlockImportWorker::new(
 			result_sender,
 			verifier,
 			block_import,
 			justification_import,
 			finality_proof_import,
+			metrics,
 		);
 
 		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
@@ -132,8 +142,14 @@ struct BlockImportWorker<B: BlockT, Transaction> {
 	justification_import: Option<BoxJustificationImport<B>>,
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	delay_between_blocks: Duration,
+	metrics: Option<Metrics>,
 	_phantom: PhantomData<Transaction>,
 }
+
+const METRIC_SUCCESS_FIELDS: [&'static str; 8] = [
+	"success", "incomplete_header", "verification_failed", "bad_block",
+	"missing_state", "unknown_parent", "cancelled", "failed"
+];
 
 impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 	fn new<V: 'static + Verifier<B>>(
@@ -142,6 +158,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
+		metrics: Option<Metrics>,
 	) -> (impl Future<Output = ()> + Send, TracingUnboundedSender<ToWorkerMsg<B>>) {
 		let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
 
@@ -150,6 +167,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 			justification_import,
 			finality_proof_import,
 			delay_between_blocks: Duration::new(0, 0),
+			metrics,
 			_phantom: PhantomData,
 		};
 
@@ -240,9 +258,31 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		blocks: Vec<IncomingBlock<B>>
 	) -> impl Future<Output = (BoxBlockImport<B, Transaction>, V)> {
 		let mut result_sender = self.result_sender.clone();
+		let metrics = self.metrics.clone();
 
 		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks)
 			.then(move |(imported, count, results, block_import, verifier)| {
+				if let Some(metrics) = metrics {
+					let amounts = results.iter().fold([0u64; 8], |mut acc, result| {
+						match result.0 {
+							Ok(_) => acc[0] += 1,
+							Err(BlockImportError::IncompleteHeader(_)) => acc[1] += 1,
+							Err(BlockImportError::VerificationFailed(_,_)) => acc[2] += 1,
+							Err(BlockImportError::BadBlock(_)) => acc[3] += 1,
+							Err(BlockImportError::MissingState) => acc[4] += 1,
+							Err(BlockImportError::UnknownParent) => acc[5] += 1,
+							Err(BlockImportError::Cancelled) => acc[6] += 1,
+							Err(BlockImportError::Other(_)) => acc[7] += 1,
+						};
+						acc
+					});
+					for (idx, field) in METRIC_SUCCESS_FIELDS.iter().enumerate() {
+						let amount = amounts[idx];
+						if amount > 0 {
+							metrics.import_queue_processed.with_label_values(&[&field]).inc_by(amount)
+						}
+					};
+				}
 				result_sender.blocks_processed(imported, count, results);
 				future::ready((block_import, verifier))
 			})

@@ -4,7 +4,7 @@ version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
@@ -15,13 +15,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 futures = { version = "0.3", features = ["compat"] }
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-libp2p-wasm-ext = { version = "0.18.0", features = ["websocket"] }
+libp2p-wasm-ext = { version = "0.19.0", features = ["websocket"] }
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.7"
-kvdb-web = "0.5"
+kvdb-web = "0.6"
 sp-database = { version = "2.0.0-dev", path = "../../primitives/database" }
 sc-informant = { version = "0.8.0-dev", path = "../../client/informant" }
 sc-service = { version = "0.8.0-dev", path = "../../client/service", default-features = false }

@@ -7,7 +7,7 @@
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 github_api_polkadot_pull_url="https://api.github.com/repos/paritytech/polkadot/pulls"
 # use github api v3 in order to access the data without authentication
-github_header="Accept: application/vnd.github.v3+json" 
+github_header="Authorization: token ${GITHUB_PR_TOKEN}" 
 
 boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
 boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }

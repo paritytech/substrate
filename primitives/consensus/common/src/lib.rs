@@ -44,6 +44,7 @@ pub mod block_import;
 mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
+mod metrics;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
@@ -71,7 +72,9 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-/// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
+/// Environment for a Consensus instance.
+///
+/// Creates proposer instance.
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B> + Send + 'static;
