@@ -20,8 +20,8 @@
 //!
 //! The lock is using Local Storage and allows synchronizing access to critical
 //! section of your code for concurrently running Off-chain Workers. Usage of
-//! `PERSISTENT` variant of the storage persists the lock value even in case of
-//! re-orgs.
+//! `PERSISTENT` variant of the storage persists the lock value accross a full node
+//! restart or re-orgs.
 //!
 //! A use case for the lock is to make sure that a particular section of the
 //! code is only run by one Off-chain Worker at the time. This may include
@@ -47,7 +47,9 @@
 //!         let _guard = lock.spin_lock();
 //!         let acc = StorageValueRef::persistent(key);
 //!         let v: Vec<T> = acc.get::<Vec<T>>().unwrap().unwrap();
-//!         // modify `v` as desired - i.e. perform some heavy computation or side effects that should only be done once.
+//!         // modify `v` as desired
+//!         // i.e. perform some heavy computation
+//!         // side effects that should only be done once.
 //!         acc.set(v);
 //!         // drop `_guard` implicitly at end of scope
 //!    }
@@ -120,29 +122,55 @@ impl Lockable for Timestamp {
 }
 
 /// Lockable based on the current block number and a timestamp based deadline.
-#[derive(Debug, Copy, Clone, Encode, Decode)]
-pub struct BlockAndTime<B: BlockNumberTrait> {
+#[derive(Encode, Decode)]
+pub struct BlockAndTime<B>
+where
+	B: BlockNumberProvider,
+	<B as BlockNumberProvider>::BlockNumber: Copy,
+{
 	/// The block number that has to be reached in order
 	/// for the lock to be considered stale.
-	pub block_number: B,
+	pub block_number: <B as BlockNumberProvider>::BlockNumber,
 	/// Additional timestamp based deadline which has to be
 	/// reached in order for the lock to become stale.
 	pub timestamp: Timestamp,
 }
 
-impl<B> Lockable for BlockAndTime<B>
+// derive not possible, since `B` does not necessarily implement `trait Clone`.
+impl<B> Clone for BlockAndTime<B>
 where
-	B: BlockNumberTrait,
+	B: BlockNumberProvider,
+	<B as BlockNumberProvider>::BlockNumber: Clone,
+{
+	fn clone(&self) -> Self {
+		Self {
+			block_number: self.block_number,
+			timestamp: self.timestamp,
+		}
+	}
+}
+
+// derive not possible, since `B` does not necessarily implement `trait Copy`.
+impl<B: BlockNumberProvider> Copy for BlockAndTime<B>
+{
+}
+
+impl<B: BlockNumberProvider> Lockable for BlockAndTime<B>
 {
 	fn current() -> Self {
 		Self {
-			block_number: B::current(),
+			block_number: B::current_block_number(),
 			timestamp: offchain::timestamp(),
 		}
 	}
 
 	fn deadline() -> Self {
-		Self::current()
+		Self {
+			block_number: B::deadline_block_number(),
+			timestamp: offchain::timestamp().add(Duration::from_millis(
+				STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS,
+			)),
+		}
 	}
 
 	fn expired(&self, reference: &Self) -> bool {
@@ -159,12 +187,12 @@ where
 
 /// Storage based lock.
 ///
-/// A lock that is persisted in the DB and provides a mutex behaviour
+/// A lock that is persisted in the DB and provides a mutex behavior
 /// with a defined safety expirey deadline based on a [`Lockable`](Self::Lockable)
 /// implementation.
 pub struct StorageLock<'a, L>
 where
-	L: Sized + Lockable,
+	L: Lockable,
 {
 	// A storage value ref which defines the DB entry representing the lock.
 	value_ref: StorageValueRef<'a>,
@@ -176,8 +204,7 @@ where
 	L: Lockable,
 {
 	/// Create a new storage lock with [default expiry duration](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
-	pub fn new(key: &'a [u8]) -> Self
-	{
+	pub fn new(key: &'a [u8]) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
 			deadline: L::deadline(),
@@ -245,9 +272,30 @@ where
 	}
 }
 
+/// RAII style guard for a lock.
+pub struct StorageLockGuard<'a, 'b, L: Lockable> {
+	lock: Option<&'b mut StorageLock<'a, L>>,
+}
+
+impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
+	/// Consume the guard but DO NOT unlock the underlying lock.
+	pub fn forget(mut self) {
+		let _ = self.lock.take();
+	}
+}
+
+impl<'a, 'b, L: Lockable> Drop for StorageLockGuard<'a, 'b, L>
+{
+	fn drop(&mut self) {
+		if let Some(lock) = self.lock.take() {
+			lock.unlock();
+		}
+	}
+}
+
 /// Extension trait for locks based on [`Timestamp`](::sp_core::offchain::Timestamp).
 ///
-/// Allows explicity setting the timeout on construction
+/// Allows explicitly setting the timeout on construction
 /// instead of using the implicit default timeout of
 /// [`STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS`](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
 pub trait TimeLock<'a>: Sized {
@@ -265,46 +313,30 @@ impl<'a> TimeLock<'a> for StorageLock<'a, Timestamp> {
 	}
 }
 
-/// Bound for block numbers which commonly will be implemented by the `frame_system::Trait::BlockNumber`.
+/// Extension for storage locks which are based on blocks in addition to a timestamp.
 ///
-/// This trait has no intrinsic meaning and exists only to decouple `frame_system`
-/// from `runtime` crate and avoid a circular dependency.
-pub trait BlockNumberTrait: Codec + Copy + Clone + Ord + Eq {
-	/// Returns the current block number.
-	///
-	/// Commonly this will be implemented as
-	/// ```ignore
-	/// fn current() -> Self {
-	///     frame_system::Module<Trait>::block_number()
-	/// }
-	/// ```
-	/// but note that the definition of current is
-	/// application specific.
-	fn current() -> Self;
-}
-
-/// Extension for lor storage locks which are based on blocks in addition to a timestamp.
+/// The provider `B` does provide means of obtaining a default deadline as well as obtaining
+/// the current block number. Expiry and others are actually checked.
 trait BlockAndTimeLock<'a, B>: Sized
 where
-	B: BlockNumberTrait,
+	B: BlockNumberProvider,
 {
 	fn with_block_and_time_deadline(
 		key: &'a [u8],
-		block_deadline: B,
+		block_deadline: B::BlockNumber,
 		time_deadline: Timestamp,
 	) -> Self;
 }
 
 impl<'a, B> BlockAndTimeLock<'a, B> for StorageLock<'a, BlockAndTime<B>>
 where
-	B: BlockNumberTrait,
+	B: BlockNumberProvider,
 {
 	fn with_block_and_time_deadline(
 		key: &'a [u8],
-		block_deadline: B,
+		block_deadline: B::BlockNumber,
 		time_deadline: Timestamp,
-	) -> Self
-	{
+	) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
 			deadline: BlockAndTime {
@@ -315,27 +347,28 @@ where
 	}
 }
 
-/// RAII style guard for a lock.
-pub struct StorageLockGuard<'a, 'b, L: Lockable> {
-	lock: Option<&'b mut StorageLock<'a, L>>,
-}
+/// Bound for block numbers which commonly will be implemented by the `frame_system::Trait::BlockNumber`.
+///
+/// This trait has no intrinsic meaning and exists only to decouple `frame_system`
+/// from `runtime` crate and avoid a circular dependency.
+pub trait BlockNumberProvider {
+	/// Type of `BlockNumber` the provider is going to provide
+	/// with `deadline()` and `current()`.
+	type BlockNumber: Codec + Copy + Ord + Eq;
+	/// Returns the current block number.
+	///
+	/// Commonly this will be implemented as
+	/// ```ignore
+	/// fn current() -> Self {
+	///     frame_system::Module<Trait>::block_number()
+	/// }
+	/// ```
+	/// but note that the definition of current is
+	/// application specific.
+	fn current_block_number() -> Self::BlockNumber;
 
-impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
-	/// Consume the guard but DO NOT unlock the underlying lock.
-	pub fn forget(mut self) {
-		let _ = self.lock.take();
-	}
-}
-
-impl<'a, 'b, L> Drop for StorageLockGuard<'a, 'b, L>
-where
-	L: Lockable,
-{
-	fn drop(&mut self) {
-		if let Some(lock) = self.lock.take() {
-			lock.unlock();
-		}
-	}
+	/// Provide a default deadline as `BlockNumber`.
+	fn deadline_block_number() -> Self::BlockNumber;
 }
 
 #[cfg(test)]

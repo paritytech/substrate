@@ -111,6 +111,7 @@ use sp_runtime::{
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 	},
+	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -1257,6 +1258,26 @@ pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::kill_account(who)
+	}
+}
+
+/// Number of blocks until a `BlockNumberProvider` based
+/// storage lock will expire from the point it was instantiated.
+const BLOCK_NUMBER_EXPIRATION_DELTA : u32 = 4u32;
+
+impl<T> BlockNumberProvider for Module<T>
+where
+	T: crate::Trait,
+	<T as Trait>::BlockNumber: AtLeast32Bit,
+{
+	type BlockNumber = <T as Trait>::BlockNumber;
+
+	fn current_block_number() -> Self::BlockNumber {
+		Module::<T>::block_number()
+	}
+
+	fn deadline_block_number() -> Self::BlockNumber {
+		Self::current_block_number() + Self::BlockNumber::from(BLOCK_NUMBER_EXPIRATION_DELTA)
 	}
 }
 
