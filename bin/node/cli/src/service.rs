@@ -43,7 +43,6 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
 
-		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let mut rpc_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -120,7 +119,7 @@ macro_rules! new_full_start {
 					.expect("SelectChain is present for full services or set up failed; qed.");
 				let keystore = builder.keystore().clone();
 
-				Ok(move |deny_unsafe| -> RpcExtension {
+				Ok(move |deny_unsafe| {
 					let deps = node_rpc::FullDeps {
 						client: client.clone(),
 						pool: pool.clone(),
