@@ -807,7 +807,7 @@ pub mod weight {
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
 
-	/// Weight of `weight_for_submit_solution` in case of a correct submission.
+	/// Weight of `submit_solution` in case of a correct submission.
 	///
 	/// refund: we charged compact.len() * read(1) for SlashingSpans. A valid solution only reads
 	/// winners.len().
