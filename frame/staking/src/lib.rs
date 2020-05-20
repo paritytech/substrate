@@ -2658,15 +2658,15 @@ impl<T: Trait> Module<T> {
 			.map(|l| l as u32)
 			.ok_or_else(|| Error::<T>::SnapshotUnavailable)?;
 
-		// decode snapshot validators.
-		let snapshot_validators = Self::snapshot_validators()
-			.ok_or(Error::<T>::SnapshotUnavailable)?;
-
 		// rest of the size of the solution must be correct.
 		ensure!(
 			snapshot_nominators_len == election_size.nominators,
 			Error::<T>::PhragmenBogusElectionSize,
 		);
+
+		// decode snapshot validators.
+		let snapshot_validators = Self::snapshot_validators()
+			.ok_or(Error::<T>::SnapshotUnavailable)?;
 
 		// check if all winners were legit; this is rather cheap. Replace with accountId.
 		let winners = winners.into_iter().map(|widx| {
