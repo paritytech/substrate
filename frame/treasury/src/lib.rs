@@ -339,8 +339,8 @@ decl_event!(
 		BountyProposed(BountyIndex),
 		/// A bounty proposal was rejected; funds were slashed.
 		BountyRejected(BountyIndex, Balance),
-		/// A bounty proposal is funded and become active.
-		BountyBecomeActive(BountyIndex),
+		/// A bounty proposal is funded and became active.
+		BountyBecameActive(BountyIndex),
 		/// A bounty is awarded to a beneficiary.
 		BountyAwarded(BountyIndex, AccountId),
 		/// A bounty is claimed by beneficiary.
@@ -943,7 +943,7 @@ impl<T: Trait> Module<T> {
 						// fund the bounty account
 						imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
 
-						Self::deposit_event(RawEvent::BountyBecomeActive(index));
+						Self::deposit_event(RawEvent::BountyBecameActive(index));
 						false
 					} else {
 						missed_any = true;
