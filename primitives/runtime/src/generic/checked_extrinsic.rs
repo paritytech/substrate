@@ -19,7 +19,8 @@
 //! stage.
 
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, ValidateUnsigned,
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+	ValidateUnsigned,
 };
 use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
@@ -67,7 +68,7 @@ where
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> crate::ApplyExtrinsicResult {
+	) -> crate::ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
 			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
 			(Some(id), pre)
@@ -81,8 +82,7 @@ where
 			Ok(info) => info,
 			Err(err) => err.post_info,
 		};
-		let res = res.map(|_| ()).map_err(|e| e.error);
-		Extra::post_dispatch(pre, info, &post_info, len, &res)?;
+		Extra::post_dispatch(pre, info, &post_info, len, &res.map(|_| ()).map_err(|e| e.error))?;
 		Ok(res)
 	}
 }

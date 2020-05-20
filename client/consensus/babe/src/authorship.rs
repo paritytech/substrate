@@ -126,7 +126,7 @@ fn claim_secondary_slot(
 	epoch: &Epoch,
 	key_pairs: &[(AuthorityPair, usize)],
 	author_secondary_vrf: bool,
-) -> Option<(PreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	if authorities.is_empty() {
@@ -163,7 +163,7 @@ fn claim_secondary_slot(
 				})
 			};
 
-			return Some((pre_digest, pair.clone()));
+			return Some((pre_digest, pair.public()));
 		}
 	}
 
@@ -178,7 +178,7 @@ pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
-) -> Option<(PreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityId)> {
 	let key_pairs = {
 		let keystore = keystore.read();
 		epoch.authorities.iter()
@@ -197,7 +197,7 @@ pub fn claim_slot_using_key_pairs(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	key_pairs: &[(AuthorityPair, usize)],
-) -> Option<(PreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityId)> {
 	claim_primary_slot(slot_number, epoch, epoch.config.c, &key_pairs)
 		.or_else(|| {
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
@@ -229,7 +229,7 @@ fn claim_primary_slot(
 	epoch: &Epoch,
 	c: (u64, u64),
 	key_pairs: &[(AuthorityPair, usize)],
-) -> Option<(PreDigest, AuthorityPair)> {
+) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	for (pair, authority_index) in key_pairs {
@@ -254,7 +254,7 @@ fn claim_primary_slot(
 
 		// early exit on first successful claim
 		if let Some(pre_digest) = pre_digest {
-			return Some((pre_digest, pair.clone()));
+			return Some((pre_digest, pair.public()));
 		}
 	}
 

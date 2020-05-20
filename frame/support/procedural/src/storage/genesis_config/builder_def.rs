@@ -55,10 +55,16 @@ impl BuilderDef {
 				data = Some(match &line.storage_type {
 					StorageLineTypeDef::Simple(_) if line.is_option =>
 						quote_spanned!(builder.span() =>
-							let data = (#builder)(self);
+							// NOTE: the type of `data` is specified when used later in the code
+							let builder: fn(&Self) -> _ = #builder;
+							let data = builder(self);
 							let data = Option::as_ref(&data);
 						),
-					_ => quote_spanned!(builder.span() => let data = &(#builder)(self); ),
+					_ => quote_spanned!(builder.span() =>
+						// NOTE: the type of `data` is specified when used later in the code
+						let builder: fn(&Self) -> _ = #builder;
+						let data = &builder(self);
+					),
 				});
 			} else if let Some(config) = &line.config {
 				is_generic |= line.is_generic;
