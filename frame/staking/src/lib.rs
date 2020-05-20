@@ -806,6 +806,23 @@ pub mod weight {
 			// write queued score and elected
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
+
+	/// Weight of `weight_for_submit_solution` in case of a correct submission.
+	///
+	/// refund: we charged compact.len() * read(1) for SlashingSpans. A valid solution only reads
+	/// winners.len().
+	pub fn weight_for_correct_submit_solution<T: Trait>(
+		winners: &Vec<ValidatorIndex>,
+		compact: &CompactAssignments,
+		size: &ElectionSize,
+	) -> Weight {
+		// NOTE: for consistency, we re-compute the original weight to maintain their relation and
+		// prevent any foot-guns.
+		let original_weight = weight_for_submit_solution::<T>(winners, compact, size);
+		original_weight
+			.saturating_sub(T::DbWeight::get().reads(compact.edge_count() as Weight))
+			.saturating_add(T::DbWeight::get().reads(winners.len() as Weight))
+	}
 }
 
 pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
@@ -2611,17 +2628,13 @@ impl<T: Trait> Module<T> {
 	) -> DispatchResultWithPostInfo {
 		// Do the basic checks. era, claimed score and window open.
 		Self::pre_dispatch_checks(claimed_score, era)?;
-		// utilities for refund.
-		// Weight note: sadly we have to recompute the original weight here. Maybe we can optimise
-		// it someday.
-		let original_weight = weight::weight_for_submit_solution::<T>(
+		// the weight that we will refund in case of a correct submission. We compute this now
+		// because the data needed for it will be consumed further down.
+		let adjusted_weight = weight::weight_for_correct_submit_solution::<T>(
 			&winners,
 			&compact_assignments,
 			&election_size,
 		);
-		let mut refund: Weight = 0;
-		let mut accumulate_read_refund = ||
-			refund = refund.saturating_add(T::DbWeight::get().reads(1));
 
 		// Check that the number of presented winners is sane. Most often we have more candidates
 		// than we need. Then it should be `Self::validator_count()`. Else it should be all the
@@ -2731,8 +2744,6 @@ impl<T: Trait> Module<T> {
 					distribution[0].1 == OffchainAccuracy::one(),
 					Error::<T>::PhragmenBogusSelfVote,
 				);
-				// all good. We can refund some weight now.
-				accumulate_read_refund();
 			}
 		}
 
@@ -2773,7 +2784,7 @@ impl<T: Trait> Module<T> {
 		});
 		QueuedScore::put(submitted_score);
 
-		Ok(Some(original_weight.saturating_sub(refund)).into())
+		Ok(Some(adjusted_weight).into())
 	}
 
 	/// Start a session potentially starting an era.
