@@ -31,6 +31,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
+	NoopRpcExtensionBuilder,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
@@ -318,7 +319,6 @@ pub fn new_full(config: Configuration)
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration)
 -> Result<impl AbstractService, ServiceError> {
-	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
@@ -394,16 +394,14 @@ pub fn new_light(config: Configuration)
 			let client = builder.client().clone();
 			let pool = builder.pool().clone();
 
-			Ok(move |_| -> RpcExtension {
-				let light_deps = node_rpc::LightDeps {
-					remote_blockchain: remote_blockchain.clone(),
-					fetcher: fetcher.clone(),
-					client: client.clone(),
-					pool: pool.clone(),
-				};
+			let light_deps = node_rpc::LightDeps {
+				remote_blockchain: remote_blockchain.clone(),
+				fetcher: fetcher.clone(),
+				client: client.clone(),
+				pool: pool.clone(),
+			};
 
-				node_rpc::create_light(light_deps)
-			})
+			Ok(NoopRpcExtensionBuilder::from(node_rpc::create_light(light_deps)))
 		})?
 		.build()?;
 
