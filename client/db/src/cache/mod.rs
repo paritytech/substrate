@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! DB-backed cache of blockchain data.
 
 use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};

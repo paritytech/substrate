@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Service configuration.
 
 pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
