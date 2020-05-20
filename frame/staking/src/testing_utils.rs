@@ -262,6 +262,37 @@ pub fn get_seq_phragmen_solution<T: Trait>(
 	offchain_election::prepare_submission::<T>(assignments, winners, do_reduce).unwrap()
 }
 
+/// Returns a solution in which only one winner is elected with just a self vote.
+pub fn get_single_winner_solution<T: Trait>(
+	winner: T::AccountId
+) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore, ElectionSize), &'static str> {
+	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
+	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
+
+	let val_index = snapshot_validators.iter().position(|x| *x == winner).ok_or("not a validator")?;
+	let nom_index = snapshot_nominators.iter().position(|x| *x == winner).ok_or("not a nominator")?;
+
+	let stake = <Staking<T>>::slashable_balance_of(&winner);
+	let stake = <T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(stake)
+		as ExtendedBalance;
+
+	let val_index = val_index as ValidatorIndex;
+	let nom_index = nom_index as NominatorIndex;
+
+	let winners = vec![val_index];
+	let compact = CompactAssignments {
+		votes1: vec![(nom_index, val_index)],
+		..Default::default()
+	};
+	let score = [stake, stake, stake * stake];
+	let size = ElectionSize {
+		validators: snapshot_validators.len() as ValidatorIndex,
+		nominators: snapshot_nominators.len() as NominatorIndex,
+	};
+
+	Ok((winners, compact, score, size))
+}
+
 /// get the active era.
 pub fn current_era<T: Trait>() -> EraIndex {
 	<Module<T>>::current_era().unwrap_or(0)
@@ -348,4 +379,33 @@ pub fn init_active_era() {
 		index: 1,
 		start: None,
 	})
+}
+
+/// Create random assignments for the given list of winners. Each assignment will have
+/// MAX_NOMINATIONS edges.
+pub fn create_assignments_for_offchain<T: Trait>(
+	num_assignments: u32,
+	winners: Vec<<T::Lookup as StaticLookup>::Source>,
+) -> Result<(
+		Vec<(T::AccountId, ExtendedBalance)>,
+		Vec<Assignment<T::AccountId, OffchainAccuracy>>,
+	),
+	&'static str>
+{
+	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
+	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
+		.take(num_assignments as usize)
+		.map(|(n, t)| Assignment {
+			who: n,
+			distribution: t.targets.iter().map(|v| (v.clone(), ratio)).collect(),
+		})
+		.collect();
+
+	ensure!(assignments.len() == num_assignments as usize, "must bench for `a` assignments");
+
+	let winners = winners.into_iter().map(|v| {
+		(<T::Lookup as StaticLookup>::lookup(v).unwrap(), 0)
+	}).collect();
+
+	Ok((winners, assignments))
 }

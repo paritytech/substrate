@@ -21,7 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
-use sp_runtime::{PerU16, traits::{Dispatchable, One}};
+use sp_runtime::{traits::{Dispatchable, One}};
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account};
 const SEED: u32 = 0;
@@ -430,21 +430,8 @@ benchmarks! {
 		// set number of winners
 		ValidatorCount::put(w);
 
-		let ratio = PerU16::from_rational_approximation(1, MAX_NOMINATIONS);
-		// final assignments
-		let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
-			.take(a as usize)
-			.map(|(n, t)| Assignment {
-				who: n,
-				distribution: t.targets.iter().map(|v| (v.clone(), ratio)).collect(),
-			})
-			.collect();
-
-		ensure!(assignments.len() == a as usize, "must bench for `a` assignments");
-
-		let winners = winners.into_iter().map(|v| {
-			(<T::Lookup as StaticLookup>::lookup(v).unwrap(), 0)
-		}).collect();
+		// create a assignments in total for the w winners.
+		let (winners, assignments) = create_assignments_for_offchain::<T>(a, winners)?;
 
 		let (
 			winners,
@@ -474,11 +461,86 @@ benchmarks! {
 		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
 	}
 
+	// same as submit_solution_initial but we place a very weak solution on chian first.
+	submit_solution_better {
+		// number of validator intent
+		let v in 1000 .. 2000;
+		// number of nominator intent
+		let n in 1000 .. 2000;
+		// number of assignments. Basically, number of active nominators.
+		let a in 200 .. 500;
+		// number of winners, also ValidatorCount
+		let w in 16 .. 100;
+
+		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
+
+		let winners = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, Some(w))?;
+
+		// needed for the solution to be generates.
+		assert!(<Staking<T>>::create_stakers_snapshot().0);
+
+		// set number of winners
+		ValidatorCount::put(w);
+
+		// create a assignments in total for the w winners.
+		let (winners, assignments) = create_assignments_for_offchain::<T>(a, winners)?;
+
+		let single_winner = winners[0].0.clone();
+
+		let (
+			winners,
+			compact,
+			score,
+			size
+		) = offchain_election::prepare_submission::<T>(assignments, winners, false).unwrap();
+
+		// needed for the solution to be accepted
+		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+
+		let era = <Staking<T>>::current_era().unwrap_or(0);
+		let caller: T::AccountId = account("caller", n, SEED);
+
+		// submit a very bad solution on-chain
+		{
+			// this is needed to fool the chain to accept this solution.
+			ValidatorCount::put(1);
+			let (winners, compact, score, size) = get_single_winner_solution::<T>(single_winner)?;
+			assert!(
+				<Staking<T>>::submit_election_solution(
+					RawOrigin::Signed(caller.clone()).into(),
+					winners,
+					compact,
+					score.clone(),
+					era,
+					size,
+			).is_ok());
+
+			// new solution has been accepted.
+			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+			ValidatorCount::put(w);
+		}
+	}: {
+		let result = <Staking<T>>::submit_election_solution(
+			RawOrigin::Signed(caller.clone()).into(),
+			winners,
+			compact,
+			score.clone(),
+			era,
+			size,
+		);
+		assert!(result.is_ok());
+	}
+	verify {
+		// new solution has been accepted.
+		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
+	}
+
+	// This will be early rejected based on the score.
 	submit_solution_weaker {
-		// TODO: whatever this weight ends up being, so how it will pan our for a solution which has
-		// 1000 validators, and like 100,000 nominators
-		let v in 1 .. 10;
-		let n in 1 .. 100;
+		// number of validator intent
+		let v in 1000 .. 2000;
+		// number of nominator intent
+		let n in 1000 .. 2000;
 
 		MinimumValidatorCount::put(0);
 		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
@@ -508,7 +570,7 @@ benchmarks! {
 			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
 		}
 
-		// prepare a bad solution
+		// prepare a bad solution. This will be very early rejected.
 		let (winners, compact, score, size) = get_weak_solution::<T>(true);
 	}: {
 		assert!(
@@ -520,56 +582,6 @@ benchmarks! {
 				era,
 				size,
 		).is_err());
-	}
-
-	submit_solution_better {
-		let v in 1 .. 10;
-		let n in 1 .. 100;
-
-		MinimumValidatorCount::put(0);
-		create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, None)?;
-
-		// needed for the solution to be generates.
-		assert!(<Staking<T>>::create_stakers_snapshot().0);
-
-		// needed for the solution to be accepted
-		<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
-		let caller: T::AccountId = account("caller", n, SEED);
-		let era = <Staking<T>>::current_era().unwrap_or(0);
-
-		// submit a weak-phragmen.
-		{
-			let (winners, compact, score, size) = get_weak_solution::<T>(true);
-			assert!(
-				<Staking<T>>::submit_election_solution(
-					RawOrigin::Signed(caller.clone()).into(),
-					winners,
-					compact,
-					score.clone(),
-					era,
-					size,
-			).is_ok());
-
-			// new solution has been accepted.
-			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
-		}
-
-		// prepare a seq-phragmen.
-		let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
-	}: {
-		assert!(
-			<Staking<T>>::submit_election_solution(
-				RawOrigin::Signed(caller.clone()).into(),
-				winners,
-				compact,
-				score.clone(),
-				era,
-				size,
-		).is_ok());
-	}
-	verify {
-		// new solution has been accepted.
-		assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
 	}
 }
 
@@ -690,9 +702,18 @@ mod tests {
 			assert_ok!(test_benchmark_new_era::<Test>());
 			assert_ok!(test_benchmark_do_slash::<Test>());
 			assert_ok!(test_benchmark_payout_all::<Test>());
+			// only run one of them to same time on the CI. ignore the other two.
 			assert_ok!(test_benchmark_submit_solution_initial::<Test>());
-			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
-			assert_ok!(test_benchmark_submit_solution_better::<Test>());
 		});
 	}
+
+	#[test]
+	#[ignore]
+	fn test_benchmarks_offchain() {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+			assert_ok!(test_benchmark_submit_solution_better::<Test>());
+			assert_ok!(test_benchmark_submit_solution_weaker::<Test>());
+		});
+	}
+
 }
