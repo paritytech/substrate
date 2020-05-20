@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Substrate state machine implementation.
 
@@ -27,7 +28,6 @@ use sp_core::{
 	storage::ChildInfo, NativeOrEncoded, NeverNativeValue, hexdisplay::HexDisplay,
 	traits::{CodeExecutor, CallInWasmExt, RuntimeCode},
 };
-use overlayed_changes::OverlayedChangeSet;
 use sp_externalities::Extensions;
 
 pub mod backend;
@@ -335,7 +335,6 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 	fn execute_call_with_both_strategy<Handler, R, NC>(
 		&mut self,
 		mut native_call: Option<NC>,
-		orig_prospective: OverlayedChangeSet,
 		on_consensus_failure: Handler,
 	) -> CallResult<R, Exec::Error>
 		where
@@ -346,10 +345,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				CallResult<R, Exec::Error>,
 			) -> CallResult<R, Exec::Error>
 	{
+		let pending_changes = self.overlay.clone_pending();
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.prospective = orig_prospective.clone();
+			self.overlay.replace_pending(pending_changes);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -371,12 +371,12 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 	fn execute_call_with_native_else_wasm_strategy<R, NC>(
 		&mut self,
 		mut native_call: Option<NC>,
-		orig_prospective: OverlayedChangeSet,
 	) -> CallResult<R, Exec::Error>
 		where
 			R: Decode + Encode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
+		let pending_changes = self.overlay.clone_pending();
 		let (result, was_native) = self.execute_aux(
 			true,
 			native_call.take(),
@@ -385,7 +385,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		if !was_native || result.is_ok() {
 			result
 		} else {
-			self.overlay.prospective = orig_prospective.clone();
+			self.overlay.replace_pending(pending_changes);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -420,20 +420,16 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		self.overlay.set_collect_extrinsics(changes_tries_enabled);
 
 		let result = {
-			let orig_prospective = self.overlay.prospective.clone();
-
 			match manager {
 				ExecutionManager::Both(on_consensus_failure) => {
 					self.execute_call_with_both_strategy(
 						native_call.take(),
-						orig_prospective,
 						on_consensus_failure,
 					)
 				},
 				ExecutionManager::NativeElseWasm => {
 					self.execute_call_with_native_else_wasm_strategy(
 						native_call.take(),
-						orig_prospective,
 					)
 				},
 				ExecutionManager::AlwaysWasm(trust_level) => {
@@ -753,7 +749,6 @@ where
 mod tests {
 	use std::collections::BTreeMap;
 	use codec::Encode;
-	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
@@ -976,21 +971,16 @@ mod tests {
 		];
 		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
-		let mut overlay = OverlayedChanges {
-			committed: map![
-				b"aba".to_vec() => OverlayedValue::from(Some(b"1312".to_vec())),
-				b"bab".to_vec() => OverlayedValue::from(Some(b"228".to_vec()))
-			],
-			prospective: map![
-				b"abd".to_vec() => OverlayedValue::from(Some(b"69".to_vec())),
-				b"bbd".to_vec() => OverlayedValue::from(Some(b"42".to_vec()))
-			],
-			..Default::default()
-		};
-		let mut offchain_overlay = Default::default();
 
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(b"aba".to_vec(), Some(b"1312".to_vec()));
+		overlay.set_storage(b"bab".to_vec(), Some(b"228".to_vec()));
+		overlay.commit_prospective();
+		overlay.set_storage(b"abd".to_vec(), Some(b"69".to_vec()));
+		overlay.set_storage(b"bbd".to_vec(), Some(b"42".to_vec()));
 
 		{
+			let mut offchain_overlay = Default::default();
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1005,7 +995,8 @@ mod tests {
 		overlay.commit_prospective();
 
 		assert_eq!(
-			overlay.committed,
+			overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned()))
+				.collect::<HashMap<_, _>>(),
 			map![
 				b"abc".to_vec() => None.into(),
 				b"abb".to_vec() => None.into(),
