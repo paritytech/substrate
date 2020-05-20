@@ -33,9 +33,20 @@ use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
-use futures::{FutureExt, StreamExt, future::ready, channel::oneshot};
 use jsonrpc_pubsub::manager::SubscriptionManager;
-use sc_keystore::Store as Keystore;
+use futures::{
+	Future, FutureExt, StreamExt,
+	future::ready,
+	channel::oneshot,
+};
+use sc_keystore::{
+	Store as Keystore,
+	proxy::{
+		proxy as keystore_proxy,
+		KeystoreProxy,
+		KeystoreReceiver,
+	},
+};
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::NetworkService;
@@ -61,6 +72,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions
 };
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use sp_core::storage::Storage;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
@@ -158,6 +170,8 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
+	Arc<KeystoreProxy>,
+	KeystoreReceiver,
 	TaskManager,
 );
 
@@ -210,6 +224,8 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		)?,
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 	};
+	let (keystore_proxy, keystore_receiver) = keystore_proxy(keystore.clone());
+	let keystore_proxy = Arc::new(keystore_proxy);
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -243,6 +259,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
 			config.execution_strategies.clone(),
 			Some(keystore.clone()),
+			Some(keystore_proxy.clone()),
 		);
 
 		new_client(
@@ -261,7 +278,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		)?
 	};
 
-	Ok((client, backend, keystore, task_manager))
+	Ok((client, backend, keystore, keystore_proxy, keystore_receiver, task_manager))
 }
 
 /// Create the initial parts of a light node.

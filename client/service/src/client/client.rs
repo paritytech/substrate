@@ -32,6 +32,7 @@ use sp_core::{
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
+use sc_keystore::proxy::proxy as keystore_proxy;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
@@ -199,8 +200,16 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
+	let keystore_proxy = match keystore.clone() {
+		Some(store) => {
+			let (keystore_proxy, _) = keystore_proxy(store.clone());
+			Some(Arc::new(keystore_proxy))
+		},
+		None => None,
+	};
+
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
-	let extensions = ExecutionExtensions::new(Default::default(), keystore);
+	let extensions = ExecutionExtensions::new(Default::default(), keystore, keystore_proxy);
 	Client::new(
 		backend,
 		call_executor,

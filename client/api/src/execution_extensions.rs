@@ -33,6 +33,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{ExecutionStrategy, ExecutionManager, DefaultHandler};
 use sp_externalities::Extensions;
+use sc_keystore::proxy::KeystoreProxy;
 use parking_lot::RwLock;
 
 /// Execution strategies settings.
@@ -82,6 +83,8 @@ impl ExtensionsFactory for () {
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<BareCryptoStorePtr>,
+	#[allow(dead_code)]
+	keystore_proxy: Option<Arc<KeystoreProxy>>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
 	// To break retain cycle between `Client` and `TransactionPool` we require this
@@ -97,6 +100,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 		Self {
 			strategies: Default::default(),
 			keystore: None,
+			keystore_proxy: None,
 			transaction_pool: RwLock::new(None),
 			extensions_factory: RwLock::new(Box::new(())),
 		}
@@ -108,10 +112,17 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	pub fn new(
 		strategies: ExecutionStrategies,
 		keystore: Option<BareCryptoStorePtr>,
+		keystore_proxy: Option<Arc<KeystoreProxy>>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
-		Self { strategies, keystore, extensions_factory: RwLock::new(extensions_factory), transaction_pool }
+		Self {
+			strategies,
+			keystore,
+			keystore_proxy,
+			extensions_factory: RwLock::new(extensions_factory),
+			transaction_pool,
+		}
 	}
 
 	/// Get a reference to the execution strategies.

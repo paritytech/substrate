@@ -6208,6 +6208,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.10.2",
  "sc-executor",
+ "sc-keystore",
  "sc-telemetry",
  "sp-api",
  "sp-blockchain",
@@ -6674,6 +6675,7 @@ dependencies = [
  "serde_json",
  "sp-application-crypto",
  "sp-core",
+ "sp-externalities",
  "subtle 2.2.2",
  "tempfile",
 ]
