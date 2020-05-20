@@ -126,9 +126,8 @@ parameter_types! {
 	pub const TipCountdown: u64 = 1;
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
-	pub const TipReportDepositPerByte: u64 = 1;
+	pub const DataDepositPerByte: u64 = 1;
 	pub const BountyDepositBase: u64 = 80;
-	pub const BountyDepositPerByte: u64 = 2;
 	pub const BountyDepositPayoutDelay: u64 = 3;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
@@ -141,7 +140,7 @@ impl Trait for Test {
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
-	type TipReportDepositPerByte = TipReportDepositPerByte;
+	type DataDepositPerByte = DataDepositPerByte;
 	type Event = Event;
 	type ProposalRejection = ();
 	type ProposalBond = ProposalBond;
@@ -149,7 +148,6 @@ impl Trait for Test {
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
 	type BountyDepositBase = BountyDepositBase;
-	type BountyDepositPerByte = BountyDepositPerByte;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 }
 type System = frame_system::Module<Test>;
@@ -543,15 +541,15 @@ fn propose_bounty_works() {
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_noop!(
-			Treasury::propose_bounty(Origin::signed(1), 1, 10, b"1234567890".to_vec()),
+			Treasury::propose_bounty(Origin::signed(1), 1, 10, b"12345678901234567890".to_vec()),
 			Error::<Test>::InsufficientProposersBalance
 		);
 
-		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, b"12345".to_vec()));
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, b"1234567890".to_vec()));
 
 		assert_eq!(last_event(), RawEvent::BountyProposed(0));
 
-		let deposit: u64 = 80 + 5 * 2;
+		let deposit: u64 = 85 + 5;
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
@@ -560,7 +558,7 @@ fn propose_bounty_works() {
 			curator: 1,
 			value: 10,
 			bond: deposit,
-			description: b"12345".to_vec(),
+			description: b"1234567890".to_vec(),
 		});
 
 		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Proposed);
@@ -578,7 +576,7 @@ fn reject_bounty_works() {
 
 		assert_ok!(Treasury::reject_bounty(Origin::ROOT, 0));
 
-		let deposit: u64 = 80 + 5 * 2;
+		let deposit: u64 = 80 + 5;
 
 		assert_eq!(last_event(), RawEvent::BountyRejected(0, deposit));
 
@@ -605,7 +603,7 @@ fn approve_bounty_works() {
 
 		assert_noop!(Treasury::reject_bounty(Origin::ROOT, 0), Error::<Test>::UnexpectedStatus);
 
-		let deposit: u64 = 80 + 5 * 2;
+		let deposit: u64 = 80 + 5;
 		// deposit not return yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);

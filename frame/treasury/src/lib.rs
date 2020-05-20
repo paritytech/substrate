@@ -154,8 +154,8 @@ pub trait Trait: frame_system::Trait {
 	/// The amount held on deposit for placing a tip report.
 	type TipReportDepositBase: Get<BalanceOf<Self>>;
 
-	/// The amount held on deposit per byte within the tip report reason.
-	type TipReportDepositPerByte: Get<BalanceOf<Self>>;
+	/// The amount held on deposit per byte within the tip report reason or bounty description.
+	type DataDepositPerByte: Get<BalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -178,9 +178,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The amount held on deposit for placing a bounty proposal.
 	type BountyDepositBase: Get<BalanceOf<Self>>;
-
-	/// The amount held on deposit per byte within bounty description.
-	type BountyDepositPerByte: Get<BalanceOf<Self>>;
 
 	/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
@@ -398,17 +395,14 @@ decl_module! {
 		/// The amount held on deposit for placing a tip report.
 		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
 
-		/// The amount held on deposit per byte within the tip report reason.
-		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+		/// The amount held on deposit per byte within the tip report reason or bounty description.
+		const DataDepositPerByte: BalanceOf<T> = T::DataDepositPerByte::get();
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
 		const ModuleId: ModuleId = T::ModuleId::get();
 
 		/// The amount held on deposit for placing a bounty proposal.
 		const BountyDepositBase: BalanceOf<T> = T::BountyDepositBase::get();
-
-		/// The amount held on deposit per byte within bounty description.
-		const BountyDepositPerByte: BalanceOf<T> = T::BountyDepositPerByte::get();
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
@@ -490,7 +484,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
-		/// `TipReportDepositPerByte` for each byte in `reason`.
+		/// `DataDepositPerByte` for each byte in `reason`.
 		///
 		/// - `reason`: The reason for, or the thing that deserves, the tip; generally this will be
 		///   a UTF-8-encoded URL.
@@ -516,7 +510,7 @@ decl_module! {
 			ensure!(!Tips::<T>::contains_key(&hash), Error::<T>::AlreadyKnown);
 
 			let deposit = T::TipReportDepositBase::get()
-				+ T::TipReportDepositPerByte::get() * (reason.len() as u32).into();
+				+ T::DataDepositPerByte::get() * (reason.len() as u32).into();
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T>::insert(&reason_hash, &reason);
@@ -680,7 +674,7 @@ decl_module! {
 			ensure!(description.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
 
 			let bond = T::BountyDepositBase::get()
-				+ T::BountyDepositPerByte::get() * (description.len() as u32).into();
+				+ T::DataDepositPerByte::get() * (description.len() as u32).into();
 			T::Currency::reserve(&proposer, bond)
 				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
