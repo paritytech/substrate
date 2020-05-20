@@ -202,29 +202,7 @@ impl Future for PendingCall {
 		if let Poll::Ready(response) = Pin::new(&mut self.future).poll(cx) {
 			sender.send(response);
 		}
-		// match &mut self.future {
-		// 	PendingFuture::HasKeys(fut) => {
-		// 		if let Poll::Ready(result) = fut.as_mut().poll(cx) {
-		// 			self.sender.send(KeystoreResponse::HasKeys(result));
-		// 			return Poll::Ready(());
-		// 		}
-		// 	},
-		// 	PendingFuture::InsertUnknown(fut) => {
-		// 		if let Poll::Ready(result) = fut.as_mut().poll(cx) {
-		// 			self.sender.send(KeystoreResponse::InsertUnknown(result));
-		// 			return Poll::Ready(());
-		// 		}
-		// 	},
-		// 	PendingFuture::SignWith(fut) => {
-		// 		if let Poll::Ready(result) = fut.as_mut().poll(cx) {
-		// 			self.sender.send(KeystoreResponse::SignWith(result));
-		// 			return Poll::Ready(());
-		// 		}
-		// 	}
-		// }
-		// if let Some(call) = ready!(self.future.poll()) {
-		// 	self.sender.start_send(call);
-		// }
+
 		return Poll::Pending;
 	}
 }
@@ -233,20 +211,6 @@ impl Future for KeystoreReceiver {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-
-		// for item in self.pending.iter_mut() {
-		// 	match pending.future {
-		// 		PendingFuture::SignWith(mut future) => {
-		// 			future.as_mut().poll(cx);
-		// 		},
-		// 		PendingFuture::HasKeys(mut future) => {
-		// 			future.as_mut().poll(cx);
-		// 		},
-		// 		PendingFuture::InsertUnknown(mut future) => {
-		// 			future.as_mut().poll(cx);
-		// 		}
-		// 	}
-		// }
 		Pin::new(&mut self.pending).poll_next(cx);
 	
 		if let Some(request) = ready!(Pin::new(&mut self.receiver).poll_next(cx)) {
