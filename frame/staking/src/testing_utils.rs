@@ -56,7 +56,10 @@ pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
 }
 
 /// create `max` validators.
-pub fn create_validators<T: Trait>(max: u32, balance_factor: u32) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
+pub fn create_validators<T: Trait>(
+	max: u32,
+	balance_factor: u32,
+) -> Result<Vec<<T::Lookup as StaticLookup>::Source>, &'static str> {
 	let mut validators: Vec<<T::Lookup as StaticLookup>::Source> = Vec::with_capacity(max as usize);
 	for i in 0 .. max {
 		let (stash, controller) = create_stash_controller::<T>(i, balance_factor)?;
