@@ -77,10 +77,10 @@ pub trait Lockable: Sized + Codec + Copy {
 	/// Get the current value of lockable.
 	fn current() -> Self;
 
-	/// Acquire a new deadline based on `Self::current()`
+	/// Acquire a new deadline based on `Self::current()`.
 	fn deadline() -> Self;
 
-	/// Verify the current value of `self` against `deadline`
+	/// Verify the current value of `self` against `deadline`.
 	/// to determine if the lock has expired.
 	fn expired(&self, deadline: &Self) -> bool;
 
@@ -136,7 +136,7 @@ where
 	pub timestamp: Timestamp,
 }
 
-// derive not possible, since `B` does not necessarily implement `trait Clone`.
+// derive not possible, since `B` does not necessarily implement `trait Clone`
 impl<B> Clone for BlockAndTime<B>
 where
 	B: BlockNumberProvider,
@@ -150,7 +150,7 @@ where
 	}
 }
 
-// derive not possible, since `B` does not necessarily implement `trait Copy`.
+// derive not possible, since `B` does not necessarily implement `trait Copy`
 impl<B: BlockNumberProvider> Copy for BlockAndTime<B>
 {
 }
