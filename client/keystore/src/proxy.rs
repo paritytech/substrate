@@ -3,12 +3,13 @@
 use futures::{
 	ready,
 	future::Future,
-	stream::Stream,
+	stream::{Stream, FuturesUnordered},
 	channel::{
 		oneshot,
 		mpsc::{Sender, Receiver, channel},
 	},
 };
+use futures_util::sink::SinkExt;
 use std::{
 	pin::Pin,
 	sync::Arc,
@@ -67,7 +68,10 @@ impl KeystoreProxy {
 		}
 	}
 
-	fn send_request(&self, request: RequestMethod) -> oneshot::Receiver<KeystoreResponse> {
+	async fn send_request(
+		&self,
+		request: RequestMethod
+	) -> Result<KeystoreResponse, oneshot::Canceled> {
 		let (request_sender, request_receiver) = oneshot::channel::<KeystoreResponse>();
 
 		let request = KeystoreRequest {
@@ -75,45 +79,46 @@ impl KeystoreProxy {
 			method: request,
 		};
 		let mut sender = self.sender.clone();
-		sender.start_send(request);
 
-		request_receiver
+		sender.send(request).await;
+
+		request_receiver.await
 	}
 
-	pub fn sign_with(
+	pub async fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> oneshot::Receiver<KeystoreResponse> {
-		self.send_request(RequestMethod::SignWith(id, key.clone(), msg.to_vec()))
+	) -> Result<KeystoreResponse, oneshot::Canceled> {
+		self.send_request(RequestMethod::SignWith(id, key.clone(), msg.to_vec())).await
 	}
 
-	pub fn has_keys(
+	pub async fn has_keys(
 		&self,
 		public_keys: &[(Vec<u8>, KeyTypeId)]
-	) -> oneshot::Receiver<KeystoreResponse> {
-		self.send_request(RequestMethod::HasKeys(public_keys.to_vec()))
+	) -> Result<KeystoreResponse, oneshot::Canceled> {
+		self.send_request(RequestMethod::HasKeys(public_keys.to_vec())).await
 	}
 
-	pub fn insert_unknown(
+	pub async fn insert_unknown(
 		&self,
 		key_type: KeyTypeId,
 		suri: &str,
 		public: &[u8]
-	) -> oneshot::Receiver<KeystoreResponse> {
+	) -> Result<KeystoreResponse, oneshot::Canceled> {
 		self.send_request(RequestMethod::InsertUnknown(
 			key_type,
 			suri.to_string(),
 			public.to_vec(),
-		))
+		)).await
 	}
 }
 
 pub struct KeystoreReceiver {
 	receiver: Receiver<KeystoreRequest>,
 	store: BareCryptoStorePtr,
-	pending: Vec<PendingCall>,
+	pending: FuturesUnordered<PendingCall>,
 }
 
 impl KeystoreReceiver {
@@ -121,7 +126,7 @@ impl KeystoreReceiver {
 		KeystoreReceiver {
 			receiver,
 			store,
-			pending: vec![],
+			pending: FuturesUnordered::new(),
 		}
 	}
 
@@ -164,19 +169,63 @@ impl KeystoreReceiver {
 			}
 		}
 	}
+}
 
-	fn poll_future(&self, cx: &mut Context, pending: PendingCall) {
-		match pending.future {
-			PendingFuture::SignWith(mut future) => {
-				future.as_mut().poll(cx);
+impl Future for PendingFuture {
+	type Output = KeystoreResponse;
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		match self.get_mut() {
+			PendingFuture::HasKeys(fut) => {
+				if let Poll::Ready(result) = fut.as_mut().poll(cx) {
+					return Poll::Ready(KeystoreResponse::HasKeys(result));
+				}
 			},
-			PendingFuture::HasKeys(mut future) => {
-				future.as_mut().poll(cx);
+			PendingFuture::InsertUnknown(fut) => {
+				if let Poll::Ready(result) = fut.as_mut().poll(cx) {
+					return Poll::Ready(KeystoreResponse::InsertUnknown(result));
+				}
 			},
-			PendingFuture::InsertUnknown(mut future) => {
-				future.as_mut().poll(cx);
+			PendingFuture::SignWith(fut) => {
+				if let Poll::Ready(result) = fut.as_mut().poll(cx) {
+					return Poll::Ready(KeystoreResponse::SignWith(result));
+				}
 			}
 		}
+		return Poll::Pending;
+	}
+}
+
+impl Future for PendingCall {
+	type Output = ();
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let sender = &mut self.sender;
+		if let Poll::Ready(response) = Pin::new(&mut self.future).poll(cx) {
+			sender.send(response);
+		}
+		// match &mut self.future {
+		// 	PendingFuture::HasKeys(fut) => {
+		// 		if let Poll::Ready(result) = fut.as_mut().poll(cx) {
+		// 			self.sender.send(KeystoreResponse::HasKeys(result));
+		// 			return Poll::Ready(());
+		// 		}
+		// 	},
+		// 	PendingFuture::InsertUnknown(fut) => {
+		// 		if let Poll::Ready(result) = fut.as_mut().poll(cx) {
+		// 			self.sender.send(KeystoreResponse::InsertUnknown(result));
+		// 			return Poll::Ready(());
+		// 		}
+		// 	},
+		// 	PendingFuture::SignWith(fut) => {
+		// 		if let Poll::Ready(result) = fut.as_mut().poll(cx) {
+		// 			self.sender.send(KeystoreResponse::SignWith(result));
+		// 			return Poll::Ready(());
+		// 		}
+		// 	}
+		// }
+		// if let Some(call) = ready!(self.future.poll()) {
+		// 	self.sender.start_send(call);
+		// }
+		return Poll::Pending;
 	}
 }
 
@@ -184,10 +233,22 @@ impl Future for KeystoreReceiver {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		// for item in self.pending.into_iter() {
-		// 	self.poll_future(cx, item);
-		// }
 
+		// for item in self.pending.iter_mut() {
+		// 	match pending.future {
+		// 		PendingFuture::SignWith(mut future) => {
+		// 			future.as_mut().poll(cx);
+		// 		},
+		// 		PendingFuture::HasKeys(mut future) => {
+		// 			future.as_mut().poll(cx);
+		// 		},
+		// 		PendingFuture::InsertUnknown(mut future) => {
+		// 			future.as_mut().poll(cx);
+		// 		}
+		// 	}
+		// }
+		Pin::new(&mut self.pending).poll_next(cx);
+	
 		if let Some(request) = ready!(Pin::new(&mut self.receiver).poll_next(cx)) {
 			self.process_request(request);
 		}
