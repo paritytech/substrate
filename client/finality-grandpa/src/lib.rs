@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
 //! This crate is unstable and the API and usage may change.

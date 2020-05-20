@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Light client blockchain backend. Only stores headers and justifications of recent
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
