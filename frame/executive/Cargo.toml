@@ -3,7 +3,7 @@ name = "frame-executive"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME executives engine"
@@ -24,7 +24,7 @@ sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primiti
 [dev-dependencies]
 hex-literal = "0.2.1"
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
-sp-io ={ path = "../../primitives/io", version = "2.0.0-dev"}
+sp-io ={ version = "2.0.0-dev", path = "../../primitives/io" }
 pallet-indices = { version = "2.0.0-dev", path = "../indices" }
 pallet-balances = { version = "2.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "2.0.0-dev", path = "../transaction-payment" }

@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
@@ -117,6 +119,7 @@ mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
+pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
@@ -126,7 +129,6 @@ pub use finality_grandpa::voter::report;
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
-use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};

@@ -109,6 +109,9 @@ use wasm_timer::Instant;
 /// tries to connect, the connection is accepted. A ban only delays dialing attempts.
 ///
 pub struct GenericProto {
+	/// `PeerId` of the local node.
+	local_peer_id: PeerId,
+
 	/// Legacy protocol to open with peers. Never modified.
 	legacy_protocol: RegisteredProtocol,
 
@@ -321,6 +324,7 @@ impl GenericProto {
 	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
 	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
+		local_peer_id: PeerId,
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		peerset: sc_peerset::Peerset,
@@ -329,6 +333,7 @@ impl GenericProto {
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
 
 		GenericProto {
+			local_peer_id,
 			legacy_protocol,
 			notif_protocols: Vec::new(),
 			peerset,
@@ -507,9 +512,18 @@ impl GenericProto {
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+		let local_peer_id = &self.local_peer_id;
+		self.peerset.discovered(peer_ids.filter_map(|peer_id| {
+			if peer_id == *local_peer_id {
+				error!(
+					target: "sub-libp2p",
+					"Discovered our own identity. This is a minor inconsequential bug."
+				);
+				return None;
+			}
+
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
+			Some(peer_id)
 		}));
 	}
 
@@ -616,8 +630,8 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
 					until {:?}", occ_entry.key(), until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
-					timer: futures_timer::Delay::new(until.clone() - now),
-					timer_deadline: until.clone(),
+					timer: futures_timer::Delay::new(*until - now),
+					timer_deadline: *until,
 				};
 			},
 
@@ -639,8 +653,8 @@ impl GenericProto {
 					occ_entry.key(), banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					open,
-					timer: futures_timer::Delay::new(banned.clone() - now),
-					timer_deadline: banned.clone(),
+					timer: futures_timer::Delay::new(*banned - now),
+					timer_deadline: *banned,
 				};
 			},
 
@@ -879,7 +893,7 @@ impl NetworkBehaviour for GenericProto {
 			// this peer", and not "banned" in the sense that we would refuse the peer altogether.
 			(st @ &mut PeerState::Poisoned, endpoint @ ConnectedPoint::Listener { .. }) |
 			(st @ &mut PeerState::Banned { .. }, endpoint @ ConnectedPoint::Listener { .. }) => {
-				let incoming_id = self.next_incoming_index.clone();
+				let incoming_id = self.next_incoming_index;
 				self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
 					Some(v) => v,
 					None => {
@@ -1200,7 +1214,7 @@ impl NetworkBehaviour for GenericProto {
 					debug!(target: "sub-libp2p", "External API <= Closed({:?})", source);
 					let event = GenericProtoOut::CustomProtocolClosed {
 						reason,
-						peer_id: source.clone(),
+						peer_id: source,
 					};
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 				} else {
@@ -1384,7 +1398,7 @@ impl NetworkBehaviour for GenericProto {
 					*peer_state = PeerState::Enabled { open };
 				}
 
-				st @ _ => *peer_state = st,
+				st => *peer_state = st,
 			}
 		}
 

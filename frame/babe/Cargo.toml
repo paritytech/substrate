@@ -3,7 +3,7 @@ name = "pallet-babe"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Consensus extension module for BABE consensus. Collects on-chain randomness from VRF outputs and manages epoch transitions."
@@ -26,7 +26,7 @@ sp-timestamp = { version = "2.0.0-dev", default-features = false, path = "../../
 pallet-session = { version = "2.0.0-dev", default-features = false, path = "../session" }
 sp-consensus-babe = { version = "0.8.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
 sp-consensus-vrf = { version = "0.8.0-dev", default-features = false, path = "../../primitives/consensus/vrf" }
-sp-io = { path = "../../primitives/io", default-features = false , version = "2.0.0-dev"}
+sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primitives/io" }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
@@ -34,8 +34,8 @@ sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
+	"serde",
 	"sp-std/std",
 	"sp-application-crypto/std",
 	"frame-support/std",
