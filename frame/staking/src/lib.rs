@@ -773,7 +773,7 @@ pub mod weight {
 	/// State reads:
 	/// 	- Initial checks:
 	/// 		- ElectionState, CurrentEra, QueuedScore
-	/// 		- SnapshotValidators.len()
+	/// 		- SnapshotValidators.len() + SnapShotNominators.len()
 	/// 		- ValidatorCount
 	/// 		- SnapshotValidators
 	/// 		- SnapshotNominators
@@ -795,7 +795,7 @@ pub mod weight {
 			.saturating_add((120 * WEIGHT_PER_MICROS).saturating_mul(compact.len() as Weight))
 			.saturating_add((7_600 * WEIGHT_PER_NANOS).saturating_mul(winners.len() as Weight))
 			// Initial checks
-			.saturating_add(T::DbWeight::get().reads(7))
+			.saturating_add(T::DbWeight::get().reads(8))
 			// Nominators
 			.saturating_add(T::DbWeight::get().reads(compact.len() as Weight))
 			// SlashingSpans (upper bound for invalid solution)
@@ -2654,9 +2654,19 @@ impl<T: Trait> Module<T> {
 		let desired_winners = Self::validator_count().min(snapshot_validators_length);
 		ensure!(winners.len() as u32 == desired_winners, Error::<T>::PhragmenBogusWinnerCount);
 
+		let snapshot_nominators_len = <SnapshotNominators<T>>::decode_len()
+			.map(|l| l as u32)
+			.ok_or_else(|| Error::<T>::SnapshotUnavailable)?;
+
 		// decode snapshot validators.
 		let snapshot_validators = Self::snapshot_validators()
 			.ok_or(Error::<T>::SnapshotUnavailable)?;
+
+		// rest of the size of the solution must be correct.
+		ensure!(
+			snapshot_nominators_len == election_size.nominators,
+			Error::<T>::PhragmenBogusElectionSize,
+		);
 
 		// check if all winners were legit; this is rather cheap. Replace with accountId.
 		let winners = winners.into_iter().map(|widx| {
@@ -2669,12 +2679,6 @@ impl<T: Trait> Module<T> {
 		// decode the rest of the snapshot.
 		let snapshot_nominators = Self::snapshot_nominators()
 			.ok_or(Error::<T>::SnapshotUnavailable)?;
-
-		// rest of the size of the solution must be correct.
-		ensure!(
-			snapshot_nominators.len() as u32 == election_size.nominators,
-			Error::<T>::PhragmenBogusElectionSize,
-		);
 
 		// helpers
 		let nominator_at = |i: NominatorIndex| -> Option<T::AccountId> {
