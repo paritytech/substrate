@@ -383,21 +383,15 @@ pub fn new_light(config: Configuration)
 		})?
 		.with_rpc_extensions(|builder| {
 			let fetcher = builder.fetcher()
-				.ok_or_else(|| "Trying to start node RPC without active fetcher")?
-				.clone();
-
+				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
 			let remote_blockchain = builder.remote_backend()
-				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?
-				.clone();
-
-			let client = builder.client().clone();
-			let pool = builder.pool().clone();
+				.ok_or_else(|| "Trying to start node RPC without active remote blockchain")?;
 
 			let light_deps = node_rpc::LightDeps {
-				remote_blockchain: remote_blockchain.clone(),
-				fetcher: fetcher.clone(),
-				client: client.clone(),
-				pool: pool.clone(),
+				remote_blockchain,
+				fetcher,
+				client: builder.client().clone(),
+				pool: builder.pool(),
 			};
 
 			Ok(node_rpc::create_light(light_deps))
