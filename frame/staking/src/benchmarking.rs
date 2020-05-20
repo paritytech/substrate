@@ -422,7 +422,13 @@ benchmarks! {
 
 		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
-		let winners = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, Some(w))?;
+		let winners = create_validators_with_nominators_for_era::<T>(
+			v,
+			n,
+			MAX_NOMINATIONS,
+			false,
+			Some(w),
+		)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
@@ -474,7 +480,13 @@ benchmarks! {
 
 		ensure!(w as usize >= MAX_NOMINATIONS, "doesn't support lower value");
 
-		let winners = create_validators_with_nominators_for_era::<T>(v, n, MAX_NOMINATIONS, false, Some(w))?;
+		let winners = create_validators_with_nominators_for_era::<T>(
+			v,
+			n,
+			MAX_NOMINATIONS,
+			false,
+			Some(w),
+		)?;
 
 		// needed for the solution to be generates.
 		assert!(<Staking<T>>::create_stakers_snapshot().0);
