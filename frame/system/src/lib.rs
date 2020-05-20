@@ -212,6 +212,11 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
 	type ExtrinsicBaseWeight: Get<Weight>;
 
+	/// The maximal weight of a single Extrinsic. This should be set to at most
+	/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
+	/// containing `Normal` dispatch class calls.
+	type MaximumExtrinsicWeight: Get<Weight>;
+
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
 
@@ -1352,10 +1357,29 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		}
 	}
 
+	/// Checks if the current extrinsic does not exceed `MaximumExtrinsicWeight` limit.
+	fn check_extrinsic_weight(
+		info: &DispatchInfoOf<T::Call>,
+	) -> Result<(), TransactionValidityError> {
+		match info.class {
+			// Mandatory and Operational transactions does not
+			DispatchClass::Mandatory | DispatchClass::Operational => Ok(()),
+			DispatchClass::Normal => {
+				let maximum_weight = T::MaximumExtrinsicWeight::get();
+				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
+				if extrinsic_weight > maximum_weight {
+					Err(InvalidTransaction::ExhaustsResources.into())
+				} else {
+					Ok(())
+				}
+			}
+		}
+	}
+
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_weight(
+	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
@@ -1446,7 +1470,9 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
-		let next_weight = Self::check_weight(info)?;
+		let next_weight = Self::check_block_weight(info)?;
+		Self::check_extrinsic_weight(info)?;
+
 		AllExtrinsicsLen::put(next_len);
 		AllExtrinsicsWeight::put(next_weight);
 		Ok(())
@@ -1459,9 +1485,12 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
+		// ignore the next length. If they return `Ok`, then it is below the limit.
 		let _ = Self::check_block_length(info, len)?;
-		let _ = Self::check_weight(info)?;
+		// during validation we skip block limit check. Since the `validate_transaction`
+		// call runs on an empty block anyway, by this we prevent `on_initialize` weight
+		// consumption from causing false negatives.
+		Self::check_extrinsic_weight(info)?;
 
 		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
 	}
@@ -1847,6 +1876,7 @@ pub(crate) mod tests {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 10;
 		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumExtrinsicWeight: Weight = 768;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
 		pub const Version: RuntimeVersion = RuntimeVersion {
@@ -1905,6 +1935,7 @@ pub(crate) mod tests {
 		type DbWeight = DbWeight;
 		type BlockExecutionWeight = BlockExecutionWeight;
 		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
+		type MaximumExtrinsicWeight = MaximumExtrinsicWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
@@ -2344,17 +2375,43 @@ pub(crate) mod tests {
 
 	#[test]
 	fn mandatory_extrinsic_doesnt_care_about_limits() {
+		fn check(call: impl FnOnce(&DispatchInfo, usize)) {
+			new_test_ext().execute_with(|| {
+				let max = DispatchInfo {
+					weight: Weight::max_value(),
+					class: DispatchClass::Mandatory,
+					..Default::default()
+				};
+				let len = 0_usize;
+
+				call(&max, len);
+			});
+		}
+
+		check(|max, len| {
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
+			assert_eq!(System::all_extrinsics_weight().total(), Weight::max_value());
+			assert!(System::all_extrinsics_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+		});
+		check(|max, len| {
+			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
+		});
+	}
+
+	#[test]
+	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
-				weight: Weight::max_value(),
-				class: DispatchClass::Mandatory,
+				weight: MaximumExtrinsicWeight::get() + 1,
+				class: DispatchClass::Normal,
 				..Default::default()
 			};
 			let len = 0_usize;
 
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_eq!(System::all_extrinsics_weight().total(), Weight::max_value());
-			assert!(System::all_extrinsics_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+			assert_noop!(
+				CheckWeight::<Test>::do_validate(&max, len),
+				InvalidTransaction::ExhaustsResources
+			);
 		});
 	}
 
@@ -2449,7 +2506,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn signed_ext_check_weight_priority_works() {
+	fn signed_ext() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
