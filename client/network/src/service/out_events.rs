@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Registering events streams.
 //!
 //! This code holds the logic that is used for the network service to inform other parts of

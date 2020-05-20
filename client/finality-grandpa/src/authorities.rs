@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
 use fork_tree::ForkTree;
