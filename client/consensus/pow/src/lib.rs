@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Proof of work consensus for Substrate.
 //!
 //! To use this engine, you can need to have a struct that implements

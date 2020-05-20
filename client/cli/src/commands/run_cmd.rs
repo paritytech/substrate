@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use crate::arg_enums::RpcMethods;
 use crate::error::{Error, Result};
 use crate::params::ImportParams;
