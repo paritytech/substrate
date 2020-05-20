@@ -686,8 +686,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		})
 	}
 
-	/// Defines the RPC extensions to use.
-	pub fn with_rpc_extensions<URpcBuilder, URpc>(
+	/// Defines the RPC extensions builder to use.
+	pub fn with_rpc_extensions_builder<URpcBuilder, URpc>(
 		self,
 		rpc_extensions_builder: impl FnOnce(&Self) -> Result<URpcBuilder, Error>,
 	) -> Result<
@@ -715,6 +715,40 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			finality_proof_provider: self.finality_proof_provider,
 			transaction_pool: self.transaction_pool,
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
+			remote_backend: self.remote_backend,
+			block_announce_validator_builder: self.block_announce_validator_builder,
+			marker: self.marker,
+		})
+	}
+
+	/// Defines the RPC extensions to use.
+	pub fn with_rpc_extensions<URpc>(
+		self,
+		rpc_extensions_builder: impl FnOnce(&Self) -> Result<URpc, Error>,
+	) -> Result<
+		ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, URpc, Backend>,
+		Error,
+	>
+	where
+		TSc: Clone,
+		TFchr: Clone,
+		URpc: Clone + sc_rpc::RpcExtension<sc_rpc::Metadata> + Send + 'static,
+	{
+		let rpc_extensions = rpc_extensions_builder(&self)?;
+
+		Ok(ServiceBuilder {
+			config: self.config,
+			client: self.client,
+			backend: self.backend,
+			task_manager: self.task_manager,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions_builder: Box::new(NoopRpcExtensionBuilder::from(rpc_extensions)),
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
@@ -810,7 +844,7 @@ impl<F, R> RpcExtensionBuilder for F where
 	}
 }
 
-pub struct NoopRpcExtensionBuilder<R>(R);
+struct NoopRpcExtensionBuilder<R>(R);
 
 impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
 	R: Clone + sc_rpc::RpcExtension<sc_rpc::Metadata>,

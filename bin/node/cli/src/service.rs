@@ -31,7 +31,6 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
-	NoopRpcExtensionBuilder,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
@@ -100,7 +99,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|builder| {
+			.with_rpc_extensions_builder(|builder| {
 				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
 					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
 
@@ -401,7 +400,7 @@ pub fn new_light(config: Configuration)
 				pool: pool.clone(),
 			};
 
-			Ok(NoopRpcExtensionBuilder::from(node_rpc::create_light(light_deps)))
+			Ok(node_rpc::create_light(light_deps))
 		})?
 		.build()?;
 
