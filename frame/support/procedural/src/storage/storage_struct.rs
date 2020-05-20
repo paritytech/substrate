@@ -86,7 +86,10 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 			Ident::new(INHERENT_INSTANCE_NAME, Span::call_site())
 		};
 
-		let storage_name_str = syn::LitStr::new(&line.name.to_string(), line.name.span());
+		let storage_name_bstr = syn::LitByteStr::new(
+			line.name.to_string().as_ref(),
+			line.name.span()
+		);
 
 		let storage_generator_trait = &line.storage_generator_trait;
 		let storage_struct = &line.storage_struct;
@@ -107,7 +110,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 
 						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
+							#storage_name_bstr
 						}
 
 						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
@@ -131,7 +134,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 
 						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
+							#storage_name_bstr
 						}
 					}
 
@@ -146,7 +149,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 
 						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
+							#storage_name_bstr
 						}
 
 						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {
@@ -171,7 +174,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 
 						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
+							#storage_name_bstr
 						}
 					}
 
@@ -189,7 +192,7 @@ pub fn decl_and_impl(scrate: &TokenStream, def: &DeclStorageDefExt) -> TokenStre
 						}
 
 						fn storage_prefix() -> &'static [u8] {
-							#storage_name_str.as_bytes()
+							#storage_name_bstr
 						}
 
 						fn from_optional_value_to_query(v: Option<#value_type>) -> Self::Query {

@@ -311,13 +311,13 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 					build_time: total_handling_time,
 				});
 			},
-			block_requests::Event::Response { peer, original_request, response, request_duration } => {
+			block_requests::Event::Response { peer, original_request: _, response, request_duration } => {
 				self.events.push_back(BehaviourOut::RequestFinished {
 					peer: peer.clone(),
 					protocol: self.block_requests.protocol_name().to_vec(),
 					request_duration,
 				});
-				let ev = self.substrate.on_block_response(peer, original_request, response);
+				let ev = self.substrate.on_block_response(peer, response);
 				self.inject_event(ev);
 			}
 			block_requests::Event::RequestCancelled { peer, request_duration, .. } |

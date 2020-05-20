@@ -19,7 +19,7 @@ sp-api = { version = "2.0.0-dev", path = "../../primitives/api", default-feature
 sp-runtime-interface = { version = "2.0.0-dev", path = "../../primitives/runtime-interface", default-features = false }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime", default-features = false }
 sp-std = { version = "2.0.0-dev", path = "../../primitives/std", default-features = false }
-sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-dev"}
+sp-io = { version = "2.0.0-dev", path = "../../primitives/io", default-features = false }
 frame-support = { version = "2.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
 

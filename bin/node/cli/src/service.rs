@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -173,7 +173,8 @@ macro_rules! new_full {
 		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
-				service.transaction_pool()
+				service.transaction_pool(),
+				service.prometheus_registry().as_ref(),
 			);
 
 			let client = service.client();
@@ -552,7 +553,8 @@ mod tests {
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
 					service.client(),
-					service.transaction_pool()
+					service.transaction_pool(),
+					None,
 				);
 
 				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(

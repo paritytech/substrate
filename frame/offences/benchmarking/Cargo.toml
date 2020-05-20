@@ -23,7 +23,6 @@ pallet-im-online = { version = "2.0.0-dev", default-features = false, path = "..
 pallet-offences = { version = "2.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../offences" }
 pallet-session = { version = "2.0.0-dev", default-features = false, path = "../../session" }
 pallet-staking = { version = "2.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
-sp-io = { path = "../../../primitives/io", default-features = false, version = "2.0.0-dev"}
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/std" }
@@ -34,7 +33,7 @@ pallet-staking-reward-curve = { version = "2.0.0-dev", path = "../../staking/rew
 pallet-timestamp = { version = "2.0.0-dev", path = "../../timestamp" }
 serde = { version = "1.0.101" }
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
-sp-io ={ path = "../../../primitives/io", version = "2.0.0-dev"}
+sp-io = { version = "2.0.0-dev", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -52,5 +51,4 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
-	"sp-io/std",
 ]
