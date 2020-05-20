@@ -247,7 +247,6 @@ macro_rules! assert_ok {
 		}
 	};
 	( $x:expr, $y:expr $(,)? ) => {
-		dbg!(&$x);
 		assert_eq!($x, Ok($y));
 	}
 }
