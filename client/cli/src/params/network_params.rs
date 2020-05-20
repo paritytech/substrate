@@ -1,19 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::params::node_key_params::NodeKeyParams;
 use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
@@ -40,6 +41,11 @@ pub struct NetworkParams {
 	/// nodes regardless of whether they are defined as reserved nodes.
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
+
+	/// The public address that other nodes will use to connect to it.
+	/// This can be used if there's a proxy in front of this node.
+	#[structopt(long, value_name = "PUBLIC_ADDR")]
+	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
@@ -89,6 +95,17 @@ pub struct NetworkParams {
 	/// enough confidence that this feature is properly working.
 	#[structopt(long)]
 	pub no_yamux_flow_control: bool,
+
+	/// Enable peer discovery on local networks.
+	///
+	/// By default this option is true for `--dev` and false otherwise.
+	#[structopt(long)]
+	pub discover_local: bool,
+
+	/// Use the legacy "pre-mainnet-launch" networking protocol. Enable if things seem broken.
+	/// This option will be removed in the future.
+	#[structopt(long)]
+	pub legacy_network_protocol: bool,
 }
 
 impl NetworkParams {
@@ -107,12 +124,17 @@ impl NetworkParams {
 		let listen_addresses = if self.listen_addr.is_empty() {
 			vec![
 				Multiaddr::empty()
+					.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
+					.with(Protocol::Tcp(port)),
+				Multiaddr::empty()
 					.with(Protocol::Ip4([0, 0, 0, 0].into()))
 					.with(Protocol::Tcp(port)),
 			]
 		} else {
 			self.listen_addr.clone()
 		};
+
+		let public_addresses = self.public_addr.clone();
 
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
@@ -127,7 +149,7 @@ impl NetworkParams {
 				NonReservedPeerMode::Accept
 			},
 			listen_addresses,
-			public_addresses: Vec::new(),
+			public_addresses,
 			notifications_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
@@ -141,6 +163,8 @@ impl NetworkParams {
 				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			allow_non_globals_in_dht: self.discover_local || is_dev,
+			use_new_block_requests_protocol: !self.legacy_network_protocol,
 		}
 	}
 }

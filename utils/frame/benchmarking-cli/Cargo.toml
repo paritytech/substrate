@@ -3,7 +3,7 @@ name = "frame-benchmarking-cli"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "CLI for benchmarking FRAME"
@@ -16,7 +16,6 @@ frame-benchmarking = { version = "2.0.0-dev", path = "../../../frame/benchmarkin
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 sc-service = { version = "0.8.0-dev", default-features = false, path = "../../../client/service" }
 sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
-sc-client = { version = "0.8.0-dev", path = "../../../client" }
 sc-client-db = { version = "0.8.0-dev", path = "../../../client/db" }
 sc-executor = { version = "0.8.0-dev", path = "../../../client/executor" }
 sp-externalities = { version = "0.8.0-dev", path = "../../../primitives/externalities" }

@@ -21,9 +21,7 @@ use futures::{future::ready, FutureExt, TryFutureExt};
 use rpc::futures::future::{result, Future, Either};
 
 use sc_rpc_api::Subscriptions;
-use sc_client::{
-	light::{fetcher::{Fetcher, RemoteBodyRequest}, blockchain::RemoteBlockchain},
-};
+use sc_client_api::light::{Fetcher, RemoteBodyRequest, RemoteBlockchain};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT},
@@ -80,7 +78,7 @@ impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client,
 		let hash = self.unwrap_or_best(hash);
 
 		let fetcher = self.fetcher.clone();
-		let maybe_header = sc_client::light::blockchain::future_header(
+		let maybe_header = sc_client_api::light::future_header(
 			&*self.remote_blockchain,
 			&*fetcher,
 			BlockId::Hash(hash),

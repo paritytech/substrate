@@ -1,32 +1,34 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Helpers for offchain worker election.
 
+use codec::Decode;
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
 };
 use frame_system::offchain::SubmitTransaction;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, PhragmenResult,
-	PhragmenScore,
+	PhragmenScore, equalize,
 };
 use sp_runtime::offchain::storage::StorageValueRef;
-use sp_runtime::PerThing;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
+use frame_support::{debug, traits::Get};
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
@@ -159,10 +161,7 @@ pub fn prepare_submission<T: Trait>(
 	};
 
 	// Clean winners.
-	let winners = winners
-		.into_iter()
-		.map(|(w, _)| w)
-		.collect::<Vec<T::AccountId>>();
+	let winners = sp_phragmen::to_without_backing(winners);
 
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(
@@ -170,6 +169,27 @@ pub fn prepare_submission<T: Trait>(
 		<Module<T>>::slashable_balance_of_vote_weight,
 	);
 
+	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
+	// equalize a random number of times.
+	let iterations_executed = match T::MaxIterations::get() {
+		0 => {
+			// Don't run equalize at all
+			0
+		}
+		iterations @ _ => {
+			let seed = sp_io::offchain::random_seed();
+			let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+				.expect("input is padded with zeroes; qed") % iterations.saturating_add(1);
+			equalize(
+				&mut staked,
+				&mut support_map,
+				Zero::zero(),
+				iterations as usize,
+			)
+		}
+	};
+
+	// reduce
 	if do_reduce {
 		reduce(&mut staked);
 	}
@@ -214,6 +234,13 @@ pub fn prepare_submission<T: Trait>(
 			return Err(OffchainElectionError::InvalidWinner);
 		}
 	}
+
+	debug::native::debug!(
+		target: "staking",
+		"prepared solution after {} equalization iterations with score {:?}",
+		iterations_executed,
+		score,
+	);
 
 	Ok((winners_indexed, compact, score))
 }

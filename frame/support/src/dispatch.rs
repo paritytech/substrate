@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
@@ -70,14 +71,13 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::MINIMUM_WEIGHT;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = 0]
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
@@ -85,7 +85,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// FRAME pallets.
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = 0]
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
@@ -107,23 +107,22 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Shorthand Example
 ///
 /// The macro automatically expands a shorthand function declaration to return the
-/// [`DispatchResult`] type. These functions are the same:
+/// [`DispatchResult`](dispatch::DispatchResult) type. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::MINIMUM_WEIGHT;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = 0]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
 ///
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = 0]
 /// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
@@ -135,7 +134,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Consuming only portions of the annotated static weight
 ///
 /// Per default a callable function consumes all of its static weight as declared via
-/// the #[weight] attribute. However, there are use cases where only a portion of this
+/// the #\[weight\] attribute. However, there are use cases where only a portion of this
 /// weight should be consumed. In that case the static weight is charged pre dispatch and
 /// the difference is refunded post dispatch.
 ///
@@ -177,11 +176,10 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::MINIMUM_WEIGHT;
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = 0]
 ///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
@@ -1436,16 +1434,17 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							let base_weight = $weight;
 							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							$crate::dispatch::DispatchInfo {
@@ -2045,7 +2044,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{MINIMUM_WEIGHT, DispatchInfo, DispatchClass, Pays};
+	use crate::weights::{DispatchInfo, DispatchClass, Pays};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade
 	};
@@ -2071,22 +2070,22 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = 0]
 			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = 0]
 			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 
 			#[weight = 3]
 			fn aux_3(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = 0]
 			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = 0]
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
 			#[weight = (5, DispatchClass::Operational)]

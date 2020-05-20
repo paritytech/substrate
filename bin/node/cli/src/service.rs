@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![warn(unused_extern_crates)]
 
@@ -21,8 +23,9 @@
 use std::sync::Arc;
 
 use sc_consensus_babe;
-use sc_client::{self, LongestChain};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
+use grandpa::{
+	self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
+};
 use node_executor;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
@@ -30,14 +33,7 @@ use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use sp_inherents::InherentDataProviders;
-
-use sc_service::{Service, NetworkStatus};
-use sc_client::{Client, LocalCallExecutor};
-use sc_client_db::Backend;
-use sp_runtime::traits::Block as BlockT;
-use node_executor::NativeExecutor;
-use sc_network::NetworkService;
-use sc_offchain::OffchainWorkers;
+use sc_consensus::LongestChain;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -46,21 +42,34 @@ use sc_offchain::OffchainWorkers;
 macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
+
 		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
+		let mut rpc_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client::LongestChain::new(backend.clone()))
+				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
+				Ok(sc_transaction_pool::BasicPool::new(
+					config,
+					std::sync::Arc::new(pool_api),
+					prometheus_registry,
+				))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
+			.with_import_queue(|
+				_config,
+				client,
+				mut select_chain,
+				_transaction_pool,
+				spawn_task_handle,
+				prometheus_registry,
+			| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -83,6 +92,8 @@ macro_rules! new_full_start {
 					None,
 					client,
 					inherent_data_providers.clone(),
+					spawn_task_handle,
+					prometheus_registry,
 				)?;
 
 				import_setup = Some((block_import, grandpa_link, babe_link));
@@ -91,6 +102,10 @@ macro_rules! new_full_start {
 			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("BabeLink is present for full services or set up failed; qed.");
+				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
+					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
+				let shared_authority_set = grandpa_link.shared_authority_set();
+				let shared_voter_state = grandpa::SharedVoterState::empty();
 				let deps = node_rpc::FullDeps {
 					client: builder.client().clone(),
 					pool: builder.pool(),
@@ -100,12 +115,17 @@ macro_rules! new_full_start {
 						keystore: builder.keystore(),
 						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
 						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
-					}
+					},
+					grandpa: node_rpc::GrandpaDeps {
+						shared_voter_state: shared_voter_state.clone(),
+						shared_authority_set: shared_authority_set.clone(),
+					},
 				};
+				rpc_setup = Some((shared_voter_state));
 				Ok(node_rpc::create_full(deps))
 			})?;
 
-		(builder, import_setup, inherent_data_providers)
+		(builder, import_setup, inherent_data_providers, rpc_setup)
 	}}
 }
 
@@ -131,7 +151,8 @@ macro_rules! new_full {
 			$config.disable_grandpa,
 		);
 
-		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
+		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
+			new_full_start!($config);
 
 		let service = builder
 			.with_finality_proof_provider(|client, backend| {
@@ -142,14 +163,18 @@ macro_rules! new_full {
 			.build()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
-				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+
+		let shared_voter_state = rpc_setup.take()
+			.expect("The SharedVoterState is present for Full Services or setup failed before. qed");
 
 		($with_startup_data)(&block_import, &babe_link);
 
 		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
-				service.transaction_pool()
+				service.transaction_pool(),
+				service.prometheus_registry().as_ref(),
 			);
 
 			let client = service.client();
@@ -243,6 +268,7 @@ macro_rules! new_full {
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				prometheus_registry: service.prometheus_registry(),
+				shared_voter_state,
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.
@@ -266,38 +292,9 @@ macro_rules! new_full {
 	}}
 }
 
-type ConcreteBlock = node_primitives::Block;
-type ConcreteClient =
-	Client<
-		Backend<ConcreteBlock>,
-		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-		ConcreteBlock,
-		node_runtime::RuntimeApi
-	>;
-type ConcreteBackend = Backend<ConcreteBlock>;
-type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
-	ConcreteBlock
->;
-
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<
-	Service<
-		ConcreteBlock,
-		ConcreteClient,
-		LongestChain<ConcreteBackend, ConcreteBlock>,
-		NetworkStatus<ConcreteBlock>,
-		NetworkService<ConcreteBlock, <ConcreteBlock as BlockT>::Hash>,
-		ConcreteTransactionPool,
-		OffchainWorkers<
-			ConcreteClient,
-			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
-			ConcreteBlock,
-		>
-	>,
-	ServiceError,
->
+-> Result<impl AbstractService, ServiceError>
 {
 	new_full!(config).map(|(service, _)| service)
 }
@@ -321,7 +318,16 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
+		.with_import_queue_and_fprb(|
+			_config,
+			client,
+			backend,
+			fetcher,
+			_select_chain,
+			_tx_pool,
+			spawn_task_handle,
+			registry,
+		| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -349,6 +355,8 @@ pub fn new_light(config: Configuration)
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
 				inherent_data_providers.clone(),
+				spawn_task_handle,
+				registry,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))
@@ -416,7 +424,7 @@ mod tests {
 		use sp_core::ed25519::Pair;
 
 		use {service_test, Factory};
-		use sc_client::{BlockImportParams, BlockOrigin};
+		use sp_consensus::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -545,7 +553,8 @@ mod tests {
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
 					service.client(),
-					service.transaction_pool()
+					service.transaction_pool(),
+					None,
 				);
 
 				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
@@ -615,30 +624,36 @@ mod tests {
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
 				let best_block_id = BlockId::number(service.client().chain_info().best_number);
-				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
+				let (spec_version, transaction_version) = {
+					let version = service.client().runtime_version_at(&best_block_id).unwrap();
+					(version.spec_version, version.transaction_version)
+				};
 				let signer = charlie.clone();
 
 				let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-				let check_version = frame_system::CheckVersion::new();
+				let check_spec_version = frame_system::CheckSpecVersion::new();
+				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
 				let check_era = frame_system::CheckEra::from(Era::Immortal);
 				let check_nonce = frame_system::CheckNonce::from(index);
 				let check_weight = frame_system::CheckWeight::new();
 				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
+				let validate_grandpa_equivocation = pallet_grandpa::ValidateEquivocationReport::new();
 				let extra = (
-					check_version,
+					check_spec_version,
+					check_tx_version,
 					check_genesis,
 					check_era,
 					check_nonce,
 					check_weight,
 					payment,
-					Default::default(),
+					validate_grandpa_equivocation,
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), ())
+					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

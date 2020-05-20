@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Macro for benchmarking a FRAME runtime.
 
@@ -69,6 +70,9 @@ pub use paste;
 /// (or not) by each arm. Syntax is available to allow for only the range to be drawn upon if
 /// desired, allowing an alternative instancing expression to be given.
 ///
+/// Note that the ranges are *inclusive* on both sides. This is in contrast to ranges in Rust which
+/// are left-inclusive right-exclusive.
+///
 /// Each arm may also have a block of code which is run prior to any instancing and a block of code
 /// which is run afterwards. All code blocks may draw upon the specific value of each parameter
 /// at any time. Local variables are shared between the two pre- and post- code blocks, but do not
@@ -81,6 +85,7 @@ pub use paste;
 /// ```ignore
 /// benchmarks! {
 ///   // common parameter; just one for this example.
+///   // will be `1`, `MAX_LENGTH` or any value inbetween
 ///   _ {
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }
@@ -723,6 +728,9 @@ macro_rules! impl_benchmark {
 					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
 					prev_steps = steps;
 
+					// Skip this loop if steps is zero
+					if steps == 0 { continue }
+
 					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
 
@@ -828,6 +836,9 @@ macro_rules! impl_benchmark {
 					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
 					prev_steps = steps;
 
+					// Skip this loop if steps is zero
+					if steps == 0 { continue }
+
 					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
 
@@ -911,6 +922,10 @@ macro_rules! impl_benchmark_tests {
 					let selected_benchmark = SelectedBenchmark::$name;
 					let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
 
+					assert!(
+						components.len() != 0,
+						"You need to add components to your benchmark!",
+					);
 					for (_, (name, low, high)) in components.iter().enumerate() {
 						// Test only the low and high value, assuming values in the middle won't break
 						for component_value in vec![low, high] {
@@ -1036,7 +1051,7 @@ macro_rules! add_benchmark {
 							&steps[..],
 							repeat,
 						)?,
-						pallet: pallet.to_vec(),
+						pallet: $name.to_vec(),
 						benchmark: benchmark.to_vec(),
 					});
 				}
@@ -1049,7 +1064,7 @@ macro_rules! add_benchmark {
 						&steps[..],
 						repeat,
 					)?,
-					pallet: pallet.to_vec(),
+					pallet: $name.to_vec(),
 					benchmark: benchmark.clone(),
 				});
 			}

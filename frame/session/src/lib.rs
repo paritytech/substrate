@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Session Module
 //!
@@ -110,7 +111,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -169,6 +170,14 @@ impl<
 		} else {
 			offset
 		})
+	}
+
+	fn weight(_now: BlockNumber) -> Weight {
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
+		// There should be no risk to the chain having this weight value be zero for now.
+		// However, this value of zero was not properly calculated, and so it would be reasonable
+		// to come back here and properly calculate the weight of this function.
+		0
 	}
 }
 
@@ -350,6 +359,8 @@ pub trait Trait: frame_system::Trait {
 	type ValidatorId: Member + Parameter;
 
 	/// A conversion from account ID to validator ID.
+	///
+	/// Its cost must be at most one storage read.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
@@ -493,12 +504,16 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(log n) in number of accounts.
-		/// - One extra DB entry.
-		/// - Increases system account refs by one on success iff there were previously no keys set.
-		///   In this case, purge_keys will need to be called before the account can be removed.
+		/// - Complexity: `O(1)`
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `origin account`, `T::ValidatorIdOf`, `NextKeys`
+		/// - DbWrites: `origin account`, `NextKeys`
+		/// - DbReads per key id: `KeyOwner`
+		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
-		#[weight = 150_000_000]
+		#[weight = 200_000_000
+			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len() as Weight)
+			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len() as Weight)]
 		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -515,11 +530,14 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(N) in number of key types.
-		/// - Removes N + 1 DB entries.
-		/// - Reduces system account refs by one on success.
+		/// - Complexity: `O(1)` in number of key types.
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `T::ValidatorIdOf`, `NextKeys`, `origin account`
+		/// - DbWrites: `NextKeys`, `origin account`
+		/// - DbWrites per key id: `KeyOwnder`
 		/// # </weight>
-		#[weight = 150_000_000]
+		#[weight = 120_000_000
+			+ T::DbWeight::get().reads_writes(2, 1 + T::Keys::key_ids().len() as Weight)]
 		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;
@@ -530,9 +548,13 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
+				T::MaximumBlockWeight::get()
+			} else {
+				// NOTE: the non-database part of the weight for `should_end_session(n)` is
+				// included as weight for empty block, the database part is expected to be in
+				// cache.
+				0
 			}
-
-			MINIMUM_WEIGHT
 		}
 	}
 }
@@ -771,5 +793,9 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+
+	fn weight(now: T::BlockNumber) -> Weight {
+		T::NextSessionRotation::weight(now)
 	}
 }

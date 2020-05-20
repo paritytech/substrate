@@ -1,34 +1,37 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 mod build_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
+mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
 mod revert_cmd;
-mod runcmd;
+mod run_cmd;
 
-pub use crate::commands::build_spec_cmd::BuildSpecCmd;
-pub use crate::commands::check_block_cmd::CheckBlockCmd;
-pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
-pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
-pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
-pub use crate::commands::revert_cmd::RevertCmd;
-pub use crate::commands::runcmd::RunCmd;
+pub use self::build_spec_cmd::BuildSpecCmd;
+pub use self::check_block_cmd::CheckBlockCmd;
+pub use self::export_blocks_cmd::ExportBlocksCmd;
+pub use self::import_blocks_cmd::ImportBlocksCmd;
+pub use self::purge_chain_cmd::PurgeChainCmd;
+pub use self::revert_cmd::RevertCmd;
+pub use self::run_cmd::RunCmd;
+pub use self::export_state_cmd::ExportStateCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
 
@@ -56,6 +59,9 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
+
+	/// Export state as raw chain spec.
+	ExportState(ExportStateCmd),
 }
 
 // TODO: move to config.rs?
@@ -144,6 +150,18 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn offchain_worker_params(&self) -> Option<&$crate::OffchainWorkerParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker_params()),*
+				}
+			}
+
+			fn database_params(&self) -> Option<&$crate::DatabaseParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -229,10 +247,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			fn pruning(&self, unsafe_pruning: bool, role: &::sc_service::Role)
 			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+					$($enum::$variant(cmd) => cmd.pruning(unsafe_pruning, role)),*
 				}
 			}
 
@@ -261,7 +279,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}
@@ -279,9 +297,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn unsafe_rpc_expose(&self) -> $crate::Result<bool> {
+			fn rpc_methods(&self) -> $crate::Result<sc_service::config::RpcMethods> {
 				match self {
-					$($enum::$variant(cmd) => cmd.unsafe_rpc_expose()),*
+					$($enum::$variant(cmd) => cmd.rpc_methods()),*
 				}
 			}
 
@@ -327,7 +345,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
+			fn offchain_worker(
+				&self,
+				role: &::sc_service::Role,
+			) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}
@@ -376,7 +397,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn log_filters(&self) -> $crate::Result<::std::option::Option<String>> {
+			fn log_filters(&self) -> $crate::Result<String> {
 				match self {
 					$($enum::$variant(cmd) => cmd.log_filters()),*
 				}
@@ -386,5 +407,6 @@ macro_rules! substrate_cli_subcommands {
 }
 
 substrate_cli_subcommands!(
-	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain
+	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
 );
+

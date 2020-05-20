@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! An opt-in utility for tracking historical sessions in FRAME-session.
 //!
@@ -27,15 +28,14 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::{KeyTypeId, RuntimeDebug};
+use sp_runtime::KeyTypeId;
 use sp_runtime::traits::{Convert, OpaqueKeys};
+use sp_session::{MembershipProof, ValidatorCount};
 use frame_support::{decl_module, decl_storage};
 use frame_support::{Parameter, print};
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
-
-type ValidatorCount = u32;
 
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
@@ -126,7 +126,7 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 		});
 
 		if let Some(new_validators) = new_validators_and_id {
-			let count = new_validators.len() as u32;
+			let count = new_validators.len() as ValidatorCount;
 			match ProvingTrie::<T>::generate_for(new_validators) {
 				Ok(trie) => <HistoricalSessions<T>>::insert(new_index, &(trie.root, count)),
 				Err(reason) => {
@@ -253,54 +253,58 @@ impl<T: Trait> ProvingTrie<T> {
 
 }
 
-/// Proof of ownership of a specific key.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct Proof {
-	session: SessionIndex,
-	trie_nodes: Vec<Vec<u8>>,
-}
-
-impl Proof {
-	/// Returns a session this proof was generated for.
-	pub fn session(&self) -> SessionIndex {
-		self.session
-	}
-}
-
 impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
 	for Module<T>
 {
-	type Proof = Proof;
+	type Proof = MembershipProof;
 	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
 		let session = <SessionModule<T>>::current_index();
-		let validators = <SessionModule<T>>::validators().into_iter()
+		let validators = <SessionModule<T>>::validators()
+			.into_iter()
 			.filter_map(|validator| {
 				T::FullIdentificationOf::convert(validator.clone())
 					.map(|full_id| (validator, full_id))
-			});
+			})
+			.collect::<Vec<_>>();
+
+		let count = validators.len() as ValidatorCount;
+
 		let trie = ProvingTrie::<T>::generate_for(validators).ok()?;
 
 		let (id, data) = key;
-
-		trie.prove(id, data.as_ref()).map(|trie_nodes| Proof {
-			session,
-			trie_nodes,
-		})
+		trie.prove(id, data.as_ref())
+			.map(|trie_nodes| MembershipProof {
+				session,
+				trie_nodes,
+				validator_count: count,
+			})
 	}
 
-	fn check_proof(key: (KeyTypeId, D), proof: Proof) -> Option<IdentificationTuple<T>> {
+	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T>> {
 		let (id, data) = key;
 
 		if proof.session == <SessionModule<T>>::current_index() {
-			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner|
-				T::FullIdentificationOf::convert(owner.clone()).map(move |id| (owner, id))
-			)
-		} else {
-			let (root, _) = <HistoricalSessions<T>>::get(&proof.session)?;
-			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
+			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner| {
+				T::FullIdentificationOf::convert(owner.clone()).and_then(move |id| {
+					let count = <SessionModule<T>>::validators().len() as ValidatorCount;
 
+					if count != proof.validator_count {
+						return None;
+					}
+
+					Some((owner, id))
+				})
+			})
+		} else {
+			let (root, count) = <HistoricalSessions<T>>::get(&proof.session)?;
+
+			if count != proof.validator_count {
+				return None;
+			}
+
+			let trie = ProvingTrie::<T>::from_nodes(root, &proof.trie_nodes);
 			trie.query(id, data.as_ref())
 		}
 	}

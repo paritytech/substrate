@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! I/O host interface for substrate runtime.
 
@@ -41,7 +42,7 @@ use sp_core::{
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
+	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -115,6 +116,18 @@ pub trait Storage {
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		Externalities::clear_prefix(*self, prefix)
+	}
+
+	/// Append the encoded `value` to the storage item at `key`.
+	///
+	/// The storage item needs to implement [`EncodeAppend`](codec::EncodeAppend).
+	///
+	/// # Warning
+	///
+	/// If the storage item does not support [`EncodeAppend`](codec::EncodeAppend) or
+	/// something else fails at appending, the storage item will be set to `[value]`.
+	fn append(&mut self, key: &[u8], value: Vec<u8>) {
+		self.storage_append(key.to_vec(), value);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.
@@ -329,7 +342,18 @@ pub trait Misc {
 
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(wasm, None, "Core_version", &[], &mut ext)
+			.call_in_wasm(
+				wasm,
+				None,
+				"Core_version",
+				&[],
+				&mut ext,
+				// If a runtime upgrade introduces new host functions that are not provided by
+				// the node, we should not fail at instantiation. Otherwise nodes that are
+				// updated could run this successfully and it could lead to a storage root
+				// mismatch when importing this block.
+				sp_core::traits::MissingHostFunctions::Allow,
+			)
 			.ok()
 	}
 }
@@ -521,6 +545,80 @@ pub trait Crypto {
 		sr25519::Pair::verify_deprecated(sig, msg, pubkey)
 	}
 
+	/// Returns all `ecdsa` public keys for the given key id from the keystore.
+	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.ecdsa_public_keys(id)
+	}
+
+	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.write()
+			.ecdsa_generate_new(id, seed)
+			.expect("`ecdsa_generate` failed")
+	}
+
+	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
+	/// key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8],
+	) -> Option<ecdsa::Signature> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.sign_with(id, &pub_key.into(), msg)
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.ok()
+	}
+
+	/// Verify `ecdsa` signature.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	/// If no batching verification extension registered, this will return the result
+	/// of verification immediately. If batching verification extension is registered
+	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
+	/// signatures.
+	fn ecdsa_verify(
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
+		// `with_externalities`.
+		//
+		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
+		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
+		let evaluated = sp_externalities::with_externalities(|mut instance|
+			instance.extension::<VerificationExt>().map(
+				|extension| extension.push_ecdsa(
+					sig.clone(),
+					pub_key.clone(),
+					msg.to_vec(),
+				)
+			)
+		);
+
+		match evaluated {
+			Some(Some(val)) => val,
+			_ => ecdsa::Pair::verify(sig, msg, pub_key),
+		}
+	}
+
 	/// Verify and recover a SECP256k1 ECDSA signature.
 	///
 	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
@@ -602,6 +700,20 @@ pub trait Hashing {
 	}
 }
 
+/// Interface that provides functions to access the Offchain DB.
+#[runtime_interface]
+pub trait OffchainIndex {
+	/// Write a key value pair to the Offchain DB database in a buffered fashion.
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.set_offchain_storage(key, Some(value));
+	}
+
+	/// Remove a key and its associated value from the Offchain DB.
+	fn clear(&mut self, key: &[u8]) {
+		self.set_offchain_storage(key, None);
+	}
+}
+
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
@@ -609,6 +721,8 @@ sp_externalities::decl_extension! {
 }
 
 /// Interface that provides functions to access the offchain functionality.
+///
+/// These functions are being made available to the runtime and are called by the runtime.
 #[runtime_interface]
 pub trait Offchain {
 	/// Returns if the local node is a potential validator.
@@ -984,6 +1098,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	offchain_index::HostFunctions,
 );
 
 #[cfg(test)]

@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Block import benchmark.
 //!
@@ -30,22 +32,39 @@
 
 use std::borrow::Cow;
 
-use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes};
+use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
 use node_primitives::Block;
 use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
 
 use crate::core::{self, Path, Mode};
 
-#[derive(Clone, Copy, Debug)]
-pub enum SizeType { Small, Medium, Large }
+#[derive(Clone, Copy, Debug, derive_more::Display)]
+pub enum SizeType {
+	#[display(fmt = "empty")]
+	Empty,
+	#[display(fmt = "small")]
+	Small,
+	#[display(fmt = "medium")]
+	Medium,
+	#[display(fmt = "large")]
+	Large,
+	#[display(fmt = "full")]
+	Full,
+	#[display(fmt = "custom")]
+	Custom(usize),
+}
 
 impl SizeType {
-	fn transactions(&self) -> usize {
+	pub fn transactions(&self) -> Option<usize> {
 		match self {
-			SizeType::Small => 10,
-			SizeType::Medium => 100,
-			SizeType::Large => 500,
+			SizeType::Empty => Some(0),
+			SizeType::Small => Some(10),
+			SizeType::Medium => Some(100),
+			SizeType::Large => Some(500),
+			SizeType::Full => None,
+			// Custom SizeType will use the `--transactions` input parameter
+			SizeType::Custom(val) => Some(*val),
 		}
 	}
 }
@@ -53,7 +72,9 @@ impl SizeType {
 pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
 	pub key_types: KeyTypes,
+	pub block_type: BlockType,
 	pub size: SizeType,
+	pub database_type: DatabaseType,
 }
 
 pub struct ImportBenchmark {
@@ -77,19 +98,30 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			KeyTypes::Ed25519 => path.push("ed25519"),
 		}
 
-		match self.size {
-			SizeType::Small => path.push("small"),
-			SizeType::Medium => path.push("medium"),
-			SizeType::Large => path.push("large"),
+		match self.block_type {
+			BlockType::RandomTransfersKeepAlive => path.push("transfer_keep_alive"),
+			BlockType::RandomTransfersReaping => path.push("transfer_reaping"),
+			BlockType::Noop => path.push("noop"),
 		}
+
+		match self.database_type {
+			DatabaseType::RocksDb => path.push("rocksdb"),
+			DatabaseType::ParityDb => path.push("paritydb"),
+		}
+
+		path.push(&format!("{}", self.size));
 
 		path
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let profile = self.profile;
-		let mut bench_db = BenchDb::with_key_types(self.size.transactions(), self.key_types);
-		let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
+		let mut bench_db = BenchDb::with_key_types(
+			self.database_type,
+			50_000,
+			self.key_types
+		);
+		let block = bench_db.generate_block(self.block_type.to_content(self.size.transactions()));
 		Box::new(ImportBenchmark {
 			database: bench_db,
 			block,
@@ -98,10 +130,12 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	}
 
 	fn name(&self) -> Cow<'static, str> {
-		match self.profile {
-			Profile::Wasm => "Import benchmark (random transfers, wasm)".into(),
-			Profile::Native => "Import benchmark (random transfers, native)".into(),
-		}
+		format!(
+			"Import benchmark ({:?}, {:?}, {:?} backend)",
+			self.block_type,
+			self.profile,
+			self.database_type,
+		).into()
 	}
 }
 
@@ -113,12 +147,16 @@ impl core::Benchmark for ImportBenchmark {
 			.expect("Failed to get runtime version")
 			.spec_version;
 
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(3));
+		}
+
 		let start = std::time::Instant::now();
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
 
 		if mode == Mode::Profile {
-			std::thread::park_timeout(std::time::Duration::from_secs(2));
+			std::thread::park_timeout(std::time::Duration::from_secs(1));
 		}
 
 		log::info!(

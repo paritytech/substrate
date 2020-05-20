@@ -16,11 +16,11 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee, BalanceOf};
+use crate::{Schedule, Trait, CodeHash, BalanceOf};
 use crate::exec::{
 	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, STATUS_SUCCESS,
 };
-use crate::gas::{Gas, GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
 use sp_sandbox;
 use frame_system;
 use sp_std::{prelude::*, mem, convert::TryInto};
@@ -32,6 +32,7 @@ use sp_io::hashing::{
 	blake2_128,
 	sha2_256,
 };
+use frame_support::weights::GetDispatchInfo;
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
@@ -153,8 +154,8 @@ pub enum RuntimeToken {
 	/// The given number of bytes is read from the sandbox memory and
 	/// is returned as the return data buffer of the call.
 	ReturnData(u32),
-	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
-	ComputedDispatchFee(Gas),
+	/// Dispatched a call with the given weight.
+	DispatchWithWeight(Gas),
 	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
 	/// given number of topics.
 	DepositEvent(u32, u32),
@@ -195,7 +196,7 @@ impl<T: Trait> Token<T> for RuntimeToken {
 						data_and_topics_cost.checked_add(metadata.event_base_cost)
 					)
 			},
-			ComputedDispatchFee(gas) => Some(gas),
+			DispatchWithWeight(gas) => gas.checked_add(metadata.dispatch_base_cost),
 		};
 
 		value.unwrap_or_else(|| Bounded::max_value())
@@ -692,7 +693,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_gas_price(ctx) => {
 		ctx.scratch_buf.clear();
-		ctx.gas_meter.gas_price().encode_to(&mut ctx.scratch_buf);
+		ctx.ext.get_weight_price().encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
@@ -783,16 +784,14 @@ define_env!(Env, <E: Ext>,
 		let call: <<E as Ext>::T as Trait>::Call =
 			read_sandbox_memory_as(ctx, call_ptr, call_len)?;
 
-		// Charge gas for dispatching this call.
-		let fee = {
-			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
-			approx_gas_for_balance(ctx.gas_meter.gas_price(), balance_fee)
-		};
+		// We already deducted the len costs when reading from the sandbox.
+		// Bill on the actual weight of the dispatched call.
+		let info = call.get_dispatch_info();
 		charge_gas(
 			&mut ctx.gas_meter,
 			ctx.schedule,
 			&mut ctx.special_trap,
-			RuntimeToken::ComputedDispatchFee(fee)
+			RuntimeToken::DispatchWithWeight(info.weight)
 		)?;
 
 		ctx.ext.note_dispatch_call(call);

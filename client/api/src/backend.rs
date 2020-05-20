@@ -1,25 +1,27 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate Client data backend
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::OffchainStorage;
+use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
@@ -77,6 +79,25 @@ pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	pub notify_imported: Option<ImportSummary<Block>>,
 	/// A list of hashes of blocks that got finalized.
 	pub notify_finalized: Vec<Block::Hash>,
+}
+
+/// Helper function to apply auxiliary data insertion into an operation.
+pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, D, I>(
+	operation: &mut ClientImportOperation<Block, B>,
+	insert: I,
+	delete: D,
+) -> sp_blockchain::Result<()>
+	where
+		Block: BlockT,
+		B: Backend<Block>,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+{
+	operation.op.insert_aux(
+		insert.into_iter()
+			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+	)
 }
 
 /// State of a new block.
@@ -147,6 +168,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
 	) -> sp_blockchain::Result<()>;
+
+	/// Write offchain storage changes to the database.
+	fn update_offchain_storage(
+		&mut self,
+		_offchain_update: OffchainOverlayedChanges,
+	) -> sp_blockchain::Result<()> {
+		 Ok(())
+	}
 
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(

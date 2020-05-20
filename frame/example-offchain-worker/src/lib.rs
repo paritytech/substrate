@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Offchain Worker Example Module
 //!
@@ -45,7 +46,7 @@ use frame_system::{
 	ensure_signed,
 	ensure_none,
 	offchain::{
-		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction,
+		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction, SendSignedTransaction,
 		SignedPayload, SigningTypes, Signer, SubmitTransaction,
 	}
 };
@@ -53,7 +54,6 @@ use frame_support::{
 	debug,
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	traits::Get,
-	weights::MINIMUM_WEIGHT,
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
@@ -189,7 +189,7 @@ decl_module! {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn submit_price(origin, price: u32) -> DispatchResult {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -214,7 +214,7 @@ decl_module! {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32)
 			-> DispatchResult
 		{
@@ -228,7 +228,7 @@ decl_module! {
 			Ok(())
 		}
 
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
@@ -382,8 +382,6 @@ impl<T: Trait> Module<T> {
 
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
-		use frame_system::offchain::SendSignedTransaction;
-
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
 		if !signer.can_sign() {
 			return Err(

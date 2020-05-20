@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Rust implementation of the Phragmén election algorithm. This is used in several pallets to
 //! optimally distribute the weight of a set of voters among an elected set of candidates. In the
@@ -34,8 +35,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
-use sp_runtime::{helpers_128bit::multiply_by_rational, PerThing, Rational128, RuntimeDebug, SaturatedConversion};
-use sp_runtime::traits::{Zero, Member, Saturating, Bounded};
+use sp_arithmetic::{
+	PerThing, Rational128,
+	helpers_128bit::multiply_by_rational,
+	traits::{Zero, Saturating, Bounded, SaturatedConversion},
+};
 
 #[cfg(test)]
 mod mock;
@@ -60,7 +64,7 @@ pub use helpers::*;
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
-pub use sp_runtime;
+pub use sp_arithmetic;
 
 // re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
@@ -107,7 +111,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 const DEN: u128 = u128::max_value();
 
 /// A candidate entity for phragmen election.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Candidate<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -120,7 +124,7 @@ struct Candidate<AccountId> {
 }
 
 /// A voter entity.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Voter<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -133,7 +137,7 @@ struct Voter<AccountId> {
 }
 
 /// A candidate being backed by a voter.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Edge<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -144,7 +148,7 @@ struct Edge<AccountId> {
 }
 
 /// Final result of the phragmen election.
-#[derive(RuntimeDebug)]
+#[derive(Debug)]
 pub struct PhragmenResult<AccountId, T: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -155,10 +159,10 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(RuntimeDebug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, T: PerThing> {
-	/// Voter's identifier
+	/// Voter's identifier.
 	pub who: AccountId,
 	/// The distribution of the voter's stake.
 	pub distribution: Vec<(AccountId, T)>,
@@ -223,7 +227,7 @@ where
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(RuntimeDebug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -301,7 +305,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
 /// they do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug)]
+#[derive(Default, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
 	/// Total support.
@@ -334,7 +338,7 @@ pub fn elect<AccountId, R>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> Option<PhragmenResult<AccountId, R>> where
-	AccountId: Default + Ord + Member,
+	AccountId: Default + Ord + Clone,
 	R: PerThing,
 {
 	// return structures
@@ -561,7 +565,7 @@ pub fn build_support_map<AccountId>(
 	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
 ) -> (SupportMap<AccountId>, u32) where
-	AccountId: Default + Ord + Member,
+	AccountId: Default + Ord + Clone,
 {
 	let mut errors = 0;
 	// Initialize the support of each candidate.
@@ -596,11 +600,11 @@ pub fn evaluate_support<AccountId>(
 ) -> PhragmenScore {
 	let mut min_support = ExtendedBalance::max_value();
 	let mut sum: ExtendedBalance = Zero::zero();
-	// NOTE: this will probably saturate but using big num makes it even slower. We'll have to see.
-	// This must run on chain..
+	// NOTE: The third element might saturate but fine for now since this will run on-chain and need
+	// to be fast.
 	let mut sum_squared: ExtendedBalance = Zero::zero();
 	for (_, support) in support.iter() {
-		sum += support.total;
+		sum = sum.saturating_add(support.total);
 		let squared = support.total.saturating_mul(support.total);
 		sum_squared = sum_squared.saturating_add(squared);
 		if support.total < min_support {

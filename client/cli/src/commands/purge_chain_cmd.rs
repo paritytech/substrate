@@ -1,23 +1,24 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 use crate::error;
-use crate::params::SharedParams;
+use crate::params::{DatabaseParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::{config::DatabaseConfig, Configuration};
+use sc_service::Configuration;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -33,18 +34,19 @@ pub struct PurgeChainCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = match &config.database {
-			DatabaseConfig::RocksDb { path, .. } => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
+		let db_path = config.database.path()
+			.ok_or_else(||
+				error::Error::Input("Cannot purge custom database implementation".into())
+		)?;
 
 		if !self.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -80,5 +82,9 @@ impl PurgeChainCmd {
 impl CliConfiguration for PurgeChainCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

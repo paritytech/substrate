@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Vesting Module
 //!
@@ -57,7 +58,7 @@ use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get
 };
-use frame_support::weights::MINIMUM_WEIGHT;
+
 use frame_system::{self as system, ensure_signed};
 
 mod benchmarking;
@@ -172,7 +173,7 @@ decl_error! {
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
+	/// Vesting module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
@@ -190,11 +191,15 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - One balance-lock operation.
-		/// - One storage read (codec `O(1)`) and up to one removal.
-		/// - One event.
+		/// - DbWeight: 2 Reads, 2 Writes
+		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
+		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
+		/// - Benchmark:
+		///     - Unlocked: 48.76 + .048 * l µs (min square analysis)
+		///     - Locked: 44.43 + .284 * l µs (min square analysis)
+		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -211,12 +216,15 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - Up to one account lookup.
-		/// - One balance-lock operation.
-		/// - One storage read (codec `O(1)`) and up to one removal.
-		/// - One event.
+		/// - DbWeight: 3 Reads, 3 Writes
+		///     - Reads: Vesting Storage, Balances Locks, Target Account
+		///     - Writes: Vesting Storage, Balances Locks, Target Account
+		/// - Benchmark:
+		///     - Unlocked: 44.3 + .294 * l µs (min square analysis)
+		///     - Locked: 48.16 + .103 * l µs (min square analysis)
+		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(3, 3)]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -233,10 +241,14 @@ decl_module! {
 		/// Emits `VestingCreated`.
 		///
 		/// # <weight>
-		/// - Creates a new storage entry, but is protected by a minimum transfer
-		///	   amount needed to succeed.
+		/// - `O(1)`.
+		/// - DbWeight: 3 Reads, 3 Writes
+		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
+		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
+		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
+		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 1_000_000_000]
+		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(3, 3)]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -382,6 +394,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();

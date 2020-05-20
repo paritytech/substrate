@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::utils::{
 	generate_crate_access, generate_hidden_includes,
@@ -173,7 +174,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 				#( #attrs )*
 				#[cfg(not(feature = "std"))]
 				#[no_mangle]
-				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+				pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
 					let mut #input = if input_len == 0 {
 						&[0u8; 0]
 					} else {
@@ -207,6 +208,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+			offchain_changes: std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
@@ -335,6 +337,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					commit_on_success: true.into(),
 					initialized_block: None.into(),
 					changes: Default::default(),
+					offchain_changes: Default::default(),
 					recorder: Default::default(),
 					storage_transaction_cache: Default::default(),
 				}.into()
@@ -353,6 +356,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&C,
 					&Self,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
+					&std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					&Option<#crate_::ProofRecorder<Block>>,
@@ -366,6 +370,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.call,
 					self,
 					&self.changes,
+					&self.offchain_changes,
 					&self.storage_transaction_cache,
 					&self.initialized_block,
 					&self.recorder,
@@ -517,6 +522,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 							call_runtime_at,
 							core_api,
 							changes,
+							offchain_changes,
 							storage_transaction_cache,
 							initialized_block,
 							recorder
@@ -527,6 +533,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								at,
 								params_encoded,
 								changes,
+								offchain_changes,
 								storage_transaction_cache,
 								initialized_block,
 								params.map(|p| {

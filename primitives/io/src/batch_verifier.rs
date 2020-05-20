@@ -1,22 +1,23 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Batch/parallel verification.
 
-use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
+use sp_core::{ed25519, sr25519, ecdsa, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
 
@@ -107,16 +108,59 @@ impl BatchVerifier {
 	) -> bool {
 		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
+
+		if self.sr25519_items.len() >= 128 {
+			let items = std::mem::take(&mut self.sr25519_items);
+			if self.spawn_verification_task(move || Self::verify_sr25519_batch(items)).is_err() {
+				log::debug!(
+					target: "runtime",
+					"Batch-verification returns false because failed to spawn background task.",
+				);
+
+				return false;
+			}
+		}
+
 		true
+	}
+
+	/// Push ecdsa signature to verify.
+	///
+	/// Returns false if some of the pushed signatures before already failed the check
+	/// (in this case it won't verify anything else)
+	pub fn push_ecdsa(
+		&mut self,
+		signature: ecdsa::Signature,
+		pub_key: ecdsa::Public,
+		message: Vec<u8>,
+	) -> bool {
+		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
+
+		if self.spawn_verification_task(move || ecdsa::Pair::verify(&signature, &message, &pub_key)).is_err() {
+			log::debug!(
+				target: "runtime",
+				"Batch-verification returns false because failed to spawn background task.",
+			);
+
+			return false;
+		}
+		true
+	}
+
+	fn verify_sr25519_batch(items: Vec<Sr25519BatchItem>) -> bool {
+		let messages = items.iter().map(|item| &item.message[..]).collect();
+		let signatures = items.iter().map(|item| &item.signature).collect();
+		let pub_keys = items.iter().map(|item| &item.pub_key).collect();
+
+		sr25519::verify_batch(messages, signatures, pub_keys)
 	}
 
 	/// Verify all previously pushed signatures since last call and return
 	/// aggregated result.
 	#[must_use]
 	pub fn verify_and_clear(&mut self) -> bool {
-		use std::sync::{Mutex, Condvar};
-
-		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
+		let pending = std::mem::take(&mut self.pending_tasks);
+		let started = std::time::Instant::now();
 
 		log::trace!(
 			target: "runtime",
@@ -125,25 +169,17 @@ impl BatchVerifier {
 			self.sr25519_items.len(),
 		);
 
-		let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
-		let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
-		let pub_keys = self.sr25519_items.iter().map(|item| &item.pub_key).collect();
-
-		if !sr25519::verify_batch(messages, signatures, pub_keys) {
-			self.sr25519_items.clear();
-
+		if !Self::verify_sr25519_batch(std::mem::take(&mut self.sr25519_items)) {
 			return false;
 		}
 
-		self.sr25519_items.clear();
-
 		if pending.len() > 0 {
-			let pair = Arc::new((Mutex::new(()), Condvar::new()));
-			let pair_clone = pair.clone();
-
+			let (sender, receiver) = std::sync::mpsc::channel();
 			if self.scheduler.spawn_obj(FutureObj::new(async move {
 				futures::future::join_all(pending).await;
-				pair_clone.1.notify_all();
+				sender.send(())
+					.expect("Channel never panics if receiver is live. \
+							Receiver is always live until received this data; qed. ");
 			}.boxed())).is_err() {
 				log::debug!(
 					target: "runtime",
@@ -152,11 +188,17 @@ impl BatchVerifier {
 
 				return false;
 			}
-
-			let (mtx, cond_var) = &*pair;
-			let mtx = mtx.lock().expect("Locking can only fail when the mutex is poisoned; qed");
-			let _ = cond_var.wait(mtx).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
+			if receiver.recv().is_err() {
+				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.");
+				return false;
+			}
 		}
+
+		log::trace!(
+			target: "runtime",
+			"Finalization of batch verification took {} ms",
+			started.elapsed().as_millis(),
+		);
 
 		!self.invalid.swap(false, AtomicOrdering::Relaxed)
 	}

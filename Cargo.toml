@@ -12,10 +12,8 @@ members = [
 	"bin/node/rpc",
 	"bin/node/runtime",
 	"bin/node/testing",
-	"bin/node/transaction-factory",
 	"bin/utils/subkey",
 	"bin/utils/chain-spec-builder",
-	"client",
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
@@ -26,6 +24,7 @@ members = [
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
+	"client/consensus/common",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/uncles",
@@ -46,6 +45,7 @@ members = [
 	"client/network-gossip",
 	"client/offchain",
 	"client/peerset",
+	"client/proposer-metrics",
 	"client/rpc-servers",
 	"client/rpc",
 	"client/rpc-api",
@@ -95,6 +95,7 @@ members = [
 	"frame/society",
 	"frame/staking",
 	"frame/staking/reward-curve",
+	"frame/staking/fuzzer",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
@@ -102,6 +103,7 @@ members = [
 	"frame/support/procedural/tools/derive",
 	"frame/support/test",
 	"frame/system",
+	"frame/system/benchmarking",
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
@@ -180,4 +182,3 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-

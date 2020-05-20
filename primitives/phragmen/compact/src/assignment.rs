@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Code generation for the ratio assignment type.
 
@@ -91,7 +92,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				}
 
 				// defensive only. Since Percent doesn't have `Sub`.
-				let p2 = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
+				let p2 = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
 					Accuracy::one(),
 					p1,
 				);
@@ -115,7 +116,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				let mut inners_parsed = inners
 					.iter()
 					.map(|(ref t_idx, p)| {
-						sum = _phragmen::sp_runtime::traits::Saturating::saturating_add(sum, *p);
+						sum = _phragmen::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
 						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
 						Ok((target, *p))
 					})
@@ -126,7 +127,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				}
 
 				// defensive only. Since Percent doesn't have `Sub`.
-				let p_last = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
+				let p_last = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
 					Accuracy::one(),
 					sum,
 				);
@@ -163,7 +164,7 @@ pub(crate) fn assignment(
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
 			#target_type: _phragmen::codec::Codec + Default + Copy,
 			Accuracy:
-				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_runtime::PerThing +
+				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_arithmetic::PerThing +
 				PartialOrd,
 		>
 		#ident<#voter_type, #target_type, Accuracy>

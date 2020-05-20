@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 #![allow(missing_docs)]
 
 #[cfg(test)]
@@ -27,12 +28,16 @@ use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
-	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
+	HeaderBackend, Result as ClientResult,
+	well_known_cache_keys::{self, Id as CacheKeyId},
+	Info as BlockchainInfo,
 };
-use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
+use sc_client_api::{
+	BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification,
+	backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend,
+};
+use sc_consensus::LongestChain;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client::LongestChain;
-use sc_client::blockchain::HeaderBackend;
 use sc_network::config::Role;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_consensus::import_queue::{
@@ -52,7 +57,7 @@ use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
-
+use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -88,10 +93,18 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-pub type PeersFullClient =
-	sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
-pub type PeersLightClient =
-	sc_client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
+pub type PeersFullClient = Client<
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
+pub type PeersLightClient = Client<
+	substrate_test_runtime_client::LightBackend,
+	substrate_test_runtime_client::LightExecutor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
 
 #[derive(Clone)]
 pub enum PeersClient {
@@ -282,11 +295,11 @@ impl<D> Peer<D> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(header, true);
 			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
 		}
 
+		self.network.update_chain();
 		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}
@@ -599,6 +612,8 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
+			&sp_core::testing::SpawnBlockingExecutor::new(),
+			None,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -611,6 +626,7 @@ pub trait TestNetFactory: Sized {
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
+		network_config.allow_non_globals_in_dht = true;
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
@@ -675,6 +691,8 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
+			&sp_core::testing::SpawnBlockingExecutor::new(),
+			None,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -687,6 +705,7 @@ pub trait TestNetFactory: Sized {
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
+		network_config.allow_non_globals_in_dht = true;
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
@@ -794,10 +813,6 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
-					peer.network.on_block_imported(
-						notification.header,
-						true,
-					);
 					peer.network.service().announce_block(notification.hash, Vec::new());
 				}
 

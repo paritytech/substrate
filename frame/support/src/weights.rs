@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Primitives for transaction weighting.
 //!
@@ -133,7 +134,7 @@ use sp_runtime::{
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
-use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -141,8 +142,36 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 /// Numeric range of a transaction weight.
 pub type Weight = u64;
 
-/// The smallest total weight an extrinsic should have.
-pub const MINIMUM_WEIGHT: Weight = 10_000_000;
+/// These constants are specific to FRAME, and the current implementation of its various components.
+/// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
+pub mod constants {
+	use super::{RuntimeDbWeight, Weight};
+	use crate::parameter_types;
+
+	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
+	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
+	pub const WEIGHT_PER_NANOS:  Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+
+	parameter_types! {
+		/// Importing a block with 0 txs takes ~5 ms
+		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
+		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
+		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
+		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
+		/// the runtime.
+		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 25 * WEIGHT_PER_MICROS,   // ~25 µs @ 200,000 items
+			write: 100 * WEIGHT_PER_MICROS, // ~100 µs @ 200,000 items
+		};
+		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
+		/// are available for brave runtime engineers who may want to try this out as default.
+		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 8 * WEIGHT_PER_MICROS,   // ~8 µs @ 200,000 items
+			write: 50 * WEIGHT_PER_MICROS, // ~50 µs @ 200,000 items
+		};
+	}
+}
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
@@ -250,6 +279,14 @@ impl PostDispatchInfo {
 			0
 		}
 	}
+}
+
+/// Extract the actual weight from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+	match result {
+		Ok(post_info) => &post_info.actual_weight,
+		Err(err) => &err.post_info.actual_weight,
+	}.unwrap_or_else(|| info.weight).min(info.weight)
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {
@@ -586,5 +623,32 @@ mod tests {
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
 		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
+	}
+
+	#[test]
+	fn extract_actual_weight_works() {
+		let pre = DispatchInfo {
+			weight: 1000,
+			.. Default::default()
+		};
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), 7);
+		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), 1000);
+		assert_eq!(
+			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre),
+			9
+		);
+	}
+
+	#[test]
+	fn extract_actual_weight_caps_at_pre_weight() {
+		let pre = DispatchInfo {
+			weight: 1000,
+			.. Default::default()
+		};
+		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), 1000);
+		assert_eq!(
+			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
+			1000
+		);
 	}
 }

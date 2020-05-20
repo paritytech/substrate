@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 use std::{iter::FromIterator, sync::{Arc, Mutex}};
 
 use futures::channel::mpsc::channel;
@@ -162,13 +163,24 @@ sp_api::mock_impl_runtime_apis! {
 	}
 }
 
-#[derive(Default)]
 struct TestNetwork {
+	peer_id: PeerId,
 	// Whenever functions on `TestNetwork` are called, the function arguments are added to the
 	// vectors below.
 	pub put_value_call: Arc<Mutex<Vec<(kad::record::Key, Vec<u8>)>>>,
 	pub get_value_call: Arc<Mutex<Vec<kad::record::Key>>>,
 	pub set_priority_group_call: Arc<Mutex<Vec<(String, HashSet<Multiaddr>)>>>,
+}
+
+impl Default for TestNetwork {
+	fn default() -> Self {
+		TestNetwork {
+			peer_id: PeerId::random(),
+			put_value_call: Default::default(),
+			get_value_call: Default::default(),
+			set_priority_group_call: Default::default(),
+		}
+	}
 }
 
 impl NetworkProvider for TestNetwork {
@@ -193,11 +205,11 @@ impl NetworkProvider for TestNetwork {
 
 impl NetworkStateInfo for TestNetwork {
 	fn local_peer_id(&self) -> PeerId {
-		PeerId::random()
+		self.peer_id.clone()
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
-		vec![]
+		vec!["/ip6/2001:db8::".parse().unwrap()]
 	}
 }
 
@@ -222,34 +234,6 @@ fn new_registers_metrics() {
 	);
 
 	assert!(registry.gather().len() > 0);
-}
-
-#[test]
-fn publish_ext_addresses_puts_record_on_dht() {
-	let (_dht_event_tx, dht_event_rx) = channel(1000);
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
-	let public = key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![public.into()],
-	});
-
-	let mut authority_discovery = AuthorityDiscovery::new(
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
-
-	authority_discovery.publish_ext_addresses().unwrap();
-
-	// Expect authority discovery to put a new record onto the dht.
-	assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
 }
 
 #[test]
@@ -284,15 +268,57 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 }
 
 #[test]
-fn handle_dht_events_with_value_found_should_call_set_priority_group() {
+fn publish_discover_cycle() {
 	let _ = ::env_logger::try_init();
 
-	// Create authority discovery.
+	// Node A publishing its address.
+
+	let (_dht_event_tx, dht_event_rx) = channel(1000);
+
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let node_a_multiaddr = {
+		let peer_id = network.local_peer_id();
+		let address = network.external_addresses().pop().unwrap();
+
+		address.with(libp2p::core::multiaddr::Protocol::P2p(
+			peer_id.into(),
+		))
+	};
+
+	let key_store = KeyStore::new();
+	let node_a_public = key_store
+		.write()
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.unwrap();
+	let test_api = Arc::new(TestApi {
+		authorities: vec![node_a_public.into()],
+	});
+
+	let mut authority_discovery = AuthorityDiscovery::new(
+		test_api,
+		network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Authority(key_store),
+		None,
+	);
+
+	authority_discovery.publish_ext_addresses().unwrap();
+
+	// Expect authority discovery to put a new record onto the dht.
+	assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
+
+	let dht_event = {
+		let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
+		sc_network::DhtEvent::ValueFound(vec![(key, value)])
+	};
+
+	// Node B discovering node A's address.
 
 	let (mut dht_event_tx, dht_event_rx) = channel(1000);
-	let key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
 	let test_api = Arc::new(TestApi {
-		authorities: vec![key_pair.public()],
+		// Make sure node B identifies node A as an authority.
+		authorities: vec![node_a_public.into()],
 	});
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
@@ -306,32 +332,10 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 		None,
 	);
 
-	// Create sample dht event.
-
-	let authority_id_1 = hash_authority_id(key_pair.public().as_ref());
-	let address_1: Multiaddr = "/ip6/2001:db8::".parse().unwrap();
-
-	let mut serialized_addresses = vec![];
-	schema::AuthorityAddresses {
-		addresses: vec![address_1.to_vec()],
-	}
-	.encode(&mut serialized_addresses)
-	.unwrap();
-
-	let signature = key_pair.sign(serialized_addresses.as_ref()).encode();
-	let mut signed_addresses = vec![];
-	schema::SignedAuthorityAddresses {
-		addresses: serialized_addresses,
-		signature,
-	}
-	.encode(&mut signed_addresses)
-	.unwrap();
-
-	let dht_event = sc_network::DhtEvent::ValueFound(vec![(authority_id_1, signed_addresses)]);
 	dht_event_tx.try_send(dht_event).unwrap();
 
-	// Make authority discovery handle the event.
 	let f = |cx: &mut Context<'_>| -> Poll<()> {
+		// Make authority discovery handle the event.
 		if let Poll::Ready(e) = authority_discovery.handle_dht_events(cx) {
 			panic!("Unexpected error: {:?}", e);
 		}
@@ -343,7 +347,7 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 			network.set_priority_group_call.lock().unwrap()[0],
 			(
 				"authorities".to_string(),
-				HashSet::from_iter(vec![address_1.clone()].into_iter())
+				HashSet::from_iter(vec![node_a_multiaddr.clone()].into_iter())
 			)
 		);
 

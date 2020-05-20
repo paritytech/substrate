@@ -1,22 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 /// A `Database` adapter for parity-db.
 
 use sp_database::{Database, Change, Transaction, ColumnId};
+use crate::utils::NUM_COLUMNS;
+use crate::columns;
 
 struct DbAdapter(parity_db::Db);
 
@@ -30,8 +33,13 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 }
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
-pub fn open<H: Clone>(path: &std::path::Path, num_columns: u32) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
-	let db = parity_db::Db::with_columns(path, num_columns as u8)?;
+pub fn open<H: Clone>(path: &std::path::Path) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
+	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
+	let mut state_col = &mut config.columns[columns::STATE as usize];
+	state_col.ref_counted = true;
+	state_col.preimage = true;
+	state_col.uniform = true;
+	let db = parity_db::Db::open(&config)?;
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 

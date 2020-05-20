@@ -1,25 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Subcommand};
+use crate::{chain_spec, service, Cli, Subcommand};
 use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
-use node_transaction_factory::RuntimeAdapter;
-use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli};
-use sc_service::Configuration;
+use sc_cli::{Result, SubstrateCli};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -65,8 +65,6 @@ impl SubstrateCli for Cli {
 
 /// Parse command line arguments into service configuration.
 pub fn run() -> Result<()> {
-	sc_cli::reset_signal_pipe_handler()?;
-
 	let cli = Cli::from_args();
 
 	match &cli.subcommand {
@@ -94,56 +92,10 @@ pub fn run() -> Result<()> {
 				Ok(())
 			}
 		}
-		Some(Subcommand::Factory(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
-
-			runner.sync_run(|config| cmd.run(config))
-		}
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
 
 			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
 		}
-	}
-}
-
-impl CliConfiguration for FactoryCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn import_params(&self) -> Option<&ImportParams> {
-		Some(&self.import_params)
-	}
-}
-
-impl FactoryCmd {
-	fn run(&self, config: Configuration) -> Result<()> {
-		match config.chain_spec.id() {
-			"dev" | "local" => {}
-			_ => return Err("Factory is only supported for development and local testnet.".into()),
-		}
-
-		// Setup tracing.
-		if let Some(tracing_targets) = self.import_params.tracing_targets.as_ref() {
-			let subscriber = sc_tracing::ProfilingSubscriber::new(
-				self.import_params.tracing_receiver.into(),
-				tracing_targets,
-			);
-			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-				return Err(format!("Unable to set global default subscriber {}", e).into());
-			}
-		}
-
-		let factory_state = FactoryState::new(self.blocks, self.transactions);
-
-		let service_builder = new_full_start!(config).0;
-		node_transaction_factory::factory(
-			factory_state,
-			service_builder.client(),
-			service_builder
-				.select_chain()
-				.expect("The select_chain is always initialized by new_full_start!; qed"),
-		)
 	}
 }

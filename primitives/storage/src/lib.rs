@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Primitive types for storage related stuff.
 
@@ -22,8 +23,7 @@
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::vec::Vec;
-use sp_std::ops::{Deref, DerefMut};
+use sp_std::{vec::Vec, ops::{Deref, DerefMut}};
 use ref_cast::RefCast;
 
 /// Storage key.
@@ -92,9 +92,9 @@ pub struct StorageData(
 #[cfg(feature = "std")]
 pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
+/// Child trie storage data.
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
-/// Child trie storage data.
 pub struct StorageChild {
 	/// Child data for storage.
 	pub data: StorageMap,
@@ -103,9 +103,9 @@ pub struct StorageChild {
 	pub child_info: ChildInfo,
 }
 
+/// Struct containing data needed for a storage.
 #[cfg(feature = "std")]
 #[derive(Default, Debug, Clone)]
-/// Struct containing data needed for a storage.
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
@@ -147,6 +147,9 @@ pub mod well_known_keys {
 
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
+
+	/// Prefix of the default child storage keys in the top trie.
+	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:default:";
 
 	/// Whether a key is a child storage key.
 	///
@@ -300,7 +303,7 @@ impl ChildType {
 	/// is one.
 	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
-			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
+			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 		}
 	}
 }
@@ -331,12 +334,15 @@ impl ChildTrieParentKeyId {
 	}
 }
 
-const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
+#[cfg(test)]
+mod tests {
+	use super::*;
 
-#[test]
-fn test_prefix_default_child_info() {
-	let child_info = ChildInfo::new_default(b"any key");
-	let prefix = child_info.child_type().parent_prefix();
-	assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
-	assert!(prefix.starts_with(DEFAULT_CHILD_TYPE_PARENT_PREFIX));
+	#[test]
+	fn test_prefix_default_child_info() {
+		let child_info = ChildInfo::new_default(b"any key");
+		let prefix = child_info.child_type().parent_prefix();
+		assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
+		assert!(prefix.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX));
+	}
 }
