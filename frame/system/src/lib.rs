@@ -1022,7 +1022,6 @@ impl<T: Trait> Module<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::kill();
-		AllExtrinsicsLen::kill();
 
 		// Kill inspectable storage entries in state when `InitKind::Full`.
 		if let InitKind::Full = kind {
@@ -1036,6 +1035,7 @@ impl<T: Trait> Module<T> {
 	pub fn finalize() -> T::Header {
 		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
+		AllExtrinsicsLen::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();

@@ -845,6 +845,10 @@ mod tests {
 			);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
+			let _ = <frame_system::Module<Runtime>>::finalize();
+			// All extrinsics length cleaned on `System::finalize`
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
+
 			// New Block
 			Executive::initialize_block(&Header::new(
 				2,
@@ -854,8 +858,7 @@ mod tests {
 				Digest::default(),
 			));
 
-			// Values cleaned up on `System::initalize`
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 0);
+			// Block weight cleaned up on `System::initialize`
 			assert_eq!(<frame_system::Module<Runtime>>::block_weight().total(), base_block_weight);
 		});
 	}
