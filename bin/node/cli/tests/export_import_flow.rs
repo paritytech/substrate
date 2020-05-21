@@ -122,10 +122,10 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let log = self.run_block_command(Cmd::ExportBlocks, fmt_opt, false);
 
 		// Using regex to find out how many block we exported.
-		let re = Regex::new(r"Exporting blocks from #\d to #(?P<to>\d)").unwrap();
+		let re = Regex::new(r"Exporting blocks from #\d* to #(?P<exported_blocks>\d*)").unwrap();
 		let caps = re.captures(&log).unwrap();
 		// Saving the number of blocks we've exported for further use.
-		self.num_exported_blocks = Some(caps["to"].parse::<u64>().unwrap());
+		self.num_exported_blocks = Some(caps["exported_blocks"].parse::<u64>().unwrap());
 
 		let metadata = fs::metadata(&self.exported_blocks_file).unwrap();
 		assert!(metadata.len() > 0, "file exported_blocks should not be empty");
@@ -139,7 +139,6 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let log = self.run_block_command(Cmd::ImportBlocks, fmt_opt, expected_to_fail);
 
 		if !expected_to_fail {
-			dbg!(&log);
 			// Using regex to find out how much block we imported,
 			// and what's the best current block.
 			let re = Regex::new(r"Imported (?P<imported>\d*) blocks. Best: #(?P<best>\d*)").unwrap();
@@ -152,9 +151,10 @@ impl<'a> ExportImportRevertExecutor<'a> {
 				best,
 				"numbers of blocks imported and best number differs"
 			);
-			assert_eq!(best,
-				self.num_exported_blocks.unwrap(),
-				"best block number and number of blocks exported should not differ"
+			assert_eq!(
+				best,
+				self.num_exported_blocks.expect("number of exported blocks cannot be None; qed"),
+				"best block number and number of expected blocks should not differ"
 			);
 		}
 		self.num_exported_blocks = None;
