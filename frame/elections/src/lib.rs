@@ -255,7 +255,7 @@ decl_storage! {
 			map hasher(twox_64_concat) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
 		///
-		/// TWOX-NOTE: OKAY ― `SetIndex` is not controlled by an attacker.
+		/// TWOX-NOTE: OKAY ― `SetIndex` is not user-controlled data.
 		pub Voters get(fn voters): map hasher(twox_64_concat) SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
 		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
