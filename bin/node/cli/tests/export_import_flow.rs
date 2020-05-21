@@ -58,7 +58,10 @@ impl ToString for Cmd {
 }
 
 impl<'a> ExportImportRevertExecutor<'a> {
-	fn new(base_path: &'a TempDir, exported_blocks_file: &'a PathBuf, db_path: &'a PathBuf) -> Self {
+	fn new(base_path: &'a TempDir,
+		exported_blocks_file: &'a PathBuf,
+		db_path: &'a PathBuf
+	) -> Self {
 		Self {
 			base_path,
 			exported_blocks_file,
@@ -68,7 +71,11 @@ impl<'a> ExportImportRevertExecutor<'a> {
 	}
 
 	/// Helper method to run a command. Returns a string corresponding to what has been logged.
-	fn run_block_command(&self, command: Cmd, format_opt: FormatOpt, expected_to_fail: bool) -> String {
+	fn run_block_command(&self,
+		command: Cmd,
+		format_opt: FormatOpt,
+		expected_to_fail: bool
+	) -> String {
 		let cmd = command.to_string();
 		// Adding "--binary" if need be.
 		let arguments: Vec<&str> = match format_opt {
@@ -126,13 +133,15 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let _ = fs::remove_dir_all(&self.db_path);
 	}
 
-	/// Runs the `import-blocks` command, asserting that an error was found or not depending on `expected_to_fail`.
+	/// Runs the `import-blocks` command, asserting that an error was found or 
+	/// not depending on `expected_to_fail`.
 	fn run_import(&mut self, fmt_opt: FormatOpt, expected_to_fail: bool) {
 		let log = self.run_block_command(Cmd::ImportBlocks, fmt_opt, expected_to_fail);
 
 		if !expected_to_fail {
 			dbg!(&log);
-			// Using regex to find out how much block we imported, and what's the best current block.
+			// Using regex to find out how much block we imported,
+			// and what's the best current block.
 			let re = Regex::new(r"Imported (?P<imported>\d) blocks. Best: #(?P<best>\d)").unwrap();
 			let caps = re.captures(&log).expect("capture should have succeeded");
 			let imported = caps["imported"].parse::<u64>().unwrap();
