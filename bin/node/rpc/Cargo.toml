@@ -30,3 +30,4 @@ sp-consensus = { version = "0.8.0-dev", path = "../../../primitives/consensus/co
 sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
 sc-finality-grandpa = { version = "0.8.0-dev", path = "../../../client/finality-grandpa" }
 sc-finality-grandpa-rpc = { version = "0.8.0-dev", path = "../../../client/finality-grandpa/rpc" }
+sc-rpc-api = { version = "0.8.0-dev", path = "../../../client/rpc-api" }
