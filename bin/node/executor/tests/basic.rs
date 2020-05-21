@@ -26,7 +26,7 @@ use frame_support::{
 };
 use sp_core::{NeverNativeValue, traits::Externalities, storage::well_known_keys};
 use sp_runtime::{
-	ApplyExtrinsicResult, Fixed128,
+	ApplyExtrinsicResult, Fixed128, FixedPointNumber,
 	traits::Hash as HashT,
 	transaction_validity::InvalidTransaction,
 };
@@ -61,7 +61,7 @@ fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed128) -> Balance {
 	let weight = default_transfer_call().get_dispatch_info().weight;
 	let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
 
-	base_fee + fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee)
+	base_fee + fee_multiplier.saturating_mul_acc_int(length_fee + weight_fee)
 }
 
 fn xt() -> UncheckedExtrinsic {

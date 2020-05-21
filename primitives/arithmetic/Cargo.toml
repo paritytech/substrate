@@ -20,12 +20,12 @@ num-traits = { version = "0.2.8", default-features = false }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-debug-derive = { version = "2.0.0-dev", default-features = false, path = "../../primitives/debug-derive" }
-primitive-types = { version = "0.7.0", default-features = false }
 
 [dev-dependencies]
 rand = "0.7.2"
 criterion = "0.3"
 serde_json = "1.0"
+primitive-types = "0.7.0"
 
 [features]
 default = ["std"]
@@ -35,7 +35,6 @@ std = [
 	"sp-std/std",
 	"serde",
 	"sp-debug-derive/std",
-	"primitive-types/std",
 ]
 
 [[bench]]
