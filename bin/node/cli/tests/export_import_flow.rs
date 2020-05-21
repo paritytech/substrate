@@ -43,7 +43,7 @@ enum FormatOpt {
 }
 
 /// Command corresponding to the different commands we would like to run.
-enum Cmd {
+enum Command {
 	ExportBlocks,
 	ImportBlocks,
 }
