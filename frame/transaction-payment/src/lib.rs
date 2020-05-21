@@ -107,8 +107,9 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
-	/// As this module is not and cannot be aware of the internals of a signed extension, it only
-	/// interprets them as some encoded value and takes their length into account.
+	/// This module is not and cannot be aware of the internals of a signed extension, for example
+	/// a tip. It only interprets the extrinsic as some encoded value and accounts for its weight
+	/// and length, the runtime's extrinsic base weight, and the current fee multiplier.
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
@@ -137,17 +138,24 @@ impl<T: Trait> Module<T> {
 	/// Compute the final fee value for a particular transaction.
 	///
 	/// The final fee is composed of:
-	///   - _base_fee_: This is the minimum amount a user pays for a transaction.
-	///   - _len_fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight_fee_: This amount is computed based on the weight of the transaction. Unlike
-	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
-	///      and the time it consumes.
-	///   - _targeted_fee_adjustment_: This is a multiplier that can tune the final fee based on
+	///   - `base_fee`: This is the minimum amount a user pays for a transaction. It is declared
+	///     as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
+	///   - `len_fee`: The length fee, the amount paid for the encoded length (in bytes) of the
+	///     transaction.
+	///   - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
+	///     accounts for the execution time of a transaction.
+	///   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
 	///     the congestion of the network.
-	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
-	///      transactions can have a tip.
+	///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
+	///     signed transactions can have a tip.
 	///
-	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
+	/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
+	/// the minimum fee for a transaction to be included in a block.
+	///
+	/// ```ignore
+	/// inclusion_fee = base_fee + targeted_fee_adjustment * (len_fee + weight_fee);
+	/// final_fee = inclusion_fee + tip;
+	/// ```
 	pub fn compute_fee(
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
