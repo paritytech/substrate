@@ -42,7 +42,7 @@ pub mod keccak {
 	use hash256_std_hasher::Hash256StdHasher;
 	use crate::hash::H256;
 
-	/// Concrete implementation of Hasher using Blake2b 256-bit hashes
+	/// Concrete implementation of Hasher using Keccak 256-bit hashes
 	#[derive(Debug)]
 	pub struct KeccakHasher;
 
