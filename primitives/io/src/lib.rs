@@ -42,7 +42,7 @@ use sp_core::{
 };
 
 use sp_core::{
-	crypto::KeyTypeId, ed25519, sr25519, H256, LogLevel,
+	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -543,6 +543,80 @@ pub trait Crypto {
 	/// signature version.
 	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
 		sr25519::Pair::verify_deprecated(sig, msg, pubkey)
+	}
+
+	/// Returns all `ecdsa` public keys for the given key id from the keystore.
+	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.ecdsa_public_keys(id)
+	}
+
+	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
+	/// store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.write()
+			.ecdsa_generate_new(id, seed)
+			.expect("`ecdsa_generate` failed")
+	}
+
+	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
+	/// key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8],
+	) -> Option<ecdsa::Signature> {
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.read()
+			.sign_with(id, &pub_key.into(), msg)
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.ok()
+	}
+
+	/// Verify `ecdsa` signature.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	/// If no batching verification extension registered, this will return the result
+	/// of verification immediately. If batching verification extension is registered
+	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
+	/// signatures.
+	fn ecdsa_verify(
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
+		// `with_externalities`.
+		//
+		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
+		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
+		let evaluated = sp_externalities::with_externalities(|mut instance|
+			instance.extension::<VerificationExt>().map(
+				|extension| extension.push_ecdsa(
+					sig.clone(),
+					pub_key.clone(),
+					msg.to_vec(),
+				)
+			)
+		);
+
+		match evaluated {
+			Some(Some(val)) => val,
+			_ => ecdsa::Pair::verify(sig, msg, pub_key),
+		}
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.

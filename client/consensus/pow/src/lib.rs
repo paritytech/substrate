@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Proof of work consensus for Substrate.
 //!
 //! To use this engine, you can need to have a struct that implements
@@ -54,6 +55,7 @@ use sp_consensus::import_queue::{
 	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
 };
 use codec::{Encode, Decode};
+use prometheus_endpoint::Registry;
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
@@ -465,6 +467,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnBlocking,
+	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
@@ -483,6 +486,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		justification_import,
 		finality_proof_import,
 		spawner,
+		registry,
 	))
 }
 

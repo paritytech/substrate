@@ -17,7 +17,7 @@
 
 //! Structures and functions required to build changes trie for given block.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
@@ -33,7 +33,7 @@ use crate::{
 		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
 	},
 };
-use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey};
+use sp_core::storage::{ChildInfo, PrefixedStorageKey};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -106,20 +106,18 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		H: Hasher + 'a,
 		Number: BlockNumber,
 {
-
-	let mut children_info = BTreeSet::<ChildInfo>::new();
 	let mut children_result = BTreeMap::new();
-	for (_storage_key, (_map, child_info)) in changes.prospective.children_default.iter()
-		.chain(changes.committed.children_default.iter()) {
-		children_info.insert(child_info.clone());
-	}
-	for child_info in children_info {
+
+	for child_info in changes.child_infos() {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
 			storage_key: child_info.prefixed_storage_key(),
 		};
 
-		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(child_info))?;
+		let iter = prepare_extrinsics_input_inner(
+			backend, block, changes,
+			Some(child_info.clone())
+		)?;
 		children_result.insert(child_index, iter);
 	}
 
@@ -139,19 +137,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective) = if let Some(child_info) = child_info.as_ref() {
-		match child_info.child_type() {
-			ChildType::ParentKeyId => (
-				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.0),
-				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.0),
-			),
-		}
-	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top))
-	};
-	committed.iter().flat_map(|c| c.iter())
-		.chain(prospective.iter().flat_map(|c| c.iter()))
-		.filter(|( _, v)| v.extrinsics.is_some())
+	changes.changes(child_info.as_ref())
+		.filter(|( _, v)| v.extrinsics().is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
 				Entry::Vacant(entry) => {
@@ -172,9 +159,10 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 						}
 					};
 
-					let extrinsics = v.extrinsics.as_ref()
+					let extrinsics = v.extrinsics()
 						.expect("filtered by filter() call above; qed")
-						.iter().cloned().collect();
+						.cloned()
+						.collect();
 					entry.insert((ExtrinsicIndex {
 						block: block.clone(),
 						key: k.to_vec(),
@@ -185,9 +173,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND we are checking it before insertion
 					let extrinsics = &mut entry.get_mut().1;
 					extrinsics.extend(
-						v.extrinsics.as_ref()
+						v.extrinsics()
 							.expect("filtered by filter() call above; qed")
-							.iter()
 							.cloned()
 					);
 					extrinsics.sort_unstable();
@@ -341,13 +328,10 @@ fn prepare_digest_input<'a, H, Number>(
 
 #[cfg(test)]
 mod test {
-	use codec::Encode;
 	use sp_core::Blake2Hasher;
-	use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::InMemoryBackend;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
-	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
@@ -367,8 +351,6 @@ mod test {
 			(vec![105], vec![255]),
 		].into_iter().collect::<std::collections::BTreeMap<_, _>>().into();
 		let prefixed_child_trie_key1 = child_info_1.prefixed_storage_key();
-		let child_trie_key1 = child_info_1.storage_key().to_vec();
-		let child_trie_key2 = child_info_2.storage_key().to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
 			(zero + 1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
@@ -418,58 +400,41 @@ mod test {
 				]),
 			]),
 		]);
-		let changes = OverlayedChanges {
-			prospective: OverlayedChangeSet { top: vec![
-				(vec![100], OverlayedValue {
-					value: Some(vec![200]),
-					extrinsics: Some(vec![0, 2].into_iter().collect())
-				}),
-				(vec![103], OverlayedValue {
-					value: None,
-					extrinsics: Some(vec![0, 1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-				children_default: vec![
-					(child_trie_key1.clone(), (vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect(), child_info_1.to_owned())),
-					(child_trie_key2, (vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![200]),
-							extrinsics: Some(vec![0, 2].into_iter().collect())
-						})
-					].into_iter().collect(), child_info_2.to_owned())),
-				].into_iter().collect()
-			},
-			committed: OverlayedChangeSet { top: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: None,
-				}),
-				(vec![100], OverlayedValue {
-					value: Some(vec![202]),
-					extrinsics: Some(vec![3].into_iter().collect())
-				}),
-				(vec![101], OverlayedValue {
-					value: Some(vec![203]),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-				children_default: vec![
-					(child_trie_key1, (vec![
-						(vec![100], OverlayedValue {
-							value: Some(vec![202]),
-							extrinsics: Some(vec![3].into_iter().collect())
-						})
-					].into_iter().collect(), child_info_1.to_owned())),
-				].into_iter().collect(),
-			},
-			collect_extrinsics: true,
-			stats: Default::default(),
-		};
+
+		let mut changes = OverlayedChanges::default();
+		changes.set_collect_extrinsics(true);
+
+		changes.set_extrinsic_index(1);
+		changes.set_storage(vec![101], Some(vec![203]));
+
+		changes.set_extrinsic_index(3);
+		changes.set_storage(vec![100], Some(vec![202]));
+		changes.set_child_storage(&child_info_1, vec![100], Some(vec![202]));
+
+		changes.commit_prospective();
+
+		changes.set_extrinsic_index(0);
+		changes.set_storage(vec![100], Some(vec![0]));
+		changes.set_extrinsic_index(2);
+		changes.set_storage(vec![100], Some(vec![200]));
+
+		changes.set_extrinsic_index(0);
+		changes.set_storage(vec![103], Some(vec![0]));
+		changes.set_extrinsic_index(1);
+		changes.set_storage(vec![103], None);
+
+		changes.set_extrinsic_index(0);
+		changes.set_child_storage(&child_info_1, vec![100], Some(vec![0]));
+		changes.set_extrinsic_index(2);
+		changes.set_child_storage(&child_info_1, vec![100], Some(vec![200]));
+
+		changes.set_extrinsic_index(0);
+		changes.set_child_storage(&child_info_2, vec![100], Some(vec![0]));
+		changes.set_extrinsic_index(2);
+		changes.set_child_storage(&child_info_2, vec![100], Some(vec![200]));
+
+		changes.set_extrinsic_index(1);
+
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
 		(backend, storage, changes, config)
@@ -667,10 +632,7 @@ mod test {
 			let (backend, storage, mut changes, config) = prepare_for_build(zero);
 
 			// 110: missing from backend, set to None in overlay
-			changes.prospective.top.insert(vec![110], OverlayedValue {
-				value: None,
-				extrinsics: Some(vec![1].into_iter().collect())
-			});
+			changes.set_storage(vec![110], None);
 
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(

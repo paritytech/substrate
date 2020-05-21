@@ -22,6 +22,7 @@ use mock::*;
 use frame_support::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
 use sp_core::crypto::IsWrappedBy;
+use sp_consensus_babe::AllowedSlots;
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -149,4 +150,36 @@ fn can_predict_next_epoch_change() {
 		assert_eq!(Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
 		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), Some(5 + 2));
 	})
+}
+
+#[test]
+fn can_enact_next_config() {
+	new_test_ext(0).1.execute_with(|| {
+		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		// this sets the genesis slot to 6;
+		go_to_block(1, 6);
+		assert_eq!(Babe::genesis_slot(), 6);
+		assert_eq!(Babe::current_slot(), 6);
+		assert_eq!(Babe::epoch_index(), 0);
+		go_to_block(2, 7);
+
+		Babe::plan_config_change(NextConfigDescriptor::V1 {
+			c: (1, 4),
+			allowed_slots: AllowedSlots::PrimarySlots,
+		});
+
+		progress_to_block(4);
+		Babe::on_finalize(9);
+		let header = System::finalize();
+
+		let consensus_log = sp_consensus_babe::ConsensusLog::NextConfigData(
+			sp_consensus_babe::digests::NextConfigDescriptor::V1 {
+				c: (1, 4),
+				allowed_slots: AllowedSlots::PrimarySlots,
+			}
+		);
+		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
+
+		assert_eq!(header.digest.logs[2], consensus_digest.clone())
+	});
 }
