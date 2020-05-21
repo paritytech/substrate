@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Basic implementation of block-authoring logic.
 //!
 //! # Example
@@ -29,7 +30,7 @@
 //! # let client = Arc::new(substrate_test_runtime_client::new());
 //! # let txpool = Arc::new(BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())), None).0);
 //! // The first step is to create a `ProposerFactory`.
-//! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+//! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 //!
 //! // From this factory, we create a `Proposer`.
 //! let proposer = proposer_factory.init(

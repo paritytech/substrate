@@ -34,7 +34,7 @@ use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::task::{Context, Poll};
-use std::{borrow::Cow, cmp, collections::hash_map::Entry};
+use std::{borrow::Cow, cmp, collections::{hash_map::Entry, VecDeque}};
 use std::{error, mem, pin::Pin, str, time::Duration};
 use wasm_timer::Instant;
 
@@ -109,6 +109,9 @@ use wasm_timer::Instant;
 /// tries to connect, the connection is accepted. A ban only delays dialing attempts.
 ///
 pub struct GenericProto {
+	/// `PeerId` of the local node.
+	local_peer_id: PeerId,
+
 	/// Legacy protocol to open with peers. Never modified.
 	legacy_protocol: RegisteredProtocol,
 
@@ -132,7 +135,7 @@ pub struct GenericProto {
 	next_incoming_index: sc_peerset::IncomingIndex,
 
 	/// Events to produce from `poll()`.
-	events: SmallVec<[NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>; 4]>,
+	events: VecDeque<NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>>,
 
 	/// If `Some`, report the message queue sizes on this `Histogram`.
 	queue_size_report: Option<HistogramVec>,
@@ -321,6 +324,7 @@ impl GenericProto {
 	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
 	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
+		local_peer_id: PeerId,
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		peerset: sc_peerset::Peerset,
@@ -329,13 +333,14 @@ impl GenericProto {
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
 
 		GenericProto {
+			local_peer_id,
 			legacy_protocol,
 			notif_protocols: Vec::new(),
 			peerset,
 			peers: FnvHashMap::default(),
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
-			events: SmallVec::new(),
+			events: VecDeque::new(),
 			queue_size_report,
 		}
 	}
@@ -369,7 +374,7 @@ impl GenericProto {
 
 		// Send an event to all the peers we're connected to, updating the handshake message.
 		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_connected()) {
-			self.events.push(NetworkBehaviourAction::NotifyHandler {
+			self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 				peer_id: peer_id.clone(),
 				handler: NotifyHandler::All,
 				event: NotifsHandlerIn::UpdateHandshake {
@@ -441,7 +446,7 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
 				self.peerset.dropped(peer_id.clone());
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Disable,
@@ -466,7 +471,7 @@ impl GenericProto {
 
 				inc.alive = false;
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", peer_id);
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Disable,
@@ -507,9 +512,18 @@ impl GenericProto {
 	///
 	/// Can be called multiple times with the same `PeerId`s.
 	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.peerset.discovered(peer_ids.map(|peer_id| {
+		let local_peer_id = &self.local_peer_id;
+		self.peerset.discovered(peer_ids.filter_map(|peer_id| {
+			if peer_id == *local_peer_id {
+				error!(
+					target: "sub-libp2p",
+					"Discovered our own identity. This is a minor inconsequential bug."
+				);
+				return None;
+			}
+
 			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
+			Some(peer_id)
 		}));
 	}
 
@@ -548,7 +562,7 @@ impl GenericProto {
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 
-		self.events.push(NetworkBehaviourAction::NotifyHandler {
+		self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 			peer_id: target.clone(),
 			handler: NotifyHandler::One(conn),
 			event: NotifsHandlerIn::SendNotification {
@@ -578,7 +592,7 @@ impl GenericProto {
 
 		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
-		self.events.push(NetworkBehaviourAction::NotifyHandler {
+		self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 			peer_id: target.clone(),
 			handler: NotifyHandler::One(conn),
 			event: NotifsHandlerIn::SendLegacy {
@@ -600,7 +614,7 @@ impl GenericProto {
 				// If there's no entry in `self.peers`, start dialing.
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", entry.key());
-				self.events.push(NetworkBehaviourAction::DialPeer {
+				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: entry.key().clone(),
 					condition: DialPeerCondition::Disconnected
 				});
@@ -624,7 +638,7 @@ impl GenericProto {
 			PeerState::Banned { .. } => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", occ_entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
-				self.events.push(NetworkBehaviourAction::DialPeer {
+				self.events.push_back(NetworkBehaviourAction::DialPeer {
 					peer_id: occ_entry.key().clone(),
 					condition: DialPeerCondition::Disconnected
 				});
@@ -648,7 +662,7 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Enabling connections.",
 					occ_entry.key());
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: occ_entry.key().clone(),
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Enable,
@@ -667,7 +681,7 @@ impl GenericProto {
 						incoming for incoming peer")
 				}
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", occ_entry.key());
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: occ_entry.key().clone(),
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Enable,
@@ -732,7 +746,7 @@ impl GenericProto {
 			PeerState::Enabled { open } => {
 				debug!(target: "sub-libp2p", "PSM => Drop({:?}): Disabling connections.", entry.key());
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", entry.key());
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: entry.key().clone(),
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Disable,
@@ -787,7 +801,7 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Enabling connections.",
 					index, incoming.peer_id);
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", incoming.peer_id);
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: incoming.peer_id,
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Enable,
@@ -820,7 +834,7 @@ impl GenericProto {
 				debug!(target: "sub-libp2p", "PSM => Reject({:?}, {:?}): Rejecting connections.",
 					index, incoming.peer_id);
 				debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", incoming.peer_id);
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: incoming.peer_id,
 					handler: NotifyHandler::All,
 					event: NotifsHandlerIn::Disable,
@@ -867,7 +881,7 @@ impl NetworkBehaviour for GenericProto {
 					peer_id, endpoint
 				);
 				*st = PeerState::Enabled { open: SmallVec::new() };
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::One(*conn),
 					event: NotifsHandlerIn::Enable
@@ -911,7 +925,7 @@ impl NetworkBehaviour for GenericProto {
 					"Libp2p => Connected({},{:?}): Not requested by PSM, disabling.",
 					peer_id, endpoint);
 				*st = PeerState::Disabled { open: SmallVec::new(), banned_until };
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::One(*conn),
 					event: NotifsHandlerIn::Disable
@@ -927,7 +941,7 @@ impl NetworkBehaviour for GenericProto {
 			(PeerState::Enabled { .. }, _) => {
 				debug!(target: "sub-libp2p", "Handler({},{:?}) <= Enable secondary connection",
 					peer_id, conn);
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::One(*conn),
 					event: NotifsHandlerIn::Enable
@@ -937,7 +951,7 @@ impl NetworkBehaviour for GenericProto {
 			(PeerState::Disabled { .. }, _) | (PeerState::DisabledPendingEnable { .. }, _) => {
 				debug!(target: "sub-libp2p", "Handler({},{:?}) <= Disable secondary connection",
 					peer_id, conn);
-				self.events.push(NetworkBehaviourAction::NotifyHandler {
+				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::One(*conn),
 					event: NotifsHandlerIn::Disable
@@ -965,7 +979,7 @@ impl NetworkBehaviour for GenericProto {
 						reason: "Disconnected by libp2p".into(),
 					};
 
-					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				}
 			}
 			_ => {}
@@ -1130,7 +1144,7 @@ impl NetworkBehaviour for GenericProto {
 						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
 						debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", source);
 						self.peerset.dropped(source.clone());
-						self.events.push(NetworkBehaviourAction::NotifyHandler {
+						self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 							peer_id: source.clone(),
 							handler: NotifyHandler::All,
 							event: NotifsHandlerIn::Disable,
@@ -1202,7 +1216,7 @@ impl NetworkBehaviour for GenericProto {
 						reason,
 						peer_id: source,
 					};
-					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				} else {
 					debug!(target: "sub-libp2p", "Secondary connection closed custom protocol.");
 				}
@@ -1240,7 +1254,7 @@ impl NetworkBehaviour for GenericProto {
 				if first {
 					debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
 					let event = GenericProtoOut::CustomProtocolOpen { peer_id: source };
-					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				} else {
 					debug!(target: "sub-libp2p", "Secondary connection opened custom protocol.");
 				}
@@ -1255,7 +1269,7 @@ impl NetworkBehaviour for GenericProto {
 					message,
 				};
 
-				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
 			NotifsHandlerOut::Notification { protocol_name, message } => {
@@ -1273,7 +1287,7 @@ impl NetworkBehaviour for GenericProto {
 					message,
 				};
 
-				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
 			NotifsHandlerOut::Clogged { messages } => {
@@ -1282,7 +1296,7 @@ impl NetworkBehaviour for GenericProto {
 				trace!(target: "sub-libp2p", "External API <= Clogged({:?})", source);
 				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
 					pretty large", source);
-				self.events.push(NetworkBehaviourAction::GenerateEvent(GenericProtoOut::Clogged {
+				self.events.push_back(NetworkBehaviourAction::GenerateEvent(GenericProtoOut::Clogged {
 					peer_id: source,
 					messages,
 				}));
@@ -1321,6 +1335,10 @@ impl NetworkBehaviour for GenericProto {
 			Self::OutEvent,
 		>,
 	> {
+		if let Some(event) = self.events.pop_front() {
+			return Poll::Ready(event);
+		}
+
 		// Poll for instructions from the peerset.
 		// Note that the peerset is a *best effort* crate, and we have to use defensive programming.
 		loop {
@@ -1354,7 +1372,7 @@ impl NetworkBehaviour for GenericProto {
 					}
 
 					debug!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
-					self.events.push(NetworkBehaviourAction::DialPeer {
+					self.events.push_back(NetworkBehaviourAction::DialPeer {
 						peer_id: peer_id.clone(),
 						condition: DialPeerCondition::Disconnected
 					});
@@ -1376,7 +1394,7 @@ impl NetworkBehaviour for GenericProto {
 					}
 
 					debug!(target: "sub-libp2p", "Handler({:?}) <= Enable (ban expired)", peer_id);
-					self.events.push(NetworkBehaviourAction::NotifyHandler {
+					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 						peer_id: peer_id.clone(),
 						handler: NotifyHandler::All,
 						event: NotifsHandlerIn::Enable,
@@ -1388,8 +1406,8 @@ impl NetworkBehaviour for GenericProto {
 			}
 		}
 
-		if !self.events.is_empty() {
-			return Poll::Ready(self.events.remove(0))
+		if let Some(event) = self.events.pop_front() {
+			return Poll::Ready(event);
 		}
 
 		Poll::Pending

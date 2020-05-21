@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use crate::{
 	ExHashT,
 	chain::{Client, FinalityProofProvider},
@@ -363,6 +364,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
+		local_peer_id: PeerId,
 		chain: Arc<dyn Client<B>>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
@@ -396,7 +398,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let mut behaviour = GenericProto::new(protocol_id.clone(), versions, peerset, queue_size_report);
+		let mut behaviour = GenericProto::new(
+			local_peer_id,
+			protocol_id.clone(),
+			versions,
+			peerset,
+			queue_size_report
+		);
 
 		let mut legacy_equiv_by_name = HashMap::new();
 
@@ -541,30 +549,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.update_chain_info(&info.best_hash, info.best_number);
 	}
 
-	/// Accepts a response from the legacy substream and determines what the corresponding
-	/// request was.
-	fn handle_response(
-		&mut self,
-		who: PeerId,
-		response: &message::BlockResponse<B>
-	) -> Option<message::BlockRequest<B>> {
-		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
-			if peer.obsolete_requests.remove(&response.id).is_some() {
-				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", who, response.id);
-				return None;
-			}
-			// Clear the request. If the response is invalid peer will be disconnected anyway.
-			let request = peer.block_request.take();
-			if request.as_ref().map_or(false, |(_, r)| r.id == response.id) {
-				return request.map(|(_, r)| r)
-			}
-			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id);
-			self.peerset_handle.report_peer(who.clone(), rep::UNEXPECTED_RESPONSE);
-			self.behaviour.disconnect_peer(&who);
-		}
-		None
-	}
-
 	fn update_peer_info(&mut self, who: &PeerId) {
 		if let Some(info) = self.sync.peer_info(who) {
 			if let Some(ref mut peer) = self.context_data.peers.get_mut(who) {
@@ -602,11 +586,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::Status(s) => return self.on_status_message(who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
-				if let Some(request) = self.handle_response(who.clone(), &r) {
-					let outcome = self.on_block_response(who.clone(), request, r);
-					self.update_peer_info(&who);
-					return outcome
-				}
+				let outcome = self.on_block_response(who.clone(), r);
+				self.update_peer_info(&who);
+				return outcome
 			},
 			GenericMessage::BlockAnnounce(announce) => {
 				let outcome = self.on_block_announce(who.clone(), announce);
@@ -696,6 +678,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			message,
 			legacy,
 		);
+	}
+
+	fn update_peer_request(&mut self, who: &PeerId, request: &mut message::BlockRequest<B>) {
+		update_peer_request::<B, H>(&mut self.context_data.peers, who, request)
 	}
 
 	/// Called when a new peer is connected
@@ -837,9 +823,34 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_block_response(
 		&mut self,
 		peer: PeerId,
-		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) -> CustomMessageOutcome<B> {
+		let request = if let Some(ref mut p) = self.context_data.peers.get_mut(&peer) {
+			if p.obsolete_requests.remove(&response.id).is_some() {
+				trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
+				return CustomMessageOutcome::None;
+			}
+			// Clear the request. If the response is invalid peer will be disconnected anyway.
+			match p.block_request.take() {
+				Some((_, request)) if request.id == response.id => request,
+				Some(_) =>  {
+					trace!(target: "sync", "Ignoring obsolete block response packet from {} ({})", peer, response.id);
+					return CustomMessageOutcome::None;
+				}
+				None => {
+					trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
+					self.behaviour.disconnect_peer(&peer);
+					self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
+					return CustomMessageOutcome::None;
+				}
+			}
+		} else {
+			trace!(target: "sync", "Unexpected response packet from unknown peer {}", peer);
+			self.behaviour.disconnect_peer(&peer);
+			self.peerset_handle.report_peer(peer, rep::UNEXPECTED_RESPONSE);
+			return CustomMessageOutcome::None;
+		};
+
 		let blocks_range = || match (
 			response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 			response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
@@ -884,8 +895,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			match self.sync.on_block_data(&peer, Some(request), response) {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
-				Ok(sync::OnBlockData::Request(peer, req)) => {
+				Ok(sync::OnBlockData::Request(peer, mut req)) => {
 					if self.use_new_block_requests_protocol {
+						self.update_peer_request(&peer, &mut req);
 						CustomMessageOutcome::BlockRequest {
 							target: peer,
 							request: req,
@@ -1069,8 +1081,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		if info.roles.is_full() {
 			match self.sync.new_peer(who.clone(), info.best_hash, info.best_number) {
 				Ok(None) => (),
-				Ok(Some(req)) => {
+				Ok(Some(mut req)) => {
 					if self.use_new_block_requests_protocol {
+						self.update_peer_request(&who, &mut req);
 						self.pending_messages.push_back(CustomMessageOutcome::BlockRequest {
 							target: who.clone(),
 							request: req,
@@ -1406,8 +1419,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			Ok(sync::OnBlockData::Import(origin, blocks)) => {
 				CustomMessageOutcome::BlockImport(origin, blocks)
 			},
-			Ok(sync::OnBlockData::Request(peer, req)) => {
+			Ok(sync::OnBlockData::Request(peer, mut req)) => {
 				if self.use_new_block_requests_protocol {
+					self.update_peer_request(&peer, &mut req);
 					CustomMessageOutcome::BlockRequest {
 						target: peer,
 						request: req,
@@ -1513,8 +1527,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		);
 		for result in results {
 			match result {
-				Ok((id, req)) => {
+				Ok((id, mut req)) => {
 					if self.use_new_block_requests_protocol {
+						update_peer_request(&mut self.context_data.peers, &id, &mut req);
 						self.pending_messages.push_back(CustomMessageOutcome::BlockRequest {
 							target: id,
 							request: req,
@@ -1928,6 +1943,22 @@ fn send_request<B: BlockT, H: ExHashT>(
 	send_message::<B>(behaviour, stats, who, None, message)
 }
 
+fn update_peer_request<B: BlockT, H: ExHashT>(
+	peers: &mut HashMap<PeerId, Peer<B, H>>,
+	who: &PeerId,
+	request: &mut message::BlockRequest<B>,
+) {
+	if let Some(ref mut peer) = peers.get_mut(who) {
+		request.id = peer.next_request_id;
+		peer.next_request_id += 1;
+		if let Some((timestamp, request)) = peer.block_request.take() {
+			trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
+			peer.obsolete_requests.insert(request.id, timestamp);
+		}
+		peer.block_request = Some((Instant::now(), request.clone()));
+	}
+}
+
 fn send_message<B: BlockT>(
 	behaviour: &mut GenericProto,
 	stats: &mut HashMap<&'static str, PacketStats>,
@@ -2005,8 +2036,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			self.propagate_extrinsics();
 		}
 
-		for (id, r) in self.sync.block_requests() {
+		for (id, mut r) in self.sync.block_requests() {
 			if self.use_new_block_requests_protocol {
+				update_peer_request(&mut self.context_data.peers, &id, &mut r);
 				let event = CustomMessageOutcome::BlockRequest {
 					target: id.clone(),
 					request: r,
@@ -2022,8 +2054,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				)
 			}
 		}
-		for (id, r) in self.sync.justification_requests() {
+		for (id, mut r) in self.sync.justification_requests() {
 			if self.use_new_block_requests_protocol {
+				update_peer_request(&mut self.context_data.peers, &id, &mut r);
 				let event = CustomMessageOutcome::BlockRequest {
 					target: id,
 					request: r,
@@ -2193,6 +2226,7 @@ mod tests {
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
 			ProtocolConfig::default(),
+			PeerId::random(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,

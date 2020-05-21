@@ -536,6 +536,10 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
 pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
+/// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
+pub type ApplyExtrinsicResultWithInfo<T> =
+	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
+
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
 pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(

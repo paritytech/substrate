@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
@@ -225,7 +226,8 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
@@ -289,7 +291,8 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
-			pool.clone()
+			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
@@ -358,6 +361,7 @@ mod tests {
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
+			None,
 		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);

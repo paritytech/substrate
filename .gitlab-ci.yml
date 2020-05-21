@@ -175,6 +175,8 @@ cargo-check-benches:
   <<:                              *docker-env
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
+    - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
+    - cargo run --release -p node-bench -- ::trie::read::small
     - sccache -s
 
 cargo-check-subkey:
@@ -193,22 +195,13 @@ test-linux-stable:                 &test-linux
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |&
-        tee output.log
+    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
     - sccache -s
-    - echo "____Test job successful, checking for warnings____"
-    - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
-    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
-        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
-        exit 1;
-      else
-        echo "___No warnings___";
-      fi
 
 test-dependency-rules:
   stage:                           test
