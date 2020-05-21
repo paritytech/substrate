@@ -67,7 +67,7 @@ impl BuildSpecCmd {
 		}
 
 		let json = sc_service::chain_ops::build_spec(&*spec, raw_output)?;
-		if let Err(_) = std::io::stdout().write_all(json.as_bytes()) {
+		if std::io::stdout().write_all(json.as_bytes()).is_err() {
 			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
 		}
 		Ok(())
