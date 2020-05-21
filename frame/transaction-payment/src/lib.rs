@@ -37,7 +37,10 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
-	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays},
+	weights::{
+		Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays, WeightToFeePolynomial,
+		WeightToFeeCoefficient,
+	},
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
@@ -72,7 +75,7 @@ pub trait Trait: frame_system::Trait {
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
 	/// Convert a weight value into a deductible fee based on the currency type.
-	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
+	type WeightToFee: WeightToFeePolynomial<Balance=BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
 	type FeeMultiplierUpdate: Convert<Multiplier, Multiplier>;
@@ -89,9 +92,13 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
+		/// The polynomial that is applied in order to derive fee from weight.
+		const WeightToFee: Vec<WeightToFeeCoefficient<BalanceOf<T>>> =
+			T::WeightToFee::polynomial().to_vec();
+
 		fn on_finalize() {
 			NextFeeMultiplier::mutate(|fm| {
-				*fm = T::FeeMultiplierUpdate::convert(*fm)
+				*fm = T::FeeMultiplierUpdate::convert(*fm);
 			});
 		}
 	}
@@ -183,7 +190,7 @@ impl<T: Trait> Module<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
-		T::WeightToFee::convert(capped_weight)
+		T::WeightToFee::calc(&capped_weight)
 	}
 }
 
@@ -318,7 +325,10 @@ mod tests {
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
-		weights::{DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight},
+		weights::{
+			DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight,
+			WeightToFeePolynomial, WeightToFeeCoefficients, WeightToFeeCoefficient,
+		},
 	};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -329,6 +339,7 @@ mod tests {
 		Perbill,
 	};
 	use std::cell::RefCell;
+	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Trait>::Call =
 		&Call::Balances(BalancesCall::transfer(2, 69));
@@ -411,10 +422,17 @@ mod tests {
 		fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
 	}
 
-	pub struct WeightToFee(u64);
-	impl Convert<Weight, u64> for WeightToFee {
-		fn convert(t: Weight) -> u64 {
-			WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64))
+	pub struct WeightToFee;
+	impl WeightToFeePolynomial for WeightToFee {
+		type Balance = u64;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![WeightToFeeCoefficient {
+				degree: 1,
+				coeff_frac: Perbill::zero(),
+				coeff_integer: WEIGHT_TO_FEE.with(|v| *v.borrow()),
+				negative: false,
+			}]
 		}
 	}
 

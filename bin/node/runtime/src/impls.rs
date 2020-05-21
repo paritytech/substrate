@@ -21,7 +21,9 @@ use core::num::NonZeroI128;
 use node_primitives::Balance;
 use sp_runtime::traits::{Convert, Saturating};
 use sp_runtime::{Fixed128, Perquintill};
-use frame_support::{traits::{OnUnbalanced, Currency, Get}, weights::Weight};
+use frame_support::{
+	traits::{OnUnbalanced, Currency, Get},
+};
 use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance};
 
 pub struct Author;
@@ -45,18 +47,6 @@ impl Convert<Balance, u64> for CurrencyToVoteHandler {
 
 impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
-}
-
-/// Convert from weight to balance via a simple coefficient multiplication
-/// The associated type C encapsulates a constant in units of balance per weight
-pub struct LinearWeightToFee<C>(sp_std::marker::PhantomData<C>);
-
-impl<C: Get<Balance>> Convert<Weight, Balance> for LinearWeightToFee<C> {
-	fn convert(w: Weight) -> Balance {
-		// setting this to zero will disable the weight fee.
-		let coefficient = C::get();
-		Balance::from(w).saturating_mul(coefficient)
-	}
 }
 
 /// Update the given multiplier based on the following formula
@@ -120,7 +110,7 @@ mod tests {
 	use sp_runtime::assert_eq_error_rate;
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
 	use crate::{constants::currency::*, TransactionPayment, TargetBlockFullness};
-	use frame_support::weights::Weight;
+	use frame_support::weights::{Weight, WeightToFeePolynomial};
 	use core::num::NonZeroI128;
 
 	fn max() -> Weight {
@@ -228,7 +218,8 @@ mod tests {
 				if fm == next { panic!("The fee should ever increase"); }
 				fm = next;
 				iterations += 1;
-				let fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(tx_weight);
+				let fee =
+					<Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&tx_weight);
 				let adjusted_fee = fm.saturated_multiply_accumulate(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \
