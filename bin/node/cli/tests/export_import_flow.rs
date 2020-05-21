@@ -48,11 +48,11 @@ enum Command {
 	ImportBlocks,
 }
 
-impl ToString for Cmd {
+impl ToString for Command {
 	fn to_string(&self) -> String {
 		match self {
-			Cmd::ExportBlocks => String::from("export-blocks"),
-			Cmd::ImportBlocks => String::from("import-blocks"),
+			Command::ExportBlocks => String::from("export-blocks"),
+			Command::ImportBlocks => String::from("import-blocks"),
 		}
 	}
 }
@@ -72,23 +72,23 @@ impl<'a> ExportImportRevertExecutor<'a> {
 
 	/// Helper method to run a command. Returns a string corresponding to what has been logged.
 	fn run_block_command(&self,
-		command: Cmd,
+		command: Command,
 		format_opt: FormatOpt,
 		expected_to_fail: bool
 	) -> String {
-		let cmd = command.to_string();
+		let command = command.to_string();
 		// Adding "--binary" if need be.
 		let arguments: Vec<&str> = match format_opt {
-			FormatOpt::Binary => vec![&cmd, "--dev", "--pruning", "archive", "--binary", "-d"],
-			FormatOpt::Json => vec![&cmd, "--dev", "--pruning", "archive", "-d"],
+			FormatOpt::Binary => vec![&command, "--dev", "--pruning", "archive", "--binary", "-d"],
+			FormatOpt::Json => vec![&command, "--dev", "--pruning", "archive", "-d"],
 		};
 
 		let tmp: TempDir;
 		// Setting base_path to be a temporary folder if we are importing blocks.
 		// This allows us to make sure we are importing from scratch.
 		let base_path = match command {
-			Cmd::ExportBlocks => &self.base_path.path(),
-			Cmd::ImportBlocks => {
+			Command::ExportBlocks => &self.base_path.path(),
+			Command::ImportBlocks => {
 				tmp = tempdir().unwrap();
 				tmp.path()
 			}
@@ -119,7 +119,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 
 	/// Runs the `export-blocks` command.
 	fn run_export(&mut self, fmt_opt: FormatOpt) {
-		let log = self.run_block_command(Cmd::ExportBlocks, fmt_opt, false);
+		let log = self.run_block_command(Command::ExportBlocks, fmt_opt, false);
 
 		// Using regex to find out how many block we exported.
 		let re = Regex::new(r"Exporting blocks from #\d* to #(?P<exported_blocks>\d*)").unwrap();
@@ -136,7 +136,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 	/// Runs the `import-blocks` command, asserting that an error was found or 
 	/// not depending on `expected_to_fail`.
 	fn run_import(&mut self, fmt_opt: FormatOpt, expected_to_fail: bool) {
-		let log = self.run_block_command(Cmd::ImportBlocks, fmt_opt, expected_to_fail);
+		let log = self.run_block_command(Command::ImportBlocks, fmt_opt, expected_to_fail);
 
 		if !expected_to_fail {
 			// Using regex to find out how much block we imported,
