@@ -150,7 +150,7 @@ decl_storage! {
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
 
-		/// NOTE-TWOX: `SegmentIndex` is an increasing integer, so this is okay.
+		/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
 		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::Randomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
