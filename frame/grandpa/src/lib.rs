@@ -213,7 +213,7 @@ decl_storage! {
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its
 		/// members were responsible.
 		///
-		/// TWOX-NOTE: `SetId` is not under the controll of an attacker.
+		/// TWOX-NOTE: `SetId` is not under user control.
 		SetIdSession get(fn session_for_set): map hasher(twox_64_concat) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
