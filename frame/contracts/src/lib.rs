@@ -836,6 +836,8 @@ decl_storage! {
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
+		///
+		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
 	}
 }
