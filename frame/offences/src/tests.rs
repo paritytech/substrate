@@ -22,7 +22,7 @@
 use super::*;
 use crate::mock::{
 	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
-	offence_reports, set_can_report,
+	offence_reports, set_can_report, set_offence_weight,
 };
 use sp_runtime::Perbill;
 use frame_support::traits::OnInitialize;
@@ -262,6 +262,51 @@ fn should_queue_and_resubmit_rejected_offence() {
 		assert_eq!(Offences::deferred_offences().len(), 2);
 
 		Offences::on_initialize(3);
+		assert_eq!(Offences::deferred_offences().len(), 0);
+	})
+}
+
+#[test]
+fn weight_soft_limit_is_used() {
+	new_test_ext().execute_with(|| {
+		set_can_report(false);
+		// Only 2 can fit in one block
+		set_offence_weight(<mock::Runtime as Trait>::WeightSoftLimit::get() / 2);
+
+		// Queue 3 offences
+		// #1
+		let offence = Offence {
+			validator_set_count: 5,
+			time_slot: 42,
+			offenders: vec![5],
+		};
+		Offences::report_offence(vec![], offence).unwrap();
+		// #2
+		let offence = Offence {
+			validator_set_count: 5,
+			time_slot: 62,
+			offenders: vec![5],
+		};
+		Offences::report_offence(vec![], offence).unwrap();
+		// #3
+		let offence = Offence {
+			validator_set_count: 5,
+			time_slot: 72,
+			offenders: vec![5],
+		};
+		Offences::report_offence(vec![], offence).unwrap();
+		// 3 are queued
+		assert_eq!(Offences::deferred_offences().len(), 3);
+
+		// Allow reporting
+		set_can_report(true);
+
+		Offences::on_initialize(3);
+		// Two are completed, one is left in the queue
+		assert_eq!(Offences::deferred_offences().len(), 1);
+
+		Offences::on_initialize(4);
+		// All are done now
 		assert_eq!(Offences::deferred_offences().len(), 0);
 	})
 }
