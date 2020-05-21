@@ -1364,10 +1364,9 @@ impl NetworkBehaviour for GenericProto {
 		}
 
 		for (peer_id, peer_state) in self.peers.iter_mut() {
-			match mem::replace(peer_state, PeerState::Poisoned) {
-				PeerState::PendingRequest { mut timer, timer_deadline } => {
-					if let Poll::Pending = Pin::new(&mut timer).poll(cx) {
-						*peer_state = PeerState::PendingRequest { timer, timer_deadline };
+			match peer_state {
+				PeerState::PendingRequest { timer, .. } => {
+					if let Poll::Pending = Pin::new(timer).poll(cx) {
 						continue;
 					}
 
@@ -1379,17 +1378,8 @@ impl NetworkBehaviour for GenericProto {
 					*peer_state = PeerState::Requested;
 				}
 
-				PeerState::DisabledPendingEnable {
-					mut timer,
-					open,
-					timer_deadline
-				} => {
-					if let Poll::Pending = Pin::new(&mut timer).poll(cx) {
-						*peer_state = PeerState::DisabledPendingEnable {
-							timer,
-							open,
-							timer_deadline
-						};
+				PeerState::DisabledPendingEnable { timer, open, .. } => {
+					if let Poll::Pending = Pin::new(timer).poll(cx) {
 						continue;
 					}
 
@@ -1399,10 +1389,9 @@ impl NetworkBehaviour for GenericProto {
 						handler: NotifyHandler::All,
 						event: NotifsHandlerIn::Enable,
 					});
-					*peer_state = PeerState::Enabled { open };
+					*peer_state = PeerState::Enabled { open: mem::replace(open, Default::default()) };
 				}
-
-				st => *peer_state = st,
+				_ => {},
 			}
 		}
 
