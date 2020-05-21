@@ -131,6 +131,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let log = self.run_block_command(Cmd::ImportBlocks, fmt_opt, expected_to_fail);
 
 		if !expected_to_fail {
+			dbg!(&log);
 			// Using regex to find out how much block we imported, and what's the best current block.
 			let re = Regex::new(r"Imported (?P<imported>\d) blocks. Best: #(?P<best>\d)").unwrap();
 			let caps = re.captures(&log).expect("capture should have succeeded");
