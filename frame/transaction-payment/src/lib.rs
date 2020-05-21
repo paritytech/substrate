@@ -37,7 +37,10 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
-	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays},
+	weights::{
+		Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays, WeightToFeePolynomial,
+		WeightToFeeCoefficient,
+	},
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
@@ -72,7 +75,7 @@ pub trait Trait: frame_system::Trait {
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
 	/// Convert a weight value into a deductible fee based on the currency type.
-	type WeightToFee: Convert<Weight, BalanceOf<Self>>;
+	type WeightToFee: WeightToFeePolynomial<Balance=BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
 	type FeeMultiplierUpdate: Convert<Multiplier, Multiplier>;
@@ -89,9 +92,13 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
+		/// The polynomial that is applied in order to derive fee from weight.
+		const WeightToFee: Vec<WeightToFeeCoefficient<BalanceOf<T>>> =
+			T::WeightToFee::polynomial().to_vec();
+
 		fn on_finalize() {
 			NextFeeMultiplier::mutate(|fm| {
-				*fm = T::FeeMultiplierUpdate::convert(*fm)
+				*fm = T::FeeMultiplierUpdate::convert(*fm);
 			});
 		}
 	}
@@ -100,8 +107,9 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
-	/// As this module is not and cannot be aware of the internals of a signed extension, it only
-	/// interprets them as some encoded value and takes their length into account.
+	/// This module is not and cannot be aware of the internals of a signed extension, for example
+	/// a tip. It only interprets the extrinsic as some encoded value and accounts for its weight
+	/// and length, the runtime's extrinsic base weight, and the current fee multiplier.
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
@@ -130,17 +138,24 @@ impl<T: Trait> Module<T> {
 	/// Compute the final fee value for a particular transaction.
 	///
 	/// The final fee is composed of:
-	///   - _base_fee_: This is the minimum amount a user pays for a transaction.
-	///   - _len_fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight_fee_: This amount is computed based on the weight of the transaction. Unlike
-	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
-	///      and the time it consumes.
-	///   - _targeted_fee_adjustment_: This is a multiplier that can tune the final fee based on
+	///   - `base_fee`: This is the minimum amount a user pays for a transaction. It is declared
+	///     as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
+	///   - `len_fee`: The length fee, the amount paid for the encoded length (in bytes) of the
+	///     transaction.
+	///   - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
+	///     accounts for the execution time of a transaction.
+	///   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
 	///     the congestion of the network.
-	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
-	///      transactions can have a tip.
+	///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
+	///     signed transactions can have a tip.
 	///
-	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
+	/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
+	/// the minimum fee for a transaction to be included in a block.
+	///
+	/// ```ignore
+	/// inclusion_fee = base_fee + targeted_fee_adjustment * (len_fee + weight_fee);
+	/// final_fee = inclusion_fee + tip;
+	/// ```
 	pub fn compute_fee(
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
@@ -183,7 +198,7 @@ impl<T: Trait> Module<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
-		T::WeightToFee::convert(capped_weight)
+		T::WeightToFee::calc(&capped_weight)
 	}
 }
 
@@ -318,7 +333,10 @@ mod tests {
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
-		weights::{DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight},
+		weights::{
+			DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight,
+			WeightToFeePolynomial, WeightToFeeCoefficients, WeightToFeeCoefficient,
+		},
 	};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -329,6 +347,7 @@ mod tests {
 		Perbill,
 	};
 	use std::cell::RefCell;
+	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Trait>::Call =
 		&Call::Balances(BalancesCall::transfer(2, 69));
@@ -411,10 +430,17 @@ mod tests {
 		fn get() -> u64 { TRANSACTION_BYTE_FEE.with(|v| *v.borrow()) }
 	}
 
-	pub struct WeightToFee(u64);
-	impl Convert<Weight, u64> for WeightToFee {
-		fn convert(t: Weight) -> u64 {
-			WEIGHT_TO_FEE.with(|v| *v.borrow() * (t as u64))
+	pub struct WeightToFee;
+	impl WeightToFeePolynomial for WeightToFee {
+		type Balance = u64;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![WeightToFeeCoefficient {
+				degree: 1,
+				coeff_frac: Perbill::zero(),
+				coeff_integer: WEIGHT_TO_FEE.with(|v| *v.borrow()),
+				negative: false,
+			}]
 		}
 	}
 

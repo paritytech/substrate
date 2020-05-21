@@ -22,7 +22,7 @@ use crate::{
 use log::info;
 use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt::Debug, str::FromStr, io::Write};
 use structopt::StructOpt;
 
 /// The `export-state` command used to export the state of a given block into
@@ -65,9 +65,9 @@ impl ExportStateCmd {
 
 		info!("Generating new chain spec...");
 		let json = sc_service::chain_ops::build_spec(&*input_spec, true)?;
-
-		print!("{}", json);
-
+		if std::io::stdout().write_all(json.as_bytes()).is_err() {
+			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
+		}
 		Ok(())
 	}
 }
