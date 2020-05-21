@@ -20,9 +20,7 @@
 use node_primitives::Balance;
 use sp_runtime::traits::{Convert, Saturating};
 use sp_runtime::{FixedPointNumber, Fixed128, Perquintill};
-use frame_support::{
-	traits::{OnUnbalanced, Currency, Get},
-};
+use frame_support::traits::{OnUnbalanced, Currency, Get};
 use crate::{Balances, System, Authorship, MaximumBlockWeight, NegativeImbalance};
 
 pub struct Author;
@@ -106,7 +104,6 @@ mod tests {
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
 	use crate::{constants::currency::*, TransactionPayment, TargetBlockFullness};
 	use frame_support::weights::{Weight, WeightToFeePolynomial};
-	use core::num::NonZeroI128;
 
 	fn max() -> Weight {
 		MaximumBlockWeight::get()
