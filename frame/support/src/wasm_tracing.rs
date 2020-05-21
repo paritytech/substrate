@@ -45,6 +45,9 @@ impl Drop for TracingSpanGuard {
 /// Enters a tracing span, via [`sp_tracing::proxy`] measuring execution time
 /// until exit from the current scope.
 ///
+/// It's also possible to directly call the functions `enter_span` and `exit_span`
+/// in `sp_io::wasm_tracing` if more fine-grained control of span duration is required.
+///
 /// # Example
 ///
 /// ```
