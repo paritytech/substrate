@@ -1,5 +1,5 @@
 [package]
-name = "cli-utils"
+name = "frame-utils"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -7,7 +7,7 @@ license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "CLI utils"
-documentation = "https://docs.rs/cli-utils"
+documentation = "https://docs.rs/frame-utils"
 
 [dependencies]
 frame-system = { version = "2.0.0-alpha.7", default-features = false, path = "../../frame/system" }

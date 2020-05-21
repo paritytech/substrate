@@ -7,7 +7,7 @@ license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "CLI utils"
-documentation = "https://docs.rs/cli-utils"
+documentation = "https://docs.rs/frame-utils"
 
 [dependencies]
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
@@ -15,7 +15,8 @@ sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
 sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
 structopt = "0.3.8"
 codec = { version = "1.3.0", package = "parity-scale-codec" }
-cli-utils = { path = "../../cli-utils", version = "2.0.0-dev" }
+pallet-balances = { version = "2.0.0-alpha.8", path = "../../../frame/balances" }
+frame-utils = { path = "../../frame-utils", version = "2.0.0-dev" }
 hex = "0.4.2"
 serde = "1.0.106"
 hyper = "0.12.35"
@@ -26,6 +27,7 @@ sc-rpc = { version = "2.0.0-dev", path = "../../../client/rpc" }
 sc-service = { version = "0.8.0-dev", default-features = false, path = "../../../client/service" }
 sc-client-api = { version = "2.0.0-dev", default-features = false, path = "../../../client/api" }
 futures01 = { package = "futures", version = "0.1.29" }
+futures = "0.3"
 
 [dev-dependencies]
 tempfile = "3.1.0"
@@ -34,4 +36,4 @@ frame-system = { version = "2.0.0-alpha.7", path = "../../../frame/system" }
 substrate-test-runtime = { version = "2.0.0-dev", features = ["indices-lookup"], path = "../../../test-utils/runtime" }
 
 [features]
-pallet-balances = []
+balances = []

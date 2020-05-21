@@ -49,7 +49,7 @@ use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	ConvertInto, OpaqueKeys, NumberFor,
 };
-use cli_utils::{RuntimeAdapter, IndexFor};
+use frame_utils::{SignedExtensionProvider, IndexFor};
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
@@ -518,10 +518,10 @@ parameter_types! {
 	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
-impl RuntimeAdapter for Runtime {
+impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
 
-	fn build_extra(index: IndexFor<Self>) -> Self::Extra {
+	fn construct_extras(index: IndexFor<Self>) -> Self::Extra {
 		// take the biggest period possible.
 		let period = BlockHashCount::get()
 			.checked_next_power_of_two()
@@ -557,7 +557,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		account: AccountId,
 		nonce: Index,
 	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
-		let extra = Runtime::build_extra(nonce);
+		let extra = Runtime::construct_extras(nonce);
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
 			debug::warn!("Unable to create signed payload: {:?}", e);
 		}).ok()?;

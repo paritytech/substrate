@@ -55,7 +55,7 @@ use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
-use cli_utils::{RuntimeAdapter, IndexFor};
+use frame_utils::{SignedExtensionProvider, IndexFor};
 use sp_runtime::generic::Era;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
@@ -417,14 +417,14 @@ impl pallet_balances::Trait for Runtime {
 	type AccountStore = frame_system::Module<Runtime>;
 }
 
-impl RuntimeAdapter for Runtime {
+impl SignedExtensionProvider for Runtime {
 	type Extra = (
 		frame_system::CheckTxVersion<Runtime>,
 		frame_system::CheckGenesis<Runtime>,
 		frame_system::CheckEra<Runtime>,
 	);
 
-	fn build_extra(_index: IndexFor<Self>) -> Self::Extra {
+	fn construct_extras(_index: IndexFor<Self>) -> Self::Extra {
 		(
 			frame_system::CheckTxVersion::new(),
 			frame_system::CheckGenesis::new(),

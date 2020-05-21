@@ -21,7 +21,7 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use grandpa::fg_primitives;
-use cli_utils::RuntimeAdapter;
+use frame_utils::SignedExtensionProvider;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -407,10 +407,10 @@ impl_runtime_apis! {
 	}
 }
 
-impl RuntimeAdapter for Runtime {
+impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
 
-	fn build_extra(index: Index) -> Self::Extra {
+	fn construct_extras(index: Index) -> Self::Extra {
 		(
 			system::CheckSpecVersion::new(),
 			system::CheckTxVersion::new(),

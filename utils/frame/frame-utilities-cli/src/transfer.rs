@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,7 +27,9 @@ use codec::Encode;
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
-use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, RuntimeAdapter};
+use frame_utils::{
+    AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, SignedExtensionProvider,
+};
 use crate::utils::create_extrinsic_for;
 
 /// The `transfer` command
@@ -71,7 +73,7 @@ impl TransferCmd {
     /// Run the command
     pub fn run<RA>(&self) -> Result<(), Error>
         where
-            RA: RuntimeAdapter,
+            RA: pallet_balances::Trait + SignedExtensionProvider,
             AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
             AddressFor<RA>: From<AccountIdFor<RA>>,
             <IndexFor<RA> as FromStr>::Err: Display,
@@ -111,23 +113,23 @@ impl CliConfiguration for TransferCmd {
     }
 }
 
-fn print_ext<Pair, RA>(
+fn print_ext<Pair, P>(
     uri: &str,
     pass: &str,
-    to: AddressFor<RA>,
-    nonce: IndexFor<RA>,
-    amount: BalanceFor<RA>,
+    to: AddressFor<P>,
+    nonce: IndexFor<P>,
+    amount: BalanceFor<P>,
 ) -> Result<(), Error>
     where
         Pair: sp_core::Pair,
         Pair::Public: Into<MultiSigner>,
         Pair::Signature: Encode,
-        RA: RuntimeAdapter,
-        BalancesCall<RA>: Encode,
+        P: pallet_balances::Trait + SignedExtensionProvider,
+        BalancesCall<P>: Encode,
 {
     let signer = pair_from_suri::<Pair>(uri, pass);
     let call = BalancesCall::transfer(to, amount);
-    let extrinsic = create_extrinsic_for::<Pair, RA, _>(call, nonce, signer)?;
+    let extrinsic = create_extrinsic_for::<Pair, P, _>(call, nonce, signer)?;
     println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
     Ok(())
 }
