@@ -142,7 +142,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 			dbg!(&log);
 			// Using regex to find out how much block we imported,
 			// and what's the best current block.
-			let re = Regex::new(r"Imported (?P<imported>\d) blocks. Best: #(?P<best>\d)").unwrap();
+			let re = Regex::new(r"Imported (?P<imported>\d*) blocks. Best: #(?P<best>\d*)").unwrap();
 			let caps = re.captures(&log).expect("capture should have succeeded");
 			let imported = caps["imported"].parse::<u64>().unwrap();
 			let best = caps["best"].parse::<u64>().unwrap();
