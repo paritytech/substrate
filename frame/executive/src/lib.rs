@@ -454,12 +454,12 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
-		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, Convert, ConvertInto},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
 		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
 	};
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
-		weights::{Weight, RuntimeDbWeight},
+		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
 	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
@@ -589,7 +589,7 @@ mod tests {
 		type Currency = Balances;
 		type OnTransactionPayment = ();
 		type TransactionByteFee = TransactionByteFee;
-		type WeightToFee = ConvertInto;
+		type WeightToFee = IdentityFee<Balance>;
 		type FeeMultiplierUpdate = ();
 	}
 	impl custom::Trait for Runtime {}
@@ -675,7 +675,8 @@ mod tests {
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
 		let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get();
-		let fee: Balance = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
+		let fee: Balance
+			= <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -871,7 +872,8 @@ mod tests {
 				);
 				let weight = xt.get_dispatch_info().weight
 					+ <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get();
-				let fee: Balance = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
+				let fee: Balance =
+					<Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
