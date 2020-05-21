@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Configuration trait for a CLI based on substrate
 
 use crate::arg_enums::Database;

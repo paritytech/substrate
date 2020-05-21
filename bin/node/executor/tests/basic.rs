@@ -19,12 +19,15 @@ use codec::{Encode, Decode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, DispatchInfo, DispatchClass, constants::ExtrinsicBaseWeight},
+	weights::{
+		GetDispatchInfo, DispatchInfo, DispatchClass, constants::ExtrinsicBaseWeight,
+		WeightToFeePolynomial,
+	},
 };
 use sp_core::{NeverNativeValue, traits::Externalities, storage::well_known_keys};
 use sp_runtime::{
 	ApplyExtrinsicResult, Fixed128,
-	traits::{Hash as HashT, Convert},
+	traits::Hash as HashT,
 	transaction_validity::InvalidTransaction,
 };
 use pallet_contracts::ContractAddressFor;
@@ -54,9 +57,9 @@ fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed128) -> Balance {
 	let length_fee = TransactionByteFee::get() * (extrinsic.encode().len() as Balance);
 
 	let base_weight = ExtrinsicBaseWeight::get();
-	let base_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(base_weight);
+	let base_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&base_weight);
 	let weight = default_transfer_call().get_dispatch_info().weight;
-	let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
+	let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
 
 	base_fee + fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee)
 }

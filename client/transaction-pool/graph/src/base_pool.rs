@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! A basic version of the dependency graph.
 //!
 //! For a more full-featured pool, have a look at the `pool` module.
