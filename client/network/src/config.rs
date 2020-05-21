@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Configuration of the networking layer.
 //!
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.

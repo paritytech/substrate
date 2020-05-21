@@ -37,7 +37,7 @@ use frame_support::{
 	assert_ok, assert_err, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
 	impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
-	weights::{DispatchInfo, DispatchClass, Weight, PostDispatchInfo, Pays},
+	weights::{DispatchInfo, DispatchClass, Weight, PostDispatchInfo, Pays, IdentityFee},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use sp_core::storage::well_known_keys;
@@ -103,6 +103,7 @@ impl frame_system::Trait for Test {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -151,7 +152,7 @@ impl pallet_transaction_payment::Trait for Test {
 	type Currency = Balances;
 	type OnTransactionPayment = ();
 	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = Test;
+	type WeightToFee = IdentityFee<BalanceOf<Self>>;
 	type FeeMultiplierUpdate = ();
 }
 

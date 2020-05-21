@@ -108,8 +108,10 @@
 //! Preimage actions:
 //! - `note_preimage` - Registers the preimage for an upcoming proposal, requires
 //!   a deposit that is returned once the proposal is enacted.
+//! - `note_preimage_operational` - same but provided by `T::OperationalPreimageOrigin`.
 //! - `note_imminent_preimage` - Registers the preimage for an upcoming proposal.
 //!   Does not require a deposit, but the proposal must be in the dispatch queue.
+//! - `note_imminent_preimage_operational` - same but provided by `T::OperationalPreimageOrigin`.
 //! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
 //!   work under the condition that it's the same account that noted it and
 //!   after the voting period, OR it's a different account after the enactment period.
@@ -284,6 +286,9 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// The amount of balance that must be deposited per byte of preimage stored.
 	type PreimageByteDeposit: Get<BalanceOf<Self>>;
+
+	/// An origin that can provide a preimage using operational extrinsics.
+	type OperationalPreimageOrigin: EnsureOrigin<Self::Origin, Success=Self::AccountId>;
 
 	/// Handler for the unbalanced reduction when slashing a preimage deposit.
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -542,7 +547,7 @@ mod weight_for {
 	/// - Db writes per votes: `ReferendumInfoOf`
 	/// - Base Weight: 65.78 + 8.229 * R µs
 	// NOTE: weight must cover an incorrect voting of origin with 100 votes.
-	pub(crate) fn delegate<T: Trait>(votes: Weight) -> Weight {
+	pub fn delegate<T: Trait>(votes: Weight) -> Weight {
 		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(3))
 			.saturating_add(66_000_000)
 			.saturating_add(votes.saturating_mul(8_100_000))
@@ -554,7 +559,7 @@ mod weight_for {
 	/// - Db reads per votes: `ReferendumInfoOf`
 	/// - Db writes per votes: `ReferendumInfoOf`
 	/// - Base Weight: 33.29 + 8.104 * R µs
-	pub(crate) fn undelegate<T: Trait>(votes: Weight) -> Weight {
+	pub fn undelegate<T: Trait>(votes: Weight) -> Weight {
 		T::DbWeight::get().reads_writes(votes.saturating_add(2), votes.saturating_add(2))
 			.saturating_add(33_000_000)
 			.saturating_add(votes.saturating_mul(8_000_000))
@@ -565,7 +570,7 @@ mod weight_for {
 	/// - Db reads: `Proxy`, `proxy account`
 	/// - Db writes: `proxy account`
 	/// - Base Weight: 68.61 + 8.039 * R µs
-	pub(crate) fn proxy_delegate<T: Trait>(votes: Weight) -> Weight {
+	pub fn proxy_delegate<T: Trait>(votes: Weight) -> Weight {
 		T::DbWeight::get().reads_writes(votes.saturating_add(5), votes.saturating_add(4))
 			.saturating_add(69_000_000)
 			.saturating_add(votes.saturating_mul(8_000_000))
@@ -575,10 +580,36 @@ mod weight_for {
 	/// same as `undelegate with additional:
 	/// Db reads: `Proxy`
 	/// Base Weight: 39 + 7.958 * R µs
-	pub(crate) fn proxy_undelegate<T: Trait>(votes: Weight) -> Weight {
+	pub fn proxy_undelegate<T: Trait>(votes: Weight) -> Weight {
 		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(2))
 			.saturating_add(40_000_000)
 			.saturating_add(votes.saturating_mul(8_000_000))
+	}
+
+	/// Calculate the weight for `note_preimage`.
+	/// # <weight>
+	/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
+	/// - Db reads: `Preimages`
+	/// - Db writes: `Preimages`
+	/// - Base Weight: 37.93 + .004 * b µs
+	/// # </weight>
+	pub fn note_preimage<T: Trait>(encoded_proposal_len: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(38_000_000)
+			.saturating_add(encoded_proposal_len.saturating_mul(4_000))
+	}
+
+	/// Calculate the weight for `note_imminent_preimage`.
+	/// # <weight>
+	/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
+	/// - Db reads: `Preimages`
+	/// - Db writes: `Preimages`
+	/// - Base Weight: 28.04 + .003 * b µs
+	/// # </weight>
+	pub fn note_imminent_preimage<T: Trait>(encoded_proposal_len: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(28_000_000)
+			.saturating_add(encoded_proposal_len.saturating_mul(3_000))
 	}
 }
 
@@ -1157,33 +1188,21 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
-		/// - Db reads: `Preimages`
-		/// - Db writes: `Preimages`
-		/// - Base Weight: 37.93 + .004 * b µs
+		/// see `weight_for::note_preimage`
 		/// # </weight>
-		#[weight = 38_000_000 + 4_000 * Weight::from(encoded_proposal.len() as u32)
-			+ T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = weight_for::note_preimage::<T>((encoded_proposal.len() as u32).into())]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
-			let who = ensure_signed(origin)?;
-			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
+			Self::note_preimage_inner(ensure_signed(origin)?, encoded_proposal)?;
+		}
 
-			let deposit = <BalanceOf<T>>::from(encoded_proposal.len() as u32)
-				.saturating_mul(T::PreimageByteDeposit::get());
-			T::Currency::reserve(&who, deposit)?;
-
-			let now = <frame_system::Module<T>>::block_number();
-			let a = PreimageStatus::Available {
-				data: encoded_proposal,
-				provider: who.clone(),
-				deposit,
-				since: now,
-				expiry: None,
-			};
-			<Preimages<T>>::insert(proposal_hash, a);
-
-			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, deposit));
+		/// Same as `note_preimage` but origin is `OperationalPreimageOrigin`.
+		#[weight = (
+			weight_for::note_preimage::<T>((encoded_proposal.len() as u32).into()),
+			DispatchClass::Operational,
+		)]
+		fn note_preimage_operational(origin, encoded_proposal: Vec<u8>) {
+			let who = T::OperationalPreimageOrigin::ensure_origin(origin)?;
+			Self::note_preimage_inner(who, encoded_proposal)?;
 		}
 
 		/// Register the preimage for an upcoming proposal. This requires the proposal to be
@@ -1196,32 +1215,21 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Complexity: `O(E)` with E size of `encoded_proposal` (protected by a required deposit).
-		/// - Db reads: `Preimages`
-		/// - Db writes: `Preimages`
-		/// - Base Weight: 28.04 + .003 * b µs
+		/// see `weight_for::note_preimage`
 		/// # </weight>
-		#[weight = 28_000_000 + 3_000 * Weight::from(encoded_proposal.len() as u32)
-			+ T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = weight_for::note_imminent_preimage::<T>((encoded_proposal.len() as u32).into())]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
-			let who = ensure_signed(origin)?;
-			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			Self::check_pre_image_is_missing(proposal_hash)?;
-			let status = Preimages::<T>::get(&proposal_hash).ok_or(Error::<T>::NotImminent)?;
-			let expiry = status.to_missing_expiry().ok_or(Error::<T>::DuplicatePreimage)?;
+			Self::note_imminent_preimage_inner(ensure_signed(origin)?, encoded_proposal)?;
+		}
 
-			let now = <frame_system::Module<T>>::block_number();
-			let free = <BalanceOf<T>>::zero();
-			let a = PreimageStatus::Available {
-				data: encoded_proposal,
-				provider: who.clone(),
-				deposit: Zero::zero(),
-				since: now,
-				expiry: Some(expiry),
-			};
-			<Preimages<T>>::insert(proposal_hash, a);
-
-			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, free));
+		/// Same as `note_imminent_preimage` but origin is `OperationalPreimageOrigin`.
+		#[weight = (
+			weight_for::note_imminent_preimage::<T>((encoded_proposal.len() as u32).into()),
+			DispatchClass::Operational,
+		)]
+		fn note_imminent_preimage_operational(origin, encoded_proposal: Vec<u8>) {
+			let who = T::OperationalPreimageOrigin::ensure_origin(origin)?;
+			Self::note_imminent_preimage_inner(who, encoded_proposal)?;
 		}
 
 		/// Remove an expired proposal preimage and collect the deposit.
@@ -2029,6 +2037,53 @@ impl<T: Trait> Module<T> {
 		})?.0;
 
 		Ok(len)
+	}
+
+	// See `note_preimage`
+	fn note_preimage_inner(who: T::AccountId, encoded_proposal: Vec<u8>) -> DispatchResult {
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
+
+		let deposit = <BalanceOf<T>>::from(encoded_proposal.len() as u32)
+			.saturating_mul(T::PreimageByteDeposit::get());
+		T::Currency::reserve(&who, deposit)?;
+
+		let now = <frame_system::Module<T>>::block_number();
+		let a = PreimageStatus::Available {
+			data: encoded_proposal,
+			provider: who.clone(),
+			deposit,
+			since: now,
+			expiry: None,
+		};
+		<Preimages<T>>::insert(proposal_hash, a);
+
+		Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, deposit));
+
+		Ok(())
+	}
+
+	// See `note_imminent_preimage`
+	fn note_imminent_preimage_inner(who: T::AccountId, encoded_proposal: Vec<u8>) -> DispatchResult {
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		Self::check_pre_image_is_missing(proposal_hash)?;
+		let status = Preimages::<T>::get(&proposal_hash).ok_or(Error::<T>::NotImminent)?;
+		let expiry = status.to_missing_expiry().ok_or(Error::<T>::DuplicatePreimage)?;
+
+		let now = <frame_system::Module<T>>::block_number();
+		let free = <BalanceOf<T>>::zero();
+		let a = PreimageStatus::Available {
+			data: encoded_proposal,
+			provider: who.clone(),
+			deposit: Zero::zero(),
+			since: now,
+			expiry: Some(expiry),
+		};
+		<Preimages<T>>::insert(proposal_hash, a);
+
+		Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, free));
+
+		Ok(())
 	}
 }
 

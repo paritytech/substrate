@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::{future::{ready, Ready}, executor::block_on};
