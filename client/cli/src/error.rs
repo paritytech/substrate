@@ -27,7 +27,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Cli error
-	Cli(clap::Error),
+	Cli(structopt::clap::Error),
 	/// Service error
 	Service(sc_service::Error),
 	/// Client error
