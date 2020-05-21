@@ -344,6 +344,8 @@ decl_storage! {
 		/// The public proposals. Unsorted. The second item is the proposal's hash.
 		pub PublicProps get(fn public_props): Vec<(PropIndex, T::Hash, T::AccountId)>;
 		/// Those who have locked a deposit.
+		///
+		/// TWOX-NOTE: Safe, as increasing integer keys are safe.
 		pub DepositOf get(fn deposit_of):
 			map hasher(twox_64_concat) PropIndex => Option<(Vec<T::AccountId>, BalanceOf<T>)>;
 
@@ -362,22 +364,30 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 
 		/// Information concerning any given referendum.
+		///
+		/// TWOX-NOTE: SAFE as indexes are not under an attacker’s control.
 		pub ReferendumInfoOf get(fn referendum_info):
 			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
 
 		/// All votes for a particular voter. We store the balance for the number of votes that we
 		/// have recorded. The second item is the total amount of delegations, that will be added.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId`s are crypto hashes anyway.
 		pub VotingOf: map hasher(twox_64_concat) T::AccountId => Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
+		///
+		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 		// TODO: Refactor proxy into its own pallet.
 		// https://github.com/paritytech/substrate/issues/5322
 		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
+		///
+		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 		pub Locks get(fn locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public

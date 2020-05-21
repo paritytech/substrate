@@ -237,16 +237,25 @@ decl_storage! {
 		// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
 		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 		// `APPROVAL_SET_SIZE`.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash and `SetIndex` is not
+		/// attacker-controlled.
 		pub ApprovalsOf get(fn approvals_of):
 			map hasher(twox_64_concat) (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they
 		/// are not currently registered.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 		pub RegisterInfoOf get(fn candidate_reg_info):
 			map hasher(twox_64_concat) T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 		pub VoterInfoOf get(fn voter_info):
 			map hasher(twox_64_concat) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
+		///
+		/// TWOX-NOTE: OKAY ― `SetIndex` is not user-controlled data.
 		pub Voters get(fn voters): map hasher(twox_64_concat) SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
 		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
