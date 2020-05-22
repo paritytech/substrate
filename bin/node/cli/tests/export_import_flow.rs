@@ -107,8 +107,6 @@ impl<'a> ExportImportRevertExecutor<'a> {
 
 		let logged_output = String::from_utf8_lossy(&output.stderr).to_string();
 
-		dbg!(&output.stderr);
-		dbg!(&output.status);
 		if expected_to_fail {
 			// Checking that we did indeed find an error.
 			assert!(contains_error(&logged_output), "expected to error but did not error!");
