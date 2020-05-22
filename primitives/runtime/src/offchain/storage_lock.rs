@@ -44,7 +44,7 @@
 //!    // The entry name _must_ be unique and can be seen as mutex instance reference.
 //!    let mut lock = StorageLock::new(b"access::lock");
 //!    {
-//!         let _guard = lock.spin_lock();
+//!         let _guard = lock.lock();
 //!         let acc = StorageValueRef::persistent(key);
 //!         let v: Vec<T> = acc.get::<Vec<T>>().unwrap().unwrap();
 //!         // modify `v` as desired
@@ -57,10 +57,10 @@
 //! ```
 
 use crate::offchain::storage::StorageValueRef;
+use crate::traits::AtLeast32Bit;
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
-
 
 /// Default expiry duration in milliseconds.
 const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
@@ -72,45 +72,67 @@ const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
 ///
 /// Bound for an item that has a stateful ordered meaning
 /// without explicitly requiring `Ord` trait in general.
-pub trait Lockable: Sized + Codec + Clone {
+pub trait Lockable: Sized {
+	/// The instant type
+	type Instant: Sized + Codec + Clone;
+
 	/// Get the current value of lockable.
-	fn current() -> Self;
+	fn current() -> Self::Instant;
 
 	/// Acquire a new deadline based on `Self::current()`.
-	fn deadline() -> Self;
+	fn deadline(&self) -> Self::Instant;
 
 	/// Verify the current value of `self` against `deadline`.
 	/// to determine if the lock has expired.
-	fn expired(deadline: &Self) -> bool;
+	fn expired(deadline: &Self::Instant) -> bool;
 
 	/// Snooze the thread for time determined by `self` and `other`.
 	///
 	/// Only called if not expired just yet.
 	/// Note that the deadline is only passed to allow some optimizations
 	/// for some `L` types.
-	fn snooze(_deadline: &Self) {
+	fn snooze(_deadline: &Self::Instant) {
 		sp_io::offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE,
 		)));
 	}
 }
 
-impl Lockable for Timestamp {
-	fn current() -> Self {
+/// Lockable based on the current timestamp with a configurable expiration time.
+#[derive(Encode, Decode)]
+pub struct Time {
+	/// Time of calling `fn lock(..)`.
+	timestamp: Timestamp,
+	/// How long the lock will stay valid once `fn lock(..)` is called.
+	expiration_duration: Duration,
+}
+
+impl Default for Time {
+	fn default() -> Self {
+		let timestamp = offchain::timestamp();
+		Self {
+			timestamp,
+			expiration_duration: Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS),
+		}
+	}
+}
+
+impl Lockable for Time {
+	type Instant = Timestamp;
+
+	fn current() -> Self::Instant {
 		offchain::timestamp()
 	}
 
-	fn deadline() -> Self {
-		Self::current().add(Duration::from_millis(
-			STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS,
-		))
+	fn deadline(&self) -> Self::Instant {
+		self.timestamp.add(self.expiration_duration)
 	}
 
-	fn expired(deadline: &Self) -> bool {
+	fn expired(deadline: &Self::Instant) -> bool {
 		<Self as Lockable>::current() > *deadline
 	}
 
-	fn snooze(deadline: &Self) {
+	fn snooze(deadline: &Self::Instant) {
 		let now = Self::current();
 		let remainder: Duration = now.diff(&deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
@@ -121,52 +143,85 @@ impl Lockable for Timestamp {
 	}
 }
 
-/// Lockable based on the current block number and a timestamp based deadline.
-#[derive(Encode, Decode)]
-pub struct BlockAndTime<B: BlockNumberProvider> {
-	/// The block number that has to be reached in order
-	/// for the lock to be considered stale.
+/// An instant based on block and time.
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct BlockAndTimeInstant<B: BlockNumberProvider> {
 	pub block_number: <B as BlockNumberProvider>::BlockNumber,
-	/// Additional timestamp based deadline which has to be
-	/// reached in order for the lock to become stale.
 	pub timestamp: Timestamp,
 }
 
-// derive not possible, since `B` does not necessarily implement `trait Clone`
-impl<B: BlockNumberProvider> Clone for BlockAndTime<B> {
+impl<B: BlockNumberProvider> Clone for BlockAndTimeInstant<B> {
 	fn clone(&self) -> Self {
 		Self {
 			block_number: self.block_number.clone(),
-			timestamp: self.timestamp,
+			timestamp: self.timestamp.clone(),
 		}
 	}
 }
 
-
-impl<B: BlockNumberProvider> Lockable for BlockAndTime<B>
-{
+impl<B: BlockNumberProvider> BlockAndTimeInstant<B> {
+	/// Provide the current state of block number and time.
 	fn current() -> Self {
 		Self {
 			block_number: B::current_block_number(),
 			timestamp: offchain::timestamp(),
 		}
 	}
+}
 
-	fn deadline() -> Self {
+/// Lockable based on the current block number and a timestamp based deadline.
+pub struct BlockAndTime<B: BlockNumberProvider> {
+	/// The instant when calling `fn lock(..)`.
+	lock_instant: BlockAndTimeInstant<B>,
+	/// The block number offset from the time of locking
+	/// when the lock is considered stale.
+	expiration_block_number_offset: u32,
+	/// Additional timestamp based deadline, which, once
+	/// reached, renders the lock stale.
+	expiration_duration: Duration,
+}
+
+impl<B: BlockNumberProvider> Default for BlockAndTime<B> {
+	fn default() -> Self {
 		Self {
-			block_number: B::deadline_block_number(),
-			timestamp: offchain::timestamp().add(Duration::from_millis(
-				STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS,
-			)),
+			lock_instant: BlockAndTimeInstant::current(),
+			expiration_block_number_offset: 3u32,
+			expiration_duration: Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS),
 		}
 	}
+}
 
-	fn expired(reference: &Self) -> bool {
-		let current = <Self as Lockable>::current();
-		current.timestamp > reference.timestamp && current.block_number > reference.block_number
+// derive not possible, since `B` does not necessarily implement `trait Clone`
+impl<B: BlockNumberProvider> Clone for BlockAndTime<B> {
+	fn clone(&self) -> Self {
+		Self {
+			lock_instant: self.lock_instant.clone(),
+			expiration_block_number_offset: self.expiration_block_number_offset.clone(),
+			expiration_duration: self.expiration_duration,
+		}
+	}
+}
+
+impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
+	type Instant = BlockAndTimeInstant<B>;
+
+	fn current() -> Self::Instant {
+		Self::Instant::current()
 	}
 
-	fn snooze(deadline: &Self) {
+	fn deadline(&self) -> Self::Instant {
+		let mut current = Self::current();
+		current.block_number += self.expiration_block_number_offset.into();
+		current.timestamp.add(self.expiration_duration);
+		current
+	}
+
+	fn expired(deadline: &Self::Instant) -> bool {
+		let current = <Self as Lockable>::current();
+		current.timestamp > deadline.timestamp && current.block_number > deadline.block_number
+	}
+
+	fn snooze(deadline: &Self::Instant) {
 		let timestamp = Self::current().timestamp;
 		let remainder: Duration = timestamp.diff(&(deadline.timestamp));
 		let snooze = core::cmp::min(remainder.millis(), STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE);
@@ -179,26 +234,32 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B>
 /// A lock that is persisted in the DB and provides a mutex behavior
 /// with a defined safety expiry deadline based on a [`Lockable`](Self::Lockable)
 /// implementation.
-pub struct StorageLock<'a, L> {
+pub struct StorageLock<'a, L = Time> {
 	// A storage value ref which defines the DB entry representing the lock.
 	value_ref: StorageValueRef<'a>,
-	deadline: L,
+	lockable: L,
 }
 
-impl<'a, L: Lockable> StorageLock<'a, L>
-{
-	/// Create a new storage lock with [default expiry duration](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
+impl<'a, L: Lockable + Default> StorageLock<'a, L> {
+	/// Create a new storage lock with a `default()` instance of type `L`.
 	pub fn new(key: &'a [u8]) -> Self {
+		Self::with_lockable(key, Default::default())
+	}
+}
+
+impl<'a, L: Lockable> StorageLock<'a, L> {
+	/// Create a new storage lock with an explicit instance of a lockable `L`.
+	pub fn with_lockable(key: &'a [u8], lockable: L) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
-			deadline: L::deadline(),
+			lockable,
 		}
 	}
 
-	fn try_lock_inner(&mut self, new_deadline: L) -> Result<(), Option<L>> {
-		let res = self
-			.value_ref
-			.mutate(|s: Option<Option<L>>| -> Result<L, Option<L>> {
+	/// Internal lock helper to avoid lifetime conflicts.
+	fn try_lock_inner(&mut self, new_deadline: L::Instant) -> Result<(), Option<L::Instant>> {
+		let res = self.value_ref.mutate(
+			|s: Option<Option<L::Instant>>| -> Result<L::Instant, Option<L::Instant>> {
 				match s {
 					// no lock set, we can safely acquire it
 					None => Ok(new_deadline),
@@ -209,7 +270,8 @@ impl<'a, L: Lockable> StorageLock<'a, L>
 					// lock is present and is still active
 					Some(Some(deadline)) => Err(Some(deadline)),
 				}
-			});
+			},
+		);
 		match res {
 			Ok(Ok(_)) => Ok(()),
 			Ok(Err(_deadline)) => Err(None),
@@ -222,23 +284,23 @@ impl<'a, L: Lockable> StorageLock<'a, L>
 	/// Returns a lock guard on success, otherwise an error containing `None` in
 	/// case the mutex was already unlocked before, or if the lock is still held
 	/// by another process `Err(())`.
-	pub fn try_lock(&'_ mut self) -> Result<StorageLockGuard<'a, '_, L>, ()>
-	{
-		let _ = self.try_lock_inner(self.deadline.clone()).map_err(|_opt| { () })?;
+	pub fn try_lock(&mut self) -> Result<StorageLockGuard<'a, '_, L>, ()> {
+		let _ = self
+			.try_lock_inner(self.lockable.deadline())
+			.map_err(|_opt| ())?;
 		Ok(StorageLockGuard::<'a, '_> { lock: Some(self) })
 	}
 
 	/// Try grabbing the lock until its expiry is reached.
 	///
 	/// Returns an error if the lock expired before it could be caught.
-	pub fn spin_lock(&mut self) -> StorageLockGuard<'a, '_, L>
-	{
+	pub fn lock(&mut self) -> StorageLockGuard<'a, '_, L> {
 		loop {
 			// blind attempt on locking
-			let deadline = match self.try_lock_inner(self.deadline.clone()) {
+			let deadline = match self.try_lock_inner(self.lockable.deadline()) {
 				Ok(_) => return StorageLockGuard::<'a, '_, L> { lock: Some(self) },
 				Err(Some(other_locks_deadline)) => other_locks_deadline,
-				_ => L::deadline(), // use the default
+				_ => self.lockable.deadline(), // use the default
 			};
 			L::snooze(&deadline);
 		}
@@ -257,13 +319,18 @@ pub struct StorageLockGuard<'a, 'b, L: Lockable> {
 
 impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
 	/// Consume the guard but DO NOT unlock the underlying lock.
+	///
+	/// Can be used to implement a grace period after doing some
+	/// heavy computations and sending a transaction to be included
+	/// on-chain. By forgetting the lock, it will stay locked until
+	/// its expiration deadline is reached while the off-chain worker
+	/// can already complete.
 	pub fn forget(mut self) {
 		let _ = self.lock.take();
 	}
 }
 
-impl<'a, 'b, L: Lockable> Drop for StorageLockGuard<'a, 'b, L>
-{
+impl<'a, 'b, L: Lockable> Drop for StorageLockGuard<'a, 'b, L> {
 	fn drop(&mut self) {
 		if let Some(lock) = self.lock.take() {
 			lock.unlock();
@@ -271,55 +338,36 @@ impl<'a, 'b, L: Lockable> Drop for StorageLockGuard<'a, 'b, L>
 	}
 }
 
-/// Extension trait for locks based on [`Timestamp`](::sp_core::offchain::Timestamp).
-///
 /// Allows explicitly setting the timeout on construction
 /// instead of using the implicit default timeout of
 /// [`STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS`](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
-pub trait TimeLock<'a>: Sized {
-	/// Provide an explicit deadline timestamp at which the locked state of the lock
-	/// becomes stale and may be dismissed by `fn try_lock(..)`, `fn spin_lock(..)` and others.
-	fn with_deadline(key: &'a [u8], lock_deadline: Timestamp) -> Self;
-}
-
-impl<'a> TimeLock<'a> for StorageLock<'a, Timestamp> {
-	fn with_deadline(key: &'a [u8], lock_deadline: Timestamp) -> Self {
+impl<'a> StorageLock<'a, Time> {
+	pub fn with_deadline(key: &'a [u8], expiration_duration: Duration) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
-			deadline: lock_deadline,
+			lockable: Time {
+				timestamp: offchain::timestamp(),
+				expiration_duration: expiration_duration,
+			},
 		}
 	}
 }
 
-/// Extension for storage locks which are based on blocks in addition to a timestamp.
-///
-/// The provider `B` does provide means of obtaining a default deadline as well as obtaining
-/// the current block number. Expiry and others are actually checked.
-trait BlockAndTimeLock<'a, B>: Sized
+impl<'a, B> StorageLock<'a, BlockAndTime<B>>
 where
 	B: BlockNumberProvider,
 {
-	fn with_block_and_time_deadline(
+	pub fn with_block_and_time_deadline(
 		key: &'a [u8],
-		block_deadline: B::BlockNumber,
-		time_deadline: Timestamp,
-	) -> Self;
-}
-
-impl<'a, B> BlockAndTimeLock<'a, B> for StorageLock<'a, BlockAndTime<B>>
-where
-	B: BlockNumberProvider,
-{
-	fn with_block_and_time_deadline(
-		key: &'a [u8],
-		block_deadline: B::BlockNumber,
-		time_deadline: Timestamp,
+		expiration_block_number_offset: u32,
+		expiration_duration: Duration,
 	) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
-			deadline: BlockAndTime {
-				block_number: block_deadline,
-				timestamp: time_deadline,
+			lockable: BlockAndTime::<B> {
+				lock_instant: BlockAndTimeInstant::<B>::current(),
+				expiration_block_number_offset,
+				expiration_duration,
 			},
 		}
 	}
@@ -332,21 +380,18 @@ where
 pub trait BlockNumberProvider {
 	/// Type of `BlockNumber` the provider is going to provide
 	/// with `deadline()` and `current()`.
-	type BlockNumber: Codec + Clone + Ord + Eq;
+	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32Bit;
 	/// Returns the current block number.
 	///
 	/// Commonly this will be implemented as
 	/// ```ignore
-	/// fn current() -> Self {
+	/// fn current_block_number() -> Self {
 	///     frame_system::Module<Trait>::block_number()
 	/// }
 	/// ```
 	/// but note that the definition of current is
 	/// application specific.
 	fn current_block_number() -> Self::BlockNumber;
-
-	/// Provide a default deadline as `BlockNumber`.
-	fn deadline_block_number() -> Self::BlockNumber;
 }
 
 #[cfg(test)]
@@ -365,12 +410,12 @@ mod tests {
 		t.register_extension(OffchainExt::new(offchain));
 
 		t.execute_with(|| {
-			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock_1");
+			let mut lock = StorageLock::<'_, Time>::new(b"lock_1");
 
 			let val = StorageValueRef::persistent(b"protected_value");
 
 			{
-				let _guard = lock.spin_lock();
+				let _guard = lock.lock();
 
 				val.set(&VAL_1);
 
@@ -378,7 +423,7 @@ mod tests {
 			}
 
 			{
-				let _guard = lock.spin_lock();
+				let _guard = lock.lock();
 				val.set(&VAL_2);
 
 				assert_eq!(val.get::<u32>(), Some(Some(VAL_2)));
@@ -395,11 +440,11 @@ mod tests {
 		t.register_extension(OffchainExt::new(offchain));
 
 		t.execute_with(|| {
-			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock_2");
+			let mut lock = StorageLock::<'_, Time>::new(b"lock_2");
 
 			let val = StorageValueRef::persistent(b"protected_value");
 
-			let guard = lock.spin_lock();
+			let guard = lock.lock();
 
 			val.set(&VAL_1);
 
@@ -419,20 +464,20 @@ mod tests {
 		t.register_extension(OffchainExt::new(offchain));
 
 		t.execute_with(|| {
-			let sleep_until = Timestamp::current().add(Duration::from_millis(500));
-			let lock_expiration = Timestamp::current().add(Duration::from_millis(200));
+			let sleep_until = offchain::timestamp().add(Duration::from_millis(500));
+			let lock_expiration = Duration::from_millis(200);
 
-			let mut lock = StorageLock::<'_, Timestamp>::with_deadline(b"lock_3", lock_expiration);
+			let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_3", lock_expiration);
 
 			{
-				let guard = lock.spin_lock();
+				let guard = lock.lock();
 				guard.forget();
 			}
 
 			// assure the lock expires
 			offchain::sleep_until(sleep_until);
 
-			let mut lock = StorageLock::<'_, Timestamp>::new(b"lock_3");
+			let mut lock = StorageLock::<'_, Time>::new(b"lock_3");
 			let res = lock.try_lock();
 			assert!(res.is_ok());
 			let guard = res.unwrap();

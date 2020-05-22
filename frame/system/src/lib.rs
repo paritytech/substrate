@@ -1271,10 +1271,6 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	}
 }
 
-/// Number of blocks until a `BlockNumberProvider` based
-/// storage lock will expire from the point it was instantiated.
-const BLOCK_NUMBER_EXPIRATION_DELTA : u32 = 4u32;
-
 impl<T> BlockNumberProvider for Module<T>
 where
 	T: crate::Trait,
@@ -1284,10 +1280,6 @@ where
 
 	fn current_block_number() -> Self::BlockNumber {
 		Module::<T>::block_number()
-	}
-
-	fn deadline_block_number() -> Self::BlockNumber {
-		Self::current_block_number() + Self::BlockNumber::from(BLOCK_NUMBER_EXPIRATION_DELTA)
 	}
 }
 
