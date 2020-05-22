@@ -29,9 +29,7 @@ use sp_phragmen::*;
 const SEED: u32 = 0;
 
 /// Grab a funded user.
-pub fn create_funded_user<T: Trait>(string: &'static str, n: u32, balance_factor: u32)
-	-> T::AccountId
-{
+pub fn create_funded_user<T: Trait>(string: &'static str, n: u32, balance_factor: u32) -> T::AccountId {
 	let user = account(string, n, SEED);
 	let balance = T::Currency::minimum_balance() * balance_factor.into();
 	T::Currency::make_free_balance_be(&user, balance);
@@ -49,12 +47,7 @@ pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(
-		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup,
-		amount,
-		reward_destination,
-	)?;
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
 	return Ok((stash, controller))
 }
 
