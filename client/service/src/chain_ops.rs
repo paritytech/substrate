@@ -61,8 +61,7 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 
 /// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
 /// Implements the Iterator Trait, calling `next()` will decode the next SignedBlock and return it.
-enum BlockIter<R, B> 
-where
+enum BlockIter<R, B> where
 	R: std::io::Read + std::io::Seek,
 {
 	Binary {
@@ -81,10 +80,9 @@ where
 	},
 }
 
-impl<R, B> BlockIter<R, B>
-	where
-		R: Read + Seek + 'static,
-		B: BlockT + MaybeSerializeDeserialize,
+impl<R, B> BlockIter<R, B> where
+	R: Read + Seek + 'static,
+	B: BlockT + MaybeSerializeDeserialize,
 {
 	fn new(input: R, binary: bool) -> Result<Self, String> {
 		if binary {
@@ -99,7 +97,7 @@ impl<R, B> BlockIter<R, B>
 				reader,
 			})
 		} else {
-			let stream_deser  = Deserializer::from_reader(input)
+			let stream_deser = Deserializer::from_reader(input)
 				.into_iter::<SignedBlock<B>>();
 			Ok(BlockIter::Json {
 				reader: stream_deser,
@@ -126,10 +124,9 @@ impl<R, B> BlockIter<R, B>
 	}
 }
 
-impl<R, B> Iterator for BlockIter<R, B> 
-	where
-		R: Read + Seek + 'static,
-		B: BlockT + MaybeSerializeDeserialize,
+impl<R, B> Iterator for BlockIter<R, B> where
+	R: Read + Seek + 'static\
+	B: BlockT + MaybeSerializeDeserialize,
 {
 	type Item = Result<SignedBlock<B>, String>;
 
@@ -156,8 +153,11 @@ impl<R, B> Iterator for BlockIter<R, B>
 }
 
 /// Imports the SignedBlock to the queue.
-fn import_block_to_queue<TBl, TImpQu>(signed_block: SignedBlock<TBl>, queue: &mut TImpQu, force: bool)
-where
+fn import_block_to_queue<TBl, TImpQu>(
+	signed_block: SignedBlock<TBl>,
+	queue: &mut TImpQu,
+	force: bool
+) where
 	TBl: BlockT + MaybeSerializeDeserialize,
 	TImpQu: 'static + ImportQueue<TBl>,
 {
@@ -178,7 +178,11 @@ where
 }
 
 /// Returns true if we have imported every block we were supposed to import, else returns false.
-fn importing_is_done(num_expected_blocks: Option<u64>, read_block_count: u64, imported_blocks: u64) -> bool {
+fn importing_is_done(
+	num_expected_blocks: Option<u64>,
+	read_block_count: u64,
+	imported_blocks: u64
+) -> bool {
 	if let Some(num_expected_blocks) = num_expected_blocks {
 		imported_blocks >= num_expected_blocks
 	} else {
@@ -259,8 +263,7 @@ impl<B: BlockT> Speedometer<B> {
 }
 
 /// Different State that the `import_blocks` future could be in.
-enum ImportState<R, B>
-where 
+enum ImportState<R, B> where 
 	R: Read + Seek + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
@@ -419,8 +422,7 @@ impl<
 							read_block_count, client.chain_info().best_number
 						);
 						return std::task::Poll::Ready(Ok(()))
-					}
-					else {
+					} else {
 						thread::sleep(delay);
 						// Importing is not done, we still have to wait for the queue to finish.
 						state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
