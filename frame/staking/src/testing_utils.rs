@@ -44,10 +44,16 @@ pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
 {
 	let stash = create_funded_user::<T>("stash", n, balance_factor);
 	let controller = create_funded_user::<T>("controller", n, balance_factor);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let controller_lookup: <T::Lookup as StaticLookup>::Source =
+		T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	Staking::<T>::bond(
+		RawOrigin::Signed(stash.clone()).into(),
+		controller_lookup,
+		amount,
+		reward_destination,
+	)?;
 	return Ok((stash, controller))
 }
 
