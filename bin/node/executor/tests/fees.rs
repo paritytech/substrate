@@ -22,7 +22,7 @@ use frame_support::{
 	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
 };
 use sp_core::NeverNativeValue;
-use sp_runtime::{Fixed128, Perbill};
+use sp_runtime::{FixedPointNumber, Fixed128, Perbill};
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
 	TransactionByteFee,
@@ -39,7 +39,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut t = new_test_ext(COMPACT_CODE, false);
 
 	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed128::from_parts(0);
+	let mut prev_multiplier = Fixed128::from_inner(0);
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
