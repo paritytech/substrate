@@ -310,12 +310,13 @@ pub fn init_active_era() {
 pub fn create_assignments_for_offchain<T: Trait>(
 	num_assignments: u32,
 	winners: Vec<<T::Lookup as StaticLookup>::Source>,
-) -> Result<(
+) -> Result<
+	(
 		Vec<(T::AccountId, ExtendedBalance)>,
 		Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	),
-	&'static str>
-{
+	&'static str
+> {
 	let ratio = OffchainAccuracy::from_rational_approximation(1, MAX_NOMINATIONS);
 	let assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>> = <Nominators<T>>::iter()
 		.take(num_assignments as usize)
