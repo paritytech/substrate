@@ -2645,7 +2645,7 @@ impl<T: Trait> Module<T> {
 
 		// size of the solution must be correct.
 		ensure!(
-			snapshot_validators_length == election_size.validators.into(),
+			snapshot_validators_length == u32::from(election_size.validators),
 			Error::<T>::PhragmenBogusElectionSize,
 		);
 
