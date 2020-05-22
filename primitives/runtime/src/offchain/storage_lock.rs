@@ -72,7 +72,7 @@ const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
 ///
 /// Bound for an item that has a stateful ordered meaning
 /// without explicitly requiring `Ord` trait in general.
-pub trait Lockable: Sized + Codec + Copy {
+pub trait Lockable: Sized + Codec + Clone {
 	/// Get the current value of lockable.
 	fn current() -> Self;
 
@@ -141,10 +141,6 @@ impl<B: BlockNumberProvider> Clone for BlockAndTime<B> {
 	}
 }
 
-// derive not possible, since `B` does not necessarily implement `trait Copy`
-impl<B: BlockNumberProvider> Copy for BlockAndTime<B>
-{
-}
 
 impl<B: BlockNumberProvider> Lockable for BlockAndTime<B>
 {
@@ -230,21 +226,19 @@ where
 	where
 		'a: 'b,
 	{
-	let _ = self.try_lock_inner(self.deadline)?;
+	let _ = self.try_lock_inner(self.deadline.clone())?;
 	Ok(StorageLockGuard::<'a, 'b> { lock: Some(self) })
 	}
 
 	/// Try grabbing the lock until its expiry is reached.
 	///
 	/// Returns an error if the lock expired before it could be caught.
-	pub fn spin_lock<'b>(&'b mut self) -> StorageLockGuard<'a, 'b, L>
-	where
-		'a: 'b,
+	pub fn spin_lock(&mut self) -> StorageLockGuard<'a, '_, L>
 	{
 		loop {
 			// blind attempt on locking
-			let deadline = match self.try_lock_inner(self.deadline) {
-				Ok(_) => return StorageLockGuard::<'a, 'b, L> { lock: Some(self) },
+			let deadline = match self.try_lock_inner(self.deadline.clone()) {
+				Ok(_) => return StorageLockGuard::<'a, '_, L> { lock: Some(self) },
 				Err(Some(other_locks_deadline)) => other_locks_deadline,
 				_ => L::deadline(), // use the default
 			};
@@ -253,7 +247,7 @@ where
 	}
 
 	/// Explicitly unlock the lock.
-	pub fn unlock(&mut self) {
+	fn unlock(&mut self) {
 		self.value_ref.clear();
 	}
 }
@@ -340,7 +334,7 @@ where
 pub trait BlockNumberProvider {
 	/// Type of `BlockNumber` the provider is going to provide
 	/// with `deadline()` and `current()`.
-	type BlockNumber: Codec + Copy + Ord + Eq;
+	type BlockNumber: Codec + Clone + Ord + Eq;
 	/// Returns the current block number.
 	///
 	/// Commonly this will be implemented as
