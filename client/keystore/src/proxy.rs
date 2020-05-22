@@ -3,7 +3,7 @@
 use futures::{
 	ready,
 	future::Future,
-	stream::{Stream, FuturesUnordered},
+	stream::{FuturesUnordered, Stream, StreamExt},
 	channel::{
 		oneshot,
 		mpsc::{Sender, Receiver, channel},
@@ -46,17 +46,6 @@ pub enum KeystoreResponse {
 	InsertUnknown(Result<(), ()>),
 }
 
-pub enum PendingFuture {
-	SignWith(Pin<Box<dyn Future<Output = Result<Vec<u8>, BareCryptoStoreError>>>>),
-	HasKeys(Pin<Box<dyn Future<Output = bool>>>),
-	InsertUnknown(Pin<Box<dyn Future<Output = Result<(), ()>>>>),
-}
-
-struct PendingCall {
-	future: PendingFuture,
-	sender: oneshot::Sender<KeystoreResponse>,
-}
-
 pub struct KeystoreProxy {
 	sender: Sender<KeystoreRequest>,
 }
@@ -80,7 +69,7 @@ impl KeystoreProxy {
 		};
 		let mut sender = self.sender.clone();
 
-		sender.send(request).await;
+		let _ = sender.send(request).await;
 
 		request_receiver.await
 	}
@@ -118,7 +107,7 @@ impl KeystoreProxy {
 pub struct KeystoreReceiver {
 	receiver: Receiver<KeystoreRequest>,
 	store: BareCryptoStorePtr,
-	pending: FuturesUnordered<PendingCall>,
+	pending: FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
 impl KeystoreReceiver {
@@ -132,78 +121,37 @@ impl KeystoreReceiver {
 
 	fn process_request(&mut self, request: KeystoreRequest) {
 		let keystore = self.store.clone();
+		let sender = request.sender;
 		match request.method {
 			RequestMethod::SignWith(id, key, msg) => {
 				let future = async move {
-					keystore.read().sign_with(id, &key, &msg).await
+					let result = keystore.read().sign_with(id, &key, &msg).await;
+					let _ = sender.send(KeystoreResponse::SignWith(result));
 				};
 
-				self.pending.push(PendingCall {
-					future: PendingFuture::SignWith(Box::pin(future)),
-					sender: request.sender,
-				});
+				self.pending.push(Box::pin(future));
 			},
 			RequestMethod::HasKeys(keys) => {
 				let future = async move {
-					keystore.read().has_keys(&keys).await
+					let result = keystore.read().has_keys(&keys).await;
+					let _ = sender.send(KeystoreResponse::HasKeys(result));
 				};
 
-				self.pending.push(PendingCall {
-					future: PendingFuture::HasKeys(Box::pin(future)),
-					sender: request.sender,
-				});
+				self.pending.push(Box::pin(future));
 			},
 			RequestMethod::InsertUnknown(key_type, suri, pubkey) => {
 				let future = async move {
-					keystore.write().insert_unknown(
+					let result = keystore.write().insert_unknown(
 						key_type,
 						suri.as_str(),
 						&pubkey,
-					).await
+					).await;
+					let _ = sender.send(KeystoreResponse::InsertUnknown(result));
 				};
 
-				self.pending.push(PendingCall {
-					future: PendingFuture::InsertUnknown(Box::pin(future)),
-					sender: request.sender,
-				});
+				self.pending.push(Box::pin(future));
 			}
 		}
-	}
-}
-
-impl Future for PendingFuture {
-	type Output = KeystoreResponse;
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match self.get_mut() {
-			PendingFuture::HasKeys(fut) => {
-				if let Poll::Ready(result) = fut.as_mut().poll(cx) {
-					return Poll::Ready(KeystoreResponse::HasKeys(result));
-				}
-			},
-			PendingFuture::InsertUnknown(fut) => {
-				if let Poll::Ready(result) = fut.as_mut().poll(cx) {
-					return Poll::Ready(KeystoreResponse::InsertUnknown(result));
-				}
-			},
-			PendingFuture::SignWith(fut) => {
-				if let Poll::Ready(result) = fut.as_mut().poll(cx) {
-					return Poll::Ready(KeystoreResponse::SignWith(result));
-				}
-			}
-		}
-		return Poll::Pending;
-	}
-}
-
-impl Future for PendingCall {
-	type Output = ();
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let sender = &mut self.sender;
-		if let Poll::Ready(response) = Pin::new(&mut self.future).poll(cx) {
-			sender.send(response);
-		}
-
-		return Poll::Pending;
 	}
 }
 
@@ -211,8 +159,18 @@ impl Future for KeystoreReceiver {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		Pin::new(&mut self.pending).poll_next(cx);
-	
+		loop {
+			match self.pending.poll_next_unpin(cx) {
+				Poll::Ready(Some(())) => {},
+				Poll::Pending => break,
+				Poll::Ready(None) => {
+					// Stream has terminated
+					// No need for this future to poll anymore.
+					return Poll::Ready(());
+				},
+			}
+		}
+
 		if let Some(request) = ready!(Pin::new(&mut self.receiver).poll_next(cx)) {
 			self.process_request(request);
 		}
