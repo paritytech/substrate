@@ -5975,7 +5975,6 @@ dependencies = [
  "app_dirs",
  "atty",
  "chrono",
- "clap",
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
