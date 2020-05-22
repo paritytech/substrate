@@ -119,13 +119,13 @@ impl<R, B> BlockIter<R, B> where
 	fn num_expected_blocks(&self) -> Option<u64> {
 		match self {
 			BlockIter::Binary { num_expected_blocks, ..} => Some(*num_expected_blocks),
-			BlockIter::Json {..}=> None
+			BlockIter::Json {..} => None
 		}
 	}
 }
 
 impl<R, B> Iterator for BlockIter<R, B> where
-	R: Read + Seek + 'static\
+	R: Read + Seek + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
 	type Item = Result<SignedBlock<B>, String>;
