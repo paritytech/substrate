@@ -253,6 +253,7 @@ impl<'a> Peer<'a> {
 
 	/// If we are the `Unknown` variant, returns the inner `ConnectedPeer`. Returns `None`
 	/// otherwise.
+	#[cfg(test)]	// Feel free to remove this if this function is needed outside of tests
 	pub fn into_not_connected(self) -> Option<NotConnectedPeer<'a>> {
 		match self {
 			Peer::Connected(_) => None,

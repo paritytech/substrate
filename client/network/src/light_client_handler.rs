@@ -1489,7 +1489,6 @@ mod tests {
 			out_peers: 128,
 			bootnodes: Vec::new(),
 			reserved_only: false,
-			reserved_nodes: Default::default(),
 			priority_groups: Vec::new(),
 		};
 		sc_peerset::Peerset::from_config(cfg)

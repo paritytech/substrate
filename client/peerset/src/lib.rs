@@ -35,6 +35,8 @@ pub use libp2p::PeerId;
 const BANNED_THRESHOLD: i32 = 82 * (i32::min_value() / 100);
 /// Reputation change for a node when we get disconnected from it.
 const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
+/// Reserved peers group ID
+const RESERVED_NODES: &'static str = "reserved";
 /// Amount of time between the moment we disconnect from a node and the moment we remove it from
 /// the list.
 const FORGET_AFTER: Duration = Duration::from_secs(3600);
@@ -167,13 +169,7 @@ pub struct PeersetConfig {
 	/// If true, we only accept nodes in [`PeersetConfig::priority_groups`].
 	pub reserved_only: bool,
 
-	/// Lists of nodes that don't occupy slots and that we should always be connected to.
-	///
-	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >			otherwise it will not be able to connect to them.
-	pub reserved_nodes: HashSet<PeerId>,
-
-	/// Lists of nodes we connect to in priority.
+	/// Lists of nodes we should always be connected to.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
@@ -190,10 +186,8 @@ pub struct Peerset {
 	data: peersstate::PeersState,
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
-	/// Lists of nodes that don't occupy slots and that we should always be connected to.
+	/// Lists of nodes that don't occupy slots and that we should try to always be connected to.
 	/// Is kept in sync with the list of reserved nodes in [`Peerset::data`].
-	reserved_nodes: HashSet<PeerId>,
-	/// Lists of nodes we should always be connected to.
 	priority_groups: HashMap<String, HashSet<PeerId>>,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
 	rx: TracingUnboundedReceiver<Action>,
@@ -223,14 +217,13 @@ impl Peerset {
 			tx,
 			rx,
 			reserved_only: config.reserved_only,
-			reserved_nodes: config.reserved_nodes.clone(),
-			priority_groups: config.priority_groups.into_iter().collect(),
+			priority_groups: config.priority_groups.clone().into_iter().collect(),
 			message_queue: VecDeque::new(),
 			created: now,
 			latest_time_update: now,
 		};
 
-		for node in config.reserved_nodes {
+		for node in config.priority_groups.into_iter().flat_map(|(_, l)| l) {
 			peerset.data.add_no_slot_node(node);
 		}
 
@@ -247,30 +240,20 @@ impl Peerset {
 	}
 
 	fn on_add_reserved_peer(&mut self, peer_id: PeerId) {
-		self.reserved_nodes.insert(peer_id.clone());
-		self.data.add_no_slot_node(peer_id);
-		self.alloc_slots();
+		self.on_add_to_priority_group(RESERVED_NODES, peer_id);
 	}
 
 	fn on_remove_reserved_peer(&mut self, peer_id: PeerId) {
-		self.reserved_nodes.remove(&peer_id);
-		self.data.remove_no_slot_node(&peer_id);
-
-		if self.reserved_only {
-			if let peersstate::Peer::Connected(peer) = self.data.peer(&peer_id) {
-				peer.disconnect();
-				self.message_queue.push_back(Message::Drop(peer_id));
-			}
-		}
+		self.on_remove_from_priority_group(RESERVED_NODES, peer_id);
 	}
 
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
 		self.reserved_only = reserved_only;
 
 		if self.reserved_only {
-			// Disconnect non-reserved nodes.
+			// Disconnect nodes that aren't in any priority group.
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
-				if self.reserved_nodes.contains(&peer_id) {
+				if self.priority_groups.values().any(|l| l.contains(&peer_id)) {
 					continue;
 				}
 
@@ -286,26 +269,65 @@ impl Peerset {
 	}
 
 	fn on_set_priority_group(&mut self, group_id: &str, peers: HashSet<PeerId>) {
-		if peers.is_empty() {
-			self.priority_groups.remove(group_id);
-		} else {
-			let group = self.priority_groups.entry(group_id.to_owned()).or_default();
-			*group = peers;
+		// Determine the difference between the current group and the new list.
+		let (to_insert, to_remove) = {
+			let current_group = self.priority_groups.entry(group_id.to_owned()).or_default();
+			let to_insert = peers.iter().filter(|peer| !current_group.iter().any(|p| p == *peer))
+				.cloned().collect::<Vec<_>>();
+			let to_remove = current_group.iter().filter(|peer| !peers.iter().any(|p| p == *peer))
+				.cloned().collect::<Vec<_>>();
+			(to_insert, to_remove)
+		};
+
+		// Enumerate elements in `peers` not in `current_group`.
+		for peer_id in &to_insert {
+			// We don't call `on_add_to_priority_group` here in order to avoid calling
+			// `alloc_slots` all the time.
+			self.priority_groups.entry(group_id.to_owned()).or_default().insert(peer_id.clone());
+			self.data.add_no_slot_node(peer_id.clone());
 		}
 
-		self.alloc_slots();
+		// Enumerate elements in `current_group` not in `peers`.
+		for peer in to_remove {
+			self.on_remove_from_priority_group(group_id, peer);
+		}
+
+		if !to_insert.is_empty() {
+			self.alloc_slots();
+		}
 	}
 
 	fn on_add_to_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
-		let mut peers = self.priority_groups.get(group_id).cloned().unwrap_or_default();
-		peers.insert(peer_id);
-		self.on_set_priority_group(group_id, peers);
+		self.priority_groups.entry(group_id.to_owned()).or_default().insert(peer_id.clone());
+		self.data.add_no_slot_node(peer_id);
+		self.alloc_slots();
 	}
 
 	fn on_remove_from_priority_group(&mut self, group_id: &str, peer_id: PeerId) {
-		let mut peers = self.priority_groups.get(group_id).cloned().unwrap_or_default();
-		peers.remove(&peer_id);
-		self.on_set_priority_group(group_id, peers);
+		if let Some(priority_group) = self.priority_groups.get_mut(group_id) {
+			if !priority_group.remove(&peer_id) {
+				// `PeerId` wasn't in the group in the first place.
+				return;
+			}
+		} else {
+			// Group doesn't exist, so the `PeerId` can't be in it.
+			return;
+		}
+
+		// If that `PeerId` is still in one of the other groups, don't do anything more.
+		if self.priority_groups.values().any(|l| l.contains(&peer_id)) {
+			return;
+		}
+
+		// Otherwise, that peer is no longer no-slot-occupying.
+
+		self.data.remove_no_slot_node(&peer_id);
+		if self.reserved_only {
+			if let peersstate::Peer::Connected(peer) = self.data.peer(&peer_id) {
+				peer.disconnect();
+				self.message_queue.push_back(Message::Drop(peer_id));
+			}
+		}
 	}
 
 	fn on_report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
@@ -392,50 +414,7 @@ impl Peerset {
 	fn alloc_slots(&mut self) {
 		self.update_time();
 
-		// First, try to connect to all the reserved nodes we are not connected to.
-		loop {
-			let next = {
-				let data = &mut self.data;
-				self.reserved_nodes
-					.iter()
-					.filter(move |n| {
-						data.peer(n).into_connected().is_none()
-					})
-					.next()
-					.cloned()
-			};
-
-			let next = match next {
-				Some(n) => n,
-				None => break,
-			};
-
-			let next = match self.data.peer(&next) {
-				peersstate::Peer::Unknown(n) => n.discover(),
-				peersstate::Peer::NotConnected(n) => n,
-				peersstate::Peer::Connected(_) => {
-					debug_assert!(false, "State inconsistency: not connected state");
-					break;
-				}
-			};
-
-			if let Ok(conn) = next.try_outgoing() {
-				self.message_queue.push_back(Message::Connect(conn.into_peer_id()));
-			} else {
-				debug_assert!(
-					false,
-					"State inconsistency: connecting to reserved node shouldn't fail to find slot"
-				);
-				break;
-			}
-		}
-
-		// Nothing to do if we're in reserved mode.
-		if self.reserved_only {
-			return;
-		}
-
-		// Next up are priority groups. Try to connect to all of them.
+		// Try to connect to all the nodes in priority groups and that we are not connected to.
 		loop {
 			let next = {
 				let data = &mut self.data;
@@ -443,7 +422,7 @@ impl Peerset {
 					.values()
 					.flatten()
 					.filter(move |n| {
-						data.peer(n).into_not_connected().is_some()
+						data.peer(n).into_connected().is_none()
 					})
 					.next()
 					.cloned()
@@ -469,7 +448,12 @@ impl Peerset {
 			}
 		}
 
-		// Finally, we try to connect to non-priority nodes.
+		// Nothing more to do if we're in reserved mode.
+		if self.reserved_only {
+			return;
+		}
+
+		// Now, we try to connect to non-priority nodes.
 		loop {
 			// Try to grab the next node to attempt to connect to.
 			let next = match self.data.highest_not_connected_peer() {
@@ -678,7 +662,6 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode],
 			reserved_only: true,
-			reserved_nodes: Default::default(),
 			priority_groups: Vec::new(),
 		};
 
@@ -707,7 +690,6 @@ mod tests {
 			out_peers: 1,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: Default::default(),
 			priority_groups: Vec::new(),
 		};
 
@@ -735,7 +717,6 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: Default::default(),
 			priority_groups: vec![],
 		};
 
@@ -757,7 +738,6 @@ mod tests {
 			out_peers: 25,
 			bootnodes: vec![],
 			reserved_only: false,
-			reserved_nodes: Default::default(),
 			priority_groups: vec![],
 		});
 

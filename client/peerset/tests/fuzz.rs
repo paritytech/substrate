@@ -45,15 +45,15 @@ fn test_once() {
 			known_nodes.insert(id.clone());
 			id
 		}).collect(),
-		reserved_nodes: {
-			(0 .. Uniform::new_inclusive(0, 2).sample(&mut rng)).map(|_| {
+		priority_groups: {
+			let nodes = (0 .. Uniform::new_inclusive(0, 2).sample(&mut rng)).map(|_| {
 				let id = PeerId::random();
 				known_nodes.insert(id.clone());
 				reserved_nodes.insert(id.clone());
 				id
-			}).collect()
+			}).collect();
+			vec![("foo".to_string(), nodes)]
 		},
-		priority_groups: Default::default(),
 		reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
 		in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
 		out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
