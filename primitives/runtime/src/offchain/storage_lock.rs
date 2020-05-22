@@ -61,7 +61,6 @@ use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
-//use frame_system how?
 
 /// Default expiry duration in milliseconds.
 const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
@@ -123,11 +122,7 @@ impl Lockable for Timestamp {
 
 /// Lockable based on the current block number and a timestamp based deadline.
 #[derive(Encode, Decode)]
-pub struct BlockAndTime<B>
-where
-	B: BlockNumberProvider,
-	<B as BlockNumberProvider>::BlockNumber: Copy,
-{
+pub struct BlockAndTime<B: BlockNumberProvider> {
 	/// The block number that has to be reached in order
 	/// for the lock to be considered stale.
 	pub block_number: <B as BlockNumberProvider>::BlockNumber,
@@ -137,14 +132,10 @@ where
 }
 
 // derive not possible, since `B` does not necessarily implement `trait Clone`
-impl<B> Clone for BlockAndTime<B>
-where
-	B: BlockNumberProvider,
-	<B as BlockNumberProvider>::BlockNumber: Clone,
-{
+impl<B: BlockNumberProvider> Clone for BlockAndTime<B> {
 	fn clone(&self) -> Self {
 		Self {
-			block_number: self.block_number,
+			block_number: self.block_number.clone(),
 			timestamp: self.timestamp,
 		}
 	}
@@ -188,12 +179,9 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B>
 /// Storage based lock.
 ///
 /// A lock that is persisted in the DB and provides a mutex behavior
-/// with a defined safety expirey deadline based on a [`Lockable`](Self::Lockable)
+/// with a defined safety expiry deadline based on a [`Lockable`](Self::Lockable)
 /// implementation.
-pub struct StorageLock<'a, L>
-where
-	L: Lockable,
-{
+pub struct StorageLock<'a, L> {
 	// A storage value ref which defines the DB entry representing the lock.
 	value_ref: StorageValueRef<'a>,
 	deadline: L,
@@ -242,10 +230,8 @@ where
 	where
 		'a: 'b,
 	{
-		match self.try_lock_inner(self.deadline) {
-			Ok(_) => Ok(StorageLockGuard::<'a, 'b> { lock: Some(self) }),
-			Err(e) => Err(e),
-		}
+	let _ = self.try_lock_inner(self.deadline)?;
+	Ok(StorageLockGuard::<'a, 'b> { lock: Some(self) })
 	}
 
 	/// Try grabbing the lock until its expiry is reached.
