@@ -3314,7 +3314,8 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 }
 
 /// This is intended to be used with `FilterHistoricalOffences`.
-impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>> for Module<T> where
+impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>>
+for Module<T> where
 	T: pallet_session::Trait<ValidatorId = <T as frame_system::Trait>::AccountId>,
 	T: pallet_session::historical::Trait<
 		FullIdentification = Exposure<<T as frame_system::Trait>::AccountId, BalanceOf<T>>,
