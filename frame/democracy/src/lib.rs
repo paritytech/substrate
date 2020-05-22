@@ -652,6 +652,9 @@ decl_module! {
 		/// The amount of balance that must be deposited per byte of preimage stored.
 		const PreimageByteDeposit: BalanceOf<T> = T::PreimageByteDeposit::get();
 
+		/// The maximum number of votes for an account.
+		const MaxVotes: u32 = T::MaxVotes::get();
+
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
