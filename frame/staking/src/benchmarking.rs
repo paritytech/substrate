@@ -576,7 +576,8 @@ benchmarks! {
 					score.clone(),
 					era,
 					size,
-			).is_ok());
+				).is_ok()
+			);
 
 			// new solution has been accepted.
 			assert_eq!(<Staking<T>>::queued_score().unwrap(), score);
@@ -593,7 +594,8 @@ benchmarks! {
 				score.clone(),
 				era,
 				size,
-		).is_err());
+			).is_err()
+		);
 	}
 }
 
