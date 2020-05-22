@@ -222,12 +222,10 @@ impl<'a, L: Lockable> StorageLock<'a, L>
 	/// Returns a lock guard on success, otherwise an error containing `None` in
 	/// case the mutex was already unlocked before, or if the lock is still held
 	/// by another process `Err(())`.
-	pub fn try_lock<'b>(&'b mut self) -> Result<StorageLockGuard<'a, 'b, L>, ()>
-	where
-		'a: 'b,
+	pub fn try_lock(&'_ mut self) -> Result<StorageLockGuard<'a, '_, L>, ()>
 	{
 		let _ = self.try_lock_inner(self.deadline.clone()).map_err(|_opt| { () })?;
-		Ok(StorageLockGuard::<'a, 'b> { lock: Some(self) })
+		Ok(StorageLockGuard::<'a, '_> { lock: Some(self) })
 	}
 
 	/// Try grabbing the lock until its expiry is reached.
