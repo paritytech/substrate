@@ -559,13 +559,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Registers a new notifications protocol.
 	///
-	/// After that, you can call `write_notifications`.
+	/// After a protocol has been registered, you can call `write_notifications`.
+	///
+	/// **Important**: This method is a work-around, and you are instead strongly encouraged to
+	/// pass the protocol in the `NetworkConfiguration::notifications_protocols` list instead.
+	/// If you have no other choice but to use this method, you are very strongly encouraged to
+	/// call it very early on. Any connection open will retain the protocols that were registered
+	/// then, and not any new one.
 	///
 	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
 	/// about the protocol that you have registered.
-	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
-	/// will retain the protocols that were registered then, and not any new one.
+	// TODO: remove this method after https://github.com/paritytech/substrate/issues/4587
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
