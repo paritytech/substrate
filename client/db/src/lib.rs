@@ -214,7 +214,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'a, [u8]>, Option<std::borrow::Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.storage_root(delta)
 	}
@@ -1673,7 +1673,6 @@ pub(crate) mod tests {
 	use sp_runtime::generic::DigestItem;
 	use sp_state_machine::{TrieMut, TrieDBMut};
 	use sp_blockchain::{lowest_common_ancestor, tree_route};
-	use std::borrow::Cow;
 
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
@@ -1807,7 +1806,7 @@ pub(crate) mod tests {
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
-				.map(|(x, y)| (Cow::Borrowed(&x[..]), Some(Cow::Borrowed(&y[..]))))
+				.map(|(x, y)| (&x[..], Some(&y[..])))
 			).0.into();
 			let hash = header.hash();
 
@@ -1851,8 +1850,7 @@ pub(crate) mod tests {
 
 			let (root, overlay) = op.old_state.storage_root(
 				storage.iter()
-					.cloned()
-					.map(|(k, v)| (Cow::Owned(k), v.map(Cow::Owned)))
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
 			);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();

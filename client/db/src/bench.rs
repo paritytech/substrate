@@ -195,7 +195,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'a, [u8]>, Option<std::borrow::Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
 	}

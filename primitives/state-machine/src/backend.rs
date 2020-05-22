@@ -20,7 +20,6 @@
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
-use std::borrow::Cow;
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
@@ -121,7 +120,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'a, [u8]>, Option<std::borrow::Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
@@ -162,12 +161,12 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	fn full_storage_root<'a, 'b>(
+	fn full_storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		child_deltas: impl Iterator<Item = (
 			&'a ChildInfo,
-			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>
+			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 		)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
 		let mut txs: Self::Transaction = Default::default();
@@ -184,14 +183,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root(
-			delta
-				.map(|(k, v)| (Cow::Borrowed(k), v.map(|v| Cow::Borrowed(v))))
-				.chain(
-					child_roots
-						.into_iter()
-						.map(|(k, v)| (Cow::Owned(k), v.map(|v| Cow::Owned(v))))
-				)
+		let (root, parent_txs) = self.storage_root(delta
+			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			.chain(
+				child_roots
+					.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			)
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -271,7 +269,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 
 	fn storage_root<'b>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'b, [u8]>, Option<std::borrow::Cow<'b, [u8]>>)>,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		(*self).storage_root(delta)
 	}

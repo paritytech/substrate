@@ -27,7 +27,6 @@ use crate::{
 	StorageKey, StorageValue, Backend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
-use std::borrow::Cow;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -170,7 +169,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(Cow<'a, [u8]>, Option<Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
@@ -336,7 +335,7 @@ pub mod tests {
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
 		let (new_root, mut tx) = test_trie().storage_root(
-			iter::once((Cow::Borrowed(&b"new-key"[..]), Some(Cow::Borrowed(&b"new-value"[..])))),
+			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
 		);
 		assert!(!tx.drain().is_empty());
 		assert!(new_root != test_trie().storage_root(iter::empty()).0);
