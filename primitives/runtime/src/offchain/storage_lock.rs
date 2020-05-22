@@ -81,14 +81,14 @@ pub trait Lockable: Sized + Codec + Clone {
 
 	/// Verify the current value of `self` against `deadline`.
 	/// to determine if the lock has expired.
-	fn expired(&self, deadline: &Self) -> bool;
+	fn expired(deadline: &Self) -> bool;
 
 	/// Snooze the thread for time determined by `self` and `other`.
 	///
 	/// Only called if not expired just yet.
 	/// Note that the deadline is only passed to allow some optimizations
 	/// for some `L` types.
-	fn snooze(&self, _deadline: &Self) {
+	fn snooze(_deadline: &Self) {
 		sp_io::offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE,
 		)));
@@ -106,17 +106,18 @@ impl Lockable for Timestamp {
 		))
 	}
 
-	fn expired(&self, reference: &Self) -> bool {
-		<Self as Lockable>::current() > *reference
+	fn expired(deadline: &Self) -> bool {
+		<Self as Lockable>::current() > *deadline
 	}
 
-	fn snooze(&self, deadline: &Self) {
-		let remainder: Duration = self.diff(&deadline);
+	fn snooze(deadline: &Self) {
+		let now = Self::current();
+		let remainder: Duration = now.diff(&deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
 		// consider adding some additive jitter here
 		let snooze = core::cmp::min(remainder.millis(), STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE);
-		sp_io::offchain::sleep_until(self.add(Duration::from_millis(snooze)));
+		sp_io::offchain::sleep_until(now.add(Duration::from_millis(snooze)));
 	}
 }
 
@@ -160,15 +161,16 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B>
 		}
 	}
 
-	fn expired(&self, reference: &Self) -> bool {
+	fn expired(reference: &Self) -> bool {
 		let current = <Self as Lockable>::current();
 		current.timestamp > reference.timestamp && current.block_number > reference.block_number
 	}
 
-	fn snooze(&self, deadline: &Self) {
-		let remainder: Duration = self.timestamp.diff(&(deadline.timestamp));
+	fn snooze(deadline: &Self) {
+		let timestamp = Self::current().timestamp;
+		let remainder: Duration = timestamp.diff(&(deadline.timestamp));
 		let snooze = core::cmp::min(remainder.millis(), STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE);
-		sp_io::offchain::sleep_until(self.timestamp.add(Duration::from_millis(snooze)));
+		sp_io::offchain::sleep_until(timestamp.add(Duration::from_millis(snooze)));
 	}
 }
 
@@ -183,9 +185,7 @@ pub struct StorageLock<'a, L> {
 	deadline: L,
 }
 
-impl<'a, L> StorageLock<'a, L>
-where
-	L: Lockable,
+impl<'a, L: Lockable> StorageLock<'a, L>
 {
 	/// Create a new storage lock with [default expiry duration](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
 	pub fn new(key: &'a [u8]) -> Self {
@@ -196,18 +196,18 @@ where
 	}
 
 	fn try_lock_inner(&mut self, new_deadline: L) -> Result<(), Option<L>> {
-		let now = L::current();
 		let res = self
 			.value_ref
 			.mutate(|s: Option<Option<L>>| -> Result<L, Option<L>> {
 				match s {
 					// no lock set, we can safely acquire it
 					None => Ok(new_deadline),
+					// write was good, bur read failed
+					Some(None) => Ok(new_deadline),
 					// lock is set, but it's old. We can re-acquire it.
-					Some(Some(deadline)) if now.expired(&deadline) => Ok(new_deadline),
+					Some(Some(deadline)) if <L as Lockable>::expired(&deadline) => Ok(new_deadline),
 					// lock is present and is still active
 					Some(Some(deadline)) => Err(Some(deadline)),
-					_ => Err(None),
 				}
 			});
 		match res {
@@ -221,13 +221,13 @@ where
 	///
 	/// Returns a lock guard on success, otherwise an error containing `None` in
 	/// case the mutex was already unlocked before, or if the lock is still held
-	/// by another process `Err(Some(expiration_timestamp))`.
-	pub fn try_lock<'b>(&'b mut self) -> Result<StorageLockGuard<'a, 'b, L>, Option<L>>
+	/// by another process `Err(())`.
+	pub fn try_lock<'b>(&'b mut self) -> Result<StorageLockGuard<'a, 'b, L>, ()>
 	where
 		'a: 'b,
 	{
-	let _ = self.try_lock_inner(self.deadline.clone())?;
-	Ok(StorageLockGuard::<'a, 'b> { lock: Some(self) })
+		let _ = self.try_lock_inner(self.deadline.clone()).map_err(|_opt| { () })?;
+		Ok(StorageLockGuard::<'a, 'b> { lock: Some(self) })
 	}
 
 	/// Try grabbing the lock until its expiry is reached.
@@ -242,7 +242,7 @@ where
 				Err(Some(other_locks_deadline)) => other_locks_deadline,
 				_ => L::deadline(), // use the default
 			};
-			L::current().snooze(&deadline);
+			L::snooze(&deadline);
 		}
 	}
 
