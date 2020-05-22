@@ -831,6 +831,7 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
+		binary: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Performs the blocks export.
