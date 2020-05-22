@@ -17,7 +17,7 @@
 
 //! Proving state machine backend.
 
-use std::{sync::Arc, borrow::Cow, collections::HashMap};
+use std::{sync::Arc, collections::HashMap};
 use parking_lot::RwLock;
 use codec::{Decode, Codec};
 use log::debug;
@@ -259,7 +259,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn storage_root<'b>(
 		&self,
-		delta: impl Iterator<Item=(Cow<'b, [u8]>, Option<Cow<'b, [u8]>>)>,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		self.0.storage_root(delta)
 	}

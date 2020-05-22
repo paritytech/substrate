@@ -623,7 +623,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'a, [u8]>, Option<std::borrow::Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.storage_root(delta)
 	}
@@ -805,7 +805,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'a, [u8]>, Option<std::borrow::Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.caching_state().storage_root(delta)
 	}

@@ -465,7 +465,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(std::borrow::Cow<'a, [u8]>, Option<std::borrow::Cow<'a, [u8]>>)>,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
