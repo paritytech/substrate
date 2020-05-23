@@ -251,9 +251,9 @@ impl Peerset {
 		self.reserved_only = reserved_only;
 
 		if self.reserved_only {
-			// Disconnect nodes that aren't in any priority group.
+			// Disconnect all the nodes that aren't reserved.
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
-				if self.priority_groups.values().any(|l| l.contains(&peer_id)) {
+				if self.priority_groups.get(RESERVED_NODES).into_iter().flatten().any(|p| *p == peer_id) {
 					continue;
 				}
 
@@ -314,15 +314,13 @@ impl Peerset {
 			return;
 		}
 
-		// If that `PeerId` is still in one of the other groups, don't do anything more.
-		if self.priority_groups.values().any(|l| l.contains(&peer_id)) {
-			return;
+		// If that `PeerId` isn't in any other group, then it is no longer no-slot-occupying.
+		if !self.priority_groups.values().any(|l| l.contains(&peer_id)) {
+			self.data.remove_no_slot_node(&peer_id);
 		}
 
-		// Otherwise, that peer is no longer no-slot-occupying.
-
-		self.data.remove_no_slot_node(&peer_id);
-		if self.reserved_only {
+		// Disconnect the peer if necessary.
+		if group_id != RESERVED_NODES && self.reserved_only {
 			if let peersstate::Peer::Connected(peer) = self.data.peer(&peer_id) {
 				peer.disconnect();
 				self.message_queue.push_back(Message::Drop(peer_id));
@@ -414,6 +412,46 @@ impl Peerset {
 	fn alloc_slots(&mut self) {
 		self.update_time();
 
+		// Try to connect to all the reserved nodes that we are not connected to.
+		loop {
+			let next = {
+				let data = &mut self.data;
+				self.priority_groups
+					.get(RESERVED_NODES)
+					.into_iter()
+					.flatten()
+					.filter(move |n| {
+						data.peer(n).into_connected().is_none()
+					})
+					.next()
+					.cloned()
+			};
+
+			let next = match next {
+				Some(n) => n,
+				None => break,
+			};
+
+			let next = match self.data.peer(&next) {
+				peersstate::Peer::Unknown(n) => n.discover(),
+				peersstate::Peer::NotConnected(n) => n,
+				peersstate::Peer::Connected(_) => {
+					debug_assert!(false, "State inconsistency: not connected state");
+					break;
+				}
+			};
+
+			match next.try_outgoing() {
+				Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
+				Err(_) => break,	// No more slots available.
+			}
+		}
+
+		// Nothing more to do if we're in reserved mode.
+		if self.reserved_only {
+			return;
+		}
+
 		// Try to connect to all the nodes in priority groups and that we are not connected to.
 		loop {
 			let next = {
@@ -446,11 +484,6 @@ impl Peerset {
 				Ok(conn) => self.message_queue.push_back(Message::Connect(conn.into_peer_id())),
 				Err(_) => break,	// No more slots available.
 			}
-		}
-
-		// Nothing more to do if we're in reserved mode.
-		if self.reserved_only {
-			return;
 		}
 
 		// Now, we try to connect to non-priority nodes.
