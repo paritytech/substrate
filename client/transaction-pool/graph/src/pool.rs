@@ -72,7 +72,9 @@ pub trait ChainApi: Send + Sync {
 	/// Validate transaction future.
 	type ValidationFuture: Future<Output=Result<TransactionValidity, Self::Error>> + Send + Unpin;
 	/// Body future (since block body might be remote)
-	type BodyFuture: Future<Output = Result<Option<Vec<<Self::Block as traits::Block>::Extrinsic>>, Self::Error>> + Unpin + Send + 'static;
+	type BodyFuture: Future<
+		Output = Result<Option<Vec<<Self::Block as traits::Block>::Extrinsic>>, Self::Error>
+	> + Unpin + Send + 'static;
 
 	/// Verify extrinsic at given block.
 	fn validate_transaction(
@@ -83,16 +85,30 @@ pub trait ChainApi: Send + Sync {
 	) -> Self::ValidationFuture;
 
 	/// Returns a block number given the block id.
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
+	fn block_id_to_number(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<NumberFor<Self>>, Self::Error>;
 
 	/// Returns a block hash given the block id.
-	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error>;
+	fn block_id_to_hash(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> Result<Option<BlockHash<Self>>, Self::Error>;
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
 
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
+
+	fn leaves(&self) -> Result<Vec<Self::Hash>, Self::Error>;
+
+	fn tree_route(
+		&self,
+		from: Self::Hash,
+		to: Self::Hash,
+	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.

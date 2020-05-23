@@ -389,15 +389,24 @@ fn should_push_watchers_during_maintaince() {
 	// events for hash2 are: Ready, InBlock
 	assert_eq!(
 		futures::executor::block_on_stream(watcher0).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::InBlock(header_hash.clone()), TransactionStatus::Finalized(header_hash.clone())],
+		vec![
+			TransactionStatus::Ready,
+			TransactionStatus::InBlock(header_hash.clone()),
+			TransactionStatus::Finalized(header_hash.clone())],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher1).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::InBlock(header_hash.clone()), TransactionStatus::Finalized(header_hash.clone())],
+		vec![
+			TransactionStatus::Ready,
+			TransactionStatus::InBlock(header_hash.clone()),
+			TransactionStatus::Finalized(header_hash.clone())],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher2).collect::<Vec<_>>(),
-		vec![TransactionStatus::Ready, TransactionStatus::InBlock(header_hash.clone()), TransactionStatus::Finalized(header_hash.clone())],
+		vec![
+			TransactionStatus::Ready,
+			TransactionStatus::InBlock(header_hash.clone()),
+			TransactionStatus::Finalized(header_hash.clone())],
 	);
 }
 
@@ -466,7 +475,6 @@ fn fork_aware_finalization() {
 	let d1;
 	let c2;
 	let d2;
-
 
 	// block B1
 	{
@@ -599,7 +607,7 @@ fn fork_aware_finalization() {
 
 
 	{
-		let mut stream= futures::executor::block_on_stream(from_dave_watcher);
+		let mut stream = futures::executor::block_on_stream(from_dave_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2.clone())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(c2)));
@@ -610,7 +618,7 @@ fn fork_aware_finalization() {
 	}
 
 	{
-		let mut stream= futures::executor::block_on_stream(from_bob_watcher);
+		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2.clone())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(d2)));
@@ -618,6 +626,86 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
 		assert_eq!(stream.next(), None);
+	}
+}
+
+/// This test ensures that transactions from a fork are re-submitted if
+/// the forked block is not part of the retracted blocks. This happens as the
+/// retracted block list only contains the route from the old best to the new
+/// best, without any further forks.
+///
+/// Given the following:
+///
+///     -> D0 (old best, tx0)
+///    /
+/// C - -> D1 (tx1)
+///    \
+///     -> D2 (new best)
+///
+/// Retracted will contain `D0`, but we need to re-submit `tx0` and `tx1` as both
+/// blocks are not part of the canonical chain.
+#[test]
+fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
+	let api = TestApi::empty();
+	// starting block A1 (last finalized.)
+	api.push_block(1, vec![]);
+
+	let (pool, _background, _) = BasicPool::new_test(api.into());
+
+	let tx0 = uxt(Alice, 1);
+	let tx1 = uxt(Dave, 2);
+	pool.api.increment_nonce(Alice.into());
+	pool.api.increment_nonce(Dave.into());
+
+	let d0;
+
+	// Block D0
+	{
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx0.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block(2, vec![tx0.clone()]);
+		assert_eq!(pool.status().ready, 1);
+
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Number(2),
+			is_new_best: true,
+			header: header.clone(),
+			retracted: vec![],
+		};
+		d0 = header.hash();
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+	}
+
+	// Block D1
+	{
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx1.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block(2, vec![tx1.clone()]);
+		assert_eq!(pool.status().ready, 1);
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Hash(header.hash()),
+			is_new_best: false,
+			header: header.clone(),
+			retracted: vec![],
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+	}
+
+	// Block D2
+	{
+		let header = pool.api.push_block(2, vec![]);
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Hash(header.hash()),
+			is_new_best: true,
+			header: header.clone(),
+			retracted: vec![d0.clone()],
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 2);
 	}
 }
 

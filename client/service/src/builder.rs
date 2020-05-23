@@ -1037,7 +1037,7 @@ ServiceBuilder<
 				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
 					id: BlockId::Hash(n.hash),
 					header: n.header,
-					retracted: n.retracted,
+					tree_route: n.tree_route,
 					is_new_best: n.is_new_best,
 				}),
 				client.finality_notification_stream().map(|n| ChainEvent::Finalized {

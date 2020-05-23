@@ -104,7 +104,7 @@ impl TestApi {
 		let header = Header {
 			number: block_number,
 			digest: Default::default(),
-			extrinsics_root:  Default::default(),
+			extrinsics_root: Hash::random(),
 			parent_hash: block_number
 				.checked_sub(1)
 				.and_then(|num| {
@@ -132,7 +132,7 @@ impl TestApi {
 		let header = Header {
 			number: *blocknum,
 			digest: Default::default(),
-			extrinsics_root:  Default::default(),
+			extrinsics_root: Default::default(),
 			parent_hash: parent,
 			state_root: Default::default(),
 		};
