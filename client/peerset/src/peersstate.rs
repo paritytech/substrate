@@ -215,7 +215,7 @@ impl PeersState {
 	///
 	/// Has no effect if the peer was not in the group.
 	pub fn remove_no_slot_node(&mut self, peer_id: &PeerId) {
-		// Reminder: `HashSet::remove` returns falsetrue if the node was in the set
+		// Reminder: `HashSet::remove` returns false if the node was already not in the set
 		if !self.no_slot_nodes.remove(peer_id) {
 			return;
 		}
@@ -411,7 +411,7 @@ impl<'a> NotConnectedPeer<'a> {
 				self.state.num_out += 1;
 			}
 		} else {
-			debug_assert!(false, "State inconsistency: try_accept_incoming on an unknown node");
+			debug_assert!(false, "State inconsistency: try_outgoing on an unknown node");
 		}
 
 		Ok(ConnectedPeer {
