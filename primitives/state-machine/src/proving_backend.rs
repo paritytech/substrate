@@ -17,7 +17,7 @@
 
 //! Proving state machine backend.
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 use parking_lot::RwLock;
 use codec::{Decode, Codec};
 use log::debug;
@@ -26,13 +26,10 @@ use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
 	record_all_keys, StorageProof,
 };
-pub use sp_trie::Recorder;
-pub use sp_trie::trie_types::{Layout, TrieError};
+pub use sp_trie::{Recorder, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use crate::{Error, ExecutionError, Backend};
-use std::collections::HashMap;
-use crate::DBValue;
+use crate::{Error, ExecutionError, Backend, DBValue};
 use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
@@ -260,21 +257,18 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.0.child_keys(child_info, prefix)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'b>(
+		&self,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		self.0.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord
-	{
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		self.0.child_storage_root(child_info, delta)
 	}
 
@@ -393,9 +387,9 @@ mod tests {
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
-		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
-			::std::iter::empty(),
-			child_storage_keys.into_iter().map(|k|(k.to_owned(), Vec::new()))
+		let in_memory_root = in_memory.full_storage_root(
+			std::iter::empty(),
+			child_storage_keys.iter().map(|k|(k, std::iter::empty()))
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
