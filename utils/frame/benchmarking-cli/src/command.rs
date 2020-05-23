@@ -27,7 +27,12 @@ use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
-use sp_core::{tasks, testing::KeyStore, traits::KeystoreExt};
+use sp_core::{
+	tasks,
+	testing::KeyStore,
+	traits::KeystoreExt,
+	offchain::{OffchainExt, testing::TestOffchainExt},
+};
 use std::fmt::Debug;
 
 impl BenchmarkCmd {
@@ -56,6 +61,8 @@ impl BenchmarkCmd {
 
 		let mut extensions = Extensions::default();
 		extensions.register(KeystoreExt(KeyStore::new()));
+		let (offchain, _) = TestOffchainExt::new();
+		extensions.register(OffchainExt::new(offchain));
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
