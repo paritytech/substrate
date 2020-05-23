@@ -481,7 +481,7 @@ where
 			if let Some(child_info) = self.overlay.default_child_info(storage_key) {
 				let (root, is_empty, _) = {
 					let delta = self.overlay.changes(Some(child_info))
-						.map(|(k, v)| (k.clone(), v.value().cloned()));
+						.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
 
 					self.backend.child_storage_root(child_info, delta)
 				};
