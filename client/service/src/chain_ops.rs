@@ -39,16 +39,18 @@ use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageC
 use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
 use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
-use std::{thread, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
+use futures_timer::Delay;
+use std::task::Poll;
 use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
 use std::convert::{TryFrom, TryInto};
 use sp_runtime::traits::{CheckedDiv, Saturating};
 
 /// Number of blocks we will add to the queue before waiting for the queue to catch up.
-const MAX_PENDING_BLOCKS: u64 = 1_024;
+const MAX_PENDING_BLOCKS: u64 = 2;
 
 /// Number of milliseconds to wait until next poll.
-const DELAY_TIME: u64 = 2_000;
+const DELAY_TIME: u64 = 1_000;
 
 /// Number of milliseconds that must have passed between two updates.
 const TIME_BETWEEN_UPDATES: u64 = 3_000;
@@ -366,6 +368,7 @@ impl<
 		let import = future::poll_fn(move |cx| {
 			let client = &self.client;
 			let queue = &mut self.import_queue;
+			info!("WAKEN");
 			match state.take().expect("state should never be None; qed") {
 				ImportState::Reading{mut block_iter} => {
 					match block_iter.next() {
@@ -402,9 +405,17 @@ impl<
 				ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block} => {
 					let read_block_count = block_iter.read_block_count();
 					if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
-						thread::sleep(delay);
 						// Queue is still full, so wait until there is room to insert our block.
 						state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+						match Pin::new(&mut Delay::new(delay)).poll(cx) {
+							Poll::Pending => {
+								info!("pending");
+								return Poll::Pending;
+							},
+							Poll::Ready(_) => {
+								info!("finished pending!")
+							},
+						}
 					} else {
 						// Queue is no longer full, so we can add our block to the queue.
 						import_block_to_queue(block, queue, force);
@@ -423,12 +434,22 @@ impl<
 						);
 						return std::task::Poll::Ready(Ok(()))
 					} else {
-						thread::sleep(delay);
 						// Importing is not done, we still have to wait for the queue to finish.
 						state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
+
+						match Pin::new(&mut Delay::new(delay)).poll(cx) {
+							Poll::Pending => {
+								info!("second pending");
+								return Poll::Pending;
+							},
+							Poll::Ready(_) => {
+								info!("finished finish")
+							},
+						}
 					}
 				}
 			}
+			info!("TMP");
 
 			queue.poll_actions(cx, &mut link);
 
