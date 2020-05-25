@@ -21,7 +21,8 @@ use bytes::BytesMut;
 use futures::prelude::*;
 use futures_codec::Framed;
 use libp2p::core::{Endpoint, UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
-use std::{collections::VecDeque, io, pin::Pin, vec::IntoIter as VecIntoIter};
+use parking_lot::RwLock;
+use std::{collections::VecDeque, io, pin::Pin, sync::Arc, vec::IntoIter as VecIntoIter};
 use std::task::{Context, Poll};
 use unsigned_varint::codec::UviBytes;
 
@@ -39,13 +40,12 @@ pub struct RegisteredProtocol {
 	/// Ordered in descending order so that the best comes first.
 	supported_versions: Vec<u8>,
 	/// Handshake to send after the substream is open.
-	handshake_message: Vec<u8>,
+	handshake_message: Arc<RwLock<Vec<u8>>>,
 }
 
 impl RegisteredProtocol {
-	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
-	/// passed inside the `RegisteredProtocolOutput`.
-	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8], handshake_message: Vec<u8>)
+	/// Creates a new `RegisteredProtocol`.
+	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8], handshake_message: Arc<RwLock<Vec<u8>>>)
 		-> Self {
 		let protocol = protocol.into();
 		let mut base_name = b"/substrate/".to_vec();
@@ -64,9 +64,9 @@ impl RegisteredProtocol {
 		}
 	}
 
-	/// Modifies the handshake message.
-	pub fn set_handshake_message(&mut self, handshake_message: Vec<u8>) {
-		self.handshake_message = handshake_message;
+	/// Returns the `Arc` to the handshake message that was passed at initialization.
+	pub fn handshake_message(&self) -> &Arc<RwLock<Vec<u8>>> {
+		&self.handshake_message
 	}
 }
 
@@ -271,7 +271,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				Framed::new(socket, codec)
 			};
 
-			framed.send(BytesMut::from(&self.handshake_message[..])).await?;
+			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
+			framed.send(handshake).await?;
 			let received_handshake = framed.next().await
 				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
 
@@ -307,7 +308,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				Framed::new(socket, codec)
 			};
 
-			framed.send(BytesMut::from(&self.handshake_message[..])).await?;
+			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
+			framed.send(handshake).await?;
 			let received_handshake = framed.next().await
 				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
 

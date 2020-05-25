@@ -257,11 +257,6 @@ pub enum LegacyProtoHandlerOut {
 }
 
 impl LegacyProtoHandler {
-	/// Modifies the handshake message.
-	pub fn set_handshake_message(&mut self, handshake_message: Vec<u8>) {
-		self.protocol.set_handshake_message(handshake_message);
-	}
-
 	/// Returns true if the legacy substream is currently open.
 	pub fn is_open(&self) -> bool {
 		match &self.state {
