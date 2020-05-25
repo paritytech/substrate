@@ -407,7 +407,7 @@ pub trait CliConfiguration: Sized {
 			.unwrap_or_else(|| {
 				directories::ProjectDirs::from("", "", C::executable_name())
 					.expect("app directories exist on all supported platforms; qed")
-					.data_dir()
+					.data_local_dir()
 					.into()
 			})
 			.join("chains")
