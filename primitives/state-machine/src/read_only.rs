@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -192,10 +192,4 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for Rea
 	fn deregister_extension_by_type_id(&mut self, _type_id: TypeId) -> Result<(), sp_externalities::Error> {
 		unimplemented!("deregister_extension_by_type_id is not supported in ReadOnlyExternalities")
 	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
 }
