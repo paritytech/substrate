@@ -140,19 +140,12 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-/// The maximum number of proxies an account may delegate to.
-pub const MAX_PROXIES: u32 = 32;
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
-
-		/// The set of account proxies. Maps the account which has delegated to the accounts
-		/// which are being delegated to, together with the amount held on deposit.
-		pub Proxy: map hasher(twox_64_concat) T::AccountId => (Vec<T::AccountId>, BalanceOf<T>);
 	}
 }
 
