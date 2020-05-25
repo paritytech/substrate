@@ -44,7 +44,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	Fixed128,
+	Fixed128, FixedPointNumber,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
@@ -83,7 +83,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TransactionPayment {
-		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_inner(0);
 	}
 }
 
@@ -107,8 +107,9 @@ decl_module! {
 impl<T: Trait> Module<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
-	/// As this module is not and cannot be aware of the internals of a signed extension, it only
-	/// interprets them as some encoded value and takes their length into account.
+	/// This module is not and cannot be aware of the internals of a signed extension, for example
+	/// a tip. It only interprets the extrinsic as some encoded value and accounts for its weight
+	/// and length, the runtime's extrinsic base weight, and the current fee multiplier.
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
@@ -137,17 +138,24 @@ impl<T: Trait> Module<T> {
 	/// Compute the final fee value for a particular transaction.
 	///
 	/// The final fee is composed of:
-	///   - _base_fee_: This is the minimum amount a user pays for a transaction.
-	///   - _len_fee_: This is the amount paid merely to pay for size of the transaction.
-	///   - _weight_fee_: This amount is computed based on the weight of the transaction. Unlike
-	///      size-fee, this is not input dependent and reflects the _complexity_ of the execution
-	///      and the time it consumes.
-	///   - _targeted_fee_adjustment_: This is a multiplier that can tune the final fee based on
+	///   - `base_fee`: This is the minimum amount a user pays for a transaction. It is declared
+	///     as a base _weight_ in the runtime and converted to a fee using `WeightToFee`.
+	///   - `len_fee`: The length fee, the amount paid for the encoded length (in bytes) of the
+	///     transaction.
+	///   - `weight_fee`: This amount is computed based on the weight of the transaction. Weight
+	///     accounts for the execution time of a transaction.
+	///   - `targeted_fee_adjustment`: This is a multiplier that can tune the final fee based on
 	///     the congestion of the network.
-	///   - (optional) _tip_: if included in the transaction, it will be added on top. Only signed
-	///      transactions can have a tip.
+	///   - (Optional) `tip`: If included in the transaction, the tip will be added on top. Only
+	///     signed transactions can have a tip.
 	///
-	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
+	/// The base fee and adjusted weight and length fees constitute the _inclusion fee,_ which is
+	/// the minimum fee for a transaction to be included in a block.
+	///
+	/// ```ignore
+	/// inclusion_fee = base_fee + targeted_fee_adjustment * (len_fee + weight_fee);
+	/// final_fee = inclusion_fee + tip;
+	/// ```
 	pub fn compute_fee(
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
@@ -164,7 +172,7 @@ impl<T: Trait> Module<T> {
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee.saturated_into());
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
@@ -182,7 +190,7 @@ impl<T: Trait> Module<T> {
 	{
 		let fee = UniqueSaturatedInto::<u128>::unique_saturated_into(Self::weight_to_fee(weight));
 		UniqueSaturatedFrom::unique_saturated_from(
-			NextFeeMultiplier::get().saturated_multiply_accumulate(fee)
+			NextFeeMultiplier::get().saturating_mul_acc_int(fee)
 		)
 	}
 
@@ -321,7 +329,6 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use core::num::NonZeroI128;
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
@@ -567,7 +574,7 @@ mod tests {
 			.execute_with(||
 		{
 			let len = 10;
-			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
+			NextFeeMultiplier::put(Fixed128::saturating_from_rational(1, 2));
 
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
@@ -655,7 +662,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
+			NextFeeMultiplier::put(Fixed128::saturating_from_rational(1, 2));
 			let len = 10;
 
 			assert!(
@@ -683,7 +690,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
+			NextFeeMultiplier::put(Fixed128::saturating_from_rational(1, 2));
 
 			assert_eq!(
 				TransactionPayment::query_info(xt, len),
@@ -712,7 +719,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Next fee multiplier is zero
-			assert_eq!(NextFeeMultiplier::get(), Fixed128::from_natural(0));
+			assert_eq!(NextFeeMultiplier::get(), Fixed128::saturating_from_integer(0));
 
 			// Tip only, no fees works
 			let dispatch_info = DispatchInfo {
@@ -752,7 +759,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Add a next fee multiplier
-			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap())); // = 1/2 = .5
+			NextFeeMultiplier::put(Fixed128::saturating_from_rational(1, 2)); // = 1/2 = .5
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
 				weight: 0,
