@@ -2612,9 +2612,9 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 
 [[package]]
 name = "libp2p"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ec214d189b57e4412f079ac5a1442578d06b12ca7282ba4696104cc92ab96c1"
+checksum = "057eba5432d3e740e313c6e13c9153d0cb76b4f71bfc2e5242ae5bdb7d41af67"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.5",
@@ -2684,9 +2684,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-core-derive"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67f0d915bee5d457a6d113377101e1f06e86a4286778aa4c6939553e9a4d7033"
+checksum = "f09548626b737ed64080fde595e06ce1117795b8b9fc4d2629fa36561c583171"
 dependencies = [
  "quote 1.0.5",
  "syn 1.0.21",
@@ -2694,9 +2694,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-deflate"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975c847575ef9b3d63f9c11d465e9a9b0ea940cfa408b93cc6981bbc3b1bac40"
+checksum = "5c4acff33f5bfe154bafe14c6c08655d4b1e1736afaca78014111bc1742a2016"
 dependencies = [
  "flate2",
  "futures 0.3.5",
@@ -2733,9 +2733,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-gossipsub"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce48659363fe765c09d77eb5b2248e04362557b11bba3701f05879ad34919ccd"
+checksum = "1675c23765e37ddbf6bf05fb520be8f7df3f5f4981d68f185bb95f9b047c576a"
 dependencies = [
  "base64 0.11.0",
  "byteorder 1.3.4",
@@ -2758,9 +2758,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identify"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a455af71c59473444eba05e83dbaa20262bdbd9b4154f22389510fbac16f201"
+checksum = "6438ed8ca240c7635c9caa3be6c5258bc0058553ae97ba81737f04e5d33804f5"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -2801,9 +2801,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mdns"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5bc788d92111802cb0c92d2e032fa6f46333aaeb5650c2f37b5d3eba78cabe6"
+checksum = "51b00163d13f705aae67c427bea0575f8aaf63da6524f9bd4a5a093b8bda0b38"
 dependencies = [
  "async-std",
  "data-encoding",
@@ -2823,9 +2823,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mplex"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4095bce2100f840883f1f75dbd010c966ee4ad323ae9f82026396da5cf6cce68"
+checksum = "34ce63313ad4bce2d76e54c292a1293ea47a0ebbe16708f1513fa62184992f53"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -2860,9 +2860,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-ping"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82930c36490008b1ef2f26c237a2c205c38ef6edc263738d0528b842740ab09f"
+checksum = "c189cf1dfe4b3f01e2c0fe5e97a6f5df8aeb6f3569e26981015eb7c08015ce5f"
 dependencies = [
  "futures 0.3.5",
  "libp2p-core",
@@ -2907,9 +2907,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-secio"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e30b873276846181fa9c04126653678c2797cb1556361d01b7b7fd6bf24682"
+checksum = "7b73f0cc119c83a5b619d6d11074a319fdb4aa4daf8088ade00d511418566e28"
 dependencies = [
  "aes-ctr",
  "ctr",
@@ -2952,9 +2952,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-tcp"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4462bd96b97cac3f3a83b1b343ad3c3460cebbc8d929c040b1520c30e3611e08"
+checksum = "309f95fce9bec755eff5406f8b822fd3969990830c2b54f752e1fc181d5ace3e"
 dependencies = [
  "async-std",
  "futures 0.3.5",
@@ -2968,9 +2968,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-uds"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69660d235449bb2d99333b9892c9176d06fd2b380490cb8213feb5b015678cf1"
+checksum = "78d51726e063e8d73b103331576bb7e8fad187a3f0c227933a10b3542e2ad3f4"
 dependencies = [
  "async-std",
  "futures 0.3.5",
