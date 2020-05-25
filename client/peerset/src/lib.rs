@@ -253,7 +253,7 @@ impl Peerset {
 		if self.reserved_only {
 			// Disconnect all the nodes that aren't reserved.
 			for peer_id in self.data.connected_peers().cloned().collect::<Vec<_>>().into_iter() {
-				if self.priority_groups.get(RESERVED_NODES).into_iter().flatten().any(|p| *p == peer_id) {
+				if self.priority_groups.get(RESERVED_NODES).map_or(false, |g| g.contains(&peer_id)) {
 					continue;
 				}
 
@@ -805,4 +805,3 @@ mod tests {
 		futures::executor::block_on(fut);
 	}
 }
-
