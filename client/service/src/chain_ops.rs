@@ -407,6 +407,7 @@ impl<
 						// Queue is still full, so wait until there is room to insert our block.
 						match Pin::new(&mut delay).poll(cx) {
 							Poll::Pending => {
+								delay.reset(Duration::from_millis(DELAY_TIME));
 								state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
 								return Poll::Pending
 							},
@@ -435,6 +436,7 @@ impl<
 						// Wait for the delay, because we know the queue is lagging behind.
 						match Pin::new(&mut delay).poll(cx) {
 							Poll::Pending => {
+								delay.reset(Duration::from_millis(DELAY_TIME));
 								state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
 								return Poll::Pending
 							},
