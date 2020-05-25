@@ -3031,6 +3031,21 @@ mod offchain_phragmen {
 
 				let queued_result = Staking::queued_elected().unwrap();
 				assert_eq!(queued_result.compute, ElectionCompute::Signed);
+				assert_eq!(
+					System::events()
+						.into_iter()
+						.map(|r| r.event)
+						.filter_map(|e| {
+							if let MetaEvent::staking(inner) = e {
+								Some(inner)
+							} else {
+								None
+							}
+						})
+						.last()
+						.unwrap(),
+					RawEvent::SolutionStored(ElectionCompute::Signed),
+				);
 
 				run_to_block(15);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
