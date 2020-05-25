@@ -47,10 +47,10 @@ use std::convert::{TryFrom, TryInto};
 use sp_runtime::traits::{CheckedDiv, Saturating};
 
 /// Number of blocks we will add to the queue before waiting for the queue to catch up.
-const MAX_PENDING_BLOCKS: u64 = 2;
+const MAX_PENDING_BLOCKS: u64 = 1_024;
 
 /// Number of milliseconds to wait until next poll.
-const DELAY_TIME: u64 = 1_000;
+const DELAY_TIME: u64 = 2_000;
 
 /// Number of milliseconds that must have passed between two updates.
 const TIME_BETWEEN_UPDATES: u64 = 3_000;
@@ -394,7 +394,7 @@ impl<
 									}
 								}
 								Err(e) => {
-									return std::task::Poll::Ready(
+									return Poll::Ready(
 										Err(Error::Other(format!("Error reading block #{}: {}", read_block_count, e))))
 								}
 							}
@@ -429,7 +429,7 @@ impl<
 							"🎉 Imported {} blocks. Best: #{}",
 							read_block_count, client.chain_info().best_number
 						);
-						return std::task::Poll::Ready(Ok(()))
+						return Poll::Ready(Ok(()))
 					} else {
 						// Importing is not done, we still have to wait for the queue to finish.
 						// Wait for the delay, because we know the queue is lagging behind.
@@ -452,7 +452,7 @@ impl<
 			speedometer.notify_user(best_number);
 
 			if link.has_error {
-				return std::task::Poll::Ready(Err(
+				return Poll::Ready(Err(
 					Error::Other(
 						format!("Stopping after #{} blocks because of an error", link.imported_blocks)
 					)
@@ -460,7 +460,7 @@ impl<
 			}
 
 			cx.waker().wake_by_ref();
-			std::task::Poll::Pending
+			Poll::Pending
 		});
 		Box::pin(import)
 	}
@@ -493,7 +493,7 @@ impl<
 			let client = &self.client;
 
 			if last < block {
-				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
+				return Poll::Ready(Err("Invalid block range specified".into()));
 			}
 
 			if !wrote_header {
@@ -517,19 +517,19 @@ impl<
 					}
 			},
 				// Reached end of the chain.
-				None => return std::task::Poll::Ready(Ok(())),
+				None => return Poll::Ready(Ok(())),
 			}
 			if (block % 10000.into()).is_zero() {
 				info!("#{}", block);
 			}
 			if block == last {
-				return std::task::Poll::Ready(Ok(()));
+				return Poll::Ready(Ok(()));
 			}
 			block += One::one();
 
 			// Re-schedule the task in order to continue the operation.
 			cx.waker().wake_by_ref();
-			std::task::Poll::Pending
+			Poll::Pending
 		});
 
 		Box::pin(export)
