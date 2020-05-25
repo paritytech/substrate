@@ -288,6 +288,8 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -318,6 +320,8 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -350,6 +354,8 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -498,8 +504,6 @@ impl<T: Trait> Module<T> {
 	) -> Result<R, Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (R, ExitReason),
 	{
-		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-
 		let vicinity = Vicinity {
 			gas_price,
 			origin: source,
