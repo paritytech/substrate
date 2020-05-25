@@ -549,6 +549,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn update_chain(&mut self) {
 		let info = self.context_data.chain.info();
 		self.sync.update_chain_info(&info.best_hash, info.best_number);
+		self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
+		self.behaviour.set_notif_protocol_handshake(
+			&self.block_announces_protocol,
+			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+		);
 	}
 
 	fn update_peer_info(&mut self, who: &PeerId) {
