@@ -1173,7 +1173,7 @@ decl_event!(
 		OldSlashingReportDiscarded(SessionIndex),
 		/// A new set of stakers was elected with the given computation method.
 		StakingElection(ElectionCompute),
-		/// A bew solution for the upcoming election has been stored.
+		/// A new solution for the upcoming election has been stored.
 		SolutionStored(ElectionCompute),
 		/// An account has bonded this amount.
 		///
