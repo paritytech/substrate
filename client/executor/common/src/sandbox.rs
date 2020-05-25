@@ -354,9 +354,17 @@ impl<FR> SandboxInstance<FR> {
 	/// these syscall implementations.
 	pub fn invoke<FE: SandboxCapabilities<SupervisorFuncRef=FR>>(
 		&self,
+
+		/// function to call that is exported from the module
 		export_name: &str,
+
+		/// arguments passed to the function
 		args: &[RuntimeValue],
+
+		/// supervisor environment provided to the module
 		supervisor_externals: &mut FE,
+
+		/// arbitraty context data of the call
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
 		with_guest_externals(
@@ -364,6 +372,8 @@ impl<FR> SandboxInstance<FR> {
 			self,
 			state,
 			|guest_externals| {
+
+				// This is in Wasmi already!
 				self.instance
 					.invoke_export(export_name, args, guest_externals)
 			},
