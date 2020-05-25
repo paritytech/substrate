@@ -31,7 +31,7 @@ use codec::Encode;
 
 /// Trait for inspecting state in any backend.
 ///
-/// Implemented for ay backend.
+/// Implemented for any backend.
 pub trait InspectState<H: Hasher, B: Backend<H>> {
 	/// Inspect state with a closure.
 	///
