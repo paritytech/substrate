@@ -275,8 +275,9 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
+			let is_root = ensure_root(origin.clone()).is_ok();
 			for (index, call) in calls.into_iter().enumerate() {
-				if ensure_root(origin.clone()).is_err() && !T::IsCallable::filter(&call) {
+				if !is_root && !T::IsCallable::filter(&call) {
 					Self::deposit_event(Event::<T>::Uncallable(index as u32));
 					return Ok(())
 				}
