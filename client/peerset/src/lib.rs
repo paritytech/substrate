@@ -272,9 +272,9 @@ impl Peerset {
 		// Determine the difference between the current group and the new list.
 		let (to_insert, to_remove) = {
 			let current_group = self.priority_groups.entry(group_id.to_owned()).or_default();
-			let to_insert = peers.iter().filter(|peer| !current_group.iter().any(|p| p == *peer))
+			let to_insert = peers.difference(current_group)
 				.cloned().collect::<Vec<_>>();
-			let to_remove = current_group.iter().filter(|peer| !peers.iter().any(|p| p == *peer))
+			let to_remove = current_group.difference(&peers)
 				.cloned().collect::<Vec<_>>();
 			(to_insert, to_remove)
 		};
