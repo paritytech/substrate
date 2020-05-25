@@ -22,10 +22,10 @@ use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable, DispatchInfoOf,
+	SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResult};
+use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResultWithInfo};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
@@ -382,7 +382,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> ApplyExtrinsicResult {
+	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let maybe_who = if let Some((who, extra)) = self.signature {
 			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
 			Some(who)
@@ -391,6 +391,6 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map(|_| ()).map_err(|e| e.error))
+		Ok(self.call.dispatch(maybe_who.into()))
 	}
 }

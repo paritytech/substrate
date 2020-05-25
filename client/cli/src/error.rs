@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Initialization errors.
 
 /// Result type alias for the CLI.
@@ -26,7 +27,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Cli error
-	Cli(clap::Error),
+	Cli(structopt::clap::Error),
 	/// Service error
 	Service(sc_service::Error),
 	/// Client error

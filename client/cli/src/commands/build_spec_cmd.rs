@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use crate::error;
 use crate::params::NodeKeyParams;
 use crate::params::SharedParams;
@@ -23,6 +24,7 @@ use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{config::MultiaddrWithPeerId, Configuration};
 use structopt::StructOpt;
+use std::io::Write;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -65,9 +67,9 @@ impl BuildSpecCmd {
 		}
 
 		let json = sc_service::chain_ops::build_spec(&*spec, raw_output)?;
-
-		print!("{}", json);
-
+		if std::io::stdout().write_all(json.as_bytes()).is_err() {
+			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
+		}
 		Ok(())
 	}
 }

@@ -83,6 +83,8 @@ pub use crypto::{DeriveJunction, Pair, Public};
 pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
+#[cfg(feature = "std")]
+pub use self::hasher::keccak::KeccakHasher;
 
 pub use sp_storage as storage;
 

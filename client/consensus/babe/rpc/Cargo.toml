@@ -13,6 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-consensus-babe = { version = "0.8.0-dev", path = "../" }
+sc-rpc-api = { version = "0.8.0-dev", path = "../../../rpc-api" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.5"
 jsonrpc-derive = "14.0.3"
@@ -29,7 +30,9 @@ sp-core = { version = "2.0.0-dev", path = "../../../../primitives/core" }
 sc-keystore = { version = "2.0.0-dev", path = "../../../keystore" }
 
 [dev-dependencies]
-substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../../test-utils/runtime/client" }
+sc-consensus = { version = "0.8.0-dev", path = "../../../consensus/common" }
+serde_json = "1.0.50"
 sp-application-crypto = { version = "2.0.0-dev", path = "../../../../primitives/application-crypto" }
 sp-keyring = { version = "2.0.0-dev", path = "../../../../primitives/keyring" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"

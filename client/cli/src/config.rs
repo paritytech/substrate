@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Configuration trait for a CLI based on substrate
 
 use crate::arg_enums::Database;
@@ -23,7 +24,6 @@ use crate::{
 	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
-use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
@@ -405,14 +405,10 @@ pub trait CliConfiguration: Sized {
 		let config_dir = self
 			.base_path()?
 			.unwrap_or_else(|| {
-				app_dirs::get_app_root(
-					AppDataType::UserData,
-					&AppInfo {
-						name: C::executable_name(),
-						author: C::author(),
-					},
-				)
-				.expect("app directories exist on all supported platforms; qed")
+				directories::ProjectDirs::from("", "", C::executable_name())
+					.expect("app directories exist on all supported platforms; qed")
+					.data_local_dir()
+					.into()
 			})
 			.join("chains")
 			.join(chain_spec.id());
