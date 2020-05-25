@@ -3394,6 +3394,7 @@ dependencies = [
  "lazy_static",
  "log",
  "node-primitives",
+ "node-runtime",
  "node-testing",
  "parity-db",
  "parity-util-mem",

@@ -12,6 +12,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 log = "0.4.8"
 node-primitives = { version = "2.0.0-dev", path = "../primitives" }
 node-testing = { version = "2.0.0-dev", path = "../testing" }
+node-runtime = { version = "2.0.0-dev", path = "../runtime" }
 sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
 sc-client-api = { version = "2.0.0-dev", path = "../../../client/api/" }
 sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
