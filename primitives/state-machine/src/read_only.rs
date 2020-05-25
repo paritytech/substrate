@@ -42,8 +42,7 @@ pub trait InspectState<H: Hasher, B: Backend<H>> {
 
 impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B {
 	fn inspect_with<F: FnOnce()>(&self, f: F) {
-		let mut ext = ReadOnlyExternalities::from(self);
-		ext.execute_with(f)
+		ReadOnlyExternalities::from(self).execute_with(f)
 	}
 }
 
