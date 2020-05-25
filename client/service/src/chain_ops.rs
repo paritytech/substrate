@@ -368,7 +368,6 @@ impl<
 		let import = future::poll_fn(move |cx| {
 			let client = &self.client;
 			let queue = &mut self.import_queue;
-			info!("WAKEN");
 			match state.take().expect("state should never be None; qed") {
 				ImportState::Reading{mut block_iter} => {
 					match block_iter.next() {
@@ -406,13 +405,14 @@ impl<
 					let read_block_count = block_iter.read_block_count();
 					if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
 						// Queue is still full, so wait until there is room to insert our block.
-						let delay_clone = Delay::new(Duration::from_millis(DELAY_TIME));
-						state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay: delay_clone, block});
 						match Pin::new(&mut delay).poll(cx) {
-							Poll::Pending => return Poll::Pending,
+							Poll::Pending => {
+								state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+								return Poll::Pending
+							},
 							Poll::Ready(_) => {},
 						}
-						info!("pending");
+						state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
 					} else {
 						// Queue is no longer full, so we can add our block to the queue.
 						import_block_to_queue(block, queue, force);
@@ -432,18 +432,19 @@ impl<
 						return std::task::Poll::Ready(Ok(()))
 					} else {
 						// Importing is not done, we still have to wait for the queue to finish.
-						let delay_clone = Delay::new(Duration::from_millis(DELAY_TIME));
-						state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay: delay_clone});
-
+						// Wait for the delay, because we know the queue is lagging behind.
 						match Pin::new(&mut delay).poll(cx) {
-							Poll::Pending => return Poll::Pending,
+							Poll::Pending => {
+								state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
+								return Poll::Pending
+							},
 							Poll::Ready(_) => {},
 						}
-						info!("pending");
+
+						state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
 					}
 				}
 			}
-			info!("TMP");
 
 			queue.poll_actions(cx, &mut link);
 
