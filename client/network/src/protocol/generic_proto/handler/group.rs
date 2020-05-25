@@ -338,11 +338,16 @@ impl ProtocolsHandler for NotifsHandler {
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for (handler, initial_message) in &mut self.out_handlers {
+					// We create `initial_message` on a separate line to be sure that the lock
+					// is released as soon as possible.
+					let initial_message = initial_message.read().clone();
 					handler.inject_event(NotifsOutHandlerIn::Enable {
-						initial_message: initial_message.read().clone(),
+						initial_message,
 					});
 				}
 				for num in self.pending_in.drain(..) {
+					// We create `handshake_message` on a separate line to be sure
+					// that the lock is released as soon as possible.
 					let handshake_message = self.in_handlers[num].1.read().clone();
 					self.in_handlers[num].0
 						.inject_event(NotifsInHandlerIn::Accept(handshake_message));
@@ -504,8 +509,12 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
 						match self.enabled {
 							EnabledState::Initial => self.pending_in.push(handler_num),
-							EnabledState::Enabled =>
-								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message.read().clone())),
+							EnabledState::Enabled => {
+								// We create `handshake_message` on a separate line to be sure
+								// that the lock is released as soon as possible.
+								let handshake_message = handshake_message.read().clone();
+								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
+							},
 							EnabledState::Disabled =>
 								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},

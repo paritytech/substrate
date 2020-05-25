@@ -357,11 +357,8 @@ impl GenericProto {
 		protocol_name: &[u8],
 		handshake_message: impl Into<Vec<u8>>
 	) {
-		let handshake_message = handshake_message.into();
 		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
-			*protocol.1.write() = handshake_message;
-		} else {
-			return;
+			*protocol.1.write() = handshake_message.into();
 		}
 	}
 
