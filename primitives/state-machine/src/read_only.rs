@@ -29,6 +29,24 @@ use sp_core::{
 };
 use codec::Encode;
 
+/// Trait for inspecting state in any backend.
+///
+/// Implemented for ay backend.
+pub trait InspectState<H: Hasher, B: Backend<H>> {
+	/// Inspect state with a closure.
+	///
+	/// Self will be set as read-only externalities and inspection
+	/// closure will be run against it.
+	fn inspect_with<F: FnOnce()>(&self, f: F);
+}
+
+impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B {
+	fn inspect_with<F: FnOnce()>(&self, f: F) {
+		let mut ext = ReadOnlyExternalities::from(self);
+		ext.execute_with(f)
+	}
+}
+
 /// Simple read-only externalities for any backend.
 ///
 /// To be used in test for state inspection. Will panic if something writes
@@ -42,6 +60,15 @@ pub struct ReadOnlyExternalities<'a, H: Hasher, B: 'a + Backend<H>> {
 impl<'a, H: Hasher, B: 'a + Backend<H>> From<&'a B> for ReadOnlyExternalities<'a, H, B> {
 	fn from(backend: &'a B) -> Self {
 		ReadOnlyExternalities { backend, _phantom: PhantomData }
+	}
+}
+
+impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B> {
+	/// Execute the given closure while `self` is set as externalities.
+	///
+	/// Returns the result of the given closure.
+	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
+		sp_externalities::set_and_run_with_externalities(self, f)
 	}
 }
 
