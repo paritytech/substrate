@@ -208,12 +208,17 @@ pub trait DefaultChildStorage {
 	/// Set a child storage value.
 	///
 	/// Set `key` to `value` in the child storage denoted by `storage_key`.
+	///
+	/// # Warning
+	///
+	/// Empty value is not supported.
 	fn set(
 		&mut self,
 		storage_key: &[u8],
 		key: &[u8],
 		value: &[u8],
 	) {
+		log::error!(target: "runtime", "Empty value is inserted in child, not supported.");
 		let child_info = ChildInfo::new_default(storage_key);
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
