@@ -203,7 +203,7 @@ pub type AliveContractInfo<T> =
 pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
-	/// The size of stored value in octet.
+	/// The size of stored value in bytes.
 	pub storage_size: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
@@ -338,8 +338,10 @@ pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 	/// The minimum amount required to generate a tombstone.
 	type TombstoneDeposit: Get<BalanceOf<Self>>;
 
-	/// Size of a contract at the time of instantiation. This is a simple way to ensure
-	/// that empty contracts eventually gets deleted.
+	/// A size offset for an contract. A just created account with untouched storage will have that
+	/// much of storage from the perspective of the state rent.
+	///
+	/// This is a simple way to ensure that empty contracts eventually gets deleted.
 	type StorageSizeOffset: Get<u32>;
 
 	/// Price of a byte of storage per one block interval. Should be greater than 0.
@@ -420,8 +422,10 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// Size of a contract at the time of instantiation. This is a simple way to ensure that
-		/// empty contracts eventually gets deleted.
+		/// A size offset for an contract. A just created account with untouched storage will have that
+		/// much of storage from the perspective of the state rent.
+		///
+		/// This is a simple way to ensure that empty contracts eventually gets deleted.
 		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
 
 		/// Price of a byte of storage per one block interval. Should be greater than 0.

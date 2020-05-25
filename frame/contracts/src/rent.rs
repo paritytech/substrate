@@ -93,7 +93,8 @@ fn compute_fee_per_block<T: Trait>(
 		.unwrap_or_else(Zero::zero);
 
 	let effective_storage_size =
-		<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
+		<BalanceOf<T>>::from(contract.storage_size + T::StorageSizeOffset::get())
+			.saturating_sub(free_storage);
 
 	effective_storage_size
 		.checked_mul(&T::RentByteFee::get())

@@ -752,7 +752,7 @@ fn storage_size() {
 				.unwrap();
 			assert_eq!(
 				bob_contract.storage_size,
-				<Test as Trait>::StorageSizeOffset::get() + 4
+				4
 			);
 
 			assert_ok!(Contracts::call(
@@ -768,7 +768,7 @@ fn storage_size() {
 				.unwrap();
 			assert_eq!(
 				bob_contract.storage_size,
-				<Test as Trait>::StorageSizeOffset::get() + 4 + 4
+				4 + 4
 			);
 
 			assert_ok!(Contracts::call(
@@ -784,7 +784,7 @@ fn storage_size() {
 				.unwrap();
 			assert_eq!(
 				bob_contract.storage_size,
-				<Test as Trait>::StorageSizeOffset::get() + 4
+				4
 			);
 		});
 }
@@ -1316,7 +1316,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 				let django_contract = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 					.get_alive().unwrap();
-				assert_eq!(django_contract.storage_size, 16);
+				assert_eq!(django_contract.storage_size, 8);
 				assert_eq!(django_contract.trie_id, django_trie_id);
 				assert_eq!(django_contract.deduct_block, System::block_number());
 				match (test_different_storage, test_restore_to_with_dirty_storage) {
@@ -1390,7 +1390,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap()
 					.get_alive().unwrap();
 				assert_eq!(bob_contract.rent_allowance, 50);
-				assert_eq!(bob_contract.storage_size, 12);
+				assert_eq!(bob_contract.storage_size, 4);
 				assert_eq!(bob_contract.trie_id, django_trie_id);
 				assert_eq!(bob_contract.deduct_block, System::block_number());
 				assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());

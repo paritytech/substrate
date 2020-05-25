@@ -176,7 +176,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						child::kill_storage(&info.child_trie_info());
 						AliveContractInfo::<T> {
 							code_hash,
-							storage_size: T::StorageSizeOffset::get(),
+							storage_size: 0,
 							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 							deduct_block: <frame_system::Module<T>>::block_number(),
 							rent_allowance: <BalanceOf<T>>::max_value(),
@@ -187,7 +187,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(_, None, Some(code_hash)) => {
 						AliveContractInfo::<T> {
 							code_hash,
-							storage_size: T::StorageSizeOffset::get(),
+							storage_size: 0,
 							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 							deduct_block: <frame_system::Module<T>>::block_number(),
 							rent_allowance: <BalanceOf<T>>::max_value(),
