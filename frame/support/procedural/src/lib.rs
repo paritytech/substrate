@@ -50,8 +50,8 @@ use proc_macro::TokenStream;
 /// prefix. Instance prefix is "" for default instance and "Instance$n" for instance number $n.
 /// Thus, instance 3 of module Example has a module prefix of `Instance3Example`
 ///
-/// **Warning**: storage doesn't support inserting empty values, so the value must encode to
-/// non-empty slice.
+/// **Warning**: storage doesn't support inserting empty values, so any value inserted must encode
+/// to a non-empty slice.
 ///
 /// Basic storage consists of a name and a type; supported types are:
 ///
@@ -230,11 +230,15 @@ use proc_macro::TokenStream;
 /// add_extra_genesis {
 /// 	config(phantom): std::marker::PhantomData<I>,
 /// }
-/// ...
+/// ```
 ///
 /// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
 /// `Default::default()`.
 ///
+/// # Warning
+///
+/// storage doesn't support inserting empty values, so any value inserted must encode to a
+/// non-empty slice.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)

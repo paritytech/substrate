@@ -24,6 +24,7 @@ mod getters;
 mod metadata;
 mod instance_trait;
 mod genesis_config;
+mod empty_value_test;
 
 use quote::quote;
 use frame_support_procedural_tools::{
@@ -409,6 +410,7 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let instance_trait = instance_trait::decl_and_impl(&scrate, &def_ext);
 	let genesis_config = genesis_config::genesis_config_and_build_storage(&scrate, &def_ext);
 	let storage_struct = storage_struct::decl_and_impl(&scrate, &def_ext);
+	let empty_value_test = empty_value_test::impl_empty_value_test(&scrate, &def_ext);
 
 	quote!(
 		use #scrate::{
@@ -425,5 +427,6 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 		#instance_trait
 		#genesis_config
 		#storage_struct
+		#empty_value_test
 	).into()
 }

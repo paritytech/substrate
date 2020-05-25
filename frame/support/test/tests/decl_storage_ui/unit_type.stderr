@@ -1,0 +1,5 @@
+error: `()` is not supported, because storage doesn't support inserting empty values.
+  --> $DIR/unit_type.rs:29:21
+   |
+29 |         pub Value: Option<()>;
+   |                           ^^
