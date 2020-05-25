@@ -137,7 +137,8 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 		from = backend.header_metadata(from.parent)?;
 	}
 
-	// add the pivot block. and append the reversed to-branch (note that it's reverse order originals)
+	// add the pivot block. and append the reversed to-branch
+	// (note that it's reverse order originals)
 	let pivot = from_branch.len();
 	from_branch.push(HashAndNumber {
 		number: to.number,

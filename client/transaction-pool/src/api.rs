@@ -43,8 +43,8 @@ use crate::error::{self, Error};
 pub struct FullChainApi<Client, Block, Backend> {
 	client: Arc<Client>,
 	pool: ThreadPool,
-	_marker: PhantomData<Block>,
 	backend: Arc<Backend>,
+	_marker: PhantomData<Block>,
 }
 
 impl<Client, Block, Backend> FullChainApi<Client, Block, Backend> {
@@ -57,8 +57,8 @@ impl<Client, Block, Backend> FullChainApi<Client, Block, Backend> {
 				.name_prefix("txpool-verifier")
 				.create()
 				.expect("Failed to spawn verifier threads, that are critical for node operation."),
-			_marker: Default::default(),
 			backend,
+			_marker: Default::default(),
 		}
 	}
 }
@@ -73,9 +73,10 @@ where
 	Backend: sc_client_api::Backend<Block>,
 {
 	type Block = Block;
-	type Hash = Block::Hash;
 	type Error = error::Error;
-	type ValidationFuture = Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
+	type ValidationFuture = Pin<
+		Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>
+	>;
 	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
@@ -138,57 +139,66 @@ where
 		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
 	}
 
-	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(
+		&self,
+		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
+	) -> (Block::Hash, usize) {
 		ex.using_encoded(|x| {
 			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
 
-	fn leaves(&self) -> Result<Vec<Self::Hash>, Self::Error> {
+	fn leaves(&self) -> Result<Vec<Block::Hash>, Self::Error> {
 		self.backend.blockchain().leaves().map_err(Into::into)
 	}
 
 	fn tree_route(
 		&self,
-		from: Self::Hash,
-		to: Self::Hash,
+		from: Block::Hash,
+		to: Block::Hash,
 	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
 		sp_blockchain::tree_route(self.backend.blockchain(), from, to).map_err(Into::into)
 	}
 }
 
 /// The transaction pool logic for light client.
-pub struct LightChainApi<Client, F, Block> {
+pub struct LightChainApi<Client, F, Block, Backend> {
 	client: Arc<Client>,
 	fetcher: Arc<F>,
+	backend: Arc<Backend>,
 	_phantom: PhantomData<Block>,
 }
 
-impl<Client, F, Block> LightChainApi<Client, F, Block> where
-	Block: BlockT,
-	Client: HeaderBackend<Block>,
-	F: Fetcher<Block>,
-{
+impl<Client, F, Block, Backend> LightChainApi<Client, F, Block, Backend> {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<Client>, fetcher: Arc<F>) -> Self {
+	pub fn new(client: Arc<Client>, fetcher: Arc<F>, backend: Arc<Backend>) -> Self {
 		LightChainApi {
 			client,
 			fetcher,
+			backend,
 			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, F, Block> where
-	Block: BlockT,
-	Client: HeaderBackend<Block> + 'static,
-	F: Fetcher<Block> + 'static,
+impl<Client, F, Block, Backend> sc_transaction_graph::ChainApi for
+	LightChainApi<Client, F, Block, Backend> where
+		Block: BlockT,
+		Client: HeaderBackend<Block> + 'static,
+		F: Fetcher<Block> + 'static,
+		Backend: sc_client_api::Backend<Block>,
 {
 	type Block = Block;
-	type Hash = Block::Hash;
 	type Error = error::Error;
-	type ValidationFuture = Box<dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin>;
-	type BodyFuture = Pin<Box<dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>> + Send>>;
+	type ValidationFuture = Box<
+		dyn Future<Output = error::Result<TransactionValidity>> + Send + Unpin
+	>;
+	type BodyFuture = Pin<
+		Box<
+			dyn Future<Output = error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>
+				+ Send
+		>
+	>;
 
 	fn validate_transaction(
 		&self,
@@ -225,15 +235,24 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 		Box::new(remote_validation_request)
 	}
 
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
+	fn block_id_to_number(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> error::Result<Option<sc_transaction_graph::NumberFor<Self>>> {
 		Ok(self.client.block_number_from_id(at)?)
 	}
 
-	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
+	fn block_id_to_hash(
+		&self,
+		at: &BlockId<Self::Block>,
+	) -> error::Result<Option<sc_transaction_graph::BlockHash<Self>>> {
 		Ok(self.client.block_hash_from_id(at)?)
 	}
 
-	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(
+		&self,
+		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
+	) -> (Block::Hash, usize) {
 		ex.using_encoded(|x| {
 			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})
@@ -268,15 +287,15 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 		}.boxed()
 	}
 
-	fn leaves(&self) -> Result<Vec<Self::Hash>, Self::Error> {
-		unimplemented!()
+	fn leaves(&self) -> Result<Vec<Block::Hash>, Self::Error> {
+		self.backend.blockchain().leaves().map_err(Into::into)
 	}
 
 	fn tree_route(
 		&self,
-		from: Self::Hash,
-		to: Self::Hash,
+		from: Block::Hash,
+		to: Block::Hash,
 	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
-		unimplemented!()
+		sp_blockchain::tree_route(self.backend.blockchain(), from, to).map_err(Into::into)
 	}
 }

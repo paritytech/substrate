@@ -223,20 +223,23 @@ mod tests {
 
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::{
-		runtime::Transfer,
-		AccountKeyring,
+		runtime::Transfer, DefaultTestClientBuilderExt, AccountKeyring, TestClientBuilderExt,
 	};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
-		// given
 		let _ = env_logger::try_init();
-		let client = Arc::new(substrate_test_runtime_client::new());
+
+		// given
+		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = client_builder.backend();
+
+		let client = Arc::new(client_builder.build());
 		let pool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
+				Arc::new(FullChainApi::new(client.clone(), backend)),
 				None,
 			).0
 		);

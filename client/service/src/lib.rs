@@ -724,11 +724,13 @@ mod tests {
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
-		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+		let client_builder = TestClientBuilder::new();
+		let backend = client_builder.backend();
+		let (client, longest_chain) = client_builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
+			Arc::new(FullChainApi::new(client.clone(), backend)),
 			None,
 		).0);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;

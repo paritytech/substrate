@@ -49,14 +49,17 @@ use sp_transaction_pool::{
 };
 use sc_transaction_graph::ChainApi;
 use wasm_timer::Instant;
-use sp_blockchain::TreeRoute;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use crate::metrics::MetricsLink as PrometheusMetrics;
 
-type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
+type BoxedReadyIterator<Hash, Data> = Box<
+	dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send
+>;
 
-type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<sc_transaction_graph::ExHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>>;
+type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
+	sc_transaction_graph::BlockHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>
+>;
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
 
@@ -64,7 +67,7 @@ type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolAp
 pub struct BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: ChainApi<Block=Block>,
 {
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
@@ -118,8 +121,7 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 #[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
-	PoolApi: ChainApi<Block=Block, Hash=Block::Hash>,
-	PoolApi::Hash: parity_util_mem::MallocSizeOf,
+	PoolApi: ChainApi<Block=Block>,
 	Block: BlockT,
 {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
@@ -148,7 +150,7 @@ pub enum RevalidationType {
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: ChainApi<Block=Block, Hash=Block::Hash> + 'static,
+		PoolApi: ChainApi<Block=Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api.
 	///
@@ -228,11 +230,13 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: 'static + ChainApi<Block=Block>,
 {
 	type Block = PoolApi::Block;
-	type Hash = sc_transaction_graph::ExHash<PoolApi>;
-	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
+	type Hash = sc_transaction_graph::BlockHash<PoolApi>;
+	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+		TxHash<Self>, TransactionFor<Self>
+	>;
 	type Error = PoolApi::Error;
 
 	fn submit_at(
@@ -439,20 +443,20 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 ///
 /// Given the following:
 ///
+/// ```ignore
 ///     -> D0 (old best, tx0)
 ///    /
 /// C - -> D1 (tx1)
 ///    \
 ///     -> D2 (new best)
+/// ```
 ///
 /// This function will return `D0` and `D1`.
 fn find_retracted_blocks<'a, Block: BlockT>(
 	new_best: &'a Block::Hash,
-	tree_route: TreeRoute<Block>,
-	api: &'a impl ChainApi<Block = Block, Hash = Block::Hash>,
+	tree_route: sp_blockchain::TreeRoute<Block>,
+	api: &'a impl ChainApi<Block = Block>,
 ) -> impl Iterator<Item = Block::Hash> + 'a {
-	let common_number = tree_route.common_block().number.clone();
-
 	let leaves = api.leaves();
 
 	if leaves.is_err() {
@@ -463,10 +467,12 @@ fn find_retracted_blocks<'a, Block: BlockT>(
 		};
 	}
 
+	let ignore = tree_route.retracted().first().map(|hn| hn.hash.clone());
 	leaves.ok()
 		.into_iter()
 		.flatten()
 		.into_iter()
+		.filter(move |l| Some(l) != ignore.as_ref())
 		.filter_map(move |l| {
 			match api.tree_route(l, new_best.clone()) {
 				Ok(tree_route) => Some(tree_route.into_retracted().into_iter().map(|v| v.hash)),
@@ -483,12 +489,13 @@ fn find_retracted_blocks<'a, Block: BlockT>(
 			}
 		})
 		.flatten()
+		.chain(tree_route.into_retracted().into_iter().map(|v| v.hash))
 }
 
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: 'static + ChainApi<Block=Block>,
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
@@ -549,7 +556,8 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					}
 
 					let extra_pool = pool.clone();
-					// After #5200 lands, this arguably might be moved to the handler of "all blocks notification".
+					// After #5200 lands, this arguably might be moved to the
+					// handler of "all blocks notification".
 					ready_poll.lock().trigger(
 						block_number,
 						move || Box::new(extra_pool.validated_pool().ready())
