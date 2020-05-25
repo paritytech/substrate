@@ -41,7 +41,7 @@ pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
 ///
 /// ```rust,ignore
 /// use runtime::{Runtime, SignedExtra};
-/// use frame_utils::{IndexFor};
+/// use frame_utils::IndexFor;
 /// use sp_runtime::generic;
 ///
 /// impl RuntimeAdapter for Runtime {

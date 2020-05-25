@@ -27,7 +27,7 @@ mod sign_transaction;
 #[cfg(feature = "balances")]
 mod transfer;
 #[cfg(feature = "balances")]
-pub use	transfer::TransferCmd;
+pub use transfer::TransferCmd;
 
 pub use {key::KeySubcommand, sign_transaction::SignTransactionCmd};
 
@@ -39,7 +39,7 @@ mod tests {
 	use structopt::StructOpt;
 	use std::io::Read;
 
-    #[test]
+	#[test]
     fn generate() {
         let generate = GenerateCmd::from_iter(&["generate", "--password", "12345"]);
         assert!(generate.run().is_ok())

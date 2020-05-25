@@ -40,9 +40,9 @@ pub use crate::params::transaction_pool_params::*;
 
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
 #[derive(Debug, Clone)]
-pub struct BlockNumber(String);
+pub struct GenericNumber(String);
 
-impl FromStr for BlockNumber {
+impl FromStr for GenericNumber {
 	type Err = String;
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
@@ -57,7 +57,7 @@ impl FromStr for BlockNumber {
 	}
 }
 
-impl BlockNumber {
+impl GenericNumber {
 	/// Wrapper on top of `std::str::parse<N>` but with `Error` as a `String`
 	///
 	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
@@ -89,7 +89,7 @@ impl FromStr for BlockNumberOrHash {
 				Ok(Self(block_number.into()))
 			}
 		} else {
-			BlockNumber::from_str(block_number).map(|v| Self(v.0))
+			GenericNumber::from_str(block_number).map(|v| Self(v.0))
 		}
 	}
 }
@@ -109,7 +109,7 @@ impl BlockNumberOrHash {
 					.map_err(|e| format!("Failed to parse block hash: {:?}", e))?
 			))
 		} else {
-			BlockNumber(self.0.clone()).parse().map(BlockId::Number)
+			GenericNumber(self.0.clone()).parse().map(BlockId::Number)
 		}
 	}
 }

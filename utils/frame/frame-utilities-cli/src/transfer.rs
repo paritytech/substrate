@@ -19,10 +19,11 @@
 
 use sc_cli::{
     Error, SharedParams, pair_from_suri, with_crypto_scheme,
-    CryptoSchemeFlag, decode_hex, CliConfiguration, KeystoreParams,
+	CryptoSchemeFlag, decode_hex, CliConfiguration, KeystoreParams,
+	GenericNumber,
 };
 use structopt::StructOpt;
-use std::{str::FromStr, fmt::Display};
+use std::{str::FromStr, fmt::Debug};
 use codec::Encode;
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
@@ -41,7 +42,7 @@ use crate::utils::create_extrinsic_for;
 pub struct TransferCmd {
     /// The number of units to transfer.
     #[structopt(long)]
-    amount: String,
+    amount: GenericNumber,
 
     /// The signing secret key URI.
     #[structopt(long)]
@@ -49,7 +50,7 @@ pub struct TransferCmd {
 
     /// The signing account's transaction index.
     #[structopt(long)]
-    index: String,
+    index: GenericNumber,
 
     /// The destination account public key URI.
     #[structopt(long)]
@@ -71,28 +72,28 @@ pub struct TransferCmd {
 
 impl TransferCmd {
     /// Run the command
-    pub fn run<RA>(&self) -> Result<(), Error>
+    pub fn run<R>(&self) -> Result<(), Error>
         where
-            RA: pallet_balances::Trait + SignedExtensionProvider,
-            AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
-            AddressFor<RA>: From<AccountIdFor<RA>>,
-            <IndexFor<RA> as FromStr>::Err: Display,
-            <BalanceFor<RA> as FromStr>::Err: Display,
+            R: pallet_balances::Trait + SignedExtensionProvider,
+            AccountIdFor<R>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
+            AddressFor<R>: From<AccountIdFor<R>>,
+            <IndexFor<R> as FromStr>::Err: Debug,
+            <BalanceFor<R> as FromStr>::Err: Debug,
     {
         let password = self.keystore_params.read_password()?;
-        let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
+        let nonce = self.index.parse::<IndexFor<R>>()?;
         let to = if let Ok(data_vec) = decode_hex(&self.to) {
-            AccountIdFor::<RA>::try_from(&data_vec)
-                .expect("Invalid hex length for account ID; should be 32 bytes")
+            AccountIdFor::<R>::try_from(&data_vec)
+                .map_err(|_| Error::Other("Invalid hex length for account ID; should be 32 bytes".into()))?
         } else {
-            AccountIdFor::<RA>::from_ss58check(&self.to).ok()
-                .expect("Invalid SS58-check address given for account ID.")
+            AccountIdFor::<R>::from_ss58check(&self.to)
+                .map_err(|_| Error::Other("Invalid SS58-check address given for account ID.".into()))?
         };
-        let amount = BalanceFor::<RA>::from_str(&self.amount).map_err(|e| format!("{}", e))?;
+        let amount = self.amount.parse::<BalanceFor<R>>()?;
 
         with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			print_ext<RA>(
+			print_ext<R>(
 				&self.from,
 				&password,
 				to.into(),

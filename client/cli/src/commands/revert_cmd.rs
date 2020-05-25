@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::params::{GenericNumber, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -29,7 +29,7 @@ use structopt::StructOpt;
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]
-	pub num: BlockNumber,
+	pub num: GenericNumber,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

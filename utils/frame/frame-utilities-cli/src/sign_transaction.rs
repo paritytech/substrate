@@ -19,11 +19,11 @@
 use sc_cli::{
 	Error, CliConfiguration, KeystoreParams, SharedParams,
 	pair_from_suri, decode_hex,with_crypto_scheme,
-	CryptoSchemeFlag,
+	CryptoSchemeFlag, GenericNumber,
 };
 use structopt::StructOpt;
 use codec::{Codec, Encode, Decode};
-use std::{str::FromStr, fmt::Display};
+use std::{str::FromStr, fmt::Debug};
 use sp_runtime::MultiSigner;
 use frame_utils::{SignedExtensionProvider, IndexFor, CallFor};
 use crate::utils::create_extrinsic_for;
@@ -44,7 +44,7 @@ pub struct SignTransactionCmd {
 
 	/// The nonce.
 	#[structopt(long)]
-	nonce: String,
+	nonce: GenericNumber,
 
 	/// The call, hex-encoded.
 	#[structopt(long, parse(try_from_str = decode_hex))]
@@ -65,18 +65,18 @@ pub struct SignTransactionCmd {
 
 impl SignTransactionCmd {
 	/// Run the command
-	pub fn run<RA>(&self) -> Result<(), Error>
+	pub fn run<P>(&self) -> Result<(), Error>
 		where
-			RA: SignedExtensionProvider,
-			<IndexFor<RA> as FromStr>::Err: Display,
-			CallFor<RA>: Codec,
+			P: SignedExtensionProvider,
+			<IndexFor<P> as FromStr>::Err: Debug,
+			CallFor<P>: Codec,
 	{
 
-		let nonce = IndexFor::<RA>::from_str(&self.nonce).map_err(|e| format!("{}", e))?;
-		let call = CallFor::<RA>::decode(&mut &self.call[..])?;
+		let nonce = self.nonce.parse::<IndexFor<P>>()?;
+		let call = CallFor::<P>::decode(&mut &self.call[..])?;
 		let pass = self.keystore_params.read_password()?;
 
-		with_crypto_scheme!(self.crypto_scheme.scheme, print_ext<RA>(&self.suri, &pass, call, nonce))
+		with_crypto_scheme!(self.crypto_scheme.scheme, print_ext<P>(&self.suri, &pass, call, nonce))
 	}
 }
 

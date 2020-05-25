@@ -94,7 +94,7 @@ impl KeystoreParams {
 		let pass = if password_interactive {
 			rpassword::read_password_from_tty(Some("Key password: "))?
 		} else {
-			password.map(Into::into).ok_or("Password not specified")?
+			password.map(Into::into).ok_or("one of --password or --password-interactive was not specified")?
 		};
 
 		Ok(pass)
