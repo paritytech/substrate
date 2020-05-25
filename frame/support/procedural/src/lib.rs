@@ -50,6 +50,9 @@ use proc_macro::TokenStream;
 /// prefix. Instance prefix is "" for default instance and "Instance$n" for instance number $n.
 /// Thus, instance 3 of module Example has a module prefix of `Instance3Example`
 ///
+/// **Warning**: storage doesn't support inserting empty values, so the value must encode to
+/// non-empty slice.
+///
 /// Basic storage consists of a name and a type; supported types are:
 ///
 /// * Value: `Foo: type`: Implements the

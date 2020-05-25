@@ -66,6 +66,10 @@ where
 }
 
 /// Put `value` in storage under `key`.
+///
+/// # Warning
+///
+/// Put empty value is not supported (i.e value must encode to an non-empty slice).
 pub fn put<T, HashFn, R>(hash: &HashFn, key: &[u8], value: &T)
 where
 	T: Encode,
@@ -147,6 +151,10 @@ where
 }
 
 /// Put a raw byte slice into storage.
+///
+/// # Warning
+///
+/// Put empty value is not supported.
 pub fn put_raw<HashFn, R>(hash: &HashFn, key: &[u8], value: &[u8])
 where
 	HashFn: Fn(&[u8]) -> R,

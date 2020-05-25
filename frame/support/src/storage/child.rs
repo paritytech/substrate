@@ -77,19 +77,24 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(
 }
 
 /// Put `value` in storage under `key`.
+///
+/// # Warning
+///
+/// Put empty value is not supported (i.e value must encode to an non-empty slice).
 pub fn put<T: Encode>(
 	child_info: &ChildInfo,
 	key: &[u8],
 	value: &T,
 ) {
 	match child_info.child_type() {
-		ChildType::ParentKeyId => value.using_encoded(|slice|
+		ChildType::ParentKeyId => value.using_encoded(|slice| {
+			debug_assert!(!slice.is_empty(), "put empty slice in child storage is not supported");
 			sp_io::default_child_storage::set(
 				child_info.storage_key(),
 				key,
 				slice,
 			)
-		),
+		}),
 	}
 }
 
@@ -187,11 +192,16 @@ pub fn get_raw(
 }
 
 /// Put a raw byte slice into storage.
+///
+/// # Warning
+///
+/// Put empty value is not supported.
 pub fn put_raw(
 	child_info: &ChildInfo,
 	key: &[u8],
 	value: &[u8],
 ) {
+	debug_assert!(!value.is_empty(), "put_raw empty slice in child storage is not supported");
 	match child_info.child_type() {
 		ChildType::ParentKeyId => sp_io::default_child_storage::set(
 			child_info.storage_key(),

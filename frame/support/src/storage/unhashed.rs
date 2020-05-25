@@ -50,8 +50,15 @@ pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_valu
 }
 
 /// Put `value` in storage under `key`.
+///
+/// # Warning
+///
+/// Put empty value is not supported (i.e value must encode to an non-empty slice).
 pub fn put<T: Encode + ?Sized>(key: &[u8], value: &T) {
-	value.using_encoded(|slice| sp_io::storage::set(key, slice));
+	value.using_encoded(|slice| {
+		debug_assert!(!slice.is_empty(), "put empty slice in storage is not supported");
+		sp_io::storage::set(key, slice)
+	});
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -103,9 +110,13 @@ pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
 
 /// Put a raw byte slice into storage.
 ///
-/// **WARNING**: If you set the storage of the Substrate Wasm (`well_known_keys::CODE`),
-/// you should also call `frame_system::RuntimeUpgraded::put(true)` to trigger the
-/// `on_runtime_upgrade` logic.
+/// # Warning
+///
+/// * If you set the storage of the Substrate Wasm (`well_known_keys::CODE`),
+///   you should also call `frame_system::RuntimeUpgraded::put(true)` to trigger the
+///   `on_runtime_upgrade` logic.
+/// * Put empty value is not supported.
 pub fn put_raw(key: &[u8], value: &[u8]) {
+	debug_assert!(!value.is_empty(), "put_raw empty slice in storage is not supported");
 	sp_io::storage::set(key, value)
 }
