@@ -104,7 +104,9 @@ pub trait Storage {
 	///
 	/// Empty value is not supported.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
-		log::error!(target: "runtime", "Empty value is inserted, not supported.");
+		if value.is_empty() {
+			log::error!(target: "runtime", "Empty value is inserted, not supported.");
+		}
 		self.set_storage(key.to_vec(), value.to_vec());
 	}
 
@@ -218,7 +220,9 @@ pub trait DefaultChildStorage {
 		key: &[u8],
 		value: &[u8],
 	) {
-		log::error!(target: "runtime", "Empty value is inserted in child, not supported.");
+		if value.is_empty() {
+			log::error!(target: "runtime", "Empty value is inserted in child, not supported.");
+		}
 		let child_info = ChildInfo::new_default(storage_key);
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
