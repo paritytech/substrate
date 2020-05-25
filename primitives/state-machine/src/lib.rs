@@ -42,6 +42,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 mod stats;
+mod read_only;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, StorageProof, TrieMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
