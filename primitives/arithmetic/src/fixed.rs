@@ -660,13 +660,6 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			#[should_panic(expected = "attempt to negate with overflow")]
-			fn op_neg_panics() {
-				let a = $name::min_value();
-				let _ = -a;
-			}
-
-			#[test]
 			fn op_neg_works() {
 				let a = $name::saturating_from_integer(5);
 				let b = -a;
@@ -700,11 +693,10 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			#[should_panic(expected = "attempt to add with overflow")]
-			fn op_add_panics() {
+			fn op_checked_add_overflow_works() {
 				let a = $name::max_value();
 				let b = 1.into();
-				let _ = a + b;
+				assert!(a.checked_add(&b).is_none());
 			}
 
 			#[test]
@@ -722,11 +714,10 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			#[should_panic(expected = "attempt to subtract with overflow")]
-			fn op_sub_panics() {
+			fn op_checked_sub_underflow_works() {
 				let a = $name::min_value();
 				let b = 1.into();
-				let _c = a - b;
+				assert!(a.checked_sub(&b).is_none());
 			}
 
 			#[test]
@@ -744,11 +735,10 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			#[should_panic(expected = "attempt to multiply with overflow")]
-			fn op_mul_panics() {
+			fn op_checked_mul_overflow_works() {
 				let a = $name::max_value();
 				let b = 2.into();
-				let _c = a * b;
+				assert!(a.checked_mul(&b).is_none());
 			}
 
 			#[test]
@@ -771,11 +761,10 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			#[should_panic(expected = "attempt to divide with overflow")]
-			fn op_div_panics_on_overflow() {
+			fn op_checked_div_overflow_works() {
 				let a = $name::min_value();
 				let b = (-1).into();
-				let _c = a / b;
+				assert!(a.checked_div(&b).is_none());
 			}
 
 			#[test]
