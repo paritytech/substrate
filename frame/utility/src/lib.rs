@@ -67,7 +67,7 @@ use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency},
+use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
@@ -78,13 +78,6 @@ mod tests;
 mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-pub trait Filter<T> {
-	fn filter(_: &T) -> bool;
-}
-impl<T> Filter<T> for () {
-	fn filter(_: &T) -> bool { true }
-}
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
