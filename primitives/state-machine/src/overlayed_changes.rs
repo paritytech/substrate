@@ -26,13 +26,10 @@ use crate::{
 	stats::StateMachineStats,
 };
 
-#[cfg(test)]
-use std::iter::FromIterator;
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::{mem, ops, collections::{HashMap, BTreeMap, BTreeSet}};
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, ChildType};
 use sp_core::offchain::storage::OffchainOverlayedChanges;
-use std::{mem, ops};
 
 use hash_db::Hasher;
 
@@ -178,7 +175,7 @@ impl<Transaction: Default, H: Hasher, N: BlockNumber> Default for StorageChanges
 }
 
 #[cfg(test)]
-impl FromIterator<(StorageKey, OverlayedValue)> for OverlayedChangeSet {
+impl std::iter::FromIterator<(StorageKey, OverlayedValue)> for OverlayedChangeSet {
 	fn from_iter<T: IntoIterator<Item = (StorageKey, OverlayedValue)>>(iter: T) -> Self {
 		Self {
 			top: iter.into_iter().collect(),
@@ -646,22 +643,29 @@ impl OverlayedChanges {
 				.chain(self.committed.children_default.keys());
 		let child_delta_iter = child_storage_keys.map(|storage_key|
 			(
-				self.default_child_info(storage_key).cloned()
+				self.default_child_info(storage_key)
 					.expect("child info initialized in either committed or prospective"),
 				self.committed.children_default.get(storage_key)
 					.into_iter()
-					.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+					.flat_map(|(map, _)|
+						map.iter().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])))
+					)
 					.chain(
 						self.prospective.children_default.get(storage_key)
 							.into_iter()
-							.flat_map(|(map, _)| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
+							.flat_map(|(map, _)|
+								map.iter().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])))
+							)
 					),
 			)
 		);
 
 		// compute and memoize
-		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+		let delta = self.committed
+			.top
+			.iter()
+			.map(|(k, v)| (&k[..], v.value().map(|v| &v[..])))
+			.chain(self.prospective.top.iter().map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))));
 
 		let (root, transaction) = backend.full_storage_root(delta, child_delta_iter);
 

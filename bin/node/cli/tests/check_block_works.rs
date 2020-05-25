@@ -22,7 +22,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-mod common;
+pub mod common;
 
 #[test]
 fn check_block_works() {
@@ -31,7 +31,7 @@ fn check_block_works() {
 	common::run_dev_node_for_a_while(base_path.path());
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["check-block", "--dev", "--pruning", "archive", "-d"])
+		.args(&["check-block", "--rc1", "--pruning", "archive", "-d"])
 		.arg(base_path.path())
 		.arg("1")
 		.status()

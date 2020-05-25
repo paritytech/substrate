@@ -20,7 +20,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::{convert::TryInto, process::Command, thread, time::Duration};
 use tempfile::tempdir;
 
-mod common;
+pub mod common;
 
 #[test]
 #[cfg(unix)]
@@ -31,7 +31,7 @@ fn running_the_node_works_and_can_be_interrupted() {
 	fn run_command_and_kill(signal: Signal) {
 		let base_path = tempdir().expect("could not create a temp dir");
 		let mut cmd = Command::new(cargo_bin("substrate"))
-			.args(&["--dev", "-d"])
+			.args(&["--rc1", "-d"])
 			.arg(base_path.path())
 			.spawn()
 			.unwrap();

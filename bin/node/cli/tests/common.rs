@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(unix)]
-#![allow(dead_code)]
 
 use std::{process::{Child, ExitStatus}, thread, time::Duration, path::Path};
 use assert_cmd::cargo::cargo_bin;
@@ -52,7 +51,7 @@ pub fn run_dev_node_for_a_while(base_path: &Path) {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
 	let mut cmd = cmd
-		.args(&["--dev"])
+		.args(&["--rc1"])
 		.arg("-d")
 		.arg(base_path)
 		.spawn()

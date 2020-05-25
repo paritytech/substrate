@@ -20,7 +20,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-mod common;
+pub mod common;
 
 #[test]
 #[cfg(unix)]
@@ -30,7 +30,7 @@ fn purge_chain_works() {
 	common::run_dev_node_for_a_while(base_path.path());
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d"])
+		.args(&["purge-chain", "--rc1", "-d"])
 		.arg(base_path.path())
 		.arg("-y")
 		.status()
