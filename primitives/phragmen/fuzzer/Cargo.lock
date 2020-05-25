@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "memory-db"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "198831fe8722331a395bc199a5d08efbc197497ef354cb4c77b969c02ffc0fc4"
 dependencies = [
