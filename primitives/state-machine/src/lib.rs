@@ -347,11 +347,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				CallResult<R, Exec::Error>,
 			) -> CallResult<R, Exec::Error>
 	{
-		let pending_changes = self.overlay.clone_pending();
+		self.overlay.start_transaction();
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.replace_pending(pending_changes);
+			self.overlay.rollback_transaction();
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -366,6 +366,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				on_consensus_failure(wasm_result, result)
 			}
 		} else {
+			self.overlay.commit_transaction();
 			result
 		}
 	}
@@ -378,16 +379,17 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			R: Decode + Encode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let pending_changes = self.overlay.clone_pending();
+		self.overlay.start_transaction();
 		let (result, was_native) = self.execute_aux(
 			true,
 			native_call.take(),
 		);
 
 		if !was_native || result.is_ok() {
+			self.overlay.commit_transaction();
 			result
 		} else {
-			self.overlay.replace_pending(pending_changes);
+			self.overlay.rollback_transaction();
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -977,7 +979,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(b"aba".to_vec(), Some(b"1312".to_vec()));
 		overlay.set_storage(b"bab".to_vec(), Some(b"228".to_vec()));
-		overlay.commit_prospective();
+		overlay.start_transaction();
 		overlay.set_storage(b"abd".to_vec(), Some(b"69".to_vec()));
 		overlay.set_storage(b"bbd".to_vec(), Some(b"42".to_vec()));
 
@@ -994,10 +996,10 @@ mod tests {
 			);
 			ext.clear_prefix(b"ab");
 		}
-		overlay.commit_prospective();
+		overlay.commit_transaction();
 
 		assert_eq!(
-			overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned()))
+			overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned()))
 				.collect::<HashMap<_, _>>(),
 			map![
 				b"abc".to_vec() => None.into(),
@@ -1083,7 +1085,7 @@ mod tests {
 				Some(vec![reference_data[0].clone()].encode()),
 			);
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 		{
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1102,7 +1104,7 @@ mod tests {
 				Some(reference_data.encode()),
 			);
 		}
-		overlay.discard_prospective();
+		overlay.rollback_transaction();
 		{
 			let ext = Ext::new(
 				&mut overlay,
@@ -1145,7 +1147,7 @@ mod tests {
 			ext.clear_storage(key.as_slice());
 			ext.storage_append(key.clone(), Item::InitializationItem.encode());
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 
 		// For example, first transaction resulted in panic during block building
 		{
@@ -1170,7 +1172,7 @@ mod tests {
 				Some(vec![Item::InitializationItem, Item::DiscardedItem].encode()),
 			);
 		}
-		overlay.discard_prospective();
+		overlay.rollback_transaction();
 
 		// Then we apply next transaction which is valid this time.
 		{
@@ -1196,7 +1198,7 @@ mod tests {
 			);
 
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 
 		// Then only initlaization item and second (commited) item should persist.
 		{
