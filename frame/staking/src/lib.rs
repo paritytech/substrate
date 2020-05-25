@@ -290,7 +290,7 @@ use sp_std::{
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo, WithPostDispatchInfo},
@@ -332,13 +332,14 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
 
-// syntactic sugar for logging
-#[cfg(feature = "std")]
-const LOG_TARGET: &'static str = "staking";
+pub(crate) const LOG_TARGET: &'static str = "staking";
+
+// syntactic sugar for logging.
+#[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		debug::native::$level!(
-			target: LOG_TARGET,
+		frame_support::debug::$level!(
+			target: crate::LOG_TARGET,
 			$patter $(, $values)*
 		)
 	};
@@ -372,7 +373,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
-	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
+	/// Moment of start expressed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
 	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
@@ -1172,6 +1173,8 @@ decl_event!(
 		OldSlashingReportDiscarded(SessionIndex),
 		/// A new set of stakers was elected with the given computation method.
 		StakingElection(ElectionCompute),
+		/// A new solution for the upcoming election has been stored.
+		SolutionStored(ElectionCompute),
 		/// An account has bonded this amount.
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
@@ -1327,7 +1330,7 @@ decl_module! {
 					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
-						log!(warn, "💸 Error in phragmen offchain worker: {:?}", e);
+						log!(error, "💸 Error in phragmen offchain worker: {:?}", e);
 					} else {
 						log!(debug, "Executed offchain worker thread without errors.");
 					}
@@ -2787,6 +2790,9 @@ impl<T: Trait> Module<T> {
 			exposures,
 		});
 		QueuedScore::put(submitted_score);
+
+		// emit event.
+		Self::deposit_event(RawEvent::SolutionStored(compute));
 
 		Ok(Some(adjusted_weight).into())
 	}
