@@ -424,7 +424,6 @@ fn as_sub_works() {
 #[test]
 fn as_sub_filters() {
 	new_test_ext().execute_with(|| {
-		let sub_1_0 = Utility::sub_account_id(1, 0);
 		assert_noop!(Utility::as_sub(
 			Origin::signed(1),
 			1,
