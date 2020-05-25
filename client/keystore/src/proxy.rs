@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 #![allow(missing_docs)]
 use futures::{
-	ready,
-	future::Future,
-	stream::{FuturesUnordered, Stream, StreamExt},
+	future::{Future, FutureExt},
+	stream::Stream,
 	channel::{
 		oneshot,
 		mpsc::{Sender, Receiver, channel},
@@ -21,7 +20,7 @@ use sp_core::{
 		KeyTypeId,
 	},
 	traits::{
-		BareCryptoStorePtr,
+		BareCryptoStore,
 		BareCryptoStoreError,
 	},
 };
@@ -104,78 +103,98 @@ impl KeystoreProxy {
 	}
 }
 
-pub struct KeystoreReceiver {
-	receiver: Receiver<KeystoreRequest>,
-	store: BareCryptoStorePtr,
-	pending: FuturesUnordered<Pin<Box<dyn Future<Output = ()> + Send>>>,
+enum State<Store: BareCryptoStore> {
+	Idle(Store),
+	Pending(Pin<Box<dyn Future<Output = Store> + Send>>),
+	Poisoned,
 }
 
-impl KeystoreReceiver {
-	pub fn new(store: BareCryptoStorePtr, receiver: Receiver<KeystoreRequest>) -> Self {
+pub struct KeystoreReceiver<Store: BareCryptoStore> {
+	receiver: Receiver<KeystoreRequest>,
+	state: State<Store>,
+}
+
+impl<Store: BareCryptoStore> Unpin for KeystoreReceiver<Store> {
+
+}
+
+impl<Store: BareCryptoStore + 'static> KeystoreReceiver<Store> {
+	pub fn new(store: Store, receiver: Receiver<KeystoreRequest>) -> Self {
 		KeystoreReceiver {
 			receiver,
-			store,
-			pending: FuturesUnordered::new(),
+			state: State::Idle(store),
 		}
 	}
 
-	fn process_request(&mut self, request: KeystoreRequest) {
-		let keystore = self.store.clone();
+	fn process_request(store: Store, request: KeystoreRequest) -> Pin<Box<dyn Future<Output = Store> + Send>> {
 		let sender = request.sender;
 		match request.method {
 			RequestMethod::SignWith(id, key, msg) => {
-				let future = async move {
-					let result = keystore.read().sign_with(id, &key, &msg).await;
+				Box::pin(async move {
+					let result = store.sign_with(id, &key, &msg).await;
 					let _ = sender.send(KeystoreResponse::SignWith(result));
-				};
-
-				self.pending.push(Box::pin(future));
+					return store;
+				})
 			},
 			RequestMethod::HasKeys(keys) => {
-				let future = async move {
-					let result = keystore.read().has_keys(&keys).await;
+				Box::pin(async move {
+					let result = store.has_keys(&keys).await;
 					let _ = sender.send(KeystoreResponse::HasKeys(result));
-				};
-
-				self.pending.push(Box::pin(future));
+					return store;
+				})
 			},
 			RequestMethod::InsertUnknown(key_type, suri, pubkey) => {
-				let future = async move {
-					let result = keystore.write().insert_unknown(
+				Box::pin(async move {
+					let mut store = store;
+					let result = store.insert_unknown(
 						key_type,
 						suri.as_str(),
 						&pubkey,
 					).await;
 					let _ = sender.send(KeystoreResponse::InsertUnknown(result));
-				};
-
-				self.pending.push(Box::pin(future));
+					return store;
+				})
 			}
 		}
 	}
 }
 
-impl Future for KeystoreReceiver {
+impl<Store: BareCryptoStore + 'static> Future for KeystoreReceiver<Store> {
 	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = &mut *self;
 		loop {
-			match self.pending.poll_next_unpin(cx) {
-				Poll::Ready(Some(())) => {},
-				Poll::Pending => break,
-				Poll::Ready(None) => {
-					// Stream has terminated
-					// No need for this future to poll anymore.
-					return Poll::Ready(());
+			match std::mem::replace(&mut this.state, State::Poisoned) {
+				State::Idle(store) => {
+					match Pin::new(&mut this.receiver).poll_next(cx) {
+						Poll::Ready(None) => {
+							return Poll::Ready(());
+						},
+						Poll::Ready(Some(request)) => {
+							let future = KeystoreReceiver::process_request(store, request);
+							this.state = State::Pending(future);
+						},
+						Poll::Pending => {
+							this.state = State::Idle(store);
+						}
+					}
 				},
+				State::Pending(mut future) => {
+					match future.poll_unpin(cx) {
+						Poll::Ready(store) => {
+							this.state = State::Idle(store);
+						},
+						Poll::Pending => {
+							this.state = State::Pending(future);
+						}
+					}
+				},
+				State::Poisoned => {
+					unreachable!();
+				}
 			}
 		}
-
-		if let Some(request) = ready!(Pin::new(&mut self.receiver).poll_next(cx)) {
-			self.process_request(request);
-		}
-
-		return Poll::Pending;
 	}
 }
 
@@ -184,7 +203,7 @@ sp_externalities::decl_extension! {
 	pub struct KeystoreProxyExt(Arc<KeystoreProxy>);
 }
 
-pub fn proxy(store: BareCryptoStorePtr) -> (KeystoreProxy, KeystoreReceiver) {
+pub fn proxy<Store: BareCryptoStore + 'static>(store: Store) -> (KeystoreProxy, KeystoreReceiver<Store>) {
 	let (sender, receiver) = channel::<KeystoreRequest>(CHANNEL_SIZE);
 	(KeystoreProxy::new(sender), KeystoreReceiver::new(store, receiver))
 }
