@@ -1173,8 +1173,8 @@ decl_event!(
 		OldSlashingReportDiscarded(SessionIndex),
 		/// A new set of stakers was elected with the given computation method.
 		StakingElection(ElectionCompute),
-		/// A bew solution for the election has been stored.
-		SolutionStored(ElectionCompute)
+		/// A bew solution for the upcoming election has been stored.
+		SolutionStored(ElectionCompute),
 		/// An account has bonded this amount.
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
@@ -2792,7 +2792,7 @@ impl<T: Trait> Module<T> {
 		QueuedScore::put(submitted_score);
 
 		// emit event.
-		Self::deposit_event(RawEvent::SolutionStored(compute);
+		Self::deposit_event(RawEvent::SolutionStored(compute));
 
 		Ok(Some(adjusted_weight).into())
 	}
