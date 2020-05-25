@@ -477,7 +477,7 @@ fn find_retracted_blocks<'a, Block: BlockT>(
 			match api.tree_route(l, new_best.clone()) {
 				Ok(tree_route) => Some(tree_route.into_retracted().into_iter().map(|v| v.hash)),
 				Err(_) => {
-					log::trace!(
+					log::debug!(
 						target: "txpool",
 						"Failed to get tree route {} -> {}. \
 						 Ignoring while finding retracted blocks.",
