@@ -20,7 +20,7 @@
 //!
 //! The lock is using Local Storage and allows synchronizing access to critical
 //! section of your code for concurrently running Off-chain Workers. Usage of
-//! `PERSISTENT` variant of the storage persists the lock value accross a full node
+//! `PERSISTENT` variant of the storage persists the lock value across a full node
 //! restart or re-orgs.
 //!
 //! A use case for the lock is to make sure that a particular section of the
@@ -63,13 +63,13 @@ use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
-/// Default expiry duration in milliseconds.
+/// Default expiry duration for time based locks in milliseconds.
 const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
 
-/// Default expiry duration in milliseconds.
+/// Default expiry duration for block based locks in blocks.
 const STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS: u32 = 4;
 
-/// Snooze duration before attempting to lock again in ms.
+/// Time between checks if the lock is still being held in ms.
 const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
 
 /// Lockable item for use with a persisted storage lock.
@@ -77,21 +77,21 @@ const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
 /// Bound for an item that has a stateful ordered meaning
 /// without explicitly requiring `Ord` trait in general.
 pub trait Lockable: Sized {
-	/// The instant type
+	/// An instant type specifying i.e. a point in time.
 	type Deadline: Sized + Codec + Clone;
 
-	/// Acquire a new deadline based on `Self::current()`.
+	/// Calculate the deadline based on a current state
+	/// such as time or block number and derives the deadline.
 	fn deadline(&self) -> Self::Deadline;
 
-	/// Verify the current value of `self` against `deadline`.
-	/// to determine if the lock has expired.
+	/// Verify the deadline has not expired compared to the
+	/// current state, i.e. time or block number.
 	fn has_expired(deadline: &Self::Deadline) -> bool;
 
-	/// Snooze the thread for time determined by `self` and `other`.
+	/// Snooze at least until `deadline` is reached.
 	///
-	/// Only called if not expired just yet.
-	/// Note that the deadline is only passed to allow some optimizations
-	/// for some `L` types.
+	/// Note that `deadline` is only passed to allow optimizations
+	/// for `Lockables` which have a time based component.
 	fn snooze(_deadline: &Self::Deadline) {
 		sp_io::offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(
 			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE,
@@ -102,7 +102,8 @@ pub trait Lockable: Sized {
 /// Lockable based on the current timestamp with a configurable expiration time.
 #[derive(Encode, Decode)]
 pub struct Time {
-	/// How long the lock will stay valid once `fn lock(..)` successfully acquired a lock.
+	/// How long the lock will stay valid once `fn lock(..)` or
+	/// `fn try_lock(..)` successfully acquire a lock.
 	expiration_duration: Duration,
 }
 
@@ -130,13 +131,12 @@ impl Lockable for Time {
 		let remainder: Duration = now.diff(&deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
-		// consider adding some additive jitter here
 		let snooze = core::cmp::min(remainder.millis(), STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE);
 		sp_io::offchain::sleep_until(now.add(Duration::from_millis(snooze)));
 	}
 }
 
-/// An instant based on block and time.
+/// A deadline based on block number and time.
 #[derive(Encode, Decode, Eq, PartialEq)]
 pub struct BlockAndTimeDeadline<B: BlockNumberProvider> {
 	pub block_number: <B as BlockNumberProvider>::BlockNumber,
@@ -162,13 +162,16 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 	}
 }
 
-/// Lockable based on the current block number and a timestamp based deadline.
+/// Lockable based on block number and timestamp.
+///
+/// Expiration is defined if both, block number _and_ timestamp
+/// expire.
 pub struct BlockAndTime<B: BlockNumberProvider> {
-	/// The block number offset from the time of locking
-	/// when the lock is considered stale.
+	/// Relative block number offset, which is used to determine
+	/// the block number part of the deadline.
 	expiration_block_number_offset: u32,
-	/// Additional timestamp based deadline, which, once
-	/// reached, renders the lock stale.
+	/// Relative duration, used to derive the time based part of
+	/// the deadline.
 	expiration_duration: Duration,
 
 	#[doc(hidden)]
@@ -178,7 +181,7 @@ pub struct BlockAndTime<B: BlockNumberProvider> {
 impl<B: BlockNumberProvider> Default for BlockAndTime<B> {
 	fn default() -> Self {
 		Self {
-			expiration_block_number_offset: 3u32,
+			expiration_block_number_offset: STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS,
 			expiration_duration: Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS),
 			_phantom: core::marker::PhantomData::<B>,
 		}
@@ -220,9 +223,9 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 
 /// Storage based lock.
 ///
-/// A lock that is persisted in the DB and provides a mutex behavior
-/// with a defined safety expiry deadline based on a [`Lockable`](Self::Lockable)
-/// implementation.
+/// A lock that is persisted in the DB and provides the ability to guard against
+/// concurrent access in an off-chain worker, with a defined expiry deadline
+/// based on the concrete [`Lockable`](Self::Lockable) implementation.
 pub struct StorageLock<'a, L = Time> {
 	// A storage value ref which defines the DB entry representing the lock.
 	value_ref: StorageValueRef<'a>,
@@ -268,7 +271,7 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 		}
 	}
 
-	/// Attempt to lock the storage entry.
+	/// Attempt to lock using the storage entry.
 	///
 	/// Returns a lock guard on success, otherwise an error containing `None` in
 	/// case the mutex was already unlocked before, or if the lock is still held
@@ -307,13 +310,13 @@ pub struct StorageLockGuard<'a, 'b, L: Lockable> {
 }
 
 impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
-	/// Consume the guard but DO NOT unlock the underlying lock.
+	/// Consume the guard but **do not** unlock the underlying lock.
 	///
 	/// Can be used to implement a grace period after doing some
 	/// heavy computations and sending a transaction to be included
 	/// on-chain. By forgetting the lock, it will stay locked until
 	/// its expiration deadline is reached while the off-chain worker
-	/// can already complete.
+	/// can already exit.
 	pub fn forget(mut self) {
 		let _ = self.lock.take();
 	}
@@ -327,10 +330,9 @@ impl<'a, 'b, L: Lockable> Drop for StorageLockGuard<'a, 'b, L> {
 	}
 }
 
-/// Allows explicitly setting the timeout on construction
-/// instead of using the implicit default timeout of
-/// [`STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS`](Self::STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS).
 impl<'a> StorageLock<'a, Time> {
+	/// Explicitly create a time based storage lock with a non-default
+	/// expiration timeout.
 	pub fn with_deadline(key: &'a [u8], expiration_duration: Duration) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
@@ -345,6 +347,8 @@ impl<'a, B> StorageLock<'a, BlockAndTime<B>>
 where
 	B: BlockNumberProvider,
 {
+	/// Explicitly create a time and block number based storage lock with
+	/// a non-default expiration duration and block number offset.
 	pub fn with_block_and_time_deadline(
 		key: &'a [u8],
 		expiration_block_number_offset: u32,
@@ -361,24 +365,24 @@ where
 	}
 }
 
-/// Bound for block numbers which commonly will be implemented by the `frame_system::Trait::BlockNumber`.
+/// Bound for block number sources which commonly is implemented
+/// by `frame_system::Module<T: Trait>`.
 ///
-/// This trait has no intrinsic meaning and exists only to decouple `frame_system`
-/// from `runtime` crate and avoid a circular dependency.
+/// `BlockNumberProvider` has no intrinsic meaning and exists only to decouple `frame_system`
+/// from `runtime` crate and avoid a circular dependency issues.
 pub trait BlockNumberProvider {
-	/// Type of `BlockNumber` the provider is going to provide
-	/// with `deadline()` and `current()`.
+	/// Type of `BlockNumber` which is going to be provided.
 	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32Bit;
 	/// Returns the current block number.
 	///
-	/// Commonly this will be implemented as
+	/// For `frame_system::Module<T: Trait>` it is implemented as
+	///
 	/// ```ignore
 	/// fn current_block_number() -> Self {
 	///     frame_system::Module<Trait>::block_number()
 	/// }
 	/// ```
-	/// but note that the definition of current is
-	/// application specific.
+	/// .
 	fn current_block_number() -> Self::BlockNumber;
 }
 
