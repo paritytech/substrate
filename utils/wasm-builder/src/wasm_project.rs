@@ -302,10 +302,10 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, workspace_root_path: &Pa
 		wasm_workspace_toml.insert("patch".into(), patch.into());
 	}
 
-	fs::write(
+	write_file_if_changed(
 		wasm_workspace.join("Cargo.toml"),
 		toml::to_string_pretty(&wasm_workspace_toml).expect("Wasm workspace toml is valid; qed"),
-	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
+	);
 }
 
 /// Get a list of enabled features for the project.
@@ -382,8 +382,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path, crate_metadata: 
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
 		// Use the `Cargo.lock` of the main project.
-		fs::copy(crate_lock_file, wasm_workspace.join("Cargo.lock"))
-			.expect("Copying the `Cargo.lock` can not fail; qed");
+		crate::copy_file_if_changed(crate_lock_file, wasm_workspace.join("Cargo.lock"));
 	}
 
 	project_folder
