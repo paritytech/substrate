@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+
+## 2.0.0-alpha.8 -> 2.0.0-rc1
+
+Runtime
+-------
+
+* Allow operational recovery path if on_initialize use fullblock. (#6089)
+* Maximum extrinsic weight limit (#6067)
+
+Client
+------
+
+* Add JSON format to import blocks and set it as default (#5816)
+* Upgrade to libp2p v0.19 - Changes the default PeerId representation (#6064)
+
+
 ## 2.0.0-alpha.7 -> 2.0.0-alpha.8
 
 **License Changed**

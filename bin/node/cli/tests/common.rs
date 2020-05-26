@@ -51,7 +51,7 @@ pub fn run_dev_node_for_a_while(base_path: &Path) {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
 	let mut cmd = cmd
-		.args(&["--rc1"])
+		.args(&["--dev"])
 		.arg("-d")
 		.arg(base_path)
 		.spawn()
