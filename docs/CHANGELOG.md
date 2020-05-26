@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc1 -> 2.0.0-rc2
+
+
 
 ## 2.0.0-alpha.8 -> 2.0.0-rc1
 
