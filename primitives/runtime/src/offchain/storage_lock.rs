@@ -139,7 +139,9 @@ impl Lockable for Time {
 /// A deadline based on block number and time.
 #[derive(Encode, Decode, Eq, PartialEq)]
 pub struct BlockAndTimeDeadline<B: BlockNumberProvider> {
+	/// The block number until which the lock is still valid _at least_.
 	pub block_number: <B as BlockNumberProvider>::BlockNumber,
+	/// The timestamp until which the lock is still valid _at least_.
 	pub timestamp: Timestamp,
 }
 
