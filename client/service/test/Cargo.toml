@@ -1,6 +1,6 @@
 [package]
 name = "sc-service-test"
-version = "2.0.0-rc1"
+version = "2.0.0-rc2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -20,24 +20,24 @@ log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.4"
 parking_lot = "0.10.0"
-sp-blockchain = { version = "2.0.0-rc1", path = "../../../primitives/blockchain" }
-sp-api = { version = "2.0.0-rc1", path = "../../../primitives/api" }
-sp-state-machine = { version = "0.8.0-rc1", path = "../../../primitives/state-machine" }
-sp-externalities = { version = "0.8.0-rc1", path = "../../../primitives/externalities" }
-sp-trie = { version = "2.0.0-rc1", path = "../../../primitives/trie" }
-sp-storage = { version = "2.0.0-rc1", path = "../../../primitives/storage" }
-sc-client-db = { version = "0.8.0-rc1", default-features = false, path = "../../db" }
+sp-blockchain = { version = "2.0.0-rc2", path = "../../../primitives/blockchain" }
+sp-api = { version = "2.0.0-rc2", path = "../../../primitives/api" }
+sp-state-machine = { version = "0.8.0-rc2", path = "../../../primitives/state-machine" }
+sp-externalities = { version = "0.8.0-rc2", path = "../../../primitives/externalities" }
+sp-trie = { version = "2.0.0-rc2", path = "../../../primitives/trie" }
+sp-storage = { version = "2.0.0-rc2", path = "../../../primitives/storage" }
+sc-client-db = { version = "0.8.0-rc2", default-features = false, path = "../../db" }
 futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { version = "0.8.0-rc1", default-features = false, features = ["test-helpers"], path = "../../service" }
-sc-network = { version = "0.8.0-rc1", path = "../../network" }
-sp-consensus = { version = "0.8.0-rc1", path = "../../../primitives/consensus/common" }
-sp-runtime = { version = "2.0.0-rc1", path = "../../../primitives/runtime" }
-sp-core = { version = "2.0.0-rc1", path = "../../../primitives/core" }
-sp-transaction-pool = { version = "2.0.0-rc1", path = "../../../primitives/transaction-pool" }
-substrate-test-runtime = { version = "2.0.0-rc1", path = "../../../test-utils/runtime" }
-substrate-test-runtime-client = { version = "2.0.0-rc1", path = "../../../test-utils/runtime/client" }
-sc-client-api = { version = "2.0.0-rc1", path = "../../api" }
-sc-block-builder = { version = "0.8.0-rc1", path = "../../block-builder" }
-sc-executor = { version = "0.8.0-rc1", path = "../../executor" }
-sp-panic-handler = { version = "2.0.0-rc1", path = "../../../primitives/panic-handler" }
+sc-service = { version = "0.8.0-rc2", default-features = false, features = ["test-helpers"], path = "../../service" }
+sc-network = { version = "0.8.0-rc2", path = "../../network" }
+sp-consensus = { version = "0.8.0-rc2", path = "../../../primitives/consensus/common" }
+sp-runtime = { version = "2.0.0-rc2", path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-rc2", path = "../../../primitives/core" }
+sp-transaction-pool = { version = "2.0.0-rc2", path = "../../../primitives/transaction-pool" }
+substrate-test-runtime = { version = "2.0.0-rc2", path = "../../../test-utils/runtime" }
+substrate-test-runtime-client = { version = "2.0.0-rc2", path = "../../../test-utils/runtime/client" }
+sc-client-api = { version = "2.0.0-rc2", path = "../../api" }
+sc-block-builder = { version = "0.8.0-rc2", path = "../../block-builder" }
+sc-executor = { version = "0.8.0-rc2", path = "../../executor" }
+sp-panic-handler = { version = "2.0.0-rc2", path = "../../../primitives/panic-handler" }
 parity-scale-codec = "1.3.0"
