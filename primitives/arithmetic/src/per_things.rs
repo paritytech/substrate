@@ -399,9 +399,11 @@ macro_rules! implement_per_thing {
 				Self(([x, 100][(x > 100) as usize] as $upper_type * $max as $upper_type / 100) as $type)
 			}
 
-			/// See [`PerThing::one`].
-			pub fn one() -> Self {
-				<Self as PerThing>::one()
+			/// See [`PerThing::one`]
+			///
+			/// This can be called at compile time.
+			pub const fn one() -> Self {
+				Self::from_parts($max)
 			}
 
 			/// See [`PerThing::is_one`].
@@ -410,8 +412,10 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::zero`].
-			pub fn zero() -> Self {
-				<Self as PerThing>::zero()
+			///
+			/// This can be called at compile time.
+			pub const fn zero() -> Self {
+				Self::from_parts(0)
 			}
 
 			/// See [`PerThing::is_zero`].
@@ -420,8 +424,10 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::deconstruct`].
-			pub fn deconstruct(self) -> $type {
-				PerThing::deconstruct(self)
+			///
+			/// This can be called at compile time.
+			pub const fn deconstruct(self) -> $type {
+				self.0
 			}
 
 			/// See [`PerThing::square`].
@@ -1129,6 +1135,18 @@ macro_rules! implement_per_thing {
 					),
 					1,
 				);
+			}
+
+			#[test]
+			#[allow(unused)]
+			fn const_fns_work() {
+				const C1: $name = $name::from_percent(50);
+				const C2: $name = $name::one();
+				const C3: $name = $name::zero();
+				const C4: $name = $name::from_parts(1);
+
+				// deconstruct is also const, hence it can be called in const rhs.
+				const C5: bool = C1.deconstruct() == 0;
 			}
 		}
 	};

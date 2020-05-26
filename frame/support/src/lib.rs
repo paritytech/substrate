@@ -108,10 +108,35 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
+		$crate::parameter_types!{IMPL_CONST $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
 		$crate::parameter_types!{IMPL $name , $type , $value}
 		$crate::parameter_types!{ $( $rest )* }
 	);
 	() => ();
+	(IMPL_CONST $name:ident , $type:ty , $value:expr) => {
+		impl $name {
+			pub fn get() -> $type {
+				$value
+			}
+			pub const fn get_const() -> $type {
+				$value
+			}
+		}
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from($value)
+			}
+		}
+	};
 	(IMPL $name:ident , $type:ty , $value:expr) => {
 		impl $name {
 			pub fn get() -> $type {

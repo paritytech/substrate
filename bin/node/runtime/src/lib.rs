@@ -40,7 +40,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult,
+	Permill, Perbill, Perquintill, Percent, PerThing, ApplyExtrinsicResult,
 	impl_opaque_keys, generic, create_runtime_str, ModuleId,
 };
 use sp_runtime::curve::PiecewiseLinear;
@@ -132,11 +132,14 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	/// Assume 10% of weight for average on_initialize calls.
-	pub const MaximumExtrinsicWeight: Weight = AvailableBlockRatio::get()
-		.saturating_sub(Perbill::from_percent(10)) * MaximumBlockWeight::get();
+	pub MaximumExtrinsicWeight: Weight =
+		AvailableBlockRatio::get().saturating_sub(Perbill::from_percent(10))
+		* MaximumBlockWeight::get();
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 }
+
+const_assert!(AvailableBlockRatio::get_const().deconstruct() >= Perbill::from_percent(10).deconstruct());
 
 impl frame_system::Trait for Runtime {
 	type Origin = Origin;
@@ -183,7 +186,7 @@ impl pallet_utility::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 
 impl pallet_scheduler::Trait for Runtime {
@@ -229,9 +232,15 @@ impl pallet_balances::Trait for Runtime {
 
 parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
-	// for a sane configuration, this should always be less than `AvailableBlockRatio`.
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
 }
+
+// for a sane configuration, this should always be less than `AvailableBlockRatio`.
+const_assert!(
+	TargetBlockFullness::get_const().deconstruct() <
+	(AvailableBlockRatio::get_const().deconstruct() as <Perquintill as PerThing>::Inner)
+		* (<Perquintill as PerThing>::ACCURACY / <Perbill as PerThing>::ACCURACY as <Perquintill as PerThing>::Inner)
+);
 
 impl pallet_transaction_payment::Trait for Runtime {
 	type Currency = Balances;
@@ -399,17 +408,17 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type MaxProposals = CouncilMaxProposals;
 }
 
-const DESIRED_MEMBERS: u32 = 13;
 parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
-	pub const DesiredMembers: u32 = DESIRED_MEMBERS;
+	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
+
 // Make sure that there are no more than `MAX_MEMBERS` members elected via phragmen.
-const_assert!(DESIRED_MEMBERS <= pallet_collective::MAX_MEMBERS);
+const_assert!(DesiredMembers::get_const() <= pallet_collective::MAX_MEMBERS);
 
 impl pallet_elections_phragmen::Trait for Runtime {
 	type ModuleId = ElectionsPhragmenModuleId;
@@ -586,7 +595,7 @@ impl pallet_im_online::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
 
 impl pallet_offences::Trait for Runtime {
