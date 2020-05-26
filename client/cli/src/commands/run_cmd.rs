@@ -65,7 +65,7 @@ pub struct RunCmd {
 	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
-	#[structopt(long = "no-grandpa")]
+	#[structopt(long)]
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.

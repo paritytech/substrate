@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "sp-phragmen-compact"
-version = "2.0.0-rc1"
+version = "2.0.0-rc2"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
