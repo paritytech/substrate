@@ -297,14 +297,10 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 	/// never unlock in the anticipated span i.e. when used with `BlockAndTime` during a certain
 	/// block number span.
 	pub fn lock(&mut self) -> StorageLockGuard<'a, '_, L> {
-		loop {
-			// blind attempt on locking
-			let deadline = match self.try_lock_inner(self.lockable.deadline()) {
-				Ok(_) => return StorageLockGuard::<'a, '_, L> { lock: Some(self) },
-				Err(other_locks_deadline) => other_locks_deadline,
-			};
+		while let Err(deadline) = self.try_lock_inner(self.lockable.deadline()) {
 			L::snooze(&deadline);
 		}
+		StorageLockGuard::<'a, '_, L> { lock: Some(self) }
 	}
 
 	/// Explicitly unlock the lock.
