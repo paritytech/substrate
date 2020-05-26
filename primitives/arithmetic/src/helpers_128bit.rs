@@ -111,3 +111,13 @@ pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u12
 		q.try_into().map_err(|_| "result cannot fit in u128")
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn it_should_work() {
+		assert_eq!(multiply_by_rational(29459999999999999988000u128, 1000000000000000000u128, 10000000000000000000u128).ok().unwrap(), 294599999999999999880000u128);
+	}
+}
