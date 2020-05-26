@@ -71,6 +71,7 @@ sc-offchain = { version = "2.0.0-rc2", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-rc2"}
 sc-tracing = { version = "2.0.0-rc2", path = "../tracing" }
+sp-tracing = { version = "2.0.0-rc2", path = "../../primitives/tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 
