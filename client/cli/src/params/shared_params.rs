@@ -23,16 +23,16 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
-	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
+	#[structopt(long, value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
 	/// Specify the development chain.
-	#[structopt(long = "dev")]
+	#[structopt(long, conflicts_with_all = &["chain"])]
 	pub dev: bool,
 
 	/// Specify custom base path.
 	#[structopt(
-		long = "base-path",
+		long,
 		short = "d",
 		value_name = "PATH",
 		parse(from_os_str)
@@ -43,7 +43,7 @@ pub struct SharedParams {
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
+	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 }
 
