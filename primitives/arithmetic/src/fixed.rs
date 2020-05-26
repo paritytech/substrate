@@ -75,6 +75,11 @@ pub trait FixedPointNumber:
 	/// Consumes `self` and returns the inner raw value.
 	fn into_inner(self) -> Self::Inner;
 
+	/// Returns the negation.
+	fn negate(self) -> Self {
+		Self::from_inner(-self.into_inner())
+	}
+
 	/// Creates self from an integer number `int`.
 	///
 	/// Returns `Self::max` or `Self::min` if `int` exceeds accuracy.
@@ -163,7 +168,11 @@ pub trait FixedPointNumber:
 	///
 	/// Returns `N::min` or `N::max` if the multiplication or final result does not fit in `N`.
 	fn saturating_mul_acc_int<N: FixedPointOperand>(self, n: N) -> N {
-		self.saturating_mul_int(n).saturating_add(n)
+		if self.is_negative() && n > N::zero() {
+			n.saturating_sub(self.negate().saturating_mul_int(n))
+		} else {
+			self.saturating_mul_int(n).saturating_add(n)
+		}
 	}
 
 	/// Saturating absolute value.
@@ -1255,7 +1264,8 @@ macro_rules! implement_fixed {
 
 				let a = $name::saturating_from_rational(-1, 2);
 				assert_eq!(a.saturating_mul_acc_int(42i8), 21i8);
-				assert_eq!(a.saturating_mul_acc_int(u128::max_value() - 1), u128::max_value() - 1);
+				assert_eq!(a.saturating_mul_acc_int(42u8), 21u8);
+				assert_eq!(a.saturating_mul_acc_int(u128::max_value() - 1), u128::max_value() / 2);
 			}
 
 			#[test]
