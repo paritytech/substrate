@@ -185,7 +185,7 @@ fn write_file_if_changed(file: PathBuf, content: String) {
 	}
 }
 
-/// Copy `src` to `dst` if the `dst` does not exists or is different.
+/// Copy `src` to `dst` if the `dst` does not exist or is different.
 fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
 	let src_file = fs::read_to_string(&src).ok();
 	let dst_file = fs::read_to_string(&dst).ok();
