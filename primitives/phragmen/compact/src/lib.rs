@@ -158,6 +158,23 @@ fn struct_def(
 		)
 	}).collect::<TokenStream2>();
 
+
+	let len_impl = (1..=count).map(|c| {
+		let field_name = field_name_for(c);
+		quote!(
+			all_len = all_len.saturating_add(self.#field_name.len());
+		)
+	}).collect::<TokenStream2>();
+
+	let edge_count_impl = (1..count).map(|c| {
+		let field_name = field_name_for(c);
+		quote!(
+			all_edges = all_edges.saturating_add(
+				self.#field_name.len().saturating_mul(#c as usize)
+			);
+		)
+	}).collect::<TokenStream2>();
+
 	Ok(quote! (
 		/// A struct to encode a Phragmen assignment in a compact way.
 		#[derive(
@@ -180,6 +197,28 @@ fn struct_def(
 		for #ident<#voter_type, #target_type, #weight_type>
 		{
 			const LIMIT: usize = #count;
+		}
+
+		impl<#voter_type, #target_type, #weight_type> #ident<#voter_type, #target_type, #weight_type> {
+			/// Get the length of all the assignments that this type is encoding. This is basically
+			/// the same as the number of assignments, or the number of voters in total.
+			pub fn len(&self) -> usize {
+				let mut all_len = 0usize;
+				#len_impl
+				all_len
+			}
+
+			/// Get the total count of edges.
+			pub fn edge_count(&self) -> usize {
+				let mut all_edges = 0usize;
+				#edge_count_impl
+				all_edges
+			}
+
+			/// Get the average edge count.
+			pub fn average_edge_count(&self) -> usize {
+				self.edge_count().checked_div(self.len()).unwrap_or(0)
+			}
 		}
 	))
 }

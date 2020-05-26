@@ -36,6 +36,7 @@ use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes, DatabaseType};
 use node_primitives::Block;
 use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
+use sp_state_machine::InspectState;
 
 use crate::core::{self, Path, Mode};
 
@@ -81,6 +82,7 @@ pub struct ImportBenchmark {
 	profile: Profile,
 	database: BenchDb,
 	block: Block,
+	block_type: BlockType,
 }
 
 impl core::BenchmarkDescription for ImportBenchmarkDescription {
@@ -124,6 +126,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 		let block = bench_db.generate_block(self.block_type.to_content(self.size.transactions()));
 		Box::new(ImportBenchmark {
 			database: bench_db,
+			block_type: self.block_type,
 			block,
 			profile,
 		})
@@ -154,6 +157,41 @@ impl core::Benchmark for ImportBenchmark {
 		let start = std::time::Instant::now();
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
+
+		// Sanity checks.
+		context.client.state_at(&BlockId::number(1)).expect("state_at failed for block#1")
+			.inspect_with(|| {
+				match self.block_type {
+					BlockType::RandomTransfersKeepAlive => {
+						// should be 5 per signed extrinsic + 1 per unsigned
+						// we have 1 unsigned and the rest are signed in the block
+						// those 5 events per signed are:
+						//    - new account (RawEvent::NewAccount) as we always transfer fund to non-existant account
+						//    - endowed (RawEvent::Endowed) for this new account
+						//    - successful transfer (RawEvent::Transfer) for this transfer operation
+						//    - deposit event for charging transaction fee
+						//    - extrinsic success
+						assert_eq!(
+							node_runtime::System::events().len(),
+							(self.block.extrinsics.len() - 1) * 5 + 1,
+						);
+					},
+					BlockType::Noop => {
+						assert_eq!(
+							node_runtime::System::events().len(),
+
+							// should be 2 per signed extrinsic + 1 per unsigned
+							// we have 1 unsigned and the rest are signed in the block
+							// those 2 events per signed are:
+							//    - deposit event for charging transaction fee
+							//    - extrinsic success
+							(self.block.extrinsics.len() - 1) *  2 + 1,
+						);
+					},
+					_ => {},
+				}
+			}
+		);
 
 		if mode == Mode::Profile {
 			std::thread::park_timeout(std::time::Duration::from_secs(1));
