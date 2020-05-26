@@ -472,11 +472,13 @@ ss58_address_format!(
 		(43, "reserved43", "Reserved for future use (43).")
 	SubstraTeeAccount =>
 		(44, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
-	DataHighwayAccount =>
-		(46, "datahighway", "DataHighway mainnet, standard account (*25519).")
+	Reserved46 =>
+		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>
 		(47, "reserved47", "Reserved for future use (47).")
 	// Note: 48 and above are reserved.
+	DataHighwayAccount =>
+		(49, "datahighway", "DataHighway mainnet, standard account (*25519).")
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
