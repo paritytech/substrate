@@ -126,6 +126,12 @@ pub struct GenericProto {
 	/// List of peers in our state.
 	peers: FnvHashMap<PeerId, PeerState>,
 
+	/// `peers` occasionally contains a few `Delay` objects that we would normally have to be
+	/// polled one by one. In order to avoid doing so, as an optimization, every `Delay` is
+	/// duplicated in `peers_check_after`. This stream yields `PeerId`s whose `Delay` is
+	/// potentially ready to be checked.
+	peers_check_after: stream::FuturesUnordered<Pin<Box<dyn Future<Output = PeerId> + Send>>>,
+
 	/// List of incoming messages we have sent to the peer set manager and that are waiting for an
 	/// answer.
 	incoming: SmallVec<[IncomingPeer; 6]>,
@@ -338,6 +344,7 @@ impl GenericProto {
 			notif_protocols: Vec::new(),
 			peerset,
 			peers: FnvHashMap::default(),
+			peers_check_after: Default::default(),
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: VecDeque::new(),
@@ -627,12 +634,22 @@ impl GenericProto {
 
 		match mem::replace(occ_entry.get_mut(), PeerState::Poisoned) {
 			PeerState::Banned { ref until } if *until > now => {
+				let peer_id = occ_entry.key().clone();
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Will start to connect at \
-					until {:?}", occ_entry.key(), until);
+					until {:?}", peer_id, until);
 				*occ_entry.into_mut() = PeerState::PendingRequest {
 					timer: futures_timer::Delay::new(*until - now),
 					timer_deadline: *until,
 				};
+
+				// The reference `Delay` is the one in the peer state. The one we insert below is
+				// a duplicate that is used to know when the state of this peer should be checked.
+				// As such, this second `Delay` must be created *after* the reference one.
+				let delay = futures_timer::Delay::new(*until - now);
+				self.peers_check_after.push(async move {
+					delay.await;
+					peer_id
+				}.boxed());
 			},
 
 			PeerState::Banned { .. } => {
@@ -649,13 +666,23 @@ impl GenericProto {
 				open,
 				banned_until: Some(ref banned)
 			} if *banned > now => {
+				let peer_id = occ_entry.key().clone();
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): But peer is banned until {:?}",
-					occ_entry.key(), banned);
+					peer_id, banned);
 				*occ_entry.into_mut() = PeerState::DisabledPendingEnable {
 					open,
 					timer: futures_timer::Delay::new(*banned - now),
 					timer_deadline: *banned,
 				};
+
+				// The reference `Delay` is the one in the peer state. The one we insert below is
+				// a duplicate that is used to know when the state of this peer should be checked.
+				// As such, this second `Delay` must be created *after* the reference one.
+				let delay = futures_timer::Delay::new(*banned - now);
+				self.peers_check_after.push(async move {
+					delay.await;
+					peer_id
+				}.boxed());
 			},
 
 			PeerState::Disabled { open, banned_until: _ } => {
@@ -1363,7 +1390,14 @@ impl NetworkBehaviour for GenericProto {
 			}
 		}
 
-		for (peer_id, peer_state) in self.peers.iter_mut() {
+		while let Poll::Ready(Some(peer_id)) = Pin::new(&mut self.peers_check_after).poll_next(cx) {
+			let peer_state = match self.peers.get_mut(&peer_id) {
+				Some(s) => s,
+				// We intentionally never remove elements from `peers_check_after`, and it may
+				// thus contain peers which are now gone. This is a normal situation.
+				None => continue,
+			};
+
 			match peer_state {
 				PeerState::PendingRequest { timer, .. } => {
 					if let Poll::Pending = Pin::new(timer).poll(cx) {
@@ -1372,7 +1406,7 @@ impl NetworkBehaviour for GenericProto {
 
 					debug!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
 					self.events.push_back(NetworkBehaviourAction::DialPeer {
-						peer_id: peer_id.clone(),
+						peer_id,
 						condition: DialPeerCondition::Disconnected
 					});
 					*peer_state = PeerState::Requested;
@@ -1385,12 +1419,15 @@ impl NetworkBehaviour for GenericProto {
 
 					debug!(target: "sub-libp2p", "Handler({:?}) <= Enable (ban expired)", peer_id);
 					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
-						peer_id: peer_id.clone(),
+						peer_id,
 						handler: NotifyHandler::All,
 						event: NotifsHandlerIn::Enable,
 					});
 					*peer_state = PeerState::Enabled { open: mem::replace(open, Default::default()) };
 				}
+
+				// We intentionally never remove elements from `peers_check_after`, and it may
+				// thus contain peers which don't have a timer. This is a normal situation.
 				_ => {},
 			}
 		}
