@@ -33,6 +33,16 @@ use crate::storage::StorageMap;
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 
+/// Simple trait for providing a filter over a reference to some type.
+pub trait Filter<T> {
+	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
+	fn filter(_: &T) -> bool;
+}
+
+impl<T> Filter<T> for () {
+	fn filter(_: &T) -> bool { true }
+}
+
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
 pub trait StoredMap<K, T> {

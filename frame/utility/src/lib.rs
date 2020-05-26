@@ -67,11 +67,11 @@ use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency},
+use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
@@ -85,7 +85,8 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo + From<frame_system::Call<Self>>;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
+		+ GetDispatchInfo + From<frame_system::Call<Self>>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -103,6 +104,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
+
+	/// Is a given call compatible with the proxying subsystem?
+	type IsCallable: Filter<<Self as Trait>::Call>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -164,6 +168,8 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
+		/// A call with a `false` IsCallable filter was attempted.
+		Uncallable,
 	}
 }
 
@@ -191,6 +197,8 @@ decl_event! {
 		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account, fourth is hash of the call.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
+		/// A call with a `false` IsCallable filter was attempted.
+		Uncallable(u32),
 	}
 }
 
@@ -230,7 +238,8 @@ decl_module! {
 
 		/// Send a batch of dispatch calls.
 		///
-		/// This will execute until the first one fails and then stop.
+		/// This will execute until the first one fails and then stop. Calls must fulfil the
+		/// `IsCallable` filter unless the origin is `Root`.
 		///
 		/// May be called from any origin.
 		///
@@ -266,7 +275,12 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
+			let is_root = ensure_root(origin.clone()).is_ok();
 			for (index, call) in calls.into_iter().enumerate() {
+				if !is_root && !T::IsCallable::filter(&call) {
+					Self::deposit_event(Event::<T>::Uncallable(index as u32));
+					return Ok(())
+				}
 				let result = call.dispatch(origin.clone());
 				if let Err(e) = result {
 					Self::deposit_event(Event::<T>::BatchInterrupted(index as u32, e.error));
@@ -277,6 +291,8 @@ decl_module! {
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
+		///
+		/// Calls must each fulfil the `IsCallable` filter.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -293,6 +309,7 @@ decl_module! {
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 			let pseudonym = Self::sub_account_id(who, index);
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
 				.map(|_| ()).map_err(|e| e.error)
@@ -301,7 +318,8 @@ decl_module! {
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
-		/// If there are enough, then dispatch the call.
+		/// If there are enough, then dispatch the call. Calls must each fulfil the `IsCallable`
+		/// filter.
 		///
 		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
 		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
@@ -364,6 +382,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
