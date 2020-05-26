@@ -43,7 +43,7 @@ use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
-use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
+use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, FinalityProofProvider};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
 
@@ -70,15 +70,17 @@ pub struct BabeDeps {
 }
 
 /// Extra dependencies for GRANDPA
-pub struct GrandpaDeps {
+pub struct GrandpaDeps<B> {
 	/// Voting round info.
 	pub shared_voter_state: SharedVoterState,
 	/// Authority set info.
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
+	/// Finality proof provider.
+	pub finality_provider: Arc<FinalityProofProvider<B, Block>>,
 }
 
 /// Full client dependencies.
-pub struct FullDeps<C, P, SC> {
+pub struct FullDeps<C, P, SC, B> {
 	/// The client instance to use.
 	pub client: Arc<C>,
 	/// Transaction pool instance.
@@ -90,12 +92,12 @@ pub struct FullDeps<C, P, SC> {
 	/// BABE specific dependencies.
 	pub babe: BabeDeps,
 	/// GRANDPA specific dependencies.
-	pub grandpa: GrandpaDeps,
+	pub grandpa: GrandpaDeps<B>,
 }
 
 /// Instantiate all Full RPC extensions.
-pub fn create_full<C, P, M, SC>(
-	deps: FullDeps<C, P, SC>,
+pub fn create_full<C, P, M, SC, B>(
+	deps: FullDeps<C, P, SC, B>,
 ) -> jsonrpc_core::IoHandler<M> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
@@ -108,6 +110,8 @@ pub fn create_full<C, P, M, SC>(
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 	SC: SelectChain<Block> +'static,
+	B: Send + Sync + 'static + sc_client_api::backend::Backend<Block>,
+	<B as sc_client_api::backend::Backend<Block>>::State: sp_state_machine::backend::Backend<sp_runtime::traits::BlakeTwo256>,
 {
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
@@ -130,6 +134,7 @@ pub fn create_full<C, P, M, SC>(
 	let GrandpaDeps {
 		shared_voter_state,
 		shared_authority_set,
+		finality_provider,
 	} = grandpa;
 
 	io.extend_with(
@@ -158,7 +163,7 @@ pub fn create_full<C, P, M, SC>(
 	);
 	io.extend_with(
 		sc_finality_grandpa_rpc::GrandpaApi::to_delegate(
-			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state)
+			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state, finality_provider)
 		)
 	);
 

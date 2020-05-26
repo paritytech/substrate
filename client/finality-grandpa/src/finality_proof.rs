@@ -256,7 +256,7 @@ struct OriginalFinalityProofRequest<H: Encode + Decode> {
 }
 
 /// Prepare data blob associated with finality proof request.
-pub(crate) fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H, authorities_set_id: u64) -> Vec<u8> {
+pub fn make_finality_proof_request<H: Encode + Decode>(last_finalized: H, authorities_set_id: u64) -> Vec<u8> {
 	FinalityProofRequest::Original(OriginalFinalityProofRequest {
 		authorities_set_id,
 		last_finalized,

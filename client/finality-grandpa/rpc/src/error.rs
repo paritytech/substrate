@@ -30,12 +30,17 @@ pub enum Error {
 	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
 	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
 	VoterStateReportsUnreasonablyLargeNumbers,
+	/// GRANDPA prove finality failed.
+	// WIP: extend this to forward more info and use a better description.
+	#[display(fmt = "WIP: GRANDPA prove finality rpc failed")]
+	ProveFinalityFailed,
 }
 
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		jsonrpc_core::Error {
 			message: format!("{}", error),
+			// WIP: needs updating to return different error codes
 			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
 			data: None,
 		}

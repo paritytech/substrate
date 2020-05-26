@@ -19,6 +19,8 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
+use std::sync::Arc;
+
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
 
@@ -26,6 +28,8 @@ mod error;
 mod report;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+use sp_runtime::traits::{Block as BlockT};
+use sc_network::config::FinalityProofProvider;
 
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
@@ -35,30 +39,42 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi {
+pub trait GrandpaApi<Hash>
+{
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
 	#[rpc(name = "grandpa_roundState")]
 	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
+
+	/// Prove finality for the hash, given a last known finalized hash.
+	// WIP: handle authoroties_set_id changes?
+	#[rpc(name = "grandpa_proveFinality")]
+	fn prove_finality(&self, hash: Hash, last_finalized: Hash, authorities_set_id: u64) -> FutureResult<Option<Vec<u8>>>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
-pub struct GrandpaRpcHandler<AuthoritySet, VoterState> {
+pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
+	finality_proof_provider: Arc<dyn FinalityProofProvider<Block>>,
 }
 
-impl<AuthoritySet, VoterState> GrandpaRpcHandler<AuthoritySet, VoterState> {
+impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
 	/// Creates a new GrandpaRpcHander instance.
-	pub fn new(authority_set: AuthoritySet, voter_state: VoterState) -> Self {
+	pub fn new(
+		authority_set: AuthoritySet,
+		voter_state: VoterState,
+		finality_proof_provider: Arc<dyn FinalityProofProvider<Block>>
+	) -> Self {
 		Self {
 			authority_set,
 			voter_state,
+			finality_proof_provider,
 		}
 	}
 }
 
-impl<AuthoritySet, VoterState> GrandpaApi for GrandpaRpcHandler<AuthoritySet, VoterState>
+impl<AuthoritySet, VoterState, Block: BlockT> GrandpaApi<Block::Hash> for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -67,6 +83,21 @@ where
 		let round_states = ReportedRoundStates::from(&self.authority_set, &self.voter_state);
 		let future = async move { round_states }.boxed();
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
+	}
+
+	fn prove_finality(&self, hash: Block::Hash, last_finalized: Block::Hash, authorities_set_id: u64) -> FutureResult<Option<Vec<u8>>> {
+		let request = sc_finality_grandpa::make_finality_proof_request(last_finalized, authorities_set_id);
+		let result = self.finality_proof_provider.prove_finality(hash, &request);
+		let future = async move { result }.boxed();
+		Box::new(
+			future
+				.map_err(|e| match e {
+					// WIP: don't just swallow the error
+					_ => error::Error::ProveFinalityFailed,
+				})
+				.map_err(jsonrpc_core::Error::from)
+				.compat()
+		)
 	}
 }
 
@@ -77,10 +108,13 @@ mod tests {
 	use sc_finality_grandpa::{report, AuthorityId};
 	use sp_core::crypto::Public;
 	use std::{collections::HashSet, convert::TryInto};
+	use sp_runtime::traits::{Block as BlockT};
 
 	struct TestAuthoritySet;
 	struct TestVoterState;
 	struct EmptyVoterState;
+
+	struct EmptyFinalityProofProvider;
 
 	fn voters() -> HashSet<AuthorityId> {
 		let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
@@ -98,6 +132,16 @@ mod tests {
 	impl ReportVoterState for EmptyVoterState {
 		fn get(&self) -> Option<report::VoterState<AuthorityId>> {
 			None
+		}
+	}
+
+	impl<Block: BlockT> sc_network::config::FinalityProofProvider<Block> for EmptyFinalityProofProvider {
+		fn prove_finality(
+			&self,
+			for_block: Block::Hash,
+			request: &[u8],
+		) -> Result<Option<Vec<u8>>, sp_blockchain::Error> {
+			todo!();
 		}
 	}
 
@@ -135,7 +179,11 @@ mod tests {
 
 	#[test]
 	fn uninitialized_rpc_handler() {
-		let handler = GrandpaRpcHandler::new(TestAuthoritySet, EmptyVoterState);
+		let handler: GrandpaRpcHandler<_, _, sc_network_test::Block> = GrandpaRpcHandler::new(
+			TestAuthoritySet,
+			EmptyVoterState,
+			Arc::new(EmptyFinalityProofProvider),
+		);
 		let mut io = IoHandler::new();
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
@@ -147,7 +195,11 @@ mod tests {
 
 	#[test]
 	fn working_rpc_handler() {
-		let handler = GrandpaRpcHandler::new(TestAuthoritySet, TestVoterState);
+		let handler: GrandpaRpcHandler<_, _, sc_network_test::Block> = GrandpaRpcHandler::new(
+			TestAuthoritySet,
+			TestVoterState,
+			Arc::new(EmptyFinalityProofProvider),
+		);
 		let mut io = IoHandler::new();
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
@@ -167,5 +219,25 @@ mod tests {
 		},\"id\":1}";
 
 		assert_eq!(io.handle_request_sync(request), Some(response.into()));
+	}
+
+	#[test]
+	fn test_finality() {
+		let handler: GrandpaRpcHandler<_, _, sc_network_test::Block> = GrandpaRpcHandler::new(
+			TestAuthoritySet,
+			EmptyVoterState,
+			Arc::new(EmptyFinalityProofProvider),
+		);
+		let mut io = IoHandler::new();
+		io.extend_with(GrandpaApi::to_delegate(handler));
+
+		let request = "{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_proveFinality\",\"params\":[\
+			\"0x0000000000000000000000000000000000000000000000000000000000000000\",\
+			\"0x0000000000000000000000000000000000000000000000000000000000000000\",\
+			42\
+		],\"id\":1}";
+		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
+
+		assert_eq!(Some(response.into()), io.handle_request_sync(request));
 	}
 }

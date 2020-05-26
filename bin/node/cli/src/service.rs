@@ -45,6 +45,7 @@ macro_rules! new_full_start {
 
 		let mut import_setup = None;
 		let mut rpc_setup = None;
+		let mut finality_provider = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
 		let builder = sc_service::ServiceBuilder::new_full::<
@@ -119,6 +120,11 @@ macro_rules! new_full_start {
 					.expect("SelectChain is present for full services or set up failed; qed.");
 				let keystore = builder.keystore().clone();
 
+				let backend = builder.backend().clone();
+				let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+				let finality_provider_for_rpc = Arc::new(grandpa::FinalityProofProvider::new(backend, provider));
+				finality_provider = Some(finality_provider_for_rpc.clone());
+
 				Ok(move |deny_unsafe| {
 					let deps = node_rpc::FullDeps {
 						client: client.clone(),
@@ -133,12 +139,20 @@ macro_rules! new_full_start {
 						grandpa: node_rpc::GrandpaDeps {
 							shared_voter_state: shared_voter_state.clone(),
 							shared_authority_set: shared_authority_set.clone(),
+							finality_provider: finality_provider_for_rpc.clone(),
 						},
 					};
 
 					node_rpc::create_full(deps)
 				})
-			})?;
+			})?
+			.with_finality_proof_provider(|client, backend| {
+				// let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+				// finality_provider = Arc::new(grandpa::FinalityProofProvider::new(backend, provider));
+				Ok(finality_provider.unwrap().clone())
+				// Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
+			})?
+			;
 
 		(builder, import_setup, inherent_data_providers, rpc_setup)
 	}}
@@ -170,11 +184,11 @@ macro_rules! new_full {
 			new_full_start!($config);
 
 		let service = builder
-			.with_finality_proof_provider(|client, backend| {
-				// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
-				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
-			})?
+			//.with_finality_proof_provider(|client, backend| {
+			//	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+			//	let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+			//	Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
+			//})?
 			.build()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()

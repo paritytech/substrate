@@ -118,7 +118,7 @@ mod until_imported;
 mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
-pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
+pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider, make_finality_proof_request};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;

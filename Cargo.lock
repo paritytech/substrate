@@ -3573,6 +3573,7 @@ dependencies = [
  "sp-consensus",
  "sp-consensus-babe",
  "sp-runtime",
+ "sp-state-machine",
  "sp-transaction-pool",
  "substrate-frame-rpc-system",
 ]
@@ -6424,9 +6425,13 @@ dependencies = [
  "jsonrpc-derive",
  "log",
  "sc-finality-grandpa",
+ "sc-network",
+ "sc-network-test",
  "serde",
  "serde_json",
+ "sp-blockchain",
  "sp-core",
+ "sp-runtime",
 ]
 
 [[package]]
