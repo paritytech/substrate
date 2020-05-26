@@ -100,13 +100,22 @@ pub trait Trait: frame_system::Trait {
 	/// The amount of currency needed per unit threshold when creating a multisig execution.
 	///
 	/// This is held for adding 32 bytes more into a pre-existing storage value.
-	type MultisigDepositFactor: Get<BalanceOf<Self>>;
+	type AccountDepositFactor: Get<BalanceOf<Self>>;
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
 
 	/// Is a given call compatible with the proxying subsystem?
 	type IsCallable: Filter<<Self as Trait>::Call>;
+
+	/// Is a given call compatible with the proxying subsystem?
+	type IsProxyable: Filter<<Self as Trait>::Call>;
+
+	/// The base amount of currency needed to reserve for creating a proxy.
+	///
+	/// This is held for an additional storage item whose value size is
+	/// `sizeof(Balance)` bytes and whose key size is `sizeof(AccountId)` bytes.
+	type ProxyDepositBase: Get<BalanceOf<Self>>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -133,12 +142,19 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
+/// The maximum number of proxies an account may delegate to.
+pub const MAX_PROXIES: u32 = 32;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
+
+		/// The set of account proxies. Maps the account which has delegated to the accounts
+		/// which are being delegated to, together with the amount held on deposit.
+		pub Proxy: map hasher(twox_64_concat) T::AccountId => (Vec<T::AccountId>, BalanceOf<T>);
 	}
 }
 
@@ -168,6 +184,8 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
+		/// Sender is not a proxy of the account to be proxied.
+		NotProxy,
 		/// A call with a `false` IsCallable filter was attempted.
 		Uncallable,
 	}
@@ -197,6 +215,8 @@ decl_event! {
 		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account, fourth is hash of the call.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
+		/// A proxy was executed correctly, with the given result.
+		ProxyExecuted(DispatchResult),
 		/// A call with a `false` IsCallable filter was attempted.
 		Uncallable(u32),
 	}
@@ -290,6 +310,37 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BatchCompleted);
 		}
 
+		/// Dispatch the given `call` from an account that the sender is authorised for through
+		/// `add_proxy`.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - Base weight: ??? µs, 1 storage read.
+		/// - Plus the weight of the `call`
+		/// # </weight>
+		#[weight = {
+			let di = call.get_dispatch_info();
+			(di.weight.saturating_add(T::DbWeight::get().reads_writes(1, 0) + 3_000_000), di.class)
+		}]
+		fn proxy(origin, real: T::AccountId, call: Box<<T as Trait>::Call>) {
+			let who = ensure_signed(origin)?;
+			ensure!(Proxy::<T>::get(&real).0.binary_search(&who).is_ok(), Error::<T>::NotProxy);
+			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
+			ensure!(T::IsProxyable::filter(&call));
+			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
+			Self::deposit_event(Event::<T>::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
+		}
+
+		/// Register a proxy account for the sender that is able to make calls on its behalf.
+		fn add_proxy(origin, proxy: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!()
+		}
+
+		/// Unregister a proxy account for the sender that is able to make calls on its behalf.
+//		fn remove_proxy(origin, proxy: T::AccountId) -> DispatchResult {}
+
 		/// Send a call through an indexed pseudonym of the sender.
 		///
 		/// Calls must each fulfil the `IsCallable` filter.
@@ -322,7 +373,7 @@ decl_module! {
 		/// filter.
 		///
 		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
-		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
+		/// `threshold` times `AccountDepositFactor`. It is returned once this dispatch happens or
 		/// is cancelled.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -355,7 +406,7 @@ decl_module! {
 		/// - The weight of the `call`.
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
-		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		///   `MultisigDepositBase + threshold * AccountDepositFactor`.
 		/// -------------------------------
 		/// - Base Weight:
 		///     - Create: 46.55 + 0.089 * S µs
@@ -422,7 +473,7 @@ decl_module! {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
 					let deposit = T::MultisigDepositBase::get()
-						+ T::MultisigDepositFactor::get() * threshold.into();
+						+ T::AccountDepositFactor::get() * threshold.into();
 					T::Currency::reserve(&who, deposit)?;
 					<Multisigs<T>>::insert(&id, call_hash, Multisig {
 						when: Self::timepoint(),
@@ -462,7 +513,7 @@ decl_module! {
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
 		/// Payment: `MultisigDepositBase` will be reserved if this is the first approval, plus
-		/// `threshold` times `MultisigDepositFactor`. It is returned once this dispatch happens or
+		/// `threshold` times `AccountDepositFactor`. It is returned once this dispatch happens or
 		/// is cancelled.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -488,7 +539,7 @@ decl_module! {
 		/// - One event.
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
-		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		///   `MultisigDepositBase + threshold * AccountDepositFactor`.
 		/// ----------------------------------
 		/// - Base Weight:
 		///     - Create: 44.71 + 0.088 * S
@@ -536,7 +587,7 @@ decl_module! {
 				if threshold > 1 {
 					ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 					let deposit = T::MultisigDepositBase::get()
-						+ T::MultisigDepositFactor::get() * threshold.into();
+						+ T::AccountDepositFactor::get() * threshold.into();
 					T::Currency::reserve(&who, deposit)?;
 					<Multisigs<T>>::insert(&id, call_hash, Multisig {
 						when: Self::timepoint(),

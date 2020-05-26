@@ -96,10 +96,19 @@ impl pallet_balances::Trait for Test {
 }
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
-	pub const MultisigDepositFactor: u64 = 1;
+	pub const AccountDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
+	pub const ProxyDepositBase: u64 = 1;
 }
-
+pub struct TestIsProxyable;
+impl Filter<Call> for TestIsProxyable {
+	fn filter(c: &Call) -> bool {
+		match *c {
+			Call::System(system::Call::remark(_)) => true,
+			_ => false,
+		}
+	}
+}
 pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
@@ -114,8 +123,10 @@ impl Trait for Test {
 	type Call = Call;
 	type Currency = Balances;
 	type MultisigDepositBase = MultisigDepositBase;
-	type MultisigDepositFactor = MultisigDepositFactor;
+	type AccountDepositFactor = AccountDepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type IsProxyable = TestIsProxyable;
+	type ProxyDepositBase = ProxyDepositBase;
 	type IsCallable = TestIsCallable;
 }
 type System = frame_system::Module<Test>;
