@@ -20,6 +20,9 @@
 
 #![warn(missing_docs)]
 
-fn main() -> sc_cli::Result<()> {
-	node_cli::run()
+fn main() {
+	if let Err(err) = node_cli::run() {
+		eprintln!("Error: {:?}", err);
+		std::process::exit(1)
+	}
 }
