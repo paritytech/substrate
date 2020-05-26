@@ -157,7 +157,10 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 	fn default() -> Self {
 		Self {
 			block_number: B::current_block_number() + STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS.into(),
-			timestamp: offchain::timestamp().add(Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS)),
+			timestamp: offchain::timestamp()
+				.add(
+					Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS)
+				),
 		}
 	}
 }
@@ -203,14 +206,17 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	type Deadline = BlockAndTimeDeadline<B>;
 
 	fn deadline(&self) -> Self::Deadline {
+		let block_number = <B as BlockNumberProvider>::current_block_number()
+			+ self.expiration_block_number_offset.into();
 		BlockAndTimeDeadline {
 			timestamp: offchain::timestamp().add(self.expiration_duration),
-			block_number: <B as BlockNumberProvider>::current_block_number() + self.expiration_block_number_offset.into(),
+			block_number,
 		}
 	}
 
 	fn has_expired(deadline: &Self::Deadline) -> bool {
-		offchain::timestamp() > deadline.timestamp && <B as BlockNumberProvider>::current_block_number() > deadline.block_number
+		offchain::timestamp() > deadline.timestamp
+		&& <B as BlockNumberProvider>::current_block_number() > deadline.block_number
 	}
 
 	fn snooze(deadline: &Self::Deadline) {
