@@ -257,9 +257,9 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 	}
 
 	/// Internal lock helper to avoid lifetime conflicts.
-	fn try_lock_inner(&mut self, new_deadline: L::Deadline) -> Result<(), Option<L::Deadline>> {
+	fn try_lock_inner(&mut self, new_deadline: L::Deadline) -> Result<(), <L as Lockable>::Deadline> {
 		let res = self.value_ref.mutate(
-			|s: Option<Option<L::Deadline>>| -> Result<L::Deadline, Option<L::Deadline>> {
+			|s: Option<Option<L::Deadline>>| -> Result<<L as Lockable>::Deadline, <L as Lockable>::Deadline> {
 				match s {
 					// no lock set, we can safely acquire it
 					None => Ok(new_deadline),
@@ -268,39 +268,40 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 					// lock is set, but it's old. We can re-acquire it.
 					Some(Some(deadline)) if <L as Lockable>::has_expired(&deadline) => Ok(new_deadline),
 					// lock is present and is still active
-					Some(Some(deadline)) => Err(Some(deadline)),
+					Some(Some(deadline)) => Err(deadline),
 				}
 			},
 		);
 		match res {
 			Ok(Ok(_)) => Ok(()),
-			Ok(Err(_deadline)) => Err(None),
+			Ok(Err(deadline)) => Err(deadline),
 			Err(e) => Err(e),
 		}
 	}
 
 	/// Attempt to lock using the storage entry.
 	///
-	/// Returns a lock guard on success, otherwise an error containing `None` in
-	/// case the mutex was already unlocked before, or if the lock is still held
-	/// by another process `Err(())`.
-	pub fn try_lock(&mut self) -> Result<StorageLockGuard<'a, '_, L>, ()> {
-		let _ = self
-			.try_lock_inner(self.lockable.deadline())
-			.map_err(|_opt| ())?;
+	/// Returns a lock guard on success, otherwise an error containing the
+	/// `<Self::Lockable>::Deadline` in for the currently locked lock
+	/// by another process: `Err(<L as Lockable>::Deadline)`.
+	pub fn try_lock(&mut self) -> Result<StorageLockGuard<'a, '_, L>, <L as Lockable>::Deadline> {
+		self.try_lock_inner(self.lockable.deadline())?;
 		Ok(StorageLockGuard::<'a, '_> { lock: Some(self) })
 	}
 
 	/// Try grabbing the lock until its expiry is reached.
 	///
 	/// Returns an error if the lock expired before it could be caught.
+	/// If one uses `fn forget(..)`, it is highly likely `fn try_lock(..)`
+	/// is the correct API to use instead of `fn lock(..)`, since that might
+	/// never unlock in the anticipated span i.e. when used with `BlockAndTime` during a certain
+	/// block number span.
 	pub fn lock(&mut self) -> StorageLockGuard<'a, '_, L> {
 		loop {
 			// blind attempt on locking
 			let deadline = match self.try_lock_inner(self.lockable.deadline()) {
 				Ok(_) => return StorageLockGuard::<'a, '_, L> { lock: Some(self) },
-				Err(Some(other_locks_deadline)) => other_locks_deadline,
-				_ => self.lockable.deadline(), // use the default
+				Err(other_locks_deadline) => other_locks_deadline,
 			};
 			L::snooze(&deadline);
 		}
