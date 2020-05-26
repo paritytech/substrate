@@ -290,7 +290,7 @@ fn account_removal_does_not_remove_storage() {
 			let _ = Balances::deposit_creating(&1, 110);
 			ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id1.clone(),
-				storage_size: <Test as Trait>::StorageSizeOffset::get(),
+				storage_size: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
@@ -305,7 +305,7 @@ fn account_removal_does_not_remove_storage() {
 			let _ = Balances::deposit_creating(&2, 110);
 			ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id2.clone(),
-				storage_size: <Test as Trait>::StorageSizeOffset::get(),
+				storage_size: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
