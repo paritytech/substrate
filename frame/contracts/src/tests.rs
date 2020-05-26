@@ -291,6 +291,8 @@ fn account_removal_does_not_remove_storage() {
 			ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id1.clone(),
 				storage_size: 0,
+				empty_pair_count: 0,
+				total_pair_count: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
@@ -306,6 +308,8 @@ fn account_removal_does_not_remove_storage() {
 			ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id2.clone(),
 				storage_size: 0,
+				empty_pair_count: 0,
+				total_pair_count: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
@@ -754,6 +758,14 @@ fn storage_size() {
 				bob_contract.storage_size,
 				4
 			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				1,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				0,
+			);
 
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
@@ -770,6 +782,14 @@ fn storage_size() {
 				bob_contract.storage_size,
 				4 + 4
 			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				2,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				0,
+			);
 
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
@@ -785,6 +805,50 @@ fn storage_size() {
 			assert_eq!(
 				bob_contract.storage_size,
 				4
+			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				1,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				0,
+			);
+		});
+}
+
+#[test]
+fn empty_kv_pairs() {
+	let (wasm, code_hash) = compile_module::<Test>("set_empty_storage").unwrap();
+
+	ExtBuilder::default()
+		.build()
+		.execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+			assert_ok!(Contracts::instantiate(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				code_hash.into(),
+				vec![],
+			));
+			let bob_contract = ContractInfoOf::<Test>::get(BOB)
+				.unwrap()
+				.get_alive()
+				.unwrap();
+
+			assert_eq!(
+				bob_contract.storage_size,
+				0,
+			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				1,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				1,
 			);
 		});
 }

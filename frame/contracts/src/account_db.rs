@@ -183,6 +183,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: 0,
+							empty_pair_count: 0,
+							total_pair_count: 0,
 							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 							deduct_block: <frame_system::Module<T>>::block_number(),
 							rent_allowance: <BalanceOf<T>>::max_value(),
@@ -193,6 +195,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(_, None, Some(code_hash)) => AliveContractInfo::<T> {
 						code_hash,
 						storage_size: 0,
+						empty_pair_count: 0,
+						total_pair_count: 0,
 						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 						deduct_block: <frame_system::Module<T>>::block_number(),
 						rent_allowance: <BalanceOf<T>>::max_value(),
@@ -223,7 +227,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				for (key, opt_new_value) in changed.storage.into_iter() {
 					let hashed_key = blake2_256(&key);
 
-					// In order to correctly update the storage size we need to fetch the previous
+					// In order to correctly update the book keeping we need to fetch the previous
 					// value of the key-value pair.
 					//
 					// It might be a bit more clean if we had an API that supported getting the size
@@ -232,8 +236,37 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					//
 					// That's not a show stopper in any case, since the performance cost is
 					// dominated by the trie traversal anyway.
-					let prev_value_len = child::get_raw(&child_trie_info, &hashed_key)
-						.map(|prev_value| prev_value.len() as u32)
+					let opt_prev_value = child::get_raw(&child_trie_info, &hashed_key);
+
+					// Update the total number of KV pairs and the number of empty pairs.
+					match (&opt_prev_value, &opt_new_value) {
+						(Some(prev_value), None) => {
+							new_info.total_pair_count -= 1;
+							if prev_value.is_empty() {
+								new_info.empty_pair_count -= 1;
+							}
+						},
+						(None, Some(new_value)) => {
+							new_info.total_pair_count += 1;
+							if new_value.is_empty() {
+								new_info.empty_pair_count += 1;
+							}
+						},
+						(Some(prev_value), Some(new_value)) => {
+							if prev_value.is_empty() {
+								new_info.empty_pair_count -= 1;
+							}
+							if new_value.is_empty() {
+								new_info.empty_pair_count += 1;
+							}
+						}
+						(None, None) => {}
+					}
+
+					// Update the total storage size.
+					let prev_value_len = opt_prev_value
+						.as_ref()
+						.map(|old_value| old_value.len() as u32)
 						.unwrap_or(0);
 					let new_value_len = opt_new_value
 						.as_ref()
@@ -244,6 +277,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						.saturating_sub(prev_value_len)
 						.saturating_add(new_value_len);
 
+
+					// Finally, perform the change on the storage.
 					match opt_new_value {
 						Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, &new_value[..]),
 						None => child::kill(&child_trie_info, &hashed_key),
@@ -271,6 +306,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		}
 	}
 }
+
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	local: RefCell<ChangeSet<T>>,
 	underlying: &'a dyn AccountDb<T>,
