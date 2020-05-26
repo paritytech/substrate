@@ -84,12 +84,14 @@ pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 #[derive(Debug)]
 pub enum Never {}
 
-/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
-/// how you would declare a `const`:
+/// Macro for easily creating a new implementation of the `Get` trait. If `const` token is used, the
+/// rhs of the expression must be `const`-only, and an additional `get_const` for it is implemented,
+/// else only `Get` is implemented and the rhs can be any expression:
 ///
 /// ```no_compile
 /// parameter_types! {
 ///   pub const Argument: u64 = 42;
+///   pub OtherArg: u63 = non_const_expression();
 /// }
 /// trait Config {
 ///   type Parameter: Get<u64>;
