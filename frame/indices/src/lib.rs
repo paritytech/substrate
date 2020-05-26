@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! An index is a short form of an address. This module handles allocation
 //! of indices for a newly created accounts.
@@ -22,13 +23,11 @@
 use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::traits::{
-	StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating, AtLeast32Bit
+	StaticLookup, Member, LookupError, Zero, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
-use frame_support::weights::{Weight, SimpleDispatchInfo, WeighData};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_support::storage::migration::take_storage_value;
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
@@ -99,12 +98,6 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
 
-		fn on_initialize() -> Weight {
-			Self::migrations();
-
-			SimpleDispatchInfo::default().weigh_data(())
-		}
-
 		/// Assign an previously unassigned index.
 		///
 		/// Payment: `Deposit` is reserved from the sender account.
@@ -121,7 +114,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -149,7 +142,7 @@ decl_module! {
 		/// - One transfer operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -180,7 +173,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -209,7 +202,7 @@ decl_module! {
 		/// - Up to one reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			ensure_root(origin)?;
 
@@ -239,30 +232,6 @@ impl<T: Trait> Module<T> {
 		match a {
 			address::Address::Id(i) => Some(i),
 			address::Address::Index(i) => Self::lookup_index(i),
-		}
-	}
-
-	/// Do any migrations.
-	fn migrations() {
-		if let Some(set_count) = take_storage_value::<T::AccountIndex>(b"Indices", b"NextEnumSet", b"") {
-			// migrations need doing.
-			let set_size: T::AccountIndex = 64.into();
-
-			let mut set_index: T::AccountIndex = Zero::zero();
-			while set_index < set_count {
-				let maybe_accounts = take_storage_value::<Vec<T::AccountId>>(b"Indices", b"EnumSet", BlakeTwo256::hash_of(&set_index).as_ref());
-				if let Some(accounts) = maybe_accounts {
-					for (item_index, target) in accounts.into_iter().enumerate() {
-						if target != T::AccountId::default() && !T::Currency::total_balance(&target).is_zero() {
-							let index = set_index * set_size + T::AccountIndex::from(item_index as u32);
-							Accounts::<T>::insert(index, (target, BalanceOf::<T>::zero()));
-						}
-					}
-				} else {
-					break;
-				}
-				set_index += One::one();
-			}
 		}
 	}
 }

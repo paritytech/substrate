@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Chain api required for the transaction pool.
 
@@ -89,12 +91,17 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 		let at = at.clone();
 
 		self.pool.spawn_ok(futures_diagnose::diagnose("validate-transaction", async move {
+			sp_tracing::enter_span!("validate_transaction");
 			let runtime_api = client.runtime_api();
-			let has_v2 = runtime_api
+			let has_v2 = sp_tracing::tracing_span! { "check_version";
+				runtime_api
 				.has_api_with::<dyn TaggedTransactionQueue<Self::Block, Error=()>, _>(
 					&at, |v| v >= 2,
 				)
-				.unwrap_or_default();
+				.unwrap_or_default()
+			};
+
+			sp_tracing::enter_span!("runtime::validate_transaction");
 			let res = if has_v2 {
 				runtime_api.validate_transaction(&at, source, uxt)
 			} else {

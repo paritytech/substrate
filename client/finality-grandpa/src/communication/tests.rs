@@ -16,9 +16,9 @@
 
 //! Tests for the communication portion of the GRANDPA crate.
 
-use futures::channel::mpsc;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use futures::prelude::*;
-use sc_network::{Event as NetworkEvent, PeerId, config::Roles};
+use sc_network::{Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_test::{Block, Hash};
 use sc_network_gossip::Validator;
 use std::sync::Arc;
@@ -29,11 +29,11 @@ use std::{borrow::Cow, pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
-use super::{AuthorityId, VoterSet, Round, SetId};
+use super::{VoterSet, Round, SetId};
 
 #[derive(Debug)]
 pub(crate) enum Event {
-	EventStream(mpsc::UnboundedSender<NetworkEvent>),
+	EventStream(TracingUnboundedSender<NetworkEvent>),
 	WriteNotification(sc_network::PeerId, Vec<u8>),
 	Report(sc_network::PeerId, sc_network::ReputationChange),
 	Announce(Hash),
@@ -41,12 +41,12 @@ pub(crate) enum Event {
 
 #[derive(Clone)]
 pub(crate) struct TestNetwork {
-	sender: mpsc::UnboundedSender<Event>,
+	sender: TracingUnboundedSender<Event>,
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("test");
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -97,7 +97,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 pub(crate) struct Tester {
 	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
-	pub(crate) events: mpsc::UnboundedReceiver<Event>,
+	pub(crate) events: TracingUnboundedReceiver<Event>,
 }
 
 impl Tester {
@@ -142,11 +142,15 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 	use crate::authorities::AuthoritySet;
 	use crate::environment::VoterSetState;
 	use finality_grandpa::round::State as RoundState;
-	use sp_core::H256;
+	use sp_core::{crypto::Public, H256};
+	use sp_finality_grandpa::AuthorityId;
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
-	let voters = AuthoritySet::genesis(Vec::new());
+
+	let voters = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+	let voters = AuthoritySet::genesis(voters).unwrap();
+
 	let set_state = VoterSetState::live(
 		0,
 		&voters,
@@ -161,7 +165,7 @@ pub(crate) fn make_test_network() -> (
 	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = tracing_unbounded("test");
 	let net = TestNetwork { sender: tx };
 
 	#[derive(Clone)]
@@ -212,7 +216,7 @@ impl sc_network_gossip::ValidatorContext<Block> for NoopContext {
 fn good_commit_leads_to_relay() {
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
-	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+	let voter_set = Arc::new(VoterSet::new(public.iter().cloned()).unwrap());
 
 	let round = 1;
 	let set_id = 1;
@@ -222,7 +226,7 @@ fn good_commit_leads_to_relay() {
 		let target_number = 500;
 
 		let precommit = finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
-		let payload = super::localized_payload(
+		let payload = sp_finality_grandpa::localized_payload(
 			round, set_id, &finality_grandpa::Message::Precommit(precommit.clone())
 		);
 
@@ -256,7 +260,7 @@ fn good_commit_leads_to_relay() {
 	let test = make_test_network().0
 		.then(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Full);
 			future::ready((tester, id))
 		})
 		.then(move |(tester, id)| {
@@ -284,7 +288,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
@@ -297,7 +301,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 
 					// Announce its local set has being on the current set id through a neighbor
@@ -360,7 +364,7 @@ fn bad_commit_leads_to_report() {
 	let _ = env_logger::try_init();
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
-	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+	let voter_set = Arc::new(VoterSet::new(public.iter().cloned()).unwrap());
 
 	let round = 1;
 	let set_id = 1;
@@ -370,7 +374,7 @@ fn bad_commit_leads_to_report() {
 		let target_number = 500;
 
 		let precommit = finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
-		let payload = super::localized_payload(
+		let payload = sp_finality_grandpa::localized_payload(
 			round, set_id, &finality_grandpa::Message::Precommit(precommit.clone())
 		);
 
@@ -404,7 +408,7 @@ fn bad_commit_leads_to_report() {
 	let test = make_test_network().0
 		.map(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Full);
 			(tester, id)
 		})
 		.then(move |(tester, id)| {
@@ -431,7 +435,7 @@ fn bad_commit_leads_to_report() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
@@ -482,7 +486,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 	let test = tester
 		.map(move |tester| {
 			// register a peer with authority role.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Authority);
 			(tester, id)
 		})
 		.then(move |(tester, id)| {

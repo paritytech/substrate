@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 pub use frame_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
@@ -256,9 +257,8 @@ mod tests {
 	struct TestExtension;
 	impl sp_runtime::traits::SignedExtension for TestExtension {
 		type AccountId = u32;
-		type Call = u32;
+		type Call = ();
 		type AdditionalSigned = u32;
-		type DispatchInfo = ();
 		type Pre = ();
 		const IDENTIFIER: &'static str = "testextension";
 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -270,9 +270,8 @@ mod tests {
 	struct TestExtension2;
 	impl sp_runtime::traits::SignedExtension for TestExtension2 {
 		type AccountId = u32;
-		type Call = u32;
+		type Call = ();
 		type AdditionalSigned = u32;
-		type DispatchInfo = ();
 		type Pre = ();
 		const IDENTIFIER: &'static str = "testextension2";
 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -336,7 +335,6 @@ mod tests {
 
 	mod event_module {
 		use crate::dispatch::DispatchResult;
-		use crate::weights::SimpleDispatchInfo;
 
 		pub trait Trait: super::system::Trait {
 			type Balance;
@@ -354,7 +352,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 				type Error = Error<T>;
 
-				#[weight = SimpleDispatchInfo::default()]
+				#[weight = 0]
 				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}

@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
 	hash,
@@ -24,10 +26,7 @@ use crate::base_pool as base;
 use crate::watcher::Watcher;
 use serde::Serialize;
 
-use futures::{
-	Future, FutureExt,
-	channel::mpsc,
-};
+use futures::{Future, FutureExt};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
@@ -37,12 +36,13 @@ use sp_runtime::{
 };
 use sp_transaction_pool::error;
 use wasm_timer::Instant;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 use crate::validated_pool::ValidatedPool;
 pub use crate::validated_pool::ValidatedTransaction;
 
 /// Modification notification event stream type;
-pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
+pub type EventStream<H> = TracingUnboundedReceiver<H>;
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;

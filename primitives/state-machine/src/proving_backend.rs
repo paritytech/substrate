@@ -1,37 +1,35 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Proving state machine backend.
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 use parking_lot::RwLock;
 use codec::{Decode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
-	MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with,
+	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
 	record_all_keys, StorageProof,
 };
-pub use sp_trie::Recorder;
-pub use sp_trie::trie_types::{Layout, TrieError};
+pub use sp_trie::{Recorder, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use crate::{Error, ExecutionError, Backend};
-use std::collections::HashMap;
-use crate::DBValue;
+use crate::{Error, ExecutionError, Backend, DBValue};
 use sp_core::storage::ChildInfo;
 
 /// Patricia trie-based backend specialized in get value proofs.
@@ -67,13 +65,13 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	/// Produce proof for a child key query.
 	pub fn child_storage(
 		&mut self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8]
 	) -> Result<Option<Vec<u8>>, String> {
+		let storage_key = child_info.storage_key();
 		let root = self.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+			.unwrap_or(empty_child_trie_root::<Layout<H>>());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(
@@ -84,7 +82,6 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		read_child_trie_value_with::<Layout<H>, _, _>(
-			storage_key,
 			child_info.keyspace(),
 			&eph,
 			&root.as_ref(),
@@ -201,20 +198,18 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.child_storage(storage_key, child_info, key)
+		self.0.child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.0.for_keys_in_child_storage(storage_key, child_info, f)
+		self.0.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -223,11 +218,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.next_child_storage_key(storage_key, child_info, key)
+		self.0.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -240,12 +234,11 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.0.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.0.for_child_keys_with_prefix( child_info, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -258,30 +251,31 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn child_keys(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.0.child_keys(storage_key, child_info, prefix)
+		self.0.child_keys(child_info, prefix)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'b>(
+		&self,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		self.0.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'b>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		H::Out: Ord
-	{
-		self.0.child_storage_root(storage_key, child_info, delta)
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
+		self.0.child_storage_root(child_info, delta)
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::stats::UsageInfo {
+		self.0.usage_info()
 	}
 }
 
@@ -308,13 +302,9 @@ mod tests {
 	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use sp_core::storage::ChildStorageKey;
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
 	use sp_runtime::traits::BlakeTwo256;
-
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
-	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>,BlakeTwo256>,
@@ -383,33 +373,34 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
-		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub1").unwrap();
-		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
-		let own1 = subtrie1.into_owned();
-		let own2 = subtrie2.into_owned();
+		let child_info_1 = ChildInfo::new_default(b"sub1");
+		let child_info_2 = ChildInfo::new_default(b"sub2");
+		let child_info_1 = &child_info_1;
+		let child_info_2 = &child_info_2;
 		let contents = vec![
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own1.clone(), CHILD_INFO_1.to_owned())),
+			(Some(child_info_1.clone()),
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own2.clone(), CHILD_INFO_2.to_owned())),
+			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
-		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
-			::std::iter::empty(),
-			in_memory.child_storage_keys().map(|k|(k.0.to_vec(), Vec::new(), k.1.to_owned()))
+		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
+		let in_memory_root = in_memory.full_storage_root(
+			std::iter::empty(),
+			child_storage_keys.iter().map(|k|(k, std::iter::empty()))
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),
 			vec![i]
 		));
 		(28..65).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own1[..], CHILD_INFO_1, &[i]).unwrap().unwrap(),
+			in_memory.child_storage(child_info_1, &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 		(10..15).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own2[..], CHILD_INFO_2, &[i]).unwrap().unwrap(),
+			in_memory.child_storage(child_info_2, &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 
@@ -437,7 +428,7 @@ mod tests {
 		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
 		let proving = ProvingBackend::new(trie);
-		assert_eq!(proving.child_storage(&own1[..], CHILD_INFO_1, &[64]), Ok(Some(vec![64])));
+		assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof();
 		let proof_check = create_proof_check_backend::<BlakeTwo256>(
@@ -445,7 +436,7 @@ mod tests {
 			proof
 		).unwrap();
 		assert_eq!(
-			proof_check.child_storage(&own1[..], CHILD_INFO_1, &[64]).unwrap().unwrap(),
+			proof_check.child_storage(child_info_1, &[64]).unwrap().unwrap(),
 			vec![64]
 		);
 	}

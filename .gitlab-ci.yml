@@ -24,6 +24,7 @@
 stages:
   - test
   - build
+  - post-build-test
   - publish
   - kubernetes
   - flaming-fir
@@ -31,7 +32,6 @@ stages:
 variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
-  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
@@ -39,7 +39,10 @@ variables:
   ARCH:                            "x86_64"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder sp-arithmetic-fuzzer"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
+  WASM_BINDGEN_TEST_TIMEOUT:                  120
+  CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
 
 
 .collect-artifacts:                &collect-artifacts
@@ -86,7 +89,16 @@ variables:
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
 
+#### stage:                       .pre
 
+skip-if-draft:
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  stage:                          .pre
+  only:
+    - /^[0-9]+$/                  # Pull requests
+  script:
+     - ./.maintain/gitlab/skip_if_draft.sh
 
 #### stage:                        test
 
@@ -109,7 +121,7 @@ check-signed-tag:
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
-    - tags
+    - /^ci-release-.*$/
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/check_signed.sh
@@ -126,15 +138,13 @@ check-line-width:
   interruptible:                   true
   allow_failure:                   true
 
-
-check-polkadot:
+check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
   script:
-    - ./.maintain/gitlab/check_polkadot.sh
+    - ./.maintain/gitlab/check_polkadot_companion_build.sh
   interruptible:                   true
   allow_failure:                   true
-
 
 cargo-audit:
   stage:                           test
@@ -165,8 +175,9 @@ cargo-check-benches:
   <<:                              *docker-env
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
+    - cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small
+    - cargo run --release -p node-bench -- ::trie::read::small
     - sccache -s
-
 
 cargo-check-subkey:
   stage:                           test
@@ -178,29 +189,19 @@ cargo-check-subkey:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
-
 test-linux-stable:                 &test-linux
   stage:                           test
   <<:                              *docker-env
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |&
-        tee output.log
+    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
     - sccache -s
-  after_script:
-    - echo "___Collecting warnings for check_warnings job___"
-    - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     3 days
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_warnings.log
 
 test-dependency-rules:
   stage:                           test
@@ -234,7 +235,7 @@ test-frame-staking:
       - $DEPLOY_TAG
   script:
     - cd frame/staking/
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features "std"
     - sccache -s
 
 test-frame-examples-compile-to-wasm:
@@ -284,7 +285,7 @@ test-runtime-benchmarks:
       - $DEPLOY_TAG
   script:
     - cd bin/node/cli
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --verbose --features runtime-benchmarks
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
@@ -310,7 +311,6 @@ test-linux-stable-int:
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
-
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
@@ -322,13 +322,12 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sp-io
     - time cargo build --target=wasm32-unknown-unknown -p sp-runtime
     - time cargo build --target=wasm32-unknown-unknown -p sp-std
-    - time cargo build --target=wasm32-unknown-unknown -p sc-client
     - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura
     - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
     - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
     - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown -Z features=itarget
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown -Z features=itarget
     - sccache -s
 
 test-full-crypto-feature:
@@ -349,8 +348,25 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
+cargo-check-macos:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
+    - sccache -s
+  tags:
+    - osx
 
 #### stage:                        build
+
+test-browser-node:
+  stage:                           build
+  <<:                              *docker-env
+  needs:
+    - job:                         check-web-wasm
+      artifacts:                   false
+  script:
+    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing -Z features=itarget
 
 build-linux-substrate:             &build-binary
   stage:                           build
@@ -370,7 +386,7 @@ build-linux-substrate:             &build-binary
         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
         ./artifacts/substrate/substrate --version |
-          sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
           tee ./artifacts/substrate/VERSION;
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
@@ -379,7 +395,8 @@ build-linux-substrate:             &build-binary
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
-build-linux-subkey:
+
+build-linux-subkey:                &build-subkey
   <<:                              *build-binary
   before_script:
     - mkdir -p ./artifacts/subkey
@@ -390,11 +407,19 @@ build-linux-subkey:
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
-        sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
+        sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
+
+build-macos-subkey:
+  <<:                              *build-subkey
+  only:
+    - master
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  tags:
+    - osx
 
 build-rust-doc-release:
   stage:                           build
@@ -414,24 +439,14 @@ build-rust-doc-release:
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
-check_warnings:
-  stage:                           build
-  <<:                              *docker-env
-  except:
-    variables:
-      - $DEPLOY_TAG
-  variables:
-    GIT_STRATEGY:                  none
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   true
+check-polkadot-companion-status:
+  stage:                           post-build-test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
   script:
-    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
-        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
-        exit 1;
-      else
-        echo "___No warnings___";
-      fi
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
 
 trigger-contracts-ci:
@@ -555,51 +570,11 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-
-publish-gh-doc:
-  stage:                           publish
-  image:                           parity/tools:latest
-  allow_failure:                   true
-  dependencies:
-    - build-rust-doc-release
-  cache:                           {}
-  <<:                              *build-only
-  <<:                              *kubernetes-build
-  variables:
-    GIT_STRATEGY:                  none
-    GITHUB_API:                    "https://api.github.com"
-  script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - test "${GITHUB_USER}" -a "${GITHUB_EMAIL}" -a "${GITHUB_TOKEN}" || (
-        echo "environment variables for github insufficient";
-        exit 1
-      )
-    - |
-      cat > ${HOME}/.gitconfig <<EOC
-      [user]
-      name = "${GITHUB_USER}"
-      email = "${GITHUB_EMAIL}"
-
-      [url "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/"]
-      insteadOf = "https://github.com/"
-      EOC
-    - unset GITHUB_TOKEN
-    - git clone --depth 1 https://github.com/substrate-developer-hub/rustdocs.git
-    - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
-    - cd ./rustdocs; git add .
-    - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
-    - git push origin master 2>&1 | sed -r "s|(${GITHUB_USER}):[a-f0-9]+@|\1:REDACTED@|g"
-  after_script:
-    - rm -vrf ${HOME}/.gitconfig
-
 publish-draft-release:
   stage:                           publish
   image:                           parity/tools:latest
   only:
-    - tags
+    - /^ci-release-.*$/
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/publish_draft_release.sh
@@ -610,8 +585,8 @@ publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   only:
-    - tags
     - /^ci-release-.*$/
+    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}

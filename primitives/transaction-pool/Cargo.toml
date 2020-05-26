@@ -1,13 +1,16 @@
 [package]
 name = "sp-transaction-pool"
-version = "2.0.0-alpha.5"
+version = "2.0.0-rc1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Transaction pool primitives types & Runtime API."
 documentation = "https://docs.rs/sp-transaction-pool"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
@@ -16,8 +19,9 @@ derive_more = { version = "0.99.2", optional = true }
 futures = { version = "0.3.1", optional = true }
 log = { version = "0.4.8", optional = true }
 serde = { version = "1.0.101", features = ["derive"], optional = true}
-sp-api = { version = "2.0.0-alpha.5", default-features = false, path = "../api" }
-sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../runtime" }
+sp-api = { version = "2.0.0-rc1", default-features = false, path = "../api" }
+sp-runtime = { version = "2.0.0-rc1", default-features = false, path = "../runtime" }
+sp-utils = { version = "2.0.0-rc1", default-features = false, path = "../utils" }
 
 [features]
 default = [ "std" ]
@@ -30,6 +34,3 @@ std = [
 	"sp-api/std",
 	"sp-runtime/std",
 ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

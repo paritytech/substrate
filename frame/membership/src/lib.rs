@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Membership Module
 //!
@@ -25,11 +26,9 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers},
-	weights::SimpleDispatchInfo,
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
-use sp_runtime::traits::EnsureOrigin;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
@@ -119,8 +118,8 @@ decl_module! {
 		/// Add a member `who` to the set.
 		///
 		/// May only be called from `AddOrigin` or root.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn add_member(origin, who: T::AccountId) {
+		#[weight = 50_000_000]
+		pub fn add_member(origin, who: T::AccountId) {
 			T::AddOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -138,8 +137,8 @@ decl_module! {
 		/// Remove a member `who` from the set.
 		///
 		/// May only be called from `RemoveOrigin` or root.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn remove_member(origin, who: T::AccountId) {
+		#[weight = 50_000_000]
+		pub fn remove_member(origin, who: T::AccountId) {
 			T::RemoveOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -160,8 +159,8 @@ decl_module! {
 		/// May only be called from `SwapOrigin` or root.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
+		#[weight = 50_000_000]
+		pub fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
 			T::SwapOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -189,8 +188,8 @@ decl_module! {
 		/// pass `members` pre-sorted.
 		///
 		/// May only be called from `ResetOrigin` or root.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn reset_members(origin, members: Vec<T::AccountId>) {
+		#[weight = 50_000_000]
+		pub fn reset_members(origin, members: Vec<T::AccountId>) {
 			T::ResetOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -212,8 +211,8 @@ decl_module! {
 		/// May only be called from `Signed` origin of a current member.
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn change_key(origin, new: T::AccountId) {
+		#[weight = 50_000_000]
+		pub fn change_key(origin, new: T::AccountId) {
 			let remove = ensure_signed(origin)?;
 
 			if remove != new {
@@ -240,8 +239,8 @@ decl_module! {
 		}
 
 		/// Set the prime member. Must be a current member.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn set_prime(origin, who: T::AccountId) {
+		#[weight = 50_000_000]
+		pub fn set_prime(origin, who: T::AccountId) {
 			T::PrimeOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -251,8 +250,8 @@ decl_module! {
 		}
 
 		/// Remove the prime member if it exists.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
-		fn clear_prime(origin) {
+		#[weight = 50_000_000]
+		pub fn clear_prime(origin) {
 			T::PrimeOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -316,6 +315,10 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();

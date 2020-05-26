@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Peer Set Manager (PSM). Contains the strategy for choosing which nodes the network should be
 //! connected to.
@@ -20,11 +22,12 @@
 mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque};
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 pub use libp2p::PeerId;
 
@@ -73,7 +76,7 @@ impl ReputationChange {
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
 #[derive(Debug, Clone)]
 pub struct PeersetHandle {
-	tx: mpsc::UnboundedSender<Action>,
+	tx: TracingUnboundedSender<Action>,
 }
 
 impl PeersetHandle {
@@ -163,14 +166,14 @@ pub struct PeersetConfig {
 	/// >			otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
 
-	/// If true, we only accept reserved nodes.
+	/// If true, we only accept nodes in [`PeersetConfig::priority_groups`].
 	pub reserved_only: bool,
 
-	/// List of nodes that we should always be connected to.
+	/// Lists of nodes we should always be connected to.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
-	pub reserved_nodes: Vec<PeerId>,
+	pub priority_groups: Vec<(String, HashSet<PeerId>)>,
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -183,9 +186,9 @@ pub struct Peerset {
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
-	rx: mpsc::UnboundedReceiver<Action>,
+	rx: TracingUnboundedReceiver<Action>,
 	/// Sending side of `rx`.
-	tx: mpsc::UnboundedSender<Action>,
+	tx: TracingUnboundedSender<Action>,
 	/// Queue of messages to be emitted when the `Peerset` is polled.
 	message_queue: VecDeque<Message>,
 	/// When the `Peerset` was created.
@@ -197,7 +200,7 @@ pub struct Peerset {
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
 	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_peerset_messages");
 
 		let handle = PeersetHandle {
 			tx: tx.clone(),
@@ -215,7 +218,10 @@ impl Peerset {
 			latest_time_update: now,
 		};
 
-		peerset.data.set_priority_group(RESERVED_NODES, config.reserved_nodes.into_iter().collect());
+		for (group, nodes) in config.priority_groups {
+			peerset.data.set_priority_group(&group, nodes);
+		}
+
 		for peer_id in config.bootnodes {
 			if let peersstate::Peer::Unknown(entry) = peerset.data.peer(&peer_id) {
 				entry.discover();
@@ -597,7 +603,7 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode],
 			reserved_only: true,
-			reserved_nodes: Vec::new(),
+			priority_groups: Vec::new(),
 		};
 
 		let (peerset, handle) = Peerset::from_config(config);
@@ -625,7 +631,7 @@ mod tests {
 			out_peers: 1,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: Vec::new(),
+			priority_groups: Vec::new(),
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -652,7 +658,7 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: vec![],
+			priority_groups: vec![],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -673,7 +679,7 @@ mod tests {
 			out_peers: 25,
 			bootnodes: vec![],
 			reserved_only: false,
-			reserved_nodes: vec![],
+			priority_groups: vec![],
 		});
 
 		// We ban a node by setting its reputation under the threshold.

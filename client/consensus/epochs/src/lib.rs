@@ -16,6 +16,8 @@
 
 //! Generic utilities for epoch-based consensus engines.
 
+pub mod migration;
+
 use std::{sync::Arc, ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};
@@ -331,6 +333,55 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 	/// fork (longest fork first).
 	pub fn rebalance(&mut self) {
 		self.inner.rebalance()
+	}
+
+	/// Map the epoch changes from one storing data to a different one.
+	pub fn map<B, F>(self, mut f: F) -> EpochChanges<Hash, Number, B> where
+		B: Epoch<SlotNumber=E::SlotNumber>,
+		F: FnMut(&Hash, &Number, E) -> B,
+	{
+		EpochChanges {
+			inner: self.inner.map(&mut |_, _, header| {
+				match header {
+					PersistedEpochHeader::Genesis(epoch_0, epoch_1) => {
+						PersistedEpochHeader::Genesis(
+							EpochHeader {
+								start_slot: epoch_0.start_slot,
+								end_slot: epoch_0.end_slot,
+							},
+							EpochHeader {
+								start_slot: epoch_1.start_slot,
+								end_slot: epoch_1.end_slot,
+							},
+						)
+					},
+					PersistedEpochHeader::Regular(epoch_n) => {
+						PersistedEpochHeader::Regular(
+							EpochHeader {
+								start_slot: epoch_n.start_slot,
+								end_slot: epoch_n.end_slot,
+							},
+						)
+					},
+				}
+			}),
+			epochs: self.epochs.into_iter().map(|((hash, number), epoch)| {
+				let bepoch = match epoch {
+					PersistedEpoch::Genesis(epoch_0, epoch_1) => {
+						PersistedEpoch::Genesis(
+							f(&hash, &number, epoch_0),
+							f(&hash, &number, epoch_1),
+						)
+					},
+					PersistedEpoch::Regular(epoch_n) => {
+						PersistedEpoch::Regular(
+							f(&hash, &number, epoch_n)
+						)
+					},
+				};
+				((hash, number), bepoch)
+			}).collect(),
+		}
 	}
 
 	/// Prune out finalized epochs, except for the ancestor of the finalized

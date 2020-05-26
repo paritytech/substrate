@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Pool periodic revalidation.
 
@@ -22,14 +24,15 @@ use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransacti
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use std::time::Duration;
 
 #[cfg(not(test))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
 #[cfg(test)]
-pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(5);
+pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
 const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
@@ -202,7 +205,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	/// transactions from the pool.
 	pub async fn run<R: intervalier::IntoStream>(
 		mut self,
-		from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>,
+		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
 		interval: R,
 	) where R: Send, R::Guard: Send
 	{
@@ -213,11 +216,20 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 		loop {
 			futures::select! {
-				_ = interval.next() => {
+				_guard = interval.next() => {
 					let next_batch = this.prepare_batch();
 					let batch_len = next_batch.len();
 
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
+
+					#[cfg(test)]
+					{
+						use intervalier::Guard;
+						// only trigger test events if something was processed
+						if batch_len == 0 {
+							_guard.expect("Always some() in tests").skip();
+						}
+					}
 
 					if batch_len > 0 || this.len() > 0 {
 						log::debug!(
@@ -252,7 +264,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 pub struct RevalidationQueue<Api: ChainApi> {
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
-	background: Option<mpsc::UnboundedSender<WorkerPayload<Api>>>,
+	background: Option<TracingUnboundedSender<WorkerPayload<Api>>>,
 }
 
 impl<Api: ChainApi> RevalidationQueue<Api>
@@ -275,7 +287,7 @@ where
 	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>)
 	where R: Send + 'static, R::Guard: Send
 	{
-		let (to_worker, from_queue) = mpsc::unbounded();
+		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 

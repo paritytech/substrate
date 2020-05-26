@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Implements tree backend, cached header metadata and algorithms
 //! to compute routes efficiently over the tree of headers.
@@ -239,19 +240,16 @@ impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	}
 }
 
-impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
-	type Error = String;
-
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+impl<Block: BlockT> HeaderMetadataCache<Block> {
+	pub fn header_metadata(&self, hash: Block::Hash) -> Option<CachedHeaderMetadata<Block>> {
 		self.cache.write().get(&hash).cloned()
-			.ok_or("header metadata not found in cache".to_owned())
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+	pub fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.cache.write().put(hash, metadata);
 	}
 
-	fn remove_header_metadata(&self, hash: Block::Hash) {
+	pub fn remove_header_metadata(&self, hash: Block::Hash) {
 		self.cache.write().pop(&hash);
 	}
 }
@@ -265,6 +263,8 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 	pub number: NumberFor<Block>,
 	/// Hash of parent header.
 	pub parent: Block::Hash,
+	/// Block state root.
+	pub state_root: Block::Hash,
 	/// Hash of an ancestor header. Used to jump through the tree.
 	ancestor: Block::Hash,
 }
@@ -275,6 +275,7 @@ impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {
 			hash: header.hash().clone(),
 			number: header.number().clone(),
 			parent: header.parent_hash().clone(),
+			state_root: header.state_root().clone(),
 			ancestor: header.parent_hash().clone(),
 		}
 	}

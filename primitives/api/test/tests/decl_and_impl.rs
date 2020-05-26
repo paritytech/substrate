@@ -1,20 +1,24 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-use sp_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
+use sp_api::{
+	RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis,
+	ApiExt,
+};
 
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 
@@ -81,7 +85,35 @@ impl_runtime_apis! {
 	}
 }
 
-type TestClient = substrate_test_runtime_client::sc_client::Client<
+struct MockApi {
+	block: Option<Block>,
+}
+
+mock_impl_runtime_apis! {
+	impl Api<Block> for MockApi {
+		fn test(_: u64) {
+			unimplemented!()
+		}
+
+		fn something_with_block(&self, _: Block) -> Block {
+			self.block.clone().unwrap()
+		}
+
+		fn function_with_two_args(_: u64, _: Block) {
+			unimplemented!()
+		}
+
+		fn same_name() {}
+
+		fn wild_card(_: u32) {}
+	}
+
+	impl ApiWithCustomVersion<Block> for MockApi {
+		fn same_name() {}
+	}
+}
+
+type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
 	substrate_test_runtime_client::Executor,
 	Block,
@@ -128,4 +160,23 @@ fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block, Error = ()>>();
 	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block, Error = ()>>();
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block, Error = ()>>();
+}
+
+#[test]
+fn mock_runtime_api_has_api() {
+	let mock = MockApi { block: None };
+
+	assert!(
+		mock.has_api::<dyn ApiWithCustomVersion<Block, Error = ()>>(&BlockId::Number(0)).unwrap(),
+	);
+	assert!(mock.has_api::<dyn Api<Block, Error = ()>>(&BlockId::Number(0)).unwrap());
+}
+
+#[test]
+#[should_panic(expected = "Mocked runtime apis don't support calling deprecated api versions")]
+fn mock_runtime_api_panics_on_calling_old_version() {
+	let mock = MockApi { block: None };
+
+	#[allow(deprecated)]
+	let _ = mock.same_name_before_version_2(&BlockId::Number(0));
 }

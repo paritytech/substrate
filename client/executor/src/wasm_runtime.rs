@@ -40,6 +40,12 @@ pub enum WasmExecutionMethod {
 	Compiled,
 }
 
+impl Default for WasmExecutionMethod {
+	fn default() -> WasmExecutionMethod {
+		WasmExecutionMethod::Interpreted
+	}
+}
+
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
 	/// Runtime code hash.
@@ -281,6 +287,25 @@ pub fn create_wasm_runtime_with_code(
 	}
 }
 
+fn decode_version(version: &[u8]) -> Result<RuntimeVersion, WasmError> {
+	let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut &version[..])
+		.map_err(|_|
+				 WasmError::Instantiation(
+					 "failed to decode \"Core_version\" result using old runtime version".into(),
+				 )
+		)?.into();
+
+	let core_api_id = sp_core::hashing::blake2_64(b"Core");
+	if v.has_api_with(&core_api_id, |v| v >= 3) {
+		sp_api::RuntimeVersion::decode(&mut &version[..])
+			.map_err(|_|
+				WasmError::Instantiation("failed to decode \"Core_version\" result".into())
+			)
+	} else {
+		Ok(v)
+	}
+}
+
 fn create_versioned_wasm_runtime(
 	code: &[u8],
 	code_hash: Vec<u8>,
@@ -315,10 +340,7 @@ fn create_versioned_wasm_runtime(
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
 	let version = match version_result {
-		Ok(version) => Some(RuntimeVersion::decode(&mut version.as_slice())
-			.map_err(|_|
-				WasmError::Instantiation("failed to decode \"Core_version\" result".into())
-			)?),
+		Ok(version) => Some(decode_version(&version)?),
 		Err(_) => None,
 	};
 	#[cfg(not(target_os = "unknown"))]
@@ -344,7 +366,11 @@ fn create_versioned_wasm_runtime(
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use sp_wasm_interface::HostFunctions;
+	use sp_api::{Core, RuntimeApiInfo};
+	use substrate_test_runtime::Block;
+	use codec::Encode;
 
 	#[test]
 	fn host_functions_are_equal() {
@@ -352,5 +378,50 @@ mod tests {
 
 		let equal = &host_functions[..] == &host_functions[..];
 		assert!(equal, "Host functions are not equal");
+	}
+
+	#[test]
+	fn old_runtime_version_decodes() {
+		let old_runtime_version = sp_api::OldRuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(Core::<Block, Error = ()>::ID, 1)]),
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(1, version.transaction_version);
+	}
+
+	#[test]
+	fn old_runtime_version_decodes_fails_with_version_3() {
+		let old_runtime_version = sp_api::OldRuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(Core::<Block, Error = ()>::ID, 3)]),
+		};
+
+		decode_version(&old_runtime_version.encode()).unwrap_err();
+	}
+
+	#[test]
+	fn new_runtime_version_decodes() {
+		let old_runtime_version = sp_api::RuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+			apis: sp_api::create_apis_vec!([(Core::<Block, Error = ()>::ID, 3)]),
+			transaction_version: 3,
+		};
+
+		let version = decode_version(&old_runtime_version.encode()).unwrap();
+		assert_eq!(3, version.transaction_version);
 	}
 }

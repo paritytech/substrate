@@ -1,12 +1,33 @@
-use super::*;
+// This file is part of Substrate.
 
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Treasury pallet tests.
+
+#![cfg(test)]
+
+use super::*;
+use std::cell::RefCell;
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
+	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
 	traits::{Contains, OnInitialize}
 };
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
+	Perbill, ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
@@ -14,6 +35,21 @@ use sp_runtime::{
 impl_outer_origin! {
 	pub enum Origin for Test  where system = frame_system {}
 }
+
+
+mod treasury {
+	// Re-export needed for `impl_outer_event!`.
+	pub use super::super::*;
+}
+
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		pallet_balances<T>,
+		treasury<T>,
+	}
+}
+
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
@@ -33,9 +69,13 @@ impl frame_system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -49,21 +89,35 @@ parameter_types! {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 }
+thread_local! {
+	static TEN_TO_FOURTEEN: RefCell<Vec<u64>> = RefCell::new(vec![10,11,12,13,14]);
+}
 pub struct TenToFourteen;
 impl Contains<u64> for TenToFourteen {
-	fn contains(n: &u64) -> bool {
-		*n >= 10 && *n <= 14
-	}
 	fn sorted_members() -> Vec<u64> {
-		vec![10, 11, 12, 13, 14]
+		TEN_TO_FOURTEEN.with(|v| {
+			v.borrow().clone()
+		})
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_: &u64) { unimplemented!() }
+	fn add(new: &u64) {
+		TEN_TO_FOURTEEN.with(|v| {
+			let mut members = v.borrow_mut();
+			members.push(*new);
+			members.sort();
+		})
+	}
+}
+impl ContainsLengthBound for TenToFourteen {
+	fn max_len() -> usize {
+		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
+	}
+	fn min_len() -> usize { 0 }
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
@@ -74,8 +128,10 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
 	pub const TipReportDepositPerByte: u64 = 1;
+	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 impl Trait for Test {
+	type ModuleId = TreasuryModuleId;
 	type Currency = pallet_balances::Module<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u64>;
 	type RejectOrigin = frame_system::EnsureRoot<u64>;
@@ -84,7 +140,7 @@ impl Trait for Test {
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
 	type TipReportDepositPerByte = TipReportDepositPerByte;
-	type Event = ();
+	type Event = Event;
 	type ProposalRejection = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
@@ -95,7 +151,7 @@ type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type Treasury = Module<Test>;
 
-fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test>{
 		// Total issuance will be 200 with treasury account initialized at ED.
@@ -177,21 +233,57 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 #[test]
 fn close_tip_works() {
 	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+
 		let h = tip_hash();
+
+		assert_eq!(
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
+			RawEvent::NewTip(h),
+		);
+
 		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
 		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+
+		assert_eq!(
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
+			RawEvent::TipClosing(h),
+		);
+
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
 		System::set_block_number(2);
 		assert_noop!(Treasury::close_tip(Origin::NONE, h.into()), BadOrigin);
 		assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
+
+		assert_eq!(
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
+			RawEvent::TipClosed(h, 3, 10),
+		);
 
 		assert_noop!(Treasury::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});

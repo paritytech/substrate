@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Changes trie pruning-related functions.
 
@@ -137,7 +138,8 @@ mod tests {
 	#[test]
 	fn prune_works() {
 		fn prepare_storage() -> InMemoryStorage<BlakeTwo256, u64> {
-			let child_key = ChildIndex { block: 67u64, storage_key: b"1".to_vec() }.encode();
+			let child_info = sp_core::storage::ChildInfo::new_default(&b"1"[..]);
+			let child_key = ChildIndex { block: 67u64, storage_key: child_info.prefixed_storage_key() }.encode();
 			let mut mdb1 = MemoryDB::<BlakeTwo256>::default();
 			let root1 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb1, vec![(vec![10], vec![20])]).unwrap();

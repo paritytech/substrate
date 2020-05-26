@@ -1,22 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate state API.
 
 pub mod error;
+pub mod helpers;
 
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
@@ -28,6 +31,7 @@ use sp_version::RuntimeVersion;
 use self::error::FutureResult;
 
 pub use self::gen_client::Client as StateClient;
+pub use self::helpers::ReadProof;
 
 /// Substrate state API
 #[rpc]
@@ -72,50 +76,6 @@ pub trait StateApi<Hash> {
 	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
 	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> FutureResult<Option<u64>>;
 
-	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[rpc(name = "state_getChildKeys")]
-	fn child_storage_keys(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		prefix: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageKey>>;
-
-	/// Returns a child storage entry at a specific block's state.
-	#[rpc(name = "state_getChildStorage")]
-	fn child_storage(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<StorageData>>;
-
-	/// Returns the hash of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageHash")]
-	fn child_storage_hash(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<Hash>>;
-
-	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "state_getChildStorageSize")]
-	fn child_storage_size(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<u64>>;
-
 	/// Returns the runtime metadata as an opaque blob.
 	#[rpc(name = "state_getMetadata")]
 	fn metadata(&self, hash: Option<Hash>) -> FutureResult<Bytes>;
@@ -143,6 +103,10 @@ pub trait StateApi<Hash> {
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+
+	/// Returns proof of storage entries at a specific block's state.
+	#[rpc(name = "state_getReadProof")]
+	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[pubsub(

@@ -1,24 +1,26 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Changes tries build cache.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::StorageKey;
+use sp_core::storage::PrefixedStorageKey;
 
 /// Changes trie build cache.
 ///
@@ -38,7 +40,7 @@ pub struct BuildCache<H, N> {
 	/// The `Option<Vec<u8>>` in inner `HashMap` stands for the child storage key.
 	/// If it is `None`, then the `HashSet` contains keys changed in top-level storage.
 	/// If it is `Some`, then the `HashSet` contains keys changed in child storage, identified by the key.
-	changed_keys: HashMap<H, HashMap<Option<StorageKey>, HashSet<StorageKey>>>,
+	changed_keys: HashMap<H, HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>>,
 }
 
 /// The action to perform when block-with-changes-trie is imported.
@@ -56,7 +58,7 @@ pub struct CachedBuildData<H, N> {
 	block: N,
 	trie_root: H,
 	digest_input_blocks: Vec<N>,
-	changed_keys: HashMap<Option<StorageKey>, HashSet<StorageKey>>,
+	changed_keys: HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>,
 }
 
 /// The action to perform when block-with-changes-trie is imported.
@@ -72,7 +74,7 @@ pub(crate) enum IncompleteCacheAction<N> {
 #[derive(Debug, PartialEq)]
 pub(crate) struct IncompleteCachedBuildData<N> {
 	digest_input_blocks: Vec<N>,
-	changed_keys: HashMap<Option<StorageKey>, HashSet<StorageKey>>,
+	changed_keys: HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>,
 }
 
 impl<H, N> BuildCache<H, N>
@@ -89,7 +91,7 @@ impl<H, N> BuildCache<H, N>
 	}
 
 	/// Get cached changed keys for changes trie with given root.
-	pub fn get(&self, root: &H) -> Option<&HashMap<Option<StorageKey>, HashSet<StorageKey>>> {
+	pub fn get(&self, root: &H) -> Option<&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>> {
 		self.changed_keys.get(&root)
 	}
 
@@ -98,7 +100,7 @@ impl<H, N> BuildCache<H, N>
 	pub fn with_changed_keys(
 		&self,
 		root: &H,
-		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
+		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>),
 	) -> bool {
 		match self.changed_keys.get(&root) {
 			Some(changed_keys) => {
@@ -164,7 +166,7 @@ impl<N> IncompleteCacheAction<N> {
 	/// Insert changed keys of given storage into cached data.
 	pub(crate) fn insert(
 		self,
-		storage_key: Option<StorageKey>,
+		storage_key: Option<PrefixedStorageKey>,
 		changed_keys: HashSet<StorageKey>,
 	) -> Self {
 		match self {
@@ -200,7 +202,7 @@ impl<N> IncompleteCachedBuildData<N> {
 
 	fn insert(
 		mut self,
-		storage_key: Option<StorageKey>,
+		storage_key: Option<PrefixedStorageKey>,
 		changed_keys: HashSet<StorageKey>,
 	) -> Self {
 		self.changed_keys.insert(storage_key, changed_keys);

@@ -64,7 +64,7 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{debug, error};
-use sp_runtime::ConsensusEngineId;
+use prometheus_endpoint::HistogramVec;
 use std::{borrow::Cow, error, io, str, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -75,11 +75,12 @@ use std::{borrow::Cow, error, io, str, task::{Context, Poll}};
 ///
 /// See the documentation at the module level for more information.
 pub struct NotifsHandlerProto {
-	/// Prototypes for handlers for inbound substreams.
-	in_handlers: Vec<NotifsInHandlerProto>,
+	/// Prototypes for handlers for inbound substreams, and the message we respond with in the
+	/// handshake.
+	in_handlers: Vec<(NotifsInHandlerProto, Vec<u8>)>,
 
-	/// Prototypes for handlers for outbound substreams.
-	out_handlers: Vec<NotifsOutHandlerProto>,
+	/// Prototypes for handlers for outbound substreams, and the initial handshake message we send.
+	out_handlers: Vec<(NotifsOutHandlerProto, Vec<u8>)>,
 
 	/// Prototype for handler for backwards-compatibility.
 	legacy: LegacyProtoHandlerProto,
@@ -89,11 +90,11 @@ pub struct NotifsHandlerProto {
 ///
 /// See the documentation at the module level for more information.
 pub struct NotifsHandler {
-	/// Handlers for inbound substreams.
-	in_handlers: Vec<NotifsInHandler>,
+	/// Handlers for inbound substreams, and the message we respond with in the handshake.
+	in_handlers: Vec<(NotifsInHandler, Vec<u8>)>,
 
-	/// Handlers for outbound substreams.
-	out_handlers: Vec<NotifsOutHandler>,
+	/// Handlers for outbound substreams, and the initial handshake message we send.
+	out_handlers: Vec<(NotifsOutHandler, Vec<u8>)>,
 
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler,
@@ -119,7 +120,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 
 	fn inbound_protocol(&self) -> SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol> {
 		let in_handlers = self.in_handlers.iter()
-			.map(|h| h.inbound_protocol())
+			.map(|(h, _)| h.inbound_protocol())
 			.collect::<UpgradeCollec<_>>();
 
 		SelectUpgrade::new(in_handlers, self.legacy.inbound_protocol())
@@ -129,11 +130,11 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 		NotifsHandler {
 			in_handlers: self.in_handlers
 				.into_iter()
-				.map(|p| p.into_handler(remote_peer_id, connected_point))
+				.map(|(proto, msg)| (proto.into_handler(remote_peer_id, connected_point), msg))
 				.collect(),
 			out_handlers: self.out_handlers
 				.into_iter()
-				.map(|p| p.into_handler(remote_peer_id, connected_point))
+				.map(|(proto, msg)| (proto.into_handler(remote_peer_id, connected_point), msg))
 				.collect(),
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 			enabled: EnabledState::Initial,
@@ -143,7 +144,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 }
 
 /// Event that can be received by a `NotifsHandler`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NotifsHandlerIn {
 	/// The node should start using custom protocols.
 	Enable,
@@ -158,6 +159,18 @@ pub enum NotifsHandlerIn {
 	SendLegacy {
 		/// The message to send.
 		message: Vec<u8>,
+	},
+
+	/// Modifies the handshake message of a notifications protocol.
+	UpdateHandshake {
+		/// Name of the protocol for the message.
+		///
+		/// Must match one of the registered protocols.
+		protocol_name: Cow<'static, [u8]>,
+
+		/// The new handshake message to send if we open a substream or if the remote opens a
+		/// substream towards us.
+		handshake_message: Vec<u8>,
 	},
 
 	/// Sends a notifications message.
@@ -181,13 +194,18 @@ pub enum NotifsHandlerIn {
 /// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
-	/// Opened the substreams with the remote.
-	Open,
+	/// The connection is open for custom protocols.
+	Open {
+		/// The endpoint of the connection that is open for custom protocols.
+		endpoint: ConnectedPoint,
+	},
 
-	/// Closed the substreams with the remote.
+	/// The connection is closed for custom protocols.
 	Closed {
-		/// Reason why the substream closed, for diagnostic purposes.
+		/// The reason for closing, for diagnostic purposes.
 		reason: Cow<'static, str>,
+		/// The endpoint of the connection that closed for custom protocols.
+		endpoint: ConnectedPoint,
 	},
 
 	/// Received a non-gossiping message on the legacy substream.
@@ -226,12 +244,44 @@ pub enum NotifsHandlerOut {
 
 impl NotifsHandlerProto {
 	/// Builds a new handler.
-	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
+	///
+	/// `list` is a list of notification protocols names, and the message to send as part of the
+	/// handshake. At the moment, the message is always the same whether we open a substream
+	/// ourselves or respond to handshake from the remote.
+	///
+	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
+	/// messages queue. If passed, it must have one label for the protocol name.
+	pub fn new(
+		legacy: RegisteredProtocol,
+		list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>,
+		queue_size_report: Option<HistogramVec>
+	) -> Self {
 		let list = list.into();
 
+		let out_handlers = list
+			.clone()
+			.into_iter()
+			.map(|(proto_name, initial_message)| {
+				let queue_size_report = queue_size_report.as_ref().and_then(|qs| {
+					if let Ok(utf8) = str::from_utf8(&proto_name) {
+						Some(qs.with_label_values(&[utf8]))
+					} else {
+						log::warn!("Ignoring Prometheus metric because {:?} isn't UTF-8", proto_name);
+						None
+					}
+				});
+
+				(NotifsOutHandlerProto::new(proto_name, queue_size_report), initial_message)
+			}).collect();
+
+		let in_handlers = list.clone()
+			.into_iter()
+			.map(|(proto_name, msg)| (NotifsInHandlerProto::new(proto_name), msg))
+			.collect();
+
 		NotifsHandlerProto {
-			in_handlers: list.clone().into_iter().map(|(p, _)| NotifsInHandlerProto::new(p)).collect(),
-			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)).collect(),
+			in_handlers,
+			out_handlers,
 			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
 	}
@@ -254,7 +304,7 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol> {
 		let in_handlers = self.in_handlers.iter()
-			.map(|h| h.listen_protocol().into_upgrade().1)
+			.map(|(h, _)| h.listen_protocol().into_upgrade().1)
 			.collect::<UpgradeCollec<_>>();
 
 		let proto = SelectUpgrade::new(in_handlers, self.legacy.listen_protocol().into_upgrade().1);
@@ -267,7 +317,7 @@ impl ProtocolsHandler for NotifsHandler {
 	) {
 		match out {
 			EitherOutput::First((out, num)) =>
-				self.in_handlers[num].inject_fully_negotiated_inbound(out),
+				self.in_handlers[num].0.inject_fully_negotiated_inbound(out),
 			EitherOutput::Second(out) =>
 				self.legacy.inject_fully_negotiated_inbound(out),
 		}
@@ -280,7 +330,7 @@ impl ProtocolsHandler for NotifsHandler {
 	) {
 		match (out, num) {
 			(EitherOutput::First(out), Some(num)) =>
-				self.out_handlers[num].inject_fully_negotiated_outbound(out, ()),
+				self.out_handlers[num].0.inject_fully_negotiated_outbound(out, ()),
 			(EitherOutput::Second(out), None) =>
 				self.legacy.inject_fully_negotiated_outbound(out, ()),
 			_ => error!("inject_fully_negotiated_outbound called with wrong parameters"),
@@ -295,13 +345,15 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
-				for handler in &mut self.out_handlers {
+				for (handler, initial_message) in &mut self.out_handlers {
 					handler.inject_event(NotifsOutHandlerIn::Enable {
-						initial_message: vec![]
+						initial_message: initial_message.clone(),
 					});
 				}
 				for num in self.pending_in.drain(..) {
-					self.in_handlers[num].inject_event(NotifsInHandlerIn::Accept(vec![]));
+					let handshake_message = self.in_handlers[num].1.clone();
+					self.in_handlers[num].0
+						.inject_event(NotifsInHandlerIn::Accept(handshake_message));
 				}
 			},
 			NotifsHandlerIn::Disable => {
@@ -312,19 +364,31 @@ impl ProtocolsHandler for NotifsHandler {
 				// The notifications protocols start in the disabled state. If we were in the
 				// "Initial" state, then we shouldn't disable the notifications protocols again.
 				if self.enabled != EnabledState::Initial {
-					for handler in &mut self.out_handlers {
+					for (handler, _) in &mut self.out_handlers {
 						handler.inject_event(NotifsOutHandlerIn::Disable);
 					}
 				}
 				self.enabled = EnabledState::Disabled;
 				for num in self.pending_in.drain(..) {
-					self.in_handlers[num].inject_event(NotifsInHandlerIn::Refuse);
+					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
+			NotifsHandlerIn::UpdateHandshake { protocol_name, handshake_message } => {
+				for (handler, current_handshake) in &mut self.in_handlers {
+					if handler.protocol_name() == &*protocol_name {
+						*current_handshake = handshake_message.clone();
+					}
+				}
+				for (handler, current_handshake) in &mut self.out_handlers {
+					if handler.protocol_name() == &*protocol_name {
+						*current_handshake = handshake_message.clone();
+					}
+				}
+			}
 			NotifsHandlerIn::SendNotification { message, encoded_fallback_message, protocol_name } => {
-				for handler in &mut self.out_handlers {
+				for (handler, _) in &mut self.out_handlers {
 					if handler.protocol_name() != &protocol_name[..] {
 						continue;
 					}
@@ -349,21 +413,21 @@ impl ProtocolsHandler for NotifsHandler {
 	) {
 		match (err, num) {
 			(ProtocolsHandlerUpgrErr::Timeout, Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timeout
 				),
 			(ProtocolsHandlerUpgrErr::Timeout, None) =>
 				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timeout),
 			(ProtocolsHandlerUpgrErr::Timer, Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Timer
 				),
 			(ProtocolsHandlerUpgrErr::Timer, None) =>
 				self.legacy.inject_dial_upgrade_error((), ProtocolsHandlerUpgrErr::Timer),
 			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err)), Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
 				),
@@ -373,7 +437,7 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Select(err))
 				),
 			(ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(EitherError::A(err))), Some(num)) =>
-				self.out_handlers[num].inject_dial_upgrade_error(
+				self.out_handlers[num].0.inject_dial_upgrade_error(
 					(),
 					ProtocolsHandlerUpgrErr::Upgrade(UpgradeError::Apply(err))
 				),
@@ -394,7 +458,7 @@ impl ProtocolsHandler for NotifsHandler {
 			return KeepAlive::Yes;
 		}
 
-		for handler in &self.in_handlers {
+		for (handler, _) in &self.in_handlers {
 			let val = handler.connection_keep_alive();
 			if val.is_yes() {
 				return KeepAlive::Yes;
@@ -402,7 +466,7 @@ impl ProtocolsHandler for NotifsHandler {
 			if ret < val { ret = val; }
 		}
 
-		for handler in &self.out_handlers {
+		for (handler, _) in &self.out_handlers {
 			let val = handler.connection_keep_alive();
 			if val.is_yes() {
 				return KeepAlive::Yes;
@@ -419,7 +483,39 @@ impl ProtocolsHandler for NotifsHandler {
 	) -> Poll<
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
-		for (handler_num, handler) in self.in_handlers.iter_mut().enumerate() {
+		if let Poll::Ready(ev) = self.legacy.poll(cx) {
+			return match ev {
+				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
+					Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+						protocol: protocol.map_upgrade(EitherUpgrade::B),
+						info: None,
+					}),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
+					Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Open { endpoint }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
+					Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Closed { endpoint, reason }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
+					Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::CustomMessage { message }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
+					Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Clogged { messages }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
+					Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::ProtocolError { is_severe, error }
+					)),
+				ProtocolsHandlerEvent::Close(err) =>
+					Poll::Ready(ProtocolsHandlerEvent::Close(EitherError::B(err))),
+			}
+		}
+
+		for (handler_num, (handler, handshake_message)) in self.in_handlers.iter_mut().enumerate() {
 			while let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { .. } =>
@@ -429,7 +525,7 @@ impl ProtocolsHandler for NotifsHandler {
 						match self.enabled {
 							EnabledState::Initial => self.pending_in.push(handler_num),
 							EnabledState::Enabled =>
-								handler.inject_event(NotifsInHandlerIn::Accept(vec![])),
+								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message.clone())),
 							EnabledState::Disabled =>
 								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},
@@ -449,7 +545,7 @@ impl ProtocolsHandler for NotifsHandler {
 			}
 		}
 
-		for (handler_num, handler) in self.out_handlers.iter_mut().enumerate() {
+		for (handler_num, (handler, _)) in self.out_handlers.iter_mut().enumerate() {
 			while let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
 					ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
@@ -469,38 +565,6 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},
 				}
-			}
-		}
-
-		while let Poll::Ready(ev) = self.legacy.poll(cx) {
-			match ev {
-				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
-					return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						protocol: protocol.map_upgrade(EitherUpgrade::B),
-						info: None,
-					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { .. }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { reason }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Closed { reason }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::CustomMessage { message }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Clogged { messages }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::ProtocolError { is_severe, error }
-					)),
-				ProtocolsHandlerEvent::Close(err) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Close(EitherError::B(err))),
 			}
 		}
 

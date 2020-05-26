@@ -1,20 +1,23 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Identity pallet benchmarking.
+
+#![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
 
@@ -24,9 +27,6 @@ use frame_benchmarking::benchmarks;
 use sp_runtime::traits::Bounded;
 
 use crate::Module as Identity;
-
-// The maximum number of identity registrars we will test.
-const MAX_REGISTRARS: u32 = 50;
 
 // Support Functions
 fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
@@ -51,9 +51,9 @@ fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	Ok(())
 }
 
-// Adds `s` sub-accounts to the identity of `who`. Each wil have 32 bytes of raw data added to it.
-// This additionally returns the vector of sub-accounts to it can be modified if needed.
-fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+// Create `s` sub-accounts for the identity of `who` and return them.
+// Each will have 32 bytes of raw data added to it.
+fn create_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
 	let data = Data::Raw(vec![0; 32]);
@@ -68,9 +68,18 @@ fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::Acco
 	let info = create_identity_info::<T>(1);
 	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
 
+	Ok(subs)
+}
+
+// Adds `s` sub-accounts to the identity of `who`. Each will have 32 bytes of raw data added to it.
+// This additionally returns the vector of sub-accounts so it can be modified if needed.
+fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+	let who_origin = RawOrigin::Signed(who.clone());
+	let subs = create_sub_accounts::<T>(who, s)?;
+
 	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
 
-	return Ok(subs)
+	Ok(subs)
 }
 
 // This creates an `IdentityInfo` object with `num_fields` extra fields.
@@ -96,7 +105,9 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
-		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
+		// extra parameter for the set_subs bench for previous sub accounts
+		let p in 1 .. T::MaxSubAccounts::get() => ();
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
@@ -112,7 +123,7 @@ benchmarks! {
 	}
 
 	add_registrar {
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 	}: _(RawOrigin::Root, account::<T>("registrar", r + 1))
 
 	set_identity {
@@ -151,16 +162,13 @@ benchmarks! {
 	set_subs {
 		let caller = account::<T>("caller", 0);
 
-		// Give them s many sub accounts.
-		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
-			let _ = add_sub_accounts::<T>(&caller, s)?;
+		// Give them p many previous sub accounts.
+		let p in 1 .. T::MaxSubAccounts::get() => {
+			let _ = add_sub_accounts::<T>(&caller, p)?;
 		};
-
-		let mut subs = Module::<T>::subs(&caller);
-
-		// Create an s + 1 sub account.
-		let data = Data::Raw(vec![0; 32]);
-		subs.push((account::<T>("sub", s + 1), data));
+		// Create a new subs vec with s sub accounts
+		let s in 1 .. T::MaxSubAccounts::get() => ();
+		let subs = create_sub_accounts::<T>(&caller, s)?;
 
 	}: _(RawOrigin::Signed(caller), subs)
 
@@ -208,7 +216,7 @@ benchmarks! {
 	set_fee {
 		let caller = account::<T>("caller", 0);
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 	}: _(RawOrigin::Signed(caller), r, 10.into())
@@ -217,7 +225,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
@@ -226,7 +234,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		let fields = IdentityFields(
@@ -245,7 +253,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		// For this x, it's the user identity that gts the fields, not the caller.
 		let x in _ .. _ => {
 			let info = create_identity_info::<T>(x);
@@ -277,4 +285,28 @@ benchmarks! {
 			)?;
 		}
 	}: _(RawOrigin::Root, caller_lookup)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_add_registrar::<Test>());
+			assert_ok!(test_benchmark_set_identity::<Test>());
+			assert_ok!(test_benchmark_set_subs::<Test>());
+			assert_ok!(test_benchmark_clear_identity::<Test>());
+			assert_ok!(test_benchmark_request_judgement::<Test>());
+			assert_ok!(test_benchmark_cancel_request::<Test>());
+			assert_ok!(test_benchmark_set_fee::<Test>());
+			assert_ok!(test_benchmark_set_account_id::<Test>());
+			assert_ok!(test_benchmark_set_fields::<Test>());
+			assert_ok!(test_benchmark_provide_judgement::<Test>());
+			assert_ok!(test_benchmark_kill_identity::<Test>());
+		});
+	}
 }

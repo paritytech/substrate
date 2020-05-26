@@ -20,20 +20,8 @@
 //!
 //! # Usage
 //!
-//! Monitor performance throughout the codebase via the creation of `Span`s.
-//! A span is set in the following way:
-//! ```
-//! let span = tracing::span!(tracing::Level::INFO, "my_span_name");
-//! let _guard = span.enter();
-//! ```
-//! To begin timing, a span must be entered. When the span is dropped, the execution time
-//! is recorded and details sent to the `Receiver` which defines how to process it.
+//! See `sp-tracing` for examples on how to use tracing.
 //!
-//! It's possible to record values with each span in the following way:
-//! ```
-//! let span = tracing::span!(tracing::Level::INFO, "my_span_name", my_number = 10, a_key = "a value");
-//! let _guard = span.enter();
-//! ```
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
 use std::collections::HashMap;

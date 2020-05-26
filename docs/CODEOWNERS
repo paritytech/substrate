@@ -34,8 +34,8 @@
 /primitives/core/src/sandbox.rs @pepyakin
 
 # Transaction pool
-/client/transaction-pool/ @tomusdrw @NikVolf
-/primitives/transaction-pool/ @tomusdrw @NikVolf
+/client/transaction-pool/ @NikVolf
+/primitives/transaction-pool/ @NikVolf
 
 # Offchain
 /client/offchain/ @tomusdrw
@@ -49,22 +49,19 @@
 
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva @DemiMarie-parity
-/frame/grandpa/ @andresilva @DemiMarie-parity
-/client/finality-grandpa/ @andresilva @DemiMarie-parity
+/frame/grandpa/ @andresilva
+/client/finality-grandpa/ @andresilva
 /client/consensus/babe/ @andresilva @DemiMarie-parity
 /client/consensus/slots/ @andresilva @DemiMarie-parity
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere
+/frame/contracts/ @pepyakin
 /frame/contracts/src/wasm/runtime.rs @Robbepop
 
 # EVM
 /frame/evm/ @sorpaas
-
-# Inflation points
-/frame/staking/src/inflation.rs @thiolliere
 
 # NPoS and Governance and Phragmén
 /frame/staking/ @kianenigma
@@ -73,7 +70,7 @@
 /primitives/phragmen/ @kianenigma
 
 # Fixed point arithmetic
-/primitives/sp-arithmetic/ @kianenigma @thiolliere
+/primitives/sp-arithmetic/ @kianenigma
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
@@ -82,7 +79,7 @@
 /frame/support/src/weights.rs @kianenigma
 
 # Support crates
-/frame/support/ @thiolliere @kianenigma
+/frame/support/ @kianenigma
 
 # Authority discovery
 /client/authority-discovery/ @mxinden
@@ -90,3 +87,7 @@
 
 # Prometheus endpoint
 /utils/prometheus/ @mxinden
+
+# CLI API
+/client/cli @cecton
+/client/cli-derive @cecton

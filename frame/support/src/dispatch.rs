@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
@@ -24,19 +25,32 @@ pub use frame_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
 pub use crate::weights::{
-	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
-	TransactionPriority, Weight, PaysFee,
+	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
+	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
+pub use sp_runtime::{traits::Dispatchable, DispatchError};
 pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
 
-/// A type that cannot be instantiated.
-pub enum Never {}
+/// The return typ of a `Dispatchable` in frame. When returned explicitly from
+/// a dispatchable function it allows overriding the default `PostDispatchInfo`
+/// returned from a dispatch.
+pub type DispatchResultWithPostInfo =
+	sp_runtime::DispatchResultWithInfo<crate::weights::PostDispatchInfo>;
+
+/// Unaugmented version of `DispatchResultWithPostInfo` that can be returned from
+/// dispatchable functions and is automatically converted to the augmented type. Should be
+/// used whenever the `PostDispatchInfo` does not need to be overwritten. As this should
+/// be the common case it is the implicit return type when none is specified.
+pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
+
+/// The error type contained in a `DispatchResultWithPostInfo`.
+pub type DispatchErrorWithPostInfo =
+	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
 
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
-	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
+	type Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo> + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -57,14 +71,13 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = 0]
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
@@ -72,7 +85,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// FRAME pallets.
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = 0]
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
@@ -94,27 +107,63 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// ### Shorthand Example
 ///
 /// The macro automatically expands a shorthand function declaration to return the
-/// [`DispatchResult`] type. These functions are the same:
+/// [`DispatchResult`](dispatch::DispatchResult) type. These functions are the same:
 ///
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = 0]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
 ///
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = 0]
 /// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
 ///		}
+/// }
+/// # fn main() {}
+/// ```
+///
+/// ### Consuming only portions of the annotated static weight
+///
+/// Per default a callable function consumes all of its static weight as declared via
+/// the #\[weight\] attribute. However, there are use cases where only a portion of this
+/// weight should be consumed. In that case the static weight is charged pre dispatch and
+/// the difference is refunded post dispatch.
+///
+/// In order to make use of this feature the function must return `DispatchResultWithPostInfo`
+/// in place of the default `DispatchResult`. Then the actually consumed weight can be returned.
+/// To consume a non default weight while returning an error
+/// [`WithPostDispatchInfo::with_weight`](./weight/trait.WithPostDispatchInfo.html) can be used
+/// to augment any error with custom weight information.
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_system::{self as system, Trait, ensure_signed};
+/// decl_module! {
+/// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+/// 		#[weight = 1_000_000]
+/// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			if do_expensive_calc {
+/// 				// do the expensive calculation
+/// 				// ...
+/// 				// return None to indicate that we are using all weight (the default)
+/// 				return Ok(None.into());
+/// 			}
+/// 			// expensive calculation not executed: use only a portion of the weight
+/// 			Ok(Some(100_000).into())
+/// 		}
+/// 	}
 /// }
 /// # fn main() {}
 /// ```
@@ -127,11 +176,10 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = 0]
 ///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
@@ -938,7 +986,7 @@ macro_rules! decl_module {
 		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
-		<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* )
+		<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
 	};
 
 	// no `deposit_event` function wanted
@@ -975,12 +1023,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) -> $return {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_initialize");
 				{ $( $impl )* }
 			}
 		}
@@ -996,12 +1039,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) -> $return {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_initialize");
 				{ $( $impl )* }
 			}
 		}
@@ -1027,12 +1065,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_runtime_upgrade() -> $return {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_runtime_upgrade");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_runtime_upgrade");
 				{ $( $impl )* }
 			}
 		}
@@ -1059,12 +1092,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_finalize");
 				{ $( $impl )* }
 			}
 		}
@@ -1080,12 +1108,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_finalize");
 				{ $( $impl )* }
 			}
 		}
@@ -1154,15 +1177,9 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_std::if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
-			{
-				{ $( $impl )* }
-				Ok(())
-			}
+			$crate::sp_tracing::enter_span!(stringify!($name));
+			{ $( $impl )* }
+			Ok(())
 		}
 	};
 
@@ -1179,13 +1196,8 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			use $crate::sp_std::if_std;
-			if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
-			{ $( $impl )* }
+			$crate::sp_tracing::enter_span!(stringify!($name));
+			$( $impl )*
 		}
 	};
 
@@ -1297,7 +1309,7 @@ macro_rules! decl_module {
 		{
 			#[doc(hidden)]
 			#[codec(skip)]
-			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::dispatch::Never),
+			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::Never),
 			$( $generated_variants )*
 		}
 	};
@@ -1422,16 +1434,17 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							let base_weight = $weight;
 							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							$crate::dispatch::DispatchInfo {
@@ -1538,7 +1551,9 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::sp_runtime::DispatchResult {
+			type Info = $crate::weights::DispatchInfo;
+			type PostInfo = $crate::weights::PostDispatchInfo;
+			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1563,10 +1578,10 @@ macro_rules! decl_module {
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance, PostInfo = $crate::weights::PostDispatchInfo>>(
 				d: D,
 				origin: D::Origin
-			) -> $crate::sp_runtime::DispatchResult {
+			) -> $crate::dispatch::DispatchResultWithPostInfo {
 				d.dispatch(origin)
 			}
 		}
@@ -1664,10 +1679,12 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
+			type Info = $crate::weights::DispatchInfo;
+			type PostInfo = $crate::weights::PostDispatchInfo;
 			fn dispatch(
 				self,
 				origin: $origin,
-			) -> $crate::sp_runtime::DispatchResult {
+			) -> $crate::dispatch::DispatchResultWithPostInfo {
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self
@@ -2027,7 +2044,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass};
+	use crate::weights::{DispatchInfo, DispatchClass, Pays};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade
 	};
@@ -2053,25 +2070,25 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = 0]
 			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = 0]
 			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::FixedNormal(3)]
+			#[weight = 3]
 			fn aux_3(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = 0]
 			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = 0]
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::FixedOperational(5)]
+			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
@@ -2230,17 +2247,12 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: true },
-		);
-		// default weight.
-		assert_eq!(
-			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 10_000, class: DispatchClass::Normal, pays_fee: true },
+			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: true },
+			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
 		);
 	}
 

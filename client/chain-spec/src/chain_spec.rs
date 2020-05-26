@@ -1,47 +1,46 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate chain configurations.
 
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::fs::File;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{borrow::Cow, fs::File, path::PathBuf, sync::Arc, collections::HashMap};
 use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
 use serde_json as json;
-use crate::RuntimeGenesis;
-use crate::extension::GetExtension;
-use sc_network::Multiaddr;
+use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
 	Factory(Arc<dyn Fn() -> G + Send + Sync>),
+	Storage(Storage),
 }
 
 impl<G> Clone for GenesisSource<G> {
 	fn clone(&self) -> Self {
 		match *self {
-			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
-			GenesisSource::Binary(ref d) => GenesisSource::Binary(d.clone()),
-			GenesisSource::Factory(ref f) => GenesisSource::Factory(f.clone()),
+			Self::File(ref path) => Self::File(path.clone()),
+			Self::Binary(ref d) => Self::Binary(d.clone()),
+			Self::Factory(ref f) => Self::Factory(f.clone()),
+			Self::Storage(ref s) => Self::Storage(s.clone()),
 		}
 	}
 }
@@ -54,19 +53,40 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 		}
 
 		match self {
-			GenesisSource::File(path) => {
+			Self::File(path) => {
 				let file = File::open(path)
 					.map_err(|e| format!("Error opening spec file: {}", e))?;
 				let genesis: GenesisContainer<G> = json::from_reader(file)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
-			GenesisSource::Binary(buf) => {
+			Self::Binary(buf) => {
 				let genesis: GenesisContainer<G> = json::from_reader(buf.as_ref())
 					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
-			GenesisSource::Factory(f) => Ok(Genesis::Runtime(f())),
+			Self::Factory(f) => Ok(Genesis::Runtime(f())),
+			Self::Storage(storage) => {
+				let top = storage.top
+					.iter()
+					.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
+					.collect();
+
+				let children_default = storage.children_default
+					.iter()
+					.map(|(k, child)|
+						 (
+							 StorageKey(k.clone()),
+							 child.data
+								.iter()
+								.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
+								.collect()
+						 )
+					)
+					.collect();
+
+				Ok(Genesis::Raw(RawGenesis { top, children_default }))
+			},
 		}
 	}
 }
@@ -75,17 +95,14 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = ChildInfo::resolve_child_info(
-						child_content.child_type,
-						child_content.child_info.as_slice(),
-					).expect("chain spec contains correct content").to_owned();
+				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
+					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
 					(
-						sk.0,
+						storage_key.0,
 						StorageChild {
-							data: child_content.data.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+							data: child_content.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 							child_info,
 						},
 					)
@@ -102,24 +119,15 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	}
 }
 
-type GenesisStorage = HashMap<StorageKey, StorageData>;
+pub type GenesisStorage = HashMap<StorageKey, StorageData>;
 
+/// Raw storage content for genesis block.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-struct ChildRawStorage {
-	data: GenesisStorage,
-	child_info: Vec<u8>,
-	child_type: u32,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-/// Storage content for genesis block.
-struct RawGenesis {
-	top: GenesisStorage,
-	children: HashMap<StorageKey, ChildRawStorage>,
+pub struct RawGenesis {
+	pub top: GenesisStorage,
+	pub children_default: HashMap<StorageKey, GenesisStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -137,7 +145,9 @@ enum Genesis<G> {
 struct ClientSpec<E> {
 	name: String,
 	id: String,
-	boot_nodes: Vec<String>,
+	#[serde(default)]
+	chain_type: ChainType,
+	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
 	properties: Option<Properties>,
@@ -148,9 +158,6 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
 }
-
-/// Arbitrary properties defined in chain spec as a JSON object
-pub type Properties = json::map::Map<String, json::Value>;
 
 /// A type denoting empty extensions.
 ///
@@ -174,7 +181,7 @@ impl<G, E: Clone> Clone for ChainSpec<G, E> {
 
 impl<G, E> ChainSpec<G, E> {
 	/// A list of bootnode addresses.
-	pub fn boot_nodes(&self) -> &[String] {
+	pub fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		&self.client_spec.boot_nodes
 	}
 
@@ -206,8 +213,8 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Add a bootnode to the list.
-	pub fn add_boot_node(&mut self, addr: Multiaddr) {
-		self.client_spec.boot_nodes.push(addr.to_string())
+	pub fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
+		self.client_spec.boot_nodes.push(addr)
 	}
 
 	/// Returns a reference to defined chain spec extensions.
@@ -219,8 +226,9 @@ impl<G, E> ChainSpec<G, E> {
 	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
+		chain_type: ChainType,
 		constructor: F,
-		boot_nodes: Vec<String>,
+		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
 		properties: Option<Properties>,
@@ -229,6 +237,7 @@ impl<G, E> ChainSpec<G, E> {
 		let client_spec = ClientSpec {
 			name: name.to_owned(),
 			id: id.to_owned(),
+			chain_type,
 			boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
@@ -242,6 +251,11 @@ impl<G, E> ChainSpec<G, E> {
 			client_spec,
 			genesis: GenesisSource::Factory(Arc::new(constructor)),
 		}
+	}
+
+	/// Type of the chain.
+	fn chain_type(&self) -> ChainType {
+		self.client_spec.chain_type.clone()
 	}
 }
 
@@ -270,7 +284,7 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	}
 }
 
-impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
+impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	/// Dump to json string.
 	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
@@ -286,23 +300,16 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
-				let children = storage.children.into_iter()
-					.map(|(sk, child)| {
-						let info = child.child_info.as_ref();
-						let (info, ci_type) = info.info();
-						(
-							StorageKey(sk),
-							ChildRawStorage {
-								data: child.data.into_iter()
-									.map(|(k, v)| (StorageKey(k), StorageData(v)))
-									.collect(),
-								child_info: info.to_vec(),
-								child_type: ci_type,
-							},
-					)})
+				let children_default = storage.children_default.into_iter()
+					.map(|(sk, child)| (
+						StorageKey(sk),
+						child.data.into_iter()
+							.map(|(k, v)| (StorageKey(k), StorageData(v)))
+							.collect(),
+					))
 					.collect();
 
-				Genesis::Raw(RawGenesis { top, children })
+				Genesis::Raw(RawGenesis { top, children_default })
 			},
 			(_, genesis) => genesis,
 		};
@@ -317,10 +324,10 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 
 impl<G, E> crate::ChainSpec for ChainSpec<G, E>
 where
-	G: RuntimeGenesis,
-	E: GetExtension + serde::Serialize + Clone + Send,
+	G: RuntimeGenesis + 'static,
+	E: GetExtension + serde::Serialize + Clone + Send + 'static,
 {
-	fn boot_nodes(&self) -> &[String] {
+	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		ChainSpec::boot_nodes(self)
 	}
 
@@ -330,6 +337,10 @@ where
 
 	fn id(&self) -> &str {
 		ChainSpec::id(self)
+	}
+
+	fn chain_type(&self) -> ChainType {
+		ChainSpec::chain_type(self)
 	}
 
 	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
@@ -344,7 +355,7 @@ where
 		ChainSpec::properties(self)
 	}
 
-	fn add_boot_node(&mut self, addr: Multiaddr) {
+	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
 		ChainSpec::add_boot_node(self, addr)
 	}
 
@@ -358,6 +369,14 @@ where
 
 	fn as_storage_builder(&self) -> &dyn BuildStorage {
 		self
+	}
+
+	fn cloned_box(&self) -> Box<dyn crate::ChainSpec> {
+		Box::new(self.clone())
+	}
+
+	fn set_storage(&mut self, storage: Storage) {
+		self.genesis = GenesisSource::Storage(storage);
 	}
 }
 
@@ -392,6 +411,7 @@ mod tests {
 		).unwrap();
 
 		assert_eq!(spec1.as_json(false), spec2.as_json(false));
+		assert_eq!(spec2.chain_type(), ChainType::Live)
 	}
 
 	#[derive(Debug, Serialize, Deserialize)]

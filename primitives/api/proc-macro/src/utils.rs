@@ -1,24 +1,25 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use proc_macro2::{TokenStream, Span};
 
 use syn::{
 	Result, Ident, Signature, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error, token::And,
-	ImplItem, ReturnType,
+	ImplItem, ReturnType, PathArguments, Path, GenericArgument, TypePath, ItemImpl,
 };
 
 use quote::quote;
@@ -126,13 +127,21 @@ pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
 		},
 		_ => pat,
 	}
- }
+}
+
+/// Allow `&self` in parameters of a method.
+pub enum AllowSelfRefInParameters {
+	/// Allows `&self` in parameters, but doesn't return it as part of the parameters.
+	YesButIgnore,
+	No,
+}
 
 /// Extracts the name, the type and `&` or ``(if it is a reference or not)
 /// for each parameter in the given function signature.
-pub fn extract_parameter_names_types_and_borrows(sig: &Signature)
-	-> Result<Vec<(Pat, Type, Option<And>)>>
-{
+pub fn extract_parameter_names_types_and_borrows(
+	sig: &Signature,
+	allow_self: AllowSelfRefInParameters,
+) -> Result<Vec<(Pat, Type, Option<And>)>> {
 	let mut result = Vec::new();
 	let mut generated_pattern_counter = 0;
 	for input in sig.inputs.iter() {
@@ -145,13 +154,20 @@ pub fn extract_parameter_names_types_and_borrows(sig: &Signature)
 					t => { (t.clone(), None) },
 				};
 
-				let name =
-					generate_unique_pattern((*arg.pat).clone(), &mut generated_pattern_counter);
+				let name = generate_unique_pattern(
+					(*arg.pat).clone(),
+					&mut generated_pattern_counter,
+				);
 				result.push((name, ty, borrow));
 			},
-			FnArg::Receiver(_) => {
+			FnArg::Receiver(_) if matches!(allow_self, AllowSelfRefInParameters::No) => {
 				return Err(Error::new(input.span(), "`self` parameter not supported!"))
-			}
+			},
+			FnArg::Receiver(recv) => {
+				if recv.mutability.is_some() || recv.reference.is_none() {
+					return Err(Error::new(recv.span(), "Only `&self` is supported!"))
+				}
+			},
 		}
 	}
 
@@ -198,4 +214,61 @@ pub fn extract_all_signature_types(items: &[ImplItem]) -> Vec<Type> {
 		})
 		.flatten()
 		.collect()
+}
+
+/// Extracts the block type from a trait path.
+///
+/// It is expected that the block type is the first type in the generic arguments.
+pub fn extract_block_type_from_trait_path(trait_: &Path) -> Result<&TypePath> {
+	let span = trait_.span();
+	let generics = trait_
+		.segments
+		.last()
+		.ok_or_else(|| Error::new(span, "Empty path not supported"))?;
+
+	match &generics.arguments {
+		PathArguments::AngleBracketed(ref args) => {
+			args.args.first().and_then(|v| match v {
+				GenericArgument::Type(Type::Path(ref block)) => Some(block),
+				_ => None
+			}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
+		},
+		PathArguments::None => {
+			let span = trait_.segments.last().as_ref().unwrap().span();
+			Err(Error::new(span, "Missing `Block` generic parameter."))
+		},
+		PathArguments::Parenthesized(_) => {
+			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
+		},
+	}
+}
+
+/// Should a qualified trait path be required?
+///
+/// e.g. `path::Trait` is qualified and `Trait` is not.
+pub enum RequireQualifiedTraitPath {
+	Yes,
+	No,
+}
+
+/// Extract the trait that is implemented by the given `ItemImpl`.
+pub fn extract_impl_trait<'a>(
+	impl_: &'a ItemImpl,
+	require: RequireQualifiedTraitPath,
+) -> Result<&'a Path> {
+	impl_.trait_.as_ref().map(|v| &v.1).ok_or_else(
+		|| Error::new(impl_.span(), "Only implementation of traits are supported!")
+	).and_then(|p| {
+		if p.segments.len() > 1 || matches!(require, RequireQualifiedTraitPath::No) {
+			Ok(p)
+		} else {
+			Err(
+				Error::new(
+					p.span(),
+					"The implemented trait has to be referenced with a path, \
+					e.g. `impl client::Core for Runtime`."
+				)
+			)
+		}
+	})
 }

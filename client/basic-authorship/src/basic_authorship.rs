@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
@@ -23,7 +25,7 @@ use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
-use log::{error, info, debug, trace};
+use log::{error, info, debug, trace, warn};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
@@ -34,8 +36,11 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{executor, future, future::Either};
-use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
+use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
+
+use prometheus_endpoint::Registry as PrometheusRegistry;
+use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
@@ -43,15 +48,22 @@ pub struct ProposerFactory<A, B, C> {
 	client: Arc<C>,
 	/// The transaction pool.
 	transaction_pool: Arc<A>,
+	/// Prometheus Link,
+	metrics: PrometheusMetrics,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C> {
-	pub fn new(client: Arc<C>, transaction_pool: Arc<A>) -> Self {
+	pub fn new(
+		client: Arc<C>,
+		transaction_pool: Arc<A>,
+		prometheus: Option<&PrometheusRegistry>,
+	) -> Self {
 		ProposerFactory {
 			client,
 			transaction_pool,
+			metrics: PrometheusMetrics::new(prometheus),
 			_phantom: PhantomData,
 		}
 	}
@@ -86,6 +98,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 				parent_number: *parent_header.number(),
 				transaction_pool: self.transaction_pool.clone(),
 				now,
+				metrics: self.metrics.clone(),
 				_phantom: PhantomData,
 			}),
 		};
@@ -130,6 +143,7 @@ struct ProposerInner<B, Block: BlockT, C, A: TransactionPool> {
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	metrics: PrometheusMetrics,
 	_phantom: PhantomData<B>,
 }
 
@@ -196,23 +210,35 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		for extrinsic in self.client.runtime_api()
+		for inherent in self.client.runtime_api()
 			.inherent_extrinsics_with_context(
 				&self.parent_id,
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			match block_builder.push(inherent) {
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
+					error!("❌️ Mandatory inherent extrinsic returned error. Block cannot be produced.");
+					Err(ApplyExtrinsicFailed(Validity(e)))?
+				}
+				Err(e) => {
+					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+				}
+				Ok(_) => {}
+			}
 		}
 
 		// proceed with transactions
+		let block_timer = self.metrics.report(|metrics| metrics.block_constructed.start_timer());
 		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
 			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new((deadline - (self.now)()) / 8),
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
 		)) {
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
@@ -241,7 +267,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(ApplyExtrinsicFailed::Validity(e)))
+				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
@@ -276,6 +302,9 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+
+		drop(block_timer);
+		self.metrics.report(|metrics| metrics.number_of_transactions.set(block.extrinsics().len() as u64));
 
 		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
@@ -349,7 +378,11 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		futures::executor::block_on(
@@ -363,7 +396,7 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let mut proposer = proposer_factory.init_with_now(
@@ -394,13 +427,52 @@ mod tests {
 	}
 
 	#[test]
+	fn should_not_panic_when_deadline_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let txpool = Arc::new(
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
+		);
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let mut proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1;
+				}
+				let new = value.1 + time::Duration::from_secs(160);
+				*value = (true, new);
+				new
+			})
+		);
+
+		let deadline = time::Duration::from_secs(1);
+		futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		).map(|r| r.block).unwrap();
+	}
+
+	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
 			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
+
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
@@ -415,7 +487,7 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let mut proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -452,7 +524,11 @@ mod tests {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		futures::executor::block_on(
@@ -477,7 +553,7 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 		let mut propose_block = |
 			client: &TestClient,
 			number,
