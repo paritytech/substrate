@@ -139,7 +139,7 @@ parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
 }
 
-const_assert!(AvailableBlockRatio::get_const().deconstruct() >= Perbill::from_percent(10).deconstruct());
+const_assert!(AvailableBlockRatio::get().deconstruct() >= Perbill::from_percent(10).deconstruct());
 
 impl frame_system::Trait for Runtime {
 	type Origin = Origin;
@@ -237,8 +237,8 @@ parameter_types! {
 
 // for a sane configuration, this should always be less than `AvailableBlockRatio`.
 const_assert!(
-	TargetBlockFullness::get_const().deconstruct() <
-	(AvailableBlockRatio::get_const().deconstruct() as <Perquintill as PerThing>::Inner)
+	TargetBlockFullness::get().deconstruct() <
+	(AvailableBlockRatio::get().deconstruct() as <Perquintill as PerThing>::Inner)
 		* (<Perquintill as PerThing>::ACCURACY / <Perbill as PerThing>::ACCURACY as <Perquintill as PerThing>::Inner)
 );
 
@@ -418,7 +418,7 @@ parameter_types! {
 }
 
 // Make sure that there are no more than `MAX_MEMBERS` members elected via phragmen.
-const_assert!(DesiredMembers::get_const() <= pallet_collective::MAX_MEMBERS);
+const_assert!(DesiredMembers::get() <= pallet_collective::MAX_MEMBERS);
 
 impl pallet_elections_phragmen::Trait for Runtime {
 	type ModuleId = ElectionsPhragmenModuleId;

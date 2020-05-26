@@ -383,7 +383,6 @@ macro_rules! implement_per_thing {
 		impl $name {
 			/// From an explicitly defined number of parts per maximum of the type.
 			///
-			/// This can be called at compile time.
 			// needed only for peru16. Since peru16 is the only type in which $max ==
 			// $type::max_value(), rustc is being a smart-a** here by warning that the comparison
 			// is not needed.
@@ -400,8 +399,6 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::one`]
-			///
-			/// This can be called at compile time.
 			pub const fn one() -> Self {
 				Self::from_parts($max)
 			}
@@ -412,8 +409,6 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::zero`].
-			///
-			/// This can be called at compile time.
 			pub const fn zero() -> Self {
 				Self::from_parts(0)
 			}
@@ -424,8 +419,6 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::deconstruct`].
-			///
-			/// This can be called at compile time.
 			pub const fn deconstruct(self) -> $type {
 				self.0
 			}

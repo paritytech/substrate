@@ -85,8 +85,7 @@ pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 pub enum Never {}
 
 /// Macro for easily creating a new implementation of the `Get` trait. If `const` token is used, the
-/// rhs of the expression must be `const`-only, and an additional `get_const` for it is implemented,
-/// else only `Get` is implemented and the rhs can be any expression:
+/// rhs of the expression must be `const`-only, and get is implemented as `const`:
 ///
 /// ```no_compile
 /// parameter_types! {
@@ -126,10 +125,7 @@ macro_rules! parameter_types {
 	() => ();
 	(IMPL_CONST $name:ident , $type:ty , $value:expr) => {
 		impl $name {
-			pub fn get() -> $type {
-				$value
-			}
-			pub const fn get_const() -> $type {
+			pub const fn get() -> $type {
 				$value
 			}
 		}
