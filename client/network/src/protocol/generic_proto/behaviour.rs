@@ -129,7 +129,10 @@ pub struct GenericProto {
 	/// `peers` occasionally contains a few `Delay` objects that we would normally have to be
 	/// polled one by one. In order to avoid doing so, as an optimization, every `Delay` is
 	/// duplicated in `peers_check_after`. This stream yields `PeerId`s whose `Delay` is
-	/// potentially ready to be checked.
+	/// potentially ready.
+	///
+	/// By design, we never remove elements from this list. Elements are removed only when the
+	/// `Delay` triggers. As such, this stream may produce obsolete elements.
 	peers_check_after: stream::FuturesUnordered<Pin<Box<dyn Future<Output = PeerId> + Send>>>,
 
 	/// List of incoming messages we have sent to the peer set manager and that are waiting for an
