@@ -29,7 +29,7 @@ use sp_phragmen::{
 };
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
-use frame_support::{debug, traits::Get};
+use frame_support::traits::Get;
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
@@ -249,8 +249,8 @@ pub fn prepare_submission<T: Trait>(
 		nominators: snapshot_nominators.len() as NominatorIndex,
 	};
 
-	debug::native::debug!(
-		target: "staking",
+	crate::log!(
+		info,
 		"prepared solution after {} equalization iterations with score {:?}",
 		iterations_executed,
 		score,
