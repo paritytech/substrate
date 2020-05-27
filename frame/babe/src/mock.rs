@@ -73,6 +73,7 @@ impl frame_system::Trait for Test {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type ModuleToIndex = ();

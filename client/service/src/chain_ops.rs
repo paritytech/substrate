@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Chain utilities.
 
 use crate::error;
@@ -24,10 +25,10 @@ use sc_chain_spec::ChainSpec;
 use log::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion, MaybeSerializeDeserialize,
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader};
+use codec::{Decode, Encode, IoReader as CodecIoReader};
 use crate::client::{Client, LocalCallExecutor};
 use sp_consensus::{
 	BlockOrigin,
@@ -38,10 +39,250 @@ use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageC
 use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
 use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
+use std::time::{Duration, Instant};
+use futures_timer::Delay;
+use std::task::Poll;
+use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
+use std::convert::{TryFrom, TryInto};
+use sp_runtime::traits::{CheckedDiv, Saturating};
+
+/// Number of blocks we will add to the queue before waiting for the queue to catch up.
+const MAX_PENDING_BLOCKS: u64 = 1_024;
+
+/// Number of milliseconds to wait until next poll.
+const DELAY_TIME: u64 = 2_000;
+
+/// Number of milliseconds that must have passed between two updates.
+const TIME_BETWEEN_UPDATES: u64 = 3_000;
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 	spec.as_json(raw).map_err(Into::into)
+}
+
+
+/// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
+/// Implements the Iterator Trait, calling `next()` will decode the next SignedBlock and return it.
+enum BlockIter<R, B> where
+	R: std::io::Read + std::io::Seek,
+{
+	Binary {
+		// Total number of blocks we are expecting to decode.
+		num_expected_blocks: u64,
+		// Number of blocks we have decoded thus far.
+		read_block_count: u64,
+		// Reader to the data, used for decoding new blocks.
+		reader: CodecIoReader<R>,
+	},
+	Json {
+		// Nubmer of blocks we have decoded thus far.
+		read_block_count: u64,
+		// Stream to the data, used for decoding new blocks.
+		reader: StreamDeserializer<'static, JsonIoRead<R>, SignedBlock<B>>,
+	},
+}
+
+impl<R, B> BlockIter<R, B> where
+	R: Read + Seek + 'static,
+	B: BlockT + MaybeSerializeDeserialize,
+{
+	fn new(input: R, binary: bool) -> Result<Self, String> {
+		if binary {
+			let mut reader = CodecIoReader(input);
+			// If the file is encoded in binary format, it is expected to first specify the number
+			// of blocks that are going to be decoded. We read it and add it to our enum struct.
+			let num_expected_blocks: u64 = Decode::decode(&mut reader)
+				.map_err(|e| format!("Failed to decode the number of blocks: {:?}", e))?;
+			Ok(BlockIter::Binary {
+				num_expected_blocks,
+				read_block_count: 0,
+				reader,
+			})
+		} else {
+			let stream_deser = Deserializer::from_reader(input)
+				.into_iter::<SignedBlock<B>>();
+			Ok(BlockIter::Json {
+				reader: stream_deser,
+				read_block_count: 0,
+			})
+		}
+	}
+
+	/// Returns the number of blocks read thus far.
+	fn read_block_count(&self) -> u64 {
+		match self {
+			BlockIter::Binary { read_block_count, .. }
+			| BlockIter::Json { read_block_count, .. }
+			=> *read_block_count,
+		}
+	}
+
+	/// Returns the total number of blocks to be imported, if possible.
+	fn num_expected_blocks(&self) -> Option<u64> {
+		match self {
+			BlockIter::Binary { num_expected_blocks, ..} => Some(*num_expected_blocks),
+			BlockIter::Json {..} => None
+		}
+	}
+}
+
+impl<R, B> Iterator for BlockIter<R, B> where
+	R: Read + Seek + 'static,
+	B: BlockT + MaybeSerializeDeserialize,
+{
+	type Item = Result<SignedBlock<B>, String>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			BlockIter::Binary { num_expected_blocks, read_block_count, reader } => {
+				if read_block_count < num_expected_blocks {
+					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader)
+						.map_err(|e| e.to_string());
+					*read_block_count += 1;
+					Some(block_result)
+				} else {
+					// `read_block_count` == `num_expected_blocks` so we've read enough blocks.
+					None
+				}
+			}
+			BlockIter::Json { reader, read_block_count } => {
+				let res = Some(reader.next()?.map_err(|e| e.to_string()));
+				*read_block_count += 1;
+				res
+			}
+		}
+	}
+}
+
+/// Imports the SignedBlock to the queue.
+fn import_block_to_queue<TBl, TImpQu>(
+	signed_block: SignedBlock<TBl>,
+	queue: &mut TImpQu,
+	force: bool
+) where
+	TBl: BlockT + MaybeSerializeDeserialize,
+	TImpQu: 'static + ImportQueue<TBl>,
+{
+	let (header, extrinsics) = signed_block.block.deconstruct();
+	let hash = header.hash();
+	// import queue handles verification and importing it into the client.
+	queue.import_blocks(BlockOrigin::File, vec![
+		IncomingBlock::<TBl> {
+			hash,
+			header: Some(header),
+			body: Some(extrinsics),
+			justification: signed_block.justification,
+			origin: None,
+			allow_missing_state: false,
+			import_existing: force,
+		}
+	]);
+}
+
+/// Returns true if we have imported every block we were supposed to import, else returns false.
+fn importing_is_done(
+	num_expected_blocks: Option<u64>,
+	read_block_count: u64,
+	imported_blocks: u64
+) -> bool {
+	if let Some(num_expected_blocks) = num_expected_blocks {
+		imported_blocks >= num_expected_blocks
+	} else {
+		imported_blocks >= read_block_count
+	}
+}
+
+/// Structure used to log the block importing speed.
+struct Speedometer<B: BlockT> {
+	best_number: NumberFor<B>,
+	last_number: Option<NumberFor<B>>,
+	last_update: Instant,
+}
+
+impl<B: BlockT> Speedometer<B> {
+	/// Creates a fresh Speedometer.
+	fn new() -> Self {
+		Self {
+			best_number: NumberFor::<B>::from(0),
+			last_number: None,
+			last_update: Instant::now(),
+		}
+	}
+
+	/// Calculates `(best_number - last_number) / (now - last_update)` and 
+	/// logs the speed of import.
+	fn display_speed(&self) {
+		// Number of milliseconds elapsed since last time.
+		let elapsed_ms = {
+			let elapsed = self.last_update.elapsed();
+			let since_last_millis = elapsed.as_secs() * 1000;
+			let since_last_subsec_millis = elapsed.subsec_millis() as u64;
+			since_last_millis + since_last_subsec_millis
+		};
+
+		// Number of blocks that have been imported since last time.
+		let diff = match self.last_number {
+			None => return,
+			Some(n) => self.best_number.saturating_sub(n)
+		};
+
+		if let Ok(diff) = TryInto::<u128>::try_into(diff) {
+			// If the number of blocks can be converted to a regular integer, then it's easy: just
+			// do the math and turn it into a `f64`.
+			let speed = diff.saturating_mul(10_000).checked_div(u128::from(elapsed_ms))
+				.map_or(0.0, |s| s as f64) / 10.0;
+			info!("📦 Current best block: {} ({:4.1} bps)", self.best_number, speed);
+		} else {
+			// If the number of blocks can't be converted to a regular integer, then we need a more
+			// algebraic approach and we stay within the realm of integers.
+			let one_thousand = NumberFor::<B>::from(1_000);
+			let elapsed = NumberFor::<B>::from(
+				<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
+			);
+
+			let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)
+				.unwrap_or_else(Zero::zero);
+			info!("📦 Current best block: {} ({} bps)", self.best_number, speed)
+		}
+	}
+
+	/// Updates the Speedometer.
+	fn update(&mut self, best_number: NumberFor<B>) {
+		self.last_number = Some(self.best_number);
+		self.best_number = best_number;
+		self.last_update = Instant::now();
+	}
+
+	// If more than TIME_BETWEEN_UPDATES has elapsed since last update,
+	// then print and update the speedometer.
+	fn notify_user(&mut self, best_number: NumberFor<B>) {
+		let delta = Duration::from_millis(TIME_BETWEEN_UPDATES);
+		if Instant::now().duration_since(self.last_update) >= delta {
+			self.display_speed();
+			self.update(best_number);
+		}
+	}
+}
+
+/// Different State that the `import_blocks` future could be in.
+enum ImportState<R, B> where 
+	R: Read + Seek + 'static,
+	B: BlockT + MaybeSerializeDeserialize,
+{
+	/// We are reading from the BlockIter structure, adding those blocks to the queue if possible.
+	Reading{block_iter: BlockIter<R, B>},
+	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it to catch up.
+	WaitingForImportQueueToCatchUp{
+		block_iter: BlockIter<R, B>,
+		delay: Delay,
+		block: SignedBlock<B>
+	},
+	// We have added all the blocks to the queue but they are still being processed.
+	WaitingForImportQueueToFinish{
+		num_expected_blocks: Option<u64>, 
+		read_block_count: u64,
+		delay: Delay,
+	},
 }
 
 impl<
@@ -53,7 +294,7 @@ impl<
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
-	TBl: BlockT,
+	TBl: BlockT + MaybeSerializeDeserialize,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
@@ -67,6 +308,7 @@ impl<
 		mut self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
+		binary: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		struct WaitLink {
 			imported_blocks: u64,
@@ -86,7 +328,7 @@ impl<
 			fn blocks_processed(
 				&mut self,
 				imported: usize,
-				_count: usize,
+				_num_expected_blocks: usize,
 				results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 			) {
 				self.imported_blocks += imported as u64;
@@ -101,10 +343,20 @@ impl<
 			}
 		}
 
-		let mut io_reader_input = IoReader(input);
-		let mut count = None::<u64>;
-		let mut read_block_count = 0;
 		let mut link = WaitLink::new();
+		let block_iter_res: Result<BlockIter<_, Self::Block>, String> = BlockIter::new(input, binary);
+
+		let block_iter = match block_iter_res {
+			Ok(block_iter) => block_iter,
+			Err(e) => {
+				// We've encountered an error while creating the block iterator 
+				// so we can just return a future that returns an error.
+				return future::ready(Err(Error::Other(e))).boxed()
+			}
+		};
+
+		let mut state = Some(ImportState::Reading{block_iter});
+		let mut speedometer = Speedometer::<TBl>::new();
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -116,85 +368,103 @@ impl<
 		let import = future::poll_fn(move |cx| {
 			let client = &self.client;
 			let queue = &mut self.import_queue;
-
-			// Start by reading the number of blocks if not done so already.
-			let count = match count {
-				Some(c) => c,
-				None => {
-					let c: u64 = match Decode::decode(&mut io_reader_input) {
-						Ok(c) => c,
-						Err(err) => {
-							let err = format!("Error reading file: {}", err);
-							return std::task::Poll::Ready(Err(From::from(err)));
+			match state.take().expect("state should never be None; qed") {
+				ImportState::Reading{mut block_iter} => {
+					match block_iter.next() {
+						None => {
+							// The iterator is over: we now need to wait for the import queue to finish.
+							let num_expected_blocks = block_iter.num_expected_blocks();
+							let read_block_count = block_iter.read_block_count();
+							let delay = Delay::new(Duration::from_millis(DELAY_TIME));
+							state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
 						},
-					};
-					info!("📦 Importing {} blocks", c);
-					count = Some(c);
-					c
-				}
-			};
-
-			// Read blocks from the input.
-			if read_block_count < count {
-				match SignedBlock::<Self::Block>::decode(&mut io_reader_input) {
-					Ok(signed) => {
-						let (header, extrinsics) = signed.block.deconstruct();
-						let hash = header.hash();
-						// import queue handles verification and importing it into the client
-						queue.import_blocks(BlockOrigin::File, vec![
-							IncomingBlock::<Self::Block> {
-								hash,
-								header: Some(header),
-								body: Some(extrinsics),
-								justification: signed.justification,
-								origin: None,
-								allow_missing_state: false,
-								import_existing: force,
+						Some(block_result) => {
+							let read_block_count = block_iter.read_block_count();
+							match block_result {
+								Ok(block) => {
+									if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
+										// The queue is full, so do not add this block and simply wait until
+										// the queue has made some progress.
+										let delay = Delay::new(Duration::from_millis(DELAY_TIME));
+										state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+									} else {
+										// Queue is not full, we can keep on adding blocks to the queue.
+										import_block_to_queue(block, queue, force);
+										state = Some(ImportState::Reading{block_iter});
+									}
+								}
+								Err(e) => {
+									return Poll::Ready(
+										Err(Error::Other(format!("Error reading block #{}: {}", read_block_count, e))))
+								}
 							}
-						]);
+						}
 					}
-					Err(e) => {
-						warn!("Error reading block data at {}: {}", read_block_count, e);
-						return std::task::Poll::Ready(Ok(()));
+				},
+				ImportState::WaitingForImportQueueToCatchUp{block_iter, mut delay, block} => {
+					let read_block_count = block_iter.read_block_count();
+					if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
+						// Queue is still full, so wait until there is room to insert our block.
+						match Pin::new(&mut delay).poll(cx) {
+							Poll::Pending => {
+								state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+								return Poll::Pending
+							},
+							Poll::Ready(_) => {
+								delay.reset(Duration::from_millis(DELAY_TIME));
+							},
+						}
+						state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+					} else {
+						// Queue is no longer full, so we can add our block to the queue.
+						import_block_to_queue(block, queue, force);
+						// Switch back to Reading state.
+						state = Some(ImportState::Reading{block_iter});
+					}
+				},
+				ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, mut delay} => {
+					// All the blocks have been added to the queue, which doesn't mean they 
+					// have all been properly imported.
+					if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
+						// Importing is done, we can log the result and return.
+						info!(
+							"🎉 Imported {} blocks. Best: #{}",
+							read_block_count, client.chain_info().best_number
+						);
+						return Poll::Ready(Ok(()))
+					} else {
+						// Importing is not done, we still have to wait for the queue to finish.
+						// Wait for the delay, because we know the queue is lagging behind.
+						match Pin::new(&mut delay).poll(cx) {
+							Poll::Pending => {
+								state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
+								return Poll::Pending
+							},
+							Poll::Ready(_) => {
+								delay.reset(Duration::from_millis(DELAY_TIME));
+							},
+						}
+
+						state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
 					}
 				}
-
-				read_block_count += 1;
-				if read_block_count % 1000 == 0 {
-					info!("#{} blocks were added to the queue", read_block_count);
-				}
-
-				cx.waker().wake_by_ref();
-				return std::task::Poll::Pending;
 			}
 
-			let blocks_before = link.imported_blocks;
 			queue.poll_actions(cx, &mut link);
 
+			let best_number = client.chain_info().best_number;
+			speedometer.notify_user(best_number);
+
 			if link.has_error {
-				info!(
-					"Stopping after #{} blocks because of an error",
-					link.imported_blocks,
-				);
-				return std::task::Poll::Ready(Ok(()));
+				return Poll::Ready(Err(
+					Error::Other(
+						format!("Stopping after #{} blocks because of an error", link.imported_blocks)
+					)
+				))
 			}
 
-			if link.imported_blocks / 1000 != blocks_before / 1000 {
-				info!(
-					"#{} blocks were imported (#{} left)",
-					link.imported_blocks,
-					count - link.imported_blocks
-				);
-			}
-
-			if link.imported_blocks >= count {
-				info!("🎉 Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
-				return std::task::Poll::Ready(Ok(()));
-
-			} else {
-				// Polling the import queue will re-schedule the task when ready.
-				return std::task::Poll::Pending;
-			}
+			cx.waker().wake_by_ref();
+			Poll::Pending
 		});
 		Box::pin(import)
 	}
@@ -227,7 +497,7 @@ impl<
 			let client = &self.client;
 
 			if last < block {
-				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
+				return Poll::Ready(Err("Invalid block range specified".into()));
 			}
 
 			if !wrote_header {
@@ -251,19 +521,19 @@ impl<
 					}
 			},
 				// Reached end of the chain.
-				None => return std::task::Poll::Ready(Ok(())),
+				None => return Poll::Ready(Ok(())),
 			}
 			if (block % 10000.into()).is_zero() {
 				info!("#{}", block);
 			}
 			if block == last {
-				return std::task::Poll::Ready(Ok(()));
+				return Poll::Ready(Ok(()));
 			}
 			block += One::one();
 
 			// Re-schedule the task in order to continue the operation.
 			cx.waker().wake_by_ref();
-			std::task::Poll::Pending
+			Poll::Pending
 		});
 
 		Box::pin(export)
@@ -294,7 +564,7 @@ impl<
 				1u64.encode_to(&mut buf);
 				block.encode_to(&mut buf);
 				let reader = std::io::Cursor::new(buf);
-				self.import_blocks(reader, true)
+				self.import_blocks(reader, true, true)
 			}
 			Ok(None) => Box::pin(future::err("Unknown block".into())),
 			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),

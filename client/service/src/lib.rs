@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
 
@@ -63,7 +64,7 @@ pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client,
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TFullCallExecutor, TLightCallExecutor,
+	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
 };
 pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
 pub use sc_chain_spec::{

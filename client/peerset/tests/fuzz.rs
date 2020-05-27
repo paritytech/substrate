@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use futures::prelude::*;
 use libp2p::PeerId;
 use rand::distributions::{Distribution, Uniform, WeightedIndex};
@@ -45,13 +46,13 @@ fn test_once() {
 			id
 		}).collect(),
 		priority_groups: {
-			let list = (0 .. Uniform::new_inclusive(0, 2).sample(&mut rng)).map(|_| {
+			let nodes = (0 .. Uniform::new_inclusive(0, 2).sample(&mut rng)).map(|_| {
 				let id = PeerId::random();
 				known_nodes.insert(id.clone());
 				reserved_nodes.insert(id.clone());
 				id
 			}).collect();
-			vec![("reserved".to_owned(), list)]
+			vec![("foo".to_string(), nodes)]
 		},
 		reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
 		in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
