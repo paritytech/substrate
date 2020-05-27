@@ -2564,22 +2564,22 @@ impl<T: Trait> Module<T> {
 			let era_length = session_index.checked_sub(current_era_start_session_index)
 				.unwrap_or(0); // Must never happen.
 
-match ForceEra::get() {
-	Forcing::ForceNew => ForceEra::kill(),
-	Forcing::ForceAlways => (),
-	Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
-	_ => {
-		// Either `ForceNone`, or `NotForcing && era_length < T::SessionsPerEra::get()`.
-		if era_length == T::SessionsPerEra::get() - 1 {
-			IsCurrentSessionFinal::put(true);
-		} else if era_length >= T::SessionsPerEra::get() {
-			// Should only happen when we are ready to trigger an era but we have ForceNone,
-			// otherwise previous arm would short circuit.
-			Self::close_election_window();
-		}
-		return None
-	},
-}
+			match ForceEra::get() {
+				Forcing::ForceNew => ForceEra::kill(),
+				Forcing::ForceAlways => (),
+				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
+				_ => {
+					// Either `ForceNone`, or `NotForcing && era_length < T::SessionsPerEra::get()`.
+					if era_length == T::SessionsPerEra::get() - 1 {
+						IsCurrentSessionFinal::put(true);
+					} else if era_length >= T::SessionsPerEra::get() {
+						// Should only happen when we are ready to trigger an era but we have ForceNone,
+						// otherwise previous arm would short circuit.
+						Self::close_election_window();
+					}
+					return None
+				},
+			}
 
 			// new era.
 			Self::new_era(session_index)
