@@ -1492,4 +1492,32 @@ mod tests {
 			]);
 		});
 	}
+
+	#[test]
+	fn close_disapprove_does_not_care_about_weight_or_len() {
+		// This test confirms that if you close a proposal that would be disapproved,
+		// we do not care about the proposal length or proposal weight since it will
+		// not be read from storage or executed.
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), u32::max_value()));
+			// First we make the proposal succeed
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+			// It will not close with bad weight/len information
+			assert_noop!(
+				Collective::close(Origin::signed(2), hash.clone(), 0, 0, 0),
+				Error::<Test, Instance1>::WrongProposalLength,
+			);
+			assert_noop!(
+				Collective::close(Origin::signed(2), hash.clone(), 0, 0, u32::max_value()),
+				Error::<Test, Instance1>::WrongProposalWeight,
+			);
+			// Now we make the proposal fail
+			assert_ok!(Collective::vote(Origin::signed(1), hash.clone(), 0, false));
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
+			// It can close even if the weight/len information is bad
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, 0, 0));
+		})
+	}
 }
