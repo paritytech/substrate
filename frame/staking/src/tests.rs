@@ -2996,6 +2996,9 @@ mod offchain_phragmen {
 
 				run_to_block(57);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(67);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			})
 	}
 
