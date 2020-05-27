@@ -231,10 +231,15 @@ impl staking::Trait for Test {
 	type MaxIterations = ();
 }
 
+parameter_types! {
+	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+}
+
 impl offences::Trait for Test {
 	type Event = TestEvent;
 	type IdentificationTuple = session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 impl Trait for Test {
