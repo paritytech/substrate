@@ -2569,11 +2569,11 @@ impl<T: Trait> Module<T> {
 				Forcing::ForceAlways => (),
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
-					// Either ForceNone, or era_length < T::SessionsPerEra::get()
+					// Either ForceNone, or era_length < T::SessionsPerEra::get().
 					if era_length == T::SessionsPerEra::get() - 1 {
 						IsCurrentSessionFinal::put(true);
 					} else if era_length >= T::SessionsPerEra::get() {
-						// Should only happen when are ready to trigger era but we have ForceNone
+						// Should only happen when are ready to trigger era but we have ForceNone.
 						Self::close_election_window();
 					}
 					return None
