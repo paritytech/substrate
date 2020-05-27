@@ -34,12 +34,14 @@
 //! ## Example:
 //!
 //! ```rust
-//! # use sp_core::offchain::storage::StorageValueRef;
-//! # use sp_runtime::offchain::storage_lock::Time;
 //! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
+//! use sp_runtime::offchain::{
+//!		storage::StorageValueRef,
+//!		storage_lock::{StorageLock, Time},
+//! };
 //!
-//! fn append_to_in_storage_vec<'a, T>(key: &'a [u8], _: T) where T: Encode {
+//! fn append_to_in_storage_vec<'a, T>(key: &'a [u8], _: T) where T: Codec {
 //!    // `access::lock` defines the storage entry which is used for
 //!    // persisting the lock in the underlying database.
 //!    // The entry name _must_ be unique and can be interpreted as a
@@ -52,7 +54,7 @@
 //!         // modify `v` as desired
 //!         // i.e. perform some heavy computation with
 //!         // side effects that should only be done once.
-//!         acc.set(v);
+//!         acc.set(&v);
 //!         // drop `_guard` implicitly at end of scope
 //!    }
 //! }
