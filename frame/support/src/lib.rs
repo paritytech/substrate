@@ -87,19 +87,43 @@ pub enum Never {}
 /// Macro for easily creating a new implementation of the `Get` trait. If `const` token is used, the
 /// rhs of the expression must be `const`-only, and get is implemented as `const`:
 ///
-/// ```no_compile
+/// ```
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
 /// parameter_types! {
-///   pub const Argument: u64 = 42;
-///   pub OtherArg: u63 = non_const_expression();
+///   pub const Argument: u64 = 42 + FIXED_VALUE;
+///   pub OtherArgument: u64 = non_const_expression();
 /// }
+///
 /// trait Config {
 ///   type Parameter: Get<u64>;
+///   type OtherParameter: Get<u64>;
 /// }
+///
 /// struct Runtime;
 /// impl Config for Runtime {
 ///   type Parameter = Argument;
+///   type OtherParameter = OtherArgument;
 /// }
 /// ```
+///
+/// Invalid example:
+///
+/// ```compile_fail
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///   pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+
 #[macro_export]
 macro_rules! parameter_types {
 	(
