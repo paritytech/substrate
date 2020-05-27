@@ -34,7 +34,8 @@
 //! ## Example:
 //!
 //! ```rust
-//! # use crate::offchain::storage::StorageValueRef;
+//! # use sp_core::offchain::storage::StorageValueRef;
+//! # use sp_runtime::offchain::storage_lock::Time;
 //! # use codec::{Decode, Encode, Codec};
 //! // in your off-chain worker code
 //!
