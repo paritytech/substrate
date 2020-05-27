@@ -116,6 +116,9 @@ pub trait Trait: frame_system::Trait {
 	/// This is held for an additional storage item whose value size is
 	/// `sizeof(Balance)` bytes and whose key size is `sizeof(AccountId)` bytes.
 	type ProxyDepositBase: Get<BalanceOf<Self>>;
+
+	/// The maximum amount of proxies allowed for a single account.
+	type MaxProxies: Get<u16>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -343,7 +346,7 @@ decl_module! {
 		fn add_proxy(origin, proxy: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
-				ensure!(proxies.len() < MAX_PROXIES, Error::<T>::TooMany);
+				ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
 				let i = proxies.binary_search(&proxy).err().ok_or(Error::<T>::Duplicate)?;
 				proxies.insert(i, proxy);
 				let new_deposit = T::ProxyDepositBase::get() + T::AccountDepositFactor::get() * (proxies.len() as u32).into();

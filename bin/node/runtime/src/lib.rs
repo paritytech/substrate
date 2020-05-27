@@ -168,8 +168,11 @@ parameter_types! {
 	// One storage item; value is size 4+4+16+32 bytes = 56 bytes.
 	pub const MultisigDepositBase: Balance = 30 * CENTS;
 	// Additional storage item size of 32 bytes.
-	pub const MultisigDepositFactor: Balance = 5 * CENTS;
+	pub const AccountDepositFactor: Balance = 5 * CENTS;
 	pub const MaxSignatories: u16 = 100;
+	pub const MaxProxies: u16 = 32;
+	// One storage item; value is size 4 bytes; key size 32.
+	pub const ProxyDepositBase: Balance = 10 * CENTS;
 }
 
 impl pallet_utility::Trait for Runtime {
@@ -177,9 +180,12 @@ impl pallet_utility::Trait for Runtime {
 	type Call = Call;
 	type Currency = Balances;
 	type MultisigDepositBase = MultisigDepositBase;
-	type MultisigDepositFactor = MultisigDepositFactor;
+	type AccountDepositFactor = AccountDepositFactor;
 	type MaxSignatories = MaxSignatories;
 	type IsCallable = ();
+	type IsProxyable = ();
+	type ProxyDepositBase = ProxyDepositBase;
+	type MaxProxies = MaxProxies;
 }
 
 parameter_types! {
