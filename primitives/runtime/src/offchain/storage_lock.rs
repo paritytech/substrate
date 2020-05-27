@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! # Offchain Storage Lock
+//! # Off-chain Storage Lock
 //!
 //! A storage-based lock with a defined expiry time.
 //!
@@ -29,7 +29,7 @@
 //! multiple Local Storage entries.
 //!
 //! One use case would be collective updates of multiple data items or append /
-//! remove of i.e. sets, vectors which are stored in the offchain storage DB.
+//! remove of i.e. sets, vectors which are stored in the off-chain storage DB.
 //!
 //! ## Example:
 //!
@@ -69,7 +69,7 @@ const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
 /// Default expiry duration for block based locks in blocks.
 const STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS: u32 = 4;
 
-/// Time between checks if the lock is still being held in ms.
+/// Time between checks if the lock is still being held in milliseconds.
 const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
 
 /// Lockable item for use with a persisted storage lock.
@@ -263,9 +263,9 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 				match s {
 					// no lock set, we can safely acquire it
 					None => Ok(new_deadline),
-					// write was good, bur read failed
+					// write was good, but read failed
 					Some(None) => Ok(new_deadline),
-					// lock is set, but it's old. We can re-acquire it.
+					// lock is set, but it is expired. We can re-acquire it.
 					Some(Some(deadline)) if <L as Lockable>::has_expired(&deadline) => Ok(new_deadline),
 					// lock is present and is still active
 					Some(Some(deadline)) => Err(deadline),
@@ -279,23 +279,22 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 		}
 	}
 
-	/// Attempt to lock using the storage entry.
+	/// A single attempt to lock using the storage entry.
 	///
 	/// Returns a lock guard on success, otherwise an error containing the
-	/// `<Self::Lockable>::Deadline` in for the currently locked lock
-	/// by another process: `Err(<L as Lockable>::Deadline)`.
+	/// `<Self::Lockable>::Deadline` in for the currently active lock
+	/// by another task `Err(<L as Lockable>::Deadline)`.
 	pub fn try_lock(&mut self) -> Result<StorageLockGuard<'a, '_, L>, <L as Lockable>::Deadline> {
 		self.try_lock_inner(self.lockable.deadline())?;
 		Ok(StorageLockGuard::<'a, '_> { lock: Some(self) })
 	}
 
-	/// Try grabbing the lock until its expiry is reached.
+	/// Repeated lock attempts until the lock is successfully acquired.
 	///
-	/// Returns an error if the lock expired before it could be caught.
 	/// If one uses `fn forget(..)`, it is highly likely `fn try_lock(..)`
 	/// is the correct API to use instead of `fn lock(..)`, since that might
-	/// never unlock in the anticipated span i.e. when used with `BlockAndTime` during a certain
-	/// block number span.
+	/// never unlock in the anticipated span i.e. when used with `BlockAndTime`
+	/// during a certain block number span.
 	pub fn lock(&mut self) -> StorageLockGuard<'a, '_, L> {
 		while let Err(deadline) = self.try_lock_inner(self.lockable.deadline()) {
 			L::snooze(&deadline);
