@@ -1213,7 +1213,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) => {
-					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr);
+					info!(target: "sub-libp2p", "📪 No longer listening on {}", addr);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.listeners_local_addresses.dec();
 					}

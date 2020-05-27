@@ -488,7 +488,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 
 	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		info!(target: "sub-libp2p", "📪 No longer listening on {}", addr);
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_expired_listen_addr(k, addr)
 		}
