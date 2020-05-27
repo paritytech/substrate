@@ -312,7 +312,7 @@ mod weight_for {
 			.saturating_add(proposals.saturating_mul(490_000)) // P2
 	}
 
-	/// Calculate the weight for `close` without the call to `finalize_proposal`.
+	/// Calculate the weight for `close` without the call to `approve/disapprove_proposal`.
 	pub(crate) fn close_without_finalize<T: Trait<I>, I: Instance>(
 		members: Weight,
 		length: Weight,
@@ -642,14 +642,14 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn close(origin,
-			proposal: T::Hash,
+			proposal_hash: T::Hash,
 			#[compact] index: ProposalIndex,
 			#[compact] proposal_weight_bound: Weight,
 			#[compact] length_bound: u32
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 
-			let voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
+			let voting = Self::voting(&proposal_hash).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
 
 			let mut no_votes = voting.nays.len() as MemberCount;
@@ -658,16 +658,22 @@ decl_module! {
 			let approved = yes_votes >= voting.threshold;
 			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 			// Allow (dis-)approving the proposal as soon as there are enough votes.
-			if approved || disapproved {
-				let (p, len) = Self::validate_and_get_proposal(
-					&proposal,
+			if approved {
+				let (proposal, len) = Self::validate_and_get_proposal(
+					&proposal_hash,
 					length_bound,
 					proposal_weight_bound
 				)?;
-				let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
+				let approve_weight = Self::approve_proposal(seats, voting, proposal_hash, proposal);
 				return Ok(Some(
 					weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
-						.saturating_add(finalize_weight)
+						.saturating_add(approve_weight)
+				).into());
+			} else if disapproved {
+				let disapprove_weight = Self::disapprove_proposal(proposal_hash);
+				return Ok(Some(
+					weight_for::close_without_finalize::<T, I>(seats.into(), 0)
+						.saturating_add(disapprove_weight)
 				).into());
 			}
 
@@ -684,13 +690,17 @@ decl_module! {
 			}
 			let approved = yes_votes >= voting.threshold;
 
-			let (p, len) = Self::validate_and_get_proposal(
-				&proposal,
+			let (proposal, len) = Self::validate_and_get_proposal(
+				&proposal_hash,
 				length_bound,
 				proposal_weight_bound
 			)?;
-			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
-			let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
+			Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
+			let finalize_weight = if approved {
+				Self::approve_proposal(seats, voting, proposal_hash, proposal)
+			} else {
+				Self::disapprove_proposal(proposal_hash)
+			};
 			Ok(Some(
 				weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
 					.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
@@ -742,33 +752,38 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Two removals, one mutation.
 	/// Computation and i/o `O(P)` where:
 	/// - `P` is number of active proposals
-	fn finalize_proposal(
-		approved: bool,
+	fn approve_proposal(
 		seats: MemberCount,
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal_hash: T::Hash,
 		proposal: <T as Trait<I>>::Proposal,
 	) -> Weight {
-		let db = T::DbWeight::get();
 		let mut weight: Weight = 0;
-		if approved {
-			Self::deposit_event(RawEvent::Approved(proposal_hash));
+		Self::deposit_event(RawEvent::Approved(proposal_hash));
 
-			let dispatch_weight = proposal.get_dispatch_info().weight;
-			let origin = RawOrigin::Members(voting.threshold, seats).into();
-			let result = proposal.dispatch(origin);
-			Self::deposit_event(
-				RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
-			);
-			weight = weight.saturating_add(
-				// default to the dispatch info weight for safety
-				get_result_weight(result).unwrap_or(dispatch_weight) // P1
-			);
-		} else {
-			// disapproved
-			Self::deposit_event(RawEvent::Disapproved(proposal_hash));
-		}
+		let dispatch_weight = proposal.get_dispatch_info().weight;
+		let origin = RawOrigin::Members(voting.threshold, seats).into();
+		let result = proposal.dispatch(origin);
+		Self::deposit_event(
+			RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error))
+		);
+		weight = weight.saturating_add(
+			// default to the dispatch info weight for safety
+			get_result_weight(result).unwrap_or(dispatch_weight) // P1
+		);
 
+		let remove_proposal_weight = Self::remove_proposal(proposal_hash);
+		weight.saturating_add(remove_proposal_weight)
+	}
+
+	fn disapprove_proposal(proposal_hash: T::Hash) -> Weight {
+		// disapproved
+		Self::deposit_event(RawEvent::Disapproved(proposal_hash));
+		Self::remove_proposal(proposal_hash)
+	}
+
+	// Removes a proposal from the pallet, cleaning up votes and the vector of proposals.
+	fn remove_proposal(proposal_hash: T::Hash) -> Weight {
 		// remove proposal and vote
 		ProposalOf::<T, I>::remove(&proposal_hash);
 		Voting::<T, I>::remove(&proposal_hash);
@@ -776,7 +791,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			proposals.retain(|h| h != &proposal_hash);
 			proposals.len() + 1 // calculate weight based on original length
 		});
-		weight.saturating_add(db.reads_writes(1, 3)) // `Voting`, `Proposals`, `ProposalOf`
+		T::DbWeight::get().reads_writes(1, 3) // `Voting`, `Proposals`, `ProposalOf`
 			.saturating_add(490_000 * num_proposals as Weight) // P2
 	}
 }
