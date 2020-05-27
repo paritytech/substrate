@@ -2570,7 +2570,7 @@ impl<T: Trait> Module<T> {
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
 					// Either `ForceNone`, or `NotForcing && era_length < T::SessionsPerEra::get()`.
-					if era_length == T::SessionsPerEra::get() - 1 {
+					if era_length + 1 == T::SessionsPerEra::get() {
 						IsCurrentSessionFinal::put(true);
 					} else if era_length >= T::SessionsPerEra::get() {
 						// Should only happen when we are ready to trigger an era but we have ForceNone,
