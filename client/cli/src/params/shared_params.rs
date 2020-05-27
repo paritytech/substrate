@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -22,16 +23,16 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
-	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
+	#[structopt(long, value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
 	/// Specify the development chain.
-	#[structopt(long = "dev")]
+	#[structopt(long, conflicts_with_all = &["chain"])]
 	pub dev: bool,
 
 	/// Specify custom base path.
 	#[structopt(
-		long = "base-path",
+		long,
 		short = "d",
 		value_name = "PATH",
 		parse(from_os_str)
@@ -42,7 +43,7 @@ pub struct SharedParams {
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
+	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 }
 

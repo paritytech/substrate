@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Main entry point of the sc-network crate.
 //!
 //! There are two main structs in this module: [`NetworkWorker`] and [`NetworkService`].
@@ -59,10 +60,11 @@ use sp_runtime::{
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-	borrow::Cow,
+	borrow::{Borrow, Cow},
 	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
+	num:: NonZeroUsize,
 	pin::Pin,
 	str,
 	sync::{
@@ -185,7 +187,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
+		let local_peer_id_legacy = bs58::encode(Borrow::<[u8]>::borrow(&local_peer_id)).into_string();
+		info!(
+			target: "sub-libp2p",
+			"🏷  Local node identity is: {} (legacy representation: {})",
+			local_peer_id.to_base58(),
+			local_peer_id_legacy
+		);
 
 		// Initialize the metrics.
 		let metrics = match &params.metrics_registry {
@@ -204,6 +212,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
+			local_peer_id.clone(),
 			params.chain.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider.clone(),
@@ -286,7 +295,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
-				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER);
+				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
+				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
+				.connection_event_buffer_size(128);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
@@ -400,14 +411,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		&self.service
 	}
 
-	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, is_best);
-	}
-
 	/// You must call this when a new block is finalized by the client.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
+	}
+
+	/// This should be called when blocks are added to the
+	/// chain by something other than the import queue.
+	/// Currently this is only useful for tests.
+	pub fn update_chain(&mut self) {
+		self.network_service.user_protocol_mut().update_chain();
 	}
 
 	/// Returns the local `PeerId`.
@@ -546,13 +559,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Registers a new notifications protocol.
 	///
-	/// After that, you can call `write_notifications`.
+	/// After a protocol has been registered, you can call `write_notifications`.
+	///
+	/// **Important**: This method is a work-around, and you are instead strongly encouraged to
+	/// pass the protocol in the `NetworkConfiguration::notifications_protocols` list instead.
+	/// If you have no other choice but to use this method, you are very strongly encouraged to
+	/// call it very early on. Any connection open will retain the protocols that were registered
+	/// then, and not any new one.
 	///
 	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
 	/// about the protocol that you have registered.
-	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
-	/// will retain the protocols that were registered then, and not any new one.
+	// TODO: remove this method after https://github.com/paritytech/substrate/issues/4587
 	pub fn register_notifications_protocol(
 		&self,
 		engine_id: ConsensusEngineId,
@@ -1349,7 +1366,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		count: usize,
 		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 	) {
-		self.protocol.user_protocol_mut().blocks_processed(imported, count, results)
+		self.protocol.user_protocol_mut().on_blocks_processed(imported, count, results)
 	}
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);

@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use crate::arg_enums::RpcMethods;
 use crate::error::{Error, Result};
 use crate::params::ImportParams;
@@ -64,7 +65,7 @@ pub struct RunCmd {
 	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
-	#[structopt(long = "no-grandpa")]
+	#[structopt(long)]
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.

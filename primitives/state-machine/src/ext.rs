@@ -147,8 +147,7 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -293,7 +292,7 @@ where
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
 				self.next_storage_key(&overlay_key.0[..])
@@ -317,7 +316,7 @@ where
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
 				self.next_child_storage_key(
@@ -479,18 +478,12 @@ where
 			root.encode()
 		} else {
 
-			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
+			if let Some(child_info) = self.overlay.default_child_info(storage_key) {
 				let (root, is_empty, _) = {
-					let delta = self.overlay.committed.children_default.get(storage_key)
-						.into_iter()
-						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						.chain(
-							self.overlay.prospective.children_default.get(storage_key)
-								.into_iter()
-								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						);
+					let delta = self.overlay.changes(Some(child_info))
+						.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
 
-					self.backend.child_storage_root(&child_info, delta)
+					self.backend.child_storage_root(child_info, delta)
 				};
 
 				let root = root.encode();
@@ -677,28 +670,19 @@ mod tests {
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
 			InMemoryStorage as TestChangesTrieStorage,
-		}, InMemoryBackend, overlayed_changes::OverlayedValue,
+		}, InMemoryBackend,
 	};
 
 	type TestBackend = InMemoryBackend<Blake2Hasher>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
-		OverlayedChanges {
-			prospective: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-				(vec![1], OverlayedValue {
-					value: Some(vec![100].into_iter().collect()),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-			committed: Default::default(),
-			collect_extrinsics: true,
-			stats: Default::default(),
-		}
+		let mut changes = OverlayedChanges::default();
+		changes.set_collect_extrinsics(true);
+		changes.set_extrinsic_index(1);
+		changes.set_storage(vec![1], Some(vec![100]));
+		changes.set_storage(EXTRINSIC_INDEX.to_vec(), Some(3u32.encode()));
+		changes
 	}
 
 	fn prepare_offchain_overlay_with_changes() -> OffchainOverlayedChanges {
@@ -755,7 +739,8 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut offchain_overlay = prepare_offchain_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
-		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
+		overlay.set_collect_extrinsics(false);
+		overlay.set_storage(vec![1], None);
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();

@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,14 +15,14 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! In memory client backend
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use sp_core::storage::well_known_keys;
-use sp_core::offchain::storage::{
-	InMemOffchainStorage as OffchainStorage
+use sp_core::{
+	storage::well_known_keys, offchain::storage::InMemOffchainStorage as OffchainStorage,
 };
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
@@ -518,13 +518,17 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children_default.into_iter()
+		let child_delta = storage.children_default.iter()
 			.map(|(_storage_key, child_content)|
-				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
+				 (
+					 &child_content.child_info,
+					 child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
+				 )
+			);
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta
+			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			child_delta,
 		);
 
 		self.new_state = Some(transaction);

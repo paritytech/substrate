@@ -42,7 +42,7 @@ use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalE
 use sp_consensus_babe::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, PreDigest},
+	digests::{NextEpochDescriptor, NextConfigDescriptor, PreDigest},
 };
 use sp_consensus_vrf::schnorrkel;
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
@@ -136,6 +136,9 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
+		/// Next epoch configuration, if changed.
+		NextEpochConfig: Option<NextConfigDescriptor>;
+
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
 
@@ -149,6 +152,8 @@ decl_storage! {
 		/// We reset all segments and return to `0` at the beginning of every
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
+
+		/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
 		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::Randomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
@@ -364,6 +369,15 @@ impl<T: Trait> Module<T> {
 			})
 	}
 
+	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
+	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
+	/// method will replace any existing planned config change that had not been enacted yet.
+	pub fn plan_config_change(
+		config: NextConfigDescriptor,
+	) {
+		NextEpochConfig::put(config);
+	}
+
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
 	/// and the caller is the only caller of this function.
 	///
@@ -399,12 +413,15 @@ impl<T: Trait> Module<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
 
-		let next = NextEpochDescriptor {
+		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		if let Some(next_config) = NextEpochConfig::take() {
+			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		}
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to

@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -295,11 +295,11 @@ impl<D> Peer<D> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(header, true);
 			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
 		}
 
+		self.network.update_chain();
 		self.network.service().announce_block(at.clone(), Vec::new());
 		at
 	}
@@ -813,10 +813,6 @@ pub trait TestNetFactory: Sized {
 
 				// We poll `imported_blocks_stream`.
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
-					peer.network.on_block_imported(
-						notification.header,
-						true,
-					);
 					peer.network.service().announce_block(notification.hash, Vec::new());
 				}
 

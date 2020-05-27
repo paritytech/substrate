@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -75,14 +75,14 @@ impl fmt::Display for NsFormatter {
 		}
 
 		if self.0 < 1_000_000 {
-			return write!(f, "{:.2} ms", v as f64 / 1_000_000.0)
+			return write!(f, "{:.4} ms", v as f64 / 1_000_000.0)
 		}
 
 		if self.0 < 100_000_000 {
-			return write!(f, "{} ms", v as f64 / 1_000_000.0)
+			return write!(f, "{:.1} ms", v as f64 / 1_000_000.0)
 		}
 
-		write!(f, "{:.2} s", v as f64 / 1_000_000_000.0)
+		write!(f, "{:.4} s", v as f64 / 1_000_000_000.0)
 	}
 }
 

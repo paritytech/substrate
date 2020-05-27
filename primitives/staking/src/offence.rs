@@ -127,7 +127,7 @@ impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender,
 ///
 /// Used to decouple the module that handles offences and
 /// the one that should punish for those offences.
-pub trait OnOffenceHandler<Reporter, Offender> {
+pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	/// A handler for an offence of a particular kind.
 	///
 	/// Note that this contains a list of all previous offenders
@@ -148,7 +148,7 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	) -> Result<(), ()>;
+	) -> Result<Res, ()>;
 
 	/// Can an offence be reported now or not. This is an method to short-circuit a call into
 	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
@@ -157,12 +157,14 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	fn can_report() -> bool;
 }
 
-impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
+impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) -> Result<(), ()> { Ok(()) }
+	) -> Result<Res, ()> {
+		Ok(Default::default())
+	}
 
 	fn can_report() -> bool { true }
 }
