@@ -163,22 +163,7 @@ impl<T: Trait> Module<T> {
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
-		if info.pays_fee == Pays::Yes {
-			let len = <BalanceOf<T>>::from(len);
-			let per_byte = T::TransactionByteFee::get();
-			let len_fee = per_byte.saturating_mul(len);
-			let unadjusted_weight_fee = Self::weight_to_fee(info.weight);
-
-			// the adjustable part of the fee
-			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
-			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee.saturated_into());
-
-			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
-			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
-		} else {
-			tip
-		}
+		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee)
 	}
 
 	/// Compute the fee for the specified weight.
@@ -193,6 +178,31 @@ impl<T: Trait> Module<T> {
 			NextFeeMultiplier::get().saturating_mul_acc_int(fee)
 		)
 	}
+
+	fn compute_fee_raw(
+		len: u32,
+		weight: Weight,
+		tip: BalanceOf<T>,
+		pays_fee: Pays,
+	) -> BalanceOf<T> {
+		if pays_fee == Pays::Yes {
+			let len = <BalanceOf<T>>::from(len);
+			let per_byte = T::TransactionByteFee::get();
+			let len_fee = per_byte.saturating_mul(len);
+			let unadjusted_weight_fee = Self::weight_to_fee(weight);
+
+			// the adjustable part of the fee
+			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
+			let targeted_fee_adjustment = NextFeeMultiplier::get();
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee.saturated_into());
+
+			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
+			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
+		} else {
+			tip
+		}
+	}
+
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
@@ -265,7 +275,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type Pre = (BalanceOf<T>, Self::AccountId, Option<NegativeImbalanceOf<T>>);
+	type Pre = (BalanceOf<T>, Self::AccountId, Option<NegativeImbalanceOf<T>>, BalanceOf<T>);
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
@@ -291,20 +301,26 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize
 	) -> Result<Self::Pre, TransactionValidityError> {
-		let (_, imbalance) = self.withdraw_fee(who, info, len)?;
-		Ok((self.0, who.clone(), imbalance))
+		let (fee, imbalance) = self.withdraw_fee(who, info, len)?;
+		Ok((self.0, who.clone(), imbalance, fee))
 	}
 
 	fn post_dispatch(
 		pre: Self::Pre,
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
-		_len: usize,
+		len: usize,
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		let (tip, who, imbalance) = pre;
+		let (tip, who, imbalance, fee) = pre;
 		if let Some(payed) = imbalance {
-			let refund = Module::<T>::weight_to_fee_with_adjustment(post_info.calc_unspent(info));
+			let actual_fee = Module::<T>::compute_fee_raw(
+				len as u32,
+				post_info.calc_actual_weight(info),
+				tip,
+				info.pays_fee,
+			);
+			let refund = fee.saturating_sub(actual_fee);
 			let actual_payment = match T::Currency::deposit_into_existing(&who, refund) {
 				Ok(refund_imbalance) => {
 					// The refund cannot be larger than the up front payed max weight.
