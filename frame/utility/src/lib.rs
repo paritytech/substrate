@@ -72,7 +72,7 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
+use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
 
 mod tests;
 mod benchmarking;
@@ -143,7 +143,7 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 }
 
 /// The maximum number of proxies an account may delegate to.
-pub const MAX_PROXIES: u32 = 32;
+pub const MAX_PROXIES: usize = 32;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
@@ -186,8 +186,14 @@ decl_error! {
 		UnexpectedTimepoint,
 		/// Sender is not a proxy of the account to be proxied.
 		NotProxy,
-		/// A call with a `false` IsCallable filter was attempted.
+		/// A call with a `false` `IsCallable` filter was attempted.
 		Uncallable,
+		/// A call with a `false` `IsProxyable` filter was attempted.
+		Unproxyable,
+		/// Too many proxies have been registered.
+		TooMany,
+		/// Account is already a proxy.
+		Duplicate,
 	}
 }
 
@@ -327,19 +333,62 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(Proxy::<T>::get(&real).0.binary_search(&who).is_ok(), Error::<T>::NotProxy);
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-			ensure!(T::IsProxyable::filter(&call));
+			ensure!(T::IsProxyable::filter(&call), Error::<T>::Unproxyable);
 			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
 			Self::deposit_event(Event::<T>::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 		}
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
+		#[weight = 1_000_000]
 		fn add_proxy(origin, proxy: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!()
+			Proxy::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
+				ensure!(proxies.len() < MAX_PROXIES, Error::<T>::TooMany);
+				let i = proxies.binary_search(&proxy).err().ok_or(Error::<T>::Duplicate)?;
+				proxies.insert(i, proxy);
+				let new_deposit = T::ProxyDepositBase::get() + T::AccountDepositFactor::get() * (proxies.len() as u32).into();
+				if new_deposit > *deposit {
+					T::Currency::reserve(&who, new_deposit - *deposit)?;
+				} else if new_deposit < *deposit {
+					T::Currency::unreserve(&who, *deposit - new_deposit);
+				}
+				*deposit = new_deposit;
+				Ok(())
+			})
 		}
 
-		/// Unregister a proxy account for the sender that is able to make calls on its behalf.
-//		fn remove_proxy(origin, proxy: T::AccountId) -> DispatchResult {}
+		/// Unregister a proxy account for the sender.
+		#[weight = 1_000_000]
+		fn remove_proxy(origin, proxy: T::AccountId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Proxy::<T>::try_mutate_exists(&who, |x| {
+				let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
+				let i = proxies.binary_search(&proxy).ok().ok_or(Error::<T>::NotFound)?;
+				proxies.remove(i);
+				let new_deposit = if proxies.is_empty() {
+					BalanceOf::<T>::zero()
+				} else {
+					T::ProxyDepositBase::get() + T::AccountDepositFactor::get() * (proxies.len() as u32).into()
+				};
+				if new_deposit > old_deposit {
+					T::Currency::reserve(&who, new_deposit - old_deposit)?;
+				} else if new_deposit < old_deposit {
+					T::Currency::unreserve(&who, old_deposit - new_deposit);
+				}
+				if !proxies.is_empty() {
+					*x = Some((proxies, new_deposit))
+				}
+				Ok(())
+			})
+		}
+
+		/// Unregister all proxy accounts for the sender.
+		#[weight = 1_000_000]
+		fn remove_proxies(origin) {
+			let who = ensure_signed(origin)?;
+			let (_, old_deposit) = Proxy::<T>::take(&who);
+			T::Currency::unreserve(&who, old_deposit);
+		}
 
 		/// Send a call through an indexed pseudonym of the sender.
 		///
