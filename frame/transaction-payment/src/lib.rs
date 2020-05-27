@@ -876,7 +876,7 @@ mod tests {
 	}
 
 	#[test]
-	fn zero_transfer_on_zero_account() {
+	fn zero_transfer_on_free_transaction() {
 		ExtBuilder::default()
 			.balance_factor(10)
 			.base_weight(5)
