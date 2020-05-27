@@ -278,7 +278,7 @@ pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 				log::warn!(
 					"🙇 You are using the peer ID {}. This peer ID uses a legacy, deprecated \
 					representation that will no longer be supported in the future. \
-					Please refresh it by performing an RPC query to the appropriate node through, \
+					Please refresh it by performing a RPC query to the appropriate node, \
 					by looking at its logs, or by using `subkey inspect-node-key` on its \
 					private key.",
 					bs58::encode(key.as_bytes()).into_string()
