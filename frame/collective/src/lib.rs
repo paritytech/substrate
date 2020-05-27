@@ -664,13 +664,13 @@ decl_module! {
 					length_bound,
 					proposal_weight_bound
 				)?;
-				let approve_weight = Self::approve_proposal(seats, voting, proposal_hash, proposal);
+				let approve_weight = Self::do_approve_proposal(seats, voting, proposal_hash, proposal);
 				return Ok(Some(
 					weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
 						.saturating_add(approve_weight)
 				).into());
 			} else if disapproved {
-				let disapprove_weight = Self::disapprove_proposal(proposal_hash);
+				let disapprove_weight = Self::do_disapprove_proposal(proposal_hash);
 				return Ok(Some(
 					weight_for::close_without_finalize::<T, I>(seats.into(), 0)
 						.saturating_add(disapprove_weight)
@@ -697,15 +697,38 @@ decl_module! {
 			)?;
 			Self::deposit_event(RawEvent::Closed(proposal_hash, yes_votes, no_votes));
 			let finalize_weight = if approved {
-				Self::approve_proposal(seats, voting, proposal_hash, proposal)
+				Self::do_approve_proposal(seats, voting, proposal_hash, proposal)
 			} else {
-				Self::disapprove_proposal(proposal_hash)
+				Self::do_disapprove_proposal(proposal_hash)
 			};
 			Ok(Some(
 				weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
 					.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
 					.saturating_add(finalize_weight)
 			).into())
+		}
+
+		/// Disapprove a proposal, close, and remove it from the system, regardless of its current state.
+		///
+		/// Must be called by the Root origin.
+		///
+		/// Parameters:
+		/// * `proposal_hash`: The hash of the proposal that should be disapproved.
+		///
+		/// # <weight>
+		/// Complexity: O(P) where P is the number of max proposals
+		/// Base Weight: .49 * P
+		/// DB Weight:
+		/// * Reads: Proposals
+		/// * Writes: Voting, Proposals, ProposalOf
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 3) // `Voting`, `Proposals`, `ProposalOf`
+			.saturating_add(490_000 * Weight::from(T::MaxProposals::get())) // P2
+		]
+		fn disapprove_proposal(origin, proposal_hash: T::Hash) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+			let actual_weight = Self::do_disapprove_proposal(proposal_hash);
+			Ok(Some(actual_weight).into())
 		}
 	}
 }
@@ -752,7 +775,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Two removals, one mutation.
 	/// Computation and i/o `O(P)` where:
 	/// - `P` is number of active proposals
-	fn approve_proposal(
+	fn do_approve_proposal(
 		seats: MemberCount,
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal_hash: T::Hash,
@@ -776,7 +799,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		weight.saturating_add(remove_proposal_weight)
 	}
 
-	fn disapprove_proposal(proposal_hash: T::Hash) -> Weight {
+	fn do_disapprove_proposal(proposal_hash: T::Hash) -> Weight {
 		// disapproved
 		Self::deposit_event(RawEvent::Disapproved(proposal_hash));
 		Self::remove_proposal(proposal_hash)
@@ -1518,6 +1541,25 @@ mod tests {
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 			// It can close even if the weight/len information is bad
 			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, 0, 0));
+		})
+	}
+
+	#[test]
+	fn disapprove_proposal_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = make_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), u32::max_value()));
+			// Proposal would normally succeed
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+			// But Root can disapprove and remove it anyway
+			assert_ok!(Collective::disapprove_proposal(Origin::ROOT, hash.clone()));
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
+			assert_eq!(System::events(), vec![
+				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 2))),
+				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
+				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone()))),
+			]);
 		})
 	}
 }
