@@ -99,6 +99,7 @@ parameter_types! {
 	pub const AccountDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 	pub const ProxyDepositBase: u64 = 1;
+	pub const MaxProxies: u16 = 3;
 }
 pub struct TestIsProxyable;
 impl Filter<Call> for TestIsProxyable {
@@ -125,9 +126,10 @@ impl Trait for Test {
 	type MultisigDepositBase = MultisigDepositBase;
 	type AccountDepositFactor = AccountDepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type IsCallable = TestIsCallable;
 	type IsProxyable = TestIsProxyable;
 	type ProxyDepositBase = ProxyDepositBase;
-	type IsCallable = TestIsCallable;
+	type MaxProxies = MaxProxies;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
