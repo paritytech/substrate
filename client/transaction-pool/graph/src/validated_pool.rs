@@ -208,7 +208,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				self.rotator.ban(&Instant::now(), removed.iter().map(|x| x.clone()));
 				removed
 			};
-			if removed.len() > 0 {
+			if !removed.is_empty() {
 				log::debug!(target: "txpool", "Enforcing limits: {} dropped", removed.len());
 			}
 
