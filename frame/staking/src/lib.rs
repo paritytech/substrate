@@ -2573,7 +2573,8 @@ impl<T: Trait> Module<T> {
 					if era_length == T::SessionsPerEra::get() - 1 {
 						IsCurrentSessionFinal::put(true);
 					} else if era_length >= T::SessionsPerEra::get() {
-						// Should only happen when are ready to trigger era but we have ForceNone.
+						// Should only happen when are ready to trigger era but we have ForceNone,
+						// otherwise previous arm would short circuit.
 						Self::close_election_window();
 					}
 					return None
