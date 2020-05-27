@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![warn(unused_extern_crates)]
 
@@ -41,7 +43,6 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
 
-		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let mut rpc_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
@@ -60,7 +61,14 @@ macro_rules! new_full_start {
 					prometheus_registry,
 				))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle| {
+			.with_import_queue(|
+				_config,
+				client,
+				mut select_chain,
+				_transaction_pool,
+				spawn_task_handle,
+				prometheus_registry,
+			| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -84,35 +92,52 @@ macro_rules! new_full_start {
 					client,
 					inherent_data_providers.clone(),
 					spawn_task_handle,
+					prometheus_registry,
 				)?;
 
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
-				let babe_link = import_setup.as_ref().map(|s| &s.2)
-					.expect("BabeLink is present for full services or set up failed; qed.");
+			.with_rpc_extensions_builder(|builder| {
 				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
 					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
-				let shared_authority_set = grandpa_link.shared_authority_set();
+
+				let shared_authority_set = grandpa_link.shared_authority_set().clone();
 				let shared_voter_state = grandpa::SharedVoterState::empty();
-				let deps = node_rpc::FullDeps {
-					client: builder.client().clone(),
-					pool: builder.pool(),
-					select_chain: builder.select_chain().cloned()
-						.expect("SelectChain is present for full services or set up failed; qed."),
-					babe: node_rpc::BabeDeps {
-						keystore: builder.keystore(),
-						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
-						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
-					},
-					grandpa: node_rpc::GrandpaDeps {
-						shared_voter_state: shared_voter_state.clone(),
-						shared_authority_set: shared_authority_set.clone(),
-					},
-				};
-				rpc_setup = Some((shared_voter_state));
-				Ok(node_rpc::create_full(deps))
+
+				rpc_setup = Some((shared_voter_state.clone()));
+
+				let babe_link = import_setup.as_ref().map(|s| &s.2)
+					.expect("BabeLink is present for full services or set up failed; qed.");
+
+				let babe_config = babe_link.config().clone();
+				let shared_epoch_changes = babe_link.epoch_changes().clone();
+
+				let client = builder.client().clone();
+				let pool = builder.pool().clone();
+				let select_chain = builder.select_chain().cloned()
+					.expect("SelectChain is present for full services or set up failed; qed.");
+				let keystore = builder.keystore().clone();
+
+				Ok(move |deny_unsafe| {
+					let deps = node_rpc::FullDeps {
+						client: client.clone(),
+						pool: pool.clone(),
+						select_chain: select_chain.clone(),
+						deny_unsafe,
+						babe: node_rpc::BabeDeps {
+							babe_config: babe_config.clone(),
+							shared_epoch_changes: shared_epoch_changes.clone(),
+							keystore: keystore.clone(),
+						},
+						grandpa: node_rpc::GrandpaDeps {
+							shared_voter_state: shared_voter_state.clone(),
+							shared_authority_set: shared_authority_set.clone(),
+						},
+					};
+
+					node_rpc::create_full(deps)
+				})
 			})?;
 
 		(builder, import_setup, inherent_data_providers, rpc_setup)
@@ -163,7 +188,8 @@ macro_rules! new_full {
 		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
-				service.transaction_pool()
+				service.transaction_pool(),
+				service.prometheus_registry().as_ref(),
 			);
 
 			let client = service.client();
@@ -291,7 +317,6 @@ pub fn new_full(config: Configuration)
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration)
 -> Result<impl AbstractService, ServiceError> {
-	type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
@@ -307,7 +332,16 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, spawn_task_handle| {
+		.with_import_queue_and_fprb(|
+			_config,
+			client,
+			backend,
+			fetcher,
+			_select_chain,
+			_tx_pool,
+			spawn_task_handle,
+			registry,
+		| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -336,6 +370,7 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 				inherent_data_providers.clone(),
 				spawn_task_handle,
+				registry,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))
@@ -345,9 +380,7 @@ pub fn new_light(config: Configuration)
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
-		.with_rpc_extensions(|builder,| ->
-			Result<RpcExtension, _>
-		{
+		.with_rpc_extensions(|builder| {
 			let fetcher = builder.fetcher()
 				.ok_or_else(|| "Trying to start node RPC without active fetcher")?;
 			let remote_blockchain = builder.remote_backend()
@@ -359,6 +392,7 @@ pub fn new_light(config: Configuration)
 				client: builder.client().clone(),
 				pool: builder.pool(),
 			};
+
 			Ok(node_rpc::create_light(light_deps))
 		})?
 		.build()?;
@@ -397,83 +431,6 @@ mod tests {
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 
 	type AccountPublic = <Signature as Verify>::Signer;
-
-	#[cfg(feature = "rhd")]
-	fn test_sync() {
-		use sp_core::ed25519::Pair;
-
-		use {service_test, Factory};
-		use sp_consensus::{BlockImportParams, BlockOrigin};
-
-		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
-		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
-		let validators = vec![alice.public().0.into(), bob.public().0.into()];
-		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
-		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
-		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let block_id = BlockId::number(service.client().chain_info().best_number);
-			let parent_header = service.client().best_header(&block_id)
-				.expect("db error")
-				.expect("best block should exist");
-
-			futures::executor::block_on(
-				service.transaction_pool().maintain(
-					ChainEvent::NewBlock {
-						is_new_best: true,
-						id: block_id.clone(),
-						retracted: vec![],
-						header: parent_header,
-					},
-				)
-			);
-
-			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
-			let proposer_factory = consensus::ProposerFactory {
-				client: service.client().clone(),
-				transaction_pool: service.transaction_pool().clone(),
-				network: consensus_net,
-				force_delay: 0,
-				handle: dummy_runtime.executor(),
-			};
-			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
-			let block = proposer.propose().expect("Error making test block");
-			BlockImportParams {
-				origin: BlockOrigin::File,
-				justification: Vec::new(),
-				internal_justification: Vec::new(),
-				finalized: false,
-				body: Some(block.extrinsics),
-				storage_changes: None,
-				header: block.header,
-				auxiliary: Vec::new(),
-			}
-		};
-		let extrinsic_factory =
-			|service: &SyncService<<Factory as service::ServiceFactory>::FullService>|
-		{
-			let payload = (
-				0,
-				Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())),
-				Era::immortal(),
-				service.client().genesis_hash()
-			);
-			let signature = alice.sign(&payload.encode()).into();
-			let id = alice.public().0.into();
-			let xt = UncheckedExtrinsic {
-				signature: Some((RawAddress::Id(id), signature, payload.0, Era::immortal())),
-				function: payload.1,
-			}.encode();
-			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
-			OpaqueExtrinsic(v)
-		};
-		sc_service_test::sync(
-			sc_chain_spec::integration_test_config(),
-			|config| new_full(config),
-			|mut config| new_light(config),
-			block_factory,
-			extrinsic_factory,
-		);
-	}
 
 	#[test]
 	// It is "ignored", but the node-cli ignored tests are running on the CI.
@@ -532,7 +489,8 @@ mod tests {
 
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
 					service.client(),
-					service.transaction_pool()
+					service.transaction_pool(),
+					None,
 				);
 
 				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
@@ -602,12 +560,16 @@ mod tests {
 				let from: Address = AccountPublic::from(charlie.public()).into_account().into();
 				let genesis_hash = service.client().block_hash(0).unwrap().unwrap();
 				let best_block_id = BlockId::number(service.client().chain_info().best_number);
-				let version = service.client().runtime_version_at(&best_block_id).unwrap().spec_version;
+				let (spec_version, transaction_version) = {
+					let version = service.client().runtime_version_at(&best_block_id).unwrap();
+					(version.spec_version, version.transaction_version)
+				};
 				let signer = charlie.clone();
 
 				let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
 
-				let check_version = frame_system::CheckVersion::new();
+				let check_spec_version = frame_system::CheckSpecVersion::new();
+				let check_tx_version = frame_system::CheckTxVersion::new();
 				let check_genesis = frame_system::CheckGenesis::new();
 				let check_era = frame_system::CheckEra::from(Era::Immortal);
 				let check_nonce = frame_system::CheckNonce::from(index);
@@ -615,7 +577,8 @@ mod tests {
 				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
 				let validate_grandpa_equivocation = pallet_grandpa::ValidateEquivocationReport::new();
 				let extra = (
-					check_version,
+					check_spec_version,
+					check_tx_version,
 					check_genesis,
 					check_era,
 					check_nonce,
@@ -626,7 +589,7 @@ mod tests {
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), ())
+					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

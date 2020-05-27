@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Tests for Utility Pallet
 
@@ -74,6 +75,7 @@ impl frame_system::Trait for Test {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -97,6 +99,16 @@ parameter_types! {
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 }
+
+pub struct TestIsCallable;
+impl Filter<Call> for TestIsCallable {
+	fn filter(c: &Call) -> bool {
+		match *c {
+			Call::Balances(pallet_balances::Call::transfer(..)) => true,
+			_ => false,
+		}
+	}
+}
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
@@ -104,6 +116,7 @@ impl Trait for Test {
 	type MultisigDepositBase = MultisigDepositBase;
 	type MultisigDepositFactor = MultisigDepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type IsCallable = TestIsCallable;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -378,6 +391,17 @@ fn multisig_1_of_3_works() {
 }
 
 #[test]
+fn multisig_filters() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::System(frame_system::Call::remark(vec![])));
+		assert_noop!(
+			Utility::as_multi(Origin::signed(1), 1, vec![], None, call.clone()),
+			Error::<Test>::Uncallable,
+		);
+	});
+}
+
+#[test]
 fn as_sub_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::sub_account_id(1, 0);
@@ -394,6 +418,17 @@ fn as_sub_works() {
 		));
 		assert_eq!(Balances::free_balance(sub_1_0), 2);
 		assert_eq!(Balances::free_balance(2), 13);
+	});
+}
+
+#[test]
+fn as_sub_filters() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Utility::as_sub(
+			Origin::signed(1),
+			1,
+			Box::new(Call::System(frame_system::Call::remark(vec![]))),
+		), Error::<Test>::Uncallable);
 	});
 }
 
@@ -424,6 +459,18 @@ fn batch_with_signed_works() {
 		);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
+	});
+}
+
+#[test]
+fn batch_with_signed_filters() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(
+			Utility::batch(Origin::signed(1), vec![
+				Call::System(frame_system::Call::remark(vec![]))
+			]),
+		);
+		expect_event(RawEvent::Uncallable(0));
 	});
 }
 

@@ -23,7 +23,7 @@ use sp_core::{
 	traits::{BareCryptoStore, BareCryptoStoreError as TraitError},
 	Encode,
 };
-use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
+use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
 use parking_lot::RwLock;
 
 /// Keystore pointer
@@ -308,6 +308,7 @@ impl BareCryptoStore for Store {
 			.fold(Vec::new(), |mut v, k| {
 				v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
 				v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+				v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k.clone()));
 				v
 			}))
 	}
@@ -341,6 +342,13 @@ impl BareCryptoStore for Store {
 				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
 				let key_pair: sr25519::Pair = self
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
+					.map_err(|e| TraitError::from(e))?;
+				Ok(key_pair.sign(msg).encode())
+			},
+			ecdsa::CRYPTO_ID => {
+				let pub_key = ecdsa::Public::from_slice(key.1.as_slice());
+				let key_pair: ecdsa::Pair = self
+					.key_pair_by_type::<ecdsa::Pair>(&pub_key, id)
 					.map_err(|e| TraitError::from(e))?;
 				Ok(key_pair.sign(msg).encode())
 			}
@@ -389,6 +397,29 @@ impl BareCryptoStore for Store {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.generate_by_type::<ed25519::Pair>(id),
+		}.map_err(|e| -> TraitError { e.into() })?;
+
+		Ok(pair.public())
+	}
+
+	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+					.map(|k| ecdsa::Public::from_slice(k.as_slice()))
+					.collect()
+			})
+			.unwrap_or_default()
+	}
+
+	fn ecdsa_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<ecdsa::Public, TraitError> {
+		let pair = match seed {
+			Some(seed) => self.insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, id),
+			None => self.generate_by_type::<ecdsa::Pair>(id),
 		}.map_err(|e| -> TraitError { e.into() })?;
 
 		Ok(pair.public())

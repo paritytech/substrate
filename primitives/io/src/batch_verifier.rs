@@ -1,22 +1,23 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Batch/parallel verification.
 
-use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
+use sp_core::{ed25519, sr25519, ecdsa, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
 
@@ -120,6 +121,29 @@ impl BatchVerifier {
 			}
 		}
 
+		true
+	}
+
+	/// Push ecdsa signature to verify.
+	///
+	/// Returns false if some of the pushed signatures before already failed the check
+	/// (in this case it won't verify anything else)
+	pub fn push_ecdsa(
+		&mut self,
+		signature: ecdsa::Signature,
+		pub_key: ecdsa::Public,
+		message: Vec<u8>,
+	) -> bool {
+		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
+
+		if self.spawn_verification_task(move || ecdsa::Pair::verify(&signature, &message, &pub_key)).is_err() {
+			log::debug!(
+				target: "runtime",
+				"Batch-verification returns false because failed to spawn background task.",
+			);
+
+			return false;
+		}
 		true
 	}
 

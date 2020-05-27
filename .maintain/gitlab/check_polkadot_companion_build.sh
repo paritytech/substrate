@@ -12,7 +12,7 @@
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
-github_header="Accept: application/vnd.github.v3+json" 
+github_header="Authorization: token ${GITHUB_PR_TOKEN}" 
 
 boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
 boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
@@ -83,12 +83,12 @@ then
   if [ "${pr_companion}" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
-    git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
+    git fetch origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
     git merge origin/master
   else
     pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
-    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
+    if git fetch origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
     then
       boldprint "companion branch detected: $pr_ref"
       git checkout branch/"$pr_ref"

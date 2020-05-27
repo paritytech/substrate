@@ -1,25 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! State machine backends. These manage the code and storage of contracts.
 
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
-
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
@@ -118,22 +118,19 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	/// Does not include child storage updates.
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord;
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
 	/// is true if child storage root equals default storage root.
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord;
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
@@ -164,17 +161,14 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
-	fn full_storage_root<I1, I2i, I2>(
+	fn full_storage_root<'a>(
 		&self,
-		delta: I1,
-		child_deltas: I2)
-	-> (H::Out, Self::Transaction)
-	where
-		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		I2: IntoIterator<Item=(ChildInfo, I2i)>,
-		H::Out: Ord + Encode,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		child_deltas: impl Iterator<Item = (
+			&'a ChildInfo,
+			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+		)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
@@ -189,8 +183,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root(
-			delta.into_iter().chain(child_roots.into_iter())
+		let (root, parent_txs) = self.storage_root(delta
+			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			.chain(
+				child_roots
+					.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			)
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -213,7 +212,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, _: H::Out, _: Self::Transaction) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 }
@@ -268,23 +267,18 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord,
-	{
+	fn storage_root<'b>(
+		&self,
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		(*self).storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord,
-	{
+		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		(*self).child_storage_root(child_info, delta)
 	}
 

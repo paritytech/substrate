@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Consensus extension module tests for BABE consensus.
 
@@ -21,6 +22,7 @@ use mock::*;
 use frame_support::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
 use sp_core::crypto::IsWrappedBy;
+use sp_consensus_babe::AllowedSlots;
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -148,4 +150,36 @@ fn can_predict_next_epoch_change() {
 		assert_eq!(Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
 		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), Some(5 + 2));
 	})
+}
+
+#[test]
+fn can_enact_next_config() {
+	new_test_ext(0).1.execute_with(|| {
+		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		// this sets the genesis slot to 6;
+		go_to_block(1, 6);
+		assert_eq!(Babe::genesis_slot(), 6);
+		assert_eq!(Babe::current_slot(), 6);
+		assert_eq!(Babe::epoch_index(), 0);
+		go_to_block(2, 7);
+
+		Babe::plan_config_change(NextConfigDescriptor::V1 {
+			c: (1, 4),
+			allowed_slots: AllowedSlots::PrimarySlots,
+		});
+
+		progress_to_block(4);
+		Babe::on_finalize(9);
+		let header = System::finalize();
+
+		let consensus_log = sp_consensus_babe::ConsensusLog::NextConfigData(
+			sp_consensus_babe::digests::NextConfigDescriptor::V1 {
+				c: (1, 4),
+				allowed_slots: AllowedSlots::PrimarySlots,
+			}
+		);
+		let consensus_digest = DigestItem::Consensus(BABE_ENGINE_ID, consensus_log.encode());
+
+		assert_eq!(header.digest.logs[2], consensus_digest.clone())
+	});
 }

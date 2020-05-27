@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # WASM builder is a utility for building a project as a WASM binary
 //!
@@ -166,8 +167,8 @@ pub fn build_project_with_default_rustflags(
 				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
 				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
 			"#,
-			wasm_binary = wasm_binary.wasm_binary_path(),
-			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path(),
+			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
+			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
 		),
 	);
 }
@@ -181,6 +182,17 @@ fn check_skip_build() -> bool {
 fn write_file_if_changed(file: PathBuf, content: String) {
 	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
 		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+	}
+}
+
+/// Copy `src` to `dst` if the `dst` does not exist or is different.
+fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
+	let src_file = fs::read_to_string(&src).ok();
+	let dst_file = fs::read_to_string(&dst).ok();
+
+	if src_file != dst_file {
+		fs::copy(&src, &dst)
+			.expect(&format!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display()));
 	}
 }
 

@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Support code for the runtime.
 
@@ -83,21 +84,46 @@ pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 #[derive(Debug)]
 pub enum Never {}
 
-/// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
-/// how you would declare a `const`:
+/// Macro for easily creating a new implementation of the `Get` trait. If `const` token is used, the
+/// rhs of the expression must be `const`-only, and get is implemented as `const`:
 ///
-/// ```no_compile
+/// ```
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
 /// parameter_types! {
-///   pub const Argument: u64 = 42;
+///   pub const Argument: u64 = 42 + FIXED_VALUE;
+///   pub OtherArgument: u64 = non_const_expression();
 /// }
+///
 /// trait Config {
 ///   type Parameter: Get<u64>;
+///   type OtherParameter: Get<u64>;
 /// }
+///
 /// struct Runtime;
 /// impl Config for Runtime {
 ///   type Parameter = Argument;
+///   type OtherParameter = OtherArgument;
 /// }
 /// ```
+///
+/// Invalid example:
+///
+/// ```compile_fail
+/// # use frame_support::traits::Get;
+/// # use frame_support::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///   pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+
 #[macro_export]
 macro_rules! parameter_types {
 	(
@@ -107,10 +133,32 @@ macro_rules! parameter_types {
 	) => (
 		$( #[ $attr ] )*
 		$vis struct $name;
+		$crate::parameter_types!{IMPL_CONST $name , $type , $value}
+		$crate::parameter_types!{ $( $rest )* }
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
 		$crate::parameter_types!{IMPL $name , $type , $value}
 		$crate::parameter_types!{ $( $rest )* }
 	);
 	() => ();
+	(IMPL_CONST $name:ident , $type:ty , $value:expr) => {
+		impl $name {
+			pub const fn get() -> $type {
+				$value
+			}
+		}
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from($value)
+			}
+		}
+	};
 	(IMPL $name:ident , $type:ty , $value:expr) => {
 		impl $name {
 			pub fn get() -> $type {
@@ -213,7 +261,21 @@ macro_rules! assert_err {
 #[cfg(feature = "std")]
 macro_rules! assert_err_ignore_postinfo {
 	( $x:expr , $y:expr $(,)? ) => {
-		assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+	}
+}
+
+/// Assert an expression returns error with the given weight.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_with_weight {
+	($call:expr, $err:expr, $weight:expr $(,)? ) => {
+		if let Err(dispatch_err_with_post) = $call {
+			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
+			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight.into());
+		} else {
+			panic!("expected Err(_), got Ok(_).")
+		}
 	}
 }
 

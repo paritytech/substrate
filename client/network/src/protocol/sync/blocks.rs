@@ -1,23 +1,24 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
-use std::collections::hash_map::Entry;
 use log::trace;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, One};
@@ -116,17 +117,17 @@ impl<B: BlockT> BlockCollection<B> {
 			let mut prev: Option<(&NumberFor<B>, &BlockRangeState<B>)> = None;
 			loop {
 				let next = downloading_iter.next();
-				break match &(prev, next) {
-					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _)
+				break match (prev, next) {
+					(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _)
 						if downloading < max_parallel =>
 						(*start .. *start + *len, downloading),
-					&(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
+					(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
-					&(Some((start, r)), None) =>
+					(Some((start, r)), None) =>
 						(*start + r.len() .. *start + r.len() + count, 0), // last range
-					&(None, None) =>
+					(None, None) =>
 						(first_different .. first_different + count, 0), // empty
-					&(None, Some((start, _))) if *start > first_different =>
+					(None, Some((start, _))) if *start > first_different =>
 						(first_different .. cmp::min(first_different + count, *start), 0), // gap at the start
 					_ => {
 						prev = next;
@@ -167,7 +168,7 @@ impl<B: BlockT> BlockCollection<B> {
 		let mut prev = from;
 		for (start, range_data) in &mut self.blocks {
 			match range_data {
-				&mut BlockRangeState::Complete(ref mut blocks) if *start <= prev => {
+				BlockRangeState::Complete(blocks) if *start <= prev => {
 					prev = *start + (blocks.len() as u32).into();
 					// Remove all elements from `blocks` and add them to `drained`
 					drained.append(blocks);
@@ -185,26 +186,22 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	pub fn clear_peer_download(&mut self, who: &PeerId) {
-		match self.peer_requests.entry(who.clone()) {
-			Entry::Occupied(entry) => {
-				let start = entry.remove();
-				let remove = match self.blocks.get_mut(&start) {
-					Some(&mut BlockRangeState::Downloading { ref mut downloading, .. }) if *downloading > 1 => {
-						*downloading = *downloading - 1;
-						false
-					},
-					Some(&mut BlockRangeState::Downloading { .. }) => {
-						true
-					},
-					_ => {
-						false
-					}
-				};
-				if remove {
-					self.blocks.remove(&start);
+		if let Some(start) = self.peer_requests.remove(who) {
+			let remove = match self.blocks.get_mut(&start) {
+				Some(&mut BlockRangeState::Downloading { ref mut downloading, .. }) if *downloading > 1 => {
+					*downloading -= 1;
+					false
+				},
+				Some(&mut BlockRangeState::Downloading { .. }) => {
+					true
+				},
+				_ => {
+					false
 				}
-			},
-			_ => (),
+			};
+			if remove {
+				self.blocks.remove(&start);
+			}
 		}
 	}
 }

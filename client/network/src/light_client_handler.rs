@@ -980,7 +980,9 @@ where
 					let handler = request.connection.map_or(NotifyHandler::Any, NotifyHandler::One);
 
 					let request_id = self.next_request_id();
-					self.peers.get_mut(&peer).map(|p| p.status = PeerStatus::BusyWith(request_id));
+					if let Some(p) = self.peers.get_mut(&peer) {
+						p.status = PeerStatus::BusyWith(request_id);
+					}
 					self.outstanding.insert(request_id, request);
 
 					let event = OutboundProtocol {

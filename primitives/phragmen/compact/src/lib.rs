@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Proc macro for phragmen compact assignment.
 
@@ -157,6 +158,23 @@ fn struct_def(
 		)
 	}).collect::<TokenStream2>();
 
+
+	let len_impl = (1..=count).map(|c| {
+		let field_name = field_name_for(c);
+		quote!(
+			all_len = all_len.saturating_add(self.#field_name.len());
+		)
+	}).collect::<TokenStream2>();
+
+	let edge_count_impl = (1..count).map(|c| {
+		let field_name = field_name_for(c);
+		quote!(
+			all_edges = all_edges.saturating_add(
+				self.#field_name.len().saturating_mul(#c as usize)
+			);
+		)
+	}).collect::<TokenStream2>();
+
 	Ok(quote! (
 		/// A struct to encode a Phragmen assignment in a compact way.
 		#[derive(
@@ -179,6 +197,28 @@ fn struct_def(
 		for #ident<#voter_type, #target_type, #weight_type>
 		{
 			const LIMIT: usize = #count;
+		}
+
+		impl<#voter_type, #target_type, #weight_type> #ident<#voter_type, #target_type, #weight_type> {
+			/// Get the length of all the assignments that this type is encoding. This is basically
+			/// the same as the number of assignments, or the number of voters in total.
+			pub fn len(&self) -> usize {
+				let mut all_len = 0usize;
+				#len_impl
+				all_len
+			}
+
+			/// Get the total count of edges.
+			pub fn edge_count(&self) -> usize {
+				let mut all_edges = 0usize;
+				#edge_count_impl
+				all_edges
+			}
+
+			/// Get the average edge count.
+			pub fn average_edge_count(&self) -> usize {
+				self.edge_count().checked_div(self.len()).unwrap_or(0)
+			}
 		}
 	))
 }
