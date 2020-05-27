@@ -159,10 +159,9 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 	fn default() -> Self {
 		Self {
 			block_number: B::current_block_number() + STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS.into(),
-			timestamp: offchain::timestamp()
-				.add(
-					Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS)
-				),
+			timestamp: offchain::timestamp().add(Duration::from_millis(
+				STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS,
+			)),
 		}
 	}
 }
@@ -218,7 +217,7 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 
 	fn has_expired(deadline: &Self::Deadline) -> bool {
 		offchain::timestamp() > deadline.timestamp
-		&& <B as BlockNumberProvider>::current_block_number() > deadline.block_number
+			&& <B as BlockNumberProvider>::current_block_number() > deadline.block_number
 	}
 
 	fn snooze(deadline: &Self::Deadline) {
@@ -257,16 +256,21 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 	}
 
 	/// Internal lock helper to avoid lifetime conflicts.
-	fn try_lock_inner(&mut self, new_deadline: L::Deadline) -> Result<(), <L as Lockable>::Deadline> {
+	fn try_lock_inner(
+		&mut self,
+		new_deadline: L::Deadline,
+	) -> Result<(), <L as Lockable>::Deadline> {
 		let res = self.value_ref.mutate(
-			|s: Option<Option<L::Deadline>>| -> Result<<L as Lockable>::Deadline, <L as Lockable>::Deadline> {
+			|s: Option<Option<L::Deadline>>|
+			-> Result<<L as Lockable>::Deadline, <L as Lockable>::Deadline> {
 				match s {
 					// no lock set, we can safely acquire it
 					None => Ok(new_deadline),
 					// write was good, but read failed
 					Some(None) => Ok(new_deadline),
 					// lock is set, but it is expired. We can re-acquire it.
-					Some(Some(deadline)) if <L as Lockable>::has_expired(&deadline) => Ok(new_deadline),
+					Some(Some(deadline)) if <L as Lockable>::has_expired(&deadline) =>
+						Ok(new_deadline),
 					// lock is present and is still active
 					Some(Some(deadline)) => Err(deadline),
 				}
