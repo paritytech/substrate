@@ -158,7 +158,7 @@ pub struct GenesisAccount {
 decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
 		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
-		AccountCodes: map hasher(blake2_128_concat) H160 => Vec<u8>;
+		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
 		AccountStorages: double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
 	}
 
@@ -382,6 +382,11 @@ impl<T: Trait> Module<T> {
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
 		T::ModuleId::get().into_account()
+	}
+
+	/// Check whether the account is in Storage
+	pub fn account_exists(address: &H160) -> bool {
+		Accounts::contains_key(address)
 	}
 
 	/// Check whether an account is empty.
