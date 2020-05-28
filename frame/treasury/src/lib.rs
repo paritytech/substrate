@@ -106,7 +106,7 @@ use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
 	ReservableCurrency, WithdrawReason
 };
-use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
+use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
 use frame_support::weights::{Weight, DispatchClass};
@@ -228,7 +228,7 @@ pub type BountyIndex = u32;
 
 /// A bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Bounty<AccountId, Balance> {
+pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
 	/// The account manages this bounty.
@@ -237,13 +237,13 @@ pub struct Bounty<AccountId, Balance> {
 	value: Balance,
 	/// The amount held on deposit (reserved) for making this proposal.
 	bond: Balance,
-	/// The description of this bounty.
-	description: Vec<u8>,
+	/// The status of this bounty.
+	status: BountyStatus<AccountId, BlockNumber>,
 }
 
 /// The status of a bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum BountyStatus {
+pub enum BountyStatus<AccountId, BlockNumber> {
 	/// The bounty is proposed and waiting for approval.
 	Proposed,
 	/// The bounty is approved and waiting to become active at next spend period.
@@ -251,7 +251,12 @@ pub enum BountyStatus {
 	/// The bounty is active and waiting to be awarded.
 	Active,
 	/// The bounty is awarded and waiting to released after a delay.
-	PendingPayout,
+	PendingPayout {
+		/// The beneficiary of the bounty.
+		beneficiary: AccountId,
+		/// When the bounty can be claimed.
+		unlock_at: BlockNumber,
+	},
 }
 
 decl_storage! {
@@ -284,15 +289,10 @@ decl_storage! {
 		/// Bounties that have been made.
 		pub Bounties get(fn bounties):
 			map hasher(twox_64_concat) BountyIndex
-			=> Option<Bounty<T::AccountId, BalanceOf<T>>>;
+			=> Option<Bounty<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
-		/// The status of each bounty.
-		pub BountyStatuses get(fn bounty_statuses):
-			map hasher(twox_64_concat) BountyIndex => Option<BountyStatus>;
-
-		/// The bounty beneficiary and the block the fund can be claimed
-		pub BountyBeneficiary get(fn bounty_beneficiary):
-			map hasher(twox_64_concat) BountyIndex => Option<(T::AccountId, T::BlockNumber)>;
+		/// The description of each bounty.
+		pub BountyDescriptions get(fn bounty_descriptions): map hasher(twox_64_concat) BountyIndex => Option<Vec<u8>>;
 
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
@@ -687,11 +687,11 @@ decl_module! {
 			BountyCount::put(index + 1);
 
 			let bounty = Bounty {
-				proposer, curator, value, bond, description
+				proposer, curator, value, bond, status: BountyStatus::Proposed
 			};
 
 			Bounties::<T>::insert(index, &bounty);
-			BountyStatuses::insert(index, BountyStatus::Proposed);
+			BountyDescriptions::insert(index, description);
 
 			Self::deposit_event(RawEvent::BountyProposed(index));
 		}
@@ -709,16 +709,22 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Proposed), Error::<T>::UnexpectedStatus);
-			let bounty = <Bounties<T>>::take(&bounty_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidProposalIndex)?;
+				ensure!(bounty.status == BountyStatus::Proposed, Error::<T>::UnexpectedStatus);
 
-			BountyStatuses::remove(bounty_id);
+				BountyDescriptions::remove(bounty_id);
 
-			let value = bounty.bond;
-			let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
-			T::ProposalRejection::on_unbalanced(imbalance);
+				let value = bounty.bond;
+				let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
+				T::ProposalRejection::on_unbalanced(imbalance);
 
-			Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
+				Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
+
+				*maybe_bounty = None;
+
+				Ok(())
+			})?;
 		}
 
 		/// Approve a bounty proposal. At a later time, the bounty will be funded and become active
@@ -735,10 +741,16 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			ensure!(<Bounties<T>>::contains_key(bounty_id), Error::<T>::InvalidProposalIndex);
-			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Proposed), Error::<T>::UnexpectedStatus);
-			BountyStatuses::insert(bounty_id, BountyStatus::Approved);
-			BountyApprovals::mutate(|v| v.push(bounty_id));
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidProposalIndex)?;
+				ensure!(bounty.status == BountyStatus::Proposed, Error::<T>::UnexpectedStatus);
+
+				bounty.status = BountyStatus::Approved;
+
+				BountyApprovals::mutate(|v| v.push(bounty_id));
+
+				Ok(())
+			})?;
 		}
 
 		#[weight = 100_000_000]
@@ -746,15 +758,17 @@ decl_module! {
 			let curator = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
-			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Active), Error::<T>::UnexpectedStatus);
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidProposalIndex)?;
+				ensure!(bounty.status == BountyStatus::Active, Error::<T>::UnexpectedStatus);
+				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+				bounty.status = BountyStatus::PendingPayout {
+					beneficiary: beneficiary.clone(),
+					unlock_at: system::Module::<T>::block_number() + T::BountyDepositPayoutDelay::get(),
+				};
 
-			let bounty = Self::bounties(bounty_id).ok_or(Error::<T>::InvalidProposalIndex)?;
-			ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
-
-			BountyStatuses::insert(bounty_id, BountyStatus::PendingPayout);
-			BountyBeneficiary::<T>::insert(bounty_id, (&beneficiary, system::Module::<T>::block_number() + T::BountyDepositPayoutDelay::get()));
-
-			Bounties::<T>::remove(bounty_id); // no longer needed
+				Ok(())
+			})?;
 
 			Self::deposit_event(Event::<T>::BountyAwarded(bounty_id, beneficiary));
 		}
@@ -763,20 +777,23 @@ decl_module! {
 		fn claim_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
-			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::PendingPayout), Error::<T>::UnexpectedStatus);
-			let (beneficiary, released) = Self::bounty_beneficiary(bounty_id)
-				.ok_or(Error::<T>::InvalidProposalIndex)?; // this should not fail
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidProposalIndex)?;
+				if let BountyStatus::PendingPayout { beneficiary, unlock_at } = bounty.status {
+					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
+					let bounty_account = Self::bounty_account_id(bounty_id);
+					let balance = T::Currency::free_balance(&bounty_account);
+					let _ = T::Currency::transfer(&bounty_account, &beneficiary, balance, AllowDeath); // should not fail
+					*maybe_bounty = None;
 
-			ensure!(system::Module::<T>::block_number() >= released, Error::<T>::Premature);
+					BountyDescriptions::remove(bounty_id);
 
-			let bounty_account = Self::bounty_account_id(bounty_id);
-			let balance = T::Currency::free_balance(&bounty_account);
-			let _ = T::Currency::transfer(&bounty_account, &beneficiary, balance, AllowDeath); // should not fail
-
-			BountyStatuses::remove(bounty_id);
-			BountyBeneficiary::<T>::remove(bounty_id);
-
-			Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, balance, beneficiary));
+					Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, balance, beneficiary));
+					Ok(())
+				} else {
+					Err(Error::<T>::UnexpectedStatus.into())
+				}
+			})?;
 		}
 
 		/// # <weight>
@@ -930,27 +947,30 @@ impl<T: Trait> Module<T> {
 
 		BountyApprovals::mutate(|v| {
 			v.retain(|&index| {
-				// Should always be true, but shouldn't panic if false or we're screwed.
-				if let Some(bounty) = Self::bounties(index) {
-					if bounty.value <= budget_remaining {
-						budget_remaining -= bounty.value;
-						BountyStatuses::insert(index, BountyStatus::Active);
+				Bounties::<T>::mutate(index, |bounty| {
+					// Should always be true, but shouldn't panic if false or we're screwed.
+					if let Some(bounty) = bounty {
+						if bounty.value <= budget_remaining {
+							budget_remaining -= bounty.value;
 
-						// return their deposit.
-						let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
+							bounty.status = BountyStatus::Active;
 
-						// fund the bounty account
-						imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
+							// return their deposit.
+							let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
 
-						Self::deposit_event(RawEvent::BountyBecameActive(index));
-						false
+							// fund the bounty account
+							imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
+
+							Self::deposit_event(RawEvent::BountyBecameActive(index));
+							false
+						} else {
+							missed_any = true;
+							true
+						}
 					} else {
-						missed_any = true;
-						true
+						false
 					}
-				} else {
-					false
-				}
+				})
 			});
 		});
 

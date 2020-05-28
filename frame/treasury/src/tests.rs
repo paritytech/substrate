@@ -559,10 +559,10 @@ fn propose_bounty_works() {
 			curator: 1,
 			value: 10,
 			bond: deposit,
-			description: b"1234567890".to_vec(),
+			status: BountyStatus::Proposed,
 		});
 
-		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Proposed);
+		assert_eq!(Treasury::bounty_descriptions(0).unwrap(), b"1234567890".to_vec());
 
 		assert_eq!(Treasury::bounty_count(), 1);
 	});
@@ -585,8 +585,7 @@ fn reject_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Treasury::bounties(0), None);
-
-		assert_eq!(Treasury::bounty_statuses(0), None);
+		assert_eq!(Treasury::bounty_descriptions(0), None);
 	});
 }
 
@@ -599,12 +598,19 @@ fn approve_bounty_works() {
 
 		assert_ok!(Treasury::approve_bounty(Origin::ROOT, 0));
 
-		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Approved);
+		let deposit: u64 = 80 + 5;
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			curator: 1,
+			value: 50,
+			bond: deposit,
+			status: BountyStatus::Approved,
+		});
 		assert_eq!(Treasury::bounty_approvals(), vec![0]);
 
 		assert_noop!(Treasury::reject_bounty(Origin::ROOT, 0), Error::<Test>::UnexpectedStatus);
 
-		let deposit: u64 = 80 + 5;
 		// deposit not return yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
@@ -615,7 +621,13 @@ fn approve_bounty_works() {
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 100);
 
-		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Active);
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			curator: 1,
+			value: 50,
+			bond: deposit,
+			status: BountyStatus::Active,
+		});
 		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 50);
 	});
@@ -637,9 +649,16 @@ fn award_and_claim_bounty_works() {
 
 		assert_ok!(Treasury::award_bounty(Origin::signed(1), 0, 3));
 
-		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::PendingPayout);
-		assert_eq!(Treasury::bounties(0), None);
-		assert_eq!(Treasury::bounty_beneficiary(0).unwrap(), (3, 5));
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			curator: 1,
+			value: 50,
+			bond: 85,
+			status: BountyStatus::PendingPayout {
+				beneficiary: 3,
+				unlock_at: 5
+			},
+		});
 
 		assert_noop!(Treasury::claim_bounty(Origin::signed(1), 0), Error::<Test>::Premature);
 
@@ -652,6 +671,9 @@ fn award_and_claim_bounty_works() {
 
 		assert_eq!(Balances::free_balance(3), 50);
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
+
+		assert_eq!(Treasury::bounties(0), None);
+		assert_eq!(Treasury::bounty_descriptions(0), None);
 	});
 }
 
