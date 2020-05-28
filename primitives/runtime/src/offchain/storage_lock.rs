@@ -397,17 +397,19 @@ where
 	}
 }
 
-/// Bound for block number sources which commonly is implemented
-/// by `frame_system::Module<T: Trait>`.
-///
-/// `BlockNumberProvider` has no intrinsic meaning and exists only to decouple `frame_system`
-/// from `runtime` crate and avoid a circular dependency issues.
+/// Bound for a block number source
+/// used with [`BlockAndTime<BlockNumberProvider>`](Self::BlockAndTime).
 pub trait BlockNumberProvider {
-	/// Type of `BlockNumber` which is going to be provided.
+	/// Type of `BlockNumber` to provide.
 	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32Bit;
 	/// Returns the current block number.
 	///
-	/// For `frame_system::Module<T: Trait>` it is implemented as
+	/// Provides an abstraction over an arbitrary way of providing the
+	/// current block number.
+	///
+	/// In case of using crate `sp_runtime` without the crate `frame`
+	/// system, it is already implemented for
+	/// `frame_system::Module<T: Trait>` as:
 	///
 	/// ```ignore
 	/// fn current_block_number() -> Self {
