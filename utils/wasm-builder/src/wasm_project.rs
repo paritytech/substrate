@@ -349,7 +349,7 @@ fn project_enabled_features(
 }
 
 /// Returns if the project has the `runtime-wasm` feature
-fn has_runtime_wasm_feature(
+fn has_runtime_wasm_feature_declared(
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> bool {
@@ -373,7 +373,7 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path, crate_metadata: 
 
 	let mut enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
 
-	if has_runtime_wasm_feature(cargo_manifest, crate_metadata) {
+	if has_runtime_wasm_feature_declared(cargo_manifest, crate_metadata) {
 		enabled_features.push("runtime-wasm".into());
 	}
 
