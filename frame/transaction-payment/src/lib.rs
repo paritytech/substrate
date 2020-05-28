@@ -975,4 +975,35 @@ mod tests {
 			assert_eq!(System::events().len(), 0);
 		});
 	}
+
+	#[test]
+	fn refund_consistent_with_actual_weight() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_weight(7)
+			.build()
+			.execute_with(||
+		{
+			let info = info_from_weight(100);
+			let post_info = post_info_from_weight(33);
+			let prev_balance = Balances::free_balance(2);
+			let len = 10;
+			let tip = 5;
+
+			NextFeeMultiplier::put(Fixed128::saturating_from_rational(1, 4));
+
+			let pre = ChargeTransactionPayment::<Runtime>::from(tip)
+				.pre_dispatch(&2, CALL, &info, len)
+				.unwrap();
+
+			ChargeTransactionPayment::<Runtime>
+				::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.unwrap();
+
+			assert_eq!(
+				prev_balance - Balances::free_balance(2),
+				Module::<Runtime>::compute_actual_fee(len as u32, &info, &post_info, tip),
+			);
+		});
+	}
 }
