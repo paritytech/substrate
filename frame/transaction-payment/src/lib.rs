@@ -826,6 +826,39 @@ mod tests {
 	}
 
 	#[test]
+	fn compute_fee_works_with_negative_multiplier() {
+		ExtBuilder::default()
+			.base_weight(100)
+			.byte_fee(10)
+			.balance_factor(0)
+			.build()
+			.execute_with(||
+		{
+			// Add a next fee multiplier
+			NextFeeMultiplier::put(Fixed128::saturating_from_rational(-1, 2)); // = -1/2 = -.5
+			// Base fee is unaffected by multiplier
+			let dispatch_info = DispatchInfo {
+				weight: 0,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+			};
+			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
+
+			// Everything works together :)
+			let dispatch_info = DispatchInfo {
+				weight: 123,
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes,
+			};
+			// 123 weight, 456 length, 100 base
+			// adjustable fee = (123 * 1) + (456 * 10) = 4683
+			// adjusted fee = 4683 - (4683 * -.5)  = 4683 - 2341.5 = 4683 - 2341 = 2342
+			// final fee = 100 + 2342 + 789 tip = 3239
+			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 3231);
+		});
+	}
+
+	#[test]
 	fn compute_fee_does_not_overflow() {
 		ExtBuilder::default()
 			.base_weight(100)
