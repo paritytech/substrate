@@ -97,9 +97,9 @@ pub trait Lockable: Sized {
 	/// Note that `deadline` is only passed to allow optimizations
 	/// for `Lockables` which have a time based component.
 	fn snooze(_deadline: &Self::Deadline) {
-		sp_io::offchain::sleep_until(offchain::timestamp().add(
-			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX,
-		));
+		sp_io::offchain::sleep_until(
+			offchain::timestamp().add(STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+		);
 	}
 }
 
@@ -135,10 +135,10 @@ impl Lockable for Time {
 		let remainder: Duration = now.diff(&deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
-		use core::cmp::{min,max};
+		use core::cmp::{max, min};
 		let snooze = max(
 			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
-			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN,
 		);
 		sp_io::offchain::sleep_until(now.add(snooze));
 	}
@@ -229,10 +229,10 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
 		let remainder: Duration = now.diff(&(deadline.timestamp));
-		use core::cmp::{min,max};
+		use core::cmp::{max, min};
 		let snooze = max(
 			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
-			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN,
 		);
 		sp_io::offchain::sleep_until(now.add(snooze));
 	}
