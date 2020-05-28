@@ -331,7 +331,7 @@ mod tests {
 	use super::*;
 	use codec::Encode;
 	use frame_support::{
-		impl_outer_dispatch, impl_outer_origin, parameter_types,
+		impl_outer_dispatch, impl_outer_origin, impl_outer_event, parameter_types,
 		weights::{
 			DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight,
 			WeightToFeePolynomial, WeightToFeeCoefficients, WeightToFeeCoefficient,
@@ -355,6 +355,13 @@ mod tests {
 		pub enum Call for Runtime where origin: Origin {
 			pallet_balances::Balances,
 			frame_system::System,
+		}
+	}
+
+	impl_outer_event! {
+		pub enum Event for Runtime {
+			system<T>,
+			pallet_balances<T>,
 		}
 	}
 
@@ -392,7 +399,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
@@ -414,7 +421,7 @@ mod tests {
 
 	impl pallet_balances::Trait for Runtime {
 		type Balance = u64;
-		type Event = ();
+		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
@@ -518,7 +525,7 @@ mod tests {
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 	pub fn info_from_weight(w: Weight) -> DispatchInfo {
-		// pays: yes -- class: normal
+		// pays_fee: Pays::Yes -- class: DispatchClass::Normal
 		DispatchInfo { weight: w, ..Default::default() }
 	}
 
@@ -816,6 +823,8 @@ mod tests {
 			.build()
 			.execute_with(||
 		{
+			// So events are emitted
+			System::set_block_number(10);
 			let len = 10;
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
@@ -832,6 +841,14 @@ mod tests {
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 0);
+			// Transfer Event
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::pallet_balances(pallet_balances::RawEvent::Transfer(2, 3, 80))
+			}));
+			// Killed Event
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::system(system::RawEvent::KilledAccount(2))
+			}));
 		});
 	}
 
@@ -855,6 +872,38 @@ mod tests {
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+		});
+	}
+
+	#[test]
+	fn zero_transfer_on_free_transaction() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_weight(5)
+			.build()
+			.execute_with(||
+		{
+			// So events are emitted
+			System::set_block_number(10);
+			let len = 10;
+			let dispatch_info = DispatchInfo {
+				weight: 100,
+				pays_fee: Pays::No,
+				class: DispatchClass::Normal,
+			};
+			let user = 69;
+			let pre = ChargeTransactionPayment::<Runtime>::from(0)
+				.pre_dispatch(&user, CALL, &dispatch_info, len)
+				.unwrap();
+			assert_eq!(Balances::total_balance(&user), 0);
+			assert!(
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &dispatch_info, &default_post_info(), len, &Ok(()))
+					.is_ok()
+			);
+			assert_eq!(Balances::total_balance(&user), 0);
+			// No events for such a scenario
+			assert_eq!(System::events().len(), 0);
 		});
 	}
 }
