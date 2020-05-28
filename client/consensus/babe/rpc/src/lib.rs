@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! RPC api for babe.
 
 use sc_consensus_babe::{Epoch, authorship, Config};
@@ -32,6 +33,7 @@ use sp_consensus_babe::{
 };
 use serde::{Deserialize, Serialize};
 use sc_keystore::KeyStorePtr;
+use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
@@ -49,8 +51,8 @@ pub trait BabeApi {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
 }
 
-/// Implements the BabeRPC trait for interacting with Babe.
-pub struct BabeRPCHandler<B: BlockT, C, SC> {
+/// Implements the BabeRpc trait for interacting with Babe.
+pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to EpochChanges
@@ -61,9 +63,11 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	babe_config: Config,
 	/// The SelectChain strategy
 	select_chain: SC,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
 }
 
-impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
+impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	/// Creates a new instance of the BabeRpc handler.
 	pub fn new(
 		client: Arc<C>,
@@ -71,6 +75,7 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		keystore: KeyStorePtr,
 		babe_config: Config,
 		select_chain: SC,
+		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Self {
 			client,
@@ -78,11 +83,12 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 			keystore,
 			babe_config,
 			select_chain,
+			deny_unsafe,
 		}
 	}
 }
 
-impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
+impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 	where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
@@ -91,6 +97,10 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 		SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(rpc_future::err(err.into()));
+		}
+
 		let (
 			babe_config,
 			keystore,
@@ -213,7 +223,10 @@ fn epoch_data<B, C, SC>(
 mod tests {
 	use super::*;
 	use substrate_test_runtime_client::{
+		runtime::Block,
+		Backend,
 		DefaultTestClientBuilderExt,
+		TestClient,
 		TestClientBuilderExt,
 		TestClientBuilder,
 	};
@@ -235,8 +248,9 @@ mod tests {
 		(keystore, keystore_path)
 	}
 
-	#[test]
-	fn rpc() {
+	fn test_babe_rpc_handler(
+		deny_unsafe: DenyUnsafe
+	) -> BabeRpcHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -248,9 +262,21 @@ mod tests {
 		).expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();
-		let select_chain = longest_chain;
 		let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
-		let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain);
+
+		BabeRpcHandler::new(
+			client.clone(),
+			epoch_changes,
+			keystore,
+			config,
+			longest_chain,
+			deny_unsafe,
+		)
+	}
+
+	#[test]
+	fn epoch_authorship_works() {
+		let handler = test_babe_rpc_handler(DenyUnsafe::No);
 		let mut io = IoHandler::new();
 
 		io.extend_with(BabeApi::to_delegate(handler));
@@ -258,5 +284,20 @@ mod tests {
 		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+	}
+
+	#[test]
+	fn epoch_authorship_is_unsafe() {
+		let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
+		let mut io = IoHandler::new();
+
+		io.extend_with(BabeApi::to_delegate(handler));
+		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+
+		let response = io.handle_request_sync(request).unwrap();
+		let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();
+		let error: RpcError = serde_json::from_value(response["error"].take()).unwrap();
+
+		assert_eq!(error, RpcError::method_not_found())
 	}
 }

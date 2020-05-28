@@ -152,6 +152,11 @@ fn main() {
 		}
 	}
 
+	if results.is_empty() {
+		eprintln!("No benchmark was found for query");
+		std::process::exit(1);
+	}
+
 	if opt.json {
 		let json_result: String = serde_json::to_string(&results).expect("Failed to construct json");
 		println!("{}", json_result);

@@ -135,6 +135,9 @@ use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
+use sp_runtime::traits::SaturatedConversion;
+use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating}};
+use smallvec::{smallvec, SmallVec};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -530,6 +533,90 @@ impl RuntimeDbWeight {
 	}
 }
 
+/// One coefficient and its position in the `WeightToFeePolynomial`.
+///
+/// One term of polynomial is calculated as:
+///
+/// ```ignore
+/// coeff_integer * x^(degree) + coeff_frac * x^(degree)
+/// ```
+///
+/// The `negative` value encodes whether the term is added or substracted from the
+/// overall polynomial result.
+#[derive(Clone, Encode, Decode)]
+pub struct WeightToFeeCoefficient<Balance> {
+	/// The integral part of the coefficient.
+	pub coeff_integer: Balance,
+	/// The fractional part of the coefficient.
+	pub coeff_frac: Perbill,
+	/// True iff the coefficient should be interpreted as negative.
+	pub negative: bool,
+	/// Degree/exponent of the term.
+	pub degree: u8,
+}
+
+/// A list of coefficients that represent one polynomial.
+pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
+
+/// A trait that describes the weight to fee calculation as polynomial.
+///
+/// An implementor should only implement the `polynomial` function.
+pub trait WeightToFeePolynomial {
+	/// The type that is returned as result from polynomial evaluation.
+	type Balance: BaseArithmetic + From<u32> + Copy;
+
+	/// Returns a polynomial that describes the weight to fee conversion.
+	///
+	/// This is the only function that should be manually implemented. Please note
+	/// that all calculation is done in the probably unsigned `Balance` type. This means
+	/// that the order of coefficients is important as putting the negative coefficients
+	/// first will most likely saturate the result to zero mid evaluation.
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance>;
+
+	/// Calculates the fee from the passed `weight` according to the `polynomial`.
+	///
+	/// This should not be overriden in most circumstances. Calculation is done in the
+	/// `Balance` type and never overflows. All evaluation is saturating.
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
+			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
+
+			// The sum could get negative. Therefore we only sum with the accumulator. 
+			// The Perbill Mul implementation is non overflowing.
+			let frac = args.coeff_frac * w;
+			let integer = args.coeff_integer.saturating_mul(w);
+
+			if args.negative {
+				acc = acc.saturating_sub(frac);
+				acc = acc.saturating_sub(integer);
+			} else {
+				acc = acc.saturating_add(frac);
+				acc = acc.saturating_add(integer);
+			}
+
+			acc
+		})
+	}
+}
+
+/// Implementor of `WeightToFeePolynomial` that maps one unit of weight to one unit of fee.
+pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
+
+impl<T> WeightToFeePolynomial for IdentityFee<T> where
+	T: BaseArithmetic + From<u32> + Copy
+{
+	type Balance = T;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+		smallvec!(WeightToFeeCoefficient {
+			coeff_integer: 1u32.into(),
+			coeff_frac: Perbill::zero(),
+			negative: false,
+			degree: 1,
+		})
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
@@ -650,5 +737,65 @@ mod tests {
 			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
 			1000
 		);
+	}
+
+	type Balance = u64;
+
+	// 0.5x^3 + 2.333x2 + 7x - 10_000
+	struct Poly;
+	impl WeightToFeePolynomial for Poly {
+		type Balance = Balance;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![
+				WeightToFeeCoefficient {
+					coeff_integer: 0,
+					coeff_frac: Perbill::from_fraction(0.5),
+					negative: false,
+					degree: 3
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 2,
+					coeff_frac: Perbill::from_rational_approximation(1u32, 3u32),
+					negative: false,
+					degree: 2
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 7,
+					coeff_frac: Perbill::zero(),
+					negative: false,
+					degree: 1
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 10_000,
+					coeff_frac: Perbill::zero(),
+					negative: true,
+					degree: 0
+				},
+			]
+		}
+	}
+
+	#[test]
+	fn polynomial_works() {
+		assert_eq!(Poly::calc(&100), 514033);
+		assert_eq!(Poly::calc(&10_123), 518917034928);
+	}
+
+	#[test]
+	fn polynomial_does_not_underflow() {
+		assert_eq!(Poly::calc(&0), 0);
+	}
+
+	#[test]
+	fn polynomial_does_not_overflow() {
+		assert_eq!(Poly::calc(&Weight::max_value()), Balance::max_value() - 10_000);
+	}
+
+	#[test]
+	fn identity_fee_works() {
+		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
+		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
+		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
 	}
 }

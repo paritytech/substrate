@@ -25,6 +25,10 @@ mod backend;
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
+#[cfg(feature = "std")]
+use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, DispatchClass, FunctionOf, Pays};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
@@ -137,11 +141,42 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	}
 }
 
+#[cfg(feature = "std")]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Debug, Serialize, Deserialize)]
+/// Account definition used for genesis block construction.
+pub struct GenesisAccount {
+	/// Account nonce.
+	pub nonce: U256,
+	/// Account balance.
+	pub balance: U256,
+	/// Full account storage.
+	pub storage: std::collections::BTreeMap<H256, H256>,
+	/// Account code.
+	pub code: Vec<u8>,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
-		Accounts get(fn accounts) config(): map hasher(blake2_128_concat) H160 => Account;
+		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
 		AccountCodes: map hasher(blake2_128_concat) H160 => Vec<u8>;
 		AccountStorages: double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
+	}
+
+	add_extra_genesis {
+		config(accounts): std::collections::BTreeMap<H160, GenesisAccount>;
+		build(|config: &GenesisConfig| {
+			for (address, account) in &config.accounts {
+				Accounts::insert(address, Account {
+					balance: account.balance,
+					nonce: account.nonce,
+				});
+				AccountCodes::insert(address, &account.code);
+
+				for (index, value) in &account.storage {
+					AccountStorages::insert(address, index, value);
+				}
+			}
+		});
 	}
 }
 

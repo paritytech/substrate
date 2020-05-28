@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Communication streams for the polite-grandpa networking protocol.
 //!
 //! GRANDPA nodes communicate over a gossip network, where messages are not sent to

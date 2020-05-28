@@ -62,7 +62,7 @@ use libp2p::swarm::toggle::Toggle;
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
-use log::{debug, info, trace, warn, error};
+use log::{debug, info, trace, warn};
 use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
@@ -488,7 +488,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 
 	fn inject_expired_listen_addr(&mut self, addr: &Multiaddr) {
-		info!(target: "sub-libp2p", "No longer listening on {}", addr);
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_expired_listen_addr(k, addr)
 		}
@@ -507,14 +506,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 
 	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
-		error!(target: "sub-libp2p", "Error on libp2p listener {:?}: {}", id, err);
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_listener_error(k, id, err)
 		}
 	}
 
 	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
 		for k in self.kademlias.values_mut() {
 			NetworkBehaviour::inject_listener_closed(k, id, reason)
 		}

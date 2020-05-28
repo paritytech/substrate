@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Initialization errors.
 
 /// Result type alias for the CLI.
@@ -26,7 +27,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Cli error
-	Cli(clap::Error),
+	Cli(structopt::clap::Error),
 	/// Service error
 	Service(sc_service::Error),
 	/// Client error
