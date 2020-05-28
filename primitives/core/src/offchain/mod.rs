@@ -222,7 +222,7 @@ pub struct Duration(u64);
 
 impl Duration {
 	/// Create new duration representing given number of milliseconds.
-	pub fn from_millis(millis: u64) -> Self {
+	pub const fn from_millis(millis: u64) -> Self {
 		Duration(millis)
 	}
 

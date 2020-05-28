@@ -67,13 +67,14 @@ use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
 /// Default expiry duration for time based locks in milliseconds.
-const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS: u64 = 30_000;
+const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(30_000);
 
 /// Default expiry duration for block based locks in blocks.
 const STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS: u32 = 4;
 
 /// Time between checks if the lock is still being held in milliseconds.
-const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE: u64 = 100;
+const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN: Duration = Duration::from_millis(100);
+const STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX: Duration = Duration::from_millis(10);
 
 /// Lockable item for use with a persisted storage lock.
 ///
@@ -96,9 +97,9 @@ pub trait Lockable: Sized {
 	/// Note that `deadline` is only passed to allow optimizations
 	/// for `Lockables` which have a time based component.
 	fn snooze(_deadline: &Self::Deadline) {
-		sp_io::offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(
-			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE,
-		)));
+		sp_io::offchain::sleep_until(offchain::timestamp().add(
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX,
+		));
 	}
 }
 
@@ -113,7 +114,7 @@ pub struct Time {
 impl Default for Time {
 	fn default() -> Self {
 		Self {
-			expiration_duration: Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS),
+			expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION,
 		}
 	}
 }
@@ -134,8 +135,12 @@ impl Lockable for Time {
 		let remainder: Duration = now.diff(&deadline);
 		// do not snooze the full duration, but instead snooze max 100ms
 		// it might get unlocked in another thread
-		let snooze = core::cmp::min(remainder.millis(), STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE);
-		sp_io::offchain::sleep_until(now.add(Duration::from_millis(snooze)));
+		use core::cmp::{min,max};
+		let snooze = max(
+			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN
+		);
+		sp_io::offchain::sleep_until(now.add(snooze));
 	}
 }
 
@@ -162,9 +167,7 @@ impl<B: BlockNumberProvider> Default for BlockAndTimeDeadline<B> {
 	fn default() -> Self {
 		Self {
 			block_number: B::current_block_number() + STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS.into(),
-			timestamp: offchain::timestamp().add(Duration::from_millis(
-				STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS,
-			)),
+			timestamp: offchain::timestamp().add(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION),
 		}
 	}
 }
@@ -189,7 +192,7 @@ impl<B: BlockNumberProvider> Default for BlockAndTime<B> {
 	fn default() -> Self {
 		Self {
 			expiration_block_number_offset: STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS,
-			expiration_duration: Duration::from_millis(STORAGE_LOCK_DEFAULT_EXPIRY_DURATION_MS),
+			expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION,
 			_phantom: core::marker::PhantomData::<B>,
 		}
 	}
@@ -226,8 +229,12 @@ impl<B: BlockNumberProvider> Lockable for BlockAndTime<B> {
 	fn snooze(deadline: &Self::Deadline) {
 		let now = offchain::timestamp();
 		let remainder: Duration = now.diff(&(deadline.timestamp));
-		let snooze = core::cmp::min(remainder.millis(), STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE);
-		sp_io::offchain::sleep_until(now.add(Duration::from_millis(snooze)));
+		use core::cmp::{min,max};
+		let snooze = max(
+			min(remainder, STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MAX),
+			STORAGE_LOCK_PER_CHECK_ITERATION_SNOOZE_MIN
+		);
+		sp_io::offchain::sleep_until(now.add(snooze));
 	}
 }
 
