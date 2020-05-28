@@ -381,6 +381,20 @@ where
 			},
 		}
 	}
+
+	pub fn with_block_deadline(
+		key: &'a [u8],
+		expiration_block_number_offset: u32,
+	) -> Self {
+		Self {
+			value_ref: StorageValueRef::<'a>::persistent(key),
+			lockable: BlockAndTime::<B> {
+				expiration_block_number_offset,
+				expiration_duration: STORAGE_LOCK_DEFAULT_EXPIRY_DURATION,
+				_phantom: core::marker::PhantomData,
+			},
+		}
+	}
 }
 
 /// Bound for block number sources which commonly is implemented
