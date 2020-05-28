@@ -382,10 +382,9 @@ where
 		}
 	}
 
-	pub fn with_block_deadline(
-		key: &'a [u8],
-		expiration_block_number_offset: u32,
-	) -> Self {
+	/// Explicitly create a time and block number based storage lock with
+	/// the default expiration duration and a non-default block number offset.
+	pub fn with_block_deadline(key: &'a [u8], expiration_block_number_offset: u32) -> Self {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
 			lockable: BlockAndTime::<B> {
