@@ -755,11 +755,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
-					// if let Some(mut offchain_storage) = self.backend.offchain_storage() {
-					// 	offchain_sc.iter().for_each(|(k,v)| {
-					// 		offchain_storage.set(b"block-import-info", k,v)
-					// 	});
-					// }
 					operation.op.update_offchain_storage(offchain_sc)?;
 				}
 
