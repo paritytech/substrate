@@ -2916,8 +2916,7 @@ impl<T: Trait> Module<T> {
 	}
 
 
-	/// Remove all the storage items associated with the election. Should only once election round
-	/// is done.
+	/// Remove all the storage items associated with the election.
 	fn close_election_window() {
 		// Close window.
 		<EraElectionStatus<T>>::put(ElectionStatus::Closed);
