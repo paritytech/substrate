@@ -185,6 +185,7 @@ impl pallet_staking::Trait for Test {
 	type ElectionLookahead = ();
 	type Call = Call;
 	type MaxIterations = MaxIterations;
+	type SolutionImprovementThreshold = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 }

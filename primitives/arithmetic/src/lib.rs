@@ -40,13 +40,96 @@ mod per_things;
 mod fixed;
 mod rational128;
 
-pub use fixed::{FixedPointNumber, Fixed64, Fixed128};
-pub use per_things::{PerThing, Percent, PerU16, Permill, Perbill, Perquintill};
+pub use fixed::{FixedPointNumber, FixedPointOperand, Fixed64, Fixed128};
+pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
+
+use sp_std::cmp::Ordering;
+use sp_std::ops;
+use traits::{UniqueSaturatedInto, Saturating};
+
+/// Trait for comparing two numbers with an epsilon coefficient.
+///
+/// Returns:
+/// - `Ordering::Greater` if `self` is greater than `other + other * epsilon`.
+/// - `Ordering::Less` if `self` is less than `other - other * epsilon`.
+/// - `Ordering::Equal` otherwise.
+pub trait EpsilonOrd<T, P> {
+	/// Compare if `self` is `epsilon` greater or less than `other`.
+	fn ecmp(&self, other: &T, epsilon: P) -> Ordering;
+}
+
+impl<T, P> EpsilonOrd<T, P> for T
+where
+	P: PerThing,
+	T: Ord + PartialOrd + Clone + Copy + ops::Rem<T, Output=T> + ops::Mul<T, Output=T> +
+		ops::Div<T, Output=T> + ops::Add<T, Output=T> + UniqueSaturatedInto<InnerOf<P>> +
+		From<InnerOf<P>> + Saturating,
+{
+	fn ecmp(&self, other: &T, epsilon: P) -> Ordering {
+		// early exit.
+		if epsilon.is_zero() {
+			return self.cmp(&other)
+		}
+
+		let threshold = epsilon.mul_ceil(*other);
+		let lower_bound = other.saturating_sub(threshold);
+		let upper_bound = other.saturating_add(threshold);
+
+		if upper_bound <= lower_bound {
+			// threshold is too small to make any difference.
+			self.cmp(&other)
+		} else {
+			// upper_bound is guaranteed now to be bigger than lower.
+			match (self.cmp(&lower_bound), self.cmp(&upper_bound)) {
+				(Ordering::Greater, Ordering::Greater) => Ordering::Greater,
+				(Ordering::Less, Ordering::Less) => Ordering::Less,
+				_ => Ordering::Equal,
+			}
+		}
+
+	}
+}
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_std::cmp::Ordering;
+
+	#[test]
+	fn epsilon_ord_works() {
+		let b = 115u32;
+		let e = Perbill::from_percent(10);
+
+		// [115 - 11,5 (103,5), 115 + 11,5 (126,5)] is all equal
+		assert_eq!(103u32.ecmp(&b, e), Ordering::Equal);
+		assert_eq!(104u32.ecmp(&b, e), Ordering::Equal);
+		assert_eq!(115u32.ecmp(&b, e), Ordering::Equal);
+		assert_eq!(120u32.ecmp(&b, e), Ordering::Equal);
+		assert_eq!(126u32.ecmp(&b, e), Ordering::Equal);
+		assert_eq!(127u32.ecmp(&b, e), Ordering::Equal);
+
+		assert_eq!(128u32.ecmp(&b, e), Ordering::Greater);
+		assert_eq!(102u32.ecmp(&b, e), Ordering::Less);
+	}
+
+	#[test]
+	fn epsilon_ord_works_with_small_epc() {
+		let b = 115u32;
+		// way less than 1 percent. threshold will be zero. Result should be same as normal ord.
+		let e = Perbill::from_parts(100);
+
+		// [115 - 11,5 (103,5), 115 + 11,5 (126,5)] is all equal
+		assert_eq!(103u32.ecmp(&b, e), 103u32.cmp(&b));
+		assert_eq!(104u32.ecmp(&b, e), 104u32.cmp(&b));
+		assert_eq!(115u32.ecmp(&b, e), 115u32.cmp(&b));
+		assert_eq!(120u32.ecmp(&b, e), 120u32.cmp(&b));
+		assert_eq!(126u32.ecmp(&b, e), 126u32.cmp(&b));
+		assert_eq!(127u32.ecmp(&b, e), 127u32.cmp(&b));
+
+		assert_eq!(128u32.ecmp(&b, e), 128u32.cmp(&b));
+		assert_eq!(102u32.ecmp(&b, e), 102u32.cmp(&b));
+	}
 
 	#[test]
 	fn peru16_rational_does_not_overflow() {

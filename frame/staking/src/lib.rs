@@ -891,6 +891,10 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// equalize will not be executed at all.
 	type MaxIterations: Get<u32>;
 
+	/// The threshold of improvement that should be provided for a new solution to be accepted.
+	// TODO: fancy a shorter name? my fingers do not like this.
+	type SolutionImprovementThreshold: Get<Perbill>;
+
 	/// The maximum number of nominator rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
@@ -2611,7 +2615,7 @@ impl<T: Trait> Module<T> {
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
-				is_score_better(queued_score, score),
+				is_score_better(score, queued_score, T::SolutionImprovementThreshold::get()),
 				Error::<T>::PhragmenWeakSubmission.with_weight(T::DbWeight::get().reads(3)),
 			)
 		}

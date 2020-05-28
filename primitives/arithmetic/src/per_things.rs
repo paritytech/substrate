@@ -25,6 +25,9 @@ use crate::traits::{
 };
 use sp_debug_derive::RuntimeDebug;
 
+/// Get the inner type of a `PerThing`.
+pub type InnerOf<P> = <P as PerThing>::Inner;
+
 /// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
 /// `X`_.
 pub trait PerThing:
@@ -312,8 +315,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord,
-				 RuntimeDebug, CompactAs)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
 		pub struct $name($type);
 
 		impl PerThing for $name {
@@ -563,6 +565,12 @@ macro_rules! implement_per_thing {
 				let p = self.0;
 				let q = rhs.0;
 				Self::from_rational_approximation(p, q)
+			}
+		}
+
+		impl Default for $name {
+			fn default() -> Self {
+				<Self as PerThing>::zero()
 			}
 		}
 
