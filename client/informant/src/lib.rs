@@ -105,11 +105,11 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			OutputFormat::Coloured { prefix } => info!(
 				target: "substrate",
 				"✨ {}Imported #{} ({})",
-				prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash,
+				prefix, Colour::White.bold().paint(n.header.number().to_string()), n.hash,
 			),
 			OutputFormat::Plain { prefix } => info!(
 				target: "substrate", "✨ {}Imported #{} ({})",
-				prefix, format!("{}", n.header.number()), n.hash,
+				prefix, n.header.number(), n.hash,
 			),
 		}
 
