@@ -26,7 +26,7 @@ use codec::{Encode, Codec, Decode};
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 use sp_runtime::traits::{MaybeDisplay, MaybeFromStr};
 
-/// Some information related to a dispatchable that can be queried from the runtime.
+/// Information related to a dispatchable's class, weight, and fee that can be queried from the runtime.
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
@@ -35,8 +35,8 @@ pub struct RuntimeDispatchInfo<Balance> {
 	pub weight: Weight,
 	/// Class of this dispatch.
 	pub class: DispatchClass,
-	/// The partial inclusion fee of this dispatch. This does not include tip or anything else which
-	/// is dependent on the signature (aka. depends on a `SignedExtension`).
+	/// The inclusion fee of this dispatch. This does not include a tip or anything else that
+	/// depends on the signature (i.e. depends on a `SignedExtension`).
 	#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
 	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
