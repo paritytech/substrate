@@ -1269,10 +1269,7 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	}
 }
 
-impl<T> BlockNumberProvider for Module<T>
-where
-	T: crate::Trait,
-	<T as Trait>::BlockNumber: AtLeast32Bit,
+impl<T: Trait> BlockNumberProvider for Module<T>
 {
 	type BlockNumber = <T as Trait>::BlockNumber;
 
