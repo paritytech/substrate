@@ -93,10 +93,10 @@ pub use sp_std;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {
-	/// Context for general importing (including own blocks).
-	Importing,
-	/// Context used when syncing the blockchain.
-	Syncing,
+	/// Context used for importing locally authored blocks.
+	OwnBlockImport,
+	/// Context used for importing foreign blocks.
+	ForeignBlockImport,
 	/// Context used for block construction.
 	BlockConstruction,
 	/// Context used for offchain calls.
@@ -111,7 +111,7 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction =>
+			OwnBlockImport | ForeignBlockImport | BlockConstruction =>
 				offchain::Capabilities::none(),
 			// Enable keystore and transaction pool by default for offchain calls.
 			OffchainCall(None) => [

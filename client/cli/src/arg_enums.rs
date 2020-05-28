@@ -174,10 +174,11 @@ arg_enum! {
 	}
 }
 
-/// Default value for the `--execution-syncing` parameter.
-pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
-/// Default value for the `--execution-import-block` parameter.
-pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-own-block-import` parameter.
+pub const DEFAULT_EXECUTION_OWN_BLOCK_IMPORT: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-foreign-block-import` parameter.
+pub const DEFAULT_EXECUTION_FOREIGN_BLOCK_IMPORT: ExecutionStrategy =
+	ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-block-construction` parameter.
 pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-offchain-worker` parameter.

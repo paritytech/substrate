@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	ExecutionStrategy, TracingReceiver, WasmExecutionMethod,
-	DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
-	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	DEFAULT_EXECUTION_FOREIGN_BLOCK_IMPORT, DEFAULT_EXECUTION_OFFCHAIN_WORKER,
+	DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_OWN_BLOCK_IMPORT,
 };
 use crate::params::DatabaseParams;
 use crate::params::PruningParams;
@@ -118,8 +118,10 @@ impl ImportParams {
 		};
 
 		ExecutionStrategies {
-			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
-			importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+			own_block_import:
+				exec_all_or(exec.execution_own_block_import, DEFAULT_EXECUTION_OWN_BLOCK_IMPORT),
+			foreign_block_import:
+				exec_all_or(exec.execution_foreign_block_import, DEFAULT_EXECUTION_FOREIGN_BLOCK_IMPORT),
 			block_construction:
 				exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
 			offchain_worker:
@@ -132,25 +134,25 @@ impl ImportParams {
 /// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExecutionStrategiesParams {
-	/// The means of execution used when calling into the runtime while syncing blocks.
+	/// The means of execution used when calling into the runtime while import locally authored blocks.
 	#[structopt(
-		long = "execution-syncing",
+		long = "execution-own-block-import",
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_SYNCING.as_str(),
+		default_value = DEFAULT_EXECUTION_OWN_BLOCK_IMPORT.as_str(),
 	)]
-	pub execution_syncing: ExecutionStrategy,
+	pub execution_own_block_import: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime while importing blocks.
+	/// The means of execution used when calling into the runtime while importing foreign blocks.
 	#[structopt(
-		long = "execution-import-block",
+		long = "execution-foreign-block-import",
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_IMPORT_BLOCK.as_str(),
+		default_value = DEFAULT_EXECUTION_FOREIGN_BLOCK_IMPORT.as_str(),
 	)]
-	pub execution_import_block: ExecutionStrategy,
+	pub execution_foreign_block_import: ExecutionStrategy,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
 	#[structopt(
@@ -192,8 +194,8 @@ pub struct ExecutionStrategiesParams {
 			"execution-other",
 			"execution-offchain-worker",
 			"execution-block-construction",
-			"execution-import-block",
-			"execution-syncing",
+			"execution-own-block-import",
+			"execution-foreign-block-import",
 		]
 	)]
 	pub execution: Option<ExecutionStrategy>,

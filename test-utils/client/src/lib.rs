@@ -147,13 +147,10 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	}
 
 	/// Set the execution strategy that should be used by all contexts.
-	pub fn set_execution_strategy(
-		mut self,
-		execution_strategy: ExecutionStrategy
-	) -> Self {
+	pub fn set_execution_strategy(mut self, execution_strategy: ExecutionStrategy) -> Self {
 		self.execution_strategies = ExecutionStrategies {
-			syncing: execution_strategy,
-			importing: execution_strategy,
+			own_block_import: execution_strategy,
+			foreign_block_import: execution_strategy,
 			block_construction: execution_strategy,
 			offchain_worker: execution_strategy,
 			other: execution_strategy,
