@@ -22,6 +22,7 @@
 #     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
+  - check
   - test
   - build
   - post-build-test
@@ -32,15 +33,14 @@ stages:
 variables:                         &default-vars
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
-  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
-  CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
+cache:                             {}
 
 .collect-artifacts:                &collect-artifacts
   artifacts:
@@ -55,7 +55,6 @@ variables:                         &default-vars
     - kubernetes-parity-build
   environment:
     name: parity-build
-  interruptible:                   true
 
 .docker-env:                       &docker-env
   image:                           parity/rust-builder:latest
@@ -97,15 +96,16 @@ skip-if-draft:
   script:
      - ./.maintain/gitlab/skip_if_draft.sh
 
-#### stage:                        test
+#### stage:                        check
 
 check-runtime:
-  stage:                           test
+  stage:                           check
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
   variables:
+    <<:                            *default-vars
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
@@ -113,7 +113,7 @@ check-runtime:
   allow_failure:                   true
 
 check-signed-tag:
-  stage:                           test
+  stage:                           check
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
@@ -121,10 +121,9 @@ check-signed-tag:
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
   script:
     - ./.maintain/gitlab/check_signed.sh
-  allow_failure:                   false
 
 check-line-width:
-  stage:                           test
+  stage:                           check
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
   only:
@@ -132,6 +131,18 @@ check-line-width:
   script:
     - ./.maintain/gitlab/check_line_width.sh
   allow_failure:                   true
+
+test-dependency-rules:
+  stage:                           check
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - .maintain/ensure-deps.sh
+
+#### stage:                        test
 
 cargo-audit:
   stage:                           test
@@ -191,15 +202,6 @@ test-linux-stable:                 &test-linux
   script:
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
     - sccache -s
-
-test-dependency-rules:
-  stage:                           test
-  <<:                              *docker-env
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - .maintain/ensure-deps.sh
 
 unleash-check:
   stage:                           test
@@ -345,6 +347,7 @@ test-full-crypto-feature:
 
 cargo-check-macos:
   stage:                           test
+  # shell runner on mac ignores the image set in *docker-env
   <<:                              *docker-env
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
@@ -409,6 +412,9 @@ build-linux-substrate:             &build-binary
 
 build-linux-subkey:                &build-subkey
   <<:                              *build-binary
+  needs:
+    - job:                         cargo-check-subkey
+      artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
@@ -451,6 +457,8 @@ build-rust-doc-release:
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
+#### stage:                        post-build-test
+
 check-polkadot-companion-status:
   stage:                           post-build-test
   image:                           parity/tools:latest
@@ -462,7 +470,7 @@ check-polkadot-companion-status:
 
 
 trigger-contracts-ci:
-  stage:                           publish
+  stage:                           post-build-test
   needs:
     - job:                         build-linux-substrate
       artifacts:                   false
@@ -479,12 +487,13 @@ trigger-contracts-ci:
 #### stage:                        publish
 
 .build-push-docker-image:          &build-push-docker-image
-  # <<:                              *build-only #debug
+  <<:                              *build-only
   <<:                              *kubernetes-build
   image:                           docker:stable
   services:
     - docker:dind
   variables:                       &docker-build-vars
+    <<:                            *default-vars
     DOCKER_HOST:                   tcp://localhost:2375
     DOCKER_DRIVER:                 overlay2
     GIT_STRATEGY:                  none
@@ -567,7 +576,6 @@ publish-s3-doc:
   needs:
     - job:                         build-rust-doc-release
       artifacts:                   true
-  cache:                           {}
   <<:                              *build-only
   <<:                              *kubernetes-build
   variables:
