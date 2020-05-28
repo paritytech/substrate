@@ -134,7 +134,7 @@ impl ImportParams {
 /// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExecutionStrategiesParams {
-	/// The means of execution used when calling into the runtime while import locally authored blocks.
+	/// The means of execution used when calling into the runtime while importing locally authored blocks.
 	#[structopt(
 		long = "execution-own-block-import",
 		value_name = "STRATEGY",
