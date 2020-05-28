@@ -274,9 +274,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						.unwrap_or(0);
 					new_info.storage_size = new_info
 						.storage_size
-						.saturating_sub(prev_value_len)
-						.saturating_add(new_value_len);
-
+						.saturating_add(new_value_len)
+						.saturating_sub(prev_value_len);
 
 					// Finally, perform the change on the storage.
 					match opt_new_value {
