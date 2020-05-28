@@ -122,7 +122,7 @@ impl frame_system::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
 
 impl Trait for Runtime {

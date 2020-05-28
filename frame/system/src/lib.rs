@@ -1877,7 +1877,7 @@ pub(crate) mod tests {
 		pub const MaximumExtrinsicWeight: Weight = 768;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
-		pub const Version: RuntimeVersion = RuntimeVersion {
+		pub Version: RuntimeVersion = RuntimeVersion {
 			spec_name: sp_version::create_runtime_str!("test"),
 			impl_name: sp_version::create_runtime_str!("system-test"),
 			authoring_version: 1,
