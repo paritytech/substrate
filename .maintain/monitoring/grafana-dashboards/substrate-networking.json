@@ -4,7 +4,7 @@
       "name": "VAR_DATA_SOURCE",
       "type": "constant",
       "label": "Prometheus server to gather data from",
-      "value": "prometheus",
+      "value": "Prometheus",
       "description": ""
     },
     {
