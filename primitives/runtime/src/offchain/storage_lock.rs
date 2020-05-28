@@ -24,7 +24,7 @@
 //! restart or re-orgs.
 //!
 //! A use case for the lock is to make sure that a particular section of the
-//! code is only run by one Off-chain Worker at the time. This may include
+//! code is only run by one Off-chain Worker at a time. This may include
 //! performing a side-effect (i.e. an HTTP call) or alteration of single or
 //! multiple Local Storage entries.
 //!
