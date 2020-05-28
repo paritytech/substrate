@@ -48,7 +48,10 @@ pub struct TracingProxy {
 
 impl Drop for TracingProxy {
 	fn drop(&mut self) {
-		log::debug!("Dropping TracingProxy with {} spans", self.spans.len());
+		log::debug!(
+			target: "tracing",
+			"Dropping TracingProxy with {} spans", self.spans.len()
+		);
 		while let Some((_, mut sg)) = self.spans.pop() {
 			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 		}
@@ -78,15 +81,13 @@ impl TracingProxy {
 			|span| span.enter(),
 		);
 		self.spans.push((self.next_id, sg));
-		let spans_len = self.spans.len();
-		if spans_len > MAX_SPANS_LEN {
+		if self.spans.len() > MAX_SPANS_LEN {
 			// This is to prevent unbounded growth of Vec and could mean one of the following:
 			// 1. Too many nested spans, or MAX_SPANS_LEN is too low.
-			// 2. Not correctly exiting spans due to drop impl not running (panic in runtime)
-			// 3. Not correctly exiting spans due to misconfiguration / misuse
+			// 2. Not correctly exiting spans due to misconfiguration / misuse
 			log::warn!(
 				target: "tracing",
-				"MAX_SPANS_LEN exceeded, removing oldest span, recording `is_valid_trace = false`",
+				"TracingProxy MAX_SPANS_LEN exceeded, removing oldest span, recording `is_valid_trace = false`"
 			);
 			let mut sg = self.spans.remove(0).1;
 			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
@@ -97,17 +98,20 @@ impl TracingProxy {
 	/// Exit a span by dropping it along with it's associated guard.
 	pub fn exit_span(&mut self, id: u64) {
 		if self.spans.last().map(|l| id > l.0).unwrap_or(true) {
-			log::warn!("Span id not found {}", id);
+			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
 			return;
 		}
 		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop");
 		while id < last_span.0 {
-			log::warn!("Span ids not equal! id parameter given: {}, last span: {}", id, last_span.0);
+			log::warn!(
+				target: "tracing",
+				"TracingProxy Span ids not equal! id parameter given: {}, last span: {}", id, last_span.0
+			);
 			last_span.1.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 			if let Some(s) = self.spans.pop() {
 				last_span = s;
 			} else {
-				log::warn!("Span id not found {}", id);
+				log::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
 				return;
 			}
 		}

@@ -41,9 +41,12 @@ pub use tracing;
 #[cfg(feature = "std")]
 pub mod proxy;
 
+#[cfg(feature = "std")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
 /// Flag to signal whether to run wasm tracing
 #[cfg(feature = "std")]
-pub static WASM_TRACING_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static WASM_TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
@@ -101,4 +104,14 @@ macro_rules! if_tracing {
 #[cfg(not(feature = "std"))]
 macro_rules! if_tracing {
 	( $if:expr ) => {{}}
+}
+
+#[cfg(feature = "std")]
+pub fn wasm_tracing_enabled() -> bool {
+	WASM_TRACING_ENABLED.load(Ordering::Relaxed)
+}
+
+#[cfg(feature = "std")]
+pub fn set_wasm_tracing(b: bool) {
+	WASM_TRACING_ENABLED.store(b, Ordering::Relaxed)
 }

@@ -23,9 +23,9 @@
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 
 #![cfg_attr(feature = "std",
-   doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
+doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"),
-   doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
+doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
 use sp_std::vec::Vec;
 
@@ -161,7 +161,6 @@ pub trait Storage {
 /// from within the runtime.
 #[runtime_interface]
 pub trait DefaultChildStorage {
-
 	/// Get a default child storage value for a given key.
 	///
 	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
@@ -216,7 +215,7 @@ pub trait DefaultChildStorage {
 	/// Clear a child storage key.
 	///
 	/// For the default child storage at `storage_key`, clear value at `key`.
-	fn clear (
+	fn clear(
 		&mut self,
 		storage_key: &[u8],
 		key: &[u8],
@@ -964,37 +963,42 @@ sp_externalities::decl_extension! {
 /// Interface that provides functions for profiling the runtime.
 #[runtime_interface]
 pub trait WasmTracing {
-	/// To create and enter a `tracing` span, via `sp_tracing::proxy`
+	/// To create and enter a `tracing` span, using `sp_tracing::proxy`
 	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
-		if !sp_tracing::WASM_TRACING_ENABLED.load(std::sync::atomic::Ordering::Relaxed) {
-			log::debug!(
-				target: "sp_tracing",
-				"Notify to runtime that tracing is disabled."
-			);
-			return 0
-		}
-		let proxy = match self.extension::<TracingProxyExt>() {
-			Some(proxy) => proxy,
-			None => {
-				self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new()))
-					.expect("Failed to register required extension: `TracingProxyExt`");
-				self.extension::<TracingProxyExt>().expect("Failed to load required extension `TracingProxyExt` on enter_span")
+		if sp_tracing::wasm_tracing_enabled() {
+			match self.extension::<TracingProxyExt>() {
+				Some(proxy) => return proxy.enter_span(target, name),
+				None => {
+					if let Ok(_) = self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new())) {
+						if let Some(proxy) = self.extension::<TracingProxyExt>() {
+							return proxy.enter_span(target, name);
+						}
+					} else {
+						log::warn!(
+							target: "tracing",
+							"Unable to register extension: TracingProxyExt"
+						);
+					}
+				}
 			}
-		};
-		proxy.enter_span(target, name)
+		}
+		log::debug!(
+			target: "tracing",
+			"Notify to runtime that tracing is disabled."
+		);
+		0
 	}
 
-	/// If there is a panic in the WASM VM then this may not be called.
+	/// Exit a `tracing` span, using `sp_tracing::proxy`
 	fn exit_span(&mut self, id: u64) {
-		let proxy = match self.extension::<TracingProxyExt>() {
-			Some(proxy) => proxy,
-			None => {
-				self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new()))
-					.expect("Failed to register required extension: `TracingProxyExt`");
-				self.extension::<TracingProxyExt>().expect("Failed to load required extension `TracingProxyExt` on exit_span")
-			}
-		};
-		proxy.exit_span(id);
+		if let Some(proxy) = self.extension::<TracingProxyExt>() {
+			proxy.exit_span(id)
+		} else {
+			log::warn!(
+				target: "tracing",
+				"Unable to load extension: TracingProxyExt"
+			);
+		}
 	}
 }
 
@@ -1194,10 +1198,10 @@ mod tests {
 
 		t.execute_with(|| {
 			let mut v = [0u8; 4];
-			assert!(storage::read(b":test", &mut v[..], 0).unwrap() >= 4);
+			assert!(storage::read(b":test", &mut v[..], 0).unwrap() > = 4);
 			assert_eq!(v, [11u8, 0, 0, 0]);
 			let mut w = [0u8; 11];
-			assert!(storage::read(b":test", &mut w[..], 4).unwrap() >= 11);
+			assert!(storage::read(b":test", &mut w[..], 4).unwrap() > = 11);
 			assert_eq!(&w, b"Hello world");
 		});
 	}
@@ -1206,11 +1210,11 @@ mod tests {
 	fn clear_prefix_works() {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![
-				b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
-				b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
-				b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
-				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-			],
+	b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+	b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+	b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+	b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
+	],
 			children_default: map![],
 		});
 

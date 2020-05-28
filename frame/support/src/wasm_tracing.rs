@@ -26,18 +26,18 @@ pub static mut WASM_TRACING_ENABLED: bool = true;
 ///
 /// 0 is a special inner value to indicate that the trace is disabled and should not call out
 /// of the runtime.
-pub struct TracingSpanGuard(u64);
+pub struct TracingSpanGuard(Option<u64>);
 
 impl TracingSpanGuard {
-	pub fn new(span: u64) -> Self {
+	pub fn new(span: Option<u64>) -> Self {
 		Self(span)
 	}
 }
 
 impl Drop for TracingSpanGuard {
 	fn drop(&mut self) {
-		if self.0 > 0 {
-			crate::sp_io::wasm_tracing::exit_span(self.0);
+		if let Some(id) = self.0.take() {
+			crate::sp_io::wasm_tracing::exit_span(id);
 		}
 	}
 }
@@ -57,19 +57,20 @@ impl Drop for TracingSpanGuard {
 macro_rules! enter_span {
 	( $name:expr ) => {
 		#[cfg(not(feature = "std"))]
-		let __span_id__ = match unsafe { $crate::wasm_tracing::WASM_TRACING_ENABLED } {
-			false => $crate::wasm_tracing::TracingSpanGuard::new(0),
-			true => {
+		let __span_id__ = if unsafe { $crate::wasm_tracing::WASM_TRACING_ENABLED } {
 				let id = $crate::sp_io::wasm_tracing::enter_span(
 					module_path!(),
 					$name
 				);
 				if id == 0 {
 					unsafe { $crate::wasm_tracing::WASM_TRACING_ENABLED = false; }
+					$crate::wasm_tracing::TracingSpanGuard::new(None)
+				} else {
+					$crate::wasm_tracing::TracingSpanGuard::new(Some(id))
 				}
-				$crate::wasm_tracing::TracingSpanGuard::new(id)
-			}
-		};
+			} else {
+				$crate::wasm_tracing::TracingSpanGuard::new(None)
+			};
 		#[cfg(feature = "std")]
 		$crate::sp_tracing::enter_span!($name);
 	}

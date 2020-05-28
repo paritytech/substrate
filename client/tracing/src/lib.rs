@@ -162,11 +162,11 @@ impl ProfilingSubscriber {
 	fn check_target(&self, target: &str, level: &Level) -> bool {
 		for t in &self.targets {
 			if target.starts_with(t.0.as_str()) && level <= &t.1 {
-				log::debug!("Enabled target: {}, level: {}", target, level);
+				log::debug!(target: "tracing", "Enabled target: {}, level: {}", target, level);
 				return true;
 			}
 		}
-		log::debug!("Disabled target: {}, level: {}", target, level);
+		log::debug!(target: "tracing", "Disabled target: {}, level: {}", target, level);
 		false
 	}
 }
