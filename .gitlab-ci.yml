@@ -40,7 +40,8 @@ variables:                         &default-vars
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
-cache:                             {}
+defaults:
+  cache:                           {}
 
 .collect-artifacts:                &collect-artifacts
   artifacts:
@@ -384,7 +385,6 @@ test-browser-node:
       artifacts:                   false
   variables:
     <<:                                         *default-vars
-    # debug: may conflict with RUSTFLAGS: -Cdebug-assertions=y
     CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
     WASM_BINDGEN_TEST_TIMEOUT:                  120
