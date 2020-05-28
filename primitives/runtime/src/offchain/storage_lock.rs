@@ -67,7 +67,7 @@ use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
 
 /// Default expiry duration for time based locks in milliseconds.
-const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(30_000);
+const STORAGE_LOCK_DEFAULT_EXPIRY_DURATION: Duration = Duration::from_millis(20_000);
 
 /// Default expiry duration for block based locks in blocks.
 const STORAGE_LOCK_DEFAULT_EXPIRY_BLOCKS: u32 = 4;
