@@ -1257,12 +1257,9 @@ where
 	) {
 		if amount.is_zero() || reasons.is_none() { return }
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
-		let mut locks = Self::locks(who).into_iter().filter_map(|l|
-			if l.id == id {
-				new_lock.take()
-			} else {
-				Some(l)
-			}).collect::<Vec<_>>();
+		let mut locks = Self::locks(who).into_iter()
+			.filter_map(|l| if l.id == id { new_lock.take() } else { Some(l) })
+			.collect::<Vec<_>>();
 		if let Some(lock) = new_lock {
 			locks.push(lock)
 		}

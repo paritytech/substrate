@@ -105,7 +105,7 @@ pub struct TestIsProxyable;
 impl Filter<Call> for TestIsProxyable {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::System(system::Call::remark(_)) => true,
+			Call::Balances(pallet_balances::Call::transfer(..)) => true,
 			_ => false,
 		}
 	}
@@ -114,7 +114,7 @@ pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(pallet_balances::Call::transfer(..)) => true,
+			Call::Balances(_) => true,
 			_ => false,
 		}
 	}
@@ -158,6 +158,21 @@ fn expect_event<E: Into<TestEvent>>(e: E) {
 
 fn now() -> Timepoint<u64> {
 	Utility::timepoint()
+}
+
+#[test]
+fn basic_proxying_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::add_proxy(Origin::signed(1), 2));
+		assert_ok!(Utility::add_proxy(Origin::signed(1), 3));
+		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 5)));
+		assert_ok!(Utility::proxy(Origin::signed(2), 1, call.clone()));
+		expect_event(RawEvent::ProxyExecuted(Ok(())));
+		assert_eq!(Balances::free_balance(6), 5);
+		assert_ok!(Utility::proxy(Origin::signed(2), 1, call.clone()));
+		expect_event(RawEvent::ProxyExecuted(Ok(())));
+		assert_eq!(Balances::free_balance(6), 10);
+	});
 }
 
 #[test]
