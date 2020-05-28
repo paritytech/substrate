@@ -53,7 +53,7 @@ use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
-use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure, IterableStorageMap};
+use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
 use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get
@@ -180,13 +180,6 @@ decl_module! {
 		const MinVestedTransfer: BalanceOf<T> = T::MinVestedTransfer::get();
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> frame_support::dispatch::Weight {
-			for (a, _) in Vesting::<T>::iter() {
-				let _ = Self::update_lock(a);
-			}
-			1_000_000_000_000
-		}
 
 		/// Unlock any vested funds of the sender account.
 		///
