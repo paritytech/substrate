@@ -32,6 +32,7 @@ pub use self::purge_chain_cmd::PurgeChainCmd;
 pub use self::revert_cmd::RevertCmd;
 pub use self::run_cmd::RunCmd;
 pub use self::export_state_cmd::ExportStateCmd;
+use crate::SubstrateCli;
 use std::fmt::Debug;
 use structopt::StructOpt;
 
@@ -400,6 +401,12 @@ macro_rules! substrate_cli_subcommands {
 			fn log_filters(&self) -> $crate::Result<String> {
 				match self {
 					$($enum::$variant(cmd) => cmd.log_filters()),*
+				}
+			}
+
+			fn informant_prefix<C: SubstrateCli>(&self) -> $crate::Result<String> {
+				match self {
+					$($enum::$variant(cmd) => cmd.informant_prefix::<C>()),*
 				}
 			}
 		}

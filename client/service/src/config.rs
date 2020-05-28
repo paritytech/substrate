@@ -102,6 +102,8 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+	/// A prefix for the informant's logs
+	pub informant_prefix: String,
 }
 
 /// Type for tasks spawned by the executor.

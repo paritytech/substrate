@@ -84,6 +84,11 @@ pub trait SubstrateCli: Sized {
 	/// Chain spec factory
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 
+	/// A prefix for the informant's logs
+	fn informant_prefix() -> &'static str {
+		""
+	}
+
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
 	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
