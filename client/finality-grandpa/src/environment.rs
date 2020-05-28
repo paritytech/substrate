@@ -35,7 +35,6 @@ use finality_grandpa::{
 	voter, voter_set::VoterSet,
 };
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as ClientError};
-use sp_core::Pair;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
@@ -708,7 +707,7 @@ where
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
-				if local_key.as_ref().map(|k| k.public() == id).unwrap_or(false) {
+				if local_key.clone().map(|k| k == id).unwrap_or(false) {
 					HasVoted::Yes(id, vote)
 				} else {
 					HasVoted::No
@@ -718,6 +717,7 @@ where
 		};
 
 		let (incoming, outgoing) = self.network.round_communication(
+			&self.config.keystore,
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
@@ -740,7 +740,7 @@ where
 		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
-			voter_id: local_key.map(|pair| pair.public()),
+			voter_id: local_key.map(|public| public),
 			prevote_timer: Box::pin(prevote_timer.map(Ok)),
 			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
@@ -752,7 +752,7 @@ where
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id.public(),
+			Some(id) => id,
 			None => return Ok(()),
 		};
 
@@ -791,7 +791,7 @@ where
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id.public(),
+			Some(id) => id,
 			None => return Ok(()),
 		};
 
@@ -832,7 +832,7 @@ where
 		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
 
 		let local_id = match local_id {
-			Some(id) => id.public(),
+			Some(id) => id,
 			None => return Ok(()),
 		};
 
