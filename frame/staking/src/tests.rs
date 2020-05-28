@@ -2980,25 +2980,38 @@ mod offchain_phragmen {
 				assert_session_era!(3, 0);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
+				// opens
 				run_to_block(37);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
+				assert!(Staking::is_current_session_final());
+				assert!(Staking::snapshot_validators().is_some());
 
+				// closes normally
 				run_to_block(40);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert!(!Staking::is_current_session_final());
+				assert!(Staking::snapshot_validators().is_none());
 				assert_session_era!(4, 0);
 
 				run_to_block(47);
-				assert_session_era!(4, 0);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
-
-				run_to_block(50);
-				assert_session_era!(5, 0);
+				assert_session_era!(4, 0);
 
 				run_to_block(57);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(5, 0);
 
 				run_to_block(67);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				// Will not open again as scheduled
+				run_to_block(87);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(8, 0);
+
+				run_to_block(90);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(9, 0);
 			})
 	}
 
