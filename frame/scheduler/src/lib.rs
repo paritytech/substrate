@@ -515,7 +515,7 @@ mod tests {
 		type Event = ();
 	}
 	parameter_types! {
-		pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 	}
 	impl Trait for Test {
 		type Event = ();
