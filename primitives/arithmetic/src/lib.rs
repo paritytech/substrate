@@ -40,8 +40,8 @@ mod per_things;
 mod fixed;
 mod rational128;
 
-pub use fixed::{FixedPointNumber, FixedPointOperand, Fixed64, Fixed128};
-pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perquintill};
+pub use fixed::{FixedPointNumber, Fixed64, Fixed128, FixedPointOperand};
+pub use per_things::{PerThing, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
 
 use sp_std::cmp::Ordering;
