@@ -853,7 +853,7 @@ mod tests {
 			// 123 weight, 456 length, 100 base
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
 			// adjusted fee = 4683 - (4683 * -.5)  = 4683 - 2341.5 = 4683 - 2341 = 2342
-			// final fee = 100 + 2342 + 789 tip = 3239
+			// final fee = 100 + 2342 + 789 tip = 3231
 			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 3231);
 		});
 	}
@@ -1000,10 +1000,16 @@ mod tests {
 				::post_dispatch(pre, &info, &post_info, len, &Ok(()))
 				.unwrap();
 
-			assert_eq!(
-				prev_balance - Balances::free_balance(2),
-				Module::<Runtime>::compute_actual_fee(len as u32, &info, &post_info, tip),
-			);
+			let refund_based_fee = prev_balance - Balances::free_balance(2);
+			let actual_fee = Module::<Runtime>
+				::compute_actual_fee(len as u32, &info, &post_info, tip);
+
+			// 33 weight, 10 length, 7 base
+			// adjustable fee = (33 * 1) + (10 * 1) = 43
+			// adjusted fee = 43 + (43 * .25)  = 43 + 10.75 = 43 + 10 = 53
+			// final fee = 7 + 53 + 5 tip = 65
+			assert_eq!(actual_fee, 65);
+			assert_eq!(refund_based_fee, actual_fee);
 		});
 	}
 }
