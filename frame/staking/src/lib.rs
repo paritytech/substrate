@@ -301,7 +301,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerU16, PerThing, RuntimeDebug,
+	Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
@@ -3499,7 +3499,6 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			_,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
-			use sp_runtime::DispatchError;
 
 			// discard solution not coming from the local OCW.
 			match source {
@@ -3549,13 +3548,34 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
-		// IMPORTANT NOTE: By default, a sane `pre-dispatch` should always do the same checks as
-		// `validate_unsigned` and overriding this should be done with care. this module has only
-		// one unsigned entry point, in which we call into `<Module<T>>::pre_dispatch_checks()`
-		// which is all the important checks that we do in `validate_unsigned`. Hence, we can safely
-		// override this to save some time.
-		Ok(())
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+		if let Call::submit_election_solution_unsigned(
+			_,
+			_,
+			score,
+			era,
+			_,
+		) = call {
+			// IMPORTANT NOTE: These checks are performed in the dispatch call itself, yet we need
+			// to duplicate them here to prevent a block producer from putting a previously
+			// validated, yet no longer valid solution on chain.
+			// OPTIMISATION NOTE: we could skip this in the `submit_election_solution_unsigned`
+			// since we already do it here. The signed version needs it though. Yer for now we keep
+			// this duplicate check here so both signed and unsigned can use a singular
+			// `check_and_replace_solution`.
+			Self::pre_dispatch_checks(*score, *era)
+				.map(|_| ())
+				.map_err(|error_with_post_info| {
+					let error = error_with_post_info.error;
+					let error_number = match error {
+						DispatchError::Module { error, ..} => error,
+						_ => 0,
+					};
+					InvalidTransaction::Custom(error_number).into()
+				})
+		} else {
+			Err(InvalidTransaction::Call.into())
+		}
 	}
 }
 
