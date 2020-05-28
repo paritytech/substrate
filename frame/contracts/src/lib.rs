@@ -348,7 +348,8 @@ pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 	/// A size offset for an contract. A just created account with untouched storage will have that
 	/// much of storage from the perspective of the state rent.
 	///
-	/// This is a simple way to ensure that empty contracts eventually gets deleted.
+	/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
+	/// making them pay rent. This creates an incentive to remove them early in order to save rent.
 	type StorageSizeOffset: Get<u32>;
 
 	/// Price of a byte of storage per one block interval. Should be greater than 0.
@@ -432,7 +433,9 @@ decl_module! {
 		/// A size offset for an contract. A just created account with untouched storage will have that
 		/// much of storage from the perspective of the state rent.
 		///
-		/// This is a simple way to ensure that empty contracts eventually gets deleted.
+		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
+		/// by making them pay rent. This creates an incentive to remove them early in order to save
+		/// rent.
 		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
 
 		/// Price of a byte of storage per one block interval. Should be greater than 0.
