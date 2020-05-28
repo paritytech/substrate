@@ -194,7 +194,7 @@ test-linux-stable:                 &test-linux
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE: 1
   except:
     variables:
@@ -293,7 +293,7 @@ test-linux-stable-int:
   script:
     - echo "___Logs will be partly shown at the end in case of failure.___"
     - echo "___Full log will be saved to the job artifacts only in case of failure.___"
-    - WASM_BUILD_NO_COLOR=1 
+    - WASM_BUILD_NO_COLOR=1
       RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
         time cargo test -p node-cli --release --verbose --locked -- --ignored
         &> ${CI_COMMIT_SHORT_SHA}_int_failure.log
@@ -357,9 +357,21 @@ cargo-check-macos:
 
 #### stage:                        build
 
+check-polkadot-companion-status:
+  stage:                           build
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/                   # PRs
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
+  needs:
+    - job:                         test-linux-stable-int
+      artifacts:                   false
   script:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
   allow_failure:                   true
@@ -401,7 +413,7 @@ build-linux-substrate:             &build-binary
       else
         ./artifacts/substrate/substrate --version |
           sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-          tee ./artifacts/substrate/VERSION;
+            tee ./artifacts/substrate/VERSION;
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
@@ -425,7 +437,7 @@ build-linux-subkey:                &build-subkey
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
-        tee ./artifacts/subkey/VERSION;
+          tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
@@ -451,23 +463,13 @@ build-rust-doc-release:
   <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" 
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"
         time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
 #### stage:                        post-build-test
-
-check-polkadot-companion-status:
-  stage:                           post-build-test
-  image:                           parity/tools:latest
-  <<:                              *kubernetes-build
-  only:
-    - /^[0-9]+$/
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_status.sh
-
 
 trigger-contracts-ci:
   stage:                           post-build-test
