@@ -44,7 +44,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	Fixed128, FixedPointNumber,
+	Fixed128, FixedPointNumber, FixedPointOperand,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
@@ -104,7 +104,9 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T> where
+	BalanceOf<T>: FixedPointOperand
+{
 	/// Query the data that we know about the fee of a given `call`.
 	///
 	/// This module is not and cannot be aware of the internals of a signed extension, for example
@@ -166,17 +168,19 @@ impl<T: Trait> Module<T> {
 		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee)
 	}
 
-	/// Compute the fee for the specified weight.
+	/// Compute the actual post dispatch fee for a particular transaction.
 	///
-	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
-	/// the share that the weight contributes to the overall fee of a transaction.
-	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
-		Balance: UniqueSaturatedFrom<u128>
+	/// Identical to `compute_fee` with the only difference that the post dispatch corrected
+	/// weight is used for the weight fee calculation.
+	pub fn compute_actual_fee(
+		len: u32,
+		info: &DispatchInfoOf<T::Call>,
+		post_info: &PostDispatchInfoOf<T::Call>,
+		tip: BalanceOf<T>,
+	) -> BalanceOf<T> where
+		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
-		let fee = UniqueSaturatedInto::<u128>::unique_saturated_into(Self::weight_to_fee(weight));
-		UniqueSaturatedFrom::unique_saturated_from(
-			NextFeeMultiplier::get().saturating_mul_acc_int(fee)
-		)
+		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, info.pays_fee)
 	}
 
 	fn compute_fee_raw(
@@ -194,15 +198,31 @@ impl<T: Trait> Module<T> {
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee.saturated_into());
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee);
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
-			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
+			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
 		} else {
 			tip
 		}
 	}
+}
 
+impl<T: Trait> Module<T> {
+	/// Compute the fee for the specified weight.
+	///
+	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
+	/// the share that the weight contributes to the overall fee of a transaction.
+	///
+	/// This function is generic in order to supply the contracts module with a way
+	/// to calculate the gas price. The contracts module is not able to put the necessary
+	/// `BalanceOf<T>` contraints on its trait. This function is not to be used by this module.
+	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
+		Balance: UniqueSaturatedFrom<u128>
+	{
+		let fee: u128 = Self::weight_to_fee(weight).unique_saturated_into();
+		Balance::unique_saturated_from(NextFeeMultiplier::get().saturating_mul_acc_int(fee))
+	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
@@ -219,7 +239,7 @@ pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] Ba
 
 impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
-	BalanceOf<T>: Send + Sync,
+	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
@@ -268,7 +288,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
-	BalanceOf<T>: Send + Sync + From<u64>,
+	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
@@ -314,11 +334,11 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, imbalance, fee) = pre;
 		if let Some(payed) = imbalance {
-			let actual_fee = Module::<T>::compute_fee_raw(
+			let actual_fee = Module::<T>::compute_actual_fee(
 				len as u32,
-				post_info.calc_actual_weight(info),
+				info,
+				post_info,
 				tip,
-				info.pays_fee,
 			);
 			let refund = fee.saturating_sub(actual_fee);
 			let actual_payment = match T::Currency::deposit_into_existing(&who, refund) {
