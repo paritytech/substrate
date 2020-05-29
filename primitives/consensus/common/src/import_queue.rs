@@ -185,7 +185,7 @@ pub enum BlockImportError {
 }
 
 /// Single block import function.
-pub(crate) fn import_single_block_unmetered<B: BlockT, V: Verifier<B>, Transaction>(
+pub fn import_single_block_unmetered<B: BlockT, V: Verifier<B>, Transaction>(
 	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
