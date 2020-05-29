@@ -231,6 +231,7 @@ impl balances::Trait for Runtime {
 	/// The ubiquitous event type.
 	type Event = Event;
 	type DustRemoval = ();
+	type OnReceived = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 }

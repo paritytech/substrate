@@ -226,6 +226,7 @@ parameter_types! {
 impl pallet_balances::Trait for Runtime {
 	type Balance = Balance;
 	type DustRemoval = ();
+	type OnReceived = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Module<Runtime>;

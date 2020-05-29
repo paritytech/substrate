@@ -459,6 +459,7 @@ mod tests {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
+		type OnReceived = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
 	}

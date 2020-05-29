@@ -158,6 +158,7 @@ parameter_types! {
 impl balances::Trait for Test {
 	type Balance = u128;
 	type DustRemoval = ();
+	type OnReceived = ();
 	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;

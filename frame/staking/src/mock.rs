@@ -228,6 +228,7 @@ impl pallet_balances::Trait for Test {
 	type Balance = Balance;
 	type Event = MetaEvent;
 	type DustRemoval = ();
+	type OnReceived = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 }

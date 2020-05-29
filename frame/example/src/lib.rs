@@ -769,6 +769,7 @@ mod tests {
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
 		type DustRemoval = ();
+		type OnReceived = ();
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;

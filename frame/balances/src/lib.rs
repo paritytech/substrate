@@ -161,7 +161,7 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	traits::{
-		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnKilledAccount, OnUnbalanced, OnReceived, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
@@ -197,6 +197,9 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
+
+	/// Handler for when an account received funds.
+	type OnReceived: OnReceived<Self::AccountId, Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
@@ -629,14 +632,19 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		T::AccountStore::try_mutate_exists(who, |maybe_account| {
 			let mut account = maybe_account.take().unwrap_or_default();
 			let was_zero = account.total().is_zero();
+			let old_free = account.free;
 			f(&mut account).map(move |result| {
 				let maybe_endowed = if was_zero { Some(account.free) } else { None };
 				*maybe_account = Self::post_mutation(who, account);
-				(maybe_endowed, result)
+				let maybe_received = maybe_account.as_ref().map(|acc| acc.free.checked_sub(&old_free)).flatten();
+				(maybe_endowed, maybe_received, result)
 			})
-		}).map(|(maybe_endowed, result)| {
+		}).map(|(maybe_endowed, maybe_received, result)| {
 			if let Some(endowed) = maybe_endowed {
 				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
+			}
+			if let Some(received) = maybe_received {
+				T::OnReceived::on_received(who, received);
 			}
 			result
 		})
@@ -876,6 +884,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
 	type Event = ();
 	type DustRemoval = ();
+	type OnReceived = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
 }

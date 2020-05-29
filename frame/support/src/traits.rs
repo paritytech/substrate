@@ -269,6 +269,13 @@ pub trait OnKilledAccount<AccountId> {
 	fn on_killed_account(who: &AccountId);
 }
 
+#[impl_for_tuples(30)]
+/// Handler for when an account received funds.
+pub trait OnReceived<AccountId, Balance> {
+	/// An account received funds.
+	fn on_received(account: &AccountId, amount: Balance);
+}
+
 /// A trait for finding the author of a block header based on the `PreRuntime` digests contained
 /// within it.
 pub trait FindAuthor<Author> {

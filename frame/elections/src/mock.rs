@@ -70,6 +70,7 @@ parameter_types! {
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type DustRemoval = ();
+	type OnReceived = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -127,7 +128,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 parameter_types!{
-	pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
+	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
 }
 
 impl elections::Trait for Test {
