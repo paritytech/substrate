@@ -98,25 +98,6 @@ parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
-	pub const ProxyDepositBase: u64 = 1;
-	pub const ProxyDepositFactor: u64 = 1;
-	pub const MaxProxies: u16 = 3;
-}
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
-pub enum ProxyType {
-	Any,
-	JustTransfer,
-}
-impl InstanceFilter<Call> for ProxyType {
-	fn filter(&self, c: &Call) -> bool {
-		match self {
-			ProxyType::Any => true,
-			ProxyType::JustTransfer => match c {
-				Call::Balances(pallet_balances::Call::transfer(..)) => true,
-				_ => false,
-			}
-		}
-	}
 }
 pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
@@ -135,10 +116,6 @@ impl Trait for Test {
 	type MultisigDepositFactor = MultisigDepositFactor;
 	type MaxSignatories = MaxSignatories;
 	type IsCallable = TestIsCallable;
-	type ProxyType = ProxyType;
-	type ProxyDepositBase = ProxyDepositBase;
-	type ProxyDepositFactor = ProxyDepositFactor;
-	type MaxProxies = MaxProxies;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -167,59 +144,6 @@ fn expect_event<E: Into<TestEvent>>(e: E) {
 
 fn now() -> Timepoint<u64> {
 	Utility::timepoint()
-}
-
-#[test]
-fn add_remove_proxies_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::Any));
-		assert_noop!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::Any), Error::<Test>::Duplicate);
-		assert_eq!(Balances::reserved_balance(1), 2);
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
-		assert_eq!(Balances::reserved_balance(1), 3);
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 3, ProxyType::Any));
-		assert_eq!(Balances::reserved_balance(1), 4);
-		assert_noop!(Utility::add_proxy(Origin::signed(1), 4, ProxyType::Any), Error::<Test>::TooMany);
-		assert_ok!(Utility::remove_proxy(Origin::signed(1), 3, ProxyType::Any));
-		assert_eq!(Balances::reserved_balance(1), 3);
-		assert_ok!(Utility::remove_proxy(Origin::signed(1), 2, ProxyType::Any));
-		assert_eq!(Balances::reserved_balance(1), 2);
-		assert_ok!(Utility::remove_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
-		assert_eq!(Balances::reserved_balance(1), 0);
-	});
-}
-
-#[test]
-fn cannot_add_proxy_without_balance() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::add_proxy(Origin::signed(5), 3, ProxyType::Any));
-		assert_eq!(Balances::reserved_balance(5), 2);
-		assert_noop!(
-			Utility::add_proxy(Origin::signed(5), 4, ProxyType::Any),
-			BalancesError::<Test, _>::InsufficientBalance
-		);
-	});
-}
-
-#[test]
-fn proxying_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 3, ProxyType::Any));
-
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
-		assert_noop!(Utility::proxy(Origin::signed(4), 1, None, call.clone()), Error::<Test>::NotProxy);
-		assert_noop!(Utility::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()), Error::<Test>::NotProxy);
-		assert_ok!(Utility::proxy(Origin::signed(2), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
-		assert_eq!(Balances::free_balance(6), 1);
-
-		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
-		assert_noop!(Utility::proxy(Origin::signed(2), 1, None, call.clone()), Error::<Test>::Unproxyable);
-		assert_ok!(Utility::proxy(Origin::signed(3), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
-		assert_eq!(Balances::free_balance(6), 2);
-	});
 }
 
 #[test]
@@ -418,7 +342,7 @@ fn too_many_signatories_fails() {
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 		assert_noop!(
 			Utility::as_multi(Origin::signed(1), 2, vec![2, 3, 4], None, call.clone()),
-			Error::<Test>::TooMany,
+			Error::<Test>::TooManySignatories,
 		);
 	});
 }

@@ -86,6 +86,7 @@ members = [
 	"frame/metadata",
 	"frame/nicks",
 	"frame/offences",
+	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
 	"frame/scheduler",

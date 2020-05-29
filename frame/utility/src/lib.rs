@@ -67,13 +67,12 @@ use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter},
+use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
-use sp_runtime::traits::Member;
+use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
 mod benchmarking;
@@ -108,25 +107,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// Is a given call compatible with the proxying subsystem?
 	type IsCallable: Filter<<Self as Trait>::Call>;
-
-	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
-	/// The instance filter determines whether a given call may be proxied under this type.
-	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>;
-
-	/// The base amount of currency needed to reserve for creating a proxy.
-	///
-	/// This is held for an additional storage item whose value size is
-	/// `sizeof(Balance)` bytes and whose key size is `sizeof(AccountId)` bytes.
-	type ProxyDepositBase: Get<BalanceOf<Self>>;
-
-	/// The amount of currency needed per proxy added.
-	///
-	/// This is held for adding 32 bytes plus an instance of `ProxyType` more into a pre-existing
-	/// storage value.
-	type ProxyDepositFactor: Get<BalanceOf<Self>>;
-
-	/// The maximum amount of proxies allowed for a single account.
-	type MaxProxies: Get<u16>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -153,19 +133,12 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-/// The maximum number of proxies an account may delegate to.
-pub const MAX_PROXIES: usize = 32;
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
-
-		/// The set of account proxies. Maps the account which has delegated to the accounts
-		/// which are being delegated to, together with the amount held on deposit.
-		pub Proxies: map hasher(twox_64_concat) T::AccountId => (Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>);
 	}
 }
 
@@ -179,8 +152,8 @@ decl_error! {
 		NoApprovalsNeeded,
 		/// There are too few signatories in the list.
 		TooFewSignatories,
-		/// There are too many signatories in the list or proxies registered.
-		TooMany,
+		/// There are too many signatories in the list.
+		TooManySignatories,
 		/// The signatories were provided out of order; they should be ordered.
 		SignatoriesOutOfOrder,
 		/// The sender was contained in the other signatories; it shouldn't be.
@@ -195,14 +168,8 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
-		/// Sender is not a proxy of the account to be proxied.
-		NotProxy,
 		/// A call with a `false` `IsCallable` filter was attempted.
 		Uncallable,
-		/// A call which is incompatible with the proxy type's filter was attempted.
-		Unproxyable,
-		/// Account is already a proxy.
-		Duplicate,
 	}
 }
 
@@ -230,8 +197,6 @@ decl_event! {
 		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account, fourth is hash of the call.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
-		/// A proxy was executed correctly, with the given result.
-		ProxyExecuted(DispatchResult),
 		/// A call with a `false` IsCallable filter was attempted.
 		Uncallable(u32),
 	}
@@ -323,89 +288,6 @@ decl_module! {
 				}
 			}
 			Self::deposit_event(Event::<T>::BatchCompleted);
-		}
-
-		/// Dispatch the given `call` from an account that the sender is authorised for through
-		/// `add_proxy`.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// # <weight>
-		/// - Base weight: ??? µs, 1 storage read.
-		/// - Plus the weight of the `call`
-		/// # </weight>
-		#[weight = {
-			let di = call.get_dispatch_info();
-			(di.weight.saturating_add(T::DbWeight::get().reads_writes(1, 0) + 3_000_000), di.class)
-		}]
-		fn proxy(origin,
-			real: T::AccountId,
-			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Trait>::Call>
-		) {
-			let who = ensure_signed(origin)?;
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-			let (_, proxy_type) = Proxies::<T>::get(&real).0.into_iter()
-				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
-				.ok_or(Error::<T>::NotProxy)?;
-			ensure!(proxy_type.filter(&call), Error::<T>::Unproxyable);
-			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
-			Self::deposit_event(Event::<T>::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
-		}
-
-		/// Register a proxy account for the sender that is able to make calls on its behalf.
-		#[weight = 1_000_000]
-		fn add_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
-				ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
-				let typed_proxy = (proxy, proxy_type);
-				let i = proxies.binary_search(&typed_proxy).err().ok_or(Error::<T>::Duplicate)?;
-				proxies.insert(i, typed_proxy);
-				let new_deposit = T::ProxyDepositBase::get()
-					+ T::ProxyDepositFactor::get() * (proxies.len() as u32).into();
-				if new_deposit > *deposit {
-					T::Currency::reserve(&who, new_deposit - *deposit)?;
-				} else if new_deposit < *deposit {
-					T::Currency::unreserve(&who, *deposit - new_deposit);
-				}
-				*deposit = new_deposit;
-				Ok(())
-			})
-		}
-
-		/// Unregister a proxy account for the sender.
-		#[weight = 1_000_000]
-		fn remove_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			Proxies::<T>::try_mutate_exists(&who, |x| {
-				let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-				let typed_proxy = (proxy, proxy_type);
-				let i = proxies.binary_search(&typed_proxy).ok().ok_or(Error::<T>::NotFound)?;
-				proxies.remove(i);
-				let new_deposit = if proxies.is_empty() {
-					BalanceOf::<T>::zero()
-				} else {
-					T::ProxyDepositBase::get() + T::ProxyDepositFactor::get() * (proxies.len() as u32).into()
-				};
-				if new_deposit > old_deposit {
-					T::Currency::reserve(&who, new_deposit - old_deposit)?;
-				} else if new_deposit < old_deposit {
-					T::Currency::unreserve(&who, old_deposit - new_deposit);
-				}
-				if !proxies.is_empty() {
-					*x = Some((proxies, new_deposit))
-				}
-				Ok(())
-			})
-		}
-
-		/// Unregister all proxy accounts for the sender.
-		#[weight = 1_000_000]
-		fn remove_proxies(origin) {
-			let who = ensure_signed(origin)?;
-			let (_, old_deposit) = Proxies::<T>::take(&who);
-			T::Currency::unreserve(&who, old_deposit);
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
@@ -505,7 +387,7 @@ decl_module! {
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			let other_signatories_len = other_signatories.len();
-			ensure!(other_signatories_len < max_sigs, Error::<T>::TooMany);
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -634,7 +516,7 @@ decl_module! {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooMany);
+			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -716,7 +598,7 @@ decl_module! {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooMany);
+			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
