@@ -60,10 +60,9 @@ impl Drop for TracingProxy {
 
 impl TracingProxy {
 	pub fn new() -> TracingProxy {
-		let spans: Vec<(u64, rent_span::SpanAndGuard)> = Vec::new();
 		TracingProxy {
 			next_id: 0,
-			spans,
+			spans: Vec::new(),
 		}
 	}
 }
