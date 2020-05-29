@@ -27,7 +27,7 @@ use crate::{
 	import_queue::{
 		BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
 		BoxJustificationImport, ImportQueue, Link, Origin,
-		IncomingBlock, import_single_block,
+		IncomingBlock, import_single_block_metered,
 		buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver},
 	},
 	metrics::Metrics,
@@ -400,7 +400,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 			Err(BlockImportError::Cancelled)
 		} else {
 			// The actual import.
-			import_single_block(
+			import_single_block_metered(
 				&mut **import_handle,
 				blocks_origin.clone(),
 				block,

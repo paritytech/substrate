@@ -20,7 +20,7 @@
 
 use sp_consensus::ImportedAux;
 use sp_consensus::import_queue::{
-	import_single_block_unmetered, BasicQueue, BlockImportError, BlockImportResult, IncomingBlock,
+	import_single_block, BasicQueue, BlockImportError, BlockImportResult, IncomingBlock,
 };
 use substrate_test_runtime_client::{self, prelude::*};
 use substrate_test_runtime_client::runtime::{Block, Hash};
@@ -55,7 +55,7 @@ fn import_single_good_block_works() {
 	let mut expected_aux = ImportedAux::default();
 	expected_aux.is_new_best = true;
 
-	match import_single_block_unmetered(
+	match import_single_block(
 		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File, block,
 		&mut PassThroughVerifier(true),
@@ -69,7 +69,7 @@ fn import_single_good_block_works() {
 #[test]
 fn import_single_good_known_block_is_ignored() {
 	let (mut client, _hash, number, _, block) = prepare_good_block();
-	match import_single_block_unmetered(
+	match import_single_block(
 		&mut client, BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier(true)
@@ -83,7 +83,7 @@ fn import_single_good_known_block_is_ignored() {
 fn import_single_good_block_without_header_fails() {
 	let (_, _, _, peer_id, mut block) = prepare_good_block();
 	block.header = None;
-	match import_single_block_unmetered(
+	match import_single_block(
 		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File, block,
 		&mut PassThroughVerifier(true),

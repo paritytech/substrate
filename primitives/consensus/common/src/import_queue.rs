@@ -185,17 +185,17 @@ pub enum BlockImportError {
 }
 
 /// Single block import function.
-pub fn import_single_block_unmetered<B: BlockT, V: Verifier<B>, Transaction>(
+pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
-	import_single_block(import_handle, block_origin, block, verifier, None)
+	import_single_block_metered(import_handle, block_origin, block, verifier, None)
 }
 
 /// Single block import function with metering.
-pub(crate) fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
+pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction>(
 	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
