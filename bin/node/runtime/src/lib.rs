@@ -169,11 +169,13 @@ impl frame_system::Trait for Runtime {
 	type OnKilledAccount = ();
 }
 
+const fn deposit(items: u32, bytes: u32) -> Balance { items as Balance * 15 * CENTS + (bytes as Balance) * 6 * CENTS }
+
 parameter_types! {
 	// One storage item; key size is 32; value is size 4+4+16+32 bytes = 56 bytes.
-	pub const MultisigDepositBase: Balance = 30 * CENTS;    // TODO: use const fn
+	pub const MultisigDepositBase: Balance = deposit(1, 88);
 	// Additional storage item size of 32 bytes.
-	pub const MultisigDepositFactor: Balance = 5 * CENTS;   // TODO: use const fn
+	pub const MultisigDepositFactor: Balance = deposit(0, 32);
 	pub const MaxSignatories: u16 = 100;
 }
 
@@ -188,10 +190,10 @@ impl pallet_utility::Trait for Runtime {
 }
 
 parameter_types! {
-	// One storage item; key size 32, value size 4; .
-	pub const ProxyDepositBase: Balance = 10 * CENTS;    // TODO: use const fn
+	// One storage item; key size 32, value size 8; .
+	pub const ProxyDepositBase: Balance = deposit(1, 8);
 	// Additional storage item size of 33 bytes.
-	pub const ProxyDepositFactor: Balance = 6 * CENTS;   // TODO: use const fn
+	pub const ProxyDepositFactor: Balance = deposit(0, 33);
 	pub const MaxProxies: u16 = 32;
 }
 
