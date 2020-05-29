@@ -92,8 +92,13 @@ fn compute_fee_per_block<T: Trait>(
 		.checked_div(&T::RentDepositOffset::get())
 		.unwrap_or_else(Zero::zero);
 
-	let effective_storage_size =
-		<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
+	// For now, we treat every empty KV pair as if it was one byte long.
+	let empty_pairs_equivalent = contract.empty_pair_count;
+
+	let effective_storage_size = <BalanceOf<T>>::from(
+		contract.storage_size + T::StorageSizeOffset::get() + empty_pairs_equivalent,
+	)
+	.saturating_sub(free_storage);
 
 	effective_storage_size
 		.checked_mul(&T::RentByteFee::get())

@@ -272,14 +272,15 @@ pub struct PostDispatchInfo {
 impl PostDispatchInfo {
 	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
 	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+		info.weight - self.calc_actual_weight(info)
+	}
+
+	/// Calculate how much weight was actually spent by the `Dispatchable`.
+	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> Weight {
 		if let Some(actual_weight) = self.actual_weight {
-			if actual_weight >= info.weight {
-				0
-			} else {
-				info.weight - actual_weight
-			}
+			actual_weight.min(info.weight)
 		} else {
-			0
+			info.weight
 		}
 	}
 }
@@ -287,9 +288,9 @@ impl PostDispatchInfo {
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
 pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
 	match result {
-		Ok(post_info) => &post_info.actual_weight,
-		Err(err) => &err.post_info.actual_weight,
-	}.unwrap_or_else(|| info.weight).min(info.weight)
+		Ok(post_info) => &post_info,
+		Err(err) => &err.post_info,
+	}.calc_actual_weight(info)
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {

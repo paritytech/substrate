@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # WASM builder is a utility for building a project as a WASM binary
+//! # Wasm builder is a utility for building a project as a Wasm binary
 //!
-//! The WASM builder is a tool that integrates the process of building the WASM binary of your project into the main
+//! The Wasm builder is a tool that integrates the process of building the WASM binary of your project into the main
 //! `cargo` build process.
 //!
 //! ## Project setup
 //!
-//! A project that should be compiled as a WASM binary needs to:
+//! A project that should be compiled as a Wasm binary needs to:
 //!
 //! 1. Add a `build.rs` file.
 //! 2. Add `substrate-wasm-builder` as dependency into `build-dependencies`.
@@ -48,12 +48,20 @@
 //! include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 //! ```
 //!
-//! This will include the generated WASM binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
-//! The former is a compact WASM binary and the latter is not compacted.
+//! This will include the generated Wasm binary as two constants `WASM_BINARY` and `WASM_BINARY_BLOATY`.
+//! The former is a compact Wasm binary and the latter is not compacted.
+//!
+//! ### Feature
+//!
+//! Wasm builder supports to enable cargo features while building the Wasm binary. By default it will
+//! enable all features in the wasm build that are enabled for the native build except the
+//! `default` and `std` features. Besides that, wasm builder supports the special `runtime-wasm`
+//! feature. This `runtime-wasm` feature will be enabled by the wasm builder when it compiles the
+//! Wasm binary. If this feature is not present, it will not be enabled.
 //!
 //! ## Environment variables
 //!
-//! By using environment variables, you can configure which WASM binaries are built and how:
+//! By using environment variables, you can configure which Wasm binaries are built and how:
 //!
 //! - `SKIP_WASM_BUILD` - Skips building any wasm binary. This is useful when only native should be recompiled.
 //! - `BUILD_DUMMY_WASM_BINARY` - Builds dummy wasm binaries. These dummy binaries are empty and useful
@@ -61,7 +69,7 @@
 //! - `WASM_BUILD_TYPE` - Sets the build type for building wasm binaries. Supported values are `release` or `debug`.
 //!                       By default the build type is equal to the build type used by the main build.
 //! - `TRIGGER_WASM_BUILD` - Can be set to trigger a wasm build. On subsequent calls the value of the variable
-//!                          needs to change. As WASM builder instructs `cargo` to watch for file changes
+//!                          needs to change. As wasm builder instructs `cargo` to watch for file changes
 //!                          this environment variable should only be required in certain circumstances.
 //! - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the wasm binary.
 //! - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
@@ -76,7 +84,7 @@
 //!
 //! ## Prerequisites:
 //!
-//! WASM builder requires the following prerequisites for building the WASM binary:
+//! Wasm builder requires the following prerequisites for building the Wasm binary:
 //!
 //! - rust nightly + `wasm32-unknown-unknown` toolchain
 //!
@@ -182,6 +190,17 @@ fn check_skip_build() -> bool {
 fn write_file_if_changed(file: PathBuf, content: String) {
 	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
 		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+	}
+}
+
+/// Copy `src` to `dst` if the `dst` does not exist or is different.
+fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
+	let src_file = fs::read_to_string(&src).ok();
+	let dst_file = fs::read_to_string(&dst).ok();
+
+	if src_file != dst_file {
+		fs::copy(&src, &dst)
+			.expect(&format!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display()));
 	}
 }
 

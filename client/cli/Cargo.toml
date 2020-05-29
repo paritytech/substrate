@@ -1,6 +1,6 @@
 [package]
 name = "sc-cli"
-version = "0.8.0-dev"
+version = "0.8.0-rc2"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
@@ -33,23 +33,23 @@ hyper = "0.12.35"
 rand = "0.7.3"
 bip39 = "0.6.0-beta.1"
 serde_json = "1.0.41"
-sc-informant = { version = "0.8.0-dev", path = "../informant" }
-sp-panic-handler = { version = "2.0.0-dev", path = "../../primitives/panic-handler" }
-sc-client-api = { version = "2.0.0-dev", path = "../api" }
-sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
-sc-network = { version = "0.8.0-dev", path = "../network" }
-sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
-sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
-sp-version = { version = "2.0.0-dev", path = "../../primitives/version" }
-sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
-sc-service = { version = "0.8.0-dev", default-features = false, path = "../service" }
-sp-state-machine = { version = "0.8.0-dev", path = "../../primitives/state-machine" }
-sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
-substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0.8.0-dev"}
-sp-keyring = { version = "2.0.0-dev", path = "../../primitives/keyring" }
+sc-informant = { version = "0.8.0-rc2", path = "../informant" }
+sp-panic-handler = { version = "2.0.0-rc2", path = "../../primitives/panic-handler" }
+sc-client-api = { version = "2.0.0-rc2", path = "../api" }
+sp-blockchain = { version = "2.0.0-rc2", path = "../../primitives/blockchain" }
+sc-network = { version = "0.8.0-rc2", path = "../network" }
+sp-runtime = { version = "2.0.0-rc2", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-rc2", path = "../../primitives/utils" }
+sp-version = { version = "2.0.0-rc2", path = "../../primitives/version" }
+sp-core = { version = "2.0.0-rc2", path = "../../primitives/core" }
+sc-service = { version = "0.8.0-rc2", default-features = false, path = "../service" }
+sp-state-machine = { version = "0.8.0-rc2", path = "../../primitives/state-machine" }
+sc-telemetry = { version = "2.0.0-rc2", path = "../telemetry" }
+substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0.8.0-rc2"}
+sp-keyring = { version = "2.0.0-rc2", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.8"
-sc-tracing = { version = "2.0.0-dev", path = "../tracing" }
+sc-tracing = { version = "2.0.0-rc2", path = "../tracing" }
 chrono = "0.4.10"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 
@@ -61,7 +61,7 @@ nix = "0.17.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
-sp-io = { version = "2.0.0-dev", path = "../../primitives/io" }
+sp-io = { version = "2.0.0-rc2", path = "../../primitives/io" }
 sp-application-crypto = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/application-crypto" }
 
 [features]

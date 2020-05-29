@@ -267,6 +267,9 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						If the value is a file, the file content is used as URI. \
 						If not given, you will be prompted for the URI.'
 				"),
+			SubCommand::with_name("inspect-node-key")
+				.about("Print the peer ID corresponding to the node key in the given file")
+				.args_from_usage("[file] 'Name of file to read the secret key from'"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
 				.args_from_usage("
@@ -438,6 +441,17 @@ where
 		}
 		("inspect", Some(matches)) => {
 			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);
+		}
+		("inspect-node-key", Some(matches)) => {
+			let file = matches.value_of("file").ok_or(Error::Static("Input file name is required"))?;
+
+			let mut file_content = fs::read(file)?;
+			let secret = libp2p_ed25519::SecretKey::from_bytes(&mut file_content)
+				.map_err(|_| Error::Static("Bad node key file"))?;
+			let keypair = libp2p_ed25519::Keypair::from(secret);
+			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+
+			println!("{}", peer_id);
 		}
 		("sign", Some(matches)) => {
 			let suri = get_uri("suri", &matches)?;

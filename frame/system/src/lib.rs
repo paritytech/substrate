@@ -114,6 +114,7 @@ use sp_runtime::{
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 		MaybeFromStr, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 	},
+	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -1268,6 +1269,15 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	}
 }
 
+impl<T: Trait> BlockNumberProvider for Module<T>
+{
+	type BlockNumber = <T as Trait>::BlockNumber;
+
+	fn current_block_number() -> Self::BlockNumber {
+		Module::<T>::block_number()
+	}
+}
+
 // Implement StoredMap for a simple single-item, kill-account-on-remove system. This works fine for
 // storing a single item which is required to not be empty/default for the account to exist.
 // Anything more complex will need more sophisticated logic.
@@ -1877,7 +1887,7 @@ pub(crate) mod tests {
 		pub const MaximumExtrinsicWeight: Weight = 768;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
-		pub const Version: RuntimeVersion = RuntimeVersion {
+		pub Version: RuntimeVersion = RuntimeVersion {
 			spec_name: sp_version::create_runtime_str!("test"),
 			impl_name: sp_version::create_runtime_str!("system-test"),
 			authoring_version: 1,
