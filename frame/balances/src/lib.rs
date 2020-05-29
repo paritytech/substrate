@@ -644,7 +644,9 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				Self::deposit_event(RawEvent::Endowed(who.clone(), endowed));
 			}
 			if let Some(received) = maybe_received {
-				T::OnReceived::on_received(who, received);
+				if !received.is_zero() {
+					T::OnReceived::on_received(who, received);
+				}
 			}
 			result
 		})
