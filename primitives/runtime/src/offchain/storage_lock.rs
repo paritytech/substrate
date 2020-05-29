@@ -184,7 +184,6 @@ pub struct BlockAndTime<B: BlockNumberProvider> {
 	/// the deadline.
 	expiration_duration: Duration,
 
-	#[doc(hidden)]
 	_phantom: core::marker::PhantomData<B>,
 }
 
