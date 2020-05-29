@@ -23,8 +23,9 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event
+	weights::Weight, impl_outer_event, RuntimeDebug
 };
+use codec::{Encode, Decode};
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as proxy;

@@ -35,11 +35,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use codec::{Encode, Decode};
-use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
+use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
 use frame_support::{
 	traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter}, weights::GetDispatchInfo,
-	dispatch::PostDispatchInfo,
+	dispatch::{PostDispatchInfo, IsSubType},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
@@ -57,7 +56,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>>;
+		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -107,6 +106,8 @@ decl_error! {
 		Unproxyable,
 		/// Account is already a proxy.
 		Duplicate,
+		/// Call may not be made by proxy because it may escalate its privileges.
+		NoPermission,
 	}
 }
 
@@ -150,6 +151,11 @@ decl_module! {
 			let (_, proxy_type) = Proxies::<T>::get(&real).0.into_iter()
 				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
 				.ok_or(Error::<T>::NotProxy)?;
+			match call.is_sub_type() {
+				Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt)) =>
+					ensure!(&proxy_type == pt, Error::<T>::NoPermission),
+				_ => (),
+			}
 			ensure!(proxy_type.filter(&call), Error::<T>::Unproxyable);
 			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
 			Self::deposit_event(Event::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));

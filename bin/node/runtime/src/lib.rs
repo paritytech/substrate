@@ -24,13 +24,14 @@
 
 use sp_std::prelude::*;
 use frame_support::{
-	construct_runtime, parameter_types, debug,
+	construct_runtime, parameter_types, debug, RuntimeDebug,
 	weights::{
 		Weight, IdentityFee,
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
+use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
 	u32_trait::{_1, _2, _3, _4},
@@ -60,7 +61,6 @@ use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
-use codec::Encode;
 use static_assertions::const_assert;
 
 #[cfg(any(feature = "std", test))]
@@ -79,6 +79,7 @@ use impls::{CurrencyToVoteHandler, Author, TargetedFeeAdjustment};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
+use frame_support::traits::InstanceFilter;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -169,14 +170,11 @@ impl frame_system::Trait for Runtime {
 }
 
 parameter_types! {
-	// One storage item; value is size 4+4+16+32 bytes = 56 bytes.
-	pub const MultisigDepositBase: Balance = 30 * CENTS;
+	// One storage item; key size is 32; value is size 4+4+16+32 bytes = 56 bytes.
+	pub const MultisigDepositBase: Balance = 30 * CENTS;    // TODO: use const fn
 	// Additional storage item size of 32 bytes.
-	pub const AccountDepositFactor: Balance = 5 * CENTS;
+	pub const MultisigDepositFactor: Balance = 5 * CENTS;   // TODO: use const fn
 	pub const MaxSignatories: u16 = 100;
-	pub const MaxProxies: u16 = 32;
-	// One storage item; value is size 4 bytes; key size 32.
-	pub const ProxyDepositBase: Balance = 10 * CENTS;
 }
 
 impl pallet_utility::Trait for Runtime {
@@ -184,11 +182,48 @@ impl pallet_utility::Trait for Runtime {
 	type Call = Call;
 	type Currency = Balances;
 	type MultisigDepositBase = MultisigDepositBase;
-	type AccountDepositFactor = AccountDepositFactor;
+	type MultisigDepositFactor = MultisigDepositFactor;
 	type MaxSignatories = MaxSignatories;
 	type IsCallable = ();
-	type IsProxyable = ();
+}
+
+parameter_types! {
+	// One storage item; key size 32, value size 4; .
+	pub const ProxyDepositBase: Balance = 10 * CENTS;    // TODO: use const fn
+	// Additional storage item size of 33 bytes.
+	pub const ProxyDepositFactor: Balance = 6 * CENTS;   // TODO: use const fn
+	pub const MaxProxies: u16 = 32;
+}
+
+/// The type used to represent the kinds of proxying allowed.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
+pub enum ProxyType {
+	Any,
+	NonTransfer,
+	Governance,
+	Staking,
+}
+impl InstanceFilter<Call> for ProxyType {
+	fn filter(&self, c: &Call) -> bool {
+		match self {
+			ProxyType::Any => true,
+			ProxyType::NonTransfer =>
+				matches!(c, Call::Balances(..) | Call::Vesting(pallet_vesting::Call::vested_transfer(..))),
+			ProxyType::Governance => matches!(c, Call::Democracy(..) | Call::Council(..) | Call::Society(..)
+				| Call::TechnicalCommittee(..) | Call::Elections(..) | Call::Treasury(..)),
+			ProxyType::Staking => matches!(c, Call::Staking(..)),
+		}
+	}
+}
+
+impl pallet_proxy::Trait for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type Currency = Balances;
+	type IsCallable = ();
+	type ProxyType = ProxyType;
 	type ProxyDepositBase = ProxyDepositBase;
+	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
 }
 
@@ -762,6 +797,7 @@ construct_runtime!(
 		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Module, Call, Storage, Event},
 	}
 );
 
