@@ -10,7 +10,7 @@
 #
 # my-example-job:
 #   stage:                           test # One of the stages listed below this job (required)
-#   image:                           parity/tools:latest # Any docker image (required)
+#   image:                           paritytech/tools:latest # Any docker image (required)
 #   allow_failure:                   true # Allow the pipeline to continue if this job fails (default: false)
 #   dependencies:
 #     - build-rust-doc-release # Any jobs that are required to run before this job (optional)
@@ -58,7 +58,7 @@ default:
     name: parity-build
 
 .docker-env:                       &docker-env
-  image:                           parity/rust-builder:latest
+  image:                           paritytech/substrate-ci-linux:production
   before_script:
     - rustup show
     - cargo --version
@@ -89,7 +89,7 @@ default:
 #### stage:                       .pre
 
 skip-if-draft:
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   stage:                          .pre
   only:
@@ -101,7 +101,7 @@ skip-if-draft:
 
 check-runtime:
   stage:                           check
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -115,7 +115,7 @@ check-runtime:
 
 check-signed-tag:
   stage:                           check
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   only:
     - /^ci-release-.*$/
@@ -125,7 +125,7 @@ check-signed-tag:
 
 check-line-width:
   stage:                           check
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/
@@ -135,7 +135,7 @@ check-line-width:
 
 test-dependency-rules:
   stage:                           check
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   except:
     variables:
@@ -215,6 +215,7 @@ unleash-check:
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
 test-frame-staking:
+  # into one job
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -232,6 +233,7 @@ test-frame-staking:
     - sccache -s
 
 test-frame-examples-compile-to-wasm:
+  # into one job
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -268,6 +270,7 @@ test-wasmtime:
     - sccache -s
 
 test-runtime-benchmarks:
+  # into one job
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -360,7 +363,7 @@ cargo-check-macos:
 
 check-polkadot-companion-status:
   stage:                           build
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   only:
     - /^[0-9]+$/                   # PRs
@@ -557,7 +560,7 @@ publish-s3-release:
       artifacts:                   true
     - job:                         build-linux-subkey
       artifacts:                   true
-  image:                           parity/awscli:latest
+  image:                           paritytech/awscli:latest
   variables:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
@@ -573,7 +576,7 @@ publish-s3-release:
 
 publish-s3-doc:
   stage:                           publish
-  image:                           parity/awscli:latest
+  image:                           paritytech/awscli:latest
   allow_failure:                   true
   needs:
     - job:                         build-rust-doc-release
@@ -597,7 +600,7 @@ publish-s3-doc:
 
 publish-draft-release:
   stage:                           publish
-  image:                           parity/tools:latest
+  image:                           paritytech/tools:latest
   only:
     - /^ci-release-.*$/
     - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
@@ -620,7 +623,7 @@ publish-to-crates-io:
   stage:                           kubernetes
   when:                            manual
   retry:                           1
-  image:                           parity/kubetools:latest
+  image:                           paritytech/kubetools:latest
   <<:                              *build-only
   tags:
     # this is the runner that is used to deploy it
