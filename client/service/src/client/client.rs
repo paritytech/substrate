@@ -861,10 +861,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// block.
 			(true, ref mut storage_changes @ None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
-				let execution_context = if import_block.origin == BlockOrigin::Own {
-					ExecutionContext::OwnBlockImport
+				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
+					ExecutionContext::Syncing
 				} else {
-					ExecutionContext::ForeignBlockImport
+					ExecutionContext::Importing
 				};
 
 				runtime_api.execute_block_with_context(

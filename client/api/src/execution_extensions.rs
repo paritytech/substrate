@@ -38,10 +38,10 @@ use parking_lot::RwLock;
 /// Execution strategies settings.
 #[derive(Debug, Clone)]
 pub struct ExecutionStrategies {
-	/// Execution strategy used when importing locally authored blocks.
-	pub own_block_import: ExecutionStrategy,
-	/// Execution strategy used when importing foreign blocks.
-	pub foreign_block_import: ExecutionStrategy,
+	/// Execution strategy used when syncing.
+	pub syncing: ExecutionStrategy,
+	/// Execution strategy used when importing blocks.
+	pub importing: ExecutionStrategy,
 	/// Execution strategy used when constructing blocks.
 	pub block_construction: ExecutionStrategy,
 	/// Execution strategy used for offchain workers.
@@ -53,8 +53,8 @@ pub struct ExecutionStrategies {
 impl Default for ExecutionStrategies {
 	fn default() -> ExecutionStrategies {
 		ExecutionStrategies {
-			own_block_import: ExecutionStrategy::NativeElseWasm,
-			foreign_block_import: ExecutionStrategy::NativeElseWasm,
+			syncing: ExecutionStrategy::NativeElseWasm,
+			importing: ExecutionStrategy::NativeElseWasm,
 			block_construction: ExecutionStrategy::AlwaysWasm,
 			offchain_worker: ExecutionStrategy::NativeWhenPossible,
 			other: ExecutionStrategy::NativeElseWasm,
@@ -145,10 +145,10 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction =>
 				self.strategies.block_construction.get_manager(),
-			ExecutionContext::OwnBlockImport =>
-				self.strategies.own_block_import.get_manager(),
-			ExecutionContext::ForeignBlockImport =>
-				self.strategies.foreign_block_import.get_manager(),
+			ExecutionContext::Syncing =>
+				self.strategies.syncing.get_manager(),
+			ExecutionContext::Importing =>
+				self.strategies.importing.get_manager(),
 			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.has_all() =>
 				self.strategies.offchain_worker.get_manager(),
 			ExecutionContext::OffchainCall(_) =>

@@ -515,19 +515,19 @@ impl Profile {
 	fn into_execution_strategies(self) -> ExecutionStrategies {
 		match self {
 			Profile::Wasm => ExecutionStrategies {
-				own_block_import: ExecutionStrategy::AlwaysWasm,
-				foreign_block_import: ExecutionStrategy::AlwaysWasm,
+				syncing: ExecutionStrategy::AlwaysWasm,
+				importing: ExecutionStrategy::AlwaysWasm,
 				block_construction: ExecutionStrategy::AlwaysWasm,
 				offchain_worker: ExecutionStrategy::AlwaysWasm,
 				other: ExecutionStrategy::AlwaysWasm,
 			},
 			Profile::Native => ExecutionStrategies {
-				own_block_import: ExecutionStrategy::NativeElseWasm,
-				foreign_block_import: ExecutionStrategy::NativeElseWasm,
+				syncing: ExecutionStrategy::NativeElseWasm,
+				importing: ExecutionStrategy::NativeElseWasm,
 				block_construction: ExecutionStrategy::NativeElseWasm,
 				offchain_worker: ExecutionStrategy::NativeElseWasm,
 				other: ExecutionStrategy::NativeElseWasm,
-			},
+			}
 		}
 	}
 }
