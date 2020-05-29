@@ -43,6 +43,16 @@ impl<T> Filter<T> for () {
 	fn filter(_: &T) -> bool { true }
 }
 
+/// Simple trait for providing a filter over a reference to some type, given an instance of itself.
+pub trait InstanceFilter<T> {
+	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
+	fn filter(&self, _: &T) -> bool;
+}
+
+impl<T> InstanceFilter<T> for () {
+	fn filter(&self, _: &T) -> bool { true }
+}
+
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
 pub trait StoredMap<K, T> {
