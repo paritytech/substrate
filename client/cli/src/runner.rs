@@ -212,7 +212,8 @@ impl<C: SubstrateCli> Runner<C> {
 		let prefix = self.config.informant_prefix.clone();
 		let service = service_builder(self.config)?;
 
-		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured {
+		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat {
+			colors: true,
 			prefix,
 		});
 		let _informant_handle = self.tokio_runtime.spawn(informant_future);

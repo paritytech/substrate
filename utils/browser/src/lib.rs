@@ -121,7 +121,7 @@ pub fn start_client(mut service: impl AbstractService) -> Client {
 	wasm_bindgen_futures::spawn_local(
 		sc_informant::build(
 			&service,
-			sc_informant::OutputFormat::Plain { prefix: Default::default() },
+			sc_informant::OutputFormat { colors: false, prefix: Default::default() },
 		).map(drop)
 	);
 
