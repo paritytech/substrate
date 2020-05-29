@@ -132,8 +132,8 @@ impl ImportParams {
 /// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExecutionStrategiesParams {
-	/// The means of execution used when calling into the runtime while performing an
-	/// initial sync.
+	/// The means of execution used when calling into the runtime for importing blocks as
+	/// part of an initial sync.
 	#[structopt(
 		long = "execution-syncing",
 		value_name = "STRATEGY",
@@ -143,7 +143,7 @@ pub struct ExecutionStrategiesParams {
 	)]
 	pub execution_syncing: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime while importing blocks
+	/// The means of execution used when calling into the runtime for general block import
 	/// (including locally authored blocks).
 	#[structopt(
 		long = "execution-import-block",
