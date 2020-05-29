@@ -141,7 +141,7 @@ use pallet_balances::Error as BalancesError;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
+		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
 	}.assimilate_storage(&mut t).unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
@@ -161,17 +161,56 @@ fn now() -> Timepoint<u64> {
 }
 
 #[test]
+fn add_remove_proxies_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::add_proxy(Origin::signed(1), 2));
+		assert_noop!(Utility::add_proxy(Origin::signed(1), 2), Error::<Test>::Duplicate);
+		assert_eq!(Balances::reserved_balance(1), 2);
+		assert_ok!(Utility::add_proxy(Origin::signed(1), 3));
+		assert_eq!(Balances::reserved_balance(1), 3);
+		assert_ok!(Utility::add_proxy(Origin::signed(1), 4));
+		assert_eq!(Balances::reserved_balance(1), 4);
+		assert_noop!(Utility::add_proxy(Origin::signed(1), 4), Error::<Test>::TooMany);
+		assert_ok!(Utility::remove_proxy(Origin::signed(1), 3));
+		assert_eq!(Balances::reserved_balance(1), 3);
+		assert_ok!(Utility::remove_proxy(Origin::signed(1), 2));
+		assert_eq!(Balances::reserved_balance(1), 2);
+		assert_ok!(Utility::remove_proxy(Origin::signed(1), 4));
+		assert_eq!(Balances::reserved_balance(1), 0);
+	});
+}
+
+#[test]
+fn cannot_add_prxoxy_without_balance() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::add_proxy(Origin::signed(5), 3));
+		assert_eq!(Balances::reserved_balance(5), 2);
+		assert_noop!(Utility::add_proxy(Origin::signed(5), 4), BalancesError::<Test, _>::InsufficientBalance);
+	});
+}
+
+#[test]
 fn basic_proxying_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Utility::add_proxy(Origin::signed(1), 2));
 		assert_ok!(Utility::add_proxy(Origin::signed(1), 3));
-		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 5)));
+		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		assert_noop!(Utility::proxy(Origin::signed(4), 1, call.clone()), Error::<Test>::NotProxy);
 		assert_ok!(Utility::proxy(Origin::signed(2), 1, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
-		assert_eq!(Balances::free_balance(6), 5);
+		assert_eq!(Balances::free_balance(6), 1);
 		assert_ok!(Utility::proxy(Origin::signed(2), 1, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
-		assert_eq!(Balances::free_balance(6), 10);
+		assert_eq!(Balances::free_balance(6), 2);
+	});
+}
+
+#[test]
+fn is_proxyable_is_respected() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Utility::add_proxy(Origin::signed(1), 2));
+		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
+		assert_noop!(Utility::proxy(Origin::signed(2), 1, call), Error::<Test>::Unproxyable);
 	});
 }
 
@@ -371,7 +410,7 @@ fn too_many_signatories_fails() {
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 		assert_noop!(
 			Utility::as_multi(Origin::signed(1), 2, vec![2, 3, 4], None, call.clone()),
-			Error::<Test>::TooManySignatories,
+			Error::<Test>::TooMany,
 		);
 	});
 }

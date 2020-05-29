@@ -171,8 +171,8 @@ decl_error! {
 		NoApprovalsNeeded,
 		/// There are too few signatories in the list.
 		TooFewSignatories,
-		/// There are too many signatories in the list.
-		TooManySignatories,
+		/// There are too many signatories in the list or proxies registered.
+		TooMany,
 		/// The signatories were provided out of order; they should be ordered.
 		SignatoriesOutOfOrder,
 		/// The sender was contained in the other signatories; it shouldn't be.
@@ -193,8 +193,6 @@ decl_error! {
 		Uncallable,
 		/// A call with a `false` `IsProxyable` filter was attempted.
 		Unproxyable,
-		/// Too many proxies have been registered.
-		TooMany,
 		/// Account is already a proxy.
 		Duplicate,
 	}
@@ -490,7 +488,7 @@ decl_module! {
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			let other_signatories_len = other_signatories.len();
-			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooMany);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -619,7 +617,7 @@ decl_module! {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooMany);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -701,7 +699,7 @@ decl_module! {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooMany);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
