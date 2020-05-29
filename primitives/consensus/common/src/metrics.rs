@@ -43,7 +43,7 @@ impl Metrics {
 				HistogramVec::new(
 					HistogramOpts::new(
 						"block_verification_time",
-						"Histogram of time taken to import block",
+						"Histogram of time taken to import blocks",
 					),
 					&["result"],
 				)?,
