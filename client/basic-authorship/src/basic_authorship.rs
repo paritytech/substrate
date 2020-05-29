@@ -91,16 +91,14 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
-			inner: ProposerInner {
-				client: self.client.clone(),
-				parent_hash,
-				parent_id: id,
-				parent_number: *parent_header.number(),
-				transaction_pool: self.transaction_pool.clone(),
-				now,
-				metrics: self.metrics.clone(),
-				_phantom: PhantomData,
-			},
+			client: self.client.clone(),
+			parent_hash,
+			parent_id: id,
+			parent_number: *parent_header.number(),
+			transaction_pool: self.transaction_pool.clone(),
+			now,
+			metrics: self.metrics.clone(),
+			_phantom: PhantomData,
 		};
 
 		proposer
@@ -132,11 +130,6 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
-	inner: ProposerInner<B, Block, C, A>,
-}
-
-/// Proposer inner, to wrap parameters under Arc.
-struct ProposerInner<B, Block: BlockT, C, A: TransactionPool> {
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
@@ -173,13 +166,13 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 	) -> Self::Proposal {
 		tokio_executor::blocking::run(move || {
 			// leave some time for evaluation and block finalization (33%)
-			let deadline = (self.inner.now)() + max_duration - max_duration / 3;
-			self.inner.propose_with(inherent_data, inherent_digests, deadline, record_proof)
+			let deadline = (self.now)() + max_duration - max_duration / 3;
+			self.propose_with(inherent_data, inherent_digests, deadline, record_proof)
 		})
 	}
 }
 
-impl<A, B, Block, C> ProposerInner<B, Block, C, A>
+impl<A, B, Block, C> Proposer<B, Block, C, A>
 	where
 		A: TransactionPool<Block = Block>,
 		B: backend::Backend<Block> + Send + Sync + 'static,
