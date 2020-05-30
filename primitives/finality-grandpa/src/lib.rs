@@ -389,9 +389,8 @@ where
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = keystore.read()
 		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
-		.map_err(|_| ())?;
-
-	let signature = signature.clone().try_into()
+		.map_err(|_| ())?
+		.try_into()
 		.map_err(|_| ())?;
 
 	Ok(grandpa::SignedMessage {

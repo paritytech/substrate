@@ -288,7 +288,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			&*voters,
 		);
 
-		let locals = local_key.and_then(|id| {
+		let local_id = local_key.and_then(|id| {
 			if voters.contains(&id) {
 				Some(id)
 			} else {
@@ -354,7 +354,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			round: round.0,
 			set_id: set_id.0,
 			network: self.gossip_engine.clone(),
-			locals,
+			local_id,
 			sender: tx,
 			has_voted,
 		};
@@ -629,7 +629,7 @@ pub struct SetId(pub SetIdNumber);
 pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
-	locals: Option<AuthorityId>,
+	local_id: Option<AuthorityId>,
 	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
@@ -667,7 +667,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 		}
 
 		// when locals exist, sign messages on import
-		if let Some(ref public) = self.locals {
+		if let Some(ref public) = self.local_id {
 			let keystore = match &self.keystore {
 				Some(keystore) => keystore.clone(),
 				None => {
