@@ -1288,7 +1288,7 @@ decl_module! {
 				// either current session final based on the plan, or we're forcing.
 				(Self::is_current_session_final() || Self::will_era_be_forced())
 			{
-				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now){
+				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now) {
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
 						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 							// create snapshot.
@@ -2569,16 +2569,19 @@ impl<T: Trait> Module<T> {
 				Forcing::ForceAlways => (),
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
-					// not forcing, not a new era either. If final, set the flag.
-					if era_length + 1 >= T::SessionsPerEra::get() {
+					// Either `ForceNone`, or `NotForcing && era_length < T::SessionsPerEra::get()`.
+					if era_length + 1 == T::SessionsPerEra::get() {
 						IsCurrentSessionFinal::put(true);
+					} else if era_length >= T::SessionsPerEra::get() {
+						// Should only happen when we are ready to trigger an era but we have ForceNone,
+						// otherwise previous arm would short circuit.
+						Self::close_election_window();
 					}
 					return None
 				},
 			}
 
 			// new era.
-			IsCurrentSessionFinal::put(false);
 			Self::new_era(session_index)
 		} else {
 			// Set initial era
@@ -2912,6 +2915,17 @@ impl<T: Trait> Module<T> {
 		maybe_new_validators
 	}
 
+
+	/// Remove all the storage items associated with the election.
+	fn close_election_window() {
+		// Close window.
+		<EraElectionStatus<T>>::put(ElectionStatus::Closed);
+		// Kill snapshots.
+		Self::kill_stakers_snapshot();
+		// Don't track final session.
+		IsCurrentSessionFinal::put(false);
+	}
+
 	/// Select the new validator set at the end of the era.
 	///
 	/// Runs [`try_do_phragmen`] and updates the following storage items:
@@ -2933,11 +2947,8 @@ impl<T: Trait> Module<T> {
 			exposures,
 			compute,
 		}) = Self::try_do_phragmen() {
-			// We have chosen the new validator set. Submission is no longer allowed.
-			<EraElectionStatus<T>>::put(ElectionStatus::Closed);
-
-			// kill the snapshots.
-			Self::kill_stakers_snapshot();
+			// Totally close the election round and data.
+			Self::close_election_window();
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
