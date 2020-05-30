@@ -1230,7 +1230,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 /// storage (which is the default in most examples and tests) then there's no need.**
 impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
-		Account::<T, I>::remove(who);
+		Account::<T, I>::mutate_exists(who, |account| {
+			let total = account.as_ref().map(|acc| acc.total()).unwrap_or_default();
+			if !total.is_zero() {
+				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
+				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
+			}
+			*account = None;
+		});
 	}
 }
 
