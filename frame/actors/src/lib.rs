@@ -29,6 +29,7 @@ use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
+	RuntimeDebug,
 	traits::{
 		SignedExtension, Bounded, DispatchInfoOf,
 	},
@@ -36,6 +37,23 @@ use sp_runtime::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
+
+/// Message type that actors send around.
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+pub struct Message<A, B> {
+	/// Source of the message.
+	pub source: A,
+	/// Balance encoded in the message.
+	pub value: B,
+	/// Data field up to receiver's interpretation.
+	pub data: Vec<u8>,
+}
+
+/// Message type from actors pallet's point of view.
+pub type MessageOf<T> = Message<AccountIdOf<T>, BalanceOf<T>>;
+
+/// Account ID type from actors pallet's point of view.
+pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
 
 /// Balance type from actors pallet's point of view.
 pub type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
