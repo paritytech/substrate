@@ -677,7 +677,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 
 			let target_hash = *(msg.target().0);
 			let signed = sp_finality_grandpa::sign_message(
-				keystore.clone(),
+				keystore,
 				msg,
 				public,
 				self.round,
