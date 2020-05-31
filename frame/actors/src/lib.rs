@@ -28,6 +28,8 @@ use sp_runtime::RuntimeDebug;
 use frame_support::{decl_module, decl_storage, decl_event};
 use frame_system as system;
 
+mod exec;
+
 /// Account ID type from actors pallet's point of view.
 pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
 
@@ -57,7 +59,7 @@ pub struct ActorInfo<A, B> {
 	/// Code of the actor.
 	pub code: Vec<u8>,
 	/// Storage values of the actor.
-	pub storage: BTreeMap<H256, H256>,
+	pub storage: BTreeMap<H256, Vec<u8>>,
 	/// Incoming messages to the actor.
 	pub messages: Vec<Message<A, B>>,
 }
