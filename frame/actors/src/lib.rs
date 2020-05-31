@@ -23,81 +23,30 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
+	weights::Weight,
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{
-		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
+		SignedExtension, Bounded, DispatchInfoOf,
 	},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
 
-// A custom weight calculator tailored for the dispatch call `set_dummy()`. This actually examines
-// the arguments and makes a decision based upon them.
-//
-// The `WeightData<T>` trait has access to the arguments of the dispatch that it wants to assign a
-// weight to. Nonetheless, the trait itself can not make any assumptions about what the generic type
-// of the arguments (`T`) is. Based on our needs, we could replace `T` with a more concrete type
-// while implementing the trait. The `decl_module!` expects whatever implements `WeighData<T>` to
-// replace `T` with a tuple of the dispatch arguments. This is exactly how we will craft the
-// implementation below.
-//
-// The rules of `WeightForSetDummy` are as follows:
-// - The final weight of each dispatch is calculated as the argument of the call multiplied by the
-//   parameter given to the `WeightForSetDummy`'s constructor.
-// - assigns a dispatch class `operational` if the argument of the call is more than 1000.
-struct WeightForSetDummy<T: pallet_balances::Trait>(BalanceOf<T>);
+/// Balance type from actors pallet's point of view.
+pub type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
 
-impl<T: pallet_balances::Trait> WeighData<(&BalanceOf<T>,)> for WeightForSetDummy<T>
-{
-	fn weigh_data(&self, target: (&BalanceOf<T>,)) -> Weight {
-		let multiplier = self.0;
-		(*target.0 * multiplier).saturated_into::<Weight>()
-	}
-}
-
-impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
-	fn classify_dispatch(&self, target: (&BalanceOf<T>,)) -> DispatchClass {
-		if *target.0 > <BalanceOf<T>>::from(1000u32) {
-			DispatchClass::Operational
-		} else {
-			DispatchClass::Normal
-		}
-	}
-}
-
-impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
-	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> Pays {
-		Pays::Yes
-	}
-}
-
-/// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
-
-/// Our pallet's configuration trait. All our types and constants go in here. If the
-/// pallet is dependent on specific other pallets, then their configuration traits
-/// should be added to our implied traits list.
-///
-/// `frame_system::Trait` should always be included in our implied traits.
+/// Trait definition for actors pallet.
 pub trait Trait: pallet_balances::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 decl_storage! {
-	// A macro for the Storage trait, and its implementation, for this pallet.
-	// This allows for type-safe usage of the Substrate storage database, so you can
-	// keep things around between blocks.
-	//
-	// It is important to update your storage name so that your pallet's
-	// storage items are isolated from other pallets.
-	// ---------------------------------vvvvvvv
 	trait Store for Module<T: Trait> as Actors {
 		// Any storage declarations of the form:
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
@@ -273,7 +222,7 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you do not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
-		#[weight = WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32))]
+		#[weight = 0]
 		fn set_dummy(origin, #[compact] new_value: T::Balance) {
 			ensure_root(origin)?;
 			// Put the new value into storage.
