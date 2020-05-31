@@ -133,6 +133,7 @@ pub struct PowAux<Difficulty> {
 	pub total_difficulty: Difficulty,
 }
 
+/// Get PoW difficulty
 impl<Difficulty> PowAux<Difficulty> where
 	Difficulty: Decode + Default,
 {
