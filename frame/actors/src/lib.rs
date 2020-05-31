@@ -20,7 +20,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, collections::btree_map::BTreeMap};
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::Weight,
@@ -28,6 +28,7 @@ use frame_support::{
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
+use sp_core::{H256};
 use sp_runtime::{
 	RuntimeDebug,
 	traits::{
@@ -37,6 +38,18 @@ use sp_runtime::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
 };
+
+/// Account ID type from actors pallet's point of view.
+pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
+
+/// Balance type from actors pallet's point of view.
+pub type BalanceFor<T> = <T as pallet_balances::Trait>::Balance;
+
+/// Message type from actors pallet's point of view.
+pub type MessageFor<T> = Message<AccountIdFor<T>, BalanceFor<T>>;
+
+/// Actor data type from actors pallet's point of view.
+pub type ActorInfoFor<T> = ActorInfo<AccountIdFor<T>, BalanceFor<T>>;
 
 /// Message type that actors send around.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
@@ -49,14 +62,16 @@ pub struct Message<A, B> {
 	pub data: Vec<u8>,
 }
 
-/// Message type from actors pallet's point of view.
-pub type MessageOf<T> = Message<AccountIdOf<T>, BalanceOf<T>>;
-
-/// Account ID type from actors pallet's point of view.
-pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
-
-/// Balance type from actors pallet's point of view.
-pub type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
+/// Actor data as stored on storage.
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode, Default)]
+pub struct ActorInfo<A, B> {
+	/// Code of the actor.
+	pub code: Vec<u8>,
+	/// Storage values of the actor.
+	pub storage: BTreeMap<H256, H256>,
+	/// Incoming messages to the actor.
+	pub messages: Vec<Message<A, B>>,
+}
 
 /// Trait definition for actors pallet.
 pub trait Trait: pallet_balances::Trait {
@@ -66,6 +81,11 @@ pub trait Trait: pallet_balances::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Actors {
+		/// Info associated with a given account.
+		///
+		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
+		ActorInfoOf: map hasher(twox_64_concat) T::AccountId => ActorInfoFor<T>;
+
 		// Any storage declarations of the form:
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
