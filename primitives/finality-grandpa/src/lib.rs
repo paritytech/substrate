@@ -375,7 +375,7 @@ where
 pub fn sign_message<H, N>(
 	keystore: BareCryptoStorePtr,
 	message: grandpa::Message<H, N>,
-	public: &AuthorityId,
+	public: AuthorityId,
 	round: RoundNumber,
 	set_id: SetId,
 ) -> Result<grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>, ()>
@@ -396,7 +396,7 @@ where
 	Ok(grandpa::SignedMessage {
 		message,
 		signature,
-		id: public.clone(),
+		id: public,
 	})
 }
 

@@ -679,7 +679,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			let signed = sp_finality_grandpa::sign_message(
 				keystore,
 				msg,
-				public,
+				public.clone(),
 				self.round,
 				self.set_id,
 			).map_err(|_| {
