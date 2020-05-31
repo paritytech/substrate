@@ -21,157 +21,156 @@
 use structopt::clap::arg_enum;
 
 arg_enum! {
-	/// How to execute Wasm runtime code
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum WasmExecutionMethod {
-		// Uses an interpreter.
-		Interpreted,
-		// Uses a compiled runtime.
-		Compiled,
-	}
+    /// How to execute Wasm runtime code
+    #[allow(missing_docs)]
+    #[derive(Debug, Clone, Copy)]
+    pub enum WasmExecutionMethod {
+        // Uses an interpreter.
+        Interpreted,
+        // Uses a compiled runtime.
+        Compiled,
+    }
 }
 
 impl WasmExecutionMethod {
-	/// Returns list of variants that are not disabled by feature flags.
-	pub fn enabled_variants() -> Vec<&'static str> {
-		Self::variants()
-			.iter()
-			.cloned()
-			.filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
-			.collect()
-	}
+    /// Returns list of variants that are not disabled by feature flags.
+    pub fn enabled_variants() -> Vec<&'static str> {
+        Self::variants()
+            .iter()
+            .cloned()
+            .filter(|&name| cfg!(feature = "wasmtime") || name != "Compiled")
+            .collect()
+    }
 }
 
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
-	fn into(self) -> sc_service::config::WasmExecutionMethod {
-		match self {
-			WasmExecutionMethod::Interpreted => {
-				sc_service::config::WasmExecutionMethod::Interpreted
-			}
-			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
-			#[cfg(not(feature = "wasmtime"))]
-			WasmExecutionMethod::Compiled => panic!(
-				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
-			),
-		}
-	}
+    fn into(self) -> sc_service::config::WasmExecutionMethod {
+        match self {
+            WasmExecutionMethod::Interpreted => {
+                sc_service::config::WasmExecutionMethod::Interpreted
+            }
+            #[cfg(feature = "wasmtime")]
+            WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
+            #[cfg(not(feature = "wasmtime"))]
+            WasmExecutionMethod::Compiled => panic!(
+                "Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+            ),
+        }
+    }
 }
 
 arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum TracingReceiver {
-		Log,
-		Telemetry,
-	}
+    #[allow(missing_docs)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum TracingReceiver {
+        Log,
+        Telemetry,
+    }
 }
 
 impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
-	fn into(self) -> sc_tracing::TracingReceiver {
-		match self {
-			TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
-			TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
-		}
-	}
+    fn into(self) -> sc_tracing::TracingReceiver {
+        match self {
+            TracingReceiver::Log => sc_tracing::TracingReceiver::Log,
+            TracingReceiver::Telemetry => sc_tracing::TracingReceiver::Telemetry,
+        }
+    }
 }
 
 arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum NodeKeyType {
-		Ed25519
-	}
+    #[allow(missing_docs)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub enum NodeKeyType {
+        Ed25519
+    }
 }
 
 arg_enum! {
-	/// How to execute blocks
-	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-	pub enum ExecutionStrategy {
-		// Execute with native build (if available, WebAssembly otherwise).
-		Native,
-		// Only execute with the WebAssembly build.
-		Wasm,
-		// Execute with both native (where available) and WebAssembly builds.
-		Both,
-		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
-		NativeElseWasm,
-	}
+    /// How to execute blocks
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum ExecutionStrategy {
+        // Execute with native build (if available, WebAssembly otherwise).
+        Native,
+        // Only execute with the WebAssembly build.
+        Wasm,
+        // Execute with both native (where available) and WebAssembly builds.
+        Both,
+        // Execute with the native build if possible; if it fails, then execute with WebAssembly.
+        NativeElseWasm,
+    }
 }
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
-	fn into(self) -> sc_client_api::ExecutionStrategy {
-		match self {
-			ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
-			ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
-			ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
-			ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
-		}
-	}
+    fn into(self) -> sc_client_api::ExecutionStrategy {
+        match self {
+            ExecutionStrategy::Native => sc_client_api::ExecutionStrategy::NativeWhenPossible,
+            ExecutionStrategy::Wasm => sc_client_api::ExecutionStrategy::AlwaysWasm,
+            ExecutionStrategy::Both => sc_client_api::ExecutionStrategy::Both,
+            ExecutionStrategy::NativeElseWasm => sc_client_api::ExecutionStrategy::NativeElseWasm,
+        }
+    }
 }
 
 impl ExecutionStrategy {
-	/// Returns the variant as `'&static str`.
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Native => "Native",
-			Self::Wasm => "Wasm",
-			Self::Both => "Both",
-			Self::NativeElseWasm => "NativeElseWasm",
-		}
-	}
+    /// Returns the variant as `'&static str`.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Native => "Native",
+            Self::Wasm => "Wasm",
+            Self::Both => "Both",
+            Self::NativeElseWasm => "NativeElseWasm",
+        }
+    }
 }
 
 arg_enum! {
-	/// Available RPC methods.
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq)]
-	pub enum RpcMethods {
-		// Expose every RPC method only when RPC is listening on `localhost`,
-		// otherwise serve only safe RPC methods.
-		Auto,
-		// Allow only a safe subset of RPC methods.
-		Safe,
-		// Expose every RPC method (even potentially unsafe ones).
-		Unsafe,
-	}
+    /// Available RPC methods.
+    #[allow(missing_docs)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    pub enum RpcMethods {
+        // Expose every RPC method only when RPC is listening on `localhost`,
+        // otherwise serve only safe RPC methods.
+        Auto,
+        // Allow only a safe subset of RPC methods.
+        Safe,
+        // Expose every RPC method (even potentially unsafe ones).
+        Unsafe,
+    }
 }
 
 impl Into<sc_service::config::RpcMethods> for RpcMethods {
-	fn into(self) -> sc_service::config::RpcMethods {
-		match self {
-			RpcMethods::Auto => sc_service::config::RpcMethods::Auto,
-			RpcMethods::Safe => sc_service::config::RpcMethods::Safe,
-			RpcMethods::Unsafe => sc_service::config::RpcMethods::Unsafe,
-		}
-	}
+    fn into(self) -> sc_service::config::RpcMethods {
+        match self {
+            RpcMethods::Auto => sc_service::config::RpcMethods::Auto,
+            RpcMethods::Safe => sc_service::config::RpcMethods::Safe,
+            RpcMethods::Unsafe => sc_service::config::RpcMethods::Unsafe,
+        }
+    }
 }
 
 arg_enum! {
-	/// Database backend
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum Database {
-		// Facebooks RocksDB
-		RocksDb,
-		// Subdb. https://github.com/paritytech/subdb/
-		SubDb,
-		// ParityDb. https://github.com/paritytech/parity-db/
-		ParityDb,
-	}
+    /// Database backend
+    #[allow(missing_docs)]
+    #[derive(Debug, Clone, Copy)]
+    pub enum Database {
+        // Facebooks RocksDB
+        RocksDb,
+        // Subdb. https://github.com/paritytech/subdb/
+        SubDb,
+        // ParityDb. https://github.com/paritytech/parity-db/
+        ParityDb,
+    }
 }
 
-
 arg_enum! {
-	/// Whether off-chain workers are enabled.
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone)]
-	pub enum OffchainWorkerEnabled {
-		Always,
-		Never,
-		WhenValidating,
-	}
+    /// Whether off-chain workers are enabled.
+    #[allow(missing_docs)]
+    #[derive(Debug, Clone)]
+    pub enum OffchainWorkerEnabled {
+        Always,
+        Never,
+        WhenValidating,
+    }
 }
 
 /// Default value for the `--execution-syncing` parameter.

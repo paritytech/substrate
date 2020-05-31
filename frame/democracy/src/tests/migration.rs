@@ -17,29 +17,29 @@
 //! The tests for migration.
 
 use super::*;
-use frame_support::{storage::migration, Hashable, traits::OnRuntimeUpgrade};
+use frame_support::{storage::migration, traits::OnRuntimeUpgrade, Hashable};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
 fn migration() {
-	new_test_ext().execute_with(|| {
-		for i in 0..3 {
-			let k = i.twox_64_concat();
-			let v: (BalanceOf<Test>, Vec<u64>) = (i * 1000, vec![i]);
-			migration::put_storage_value(b"Democracy", b"DepositOf", &k, v);
-		}
-		StorageVersion::kill();
+    new_test_ext().execute_with(|| {
+        for i in 0..3 {
+            let k = i.twox_64_concat();
+            let v: (BalanceOf<Test>, Vec<u64>) = (i * 1000, vec![i]);
+            migration::put_storage_value(b"Democracy", b"DepositOf", &k, v);
+        }
+        StorageVersion::kill();
 
-		Democracy::on_runtime_upgrade();
+        Democracy::on_runtime_upgrade();
 
-		assert_eq!(StorageVersion::get(), Some(Releases::V1));
-		assert_eq_uvec!(
-			DepositOf::<Test>::iter().collect::<Vec<_>>(),
-			vec![
-				(0, (vec![0u64], <BalanceOf<Test>>::from(0u32))),
-				(1, (vec![1u64], <BalanceOf<Test>>::from(1000u32))),
-				(2, (vec![2u64], <BalanceOf<Test>>::from(2000u32))),
-			]
-		);
-	})
+        assert_eq!(StorageVersion::get(), Some(Releases::V1));
+        assert_eq_uvec!(
+            DepositOf::<Test>::iter().collect::<Vec<_>>(),
+            vec![
+                (0, (vec![0u64], <BalanceOf<Test>>::from(0u32))),
+                (1, (vec![1u64], <BalanceOf<Test>>::from(1000u32))),
+                (2, (vec![2u64], <BalanceOf<Test>>::from(2000u32))),
+            ]
+        );
+    })
 }

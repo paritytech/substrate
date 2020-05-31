@@ -17,7 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
+    error,
+    params::{BlockNumberOrHash, ImportParams, SharedParams},
+    CliConfiguration,
 };
 use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -27,54 +29,50 @@ use structopt::StructOpt;
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct CheckBlockCmd {
-	/// Block hash or number
-	#[structopt(value_name = "HASH or NUMBER")]
-	pub input: BlockNumberOrHash,
+    /// Block hash or number
+    #[structopt(value_name = "HASH or NUMBER")]
+    pub input: BlockNumberOrHash,
 
-	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
-	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
-	pub default_heap_pages: Option<u32>,
+    /// The default number of 64KB pages to ever allocate for Wasm execution.
+    ///
+    /// Don't alter this unless you know what you're doing.
+    #[structopt(long = "default-heap-pages", value_name = "COUNT")]
+    pub default_heap_pages: Option<u32>,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub shared_params: SharedParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub import_params: ImportParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub import_params: ImportParams,
 }
 
 impl CheckBlockCmd {
-	/// Run the check-block command
-	pub async fn run<B, BC, BB>(
-		&self,
-		config: Configuration,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: BlockT + Debug,
-		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
-		BB::Hash: FromStr,
-		<BB::Hash as FromStr>::Err: std::fmt::Debug,
-	{
-		let start = std::time::Instant::now();
-		builder(config)?.check_block(self.input.parse()?).await?;
-		println!("Completed in {} ms.", start.elapsed().as_millis());
+    /// Run the check-block command
+    pub async fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+    where
+        B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
+        BC: ServiceBuilderCommand<Block = BB> + Unpin,
+        BB: BlockT + Debug,
+        <NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
+        BB::Hash: FromStr,
+        <BB::Hash as FromStr>::Err: std::fmt::Debug,
+    {
+        let start = std::time::Instant::now();
+        builder(config)?.check_block(self.input.parse()?).await?;
+        println!("Completed in {} ms.", start.elapsed().as_millis());
 
-		Ok(())
-	}
+        Ok(())
+    }
 }
 
 impl CliConfiguration for CheckBlockCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
+    fn shared_params(&self) -> &SharedParams {
+        &self.shared_params
+    }
 
-	fn import_params(&self) -> Option<&ImportParams> {
-		Some(&self.import_params)
-	}
+    fn import_params(&self) -> Option<&ImportParams> {
+        Some(&self.import_params)
+    }
 }

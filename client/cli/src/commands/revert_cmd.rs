@@ -27,42 +27,42 @@ use structopt::StructOpt;
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
-	/// Number of blocks to revert.
-	#[structopt(default_value = "256")]
-	pub num: BlockNumber,
+    /// Number of blocks to revert.
+    #[structopt(default_value = "256")]
+    pub num: BlockNumber,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub shared_params: SharedParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub pruning_params: PruningParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub pruning_params: PruningParams,
 }
 
 impl RevertCmd {
-	/// Run the revert command
-	pub fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
-	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		let blocks = self.num.parse()?;
-		builder(config)?.revert_chain(blocks)?;
+    /// Run the revert command
+    pub fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+    where
+        B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
+        BC: ServiceBuilderCommand<Block = BB> + Unpin,
+        BB: sp_runtime::traits::Block + Debug,
+        <<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+        <BB as BlockT>::Hash: std::str::FromStr,
+    {
+        let blocks = self.num.parse()?;
+        builder(config)?.revert_chain(blocks)?;
 
-		Ok(())
-	}
+        Ok(())
+    }
 }
 
 impl CliConfiguration for RevertCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
+    fn shared_params(&self) -> &SharedParams {
+        &self.shared_params
+    }
 
-	fn pruning_params(&self) -> Option<&PruningParams> {
-		Some(&self.pruning_params)
-	}
+    fn pruning_params(&self) -> Option<&PruningParams> {
+        Some(&self.pruning_params)
+    }
 }

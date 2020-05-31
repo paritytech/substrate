@@ -30,34 +30,34 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 /// Chain RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
-	Client(Box<dyn std::error::Error + Send>),
-	/// Other error type.
-	Other(String),
+    /// Client error.
+    #[display(fmt = "Client error: {}", _0)]
+    Client(Box<dyn std::error::Error + Send>),
+    /// Other error type.
+    Other(String),
 }
 
 impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			_ => None,
-		}
-	}
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Client(ref err) => Some(&**err),
+            _ => None,
+        }
+    }
 }
 
 /// Base error code for all chain errors.
 const BASE_ERROR: i64 = 3000;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error::Other(message) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message,
-				data: None,
-			},
-			e => errors::internal(e),
-		}
-	}
+    fn from(e: Error) -> Self {
+        match e {
+            Error::Other(message) => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+                message,
+                data: None,
+            },
+            e => errors::internal(e),
+        }
+    }
 }

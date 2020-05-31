@@ -19,10 +19,10 @@
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
-#![recursion_limit="512"]
+#![recursion_limit = "512"]
 
-mod storage;
 mod construct_runtime;
+mod storage;
 
 use proc_macro::TokenStream;
 
@@ -234,7 +234,7 @@ use proc_macro::TokenStream;
 ///
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::decl_storage_impl(input)
+    storage::decl_storage_impl(input)
 }
 
 /// Construct a runtime, with the given name and the given modules.
@@ -289,5 +289,5 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// the module depending on it.
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
-	construct_runtime::construct_runtime(input)
+    construct_runtime::construct_runtime(input)
 }

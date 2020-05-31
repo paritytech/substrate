@@ -26,34 +26,34 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Transaction pool error type.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Pool error.
-	Pool(TxPoolError),
-	/// Blockchain error.
-	Blockchain(sp_blockchain::Error),
-	/// Error while converting a `BlockId`.
-	#[from(ignore)]
-	BlockIdConversion(String),
-	/// Error while calling the runtime api.
-	#[from(ignore)]
-	RuntimeApi(String),
+    /// Pool error.
+    Pool(TxPoolError),
+    /// Blockchain error.
+    Blockchain(sp_blockchain::Error),
+    /// Error while converting a `BlockId`.
+    #[from(ignore)]
+    BlockIdConversion(String),
+    /// Error while calling the runtime api.
+    #[from(ignore)]
+    RuntimeApi(String),
 }
 
 impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Pool(ref err) => Some(err),
-			Error::Blockchain(ref err) => Some(err),
-			Error::BlockIdConversion(_) => None,
-			Error::RuntimeApi(_) => None,
-		}
-	}
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Pool(ref err) => Some(err),
+            Error::Blockchain(ref err) => Some(err),
+            Error::BlockIdConversion(_) => None,
+            Error::RuntimeApi(_) => None,
+        }
+    }
 }
 
 impl sp_transaction_pool::error::IntoPoolError for Error {
-	fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
-		match self {
-			Error::Pool(e) => Ok(e),
-			e => Err(e),
-		}
-	}
+    fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
+        match self {
+            Error::Pool(e) => Ok(e),
+            e => Err(e),
+        }
+    }
 }

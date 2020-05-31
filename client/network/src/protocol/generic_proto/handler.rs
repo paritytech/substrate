@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
+pub use self::group::{NotifsHandler, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto};
 pub use self::legacy::ConnectionKillError as LegacyConnectionKillError;
 
 mod group;

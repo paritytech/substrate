@@ -23,7 +23,10 @@
 use libp2p::{core::ConnectedPoint, Multiaddr};
 use serde::{Deserialize, Serialize};
 use slog_derive::SerdeValue;
-use std::{collections::{HashMap, HashSet}, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 /// Returns general information about the networking.
 ///
@@ -33,81 +36,82 @@ use std::{collections::{HashMap, HashSet}, time::Duration};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, SerdeValue)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkState {
-	/// PeerId of the local node.
-	pub peer_id: String,
-	/// List of addresses the node is currently listening on.
-	pub listened_addresses: HashSet<Multiaddr>,
-	/// List of addresses the node knows it can be reached as.
-	pub external_addresses: HashSet<Multiaddr>,
-	/// List of node we're connected to.
-	pub connected_peers: HashMap<String, Peer>,
-	/// List of node that we know of but that we're not connected to.
-	pub not_connected_peers: HashMap<String, NotConnectedPeer>,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
-	/// State of the peerset manager.
-	pub peerset: serde_json::Value,
+    /// PeerId of the local node.
+    pub peer_id: String,
+    /// List of addresses the node is currently listening on.
+    pub listened_addresses: HashSet<Multiaddr>,
+    /// List of addresses the node knows it can be reached as.
+    pub external_addresses: HashSet<Multiaddr>,
+    /// List of node we're connected to.
+    pub connected_peers: HashMap<String, Peer>,
+    /// List of node that we know of but that we're not connected to.
+    pub not_connected_peers: HashMap<String, NotConnectedPeer>,
+    /// Downloaded bytes per second averaged over the past few seconds.
+    pub average_download_per_sec: u64,
+    /// Uploaded bytes per second averaged over the past few seconds.
+    pub average_upload_per_sec: u64,
+    /// State of the peerset manager.
+    pub peerset: serde_json::Value,
 }
 
 /// Part of the `NetworkState` struct. Unstable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Peer {
-	/// How we are connected to the node.
-	pub endpoint: PeerEndpoint,
-	/// Node information, as provided by the node itself. Can be empty if not known yet.
-	pub version_string: Option<String>,
-	/// Latest ping duration with this node.
-	pub latest_ping_time: Option<Duration>,
-	/// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
-	/// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
-	pub enabled: bool,
-	/// If true, the peer is "open", which means that we have a Substrate-related protocol
-	/// with this peer.
-	pub open: bool,
-	/// List of addresses known for this node.
-	pub known_addresses: HashSet<Multiaddr>,
+    /// How we are connected to the node.
+    pub endpoint: PeerEndpoint,
+    /// Node information, as provided by the node itself. Can be empty if not known yet.
+    pub version_string: Option<String>,
+    /// Latest ping duration with this node.
+    pub latest_ping_time: Option<Duration>,
+    /// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
+    /// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
+    pub enabled: bool,
+    /// If true, the peer is "open", which means that we have a Substrate-related protocol
+    /// with this peer.
+    pub open: bool,
+    /// List of addresses known for this node.
+    pub known_addresses: HashSet<Multiaddr>,
 }
 
 /// Part of the `NetworkState` struct. Unstable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NotConnectedPeer {
-	/// List of addresses known for this node.
-	pub known_addresses: HashSet<Multiaddr>,
-	/// Node information, as provided by the node itself, if we were ever connected to this node.
-	pub version_string: Option<String>,
-	/// Latest ping duration with this node, if we were ever connected to this node.
-	pub latest_ping_time: Option<Duration>,
+    /// List of addresses known for this node.
+    pub known_addresses: HashSet<Multiaddr>,
+    /// Node information, as provided by the node itself, if we were ever connected to this node.
+    pub version_string: Option<String>,
+    /// Latest ping duration with this node, if we were ever connected to this node.
+    pub latest_ping_time: Option<Duration>,
 }
 
 /// Part of the `NetworkState` struct. Unstable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PeerEndpoint {
-	/// We are dialing the given address.
-	Dialing(Multiaddr),
-	/// We are listening.
-	Listening {
-		/// Local address of the connection.
-		local_addr: Multiaddr,
-		/// Address data is sent back to.
-		send_back_addr: Multiaddr,
-	},
+    /// We are dialing the given address.
+    Dialing(Multiaddr),
+    /// We are listening.
+    Listening {
+        /// Local address of the connection.
+        local_addr: Multiaddr,
+        /// Address data is sent back to.
+        send_back_addr: Multiaddr,
+    },
 }
 
 impl From<ConnectedPoint> for PeerEndpoint {
-	fn from(endpoint: ConnectedPoint) -> Self {
-		match endpoint {
-			ConnectedPoint::Dialer { address } =>
-				PeerEndpoint::Dialing(address),
-			ConnectedPoint::Listener { local_addr, send_back_addr } =>
-				PeerEndpoint::Listening {
-					local_addr,
-					send_back_addr
-				}
-		}
-	}
+    fn from(endpoint: ConnectedPoint) -> Self {
+        match endpoint {
+            ConnectedPoint::Dialer { address } => PeerEndpoint::Dialing(address),
+            ConnectedPoint::Listener {
+                local_addr,
+                send_back_addr,
+            } => PeerEndpoint::Listening {
+                local_addr,
+                send_back_addr,
+            },
+        }
+    }
 }

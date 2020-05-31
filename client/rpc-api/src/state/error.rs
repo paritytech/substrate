@@ -30,55 +30,60 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 /// State RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
-	Client(Box<dyn std::error::Error + Send>),
-	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details)]
-	InvalidBlockRange {
-		/// Beginning of the block range.
-		from: String,
-		/// End of the block range.
-		to: String,
-		/// Details of the error message.
-		details: String,
-	},
-	/// Provided count exceeds maximum value.
-	#[display(fmt = "count exceeds maximum value. value: {}, max: {}", value, max)]
-	InvalidCount {
-		/// Provided value
-		value: u32,
-		/// Maximum allowed value
-		max: u32,
-	},
+    /// Client error.
+    #[display(fmt = "Client error: {}", _0)]
+    Client(Box<dyn std::error::Error + Send>),
+    /// Provided block range couldn't be resolved to a list of blocks.
+    #[display(
+        fmt = "Cannot resolve a block range ['{:?}' ... '{:?}]. {}",
+        from,
+        to,
+        details
+    )]
+    InvalidBlockRange {
+        /// Beginning of the block range.
+        from: String,
+        /// End of the block range.
+        to: String,
+        /// Details of the error message.
+        details: String,
+    },
+    /// Provided count exceeds maximum value.
+    #[display(fmt = "count exceeds maximum value. value: {}, max: {}", value, max)]
+    InvalidCount {
+        /// Provided value
+        value: u32,
+        /// Maximum allowed value
+        max: u32,
+    },
 }
 
 impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			_ => None,
-		}
-	}
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Client(ref err) => Some(&**err),
+            _ => None,
+        }
+    }
 }
 
 /// Base code for all state errors.
 const BASE_ERROR: i64 = 4000;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error::InvalidBlockRange { .. } => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: None,
-			},
-			Error::InvalidCount { .. } => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: format!("{}", e),
-				data: None,
-			},
-			e => errors::internal(e),
-		}
-	}
+    fn from(e: Error) -> Self {
+        match e {
+            Error::InvalidBlockRange { .. } => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+                message: format!("{}", e),
+                data: None,
+            },
+            Error::InvalidCount { .. } => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+                message: format!("{}", e),
+                data: None,
+            },
+            e => errors::internal(e),
+        }
+    }
 }

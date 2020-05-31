@@ -19,92 +19,96 @@
 
 use super::*;
 use frame_support::{
-	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
-	weights::{Weight, DispatchClass}
+    impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
+    weights::{DispatchClass, Weight},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. 
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use sp_io;
+// or public keys.
 use crate as sudo;
+use sp_io;
+use sp_runtime::{
+    testing::Header,
+    traits::{BlakeTwo256, IdentityLookup},
+    Perbill,
+};
 
 // Logger module to track execution.
 pub mod logger {
-	use super::*;
-	use frame_system::ensure_root;
+    use super::*;
+    use frame_system::ensure_root;
 
-	pub trait Trait: system::Trait {
-		type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-	}
+    pub trait Trait: system::Trait {
+        type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    }
 
-	decl_storage! {
-		trait Store for Module<T: Trait> as Logger {
-			AccountLog get(fn account_log): Vec<T::AccountId>;
-			I32Log get(fn i32_log): Vec<i32>;
-		}
-	}
+    decl_storage! {
+        trait Store for Module<T: Trait> as Logger {
+            AccountLog get(fn account_log): Vec<T::AccountId>;
+            I32Log get(fn i32_log): Vec<i32>;
+        }
+    }
 
-	decl_event! {
-		pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-			AppendI32(i32, Weight),
-			AppendI32AndAccount(AccountId, i32, Weight),
-		}
-	}
+    decl_event! {
+        pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
+            AppendI32(i32, Weight),
+            AppendI32AndAccount(AccountId, i32, Weight),
+        }
+    }
 
-	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-			fn deposit_event() = default;
+    decl_module! {
+        pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+            fn deposit_event() = default;
 
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
-			fn privileged_i32_log(origin, i: i32, weight: Weight){
-				// Ensure that the `origin` is `Root`.	
-				ensure_root(origin)?;
-				<I32Log>::append(i);
-				Self::deposit_event(RawEvent::AppendI32(i, weight));
-			}
+            #[weight = FunctionOf(
+                |args: (&i32, &Weight)| *args.1,
+                DispatchClass::Normal,
+                Pays::Yes,
+            )]
+            fn privileged_i32_log(origin, i: i32, weight: Weight){
+                // Ensure that the `origin` is `Root`.
+                ensure_root(origin)?;
+                <I32Log>::append(i);
+                Self::deposit_event(RawEvent::AppendI32(i, weight));
+            }
 
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
-			fn non_privileged_log(origin, i: i32, weight: Weight){
-				// Ensure that the `origin` is some signed account.		
-				let sender = ensure_signed(origin)?;
-				<I32Log>::append(i);
-				<AccountLog<T>>::append(sender.clone());
-				Self::deposit_event(RawEvent::AppendI32AndAccount(sender, i, weight));
-			}
-		}
-	}
+            #[weight = FunctionOf(
+                |args: (&i32, &Weight)| *args.1,
+                DispatchClass::Normal,
+                Pays::Yes,
+            )]
+            fn non_privileged_log(origin, i: i32, weight: Weight){
+                // Ensure that the `origin` is some signed account.
+                let sender = ensure_signed(origin)?;
+                <I32Log>::append(i);
+                <AccountLog<T>>::append(sender.clone());
+                Self::deposit_event(RawEvent::AppendI32AndAccount(sender, i, weight));
+            }
+        }
+    }
 }
 
 impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
+    pub enum Origin for Test where system = frame_system {}
 }
 
 mod test_events {
-	pub use crate::Event;
+    pub use crate::Event;
 }
 
 impl_outer_event! {
-	pub enum TestEvent for Test {
-		system<T>,
-		sudo<T>,
-		logger<T>,
-	}
+    pub enum TestEvent for Test {
+        system<T>,
+        sudo<T>,
+        logger<T>,
+    }
 }
 
 impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		sudo::Sudo,
-		logger::Logger,
-	}
+    pub enum Call for Test where origin: Origin {
+        sudo::Sudo,
+        logger::Logger,
+    }
 }
 
 // For testing the pallet, we construct most of a mock runtime. This means
@@ -114,47 +118,47 @@ impl_outer_dispatch! {
 pub struct Test;
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+    pub const BlockHashCount: u64 = 250;
+    pub const MaximumBlockWeight: Weight = 1024;
+    pub const MaximumBlockLength: u32 = 2 * 1024;
+    pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
 impl frame_system::Trait for Test {
-	type Origin = Origin;
-	type Call = Call;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>; 
-	type Header = Header;
-	type Event = TestEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type Version = ();
-	type ModuleToIndex = ();
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
+    type Origin = Origin;
+    type Call = Call;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Hash = H256;
+    type Hashing = BlakeTwo256;
+    type AccountId = u64;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = TestEvent;
+    type BlockHashCount = BlockHashCount;
+    type MaximumBlockWeight = MaximumBlockWeight;
+    type DbWeight = ();
+    type BlockExecutionWeight = ();
+    type ExtrinsicBaseWeight = ();
+    type MaximumExtrinsicWeight = MaximumBlockWeight;
+    type MaximumBlockLength = MaximumBlockLength;
+    type AvailableBlockRatio = AvailableBlockRatio;
+    type Version = ();
+    type ModuleToIndex = ();
+    type AccountData = ();
+    type OnNewAccount = ();
+    type OnKilledAccount = ();
 }
 
 // Implement the logger module's `Trait` on the Test runtime.
 impl logger::Trait for Test {
-	type Event = TestEvent;
+    type Event = TestEvent;
 }
 
 // Implement the sudo module's `Trait` on the Test runtime.
 impl Trait for Test {
-	type Event = TestEvent;
-	type Call = Call;
+    type Event = TestEvent;
+    type Call = Call;
 }
 
 // Assign back to type variables in order to make dispatched calls of these modules later.
@@ -168,9 +172,11 @@ pub type LoggerCall = logger::Call<Test>;
 
 // Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test>{
-		key: root_key,
-	}.assimilate_storage(&mut t).unwrap();
-	t.into()
+    let mut t = frame_system::GenesisConfig::default()
+        .build_storage::<Test>()
+        .unwrap();
+    GenesisConfig::<Test> { key: root_key }
+        .assimilate_storage(&mut t)
+        .unwrap();
+    t.into()
 }

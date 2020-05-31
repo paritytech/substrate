@@ -19,12 +19,12 @@
 
 #![cfg(test)]
 
-use crate::mock::{Aura, new_test_ext};
+use crate::mock::{new_test_ext, Aura};
 
 #[test]
 fn initial_values() {
-	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
-		assert_eq!(Aura::last(), 0u64);
-		assert_eq!(Aura::authorities().len(), 4);
-	});
+    new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+        assert_eq!(Aura::last(), 0u64);
+        assert_eq!(Aura::authorities().len(), 4);
+    });
 }

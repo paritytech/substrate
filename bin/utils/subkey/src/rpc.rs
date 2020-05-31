@@ -20,32 +20,31 @@
 
 use futures::Future;
 use hyper::rt;
+use jsonrpc_core_client::transports::http;
 use node_primitives::Hash;
 use sc_rpc::author::AuthorClient;
-use jsonrpc_core_client::transports::http;
 use sp_core::Bytes;
 
-pub struct RpcClient { url: String }
+pub struct RpcClient {
+    url: String,
+}
 
 impl RpcClient {
-	pub fn new(url: String) -> Self { Self { url } }
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
 
-	pub fn insert_key(
-		&self,
-		key_type: String,
-		suri: String,
-		public: Bytes,
-	) {
-		let url = self.url.clone();
+    pub fn insert_key(&self, key_type: String, suri: String, public: Bytes) {
+        let url = self.url.clone();
 
-		rt::run(
-			http::connect(&url)
-				.and_then(|client: AuthorClient<Hash, Hash>| {
-					client.insert_key(key_type, suri, public).map(|_| ())
-				})
-				.map_err(|e| {
-					eprintln!("Error inserting key: {:?}", e);
-				})
-		);
-	}
+        rt::run(
+            http::connect(&url)
+                .and_then(|client: AuthorClient<Hash, Hash>| {
+                    client.insert_key(key_type, suri, public).map(|_| ())
+                })
+                .map_err(|e| {
+                    eprintln!("Error inserting key: {:?}", e);
+                }),
+        );
+    }
 }

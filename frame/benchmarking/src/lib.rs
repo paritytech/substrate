@@ -19,18 +19,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
-mod utils;
 #[cfg(feature = "std")]
 mod analysis;
+mod tests;
+mod utils;
 
-pub use utils::*;
 #[cfg(feature = "std")]
 pub use analysis::Analysis;
+pub use paste;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::{Dispatchable, Zero};
-pub use paste;
+pub use utils::*;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -1009,7 +1009,6 @@ macro_rules! impl_benchmark_tests {
 		)*
 	};
 }
-
 
 /// This macro adds pallet benchmarks to a `Vec<BenchmarkBatch>` object.
 ///

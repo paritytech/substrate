@@ -23,56 +23,54 @@
 //! targeted at handling input parameter parsing providing
 //! a reasonable abstraction.
 
-use structopt::StructOpt;
-use sc_service::config::OffchainWorkerConfig;
 use sc_network::config::Role;
+use sc_service::config::OffchainWorkerConfig;
+use structopt::StructOpt;
 
 use crate::error;
 use crate::OffchainWorkerEnabled;
 
-
 /// Offchain worker related parameters.
 #[derive(Debug, StructOpt, Clone)]
 pub struct OffchainWorkerParams {
-	/// Should execute offchain workers on every block.
-	///
-	/// By default it's only enabled for nodes that are authoring new blocks.
-	#[structopt(
+    /// Should execute offchain workers on every block.
+    ///
+    /// By default it's only enabled for nodes that are authoring new blocks.
+    #[structopt(
 		long = "offchain-worker",
 		value_name = "ENABLED",
 		possible_values = &OffchainWorkerEnabled::variants(),
 		case_insensitive = true,
 		default_value = "WhenValidating"
 	)]
-	pub enabled: OffchainWorkerEnabled,
+    pub enabled: OffchainWorkerEnabled,
 
-	/// Enable Offchain Indexing API, which allows block import to write to Offchain DB.
-	///
-	/// Enables a runtime to write directly to a offchain workers
-	/// DB during block import.
-	#[structopt(
-		long = "enable-offchain-indexing",
-		value_name = "ENABLE_OFFCHAIN_INDEXING"
-	)]
-	pub indexing_enabled: bool,
+    /// Enable Offchain Indexing API, which allows block import to write to Offchain DB.
+    ///
+    /// Enables a runtime to write directly to a offchain workers
+    /// DB during block import.
+    #[structopt(
+        long = "enable-offchain-indexing",
+        value_name = "ENABLE_OFFCHAIN_INDEXING"
+    )]
+    pub indexing_enabled: bool,
 }
 
 impl OffchainWorkerParams {
-	/// Load spec to `Configuration` from `OffchainWorkerParams` and spec factory.
-	pub fn offchain_worker(
-		&self,
-		role: &Role,
-	) -> error::Result<OffchainWorkerConfig>
-	{
-		let enabled = match (&self.enabled, role) {
-			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
-			(OffchainWorkerEnabled::Always, _) => true,
-			(OffchainWorkerEnabled::Never, _) => false,
-			(OffchainWorkerEnabled::WhenValidating, _) => false,
-		};
+    /// Load spec to `Configuration` from `OffchainWorkerParams` and spec factory.
+    pub fn offchain_worker(&self, role: &Role) -> error::Result<OffchainWorkerConfig> {
+        let enabled = match (&self.enabled, role) {
+            (OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
+            (OffchainWorkerEnabled::Always, _) => true,
+            (OffchainWorkerEnabled::Never, _) => false,
+            (OffchainWorkerEnabled::WhenValidating, _) => false,
+        };
 
-		let indexing_enabled = enabled && self.indexing_enabled;
+        let indexing_enabled = enabled && self.indexing_enabled;
 
-		Ok(OffchainWorkerConfig { enabled, indexing_enabled })
-	}
+        Ok(OffchainWorkerConfig {
+            enabled,
+            indexing_enabled,
+        })
+    }
 }

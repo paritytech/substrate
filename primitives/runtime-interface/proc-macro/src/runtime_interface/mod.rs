@@ -31,8 +31,8 @@ mod trait_decl_impl;
 
 /// Custom keywords supported by the `runtime_interface` attribute.
 pub mod keywords {
-	// Custom keyword `wasm_only` that can be given as attribute to [`runtime_interface`].
-	syn::custom_keyword!(wasm_only);
+    // Custom keyword `wasm_only` that can be given as attribute to [`runtime_interface`].
+    syn::custom_keyword!(wasm_only);
 }
 
 /// Implementation of the `runtime_interface` attribute.
@@ -40,27 +40,30 @@ pub mod keywords {
 /// It expects the trait definition the attribute was put above and if this should be an wasm only
 /// interface.
 pub fn runtime_interface_impl(trait_def: ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
-	let bare_functions = bare_function_interface::generate(&trait_def, is_wasm_only)?;
-	let crate_include = generate_runtime_interface_include();
-	let mod_name = Ident::new(&trait_def.ident.to_string().to_snake_case(), Span::call_site());
-	let trait_decl_impl = trait_decl_impl::process(&trait_def, is_wasm_only)?;
-	let host_functions = host_function_interface::generate(&trait_def, is_wasm_only)?;
-	let vis = trait_def.vis;
-	let attrs = &trait_def.attrs;
+    let bare_functions = bare_function_interface::generate(&trait_def, is_wasm_only)?;
+    let crate_include = generate_runtime_interface_include();
+    let mod_name = Ident::new(
+        &trait_def.ident.to_string().to_snake_case(),
+        Span::call_site(),
+    );
+    let trait_decl_impl = trait_decl_impl::process(&trait_def, is_wasm_only)?;
+    let host_functions = host_function_interface::generate(&trait_def, is_wasm_only)?;
+    let vis = trait_def.vis;
+    let attrs = &trait_def.attrs;
 
-	let res = quote! {
-		#( #attrs )*
-		#vis mod #mod_name {
-			use super::*;
-			#crate_include
+    let res = quote! {
+        #( #attrs )*
+        #vis mod #mod_name {
+            use super::*;
+            #crate_include
 
-			#bare_functions
+            #bare_functions
 
-			#trait_decl_impl
+            #trait_decl_impl
 
-			#host_functions
-		}
-	};
+            #host_functions
+        }
+    };
 
-	Ok(res)
+    Ok(res)
 }

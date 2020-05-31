@@ -22,28 +22,23 @@ use structopt::StructOpt;
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]
 pub struct DatabaseParams {
-	/// Select database backend to use.
-	#[structopt(
-		long,
-		alias = "db",
-		value_name = "DB",
-		case_insensitive = true,
-	)]
-	pub database: Option<Database>,
+    /// Select database backend to use.
+    #[structopt(long, alias = "db", value_name = "DB", case_insensitive = true)]
+    pub database: Option<Database>,
 
-	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB")]
-	pub database_cache_size: Option<usize>,
+    /// Limit the memory the database cache can use.
+    #[structopt(long = "db-cache", value_name = "MiB")]
+    pub database_cache_size: Option<usize>,
 }
 
 impl DatabaseParams {
-	/// Limit the memory the database cache can use.
-	pub fn database(&self) -> Option<Database> {
-		self.database
-	}
+    /// Limit the memory the database cache can use.
+    pub fn database(&self) -> Option<Database> {
+        self.database
+    }
 
-	/// Limit the memory the database cache can use.
-	pub fn database_cache_size(&self) -> Option<usize> {
-		self.database_cache_size
-	}
+    /// Limit the memory the database cache can use.
+    pub fn database_cache_size(&self) -> Option<usize> {
+        self.database_cache_size
+    }
 }

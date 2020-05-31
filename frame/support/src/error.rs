@@ -18,9 +18,9 @@
 //! Macro for declaring a module error.
 
 #[doc(hidden)]
-pub use sp_runtime::traits::{LookupError, BadOrigin};
+pub use frame_metadata::{DecodeDifferent, ErrorMetadata, ModuleErrorMetadata};
 #[doc(hidden)]
-pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
+pub use sp_runtime::traits::{BadOrigin, LookupError};
 
 /// Declare an error type for a runtime module.
 ///

@@ -24,30 +24,22 @@
 
 use futures::Future;
 use hyper::rt;
+use jsonrpc_core_client::{transports::http, RpcError};
 use node_primitives::Hash;
-use sc_rpc::author::{
-	AuthorClient,
-	hash::ExtrinsicOrHash,
-};
-use jsonrpc_core_client::{
-	transports::http,
-	RpcError,
-};
+use sc_rpc::author::{hash::ExtrinsicOrHash, AuthorClient};
 
 fn main() {
-	env_logger::init();
+    env_logger::init();
 
-	rt::run(rt::lazy(|| {
-		let uri = "http://localhost:9933";
+    rt::run(rt::lazy(|| {
+        let uri = "http://localhost:9933";
 
-		http::connect(uri)
-			.and_then(|client: AuthorClient<Hash, Hash>| {
-				remove_all_extrinsics(client)
-			})
-			.map_err(|e| {
-				println!("Error: {:?}", e);
-			})
-	}))
+        http::connect(uri)
+            .and_then(|client: AuthorClient<Hash, Hash>| remove_all_extrinsics(client))
+            .map_err(|e| {
+                println!("Error: {:?}", e);
+            })
+    }))
 }
 
 /// Remove all pending extrinsics from the node.
@@ -58,14 +50,20 @@ fn main() {
 ///
 /// As the result of running the code the entire content of the transaction pool is going
 /// to be removed and the extrinsics are going to be temporarily banned.
-fn remove_all_extrinsics(client: AuthorClient<Hash, Hash>) -> impl Future<Item=(), Error=RpcError> {
-	client.pending_extrinsics()
-		.and_then(move |pending| {
-			client.remove_extrinsic(
-				pending.into_iter().map(|tx| ExtrinsicOrHash::Extrinsic(tx.into())).collect()
-			)
-		})
-		.map(|removed| {
-			println!("Removed extrinsics: {:?}", removed);
-		})
+fn remove_all_extrinsics(
+    client: AuthorClient<Hash, Hash>,
+) -> impl Future<Item = (), Error = RpcError> {
+    client
+        .pending_extrinsics()
+        .and_then(move |pending| {
+            client.remove_extrinsic(
+                pending
+                    .into_iter()
+                    .map(|tx| ExtrinsicOrHash::Extrinsic(tx.into()))
+                    .collect(),
+            )
+        })
+        .map(|removed| {
+            println!("Removed extrinsics: {:?}", removed);
+        })
 }

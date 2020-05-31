@@ -16,42 +16,43 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_core::offchain::{OffchainStorage, storage::InMemOffchainStorage};
+use sp_core::offchain::{storage::InMemOffchainStorage, OffchainStorage};
 use std::sync::Arc;
 
 type TestBackend = sc_client_api::in_mem::Backend<substrate_test_runtime::Block>;
 
 #[test]
 fn test_leaves_with_complex_block_tree() {
-	let backend = Arc::new(TestBackend::new());
+    let backend = Arc::new(TestBackend::new());
 
-	substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
+    substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
 }
 
 #[test]
 fn test_blockchain_query_by_number_gets_canonical() {
-	let backend = Arc::new(TestBackend::new());
+    let backend = Arc::new(TestBackend::new());
 
-	substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+    substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(
+        backend,
+    );
 }
 
 #[test]
 fn in_memory_offchain_storage() {
+    let mut storage = InMemOffchainStorage::default();
+    assert_eq!(storage.get(b"A", b"B"), None);
+    assert_eq!(storage.get(b"B", b"A"), None);
 
-	let mut storage = InMemOffchainStorage::default();
-	assert_eq!(storage.get(b"A", b"B"), None);
-	assert_eq!(storage.get(b"B", b"A"), None);
+    storage.set(b"A", b"B", b"C");
+    assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
+    assert_eq!(storage.get(b"B", b"A"), None);
 
-	storage.set(b"A", b"B", b"C");
-	assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
-	assert_eq!(storage.get(b"B", b"A"), None);
+    storage.compare_and_set(b"A", b"B", Some(b"X"), b"D");
+    assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
+    storage.compare_and_set(b"A", b"B", Some(b"C"), b"D");
+    assert_eq!(storage.get(b"A", b"B"), Some(b"D".to_vec()));
 
-	storage.compare_and_set(b"A", b"B", Some(b"X"), b"D");
-	assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
-	storage.compare_and_set(b"A", b"B", Some(b"C"), b"D");
-	assert_eq!(storage.get(b"A", b"B"), Some(b"D".to_vec()));
-
-	assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y"));
-	assert!(storage.compare_and_set(b"B", b"A", None, b"X"));
-	assert_eq!(storage.get(b"B", b"A"), Some(b"X".to_vec()));
+    assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y"));
+    assert!(storage.compare_and_set(b"B", b"A", None, b"X"));
+    assert_eq!(storage.get(b"B", b"A"), Some(b"X".to_vec()));
 }

@@ -18,84 +18,110 @@
 
 //! Testing block import logic.
 
-use sp_consensus::ImportedAux;
-use sp_consensus::import_queue::{
-	import_single_block, BasicQueue, BlockImportError, BlockImportResult, IncomingBlock,
-};
-use substrate_test_runtime_client::{self, prelude::*};
-use substrate_test_runtime_client::runtime::{Block, Hash};
-use sp_runtime::generic::BlockId;
-use sc_block_builder::BlockBuilderProvider;
 use super::*;
+use sc_block_builder::BlockBuilderProvider;
+use sp_consensus::import_queue::{
+    import_single_block, BasicQueue, BlockImportError, BlockImportResult, IncomingBlock,
+};
+use sp_consensus::ImportedAux;
+use sp_runtime::generic::BlockId;
+use substrate_test_runtime_client::runtime::{Block, Hash};
+use substrate_test_runtime_client::{self, prelude::*};
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
-	let mut client = substrate_test_runtime_client::new();
-	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::File, block).unwrap();
+    let mut client = substrate_test_runtime_client::new();
+    let block = client
+        .new_block(Default::default())
+        .unwrap()
+        .build()
+        .unwrap()
+        .block;
+    client.import(BlockOrigin::File, block).unwrap();
 
-	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
-	let header = client.header(&BlockId::Number(1)).unwrap();
-	let justification = client.justification(&BlockId::Number(1)).unwrap();
-	let peer_id = PeerId::random();
-	(client, hash, number, peer_id.clone(), IncomingBlock {
-		hash,
-		header,
-		body: Some(Vec::new()),
-		justification,
-		origin: Some(peer_id.clone()),
-		allow_missing_state: false,
-		import_existing: false,
-	})
+    let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
+    let header = client.header(&BlockId::Number(1)).unwrap();
+    let justification = client.justification(&BlockId::Number(1)).unwrap();
+    let peer_id = PeerId::random();
+    (
+        client,
+        hash,
+        number,
+        peer_id.clone(),
+        IncomingBlock {
+            hash,
+            header,
+            body: Some(Vec::new()),
+            justification,
+            origin: Some(peer_id.clone()),
+            allow_missing_state: false,
+            import_existing: false,
+        },
+    )
 }
 
 #[test]
 fn import_single_good_block_works() {
-	let (_, _hash, number, peer_id, block) = prepare_good_block();
+    let (_, _hash, number, peer_id, block) = prepare_good_block();
 
-	let mut expected_aux = ImportedAux::default();
-	expected_aux.is_new_best = true;
+    let mut expected_aux = ImportedAux::default();
+    expected_aux.is_new_best = true;
 
-	match import_single_block(&mut substrate_test_runtime_client::new(), BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
-		Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
-			if *num == number && *aux == expected_aux && *org == Some(peer_id) => {}
-		r @ _ => panic!("{:?}", r)
-	}
+    match import_single_block(
+        &mut substrate_test_runtime_client::new(),
+        BlockOrigin::File,
+        block,
+        &mut PassThroughVerifier(true),
+    ) {
+        Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
+            if *num == number && *aux == expected_aux && *org == Some(peer_id) => {}
+        r @ _ => panic!("{:?}", r),
+    }
 }
 
 #[test]
 fn import_single_good_known_block_is_ignored() {
-	let (mut client, _hash, number, _, block) = prepare_good_block();
-	match import_single_block(&mut client, BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
-		Ok(BlockImportResult::ImportedKnown(ref n)) if *n == number => {}
-		_ => panic!()
-	}
+    let (mut client, _hash, number, _, block) = prepare_good_block();
+    match import_single_block(
+        &mut client,
+        BlockOrigin::File,
+        block,
+        &mut PassThroughVerifier(true),
+    ) {
+        Ok(BlockImportResult::ImportedKnown(ref n)) if *n == number => {}
+        _ => panic!(),
+    }
 }
 
 #[test]
 fn import_single_good_block_without_header_fails() {
-	let (_, _, _, peer_id, mut block) = prepare_good_block();
-	block.header = None;
-	match import_single_block(&mut substrate_test_runtime_client::new(), BlockOrigin::File, block, &mut PassThroughVerifier(true)) {
-		Err(BlockImportError::IncompleteHeader(ref org)) if *org == Some(peer_id) => {}
-		_ => panic!()
-	}
+    let (_, _, _, peer_id, mut block) = prepare_good_block();
+    block.header = None;
+    match import_single_block(
+        &mut substrate_test_runtime_client::new(),
+        BlockOrigin::File,
+        block,
+        &mut PassThroughVerifier(true),
+    ) {
+        Err(BlockImportError::IncompleteHeader(ref org)) if *org == Some(peer_id) => {}
+        _ => panic!(),
+    }
 }
 
 #[test]
 fn async_import_queue_drops() {
-	let executor = sp_core::testing::SpawnBlockingExecutor::new();
-	// Perform this test multiple times since it exhibits non-deterministic behavior.
-	for _ in 0..100 {
-		let verifier = PassThroughVerifier(true);
+    let executor = sp_core::testing::SpawnBlockingExecutor::new();
+    // Perform this test multiple times since it exhibits non-deterministic behavior.
+    for _ in 0..100 {
+        let verifier = PassThroughVerifier(true);
 
-		let queue = BasicQueue::new(
-			verifier,
-			Box::new(substrate_test_runtime_client::new()),
-			None,
-			None,
-			&executor,
-			None,
-		);
-		drop(queue);
-	}
+        let queue = BasicQueue::new(
+            verifier,
+            Box::new(substrate_test_runtime_client::new()),
+            None,
+            None,
+            &executor,
+            None,
+        );
+        drop(queue);
+    }
 }

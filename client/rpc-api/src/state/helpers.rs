@@ -18,15 +18,15 @@
 
 //! Substrate state API helpers.
 
+use serde::{Deserialize, Serialize};
 use sp_core::Bytes;
-use serde::{Serialize, Deserialize};
 
 /// ReadProof struct returned by the RPC
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadProof<Hash> {
-	/// Block hash used to generate the proof
-	pub at: Hash,
-	/// A proof used to prove that storage entries are included in the storage trie
-	pub proof: Vec<Bytes>,
+    /// Block hash used to generate the proof
+    pub at: Hash,
+    /// A proof used to prove that storage entries are included in the storage trie
+    pub proof: Vec<Bytes>,
 }

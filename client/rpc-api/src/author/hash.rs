@@ -16,8 +16,8 @@
 
 //! Extrinsic helpers for author RPC module.
 
+use serde::{Deserialize, Serialize};
 use sp_core::Bytes;
-use serde::{Serialize, Deserialize};
 
 /// RPC Extrinsic or hash
 ///
@@ -25,8 +25,8 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtrinsicOrHash<Hash> {
-	/// The hash of the extrinsic.
-	Hash(Hash),
-	/// Raw extrinsic bytes.
-	Extrinsic(Bytes),
+    /// The hash of the extrinsic.
+    Hash(Hash),
+    /// Raw extrinsic bytes.
+    Extrinsic(Bytes),
 }

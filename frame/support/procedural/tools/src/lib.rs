@@ -23,70 +23,72 @@
 pub use frame_support_procedural_tools_derive::*;
 
 use proc_macro_crate::crate_name;
-use syn::parse::Error;
 use quote::quote;
+use syn::parse::Error;
 
 pub mod syn_ext;
 
 // FIXME #1569, remove the following functions, which are copied from sp-api-macros
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 use syn::Ident;
 
 fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
-	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
+    Ident::new(
+        &format!("sp_api_hidden_includes_{}", unique_id),
+        Span::call_site(),
+    )
 }
 
 /// Generates the access to the `frame-support` crate.
 pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		quote::quote!( frame_support )
-	} else {
-		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote::quote!( self::#mod_name::hidden_include )
-	}
+    if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
+        quote::quote!(frame_support)
+    } else {
+        let mod_name = generate_hidden_includes_mod_name(unique_id);
+        quote::quote!( self::#mod_name::hidden_include )
+    }
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		TokenStream::new()
-	} else {
-		let mod_name = generate_hidden_includes_mod_name(unique_id);
+    if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
+        TokenStream::new()
+    } else {
+        let mod_name = generate_hidden_includes_mod_name(unique_id);
 
-		match crate_name(def_crate) {
-			Ok(name) => {
-				let name = Ident::new(&name, Span::call_site());
-				quote::quote!(
-					#[doc(hidden)]
-					mod #mod_name {
-						pub extern crate #name as hidden_include;
-					}
-				)
-			},
-			Err(e) => {
-				let err = Error::new(Span::call_site(), &e).to_compile_error();
-				quote!( #err )
-			}
-		}
-
-	}
+        match crate_name(def_crate) {
+            Ok(name) => {
+                let name = Ident::new(&name, Span::call_site());
+                quote::quote!(
+                    #[doc(hidden)]
+                    mod #mod_name {
+                        pub extern crate #name as hidden_include;
+                    }
+                )
+            }
+            Err(e) => {
+                let err = Error::new(Span::call_site(), &e).to_compile_error();
+                quote!( #err )
+            }
+        }
+    }
 }
 
 // fn to remove white spaces around string types
 // (basically whitespaces around tokens)
 pub fn clean_type_string(input: &str) -> String {
-	input
-		.replace(" ::", "::")
-		.replace(":: ", "::")
-		.replace(" ,", ",")
-		.replace(" ;", ";")
-		.replace(" [", "[")
-		.replace("[ ", "[")
-		.replace(" ]", "]")
-		.replace(" (", "(")
-		.replace("( ", "(")
-		.replace(" )", ")")
-		.replace(" <", "<")
-		.replace("< ", "<")
-		.replace(" >", ">")
+    input
+        .replace(" ::", "::")
+        .replace(":: ", "::")
+        .replace(" ,", ",")
+        .replace(" ;", ";")
+        .replace(" [", "[")
+        .replace("[ ", "[")
+        .replace(" ]", "]")
+        .replace(" (", "(")
+        .replace("( ", "(")
+        .replace(" )", ")")
+        .replace(" <", "<")
+        .replace("< ", "<")
+        .replace(" >", ">")
 }

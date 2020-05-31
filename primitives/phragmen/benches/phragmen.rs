@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 //! Benchmarks of the phragmen election algorithm.
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
@@ -27,8 +26,8 @@ use test::Bencher;
 use rand::{self, Rng};
 use sp_phragmen::{PhragmenResult, VoteWeight};
 
+use sp_runtime::{traits::Zero, Perbill};
 use std::collections::BTreeMap;
-use sp_runtime::{Perbill, traits::Zero};
 
 // default params. Each will be scaled by the benchmarks individually.
 const VALIDATORS: u64 = 100;
@@ -42,125 +41,138 @@ const PREFIX: AccountId = 1000_000;
 type AccountId = u64;
 
 mod bench_closure_and_slice {
-	use sp_phragmen::{
-		VoteWeight, ExtendedBalance, Assignment, StakedAssignment, IdentifierT,
-		assignment_ratio_to_staked,
-	};
-	use sp_runtime::{Perbill, PerThing};
-	use rand::{self, Rng, RngCore};
-	use test::Bencher;
+    use rand::{self, Rng, RngCore};
+    use sp_phragmen::{
+        assignment_ratio_to_staked, Assignment, ExtendedBalance, IdentifierT, StakedAssignment,
+        VoteWeight,
+    };
+    use sp_runtime::{PerThing, Perbill};
+    use test::Bencher;
 
-	fn random_assignment() -> Assignment<u32, Perbill> {
-		let mut rng = rand::thread_rng();
-		let who = rng.next_u32();
-		let distribution = (0..5)
-			.map(|x| (x + rng.next_u32(), Perbill::from_percent(rng.next_u32() % 100)))
-			.collect::<Vec<_>>();
-		Assignment { who, distribution }
-	}
+    fn random_assignment() -> Assignment<u32, Perbill> {
+        let mut rng = rand::thread_rng();
+        let who = rng.next_u32();
+        let distribution = (0..5)
+            .map(|x| {
+                (
+                    x + rng.next_u32(),
+                    Perbill::from_percent(rng.next_u32() % 100),
+                )
+            })
+            .collect::<Vec<_>>();
+        Assignment { who, distribution }
+    }
 
-	/// Converts a vector of ratio assignments into ones with absolute budget value.
-	pub fn assignment_ratio_to_staked_slice<A: IdentifierT, T: PerThing>(
-		ratio: Vec<Assignment<A, T>>,
-		stakes: &[VoteWeight],
-	) -> Vec<StakedAssignment<A>>
-	where
-		T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-		ExtendedBalance: From<<T as PerThing>::Inner>,
-	{
-		ratio
-			.into_iter()
-			.zip(stakes.into_iter().map(|x| *x as ExtendedBalance))
-			.map(|(a, stake)| {
-				a.into_staked(stake.into(), true)
-			})
-			.collect()
-	}
+    /// Converts a vector of ratio assignments into ones with absolute budget value.
+    pub fn assignment_ratio_to_staked_slice<A: IdentifierT, T: PerThing>(
+        ratio: Vec<Assignment<A, T>>,
+        stakes: &[VoteWeight],
+    ) -> Vec<StakedAssignment<A>>
+    where
+        T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+        ExtendedBalance: From<<T as PerThing>::Inner>,
+    {
+        ratio
+            .into_iter()
+            .zip(stakes.into_iter().map(|x| *x as ExtendedBalance))
+            .map(|(a, stake)| a.into_staked(stake.into(), true))
+            .collect()
+    }
 
-	#[bench]
-	fn closure(b: &mut Bencher) {
-		let assignments = (0..1000).map(|_| random_assignment()).collect::<Vec<Assignment<_ ,_>>>();
-		let stake_of = |x: &u32| -> VoteWeight { (x * 2 + 100).into() };
+    #[bench]
+    fn closure(b: &mut Bencher) {
+        let assignments = (0..1000)
+            .map(|_| random_assignment())
+            .collect::<Vec<Assignment<_, _>>>();
+        let stake_of = |x: &u32| -> VoteWeight { (x * 2 + 100).into() };
 
-		// each have one clone of assignments
-		b.iter(|| assignment_ratio_to_staked(assignments.clone(), stake_of));
-	}
+        // each have one clone of assignments
+        b.iter(|| assignment_ratio_to_staked(assignments.clone(), stake_of));
+    }
 
-	#[bench]
-	fn slice(b: &mut Bencher) {
-		let assignments = (0..1000).map(|_| random_assignment()).collect::<Vec<Assignment<_ ,_>>>();
-		let stake_of = |x: &u32| -> VoteWeight { (x * 2 + 100).into() };
+    #[bench]
+    fn slice(b: &mut Bencher) {
+        let assignments = (0..1000)
+            .map(|_| random_assignment())
+            .collect::<Vec<Assignment<_, _>>>();
+        let stake_of = |x: &u32| -> VoteWeight { (x * 2 + 100).into() };
 
-		b.iter(|| {
-			let local = assignments.clone();
-			let stakes = local.iter().map(|x| stake_of(&x.who)).collect::<Vec<_>>();
-			assignment_ratio_to_staked_slice(local, stakes.as_ref());
-		});
-	}
+        b.iter(|| {
+            let local = assignments.clone();
+            let stakes = local.iter().map(|x| stake_of(&x.who)).collect::<Vec<_>>();
+            assignment_ratio_to_staked_slice(local, stakes.as_ref());
+        });
+    }
 }
 
 fn do_phragmen(
-	b: &mut Bencher,
-	num_validators: u64,
-	num_nominators: u64,
-	to_elect: usize,
-	edge_per_voter: u64,
-	eq_iters: usize,
-	eq_tolerance: u128,
+    b: &mut Bencher,
+    num_validators: u64,
+    num_nominators: u64,
+    to_elect: usize,
+    edge_per_voter: u64,
+    eq_iters: usize,
+    eq_tolerance: u128,
 ) {
-	assert!(num_validators > edge_per_voter);
-	let rr = |a, b| rand::thread_rng().gen_range(a as usize, b as usize) as VoteWeight;
+    assert!(num_validators > edge_per_voter);
+    let rr = |a, b| rand::thread_rng().gen_range(a as usize, b as usize) as VoteWeight;
 
-	let mut candidates = Vec::with_capacity(num_validators as usize);
-	let mut stake_of_tree: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
+    let mut candidates = Vec::with_capacity(num_validators as usize);
+    let mut stake_of_tree: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 
-	(1 ..= num_validators).for_each(|acc| {
-		candidates.push(acc);
-		stake_of_tree.insert(acc, STAKE + rr(10, 1000));
-	});
+    (1..=num_validators).for_each(|acc| {
+        candidates.push(acc);
+        stake_of_tree.insert(acc, STAKE + rr(10, 1000));
+    });
 
-	let mut voters = Vec::with_capacity(num_nominators as usize);
-	(PREFIX ..= (PREFIX + num_nominators)).for_each(|acc| {
-		// all possible targets
-		let mut all_targets = candidates.clone();
-		// we remove and pop into `targets` `edge_per_voter` times.
-		let targets = (0 .. edge_per_voter).map(|_| {
-			all_targets.remove(rr(0, all_targets.len()) as usize)
-		})
-		.collect::<Vec<AccountId>>();
+    let mut voters = Vec::with_capacity(num_nominators as usize);
+    (PREFIX..=(PREFIX + num_nominators)).for_each(|acc| {
+        // all possible targets
+        let mut all_targets = candidates.clone();
+        // we remove and pop into `targets` `edge_per_voter` times.
+        let targets = (0..edge_per_voter)
+            .map(|_| all_targets.remove(rr(0, all_targets.len()) as usize))
+            .collect::<Vec<AccountId>>();
 
-		let stake = STAKE + rr(10, 1000);
-		stake_of_tree.insert(acc, stake);
-		voters.push((acc, stake, targets));
-	});
+        let stake = STAKE + rr(10, 1000);
+        stake_of_tree.insert(acc, stake);
+        voters.push((acc, stake, targets));
+    });
 
-	b.iter(|| {
-		let PhragmenResult { winners, assignments } = sp_phragmen::elect::<AccountId, Perbill>(
-			to_elect,
-			Zero::zero(),
-			candidates.clone(),
-			voters.clone(),
-		).unwrap();
+    b.iter(|| {
+        let PhragmenResult {
+            winners,
+            assignments,
+        } = sp_phragmen::elect::<AccountId, Perbill>(
+            to_elect,
+            Zero::zero(),
+            candidates.clone(),
+            voters.clone(),
+        )
+        .unwrap();
 
-		let stake_of = |who: &AccountId| -> VoteWeight {
-			*stake_of_tree.get(who).unwrap()
-		};
+        let stake_of = |who: &AccountId| -> VoteWeight { *stake_of_tree.get(who).unwrap() };
 
-		// Do the benchmarking with equalize.
-		if eq_iters > 0 {
-			use sp_phragmen::{equalize, assignment_ratio_to_staked, build_support_map, to_without_backing};
-			let staked = assignment_ratio_to_staked(assignments, &stake_of);
-			let winners = to_without_backing(winners);
-			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
+        // Do the benchmarking with equalize.
+        if eq_iters > 0 {
+            use sp_phragmen::{
+                assignment_ratio_to_staked, build_support_map, equalize, to_without_backing,
+            };
+            let staked = assignment_ratio_to_staked(assignments, &stake_of);
+            let winners = to_without_backing(winners);
+            let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
-			equalize(
-				staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect(),
-				&mut support,
-				eq_tolerance,
-				eq_iters,
-			);
-		}
-	})
+            equalize(
+                staked
+                    .into_iter()
+                    .map(|a| (a.clone(), stake_of(&a.who)))
+                    .collect(),
+                &mut support,
+                eq_tolerance,
+                eq_iters,
+            );
+        }
+    })
 }
 
 macro_rules! phragmen_benches {
@@ -182,39 +194,39 @@ macro_rules! phragmen_benches {
 }
 
 phragmen_benches! {
-	bench_1_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0),
-	bench_1_2: (VALIDATORS * 2, NOMINATORS, TO_ELECT, EDGES, 0, 0),
-	bench_1_3: (VALIDATORS * 4, NOMINATORS, TO_ELECT, EDGES, 0, 0),
-	bench_1_4: (VALIDATORS * 8, NOMINATORS, TO_ELECT, EDGES, 0, 0),
-	bench_1_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
-	bench_1_2_eq: (VALIDATORS * 2, NOMINATORS, TO_ELECT, EDGES, 2, 0),
-	bench_1_3_eq: (VALIDATORS * 4, NOMINATORS, TO_ELECT, EDGES, 2, 0),
-	bench_1_4_eq: (VALIDATORS * 8, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_1_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0),
+    bench_1_2: (VALIDATORS * 2, NOMINATORS, TO_ELECT, EDGES, 0, 0),
+    bench_1_3: (VALIDATORS * 4, NOMINATORS, TO_ELECT, EDGES, 0, 0),
+    bench_1_4: (VALIDATORS * 8, NOMINATORS, TO_ELECT, EDGES, 0, 0),
+    bench_1_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_1_2_eq: (VALIDATORS * 2, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_1_3_eq: (VALIDATORS * 4, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_1_4_eq: (VALIDATORS * 8, NOMINATORS, TO_ELECT, EDGES, 2, 0),
 
-	bench_0_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0),
-	bench_0_2: (VALIDATORS, NOMINATORS, TO_ELECT * 4, EDGES, 0, 0),
-	bench_0_3: (VALIDATORS, NOMINATORS, TO_ELECT * 8, EDGES, 0, 0),
-	bench_0_4: (VALIDATORS, NOMINATORS, TO_ELECT * 16, EDGES , 0, 0),
-	bench_0_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
-	bench_0_2_eq: (VALIDATORS, NOMINATORS, TO_ELECT * 4, EDGES, 2, 0),
-	bench_0_3_eq: (VALIDATORS, NOMINATORS, TO_ELECT * 8, EDGES, 2, 0),
-	bench_0_4_eq: (VALIDATORS, NOMINATORS, TO_ELECT * 16, EDGES , 2, 0),
+    bench_0_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0),
+    bench_0_2: (VALIDATORS, NOMINATORS, TO_ELECT * 4, EDGES, 0, 0),
+    bench_0_3: (VALIDATORS, NOMINATORS, TO_ELECT * 8, EDGES, 0, 0),
+    bench_0_4: (VALIDATORS, NOMINATORS, TO_ELECT * 16, EDGES , 0, 0),
+    bench_0_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_0_2_eq: (VALIDATORS, NOMINATORS, TO_ELECT * 4, EDGES, 2, 0),
+    bench_0_3_eq: (VALIDATORS, NOMINATORS, TO_ELECT * 8, EDGES, 2, 0),
+    bench_0_4_eq: (VALIDATORS, NOMINATORS, TO_ELECT * 16, EDGES , 2, 0),
 
-	bench_2_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0),
-	bench_2_2: (VALIDATORS, NOMINATORS * 2, TO_ELECT, EDGES, 0, 0),
-	bench_2_3: (VALIDATORS, NOMINATORS * 4, TO_ELECT, EDGES, 0, 0),
-	bench_2_4: (VALIDATORS, NOMINATORS * 8, TO_ELECT, EDGES, 0, 0),
-	bench_2_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
-	bench_2_2_eq: (VALIDATORS, NOMINATORS * 2, TO_ELECT, EDGES, 2, 0),
-	bench_2_3_eq: (VALIDATORS, NOMINATORS * 4, TO_ELECT, EDGES, 2, 0),
-	bench_2_4_eq: (VALIDATORS, NOMINATORS * 8, TO_ELECT, EDGES, 2, 0),
+    bench_2_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0),
+    bench_2_2: (VALIDATORS, NOMINATORS * 2, TO_ELECT, EDGES, 0, 0),
+    bench_2_3: (VALIDATORS, NOMINATORS * 4, TO_ELECT, EDGES, 0, 0),
+    bench_2_4: (VALIDATORS, NOMINATORS * 8, TO_ELECT, EDGES, 0, 0),
+    bench_2_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_2_2_eq: (VALIDATORS, NOMINATORS * 2, TO_ELECT, EDGES, 2, 0),
+    bench_2_3_eq: (VALIDATORS, NOMINATORS * 4, TO_ELECT, EDGES, 2, 0),
+    bench_2_4_eq: (VALIDATORS, NOMINATORS * 8, TO_ELECT, EDGES, 2, 0),
 
-	bench_3_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0 ),
-	bench_3_2: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 2, 0, 0),
-	bench_3_3: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 4, 0, 0),
-	bench_3_4: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 8, 0, 0),
-	bench_3_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
-	bench_3_2_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 2, 2, 0),
-	bench_3_3_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 4, 2, 0),
-	bench_3_4_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 8, 2, 0),
+    bench_3_1: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 0, 0 ),
+    bench_3_2: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 2, 0, 0),
+    bench_3_3: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 4, 0, 0),
+    bench_3_4: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 8, 0, 0),
+    bench_3_1_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES, 2, 0),
+    bench_3_2_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 2, 2, 0),
+    bench_3_3_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 4, 2, 0),
+    bench_3_4_eq: (VALIDATORS, NOMINATORS, TO_ELECT, EDGES * 8, 2, 0),
 }

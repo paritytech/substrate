@@ -27,11 +27,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// System RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Provided block range couldn't be resolved to a list of blocks.
-	#[display(fmt = "Node is not fully functional: {}", _0)]
-	NotHealthy(Health),
-	/// Peer argument is malformatted.
-	MalformattedPeerArg(String),
+    /// Provided block range couldn't be resolved to a list of blocks.
+    #[display(fmt = "Node is not fully functional: {}", _0)]
+    NotHealthy(Health),
+    /// Peer argument is malformatted.
+    MalformattedPeerArg(String),
 }
 
 impl std::error::Error for Error {}
@@ -40,18 +40,18 @@ impl std::error::Error for Error {}
 const BASE_ERROR: i64 = 2000;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error::NotHealthy(ref h) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
-				data: serde_json::to_value(h).ok(),
-			},
-			Error::MalformattedPeerArg(ref e) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
-				message: e.clone(),
-				data: None,
-			}
-		}
-	}
+    fn from(e: Error) -> Self {
+        match e {
+            Error::NotHealthy(ref h) => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+                message: format!("{}", e),
+                data: serde_json::to_value(h).ok(),
+            },
+            Error::MalformattedPeerArg(ref e) => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+                message: e.clone(),
+                data: None,
+            },
+        }
+    }
 }

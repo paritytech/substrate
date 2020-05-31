@@ -31,27 +31,27 @@ use structopt::StructOpt;
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportBlocksCmd {
-	/// Input file or stdin if unspecified.
-	#[structopt(parse(from_os_str))]
-	pub input: Option<PathBuf>,
+    /// Input file or stdin if unspecified.
+    #[structopt(parse(from_os_str))]
+    pub input: Option<PathBuf>,
 
-	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
-	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
-	pub default_heap_pages: Option<u32>,
+    /// The default number of 64KB pages to ever allocate for Wasm execution.
+    ///
+    /// Don't alter this unless you know what you're doing.
+    #[structopt(long = "default-heap-pages", value_name = "COUNT")]
+    pub default_heap_pages: Option<u32>,
 
-	/// Try importing blocks from binary format rather than JSON.
-	#[structopt(long)]
-	pub binary: bool,
+    /// Try importing blocks from binary format rather than JSON.
+    #[structopt(long)]
+    pub binary: bool,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub shared_params: SharedParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub import_params: ImportParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub import_params: ImportParams,
 }
 
 /// Internal trait used to cast to a dynamic type that implements Read and Seek.
@@ -60,41 +60,37 @@ trait ReadPlusSeek: Read + Seek {}
 impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
-	/// Run the import-blocks command
-	pub async fn run<B, BC, BB>(
-		&self,
-		config: Configuration,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
-			Some(filename) => Box::new(fs::File::open(filename)?),
-			None => {
-				let mut buffer = Vec::new();
-				io::stdin().read_to_end(&mut buffer)?;
-				Box::new(io::Cursor::new(buffer))
-			}
-		};
+    /// Run the import-blocks command
+    pub async fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+    where
+        B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
+        BC: ServiceBuilderCommand<Block = BB> + Unpin,
+        BB: sp_runtime::traits::Block + Debug,
+        <<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+        <BB as BlockT>::Hash: std::str::FromStr,
+    {
+        let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
+            Some(filename) => Box::new(fs::File::open(filename)?),
+            None => {
+                let mut buffer = Vec::new();
+                io::stdin().read_to_end(&mut buffer)?;
+                Box::new(io::Cursor::new(buffer))
+            }
+        };
 
-		builder(config)?
-			.import_blocks(file, false, self.binary)
-			.await
-			.map_err(Into::into)
-	}
+        builder(config)?
+            .import_blocks(file, false, self.binary)
+            .await
+            .map_err(Into::into)
+    }
 }
 
 impl CliConfiguration for ImportBlocksCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
+    fn shared_params(&self) -> &SharedParams {
+        &self.shared_params
+    }
 
-	fn import_params(&self) -> Option<&ImportParams> {
-		Some(&self.import_params)
-	}
+    fn import_params(&self) -> Option<&ImportParams> {
+        Some(&self.import_params)
+    }
 }

@@ -25,9 +25,9 @@ scoped_tls::scoped_thread_local!(static HOST_STATE: HostState);
 /// During the execution of the provided function `with_context` will be callable.
 pub fn with_initialized_state<R, F>(s: &HostState, f: F) -> R
 where
-	F: FnOnce() -> R,
+    F: FnOnce() -> R,
 {
-	HOST_STATE.set(s, f)
+    HOST_STATE.set(s, f)
 }
 
 /// Create a `HostContext` from the contained `HostState` and execute the given function `f`.
@@ -36,10 +36,10 @@ where
 /// context will be `None`.
 pub fn with_context<R, F>(f: F) -> R
 where
-	F: FnOnce(Option<HostContext>) -> R,
+    F: FnOnce(Option<HostContext>) -> R,
 {
-	if !HOST_STATE.is_set() {
-		return f(None)
-	}
-	HOST_STATE.with(|state| f(Some(state.materialize())))
+    if !HOST_STATE.is_set() {
+        return f(None);
+    }
+    HOST_STATE.with(|state| f(Some(state.materialize())))
 }

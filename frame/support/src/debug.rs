@@ -87,11 +87,11 @@
 //!	native::print!("My struct: {:?}", x);
 //! ```
 
-use sp_std::vec::Vec;
 use sp_std::fmt::{self, Debug};
+use sp_std::vec::Vec;
 
-pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
+pub use log::{debug, error, info, trace, warn};
 
 /// Native-only logging.
 ///
@@ -99,7 +99,7 @@ pub use crate::runtime_print as print;
 /// only if the runtime is running natively (i.e. not via WASM)
 #[cfg(feature = "std")]
 pub mod native {
-	pub use super::{info, debug, error, trace, warn, print};
+    pub use super::{debug, error, info, print, trace, warn};
 }
 
 /// Native-only logging.
@@ -108,16 +108,16 @@ pub mod native {
 /// only if the runtime is running natively (i.e. not via WASM)
 #[cfg(not(feature = "std"))]
 pub mod native {
-	#[macro_export]
-	macro_rules! noop {
-		($($arg:tt)+) => {}
-	}
-	pub use noop as info;
-	pub use noop as debug;
-	pub use noop as error;
-	pub use noop as trace;
-	pub use noop as warn;
-	pub use noop as print;
+    #[macro_export]
+    macro_rules! noop {
+        ($($arg:tt)+) => {};
+    }
+    pub use noop as info;
+    pub use noop as debug;
+    pub use noop as error;
+    pub use noop as trace;
+    pub use noop as warn;
+    pub use noop as print;
 }
 
 /// Print out a formatted message.
@@ -141,7 +141,7 @@ macro_rules! runtime_print {
 
 /// Print out the debuggable type.
 pub fn debug(data: &impl Debug) {
-	runtime_print!("{:?}", data);
+    runtime_print!("{:?}", data);
 }
 
 /// A target for `core::write!` macro - constructs a string in memory.
@@ -149,17 +149,17 @@ pub fn debug(data: &impl Debug) {
 pub struct Writer(Vec<u8>);
 
 impl fmt::Write for Writer {
-	fn write_str(&mut self, s: &str) -> fmt::Result {
-		self.0.extend(s.as_bytes());
-		Ok(())
-	}
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.extend(s.as_bytes());
+        Ok(())
+    }
 }
 
 impl Writer {
-	/// Print the content of this `Writer` out.
-	pub fn print(&self) {
-		sp_io::misc::print_utf8(&self.0)
-	}
+    /// Print the content of this `Writer` out.
+    pub fn print(&self) {
+        sp_io::misc::print_utf8(&self.0)
+    }
 }
 
 /// Runtime logger implementation - `log` crate backend.
@@ -177,42 +177,38 @@ impl Writer {
 pub struct RuntimeLogger;
 
 impl RuntimeLogger {
-	/// Initialize the logger.
-	///
-	/// This is a no-op when running natively (`std`).
-	#[cfg(feature = "std")]
-	pub fn init() {}
+    /// Initialize the logger.
+    ///
+    /// This is a no-op when running natively (`std`).
+    #[cfg(feature = "std")]
+    pub fn init() {}
 
-	/// Initialize the logger.
-	///
-	/// This is a no-op when running natively (`std`).
-	#[cfg(not(feature = "std"))]
-	pub fn init() {
-		static LOGGER: RuntimeLogger = RuntimeLogger;;
-		let _ = log::set_logger(&LOGGER);
-	}
+    /// Initialize the logger.
+    ///
+    /// This is a no-op when running natively (`std`).
+    #[cfg(not(feature = "std"))]
+    pub fn init() {
+        static LOGGER: RuntimeLogger = RuntimeLogger;;
+        let _ = log::set_logger(&LOGGER);
+    }
 }
 
 impl log::Log for RuntimeLogger {
-	fn enabled(&self, _metadata: &log::Metadata) -> bool {
-		// to avoid calling to host twice, we pass everything
-		// and let the host decide what to print.
-		// If someone is initializing the logger they should
-		// know what they are doing.
-		true
-	}
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        // to avoid calling to host twice, we pass everything
+        // and let the host decide what to print.
+        // If someone is initializing the logger they should
+        // know what they are doing.
+        true
+    }
 
-	fn log(&self, record: &log::Record) {
-		use fmt::Write;
-		let mut w = Writer::default();
-		let _ = core::write!(&mut w, "{}", record.args());
+    fn log(&self, record: &log::Record) {
+        use fmt::Write;
+        let mut w = Writer::default();
+        let _ = core::write!(&mut w, "{}", record.args());
 
-		sp_io::logging::log(
-			record.level().into(),
-			record.target(),
-			&w.0,
-		);
-	}
+        sp_io::logging::log(record.level().into(), record.target(), &w.0);
+    }
 
-	fn flush(&self) {}
+    fn flush(&self) {}
 }

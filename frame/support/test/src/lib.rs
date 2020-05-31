@@ -24,13 +24,13 @@
 
 /// The configuration trait
 pub trait Trait {
-	/// The runtime origin type.
-	type Origin;
-	/// The block number type.
-	type BlockNumber;
+    /// The runtime origin type.
+    type Origin;
+    /// The block number type.
+    type BlockNumber;
 }
 
 frame_support::decl_module! {
-	/// Some test module
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+    /// Some test module
+    pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }

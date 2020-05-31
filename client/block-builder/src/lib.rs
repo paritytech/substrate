@@ -28,14 +28,14 @@
 
 use codec::Encode;
 
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
-};
+use sp_api::{ApiErrorFor, ApiExt, ApiRef, Core, ProvideRuntimeApi, StorageChanges, StorageProof};
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
-use sp_core::ExecutionContext;
-use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
 use sp_consensus::RecordProof;
+use sp_core::ExecutionContext;
+use sp_runtime::{
+    generic::BlockId,
+    traits::{Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
+};
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
@@ -48,206 +48,212 @@ use sc_client_api::backend;
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
 pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> {
-	/// The actual block that was build.
-	pub block: Block,
-	/// The changes that need to be applied to the backend to get the state of the build block.
-	pub storage_changes: StorageChanges<StateBackend, Block>,
-	/// An optional proof that was recorded while building the block.
-	pub proof: Option<StorageProof>,
+    /// The actual block that was build.
+    pub block: Block,
+    /// The changes that need to be applied to the backend to get the state of the build block.
+    pub storage_changes: StorageChanges<StateBackend, Block>,
+    /// An optional proof that was recorded while building the block.
+    pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBlock<Block, StateBackend> {
-	/// Convert into the inner values.
-	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
-		(self.block, self.storage_changes, self.proof)
-	}
+impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>>
+    BuiltBlock<Block, StateBackend>
+{
+    /// Convert into the inner values.
+    pub fn into_inner(
+        self,
+    ) -> (
+        Block,
+        StorageChanges<StateBackend, Block>,
+        Option<StorageProof>,
+    ) {
+        (self.block, self.storage_changes, self.proof)
+    }
 }
 
 /// Block builder provider
 pub trait BlockBuilderProvider<B, Block, RA>
-	where
-		Block: BlockT,
-		B: backend::Backend<Block>,
-		Self: Sized,
-		RA: ProvideRuntimeApi<Block>,
+where
+    Block: BlockT,
+    B: backend::Backend<Block>,
+    Self: Sized,
+    RA: ProvideRuntimeApi<Block>,
 {
-	/// Create a new block, built on top of `parent`.
-	///
-	/// When proof recording is enabled, all accessed trie nodes are saved.
-	/// These recorded trie nodes can be used by a third party to proof the
-	/// output of this block builder without having access to the full storage.
-	fn new_block_at<R: Into<RecordProof>>(
-		&self,
-		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
-		record_proof: R,
-	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
+    /// Create a new block, built on top of `parent`.
+    ///
+    /// When proof recording is enabled, all accessed trie nodes are saved.
+    /// These recorded trie nodes can be used by a third party to proof the
+    /// output of this block builder without having access to the full storage.
+    fn new_block_at<R: Into<RecordProof>>(
+        &self,
+        parent: &BlockId<Block>,
+        inherent_digests: DigestFor<Block>,
+        record_proof: R,
+    ) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 
-	/// Create a new block, built on the head of the chain.
-	fn new_block(
-		&self,
-		inherent_digests: DigestFor<Block>,
-	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
+    /// Create a new block, built on the head of the chain.
+    fn new_block(
+        &self,
+        inherent_digests: DigestFor<Block>,
+    ) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 }
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
-	extrinsics: Vec<Block::Extrinsic>,
-	api: ApiRef<'a, A::Api>,
-	block_id: BlockId<Block>,
-	parent_hash: Block::Hash,
-	backend: &'a B,
+    extrinsics: Vec<Block::Extrinsic>,
+    api: ApiRef<'a, A::Api>,
+    block_id: BlockId<Block>,
+    parent_hash: Block::Hash,
+    backend: &'a B,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
-	Block: BlockT,
-	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api: BlockBuilderApi<Block, Error = Error> +
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
-	B: backend::Backend<Block>,
+    Block: BlockT,
+    A: ProvideRuntimeApi<Block> + 'a,
+    A::Api: BlockBuilderApi<Block, Error = Error>
+        + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+    B: backend::Backend<Block>,
 {
-	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
-	///
-	/// While proof recording is enabled, all accessed trie nodes are saved.
-	/// These recorded trie nodes can be used by a third party to prove the
-	/// output of this block builder without having access to the full storage.
-	pub fn new(
-		api: &'a A,
-		parent_hash: Block::Hash,
-		parent_number: NumberFor<Block>,
-		record_proof: RecordProof,
-		inherent_digests: DigestFor<Block>,
-		backend: &'a B,
-	) -> Result<Self, ApiErrorFor<A, Block>> {
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
-			parent_number + One::one(),
-			Default::default(),
-			Default::default(),
-			parent_hash,
-			inherent_digests,
-		);
+    /// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
+    ///
+    /// While proof recording is enabled, all accessed trie nodes are saved.
+    /// These recorded trie nodes can be used by a third party to prove the
+    /// output of this block builder without having access to the full storage.
+    pub fn new(
+        api: &'a A,
+        parent_hash: Block::Hash,
+        parent_number: NumberFor<Block>,
+        record_proof: RecordProof,
+        inherent_digests: DigestFor<Block>,
+        backend: &'a B,
+    ) -> Result<Self, ApiErrorFor<A, Block>> {
+        let header = <<Block as BlockT>::Header as HeaderT>::new(
+            parent_number + One::one(),
+            Default::default(),
+            Default::default(),
+            parent_hash,
+            inherent_digests,
+        );
 
-		let mut api = api.runtime_api();
+        let mut api = api.runtime_api();
 
-		if record_proof.yes() {
-			api.record_proof();
-		}
+        if record_proof.yes() {
+            api.record_proof();
+        }
 
-		let block_id = BlockId::Hash(parent_hash);
+        let block_id = BlockId::Hash(parent_hash);
 
-		api.initialize_block_with_context(
-			&block_id, ExecutionContext::BlockConstruction, &header,
-		)?;
+        api.initialize_block_with_context(&block_id, ExecutionContext::BlockConstruction, &header)?;
 
-		Ok(Self {
-			parent_hash,
-			extrinsics: Vec::new(),
-			api,
-			block_id,
-			backend,
-		})
-	}
+        Ok(Self {
+            parent_hash,
+            extrinsics: Vec::new(),
+            api,
+            block_id,
+            backend,
+        })
+    }
 
-	/// Push onto the block's list of extrinsics.
-	///
-	/// This will ensure the extrinsic can be validly executed (by executing it).
-	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
-		let block_id = &self.block_id;
-		let extrinsics = &mut self.extrinsics;
+    /// Push onto the block's list of extrinsics.
+    ///
+    /// This will ensure the extrinsic can be validly executed (by executing it).
+    pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
+        let block_id = &self.block_id;
+        let extrinsics = &mut self.extrinsics;
 
-		self.api.map_api_result(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone(),
-			)? {
-				Ok(_) => {
-					extrinsics.push(xt);
-					Ok(())
-				}
-				Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
-			}
-		})
-	}
+        self.api.map_api_result(|api| {
+            match api.apply_extrinsic_with_context(
+                block_id,
+                ExecutionContext::BlockConstruction,
+                xt.clone(),
+            )? {
+                Ok(_) => {
+                    extrinsics.push(xt);
+                    Ok(())
+                }
+                Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+            }
+        })
+    }
 
-	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
-	///
-	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
-	/// supplied by `self.api`, combined as [`BuiltBlock`].
-	/// The storage proof will be `Some(_)` when proof recording was enabled.
-	pub fn build(mut self) -> Result<
-		BuiltBlock<Block, backend::StateBackendFor<B, Block>>,
-		ApiErrorFor<A, Block>
-	> {
-		let header = self.api.finalize_block_with_context(
-			&self.block_id, ExecutionContext::BlockConstruction
-		)?;
+    /// Consume the builder to build a valid `Block` containing all pushed extrinsics.
+    ///
+    /// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
+    /// supplied by `self.api`, combined as [`BuiltBlock`].
+    /// The storage proof will be `Some(_)` when proof recording was enabled.
+    pub fn build(
+        mut self,
+    ) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, ApiErrorFor<A, Block>> {
+        let header = self
+            .api
+            .finalize_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
-		debug_assert_eq!(
-			header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(
-				self.extrinsics.iter().map(Encode::encode).collect(),
-			),
-		);
+        debug_assert_eq!(
+            header.extrinsics_root().clone(),
+            HashFor::<Block>::ordered_trie_root(
+                self.extrinsics.iter().map(Encode::encode).collect(),
+            ),
+        );
 
-		let proof = self.api.extract_proof();
+        let proof = self.api.extract_proof();
 
-		let state = self.backend.state_at(self.block_id)?;
-		let changes_trie_state = backend::changes_tries_state_at_block(
-			&self.block_id,
-			self.backend.changes_trie_storage(),
-		)?;
-		let parent_hash = self.parent_hash;
+        let state = self.backend.state_at(self.block_id)?;
+        let changes_trie_state = backend::changes_tries_state_at_block(
+            &self.block_id,
+            self.backend.changes_trie_storage(),
+        )?;
+        let parent_hash = self.parent_hash;
 
-		let storage_changes = self.api.into_storage_changes(
-			&state,
-			changes_trie_state.as_ref(),
-			parent_hash,
-		)?;
+        let storage_changes =
+            self.api
+                .into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)?;
 
-		Ok(BuiltBlock {
-			block: <Block as BlockT>::new(header, self.extrinsics),
-			storage_changes,
-			proof,
-		})
-	}
+        Ok(BuiltBlock {
+            block: <Block as BlockT>::new(header, self.extrinsics),
+            storage_changes,
+            proof,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use sp_blockchain::HeaderBackend;
-	use sp_core::Blake2Hasher;
-	use sp_state_machine::Backend;
-	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+    use super::*;
+    use sp_blockchain::HeaderBackend;
+    use sp_core::Blake2Hasher;
+    use sp_state_machine::Backend;
+    use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
 
-	#[test]
-	fn block_building_storage_proof_does_not_include_runtime_by_default() {
-		let builder = substrate_test_runtime_client::TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = builder.build();
+    #[test]
+    fn block_building_storage_proof_does_not_include_runtime_by_default() {
+        let builder = substrate_test_runtime_client::TestClientBuilder::new();
+        let backend = builder.backend();
+        let client = builder.build();
 
-		let block = BlockBuilder::new(
-			&client,
-			client.info().best_hash,
-			client.info().best_number,
-			RecordProof::Yes,
-			Default::default(),
-			&*backend,
-		).unwrap().build().unwrap();
+        let block = BlockBuilder::new(
+            &client,
+            client.info().best_hash,
+            client.info().best_number,
+            RecordProof::Yes,
+            Default::default(),
+            &*backend,
+        )
+        .unwrap()
+        .build()
+        .unwrap();
 
-		let proof = block.proof.expect("Proof is build on request");
+        let proof = block.proof.expect("Proof is build on request");
 
-		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-			block.storage_changes.transaction_storage_root,
-			proof,
-		).unwrap();
+        let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+            block.storage_changes.transaction_storage_root,
+            proof,
+        )
+        .unwrap();
 
-		assert!(
-			backend.storage(&sp_core::storage::well_known_keys::CODE)
-				.unwrap_err()
-				.contains("Database missing expected key"),
-		);
-	}
+        assert!(backend
+            .storage(&sp_core::storage::well_known_keys::CODE)
+            .unwrap_err()
+            .contains("Database missing expected key"),);
+    }
 }

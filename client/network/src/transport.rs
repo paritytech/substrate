@@ -18,15 +18,18 @@
 
 use futures::prelude::*;
 use libp2p::{
-	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
-	core::{
-		self, either::{EitherError, EitherOutput}, muxing::StreamMuxerBox,
-		transport::{boxed::Boxed, OptionalTransport}, upgrade
-	},
-	mplex, identity, bandwidth, wasm_ext, noise
+    bandwidth,
+    core::{
+        self,
+        either::{EitherError, EitherOutput},
+        muxing::StreamMuxerBox,
+        transport::{boxed::Boxed, OptionalTransport},
+        upgrade,
+    },
+    identity, mplex, noise, wasm_ext, InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket};
+use libp2p::{dns, tcp, websocket};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -39,111 +42,126 @@ pub use self::bandwidth::BandwidthSinks;
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
 pub fn build_transport(
-	keypair: identity::Keypair,
-	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>,
-	use_yamux_flow_control: bool
-) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
-	// Build configuration objects for encryption mechanisms.
-	let noise_config = {
-		// For more information about these two panics, see in "On the Importance of
-		// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
-		// and Richard J. Lipton.
-		let noise_keypair_legacy = noise::Keypair::<noise::X25519>::new().into_authentic(&keypair)
-			.expect("can only fail in case of a hardware bug; since this signing is performed only \
+    keypair: identity::Keypair,
+    memory_only: bool,
+    wasm_external_transport: Option<wasm_ext::ExtTransport>,
+    use_yamux_flow_control: bool,
+) -> (
+    Boxed<(PeerId, StreamMuxerBox), io::Error>,
+    Arc<bandwidth::BandwidthSinks>,
+) {
+    // Build configuration objects for encryption mechanisms.
+    let noise_config = {
+        // For more information about these two panics, see in "On the Importance of
+        // Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
+        // and Richard J. Lipton.
+        let noise_keypair_legacy = noise::Keypair::<noise::X25519>::new()
+            .into_authentic(&keypair)
+            .expect(
+                "can only fail in case of a hardware bug; since this signing is performed only \
 				once and at initialization, we're taking the bet that the inconvenience of a very \
-				rare panic here is basically zero");
-		let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
-			.expect("can only fail in case of a hardware bug; since this signing is performed only \
+				rare panic here is basically zero",
+            );
+        let noise_keypair_spec = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(&keypair)
+            .expect(
+                "can only fail in case of a hardware bug; since this signing is performed only \
 				once and at initialization, we're taking the bet that the inconvenience of a very \
-				rare panic here is basically zero");
+				rare panic here is basically zero",
+            );
 
-		core::upgrade::SelectUpgrade::new(
-			noise::NoiseConfig::xx(noise_keypair_spec),
-			noise::NoiseConfig::ix(noise_keypair_legacy)
-		)
-	};
+        core::upgrade::SelectUpgrade::new(
+            noise::NoiseConfig::xx(noise_keypair_spec),
+            noise::NoiseConfig::ix(noise_keypair_legacy),
+        )
+    };
 
-	// Build configuration objects for multiplexing mechanisms.
-	let mut mplex_config = mplex::MplexConfig::new();
-	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
-	mplex_config.max_buffer_len(usize::MAX);
+    // Build configuration objects for multiplexing mechanisms.
+    let mut mplex_config = mplex::MplexConfig::new();
+    mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
+    mplex_config.max_buffer_len(usize::MAX);
 
-	let mut yamux_config = libp2p::yamux::Config::default();
-	yamux_config.set_lazy_open(true); // Only set SYN flag on first data frame sent to the remote.
+    let mut yamux_config = libp2p::yamux::Config::default();
+    yamux_config.set_lazy_open(true); // Only set SYN flag on first data frame sent to the remote.
 
-	if use_yamux_flow_control {
-		// Enable proper flow-control: window updates are only sent when
-		// buffered data has been consumed.
-		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
-	}
+    if use_yamux_flow_control {
+        // Enable proper flow-control: window updates are only sent when
+        // buffered data has been consumed.
+        yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::OnRead);
+    }
 
-	// Build the base layer of the transport.
-	let transport = if let Some(t) = wasm_external_transport {
-		OptionalTransport::some(t)
-	} else {
-		OptionalTransport::none()
-	};
-	#[cfg(not(target_os = "unknown"))]
-	let transport = transport.or_transport(if !memory_only {
-		let desktop_trans = tcp::TcpConfig::new();
-		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
-			.or_transport(desktop_trans);
-		OptionalTransport::some(if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {
-			dns.boxed()
-		} else {
-			desktop_trans.map_err(dns::DnsErr::Underlying).boxed()
-		})
-	} else {
-		OptionalTransport::none()
-	});
+    // Build the base layer of the transport.
+    let transport = if let Some(t) = wasm_external_transport {
+        OptionalTransport::some(t)
+    } else {
+        OptionalTransport::none()
+    };
+    #[cfg(not(target_os = "unknown"))]
+    let transport = transport.or_transport(if !memory_only {
+        let desktop_trans = tcp::TcpConfig::new();
+        let desktop_trans =
+            websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
+        OptionalTransport::some(
+            if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {
+                dns.boxed()
+            } else {
+                desktop_trans.map_err(dns::DnsErr::Underlying).boxed()
+            },
+        )
+    } else {
+        OptionalTransport::none()
+    });
 
-	let transport = transport.or_transport(if memory_only {
-		OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
-	} else {
-		OptionalTransport::none()
-	});
+    let transport = transport.or_transport(if memory_only {
+        OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
+    } else {
+        OptionalTransport::none()
+    });
 
-	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
+    let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
-	// Encryption
-	let transport = transport.and_then(move |stream, endpoint| {
-		core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
-			.map_err(|err|
-				err.map_err(|err| match err {
-					EitherError::A(err) => err,
-					EitherError::B(err) => err,
-				})
-			)
-			.and_then(|result| async move {
-				let remote_key = match &result {
-					EitherOutput::First((noise::RemoteIdentity::IdentityKey(key), _)) => key.clone(),
-					EitherOutput::Second((noise::RemoteIdentity::IdentityKey(key), _)) => key.clone(),
-					_ => return Err(upgrade::UpgradeError::Apply(noise::NoiseError::InvalidKey))
-				};
-				let out = match result {
-					EitherOutput::First((_, o)) => o,
-					EitherOutput::Second((_, o)) => o,
-				};
-				Ok((out, remote_key.into_peer_id()))
-			})
-	});
+    // Encryption
+    let transport = transport.and_then(move |stream, endpoint| {
+        core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
+            .map_err(|err| {
+                err.map_err(|err| match err {
+                    EitherError::A(err) => err,
+                    EitherError::B(err) => err,
+                })
+            })
+            .and_then(|result| async move {
+                let remote_key = match &result {
+                    EitherOutput::First((noise::RemoteIdentity::IdentityKey(key), _)) => {
+                        key.clone()
+                    }
+                    EitherOutput::Second((noise::RemoteIdentity::IdentityKey(key), _)) => {
+                        key.clone()
+                    }
+                    _ => return Err(upgrade::UpgradeError::Apply(noise::NoiseError::InvalidKey)),
+                };
+                let out = match result {
+                    EitherOutput::First((_, o)) => o,
+                    EitherOutput::Second((_, o)) => o,
+                };
+                Ok((out, remote_key.into_peer_id()))
+            })
+    });
 
-	// Multiplexing
-	let transport = transport.and_then(move |(stream, peer_id), endpoint| {
-			let peer_id2 = peer_id.clone();
-			let upgrade = core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-				.map_inbound(move |muxer| (peer_id, muxer))
-				.map_outbound(move |muxer| (peer_id2, muxer));
+    // Multiplexing
+    let transport = transport.and_then(move |(stream, peer_id), endpoint| {
+        let peer_id2 = peer_id.clone();
+        let upgrade = core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+            .map_inbound(move |muxer| (peer_id, muxer))
+            .map_outbound(move |muxer| (peer_id2, muxer));
 
-			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
-		});
+        core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
+            .map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
+    });
 
-	let transport = transport
-			.timeout(Duration::from_secs(20))
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-			.boxed();
+    let transport = transport
+        .timeout(Duration::from_secs(20))
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        .boxed();
 
-	(transport, sinks)
+    (transport, sinks)
 }

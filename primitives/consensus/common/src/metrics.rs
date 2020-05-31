@@ -16,24 +16,27 @@
 
 //! Metering tools for consensus
 
-use prometheus_endpoint::{register, U64, Registry, PrometheusError, Opts, CounterVec};
+use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 
 /// Generic Prometheus metrics for common consensus functionality.
 #[derive(Clone)]
 pub(crate) struct Metrics {
-	pub import_queue_processed: CounterVec<U64>,
+    pub import_queue_processed: CounterVec<U64>,
 }
 
 impl Metrics {
-	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			import_queue_processed: register(
-				CounterVec::new(
-					Opts::new("import_queue_processed_total", "Blocks processed by import queue"),
-					&["result"] // 'success or failure
-				)?,
-				registry,
-			)?,
-		})
-	}
+    pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+        Ok(Self {
+            import_queue_processed: register(
+                CounterVec::new(
+                    Opts::new(
+                        "import_queue_processed_total",
+                        "Blocks processed by import queue",
+                    ),
+                    &["result"], // 'success or failure
+                )?,
+                registry,
+            )?,
+        })
+    }
 }

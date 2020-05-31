@@ -260,13 +260,13 @@ pub mod config;
 pub mod error;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkWorker};
-pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent, ObservedRole};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
+pub use libp2p::{Multiaddr, PeerId};
+pub use protocol::event::{DhtEvent, Event, ObservedRole};
+pub use protocol::sync::SyncState;
+pub use protocol::PeerInfo;
+pub use service::{NetworkService, NetworkWorker};
 
 pub use sc_peerset::ReputationChange;
 
@@ -288,28 +288,30 @@ impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + 
 /// A cloneable handle for reporting cost/benefits of peers.
 #[derive(Clone)]
 pub struct ReportHandle {
-	inner: sc_peerset::PeersetHandle, // wraps it so we don't have to worry about breaking API.
+    inner: sc_peerset::PeersetHandle, // wraps it so we don't have to worry about breaking API.
 }
 
 impl From<sc_peerset::PeersetHandle> for ReportHandle {
-	fn from(peerset_handle: sc_peerset::PeersetHandle) -> Self {
-		ReportHandle { inner: peerset_handle }
-	}
+    fn from(peerset_handle: sc_peerset::PeersetHandle) -> Self {
+        ReportHandle {
+            inner: peerset_handle,
+        }
+    }
 }
 
 impl ReportHandle {
-	/// Report a given peer as either beneficial (+) or costly (-) according to the
-	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		self.inner.report_peer(who, cost_benefit);
-	}
+    /// Report a given peer as either beneficial (+) or costly (-) according to the
+    /// given scalar.
+    pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+        self.inner.report_peer(who, cost_benefit);
+    }
 }
 
 /// Trait for providing information about the local network state
 pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
+    /// Returns the local external addresses.
+    fn external_addresses(&self) -> Vec<Multiaddr>;
 
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
+    /// Returns the local Peer ID.
+    fn local_peer_id(&self) -> PeerId;
 }

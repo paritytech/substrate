@@ -19,8 +19,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_inherents::{InherentIdentifier, InherentData, Error};
 use codec::Decode;
+use sp_inherents::{Error, InherentData, InherentIdentifier};
 
 #[cfg(feature = "std")]
 use codec::Encode;
@@ -30,48 +30,48 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
 
 /// Auxiliary trait to extract finalized inherent data.
 pub trait FinalizedInherentData<N: Decode> {
-	/// Get finalized inherent data.
-	fn finalized_number(&self) -> Result<N, Error>;
+    /// Get finalized inherent data.
+    fn finalized_number(&self) -> Result<N, Error>;
 }
 
 impl<N: Decode> FinalizedInherentData<N> for InherentData {
-	fn finalized_number(&self) -> Result<N, Error> {
-		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "Finalized number inherent data not found".into()))
-	}
+    fn finalized_number(&self) -> Result<N, Error> {
+        self.get_data(&INHERENT_IDENTIFIER)
+            .and_then(|r| r.ok_or_else(|| "Finalized number inherent data not found".into()))
+    }
 }
 
 /// Provider for inherent data.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider<F, N> {
-	inner: F,
-	_marker: std::marker::PhantomData<N>,
+    inner: F,
+    _marker: std::marker::PhantomData<N>,
 }
 
 #[cfg(feature = "std")]
 impl<F, N> InherentDataProvider<F, N> {
-	pub fn new(final_oracle: F) -> Self {
-		InherentDataProvider { inner: final_oracle, _marker: Default::default() }
-	}
+    pub fn new(final_oracle: F) -> Self {
+        InherentDataProvider {
+            inner: final_oracle,
+            _marker: Default::default(),
+        }
+    }
 }
 
 #[cfg(feature = "std")]
 impl<F, N: Encode> sp_inherents::ProvideInherentData for InherentDataProvider<F, N>
-	where F: Fn() -> Result<N, Error>
+where
+    F: Fn() -> Result<N, Error>,
 {
-	fn inherent_identifier(&self) -> &'static InherentIdentifier {
-		&INHERENT_IDENTIFIER
-	}
+    fn inherent_identifier(&self) -> &'static InherentIdentifier {
+        &INHERENT_IDENTIFIER
+    }
 
-	fn provide_inherent_data(
-		&self,
-		inherent_data: &mut InherentData,
-	) -> Result<(), Error> {
-		(self.inner)()
-			.and_then(|n| inherent_data.put_data(INHERENT_IDENTIFIER, &n))
-	}
+    fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), Error> {
+        (self.inner)().and_then(|n| inherent_data.put_data(INHERENT_IDENTIFIER, &n))
+    }
 
-	fn error_to_string(&self, _error: &[u8]) -> Option<String> {
-		Some(format!("no further information"))
-	}
+    fn error_to_string(&self, _error: &[u8]) -> Option<String> {
+        Some(format!("no further information"))
+    }
 }

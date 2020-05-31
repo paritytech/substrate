@@ -60,37 +60,42 @@
 //! ```
 //!
 
-use futures::{prelude::*, channel::mpsc};
-use libp2p::{Multiaddr, wasm_ext};
+use futures::{channel::mpsc, prelude::*};
+use libp2p::{wasm_ext, Multiaddr};
 use log::{error, warn};
 use parking_lot::Mutex;
-use serde::{Serialize, Deserialize, Deserializer};
-use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 use wasm_timer::Instant;
 
 pub use libp2p::wasm_ext::ExtTransport;
-pub use slog_scope::with_logger;
 pub use slog;
+pub use slog_scope::with_logger;
 
 mod async_record;
 mod worker;
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
-	/// Collection of telemetry WebSocket servers with a corresponding verbosity level.
-	pub endpoints: TelemetryEndpoints,
+    /// Collection of telemetry WebSocket servers with a corresponding verbosity level.
+    pub endpoints: TelemetryEndpoints,
 
-	/// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
-	/// some binding between the networking provided by the operating system or environment and
-	/// libp2p.
-	///
-	/// This parameter exists whatever the target platform is, but it is expected to be set to
-	/// `Some` only when compiling for WASM.
-	///
-	/// > **Important**: Each individual call to `write` corresponds to one message. There is no
-	/// >                internal buffering going on. In the context of WebSockets, each `write`
-	/// >                must be one individual WebSockets frame.
-	pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
+    /// Optional external implementation of a libp2p transport. Used in WASM contexts where we need
+    /// some binding between the networking provided by the operating system or environment and
+    /// libp2p.
+    ///
+    /// This parameter exists whatever the target platform is, but it is expected to be set to
+    /// `Some` only when compiling for WASM.
+    ///
+    /// > **Important**: Each individual call to `write` corresponds to one message. There is no
+    /// >                internal buffering going on. In the context of WebSockets, each `write`
+    /// >                must be one individual WebSockets frame.
+    pub wasm_external_transport: Option<wasm_ext::ExtTransport>,
 }
 
 /// List of telemetry servers we want to talk to. Contains the URL of the server, and the
@@ -99,46 +104,51 @@ pub struct TelemetryConfig {
 /// The URL string can be either a URL or a multiaddress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TelemetryEndpoints(
-	#[serde(deserialize_with = "url_or_multiaddr_deser")]
-	Vec<(Multiaddr, u8)>
+    #[serde(deserialize_with = "url_or_multiaddr_deser")] Vec<(Multiaddr, u8)>,
 );
 
 /// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
 fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error>
-	where D: Deserializer<'de>
+where
+    D: Deserializer<'de>,
 {
-	Vec::<(String, u8)>::deserialize(deserializer)?
-		.iter()
-		.map(|e| Ok((url_to_multiaddr(&e.0)
-		.map_err(serde::de::Error::custom)?, e.1)))
-		.collect()
+    Vec::<(String, u8)>::deserialize(deserializer)?
+        .iter()
+        .map(|e| {
+            Ok((
+                url_to_multiaddr(&e.0).map_err(serde::de::Error::custom)?,
+                e.1,
+            ))
+        })
+        .collect()
 }
 
 impl TelemetryEndpoints {
-	pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
-		let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints.iter()
-			.map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
-			.collect();
-		endpoints.map(Self)
-	}
+    pub fn new(endpoints: Vec<(String, u8)>) -> Result<Self, libp2p::multiaddr::Error> {
+        let endpoints: Result<Vec<(Multiaddr, u8)>, libp2p::multiaddr::Error> = endpoints
+            .iter()
+            .map(|e| Ok((url_to_multiaddr(&e.0)?, e.1)))
+            .collect();
+        endpoints.map(Self)
+    }
 }
 
 /// Parses a WebSocket URL into a libp2p `Multiaddr`.
 fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
-	// First, assume that we have a `Multiaddr`.
-	let parse_error = match url.parse() {
-		Ok(ma) => return Ok(ma),
-		Err(err) => err,
-	};
+    // First, assume that we have a `Multiaddr`.
+    let parse_error = match url.parse() {
+        Ok(ma) => return Ok(ma),
+        Err(err) => err,
+    };
 
-	// If not, try the `ws://path/url` format.
-	if let Ok(ma) = libp2p::multiaddr::from_url(url) {
-		return Ok(ma)
-	}
+    // If not, try the `ws://path/url` format.
+    if let Ok(ma) = libp2p::multiaddr::from_url(url) {
+        return Ok(ma);
+    }
 
-	// If we have no clue about the format of that string, assume that we were expecting a
-	// `Multiaddr`.
-	Err(parse_error)
+    // If we have no clue about the format of that string, assume that we were expecting a
+    // `Multiaddr`.
+    Err(parse_error)
 }
 
 /// Log levels.
@@ -156,9 +166,9 @@ pub const CONSENSUS_INFO: &str = "1";
 /// Dropping all the clones unregisters the telemetry.
 #[derive(Clone)]
 pub struct Telemetry {
-	inner: Arc<Mutex<TelemetryInner>>,
-	/// Slog guard so that we don't get deregistered.
-	_guard: Arc<slog_scope::GlobalLoggerGuard>,
+    inner: Arc<Mutex<TelemetryInner>>,
+    /// Slog guard so that we don't get deregistered.
+    _guard: Arc<slog_scope::GlobalLoggerGuard>,
 }
 
 /// Behind the `Mutex` in `Telemetry`.
@@ -168,16 +178,16 @@ pub struct Telemetry {
 /// where we extract the telemetry registration so that it continues running during the shutdown
 /// process.
 struct TelemetryInner {
-	/// Worker for the telemetry. `None` if it failed to initialize.
-	worker: Option<worker::TelemetryWorker>,
-	/// Receives log entries for them to be dispatched to the worker.
-	receiver: mpsc::Receiver<async_record::AsyncRecord>,
+    /// Worker for the telemetry. `None` if it failed to initialize.
+    worker: Option<worker::TelemetryWorker>,
+    /// Receives log entries for them to be dispatched to the worker.
+    receiver: mpsc::Receiver<async_record::AsyncRecord>,
 }
 
 /// Implements `slog::Drain`.
 struct TelemetryDrain {
-	/// Sends log entries.
-	sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
+    /// Sends log entries.
+    sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
 }
 
 /// Initializes the telemetry. See the crate root documentation for more information.
@@ -185,121 +195,128 @@ struct TelemetryDrain {
 /// Please be careful to not call this function twice in the same program. The `slog` crate
 /// doesn't provide any way of knowing whether a global logger has already been registered.
 pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
-	// Build the list of telemetry endpoints.
-	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
+    // Build the list of telemetry endpoints.
+    let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
 
-	let (sender, receiver) = mpsc::channel(16);
-	let guard = {
-		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
-		let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
-		slog_scope::set_global_logger(root)
-	};
+    let (sender, receiver) = mpsc::channel(16);
+    let guard = {
+        let logger = TelemetryDrain {
+            sender: std::panic::AssertUnwindSafe(sender),
+        };
+        let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
+        slog_scope::set_global_logger(root)
+    };
 
-	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
-		Ok(w) => Some(w),
-		Err(err) => {
-			error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
-			None
-		}
-	};
+    let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
+        Ok(w) => Some(w),
+        Err(err) => {
+            error!(target: "telemetry", "Failed to initialize telemetry worker: {:?}", err);
+            None
+        }
+    };
 
-	Telemetry {
-		inner: Arc::new(Mutex::new(TelemetryInner {
-			worker,
-			receiver,
-		})),
-		_guard: Arc::new(guard),
-	}
+    Telemetry {
+        inner: Arc::new(Mutex::new(TelemetryInner { worker, receiver })),
+        _guard: Arc::new(guard),
+    }
 }
 
 /// Event generated when polling the worker.
 #[derive(Debug)]
 pub enum TelemetryEvent {
-	/// We have established a connection to one of the telemetry endpoint, either for the first
-	/// time or after having been disconnected earlier.
-	Connected,
+    /// We have established a connection to one of the telemetry endpoint, either for the first
+    /// time or after having been disconnected earlier.
+    Connected,
 }
 
 impl Stream for Telemetry {
-	type Item = TelemetryEvent;
+    type Item = TelemetryEvent;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		let before = Instant::now();
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+        let before = Instant::now();
 
-		// Because the `Telemetry` is cloneable, we need to put the actual fields behind a `Mutex`.
-		// However, the user is only ever supposed to poll from one instance of `Telemetry`, while
-		// the other instances are used only for RAII purposes.
-		// We assume that the user is following this advice and therefore that the `Mutex` is only
-		// ever locked once at a time.
-		let mut inner = match self.inner.try_lock() {
-			Some(l) => l,
-			None => {
-				warn!(
-					target: "telemetry",
-					"The telemetry seems to be polled multiple times simultaneously"
-				);
-				// Returning `Pending` here means that we may never get polled again, but this is
-				// ok because we're in a situation where something else is actually currently doing
-				// the polling.
-				return Poll::Pending;
-			}
-		};
+        // Because the `Telemetry` is cloneable, we need to put the actual fields behind a `Mutex`.
+        // However, the user is only ever supposed to poll from one instance of `Telemetry`, while
+        // the other instances are used only for RAII purposes.
+        // We assume that the user is following this advice and therefore that the `Mutex` is only
+        // ever locked once at a time.
+        let mut inner = match self.inner.try_lock() {
+            Some(l) => l,
+            None => {
+                warn!(
+                    target: "telemetry",
+                    "The telemetry seems to be polled multiple times simultaneously"
+                );
+                // Returning `Pending` here means that we may never get polled again, but this is
+                // ok because we're in a situation where something else is actually currently doing
+                // the polling.
+                return Poll::Pending;
+            }
+        };
 
-		let mut has_connected = false;
+        let mut has_connected = false;
 
-		// The polling pattern is: poll the worker so that it processes its queue, then add one
-		// message from the receiver (if possible), then poll the worker again, and so on.
-		loop {
-			if let Some(worker) = inner.worker.as_mut() {
-				while let Poll::Ready(event) = worker.poll(cx) {
-					// Right now we only have one possible event. This line is here in order to not
-					// forget to handle any possible new event type.
-					let worker::TelemetryWorkerEvent::Connected = event;
-					has_connected = true;
-				}
-			}
+        // The polling pattern is: poll the worker so that it processes its queue, then add one
+        // message from the receiver (if possible), then poll the worker again, and so on.
+        loop {
+            if let Some(worker) = inner.worker.as_mut() {
+                while let Poll::Ready(event) = worker.poll(cx) {
+                    // Right now we only have one possible event. This line is here in order to not
+                    // forget to handle any possible new event type.
+                    let worker::TelemetryWorkerEvent::Connected = event;
+                    has_connected = true;
+                }
+            }
 
-			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
-				if let Some(worker) = inner.worker.as_mut() {
-					log_entry.as_record_values(|rec, val| { let _ = worker.log(rec, val); });
-				}
-			} else {
-				break;
-			}
-		}
+            if let Poll::Ready(Some(log_entry)) =
+                Stream::poll_next(Pin::new(&mut inner.receiver), cx)
+            {
+                if let Some(worker) = inner.worker.as_mut() {
+                    log_entry.as_record_values(|rec, val| {
+                        let _ = worker.log(rec, val);
+                    });
+                }
+            } else {
+                break;
+            }
+        }
 
-		if before.elapsed() > Duration::from_millis(200) {
-			warn!(target: "telemetry", "Polling the telemetry took more than 200ms");
-		}
+        if before.elapsed() > Duration::from_millis(200) {
+            warn!(target: "telemetry", "Polling the telemetry took more than 200ms");
+        }
 
-		if has_connected {
-			Poll::Ready(Some(TelemetryEvent::Connected))
-		} else {
-			Poll::Pending
-		}
-	}
+        if has_connected {
+            Poll::Ready(Some(TelemetryEvent::Connected))
+        } else {
+            Poll::Pending
+        }
+    }
 }
 
 impl slog::Drain for TelemetryDrain {
-	type Ok = ();
-	type Err = ();
+    type Ok = ();
+    type Err = ();
 
-	fn log(&self, record: &slog::Record, values: &slog::OwnedKVList) -> Result<Self::Ok, Self::Err> {
-		let before = Instant::now();
+    fn log(
+        &self,
+        record: &slog::Record,
+        values: &slog::OwnedKVList,
+    ) -> Result<Self::Ok, Self::Err> {
+        let before = Instant::now();
 
-		let serialized = async_record::AsyncRecord::from(record, values);
-		// Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
-		// is lock-free.
-		if let Err(err) = self.sender.clone().try_send(serialized) {
-			warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
-		}
+        let serialized = async_record::AsyncRecord::from(record, values);
+        // Note: interestingly, `try_send` requires a `&mut` because it modifies some internal value, while `clone()`
+        // is lock-free.
+        if let Err(err) = self.sender.clone().try_send(serialized) {
+            warn!(target: "telemetry", "Ignored telemetry message because of error on channel: {:?}", err);
+        }
 
-		if before.elapsed() > Duration::from_millis(50) {
-			warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
-		}
+        if before.elapsed() > Duration::from_millis(50) {
+            warn!(target: "telemetry", "Writing a telemetry log took more than 50ms");
+        }
 
-		Ok(())
-	}
+        Ok(())
+    }
 }
 
 /// Translates to `slog_scope::info`, but contains an additional verbosity
@@ -316,32 +333,45 @@ macro_rules! telemetry {
 
 #[cfg(test)]
 mod telemetry_endpoints_tests {
-	use libp2p::Multiaddr;
-	use super::TelemetryEndpoints;
-	use super::url_to_multiaddr;
+    use super::url_to_multiaddr;
+    use super::TelemetryEndpoints;
+    use libp2p::Multiaddr;
 
-	#[test]
-	fn valid_endpoints() {
-		let endp = vec![("wss://telemetry.polkadot.io/submit/".into(), 3), ("/ip4/80.123.90.4/tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
-		let mut res: Vec<(Multiaddr, u8)> = vec![];
-		for (a, b) in endp.iter() {
-			res.push((url_to_multiaddr(a).expect("provided url should be valid"), *b))
-		}
-		assert_eq!(telem.0, res);
-	}
+    #[test]
+    fn valid_endpoints() {
+        let endp = vec![
+            ("wss://telemetry.polkadot.io/submit/".into(), 3),
+            ("/ip4/80.123.90.4/tcp/5432".into(), 4),
+        ];
+        let telem =
+            TelemetryEndpoints::new(endp.clone()).expect("Telemetry endpoint should be valid");
+        let mut res: Vec<(Multiaddr, u8)> = vec![];
+        for (a, b) in endp.iter() {
+            res.push((
+                url_to_multiaddr(a).expect("provided url should be valid"),
+                *b,
+            ))
+        }
+        assert_eq!(telem.0, res);
+    }
 
-	#[test]
-	fn invalid_endpoints() {
-		let endp = vec![("/ip4/...80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp);
-		assert!(telem.is_err());
-	}
+    #[test]
+    fn invalid_endpoints() {
+        let endp = vec![
+            ("/ip4/...80.123.90.4/tcp/5432".into(), 3),
+            ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4),
+        ];
+        let telem = TelemetryEndpoints::new(endp);
+        assert!(telem.is_err());
+    }
 
-	#[test]
-	fn valid_and_invalid_endpoints() {
-		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
-		let telem = TelemetryEndpoints::new(endp);
-		assert!(telem.is_err());
-	}
+    #[test]
+    fn valid_and_invalid_endpoints() {
+        let endp = vec![
+            ("/ip4/80.123.90.4/tcp/5432".into(), 3),
+            ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4),
+        ];
+        let telem = TelemetryEndpoints::new(endp);
+        assert!(telem.is_err());
+    }
 }

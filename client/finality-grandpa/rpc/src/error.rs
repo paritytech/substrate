@@ -21,29 +21,29 @@ use crate::NOT_READY_ERROR_CODE;
 #[derive(derive_more::Display, derive_more::From)]
 /// Top-level error type for the RPC handler
 pub enum Error {
-	/// The GRANDPA RPC endpoint is not ready.
-	#[display(fmt = "GRANDPA RPC endpoint not ready")]
-	EndpointNotReady,
-	/// GRANDPA reports the authority set id to be larger than 32-bits.
-	#[display(fmt = "GRANDPA reports authority set id unreasonably large")]
-	AuthoritySetIdReportedAsUnreasonablyLarge,
-	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
-	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
-	VoterStateReportsUnreasonablyLargeNumbers,
+    /// The GRANDPA RPC endpoint is not ready.
+    #[display(fmt = "GRANDPA RPC endpoint not ready")]
+    EndpointNotReady,
+    /// GRANDPA reports the authority set id to be larger than 32-bits.
+    #[display(fmt = "GRANDPA reports authority set id unreasonably large")]
+    AuthoritySetIdReportedAsUnreasonablyLarge,
+    /// GRANDPA reports voter state with round id or weights larger than 32-bits.
+    #[display(fmt = "GRANDPA reports voter state as unreasonably large")]
+    VoterStateReportsUnreasonablyLargeNumbers,
 }
 
 impl From<Error> for jsonrpc_core::Error {
-	fn from(error: Error) -> Self {
-		jsonrpc_core::Error {
-			message: format!("{}", error),
-			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
-			data: None,
-		}
-	}
+    fn from(error: Error) -> Self {
+        jsonrpc_core::Error {
+            message: format!("{}", error),
+            code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
+            data: None,
+        }
+    }
 }
 
 impl From<std::num::TryFromIntError> for Error {
-	fn from(_error: std::num::TryFromIntError) -> Self {
-		Error::VoterStateReportsUnreasonablyLargeNumbers
-	}
+    fn from(_error: std::num::TryFromIntError) -> Self {
+        Error::VoterStateReportsUnreasonablyLargeNumbers
+    }
 }

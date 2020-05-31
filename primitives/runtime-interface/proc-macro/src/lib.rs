@@ -26,7 +26,7 @@
 //! 3. The [`PassByEnum`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Enum`.
 //! 4. The [`PassByInner`](derive.PassByInner.html) derive macro for implementing `PassBy` with `Inner`.
 
-use syn::{parse_macro_input, ItemTrait, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, ItemTrait};
 
 mod pass_by;
 mod runtime_interface;
@@ -34,31 +34,37 @@ mod utils;
 
 #[proc_macro_attribute]
 pub fn runtime_interface(
-	attrs: proc_macro::TokenStream,
-	input: proc_macro::TokenStream,
+    attrs: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	let trait_def = parse_macro_input!(input as ItemTrait);
-	let wasm_only = parse_macro_input!(attrs as Option<runtime_interface::keywords::wasm_only>);
+    let trait_def = parse_macro_input!(input as ItemTrait);
+    let wasm_only = parse_macro_input!(attrs as Option<runtime_interface::keywords::wasm_only>);
 
-	runtime_interface::runtime_interface_impl(trait_def, wasm_only.is_some())
-		.unwrap_or_else(|e| e.to_compile_error())
-		.into()
+    runtime_interface::runtime_interface_impl(trait_def, wasm_only.is_some())
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
 }
 
 #[proc_macro_derive(PassByCodec)]
 pub fn pass_by_codec(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::codec_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+    let input = parse_macro_input!(input as DeriveInput);
+    pass_by::codec_derive_impl(input)
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
 }
 
 #[proc_macro_derive(PassByInner)]
 pub fn pass_by_inner(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::inner_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+    let input = parse_macro_input!(input as DeriveInput);
+    pass_by::inner_derive_impl(input)
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
 }
 
 #[proc_macro_derive(PassByEnum)]
 pub fn pass_by_enum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	let input = parse_macro_input!(input as DeriveInput);
-	pass_by::enum_derive_impl(input).unwrap_or_else(|e| e.to_compile_error()).into()
+    let input = parse_macro_input!(input as DeriveInput);
+    pass_by::enum_derive_impl(input)
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
 }

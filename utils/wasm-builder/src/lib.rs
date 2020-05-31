@@ -92,7 +92,12 @@
 //! as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
 //! the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
-use std::{env, fs, path::PathBuf, process::{Command, self}, io::BufRead};
+use std::{
+    env, fs,
+    io::BufRead,
+    path::PathBuf,
+    process::{self, Command},
+};
 
 mod prerequisites;
 mod wasm_project;
@@ -128,7 +133,7 @@ const WASM_BUILD_TOOLCHAIN: &str = "WASM_BUILD_TOOLCHAIN";
 ///               constant `WASM_BINARY`, which contains the built WASM binary.
 /// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
 pub fn build_project(file_name: &str, cargo_manifest: &str) {
-	build_project_with_default_rustflags(file_name, cargo_manifest, "");
+    build_project_with_default_rustflags(file_name, cargo_manifest, "");
 }
 
 /// Build the currently built project as wasm binary.
@@ -140,160 +145,177 @@ pub fn build_project(file_name: &str, cargo_manifest: &str) {
 /// `cargo_manifest` - The path to the `Cargo.toml` of the project that should be built.
 /// `default_rustflags` - Default `RUSTFLAGS` that will always be set for the build.
 pub fn build_project_with_default_rustflags(
-	file_name: &str,
-	cargo_manifest: &str,
-	default_rustflags: &str,
+    file_name: &str,
+    cargo_manifest: &str,
+    default_rustflags: &str,
 ) {
-	if check_skip_build() {
-		return;
-	}
+    if check_skip_build() {
+        return;
+    }
 
-	let cargo_manifest = PathBuf::from(cargo_manifest);
+    let cargo_manifest = PathBuf::from(cargo_manifest);
 
-	if !cargo_manifest.exists() {
-		panic!("'{}' does not exist!", cargo_manifest.display());
-	}
+    if !cargo_manifest.exists() {
+        panic!("'{}' does not exist!", cargo_manifest.display());
+    }
 
-	if !cargo_manifest.ends_with("Cargo.toml") {
-		panic!("'{}' no valid path to a `Cargo.toml`!", cargo_manifest.display());
-	}
+    if !cargo_manifest.ends_with("Cargo.toml") {
+        panic!(
+            "'{}' no valid path to a `Cargo.toml`!",
+            cargo_manifest.display()
+        );
+    }
 
-	if let Some(err_msg) = prerequisites::check() {
-		eprintln!("{}", err_msg);
-		process::exit(1);
-	}
+    if let Some(err_msg) = prerequisites::check() {
+        eprintln!("{}", err_msg);
+        process::exit(1);
+    }
 
-	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
-		&cargo_manifest,
-		default_rustflags,
-	);
+    let (wasm_binary, bloaty) =
+        wasm_project::create_and_compile(&cargo_manifest, default_rustflags);
 
-	write_file_if_changed(
-		file_name.into(),
-		format!(
-			r#"
+    write_file_if_changed(
+        file_name.into(),
+        format!(
+            r#"
 				pub const WASM_BINARY: &[u8] = include_bytes!("{wasm_binary}");
 				pub const WASM_BINARY_BLOATY: &[u8] = include_bytes!("{wasm_binary_bloaty}");
 			"#,
-			wasm_binary = wasm_binary.wasm_binary_path_escaped(),
-			wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
-		),
-	);
+            wasm_binary = wasm_binary.wasm_binary_path_escaped(),
+            wasm_binary_bloaty = bloaty.wasm_binary_bloaty_path_escaped(),
+        ),
+    );
 }
 
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
-	env::var(SKIP_BUILD_ENV).is_ok()
+    env::var(SKIP_BUILD_ENV).is_ok()
 }
 
 /// Write to the given `file` if the `content` is different.
 fn write_file_if_changed(file: PathBuf, content: String) {
-	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
-		fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
-	}
+    if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
+        fs::write(&file, content).expect(&format!("Writing `{}` can not fail!", file.display()));
+    }
 }
 
 /// Copy `src` to `dst` if the `dst` does not exist or is different.
 fn copy_file_if_changed(src: PathBuf, dst: PathBuf) {
-	let src_file = fs::read_to_string(&src).ok();
-	let dst_file = fs::read_to_string(&dst).ok();
+    let src_file = fs::read_to_string(&src).ok();
+    let dst_file = fs::read_to_string(&dst).ok();
 
-	if src_file != dst_file {
-		fs::copy(&src, &dst)
-			.expect(&format!("Copying `{}` to `{}` can not fail; qed", src.display(), dst.display()));
-	}
+    if src_file != dst_file {
+        fs::copy(&src, &dst).expect(&format!(
+            "Copying `{}` to `{}` can not fail; qed",
+            src.display(),
+            dst.display()
+        ));
+    }
 }
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> CargoCommand {
-	let env_cargo = CargoCommand::new(
-		&env::var("CARGO").expect("`CARGO` env variable is always set by cargo"),
-	);
-	let default_cargo = CargoCommand::new("cargo");
-	let rustup_run_nightly = CargoCommand::new_with_args("rustup", &["run", "nightly", "cargo"]);
-	let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
+    let env_cargo =
+        CargoCommand::new(&env::var("CARGO").expect("`CARGO` env variable is always set by cargo"));
+    let default_cargo = CargoCommand::new("cargo");
+    let rustup_run_nightly = CargoCommand::new_with_args("rustup", &["run", "nightly", "cargo"]);
+    let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
 
-	// First check if the user requested a specific toolchain
-	if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_nightly(Some(t))) {
-		cmd
-	} else if env_cargo.is_nightly() {
-		env_cargo
-	} else if default_cargo.is_nightly() {
-		default_cargo
-	} else if rustup_run_nightly.is_nightly() {
-		rustup_run_nightly
-	} else {
-		// If no command before provided us with a nightly compiler, we try to search one
-		// with rustup. If that fails as well, we return the default cargo and let the prequisities
-		// check fail.
-		get_rustup_nightly(None).unwrap_or(default_cargo)
-	}
+    // First check if the user requested a specific toolchain
+    if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_nightly(Some(t))) {
+        cmd
+    } else if env_cargo.is_nightly() {
+        env_cargo
+    } else if default_cargo.is_nightly() {
+        default_cargo
+    } else if rustup_run_nightly.is_nightly() {
+        rustup_run_nightly
+    } else {
+        // If no command before provided us with a nightly compiler, we try to search one
+        // with rustup. If that fails as well, we return the default cargo and let the prequisities
+        // check fail.
+        get_rustup_nightly(None).unwrap_or(default_cargo)
+    }
 }
 
 /// Get a nightly from rustup. If `selected` is `Some(_)`, a `CargoCommand` using the given
 /// nightly is returned.
 fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
-	let host = format!("-{}", env::var("HOST").expect("`HOST` is always set by cargo"));
+    let host = format!(
+        "-{}",
+        env::var("HOST").expect("`HOST` is always set by cargo")
+    );
 
-	let version = match selected {
-		Some(selected) => selected,
-		None => {
-			let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
-			let lines = output.as_slice().lines();
+    let version = match selected {
+        Some(selected) => selected,
+        None => {
+            let output = Command::new("rustup")
+                .args(&["toolchain", "list"])
+                .output()
+                .ok()?
+                .stdout;
+            let lines = output.as_slice().lines();
 
-			let mut latest_nightly = None;
-			for line in lines.filter_map(|l| l.ok()) {
-				if line.starts_with("nightly-") && line.ends_with(&host) {
-					// Rustup prints them sorted
-					latest_nightly = Some(line.clone());
-				}
-			}
+            let mut latest_nightly = None;
+            for line in lines.filter_map(|l| l.ok()) {
+                if line.starts_with("nightly-") && line.ends_with(&host) {
+                    // Rustup prints them sorted
+                    latest_nightly = Some(line.clone());
+                }
+            }
 
-			latest_nightly?.trim_end_matches(&host).into()
-		}
-	};
+            latest_nightly?.trim_end_matches(&host).into()
+        }
+    };
 
-	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
+    Some(CargoCommand::new_with_args(
+        "rustup",
+        &["run", &version, "cargo"],
+    ))
 }
 
 /// Builder for cargo commands
 #[derive(Debug)]
 struct CargoCommand {
-	program: String,
-	args: Vec<String>,
+    program: String,
+    args: Vec<String>,
 }
 
 impl CargoCommand {
-	fn new(program: &str) -> Self {
-		CargoCommand { program: program.into(), args: Vec::new() }
-	}
+    fn new(program: &str) -> Self {
+        CargoCommand {
+            program: program.into(),
+            args: Vec::new(),
+        }
+    }
 
-	fn new_with_args(program: &str, args: &[&str]) -> Self {
-		CargoCommand {
-			program: program.into(),
-			args: args.iter().map(ToString::to_string).collect(),
-		}
-	}
+    fn new_with_args(program: &str, args: &[&str]) -> Self {
+        CargoCommand {
+            program: program.into(),
+            args: args.iter().map(ToString::to_string).collect(),
+        }
+    }
 
-	fn command(&self) -> Command {
-		let mut cmd = Command::new(&self.program);
-		cmd.args(&self.args);
-		cmd
-	}
+    fn command(&self) -> Command {
+        let mut cmd = Command::new(&self.program);
+        cmd.args(&self.args);
+        cmd
+    }
 
-	/// Check if the supplied cargo command is a nightly version
-	fn is_nightly(&self) -> bool {
-		// `RUSTC_BOOTSTRAP` tells a stable compiler to behave like a nightly. So, when this env
-		// variable is set, we can assume that whatever rust compiler we have, it is a nightly compiler.
-		// For "more" information, see:
-		// https://github.com/rust-lang/rust/blob/fa0f7d0080d8e7e9eb20aa9cbf8013f96c81287f/src/libsyntax/feature_gate/check.rs#L891
-		env::var("RUSTC_BOOTSTRAP").is_ok() ||
-			self.command()
-				.arg("--version")
-				.output()
-				.map_err(|_| ())
-				.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
-				.unwrap_or_default()
-				.contains("-nightly")
-	}
+    /// Check if the supplied cargo command is a nightly version
+    fn is_nightly(&self) -> bool {
+        // `RUSTC_BOOTSTRAP` tells a stable compiler to behave like a nightly. So, when this env
+        // variable is set, we can assume that whatever rust compiler we have, it is a nightly compiler.
+        // For "more" information, see:
+        // https://github.com/rust-lang/rust/blob/fa0f7d0080d8e7e9eb20aa9cbf8013f96c81287f/src/libsyntax/feature_gate/check.rs#L891
+        env::var("RUSTC_BOOTSTRAP").is_ok()
+            || self
+                .command()
+                .arg("--version")
+                .output()
+                .map_err(|_| ())
+                .and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
+                .unwrap_or_default()
+                .contains("-nightly")
+    }
 }

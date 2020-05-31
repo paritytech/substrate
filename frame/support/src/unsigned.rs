@@ -19,9 +19,8 @@
 pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
-	TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
+    TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
-
 
 /// Implement `ValidateUnsigned` for `Runtime`.
 /// All given modules need to implement `ValidateUnsigned`.
@@ -97,76 +96,76 @@ macro_rules! impl_outer_validate_unsigned {
 
 #[cfg(test)]
 mod test_empty_call {
-	pub enum Call {}
+    pub enum Call {}
 
-	#[allow(unused)]
-	pub struct Runtime;
+    #[allow(unused)]
+    pub struct Runtime;
 
-	impl_outer_validate_unsigned! {
-		impl ValidateUnsigned for Runtime {
-		}
-	}
+    impl_outer_validate_unsigned! {
+        impl ValidateUnsigned for Runtime {
+        }
+    }
 }
 
 #[cfg(test)]
 mod test_partial_and_full_call {
-	pub mod timestamp {
-		pub struct Module;
+    pub mod timestamp {
+        pub struct Module;
 
-		impl super::super::ValidateUnsigned for Module {
-			type Call = Call;
+        impl super::super::ValidateUnsigned for Module {
+            type Call = Call;
 
-			fn validate_unsigned(
-				_source: super::super::TransactionSource,
-				_call: &Self::Call
-			) -> super::super::TransactionValidity {
-				unimplemented!();
-			}
-		}
+            fn validate_unsigned(
+                _source: super::super::TransactionSource,
+                _call: &Self::Call,
+            ) -> super::super::TransactionValidity {
+                unimplemented!();
+            }
+        }
 
-		pub enum Call {
-			Foo,
-		}
-	}
+        pub enum Call {
+            Foo,
+        }
+    }
 
-	mod test_full_unsigned {
-		pub type Timestamp = super::timestamp::Module;
+    mod test_full_unsigned {
+        pub type Timestamp = super::timestamp::Module;
 
-		pub enum Call {
-			Timestamp(super::timestamp::Call),
-		}
+        pub enum Call {
+            Timestamp(super::timestamp::Call),
+        }
 
-		pub struct Runtime;
+        pub struct Runtime;
 
-		impl_outer_validate_unsigned! {
-			impl ValidateUnsigned for Runtime {
-				Timestamp
-			}
-		}
+        impl_outer_validate_unsigned! {
+            impl ValidateUnsigned for Runtime {
+                Timestamp
+            }
+        }
 
-		#[test]
-		fn used() {
-			let _ = Call::Timestamp(super::timestamp::Call::Foo);
-			let _ = Runtime;
-		}
-	}
+        #[test]
+        fn used() {
+            let _ = Call::Timestamp(super::timestamp::Call::Foo);
+            let _ = Runtime;
+        }
+    }
 
-	mod test_not_full_unsigned {
-		pub enum Call {
-			Timestamp(super::timestamp::Call),
-		}
+    mod test_not_full_unsigned {
+        pub enum Call {
+            Timestamp(super::timestamp::Call),
+        }
 
-		pub struct Runtime;
+        pub struct Runtime;
 
-		impl_outer_validate_unsigned! {
-			impl ValidateUnsigned for Runtime {
-			}
-		}
+        impl_outer_validate_unsigned! {
+            impl ValidateUnsigned for Runtime {
+            }
+        }
 
-		#[test]
-		fn used() {
-			let _ = Call::Timestamp(super::timestamp::Call::Foo);
-			let _ = Runtime;
-		}
-	}
+        #[test]
+        fn used() {
+            let _ = Call::Timestamp(super::timestamp::Call::Foo);
+            let _ = Runtime;
+        }
+    }
 }

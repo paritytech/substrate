@@ -27,11 +27,11 @@ mod run_cmd;
 pub use self::build_spec_cmd::BuildSpecCmd;
 pub use self::check_block_cmd::CheckBlockCmd;
 pub use self::export_blocks_cmd::ExportBlocksCmd;
+pub use self::export_state_cmd::ExportStateCmd;
 pub use self::import_blocks_cmd::ImportBlocksCmd;
 pub use self::purge_chain_cmd::PurgeChainCmd;
 pub use self::revert_cmd::RevertCmd;
 pub use self::run_cmd::RunCmd;
-pub use self::export_state_cmd::ExportStateCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
 
@@ -42,26 +42,26 @@ use structopt::StructOpt;
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone, StructOpt)]
 pub enum Subcommand {
-	/// Build a spec.json file, outputs to stdout.
-	BuildSpec(BuildSpecCmd),
+    /// Build a spec.json file, outputs to stdout.
+    BuildSpec(BuildSpecCmd),
 
-	/// Export blocks to a file.
-	ExportBlocks(ExportBlocksCmd),
+    /// Export blocks to a file.
+    ExportBlocks(ExportBlocksCmd),
 
-	/// Import blocks from file.
-	ImportBlocks(ImportBlocksCmd),
+    /// Import blocks from file.
+    ImportBlocks(ImportBlocksCmd),
 
-	/// Validate a single block.
-	CheckBlock(CheckBlockCmd),
+    /// Validate a single block.
+    CheckBlock(CheckBlockCmd),
 
-	/// Revert chain to the previous state.
-	Revert(RevertCmd),
+    /// Revert chain to the previous state.
+    Revert(RevertCmd),
 
-	/// Remove the whole chain data.
-	PurgeChain(PurgeChainCmd),
+    /// Remove the whole chain data.
+    PurgeChain(PurgeChainCmd),
 
-	/// Export state as raw chain spec.
-	ExportState(ExportStateCmd),
+    /// Export state as raw chain spec.
+    ExportState(ExportStateCmd),
 }
 
 // TODO: move to config.rs?
@@ -407,6 +407,5 @@ macro_rules! substrate_cli_subcommands {
 }
 
 substrate_cli_subcommands!(
-	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
+    Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
 );
-

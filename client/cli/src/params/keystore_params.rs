@@ -28,67 +28,67 @@ const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 /// Parameters of the keystore
 #[derive(Debug, StructOpt, Clone)]
 pub struct KeystoreParams {
-	/// Specify custom keystore path.
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
+    /// Specify custom keystore path.
+    #[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+    pub keystore_path: Option<PathBuf>,
 
-	/// Use interactive shell for entering the password used by the keystore.
-	#[structopt(
+    /// Use interactive shell for entering the password used by the keystore.
+    #[structopt(
 		long = "password-interactive",
 		conflicts_with_all = &[ "password", "password-filename" ]
 	)]
-	pub password_interactive: bool,
+    pub password_interactive: bool,
 
-	/// Password used by the keystore.
-	#[structopt(
+    /// Password used by the keystore.
+    #[structopt(
 		long = "password",
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
-	pub password: Option<String>,
+    pub password: Option<String>,
 
-	/// File that contains the password used by the keystore.
-	#[structopt(
+    /// File that contains the password used by the keystore.
+    #[structopt(
 		long = "password-filename",
 		value_name = "PATH",
 		parse(from_os_str),
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
-	pub password_filename: Option<PathBuf>,
+    pub password_filename: Option<PathBuf>,
 }
 
 impl KeystoreParams {
-	/// Get the keystore configuration for the parameters
-	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
-		let password = if self.password_interactive {
-			#[cfg(not(target_os = "unknown"))]
-			{
-				Some(input_keystore_password()?.into())
-			}
-			#[cfg(target_os = "unknown")]
-			None
-		} else if let Some(ref file) = self.password_filename {
-			Some(
-				fs::read_to_string(file)
-					.map_err(|e| format!("{}", e))?
-					.into(),
-			)
-		} else if let Some(ref password) = self.password {
-			Some(password.clone().into())
-		} else {
-			None
-		};
+    /// Get the keystore configuration for the parameters
+    pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+        let password = if self.password_interactive {
+            #[cfg(not(target_os = "unknown"))]
+            {
+                Some(input_keystore_password()?.into())
+            }
+            #[cfg(target_os = "unknown")]
+            None
+        } else if let Some(ref file) = self.password_filename {
+            Some(
+                fs::read_to_string(file)
+                    .map_err(|e| format!("{}", e))?
+                    .into(),
+            )
+        } else if let Some(ref password) = self.password {
+            Some(password.clone().into())
+        } else {
+            None
+        };
 
-		let path = self
-			.keystore_path
-			.clone()
-			.unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
+        let path = self
+            .keystore_path
+            .clone()
+            .unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-		Ok(KeystoreConfig::Path { path, password })
-	}
+        Ok(KeystoreConfig::Path { path, password })
+    }
 }
 
 #[cfg(not(target_os = "unknown"))]
 fn input_keystore_password() -> Result<String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e).into())
+    rpassword::read_password_from_tty(Some("Keystore password: "))
+        .map_err(|e| format!("{:?}", e).into())
 }

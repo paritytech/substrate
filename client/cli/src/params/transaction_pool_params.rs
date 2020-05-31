@@ -22,29 +22,29 @@ use structopt::StructOpt;
 /// Parameters used to create the pool configuration.
 #[derive(Debug, StructOpt, Clone)]
 pub struct TransactionPoolParams {
-	/// Maximum number of transactions in the transaction pool.
-	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]
-	pub pool_limit: usize,
+    /// Maximum number of transactions in the transaction pool.
+    #[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]
+    pub pool_limit: usize,
 
-	/// Maximum number of kilobytes of all transactions stored in the pool.
-	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "20480")]
-	pub pool_kbytes: usize,
+    /// Maximum number of kilobytes of all transactions stored in the pool.
+    #[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "20480")]
+    pub pool_kbytes: usize,
 }
 
 impl TransactionPoolParams {
-	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-	pub fn transaction_pool(&self) -> TransactionPoolOptions {
-		let mut opts = TransactionPoolOptions::default();
+    /// Fill the given `PoolConfiguration` by looking at the cli parameters.
+    pub fn transaction_pool(&self) -> TransactionPoolOptions {
+        let mut opts = TransactionPoolOptions::default();
 
-		// ready queue
-		opts.ready.count = self.pool_limit;
-		opts.ready.total_bytes = self.pool_kbytes * 1024;
+        // ready queue
+        opts.ready.count = self.pool_limit;
+        opts.ready.total_bytes = self.pool_kbytes * 1024;
 
-		// future queue
-		let factor = 10;
-		opts.future.count = self.pool_limit / factor;
-		opts.future.total_bytes = self.pool_kbytes * 1024 / factor;
+        // future queue
+        let factor = 10;
+        opts.future.count = self.pool_limit / factor;
+        opts.future.total_bytes = self.pool_kbytes * 1024 / factor;
 
-		opts
-	}
+        opts
+    }
 }

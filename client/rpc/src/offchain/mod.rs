@@ -21,56 +21,56 @@
 #[cfg(test)]
 mod tests;
 
+use self::error::{Error, Result};
+use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
 use sc_rpc_api::DenyUnsafe;
-use self::error::{Error, Result};
 use sp_core::{
-	Bytes,
-	offchain::{OffchainStorage, StorageKind},
+    offchain::{OffchainStorage, StorageKind},
+    Bytes,
 };
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Offchain API
 #[derive(Debug)]
 pub struct Offchain<T: OffchainStorage> {
-	/// Offchain storage
-	storage: Arc<RwLock<T>>,
-	deny_unsafe: DenyUnsafe,
+    /// Offchain storage
+    storage: Arc<RwLock<T>>,
+    deny_unsafe: DenyUnsafe,
 }
 
 impl<T: OffchainStorage> Offchain<T> {
-	/// Create new instance of Offchain API.
-	pub fn new(storage: T, deny_unsafe: DenyUnsafe) -> Self {
-		Offchain {
-			storage: Arc::new(RwLock::new(storage)),
-			deny_unsafe,
-		}
-	}
+    /// Create new instance of Offchain API.
+    pub fn new(storage: T, deny_unsafe: DenyUnsafe) -> Self {
+        Offchain {
+            storage: Arc::new(RwLock::new(storage)),
+            deny_unsafe,
+        }
+    }
 }
 
 impl<T: OffchainStorage + 'static> OffchainApi for Offchain<T> {
-	/// Set offchain local storage under given key and prefix.
-	fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> Result<()> {
-		self.deny_unsafe.check_if_safe()?;
+    /// Set offchain local storage under given key and prefix.
+    fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> Result<()> {
+        self.deny_unsafe.check_if_safe()?;
 
-		let prefix = match kind {
-			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
-		};
-		self.storage.write().set(prefix, &*key, &*value);
-		Ok(())
-	}
+        let prefix = match kind {
+            StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
+            StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
+        };
+        self.storage.write().set(prefix, &*key, &*value);
+        Ok(())
+    }
 
-	/// Get offchain local storage under given key and prefix.
-	fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> Result<Option<Bytes>> {
-		self.deny_unsafe.check_if_safe()?;
+    /// Get offchain local storage under given key and prefix.
+    fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> Result<Option<Bytes>> {
+        self.deny_unsafe.check_if_safe()?;
 
-		let prefix = match kind {
-			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
-			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
-		};
-		Ok(self.storage.read().get(prefix, &*key).map(Into::into))
-	}
+        let prefix = match kind {
+            StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
+            StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
+        };
+        Ok(self.storage.read().get(prefix, &*key).map(Into::into))
+    }
 }

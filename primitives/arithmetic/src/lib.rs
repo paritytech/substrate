@@ -22,36 +22,36 @@
 /// Copied from `sp-runtime` and documented there.
 #[macro_export]
 macro_rules! assert_eq_error_rate {
-	($x:expr, $y:expr, $error:expr $(,)?) => {
-		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
-			"{:?} != {:?} (with error rate {:?})",
-			$x,
-			$y,
-			$error,
-		);
-	};
+    ($x:expr, $y:expr, $error:expr $(,)?) => {
+        assert!(
+            ($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+            "{:?} != {:?} (with error rate {:?})",
+            $x,
+            $y,
+            $error,
+        );
+    };
 }
 
 pub mod biguint;
-pub mod helpers_128bit;
-pub mod traits;
-mod per_things;
 mod fixed;
+pub mod helpers_128bit;
+mod per_things;
 mod rational128;
+pub mod traits;
 
-pub use fixed::{FixedPointNumber, Fixed64, Fixed128, FixedPointOperand};
-pub use per_things::{PerThing, Percent, PerU16, Permill, Perbill, Perquintill};
+pub use fixed::{Fixed128, Fixed64, FixedPointNumber, FixedPointOperand};
+pub use per_things::{PerThing, PerU16, Perbill, Percent, Permill, Perquintill};
 pub use rational128::Rational128;
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+    use super::*;
 
-	#[test]
-	fn peru16_rational_does_not_overflow() {
-		// A historical example that will panic only for per_thing type that are created with
-		// maximum capacity of their type, e.g. PerU16.
-		let _ = PerU16::from_rational_approximation(17424870u32, 17424870);
-	}
+    #[test]
+    fn peru16_rational_does_not_overflow() {
+        // A historical example that will panic only for per_thing type that are created with
+        // maximum capacity of their type, e.g. PerU16.
+        let _ = PerU16::from_rational_approximation(17424870u32, 17424870);
+    }
 }

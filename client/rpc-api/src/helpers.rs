@@ -16,18 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use jsonrpc_core::futures::prelude::*;
 use futures::{channel::oneshot, compat::Compat};
+use jsonrpc_core::futures::prelude::*;
 
 /// Wraps around `oneshot::Receiver` and adjusts the error type to produce an internal error if the
 /// sender gets dropped.
 pub struct Receiver<T>(pub Compat<oneshot::Receiver<T>>);
 
 impl<T> Future for Receiver<T> {
-	type Item = T;
-	type Error = jsonrpc_core::Error;
+    type Item = T;
+    type Error = jsonrpc_core::Error;
 
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		self.0.poll().map_err(|_| jsonrpc_core::Error::internal_error())
-	}
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        self.0
+            .poll()
+            .map_err(|_| jsonrpc_core::Error::internal_error())
+    }
 }

@@ -224,78 +224,78 @@ macro_rules! impl_outer_origin {
 
 #[cfg(test)]
 mod tests {
-	mod system {
-		pub trait Trait {
-			type AccountId;
-		}
+    mod system {
+        pub trait Trait {
+            type AccountId;
+        }
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
+        #[derive(Clone, PartialEq, Eq, Debug)]
+        pub enum RawOrigin<AccountId> {
+            Root,
+            Signed(AccountId),
+            None,
+        }
 
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+        impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+            fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+                match s {
+                    Some(who) => RawOrigin::Signed(who),
+                    None => RawOrigin::None,
+                }
+            }
+        }
 
-		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
-	}
+        pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+    }
 
-	mod origin_without_generic {
-		#[derive(Clone, PartialEq, Eq, Debug)]
-		pub struct Origin;
-	}
+    mod origin_without_generic {
+        #[derive(Clone, PartialEq, Eq, Debug)]
+        pub struct Origin;
+    }
 
-	mod origin_with_generic {
-		#[derive(Clone, PartialEq, Eq, Debug)]
-		pub struct Origin<T> {
-			t: T
-		}
-	}
+    mod origin_with_generic {
+        #[derive(Clone, PartialEq, Eq, Debug)]
+        pub struct Origin<T> {
+            t: T,
+        }
+    }
 
-	#[derive(Clone, PartialEq, Eq, Debug)]
-	pub struct TestRuntime;
+    #[derive(Clone, PartialEq, Eq, Debug)]
+    pub struct TestRuntime;
 
-	impl system::Trait for TestRuntime {
-		type AccountId = u32;
-	}
+    impl system::Trait for TestRuntime {
+        type AccountId = u32;
+    }
 
-	impl_outer_origin!(
-		pub enum OriginWithoutSystem for TestRuntime {
-			origin_without_generic,
-			origin_with_generic<T>,
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithoutSystem for TestRuntime {
+            origin_without_generic,
+            origin_with_generic<T>,
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginWithoutSystem2 for TestRuntime {
-			origin_with_generic<T>,
-			origin_without_generic
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithoutSystem2 for TestRuntime {
+            origin_with_generic<T>,
+            origin_without_generic
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginWithSystem for TestRuntime where system = system {
-			origin_without_generic,
-			origin_with_generic<T>
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithSystem for TestRuntime where system = system {
+            origin_without_generic,
+            origin_with_generic<T>
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginWithSystem2 for TestRuntime where system = system {
-			origin_with_generic<T>,
-			origin_without_generic,
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithSystem2 for TestRuntime where system = system {
+            origin_with_generic<T>,
+            origin_without_generic,
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginEmpty for TestRuntime where system = system {}
-	);
+    impl_outer_origin!(
+        pub enum OriginEmpty for TestRuntime where system = system {}
+    );
 }

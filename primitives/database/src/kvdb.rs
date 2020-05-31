@@ -16,45 +16,44 @@
 // limitations under the License.
 
 /// A wrapper around `kvdb::Database` that implements `sp_database::Database` trait
-
 use ::kvdb::{DBTransaction, KeyValueDB};
 
-use crate::{Database, Change, Transaction, ColumnId};
+use crate::{Change, ColumnId, Database, Transaction};
 
 struct DbAdapter<D: KeyValueDB + 'static>(D);
 
 fn handle_err<T>(result: std::io::Result<T>) -> T {
-	match result {
-		Ok(r) => r,
-		Err(e) =>  {
-			panic!("Critical database eror: {:?}", e);
-		}
-	}
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            panic!("Critical database eror: {:?}", e);
+        }
+    }
 }
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
 pub fn as_database<D: KeyValueDB + 'static, H: Clone>(db: D) -> std::sync::Arc<dyn Database<H>> {
-	std::sync::Arc::new(DbAdapter(db))
+    std::sync::Arc::new(DbAdapter(db))
 }
 
 impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
-	fn commit(&self, transaction: Transaction<H>) {
-		let mut tx = DBTransaction::new();
-		for change in transaction.0.into_iter() {
-			match change {
-				Change::Set(col, key, value) => tx.put_vec(col, &key, value),
-				Change::Remove(col, key) => tx.delete(col, &key),
-				_ => unimplemented!(),
-			}
-		}
-		handle_err(self.0.write(tx));
-	}
+    fn commit(&self, transaction: Transaction<H>) {
+        let mut tx = DBTransaction::new();
+        for change in transaction.0.into_iter() {
+            match change {
+                Change::Set(col, key, value) => tx.put_vec(col, &key, value),
+                Change::Remove(col, key) => tx.delete(col, &key),
+                _ => unimplemented!(),
+            }
+        }
+        handle_err(self.0.write(tx));
+    }
 
-	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
-		handle_err(self.0.get(col, key))
-	}
+    fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+        handle_err(self.0.get(col, key))
+    }
 
-	fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
-		unimplemented!();
-	}
+    fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
+        unimplemented!();
+    }
 }

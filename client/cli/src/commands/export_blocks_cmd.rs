@@ -20,9 +20,7 @@ use crate::error;
 use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
-use sc_service::{
-	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
-};
+use sc_service::{config::DatabaseConfig, Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
@@ -33,84 +31,80 @@ use structopt::StructOpt;
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExportBlocksCmd {
-	/// Output file name or stdout if unspecified.
-	#[structopt(parse(from_os_str))]
-	pub output: Option<PathBuf>,
+    /// Output file name or stdout if unspecified.
+    #[structopt(parse(from_os_str))]
+    pub output: Option<PathBuf>,
 
-	/// Specify starting block number.
-	///
-	/// Default is 1.
-	#[structopt(long = "from", value_name = "BLOCK")]
-	pub from: Option<BlockNumber>,
+    /// Specify starting block number.
+    ///
+    /// Default is 1.
+    #[structopt(long = "from", value_name = "BLOCK")]
+    pub from: Option<BlockNumber>,
 
-	/// Specify last block number.
-	///
-	/// Default is best block.
-	#[structopt(long = "to", value_name = "BLOCK")]
-	pub to: Option<BlockNumber>,
+    /// Specify last block number.
+    ///
+    /// Default is best block.
+    #[structopt(long = "to", value_name = "BLOCK")]
+    pub to: Option<BlockNumber>,
 
-	/// Use binary output rather than JSON.
-	#[structopt(long)]
-	pub binary: bool,
+    /// Use binary output rather than JSON.
+    #[structopt(long)]
+    pub binary: bool,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub shared_params: SharedParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub pruning_params: PruningParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub pruning_params: PruningParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub database_params: DatabaseParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub database_params: DatabaseParams,
 }
 
 impl ExportBlocksCmd {
-	/// Run the export-blocks command
-	pub async fn run<B, BC, BB>(
-		&self,
-		config: Configuration,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
-			info!("DB path: {}", path.display());
-		}
+    /// Run the export-blocks command
+    pub async fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+    where
+        B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
+        BC: ServiceBuilderCommand<Block = BB> + Unpin,
+        BB: sp_runtime::traits::Block + Debug,
+        <<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+        <BB as BlockT>::Hash: std::str::FromStr,
+    {
+        if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
+            info!("DB path: {}", path.display());
+        }
 
-		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
-		let to = self.to.as_ref().and_then(|t| t.parse().ok());
+        let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
+        let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
-		let binary = self.binary;
+        let binary = self.binary;
 
-		let file: Box<dyn io::Write> = match &self.output {
-			Some(filename) => Box::new(fs::File::create(filename)?),
-			None => Box::new(io::stdout()),
-		};
+        let file: Box<dyn io::Write> = match &self.output {
+            Some(filename) => Box::new(fs::File::create(filename)?),
+            None => Box::new(io::stdout()),
+        };
 
-		builder(config)?
-			.export_blocks(file, from.into(), to, binary)
-			.await
-			.map_err(Into::into)
-	}
+        builder(config)?
+            .export_blocks(file, from.into(), to, binary)
+            .await
+            .map_err(Into::into)
+    }
 }
 
 impl CliConfiguration for ExportBlocksCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
+    fn shared_params(&self) -> &SharedParams {
+        &self.shared_params
+    }
 
-	fn pruning_params(&self) -> Option<&PruningParams> {
-		Some(&self.pruning_params)
-	}
+    fn pruning_params(&self) -> Option<&PruningParams> {
+        Some(&self.pruning_params)
+    }
 
-	fn database_params(&self) -> Option<&DatabaseParams> {
-		Some(&self.database_params)
-	}
+    fn database_params(&self) -> Option<&DatabaseParams> {
+        Some(&self.database_params)
+    }
 }

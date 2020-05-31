@@ -16,10 +16,10 @@
 // limitations under the License.
 
 pub use frame_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata, ModuleMetadata, RuntimeMetadataLastVersion,
-	DefaultByteGetter, RuntimeMetadataPrefixed, StorageEntryMetadata, StorageMetadata,
-	StorageEntryType, StorageEntryModifier, DefaultByte, StorageHasher, ModuleErrorMetadata,
-	ExtrinsicMetadata,
+    DecodeDifferent, DefaultByte, DefaultByteGetter, ExtrinsicMetadata, FnEncode,
+    ModuleErrorMetadata, ModuleMetadata, RuntimeMetadata, RuntimeMetadataLastVersion,
+    RuntimeMetadataPrefixed, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
+    StorageHasher, StorageMetadata,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -165,7 +165,6 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 	};
 }
 
-
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata_calls_event {
@@ -238,372 +237,358 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 	};
 }
 
-
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use super::*;
-	use frame_metadata::{
-		EventMetadata, StorageEntryModifier, StorageEntryType, FunctionMetadata, StorageEntryMetadata,
-		ModuleMetadata, RuntimeMetadataPrefixed, DefaultByte, ModuleConstantMetadata, DefaultByteGetter,
-		ErrorMetadata, ExtrinsicMetadata,
-	};
-	use codec::{Encode, Decode};
-	use crate::traits::Get;
-	use sp_runtime::transaction_validity::TransactionValidityError;
+    use super::*;
+    use crate::traits::Get;
+    use codec::{Decode, Encode};
+    use frame_metadata::{
+        DefaultByte, DefaultByteGetter, ErrorMetadata, EventMetadata, ExtrinsicMetadata,
+        FunctionMetadata, ModuleConstantMetadata, ModuleMetadata, RuntimeMetadataPrefixed,
+        StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
+    };
+    use sp_runtime::transaction_validity::TransactionValidityError;
 
-	#[derive(Clone, Eq, Debug, PartialEq, Encode, Decode)]
-	struct TestExtension;
-	impl sp_runtime::traits::SignedExtension for TestExtension {
-		type AccountId = u32;
-		type Call = ();
-		type AdditionalSigned = u32;
-		type Pre = ();
-		const IDENTIFIER: &'static str = "testextension";
-		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-			Ok(1)
-		}
-	}
+    #[derive(Clone, Eq, Debug, PartialEq, Encode, Decode)]
+    struct TestExtension;
+    impl sp_runtime::traits::SignedExtension for TestExtension {
+        type AccountId = u32;
+        type Call = ();
+        type AdditionalSigned = u32;
+        type Pre = ();
+        const IDENTIFIER: &'static str = "testextension";
+        fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+            Ok(1)
+        }
+    }
 
-	#[derive(Clone, Eq, Debug, PartialEq, Encode, Decode)]
-	struct TestExtension2;
-	impl sp_runtime::traits::SignedExtension for TestExtension2 {
-		type AccountId = u32;
-		type Call = ();
-		type AdditionalSigned = u32;
-		type Pre = ();
-		const IDENTIFIER: &'static str = "testextension2";
-		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-			Ok(1)
-		}
-	}
+    #[derive(Clone, Eq, Debug, PartialEq, Encode, Decode)]
+    struct TestExtension2;
+    impl sp_runtime::traits::SignedExtension for TestExtension2 {
+        type AccountId = u32;
+        type Call = ();
+        type AdditionalSigned = u32;
+        type Pre = ();
+        const IDENTIFIER: &'static str = "testextension2";
+        fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+            Ok(1)
+        }
+    }
 
-	struct TestExtrinsic;
+    struct TestExtrinsic;
 
-	impl sp_runtime::traits::ExtrinsicMetadata for TestExtrinsic {
-		const VERSION: u8 = 1;
-		type SignedExtensions = (TestExtension, TestExtension2);
-	}
+    impl sp_runtime::traits::ExtrinsicMetadata for TestExtrinsic {
+        const VERSION: u8 = 1;
+        type SignedExtensions = (TestExtension, TestExtension2);
+    }
 
-	mod system {
-		use super::*;
+    mod system {
+        use super::*;
 
-		pub trait Trait: 'static {
-			const ASSOCIATED_CONST: u64 = 500;
-			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
-				+ From<RawOrigin<Self::AccountId>>;
-			type AccountId: From<u32> + Encode;
-			type BlockNumber: From<u32> + Encode;
-			type SomeValue: Get<u32>;
-			type ModuleToIndex: crate::traits::ModuleToIndex;
-		}
+        pub trait Trait: 'static {
+            const ASSOCIATED_CONST: u64 = 500;
+            type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+                + From<RawOrigin<Self::AccountId>>;
+            type AccountId: From<u32> + Encode;
+            type BlockNumber: From<u32> + Encode;
+            type SomeValue: Get<u32>;
+            type ModuleToIndex: crate::traits::ModuleToIndex;
+        }
 
-		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				/// Hi, I am a comment.
-				const BlockNumber: T::BlockNumber = 100.into();
-				const GetType: T::AccountId = T::SomeValue::get().into();
-				const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST.into();
-			}
-		}
+        decl_module! {
+            pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+                /// Hi, I am a comment.
+                const BlockNumber: T::BlockNumber = 100.into();
+                const GetType: T::AccountId = T::SomeValue::get().into();
+                const ASSOCIATED_CONST: u64 = T::ASSOCIATED_CONST.into();
+            }
+        }
 
-		decl_event!(
-			pub enum Event {
-				SystemEvent,
-			}
-		);
+        decl_event!(
+            pub enum Event {
+                SystemEvent,
+            }
+        );
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
+        #[derive(Clone, PartialEq, Eq, Debug)]
+        pub enum RawOrigin<AccountId> {
+            Root,
+            Signed(AccountId),
+            None,
+        }
 
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+        impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+            fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+                match s {
+                    Some(who) => RawOrigin::Signed(who),
+                    None => RawOrigin::None,
+                }
+            }
+        }
 
-		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
-	}
+        pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+    }
 
-	mod event_module {
-		use crate::dispatch::DispatchResult;
+    mod event_module {
+        use crate::dispatch::DispatchResult;
 
-		pub trait Trait: super::system::Trait {
-			type Balance;
-		}
+        pub trait Trait: super::system::Trait {
+            type Balance;
+        }
 
-		decl_event!(
-			pub enum Event<T> where <T as Trait>::Balance
-			{
-				/// Hi, I am a comment.
-				TestEvent(Balance),
-			}
-		);
+        decl_event!(
+            pub enum Event<T> where <T as Trait>::Balance
+            {
+                /// Hi, I am a comment.
+                TestEvent(Balance),
+            }
+        );
 
-		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				type Error = Error<T>;
+        decl_module! {
+            pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+                type Error = Error<T>;
 
-				#[weight = 0]
-				fn aux_0(_origin) -> DispatchResult { unreachable!() }
-			}
-		}
+                #[weight = 0]
+                fn aux_0(_origin) -> DispatchResult { unreachable!() }
+            }
+        }
 
-		crate::decl_error! {
-			pub enum Error for Module<T: Trait> {
-				/// Some user input error
-				UserInputError,
-				/// Something bad happened
-				/// this could be due to many reasons
-				BadThingHappened,
-			}
-		}
-	}
+        crate::decl_error! {
+            pub enum Error for Module<T: Trait> {
+                /// Some user input error
+                UserInputError,
+                /// Something bad happened
+                /// this could be due to many reasons
+                BadThingHappened,
+            }
+        }
+    }
 
-	mod event_module2 {
-		pub trait Trait {
-			type Origin;
-			type Balance;
-			type BlockNumber;
-		}
+    mod event_module2 {
+        pub trait Trait {
+            type Origin;
+            type Balance;
+            type BlockNumber;
+        }
 
-		decl_event!(
-			pub enum Event<T> where <T as Trait>::Balance
-			{
-				TestEvent(Balance),
-			}
-		);
+        decl_event!(
+            pub enum Event<T> where <T as Trait>::Balance
+            {
+                TestEvent(Balance),
+            }
+        );
 
-		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
-		}
+        decl_module! {
+            pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+        }
 
-		crate::decl_storage! {
-			trait Store for Module<T: Trait> as TestStorage {
-				StorageMethod : Option<u32>;
-			}
-			add_extra_genesis {
-				build(|_| {});
-			}
-		}
-	}
+        crate::decl_storage! {
+            trait Store for Module<T: Trait> as TestStorage {
+                StorageMethod : Option<u32>;
+            }
+            add_extra_genesis {
+                build(|_| {});
+            }
+        }
+    }
 
-	type EventModule = event_module::Module<TestRuntime>;
-	type EventModule2 = event_module2::Module<TestRuntime>;
+    type EventModule = event_module::Module<TestRuntime>;
+    type EventModule2 = event_module2::Module<TestRuntime>;
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-	pub struct TestRuntime;
+    #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+    pub struct TestRuntime;
 
-	impl_outer_event! {
-		pub enum TestEvent for TestRuntime {
-			system,
-			event_module<T>,
-			event_module2<T>,
-		}
-	}
+    impl_outer_event! {
+        pub enum TestEvent for TestRuntime {
+            system,
+            event_module<T>,
+            event_module2<T>,
+        }
+    }
 
-	impl_outer_origin! {
-		pub enum Origin for TestRuntime {}
-	}
+    impl_outer_origin! {
+        pub enum Origin for TestRuntime {}
+    }
 
-	impl_outer_dispatch! {
-		pub enum Call for TestRuntime where origin: Origin {
-			event_module::EventModule,
-			event_module2::EventModule2,
-		}
-	}
+    impl_outer_dispatch! {
+        pub enum Call for TestRuntime where origin: Origin {
+            event_module::EventModule,
+            event_module2::EventModule2,
+        }
+    }
 
-	impl event_module::Trait for TestRuntime {
-		type Balance = u32;
-	}
+    impl event_module::Trait for TestRuntime {
+        type Balance = u32;
+    }
 
-	impl event_module2::Trait for TestRuntime {
-		type Origin = Origin;
-		type Balance = u32;
-		type BlockNumber = u32;
-	}
+    impl event_module2::Trait for TestRuntime {
+        type Origin = Origin;
+        type Balance = u32;
+        type BlockNumber = u32;
+    }
 
-	crate::parameter_types! {
-		pub const SystemValue: u32 = 600;
-	}
+    crate::parameter_types! {
+        pub const SystemValue: u32 = 600;
+    }
 
-	impl system::Trait for TestRuntime {
-		type Origin = Origin;
-		type AccountId = u32;
-		type BlockNumber = u32;
-		type SomeValue = SystemValue;
-		type ModuleToIndex = ();
-	}
+    impl system::Trait for TestRuntime {
+        type Origin = Origin;
+        type AccountId = u32;
+        type BlockNumber = u32;
+        type SomeValue = SystemValue;
+        type ModuleToIndex = ();
+    }
 
-	impl_runtime_metadata!(
-		for TestRuntime with modules where Extrinsic = TestExtrinsic
-			system::Module as System with Event,
-			event_module::Module as Module with Event Call,
-			event_module2::Module as Module2 with Event Storage Call,
-	);
+    impl_runtime_metadata!(
+        for TestRuntime with modules where Extrinsic = TestExtrinsic
+            system::Module as System with Event,
+            event_module::Module as Module with Event Call,
+            event_module2::Module as Module2 with Event Storage Call,
+    );
 
-	struct ConstantBlockNumberByteGetter;
-	impl DefaultByte for ConstantBlockNumberByteGetter {
-		fn default_byte(&self) -> Vec<u8> {
-			100u32.encode()
-		}
-	}
+    struct ConstantBlockNumberByteGetter;
+    impl DefaultByte for ConstantBlockNumberByteGetter {
+        fn default_byte(&self) -> Vec<u8> {
+            100u32.encode()
+        }
+    }
 
-	struct ConstantGetTypeByteGetter;
-	impl DefaultByte for ConstantGetTypeByteGetter {
-		fn default_byte(&self) -> Vec<u8> {
-			SystemValue::get().encode()
-		}
-	}
+    struct ConstantGetTypeByteGetter;
+    impl DefaultByte for ConstantGetTypeByteGetter {
+        fn default_byte(&self) -> Vec<u8> {
+            SystemValue::get().encode()
+        }
+    }
 
-	struct ConstantAssociatedConstByteGetter;
-	impl DefaultByte for ConstantAssociatedConstByteGetter {
-		fn default_byte(&self) -> Vec<u8> {
-			<TestRuntime as system::Trait>::ASSOCIATED_CONST.encode()
-		}
-	}
+    struct ConstantAssociatedConstByteGetter;
+    impl DefaultByte for ConstantAssociatedConstByteGetter {
+        fn default_byte(&self) -> Vec<u8> {
+            <TestRuntime as system::Trait>::ASSOCIATED_CONST.encode()
+        }
+    }
 
-	#[test]
-	fn runtime_metadata() {
-		let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
-			modules: DecodeDifferent::Encode(&[
-				ModuleMetadata {
-					name: DecodeDifferent::Encode("System"),
-					storage: None,
-					calls: None,
-					event: Some(DecodeDifferent::Encode(
-						FnEncode(||&[
-							EventMetadata {
-								name: DecodeDifferent::Encode("SystemEvent"),
-								arguments: DecodeDifferent::Encode(&[]),
-								documentation: DecodeDifferent::Encode(&[])
-							}
-						])
-					)),
-					constants: DecodeDifferent::Encode(
-						FnEncode(|| &[
-							ModuleConstantMetadata {
-								name: DecodeDifferent::Encode("BlockNumber"),
-								ty: DecodeDifferent::Encode("T::BlockNumber"),
-								value: DecodeDifferent::Encode(
-									DefaultByteGetter(&ConstantBlockNumberByteGetter)
-								),
-								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
-							},
-							ModuleConstantMetadata {
-								name: DecodeDifferent::Encode("GetType"),
-								ty: DecodeDifferent::Encode("T::AccountId"),
-								value: DecodeDifferent::Encode(
-									DefaultByteGetter(&ConstantGetTypeByteGetter)
-								),
-								documentation: DecodeDifferent::Encode(&[]),
-							},
-							ModuleConstantMetadata {
-								name: DecodeDifferent::Encode("ASSOCIATED_CONST"),
-								ty: DecodeDifferent::Encode("u64"),
-								value: DecodeDifferent::Encode(
-									DefaultByteGetter(&ConstantAssociatedConstByteGetter)
-								),
-								documentation: DecodeDifferent::Encode(&[]),
-							}
-						])
-					),
-					errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				},
-				ModuleMetadata {
-					name: DecodeDifferent::Encode("Module"),
-					storage: None,
-					calls: Some(
-						DecodeDifferent::Encode(FnEncode(|| &[
-							FunctionMetadata {
-								name: DecodeDifferent::Encode("aux_0"),
-								arguments: DecodeDifferent::Encode(&[]),
-								documentation: DecodeDifferent::Encode(&[]),
-							}
-						]))),
-					event: Some(DecodeDifferent::Encode(
-						FnEncode(||&[
-							EventMetadata {
-								name: DecodeDifferent::Encode("TestEvent"),
-								arguments: DecodeDifferent::Encode(&["Balance"]),
-								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
-							}
-						])
-					)),
-					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-					errors: DecodeDifferent::Encode(FnEncode(|| &[
-						ErrorMetadata {
-							name: DecodeDifferent::Encode("UserInputError"),
-							documentation: DecodeDifferent::Encode(&[" Some user input error"]),
-						},
-						ErrorMetadata {
-							name: DecodeDifferent::Encode("BadThingHappened"),
-							documentation: DecodeDifferent::Encode(&[
-								" Something bad happened",
-								" this could be due to many reasons",
-							]),
-						},
-					])),
-				},
-				ModuleMetadata {
-					name: DecodeDifferent::Encode("Module2"),
-					storage: Some(DecodeDifferent::Encode(
-						FnEncode(|| StorageMetadata {
-							prefix: DecodeDifferent::Encode("TestStorage"),
-							entries: DecodeDifferent::Encode(
-								&[
-									StorageEntryMetadata {
-										name: DecodeDifferent::Encode("StorageMethod"),
-										modifier: StorageEntryModifier::Optional,
-										ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-										default: DecodeDifferent::Encode(
-											DefaultByteGetter(
-												&event_module2::__GetByteStructStorageMethod(
-													std::marker::PhantomData::<TestRuntime>
-												)
-											)
-										),
-										documentation: DecodeDifferent::Encode(&[]),
-									}
-								]
-							)
-						}),
-					)),
-					calls: Some(DecodeDifferent::Encode(FnEncode(|| &[]))),
-					event: Some(DecodeDifferent::Encode(
-						FnEncode(||&[
-							EventMetadata {
-								name: DecodeDifferent::Encode("TestEvent"),
-								arguments: DecodeDifferent::Encode(&["Balance"]),
-								documentation: DecodeDifferent::Encode(&[])
-							}
-						])
-					)),
-					constants: DecodeDifferent::Encode(FnEncode(|| &[])),
-					errors: DecodeDifferent::Encode(FnEncode(|| &[])),
-				},
-			]),
-			extrinsic: ExtrinsicMetadata {
-				version: 1,
-				signed_extensions: vec![
-					DecodeDifferent::Encode("testextension"),
-					DecodeDifferent::Encode("testextension2"),
-				],
-			}
-		};
+    #[test]
+    fn runtime_metadata() {
+        let expected_metadata: RuntimeMetadataLastVersion = RuntimeMetadataLastVersion {
+            modules: DecodeDifferent::Encode(&[
+                ModuleMetadata {
+                    name: DecodeDifferent::Encode("System"),
+                    storage: None,
+                    calls: None,
+                    event: Some(DecodeDifferent::Encode(FnEncode(|| {
+                        &[EventMetadata {
+                            name: DecodeDifferent::Encode("SystemEvent"),
+                            arguments: DecodeDifferent::Encode(&[]),
+                            documentation: DecodeDifferent::Encode(&[]),
+                        }]
+                    }))),
+                    constants: DecodeDifferent::Encode(FnEncode(|| {
+                        &[
+                            ModuleConstantMetadata {
+                                name: DecodeDifferent::Encode("BlockNumber"),
+                                ty: DecodeDifferent::Encode("T::BlockNumber"),
+                                value: DecodeDifferent::Encode(DefaultByteGetter(
+                                    &ConstantBlockNumberByteGetter,
+                                )),
+                                documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
+                            },
+                            ModuleConstantMetadata {
+                                name: DecodeDifferent::Encode("GetType"),
+                                ty: DecodeDifferent::Encode("T::AccountId"),
+                                value: DecodeDifferent::Encode(DefaultByteGetter(
+                                    &ConstantGetTypeByteGetter,
+                                )),
+                                documentation: DecodeDifferent::Encode(&[]),
+                            },
+                            ModuleConstantMetadata {
+                                name: DecodeDifferent::Encode("ASSOCIATED_CONST"),
+                                ty: DecodeDifferent::Encode("u64"),
+                                value: DecodeDifferent::Encode(DefaultByteGetter(
+                                    &ConstantAssociatedConstByteGetter,
+                                )),
+                                documentation: DecodeDifferent::Encode(&[]),
+                            },
+                        ]
+                    })),
+                    errors: DecodeDifferent::Encode(FnEncode(|| &[])),
+                },
+                ModuleMetadata {
+                    name: DecodeDifferent::Encode("Module"),
+                    storage: None,
+                    calls: Some(DecodeDifferent::Encode(FnEncode(|| {
+                        &[FunctionMetadata {
+                            name: DecodeDifferent::Encode("aux_0"),
+                            arguments: DecodeDifferent::Encode(&[]),
+                            documentation: DecodeDifferent::Encode(&[]),
+                        }]
+                    }))),
+                    event: Some(DecodeDifferent::Encode(FnEncode(|| {
+                        &[EventMetadata {
+                            name: DecodeDifferent::Encode("TestEvent"),
+                            arguments: DecodeDifferent::Encode(&["Balance"]),
+                            documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."]),
+                        }]
+                    }))),
+                    constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+                    errors: DecodeDifferent::Encode(FnEncode(|| {
+                        &[
+                            ErrorMetadata {
+                                name: DecodeDifferent::Encode("UserInputError"),
+                                documentation: DecodeDifferent::Encode(&[" Some user input error"]),
+                            },
+                            ErrorMetadata {
+                                name: DecodeDifferent::Encode("BadThingHappened"),
+                                documentation: DecodeDifferent::Encode(&[
+                                    " Something bad happened",
+                                    " this could be due to many reasons",
+                                ]),
+                            },
+                        ]
+                    })),
+                },
+                ModuleMetadata {
+                    name: DecodeDifferent::Encode("Module2"),
+                    storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
+                        prefix: DecodeDifferent::Encode("TestStorage"),
+                        entries: DecodeDifferent::Encode(&[StorageEntryMetadata {
+                            name: DecodeDifferent::Encode("StorageMethod"),
+                            modifier: StorageEntryModifier::Optional,
+                            ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
+                            default: DecodeDifferent::Encode(DefaultByteGetter(
+                                &event_module2::__GetByteStructStorageMethod(
+                                    std::marker::PhantomData::<TestRuntime>,
+                                ),
+                            )),
+                            documentation: DecodeDifferent::Encode(&[]),
+                        }]),
+                    }))),
+                    calls: Some(DecodeDifferent::Encode(FnEncode(|| &[]))),
+                    event: Some(DecodeDifferent::Encode(FnEncode(|| {
+                        &[EventMetadata {
+                            name: DecodeDifferent::Encode("TestEvent"),
+                            arguments: DecodeDifferent::Encode(&["Balance"]),
+                            documentation: DecodeDifferent::Encode(&[]),
+                        }]
+                    }))),
+                    constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+                    errors: DecodeDifferent::Encode(FnEncode(|| &[])),
+                },
+            ]),
+            extrinsic: ExtrinsicMetadata {
+                version: 1,
+                signed_extensions: vec![
+                    DecodeDifferent::Encode("testextension"),
+                    DecodeDifferent::Encode("testextension2"),
+                ],
+            },
+        };
 
-		let metadata_encoded = TestRuntime::metadata().encode();
-		let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
-		let expected_metadata: RuntimeMetadataPrefixed = expected_metadata.into();
+        let metadata_encoded = TestRuntime::metadata().encode();
+        let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
+        let expected_metadata: RuntimeMetadataPrefixed = expected_metadata.into();
 
-		pretty_assertions::assert_eq!(expected_metadata, metadata_decoded.unwrap());
-	}
+        pretty_assertions::assert_eq!(expected_metadata, metadata_decoded.unwrap());
+    }
 }

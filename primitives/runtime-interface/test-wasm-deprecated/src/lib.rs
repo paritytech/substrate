@@ -30,24 +30,24 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 /// `sp-io` is required for its panic and oom handler.
 #[no_mangle]
 pub fn import_sp_io() {
-	sp_io::misc::print_utf8(&[]);
+    sp_io::misc::print_utf8(&[]);
 }
 
 #[runtime_interface]
 pub trait TestApi {
-	fn test_versionning(&self, _data: u32) -> bool {
-		// should not be called
-		unimplemented!()
-	}
+    fn test_versionning(&self, _data: u32) -> bool {
+        // should not be called
+        unimplemented!()
+    }
 }
 
 wasm_export_functions! {
-	fn test_versionning_works() {
-		// old api allows only 42 and 50
-		assert!(test_api::test_versionning(42));
-		assert!(test_api::test_versionning(50));
+    fn test_versionning_works() {
+        // old api allows only 42 and 50
+        assert!(test_api::test_versionning(42));
+        assert!(test_api::test_versionning(50));
 
-		assert!(!test_api::test_versionning(142));
-		assert!(!test_api::test_versionning(0));
-	}
+        assert!(!test_api::test_versionning(142));
+        assert!(!test_api::test_versionning(0));
+    }
 }

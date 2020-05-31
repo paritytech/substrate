@@ -26,32 +26,33 @@ use futures::{executor, task};
 /// runtime host (implements `CloneableSpawn`).
 #[derive(Debug, Clone)]
 pub struct Executor {
-	pool: executor::ThreadPool,
+    pool: executor::ThreadPool,
 }
 
 impl Executor {
-	fn new() -> Self {
-		Self {
-			pool: executor::ThreadPool::builder().pool_size(1).create()
-				.expect("Failed to create task executor")
-		}
-	}
+    fn new() -> Self {
+        Self {
+            pool: executor::ThreadPool::builder()
+                .pool_size(1)
+                .create()
+                .expect("Failed to create task executor"),
+        }
+    }
 }
 
 impl task::Spawn for Executor {
-	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
-	-> Result<(), task::SpawnError> {
-		self.pool.spawn_obj(future)
-	}
+    fn spawn_obj(&self, future: task::FutureObj<'static, ()>) -> Result<(), task::SpawnError> {
+        self.pool.spawn_obj(future)
+    }
 }
 
 impl CloneableSpawn for Executor {
-	fn clone(&self) -> Box<dyn CloneableSpawn> {
-		Box::new(Clone::clone(self))
-	}
+    fn clone(&self) -> Box<dyn CloneableSpawn> {
+        Box::new(Clone::clone(self))
+    }
 }
 
 /// Create tasks executor.
 pub fn executor() -> Box<dyn CloneableSpawn> {
-	Box::new(Executor::new())
+    Box::new(Executor::new())
 }

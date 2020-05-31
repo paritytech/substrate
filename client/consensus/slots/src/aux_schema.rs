@@ -16,9 +16,9 @@
 
 //! Schema for slots in the aux-db.
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sc_client_api::backend::AuxStore;
-use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_runtime::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -30,241 +30,218 @@ pub const MAX_SLOT_CAPACITY: u64 = 1000;
 pub const PRUNING_BOUND: u64 = 2 * MAX_SLOT_CAPACITY;
 
 fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
-	where
-		C: AuxStore,
-		T: Decode,
+where
+    C: AuxStore,
+    T: Decode,
 {
-	match backend.get_aux(key)? {
-		None => Ok(None),
-		Some(t) => T::decode(&mut &t[..])
-			.map_err(
-				|e| ClientError::Backend(format!("Slots DB is corrupted. Decode error: {}", e.what())),
-			)
-			.map(Some)
-	}
+    match backend.get_aux(key)? {
+        None => Ok(None),
+        Some(t) => T::decode(&mut &t[..])
+            .map_err(|e| {
+                ClientError::Backend(format!("Slots DB is corrupted. Decode error: {}", e.what()))
+            })
+            .map(Some),
+    }
 }
 
 /// Represents an equivocation proof.
 #[derive(Debug, Clone)]
 pub struct EquivocationProof<H> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
+    slot: u64,
+    fst_header: H,
+    snd_header: H,
 }
 
 impl<H> EquivocationProof<H> {
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
+    /// Get the slot number where the equivocation happened.
+    pub fn slot(&self) -> u64 {
+        self.slot
+    }
 
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
+    /// Get the first header involved in the equivocation.
+    pub fn fst_header(&self) -> &H {
+        &self.fst_header
+    }
 
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
-	}
+    /// Get the second header involved in the equivocation.
+    pub fn snd_header(&self) -> &H {
+        &self.snd_header
+    }
 }
 
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
 pub fn check_equivocation<C, H, P>(
-	backend: &C,
-	slot_now: u64,
-	slot: u64,
-	header: &H,
-	signer: &P,
+    backend: &C,
+    slot_now: u64,
+    slot: u64,
+    header: &H,
+    signer: &P,
 ) -> ClientResult<Option<EquivocationProof<H>>>
-	where
-		H: Header,
-		C: AuxStore,
-		P: Clone + Encode + Decode + PartialEq,
+where
+    H: Header,
+    C: AuxStore,
+    P: Clone + Encode + Decode + PartialEq,
 {
-	// We don't check equivocations for old headers out of our capacity.
-	if slot_now.saturating_sub(slot) > MAX_SLOT_CAPACITY {
-		return Ok(None);
-	}
+    // We don't check equivocations for old headers out of our capacity.
+    if slot_now.saturating_sub(slot) > MAX_SLOT_CAPACITY {
+        return Ok(None);
+    }
 
-	// Key for this slot.
-	let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
-	slot.using_encoded(|s| curr_slot_key.extend(s));
+    // Key for this slot.
+    let mut curr_slot_key = SLOT_HEADER_MAP_KEY.to_vec();
+    slot.using_encoded(|s| curr_slot_key.extend(s));
 
-	// Get headers of this slot.
-	let mut headers_with_sig = load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?
-		.unwrap_or_else(Vec::new);
+    // Get headers of this slot.
+    let mut headers_with_sig =
+        load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?.unwrap_or_else(Vec::new);
 
-	// Get first slot saved.
-	let slot_header_start = SLOT_HEADER_START.to_vec();
-	let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?
-		.unwrap_or(slot);
+    // Get first slot saved.
+    let slot_header_start = SLOT_HEADER_START.to_vec();
+    let first_saved_slot = load_decode::<_, u64>(backend, &slot_header_start[..])?.unwrap_or(slot);
 
-	if slot_now < first_saved_slot {
-		// The code below assumes that slots will be visited sequentially.
-		return Ok(None);
-	}
+    if slot_now < first_saved_slot {
+        // The code below assumes that slots will be visited sequentially.
+        return Ok(None);
+    }
 
-	for (prev_header, prev_signer) in headers_with_sig.iter() {
-		// A proof of equivocation consists of two headers:
-		// 1) signed by the same voter,
-		if prev_signer == signer {
-			// 2) with different hash
-			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof {
-					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
-				}));
-			} else {
-				// We don't need to continue in case of duplicated header,
-				// since it's already saved and a possible equivocation
-				// would have been detected before.
-				return Ok(None)
-			}
-		}
-	}
+    for (prev_header, prev_signer) in headers_with_sig.iter() {
+        // A proof of equivocation consists of two headers:
+        // 1) signed by the same voter,
+        if prev_signer == signer {
+            // 2) with different hash
+            if header.hash() != prev_header.hash() {
+                return Ok(Some(EquivocationProof {
+                    slot, // 3) and mentioning the same slot.
+                    fst_header: prev_header.clone(),
+                    snd_header: header.clone(),
+                }));
+            } else {
+                // We don't need to continue in case of duplicated header,
+                // since it's already saved and a possible equivocation
+                // would have been detected before.
+                return Ok(None);
+            }
+        }
+    }
 
-	let mut keys_to_delete = vec![];
-	let mut new_first_saved_slot = first_saved_slot;
+    let mut keys_to_delete = vec![];
+    let mut new_first_saved_slot = first_saved_slot;
 
-	if slot_now - first_saved_slot >= PRUNING_BOUND {
-		let prefix = SLOT_HEADER_MAP_KEY.to_vec();
-		new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
+    if slot_now - first_saved_slot >= PRUNING_BOUND {
+        let prefix = SLOT_HEADER_MAP_KEY.to_vec();
+        new_first_saved_slot = slot_now.saturating_sub(MAX_SLOT_CAPACITY);
 
-		for s in first_saved_slot..new_first_saved_slot {
-			let mut p = prefix.clone();
-			s.using_encoded(|s| p.extend(s));
-			keys_to_delete.push(p);
-		}
-	}
+        for s in first_saved_slot..new_first_saved_slot {
+            let mut p = prefix.clone();
+            s.using_encoded(|s| p.extend(s));
+            keys_to_delete.push(p);
+        }
+    }
 
-	headers_with_sig.push((header.clone(), signer.clone()));
+    headers_with_sig.push((header.clone(), signer.clone()));
 
-	backend.insert_aux(
-		&[
-			(&curr_slot_key[..], headers_with_sig.encode().as_slice()),
-			(&slot_header_start[..], new_first_saved_slot.encode().as_slice()),
-		],
-		&keys_to_delete.iter().map(|k| &k[..]).collect::<Vec<&[u8]>>()[..],
-	)?;
+    backend.insert_aux(
+        &[
+            (&curr_slot_key[..], headers_with_sig.encode().as_slice()),
+            (
+                &slot_header_start[..],
+                new_first_saved_slot.encode().as_slice(),
+            ),
+        ],
+        &keys_to_delete
+            .iter()
+            .map(|k| &k[..])
+            .collect::<Vec<&[u8]>>()[..],
+    )?;
 
-	Ok(None)
+    Ok(None)
 }
 
 #[cfg(test)]
 mod test {
-	use sp_core::{sr25519, Pair};
-	use sp_core::hash::H256;
-	use sp_runtime::testing::{Header as HeaderTest, Digest as DigestTest};
-	use substrate_test_runtime_client;
+    use sp_core::hash::H256;
+    use sp_core::{sr25519, Pair};
+    use sp_runtime::testing::{Digest as DigestTest, Header as HeaderTest};
+    use substrate_test_runtime_client;
 
-	use super::{MAX_SLOT_CAPACITY, PRUNING_BOUND, check_equivocation};
+    use super::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 
-	fn create_header(number: u64) -> HeaderTest {
-		// so that different headers for the same number get different hashes
-		let parent_hash = H256::random();
+    fn create_header(number: u64) -> HeaderTest {
+        // so that different headers for the same number get different hashes
+        let parent_hash = H256::random();
 
-		let header = HeaderTest {
-			parent_hash,
-			number,
-			state_root: Default::default(),
-			extrinsics_root: Default::default(),
-			digest: DigestTest { logs: vec![], },
-		};
+        let header = HeaderTest {
+            parent_hash,
+            number,
+            state_root: Default::default(),
+            extrinsics_root: Default::default(),
+            digest: DigestTest { logs: vec![] },
+        };
 
-		header
-	}
+        header
+    }
 
-	#[test]
-	fn check_equivocation_works() {
-		let client = substrate_test_runtime_client::new();
-		let (pair, _seed) = sr25519::Pair::generate();
-		let public = pair.public();
+    #[test]
+    fn check_equivocation_works() {
+        let client = substrate_test_runtime_client::new();
+        let (pair, _seed) = sr25519::Pair::generate();
+        let public = pair.public();
 
-		let header1 = create_header(1); // @ slot 2
-		let header2 = create_header(2); // @ slot 2
-		let header3 = create_header(2); // @ slot 4
-		let header4 = create_header(3); // @ slot MAX_SLOT_CAPACITY + 4
-		let header5 = create_header(4); // @ slot MAX_SLOT_CAPACITY + 4
-		let header6 = create_header(3); // @ slot 4
+        let header1 = create_header(1); // @ slot 2
+        let header2 = create_header(2); // @ slot 2
+        let header3 = create_header(2); // @ slot 4
+        let header4 = create_header(3); // @ slot MAX_SLOT_CAPACITY + 4
+        let header5 = create_header(4); // @ slot MAX_SLOT_CAPACITY + 4
+        let header6 = create_header(3); // @ slot 4
 
-		// It's ok to sign same headers.
-		assert!(
-			check_equivocation(
-				&client,
-				2,
-				2,
-				&header1,
-				&public,
-			).unwrap().is_none(),
-		);
+        // It's ok to sign same headers.
+        assert!(check_equivocation(&client, 2, 2, &header1, &public,)
+            .unwrap()
+            .is_none(),);
 
-		assert!(
-			check_equivocation(
-				&client,
-				3,
-				2,
-				&header1,
-				&public,
-			).unwrap().is_none(),
-		);
+        assert!(check_equivocation(&client, 3, 2, &header1, &public,)
+            .unwrap()
+            .is_none(),);
 
-		// But not two different headers at the same slot.
-		assert!(
-			check_equivocation(
-				&client,
-				4,
-				2,
-				&header2,
-				&public,
-			).unwrap().is_some(),
-		);
+        // But not two different headers at the same slot.
+        assert!(check_equivocation(&client, 4, 2, &header2, &public,)
+            .unwrap()
+            .is_some(),);
 
-		// Different slot is ok.
-		assert!(
-			check_equivocation(
-				&client,
-				5,
-				4,
-				&header3,
-				&public,
-			).unwrap().is_none(),
-		);
+        // Different slot is ok.
+        assert!(check_equivocation(&client, 5, 4, &header3, &public,)
+            .unwrap()
+            .is_none(),);
 
-		// Here we trigger pruning and save header 4.
-		assert!(
-			check_equivocation(
-				&client,
-				PRUNING_BOUND + 2,
-				MAX_SLOT_CAPACITY + 4,
-				&header4,
-				&public,
-			).unwrap().is_none(),
-		);
+        // Here we trigger pruning and save header 4.
+        assert!(check_equivocation(
+            &client,
+            PRUNING_BOUND + 2,
+            MAX_SLOT_CAPACITY + 4,
+            &header4,
+            &public,
+        )
+        .unwrap()
+        .is_none(),);
 
-		// This fails because header 5 is an equivocation of header 4.
-		assert!(
-			check_equivocation(
-				&client,
-				PRUNING_BOUND + 3,
-				MAX_SLOT_CAPACITY + 4,
-				&header5,
-				&public,
-			).unwrap().is_some(),
-		);
+        // This fails because header 5 is an equivocation of header 4.
+        assert!(check_equivocation(
+            &client,
+            PRUNING_BOUND + 3,
+            MAX_SLOT_CAPACITY + 4,
+            &header5,
+            &public,
+        )
+        .unwrap()
+        .is_some(),);
 
-		// This is ok because we pruned the corresponding header. Shows that we are pruning.
-		assert!(
-			check_equivocation(
-				&client,
-				PRUNING_BOUND + 4,
-				4,
-				&header6,
-				&public,
-			).unwrap().is_none(),
-		);
-	}
+        // This is ok because we pruned the corresponding header. Shows that we are pruning.
+        assert!(
+            check_equivocation(&client, PRUNING_BOUND + 4, 4, &header6, &public,)
+                .unwrap()
+                .is_none(),
+        );
+    }
 }

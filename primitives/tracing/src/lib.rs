@@ -63,23 +63,24 @@ macro_rules! tracing_span {
 /// ```
 #[macro_export]
 macro_rules! enter_span {
-	( $name:expr ) => {
-		let __tracing_span__ = $crate::if_tracing!(
-			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
-		);
-		let __tracing_guard__ = $crate::if_tracing!(__tracing_span__.enter());
-	}
+    ( $name:expr ) => {
+        let __tracing_span__ =
+            $crate::if_tracing!($crate::tracing::span!($crate::tracing::Level::TRACE, $name));
+        let __tracing_guard__ = $crate::if_tracing!(__tracing_span__.enter());
+    };
 }
 
 /// Generates the given code if the tracing dependency is enabled.
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! if_tracing {
-	( $if:expr ) => {{ $if }}
+    ( $if:expr ) => {{
+        $if
+    }};
 }
 
 #[macro_export]
 #[cfg(not(feature = "std"))]
 macro_rules! if_tracing {
-	( $if:expr ) => {{}}
+    ( $if:expr ) => {{}};
 }

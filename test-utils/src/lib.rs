@@ -38,18 +38,20 @@
 /// ```
 #[macro_export]
 macro_rules! assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
-		$crate::__assert_eq_uvec!($x, $y);
-		$crate::__assert_eq_uvec!($y, $x);
-	}
+    ( $x:expr, $y:expr ) => {
+        $crate::__assert_eq_uvec!($x, $y);
+        $crate::__assert_eq_uvec!($y, $x);
+    };
 }
 
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
-		$x.iter().for_each(|e| {
-			if !$y.contains(e) { panic!(format!("vectors not equal: {:?} != {:?}", $x, $y)); }
-		});
-	}
+    ( $x:expr, $y:expr ) => {
+        $x.iter().for_each(|e| {
+            if !$y.contains(e) {
+                panic!(format!("vectors not equal: {:?} != {:?}", $x, $y));
+            }
+        });
+    };
 }

@@ -19,11 +19,11 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use ansi_term::Colour;
-use sc_client_api::{BlockchainEvents, UsageProvider};
 use futures::prelude::*;
-use log::{info, warn, trace};
-use sp_runtime::traits::Header;
+use log::{info, trace, warn};
+use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_service::AbstractService;
+use sp_runtime::traits::Header;
 use std::time::Duration;
 
 mod display;
@@ -31,46 +31,49 @@ mod display;
 /// The format to print telemetry output in.
 #[derive(PartialEq)]
 pub enum OutputFormat {
-	Coloured,
-	Plain,
+    Coloured,
+    Plain,
 }
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futures::Future<Output = ()> {
-	let client = service.client();
-	let pool = service.transaction_pool();
+pub fn build(
+    service: &impl AbstractService,
+    format: OutputFormat,
+) -> impl futures::Future<Output = ()> {
+    let client = service.client();
+    let pool = service.transaction_pool();
 
-	let mut display = display::InformantDisplay::new(format);
+    let mut display = display::InformantDisplay::new(format);
 
-	let display_notifications = service
-		.network_status(Duration::from_millis(5000))
-		.for_each(move |(net_status, _)| {
-			let info = client.usage_info();
-			if let Some(ref usage) = info.usage {
-				trace!(target: "usage", "Usage statistics: {}", usage);
-			} else {
-				trace!(
-					target: "usage",
-					"Usage statistics not displayed as backend does not provide it",
-				)
-			}
-			#[cfg(not(target_os = "unknown"))]
-			trace!(
-				target: "usage",
-				"Subsystems memory [txpool: {} kB]",
-				parity_util_mem::malloc_size(&*pool) / 1024,
-			);
-			display.display(&info, net_status);
-			future::ready(())
-		});
+    let display_notifications = service
+        .network_status(Duration::from_millis(5000))
+        .for_each(move |(net_status, _)| {
+            let info = client.usage_info();
+            if let Some(ref usage) = info.usage {
+                trace!(target: "usage", "Usage statistics: {}", usage);
+            } else {
+                trace!(
+                    target: "usage",
+                    "Usage statistics not displayed as backend does not provide it",
+                )
+            }
+            #[cfg(not(target_os = "unknown"))]
+            trace!(
+                target: "usage",
+                "Subsystems memory [txpool: {} kB]",
+                parity_util_mem::malloc_size(&*pool) / 1024,
+            );
+            display.display(&info, net_status);
+            future::ready(())
+        });
 
-	let client = service.client();
-	let mut last_best = {
-		let info = client.usage_info();
-		Some((info.chain.best_number, info.chain.best_hash))
-	};
+    let client = service.client();
+    let mut last_best = {
+        let info = client.usage_info();
+        Some((info.chain.best_number, info.chain.best_hash))
+    };
 
-	let display_block_import = client.import_notification_stream().for_each(move |n| {
+    let display_block_import = client.import_notification_stream().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
@@ -101,8 +104,5 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 		future::ready(())
 	});
 
-	future::join(
-		display_notifications,
-		display_block_import
-	).map(|_| ())
+    future::join(display_notifications, display_block_import).map(|_| ())
 }

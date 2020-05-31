@@ -28,25 +28,25 @@
 
 use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
-use sp_std::prelude::*;
-use sp_runtime::traits::Hash;
 use frame_support::StorageMap;
+use sp_runtime::traits::Hash;
+use sp_std::prelude::*;
 
 /// Put code in the storage. The hash of code is used as a key and is returned
 /// as a result of this function.
 ///
 /// This function instruments the given code and caches it in the storage.
 pub fn save<T: Trait>(
-	original_code: Vec<u8>,
-	schedule: &Schedule,
+    original_code: Vec<u8>,
+    schedule: &Schedule,
 ) -> Result<CodeHash<T>, &'static str> {
-	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
-	let code_hash = T::Hashing::hash(&original_code);
+    let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+    let code_hash = T::Hashing::hash(&original_code);
 
-	<CodeStorage<T>>::insert(code_hash, prefab_module);
-	<PristineCode<T>>::insert(code_hash, original_code);
+    <CodeStorage<T>>::insert(code_hash, prefab_module);
+    <PristineCode<T>>::insert(code_hash, original_code);
 
-	Ok(code_hash)
+    Ok(code_hash)
 }
 
 /// Load code with the given code hash.
@@ -55,21 +55,20 @@ pub fn save<T: Trait>(
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
 pub fn load<T: Trait>(
-	code_hash: &CodeHash<T>,
-	schedule: &Schedule,
+    code_hash: &CodeHash<T>,
+    schedule: &Schedule,
 ) -> Result<PrefabWasmModule, &'static str> {
-	let mut prefab_module =
-		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
+    let mut prefab_module = <CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
-	if prefab_module.schedule_version < schedule.version {
-		// The current schedule version is greater than the version of the one cached
-		// in the storage.
-		//
-		// We need to re-instrument the code with the latest schedule here.
-		let original_code =
-			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
-		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
-		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
-	}
-	Ok(prefab_module)
+    if prefab_module.schedule_version < schedule.version {
+        // The current schedule version is greater than the version of the one cached
+        // in the storage.
+        //
+        // We need to re-instrument the code with the latest schedule here.
+        let original_code =
+            <PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
+        prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+        <CodeStorage<T>>::insert(&code_hash, &prefab_module);
+    }
+    Ok(prefab_module)
 }
