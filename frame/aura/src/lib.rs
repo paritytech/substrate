@@ -145,15 +145,32 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> FindAuthor<u32> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32> where
+// impl<T: Trait> FindAuthor<u32> for Module<T> {
+// 	fn find_author<'a, I>(digests: I) -> Option<u32> where
+// 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+// 	{
+// 		for (id, mut data) in digests.into_iter() {
+// 			if id == AURA_ENGINE_ID {
+// 				if let Ok(slot_num) = u64::decode(&mut data) {
+// 					let author_index = slot_num % Self::authorities().len() as u64;
+// 					return Some(author_index as u32)
+// 				}
+// 			}
+// 		}
+//
+// 		None
+// 	}
+// }
+
+impl<T: Trait> FindAuthor<T::AuthorityId> for Module<T> {
+	fn find_author<'a, I>(digests: I) -> Option<T::AuthorityId> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
 				if let Ok(slot_num) = u64::decode(&mut data) {
 					let author_index = slot_num % Self::authorities().len() as u64;
-					return Some(author_index as u32)
+					return Some(Self::authorities()[author_index as usize].clone())
 				}
 			}
 		}
