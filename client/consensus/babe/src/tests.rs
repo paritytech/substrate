@@ -159,7 +159,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 	fn propose(
-		&mut self,
+		mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,
