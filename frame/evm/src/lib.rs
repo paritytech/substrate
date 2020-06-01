@@ -384,11 +384,6 @@ impl<T: Trait> Module<T> {
 		T::ModuleId::get().into_account()
 	}
 
-	/// Check whether the account is in Storage
-	pub fn account_exists(address: &H160) -> bool {
-		Accounts::contains_key(address)
-	}
-
 	/// Check whether an account is empty.
 	pub fn is_account_empty(address: &H160) -> bool {
 		let account = Accounts::get(address);
