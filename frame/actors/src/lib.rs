@@ -25,8 +25,11 @@ use sp_std::prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 use sp_core::H256;
 use sp_runtime::RuntimeDebug;
-use frame_support::{decl_module, decl_storage, decl_event, traits::Get};
-use frame_system as system;
+use frame_support::{
+	decl_module, decl_storage, decl_event, dispatch::DispatchResult,
+	traits::{Get, Currency, ReservableCurrency},
+};
+use frame_system::{self as system, ensure_signed};
 
 mod exec;
 
@@ -36,7 +39,13 @@ pub type StorageKey = [u8; 32];
 pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
 
 /// Balance type from actors pallet's point of view.
-pub type BalanceFor<T> = <T as pallet_balances::Trait>::Balance;
+pub type BalanceFor<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+/// Positive imbalance type from actors pallet's point of view.
+pub type PositiveImbalanceFor<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+
+/// Negative imbalance type from actors pallet's point of view.
+pub type NegativeImbalanceFor<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Message type from actors pallet's point of view.
 pub type MessageFor<T> = Message<AccountIdFor<T>, BalanceFor<T>>;
@@ -67,11 +76,13 @@ pub struct ActorInfo<A, B> {
 }
 
 /// Trait definition for actors pallet.
-pub trait Trait: pallet_balances::Trait {
+pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Max value size of storage.
 	type MaxValueSize: Get<u32>;
+	/// Currency type.
+	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 }
 
 decl_storage! {
@@ -99,9 +110,30 @@ decl_module! {
 	/// Module definition for actors pallet;
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
+
+		#[weight = 0]
+		fn send_message(
+			origin,
+			target: AccountIdFor<T>,
+			value: BalanceFor<T>,
+			data: Vec<u8>,
+		) -> DispatchResult {
+			let source = ensure_signed(origin)?;
+			T::Currency::reserve(&source, value)?;
+
+			let message = Message {
+				source,
+				value,
+				data,
+			};
+			ActorInfoOf::<T>::mutate(target, |actor| {
+				actor.messages.push(message);
+			});
+
+			Ok(())
+		}
 	}
 }
-
 
 impl<T: Trait> Module<T> {
 
