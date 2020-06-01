@@ -163,7 +163,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	}
 }
 
-struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
+pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
 impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	for FindAccountFromAuthorIndex<T, Inner>
