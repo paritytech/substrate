@@ -670,7 +670,6 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	impl sc_tracing::TraceHandler for TestTraceHandler {
 		fn process_span(&self, sd: sc_tracing::SpanDatum) {
-			println!("{:?}",sd);
 			self.0.lock().unwrap().push((sd.target, sd.name));
 		}
 	}
