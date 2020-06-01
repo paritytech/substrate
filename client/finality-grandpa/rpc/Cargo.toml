@@ -10,7 +10,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 [dependencies]
 sc-finality-grandpa = { version = "0.8.0-rc2", path = "../" }
 finality-grandpa = { version = "0.12.3", features = ["derive-codec"] }
-jsonrpc-core = "14.0.3"
+jsonrpc-core = { package = "jsonrpc-core", git = "https://github.com/paritytech/jsonrpc" }
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 futures = { version = "0.3.4", features = ["compat"] }

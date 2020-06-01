@@ -3565,7 +3565,7 @@ dependencies = [
 name = "node-rpc"
 version = "2.0.0-rc2"
 dependencies = [
- "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "node-primitives",
  "node-runtime",
  "pallet-contracts-rpc",
@@ -4108,7 +4108,7 @@ dependencies = [
 name = "pallet-contracts-rpc"
 version = "0.8.0-rc2"
 dependencies = [
- "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "pallet-contracts-primitives",
@@ -4664,7 +4664,7 @@ dependencies = [
 name = "pallet-transaction-payment-rpc"
 version = "2.0.0-rc2"
 dependencies = [
- "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "pallet-transaction-payment-rpc-runtime-api",
@@ -6160,7 +6160,7 @@ version = "0.8.0-rc2"
 dependencies = [
  "derive_more",
  "futures 0.3.4",
- "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "sc-consensus",
@@ -6417,7 +6417,7 @@ dependencies = [
  "derive_more",
  "finality-grandpa",
  "futures 0.3.4",
- "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "log",
@@ -6715,6 +6715,7 @@ dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "hash-db",
+ "jsonrpc-pubsub 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "lazy_static",
  "log",
  "netstat2",
@@ -8145,7 +8146,7 @@ dependencies = [
  "env_logger 0.7.1",
  "frame-system-rpc-runtime-api",
  "futures 0.3.4",
- "jsonrpc-core 14.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "log",

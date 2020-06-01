@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sc-consensus-babe = { version = "0.8.0-rc2", path = "../" }
 sc-rpc-api = { version = "0.8.0-rc2", path = "../../../rpc-api" }
-jsonrpc-core = "14.0.3"
+jsonrpc-core = { package = "jsonrpc-core", git = "https://github.com/paritytech/jsonrpc" }
 jsonrpc-core-client = "14.0.5"
 jsonrpc-derive = "14.0.3"
 sp-consensus-babe = { version = "0.8.0-rc2", path = "../../../../primitives/consensus/babe" }
