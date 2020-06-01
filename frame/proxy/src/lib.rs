@@ -37,7 +37,8 @@
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
 use frame_support::{
-	traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter}, weights::GetDispatchInfo,
+	traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter},
+	weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
 use frame_system::{self as system, ensure_signed};
@@ -134,13 +135,24 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
+		/// - `call`: The call to be made by the `real` account.
+		///
 		/// # <weight>
-		/// - Base weight: ??? µs, 1 storage read.
+		/// P is the number of proxies the user has
+		/// - Base weight: 19.87 + .141 * P µs
+		/// - DB weight: 1 storage read.
 		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
-			(di.weight.saturating_add(T::DbWeight::get().reads_writes(1, 0) + 3_000_000), di.class)
+			(T::DbWeight::get().reads(1)
+				.saturating_add(di.weight)
+				.saturating_add(20 * WEIGHT_PER_MICROS)
+				.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
+			di.class)
 		}]
 		fn proxy(origin,
 			real: T::AccountId,
