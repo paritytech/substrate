@@ -121,6 +121,7 @@ pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
+			Call::System(_) => true,
 			Call::Balances(_) => true,
 			_ => false,
 		}

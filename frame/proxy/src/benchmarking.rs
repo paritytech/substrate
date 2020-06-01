@@ -22,7 +22,7 @@
 use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::{Saturating, Bounded};
+use sp_runtime::traits::Bounded;
 use crate::Module as Proxy;
 
 const SEED: u32 = 0;
@@ -42,13 +42,32 @@ fn add_proxies<T: Trait>(n: u32) -> Result<(), &'static str> {
 
 benchmarks! {
 	_ {
-		let p in 0 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p)?;
+		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p)?;
 	}
+
+	proxy {
+		let p in ...;
+		// In this case the caller is the "target" proxy
+		let caller: T::AccountId = account("target", p - 1, SEED);
+		// ... and "real" is the traditional caller. This is not a typo.
+		let real: T::AccountId = account("caller", 0, SEED);
+		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 
 	add_proxy {
 		let p in ...;
 		let caller: T::AccountId = account("caller", 0, SEED);
-	}: _(RawOrigin::Signed(caller), account("target", 999, SEED), T::ProxyType::default())
+	}: _(RawOrigin::Signed(caller), account("target", T::MaxProxies::get().into(), SEED), T::ProxyType::default())
+
+	remove_proxy {
+		let p in ...;
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: _(RawOrigin::Signed(caller), account("target", 0, SEED), T::ProxyType::default())
+
+	remove_proxies {
+		let p in ...;
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: _(RawOrigin::Signed(caller))
 }
 
 #[cfg(test)]
@@ -60,7 +79,10 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_proxy::<Test>());
 			assert_ok!(test_benchmark_add_proxy::<Test>());
+			assert_ok!(test_benchmark_remove_proxy::<Test>());
+			assert_ok!(test_benchmark_remove_proxies::<Test>());
 		});
 	}
 }
