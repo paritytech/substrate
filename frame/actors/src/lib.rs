@@ -25,10 +25,12 @@ use sp_std::prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 use sp_core::H256;
 use sp_runtime::RuntimeDebug;
-use frame_support::{decl_module, decl_storage, decl_event};
+use frame_support::{decl_module, decl_storage, decl_event, traits::Get};
 use frame_system as system;
 
 mod exec;
+
+pub type StorageKey = [u8; 32];
 
 /// Account ID type from actors pallet's point of view.
 pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
@@ -59,7 +61,7 @@ pub struct ActorInfo<A, B> {
 	/// Code of the actor.
 	pub code: Vec<u8>,
 	/// Storage values of the actor.
-	pub storage: BTreeMap<H256, Vec<u8>>,
+	pub storage: BTreeMap<StorageKey, Vec<u8>>,
 	/// Incoming messages to the actor.
 	pub messages: Vec<Message<A, B>>,
 }
@@ -68,6 +70,8 @@ pub struct ActorInfo<A, B> {
 pub trait Trait: pallet_balances::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	/// Max value size of storage.
+	type MaxValueSize: Get<u32>;
 }
 
 decl_storage! {

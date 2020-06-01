@@ -3,7 +3,7 @@ pub mod env_def;
 
 use codec::Decode;
 use sp_core::H256;
-use crate::{Trait, MessageFor, exec::StorageKey};
+use crate::{Trait, MessageFor, StorageKey};
 
 /// An interface that provides access to the external environment in which the
 /// actor is executed.
@@ -17,10 +17,10 @@ pub trait Ext {
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>>;
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted. Returns an Err if the value size is too large.
-	fn set_storage(&self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
 	/// Send a new message to other actors. Returns an Err if the fund cannot be paid by the current
 	/// actor or if the message payload is too large.
-	fn send_message(&self, message: MessageFor<Self::T>) -> Result<(), &'static str>;
+	fn send_message(&mut self, message: MessageFor<Self::T>) -> Result<(), &'static str>;
 	/// Get the message that the process function is currently operating on.
 	fn get_message(&self) -> MessageFor<Self::T>;
 	/// Returns the maximum allowed size of a storage item.
