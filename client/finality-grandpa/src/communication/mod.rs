@@ -682,9 +682,9 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 				public.clone(),
 				self.round,
 				self.set_id,
-			).map_err(|_| {
+			).ok_or(
 				Error::Signing("Signing failed".to_owned())
-			})?;
+			)?;
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
 				message: signed.clone(),

@@ -378,7 +378,7 @@ pub fn sign_message<H, N>(
 	public: AuthorityId,
 	round: RoundNumber,
 	set_id: SetId,
-) -> Result<grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>, ()>
+) -> Option<grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>>
 where
 	H: Encode,
 	N: Encode,
@@ -389,11 +389,11 @@ where
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = keystore.read()
 		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
-		.map_err(|_| ())?
+		.ok()?
 		.try_into()
-		.map_err(|_| ())?;
+		.ok()?;
 
-	Ok(grandpa::SignedMessage {
+	Some(grandpa::SignedMessage {
 		message,
 		signature,
 		id: public,
