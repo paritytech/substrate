@@ -57,6 +57,7 @@ use cfg_if::cfg_if;
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
 use frame_utils::{SignedExtensionProvider, IndexFor};
 use sp_runtime::generic::Era;
+use sp_runtime::traits::SignedExtension;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
@@ -424,11 +425,17 @@ impl SignedExtensionProvider for Runtime {
 		frame_system::CheckEra<Runtime>,
 	);
 
-	fn construct_extras(_index: IndexFor<Self>) -> Self::Extra {
+	fn construct_extras(_index: IndexFor<Self>, era: Era, _genesis: Option<Hash>) -> (
+		Self::Extra,
+		Option<<Self::Extra as SignedExtension>::AdditionalSigned>
+	) {
 		(
-			frame_system::CheckTxVersion::new(),
-			frame_system::CheckGenesis::new(),
-			frame_system::CheckEra::from(Era::Immortal),
+			(
+				frame_system::CheckTxVersion::new(),
+				frame_system::CheckGenesis::new(),
+				frame_system::CheckEra::from(era)
+			),
+			None
 		)
 	}
 }

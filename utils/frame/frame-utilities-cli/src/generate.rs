@@ -73,7 +73,7 @@ impl GenerateCmd {
 			self.crypto_scheme.scheme,
 			print_from_uri(
 				mnemonic.phrase(),
-				Some(password.as_str()),
+				password.as_ref().map(String::as_str),
 				maybe_network,
 				output
 			)

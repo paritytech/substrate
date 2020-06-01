@@ -66,7 +66,7 @@ impl SignCmd {
 
 		let signature = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			sign(&suri, &password, message)
+			sign(&suri, password.as_ref().map(String::as_str), message)
 		)?;
 
 		println!("{}", signature);
@@ -84,7 +84,7 @@ impl CliConfiguration for SignCmd {
 	}
 }
 
-fn sign<P: sp_core::Pair>(suri: &str, password: &str, message: Vec<u8>) ->  error::Result<String> {
+fn sign<P: sp_core::Pair>(suri: &str, password: Option<&str>, message: Vec<u8>) ->  error::Result<String> {
 	let pair = pair_from_suri::<P>(suri, password);
 	Ok(format!("{}", hex::encode(pair.sign(&message))))
 }

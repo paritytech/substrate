@@ -826,6 +826,7 @@ pub trait ServiceBuilderCommand {
 	type Block: BlockT;
 	/// Native execution dispatch required by some commands.
 	type NativeDispatch: NativeExecutionDispatch + 'static;
+
 	/// Starts the process of importing blocks.
 	fn import_blocks(
 		self,

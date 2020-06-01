@@ -21,7 +21,6 @@ use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList};
 use grandpa::fg_primitives;
-use frame_utils::SignedExtensionProvider;
 use sp_version::RuntimeVersion;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -411,21 +410,5 @@ impl_runtime_apis! {
 			// with no values).
 			None
 		}
-	}
-}
-
-impl SignedExtensionProvider for Runtime {
-	type Extra = SignedExtra;
-
-	fn construct_extras(index: Index) -> Self::Extra {
-		(
-			system::CheckSpecVersion::new(),
-			system::CheckTxVersion::new(),
-			system::CheckGenesis::new(),
-			system::CheckEra::from(generic::Era::Immortal),
-			system::CheckNonce::from(index),
-			system::CheckWeight::new(),
-			transaction_payment::ChargeTransactionPayment::from(0),
-		)
 	}
 }

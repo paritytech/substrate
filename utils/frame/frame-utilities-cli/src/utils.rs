@@ -16,37 +16,51 @@
 // limitations under the License.
 
 use sp_runtime::{
-	MultiSigner, AccountId32, 
-	traits::IdentifyAccount,
 	generic::{UncheckedExtrinsic, SignedPayload},
+	MultiSigner, AccountId32, traits::IdentifyAccount, MultiSignature,
 };
 use codec::Encode;
-use frame_utils::{SignedExtensionProvider, IndexFor};
+use frame_utils::{SignedExtensionProvider, IndexFor, AddressFor, AccountIdFor};
+use sp_runtime::generic::Era;
 
 /// create an extrinsic for the runtime.
 pub fn create_extrinsic_for<Pair, P, Call>(
 	call: Call,
 	nonce:  IndexFor<P>,
-	signer: Pair,
-) -> Result<UncheckedExtrinsic<AccountId32, Call, Pair::Signature, P::Extra>, &'static str>
+	pair: Pair,
+	genesis: P::Hash,
+) -> Result<
+		UncheckedExtrinsic<AddressFor<P>, Call, MultiSignature, P::Extra>,
+		&'static str
+	>
 	where
 		Call: Encode,
 		Pair: sp_core::Pair,
 		Pair::Public: Into<MultiSigner>,
-		Pair::Signature: Encode,
-		P: SignedExtensionProvider,
+		Pair::Signature: Into<MultiSignature>,
+		P: SignedExtensionProvider + pallet_indices::Trait,
+		AccountIdFor<P>: From<AccountId32>,
+		AddressFor<P>: From<AccountIdFor<P>>,
 {
-	let extra = P::construct_extras(nonce);
-	let payload = SignedPayload::new(call, extra)
-		.map_err(|_| "Transaction validity error")?;
+	let (extra, additional) = P::construct_extras(nonce, Era::Immortal, Some(genesis));
 
-	let signature = payload.using_encoded(|payload| signer.sign(payload));
-	let signer = signer.public().into().into_account();
+	let payload = if let Some(additional_signed) = additional {
+		SignedPayload::from_raw(call, extra, additional_signed)
+	} else {
+		SignedPayload::new(call, extra)
+			.map_err(|_| "Transaction validity error")?
+	};
+
+	let signer = pair.public().into().into_account();
+	let account_id: AccountIdFor<P> = From::from(signer.clone());
+	let address = AddressFor::<P>::from(account_id);
+
+	let signature = payload.using_encoded(|payload| pair.sign(payload).into());
 	let (function, extra, _) = payload.deconstruct();
 
 	Ok(UncheckedExtrinsic::new_signed(
 		function,
-		signer,
+		address,
 		signature,
 		extra,
 	))

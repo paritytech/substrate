@@ -24,11 +24,12 @@ use sc_cli::{
 use structopt::StructOpt;
 use codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Debug};
-use sp_runtime::MultiSigner;
-use frame_utils::{SignedExtensionProvider, IndexFor, CallFor};
+use sp_runtime::{MultiSigner, MultiSignature, AccountId32};
+use frame_utils::{SignedExtensionProvider, IndexFor, CallFor, AccountIdFor, AddressFor};
 use crate::utils::create_extrinsic_for;
+use sp_core::hexdisplay::HexDisplay;
 
-type Call = Vec<u8>;
+type Bytes = Vec<u8>;
 
 /// The `sign-transaction` command
 #[derive(Debug, StructOpt, Clone)]
@@ -46,9 +47,13 @@ pub struct SignTransactionCmd {
 	#[structopt(long)]
 	nonce: GenericNumber,
 
+	/// genesis hash, for signed extensions.
+	#[structopt(long, parse(try_from_str = decode_hex))]
+	genesis: Bytes,
+
 	/// The call, hex-encoded.
 	#[structopt(long, parse(try_from_str = decode_hex))]
-	call: Call,
+	call: Bytes,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -67,16 +72,21 @@ impl SignTransactionCmd {
 	/// Run the command
 	pub fn run<P>(&self) -> Result<(), Error>
 		where
-			P: SignedExtensionProvider,
+			P: SignedExtensionProvider + pallet_indices::Trait,
 			<IndexFor<P> as FromStr>::Err: Debug,
+			AccountIdFor<P>: From<AccountId32>,
+			AddressFor<P>: From<AccountIdFor<P>>,
 			CallFor<P>: Codec,
 	{
-
 		let nonce = self.nonce.parse::<IndexFor<P>>()?;
+		let genesis = <P::Hash as Decode>::decode(&mut &self.genesis[..])?;
 		let call = CallFor::<P>::decode(&mut &self.call[..])?;
-		let pass = self.keystore_params.read_password()?;
+		let password = self.keystore_params.read_password()?;
 
-		with_crypto_scheme!(self.crypto_scheme.scheme, print_ext<P>(&self.suri, &pass, call, nonce))
+		with_crypto_scheme!(
+			self.crypto_scheme.scheme,
+			print_ext<P>(&self.suri, password.as_ref().map(String::as_str), call, nonce, genesis)
+		)
 	}
 }
 
@@ -92,16 +102,24 @@ impl CliConfiguration for SignTransactionCmd {
 }
 
 
-fn print_ext<Pair, P>(uri: &str, pass: &str, call: CallFor<P>, nonce: IndexFor<P>) -> Result<(), Error>
+fn print_ext<Pair, P>(
+	uri: &str,
+	pass: Option<&str>,
+	call: CallFor<P>,
+	nonce: IndexFor<P>,
+	genesis: P::Hash
+) -> Result<(), Error>
 	where
 		Pair: sp_core::Pair,
 		Pair::Public: Into<MultiSigner>,
-		Pair::Signature: Encode,
-		P: SignedExtensionProvider,
+		Pair::Signature: Into<MultiSignature>,
+		P: SignedExtensionProvider + pallet_indices::Trait,
+		AccountIdFor<P>: From<AccountId32>,
+		AddressFor<P>: From<AccountIdFor<P>>,
 		CallFor<P>: Codec,
 {
 	let signer = pair_from_suri::<Pair>(uri, pass);
-	let extrinsic = create_extrinsic_for::<Pair, P, CallFor<P>>(call, nonce, signer)?;
-	println!("0x{}", hex::encode(Encode::encode(&extrinsic)));
+	let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, genesis)?;
+	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
 	Ok(())
 }

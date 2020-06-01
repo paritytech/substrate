@@ -45,10 +45,7 @@ use sp_runtime::{
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
-use sp_runtime::traits::{
-	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
-	ConvertInto, OpaqueKeys, NumberFor, Saturating,
-};
+use sp_runtime::traits::{self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion, ConvertInto, OpaqueKeys, NumberFor, Saturating, SignedExtension};
 use frame_utils::{SignedExtensionProvider, IndexFor};
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
@@ -80,6 +77,7 @@ use impls::{CurrencyToVoteHandler, Author, TargetedFeeAdjustment};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
+use sp_runtime::generic::Era;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -536,28 +534,34 @@ parameter_types! {
 impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
 
-	fn construct_extras(index: IndexFor<Self>) -> Self::Extra {
-		// take the biggest period possible.
-		let period = BlockHashCount::get()
-			.checked_next_power_of_two()
-			.map(|c| c / 2)
-			.unwrap_or(2) as u64;
-		let current_block = System::block_number()
-			.saturated_into::<u64>()
-			// The `System::block_number` is initialized with `n+1`,
-			// so the actual block number is `n`.
-			.saturating_sub(1);
+	fn construct_extras(index: IndexFor<Self>, era: Era, genesis: Option<Hash>) -> (
+		Self::Extra,
+		Option<<Self::Extra as SignedExtension>::AdditionalSigned>
+	) {
 		let tip = 0;
-
 		(
-			frame_system::CheckSpecVersion::<Runtime>::new(),
-			frame_system::CheckTxVersion::<Runtime>::new(),
-			frame_system::CheckGenesis::<Runtime>::new(),
-			frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(period, current_block)),
-			frame_system::CheckNonce::<Runtime>::from(index),
-			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-			pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
+			(
+				frame_system::CheckSpecVersion::<Runtime>::new(),
+				frame_system::CheckTxVersion::<Runtime>::new(),
+				frame_system::CheckGenesis::<Runtime>::new(),
+				frame_system::CheckEra::<Runtime>::from(era),
+				frame_system::CheckNonce::<Runtime>::from(index),
+				frame_system::CheckWeight::<Runtime>::new(),
+				pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+				pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
+			),
+			genesis.map(|genesis| {
+				(
+					VERSION.spec_version,
+					VERSION.transaction_version,
+					genesis,
+					genesis,
+					(),
+					(),
+					(),
+					(),
+				)
+			})
 		)
 	}
 }
@@ -572,13 +576,31 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		account: AccountId,
 		nonce: Index,
 	) -> Option<(Call, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
-		let extra = Runtime::construct_extras(nonce);
-		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
-			debug::warn!("Unable to create signed payload: {:?}", e);
-		}).ok()?;
-		let signature = raw_payload.using_encoded(|payload| {
-			C::sign(payload, public)
-		})?;
+		// take the biggest period possible.
+		let period = BlockHashCount::get()
+			.checked_next_power_of_two()
+			.map(|c| c / 2)
+			.unwrap_or(2) as u64;
+		let current_block = System::block_number()
+			.saturated_into::<u64>()
+			// The `System::block_number` is initialized with `n+1`,
+			// so the actual block number is `n`.
+			.saturating_sub(1);
+		let era = Era::mortal(period, current_block);
+		let (extra, additional) = Runtime::construct_extras(nonce, era, None);
+		let raw_payload = if let Some(additional_signed) = additional {
+			SignedPayload::from_raw(call, extra, additional_signed)
+		} else {
+			SignedPayload::new(call, extra)
+				.map_err(|e| {
+					debug::warn!("Unable to create signed payload: {:?}", e);
+				})
+				.ok()?
+		};
+		let signature = raw_payload
+			.using_encoded(|payload| {
+				C::sign(payload, public)
+			})?;
 		let address = Indices::unlookup(account);
 		let (call, extra, _) = raw_payload.deconstruct();
 		Some((call, (address, signature.into(), extra)))

@@ -1604,6 +1604,7 @@ dependencies = [
  "jsonrpc-core-client",
  "libp2p 0.18.1",
  "pallet-balances",
+ "pallet-indices",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",

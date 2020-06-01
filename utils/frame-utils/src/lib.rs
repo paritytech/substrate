@@ -21,6 +21,7 @@
 
 use sp_runtime::traits::{StaticLookup, SignedExtension};
 pub use pallet_balances::Call as BalancesCall;
+use sp_runtime::generic::Era;
 
 /// AccountIndex type for Runtime
 pub type IndexFor<R> = <R as frame_system::Trait>::Index;
@@ -76,7 +77,10 @@ pub trait SignedExtensionProvider: frame_system::Trait {
     /// Concrete SignedExtension type.
     type Extra: SignedExtension;
 
-    /// build extras for inclusion in extrinsics
-    fn construct_extras(nonce: IndexFor<Self>) -> Self::Extra;
+    /// construct extras and optionally additional_signed data for inclusion in extrinsics.
+    fn construct_extras(nonce: IndexFor<Self>, era: Era, genesis: Option<Self::Hash>) -> (
+        Self::Extra,
+        Option<<Self::Extra as SignedExtension>::AdditionalSigned>
+    );
 }
 
