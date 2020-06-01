@@ -27,13 +27,17 @@
 //! queues to be instantiated simply.
 
 use std::collections::HashMap;
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
-use crate::error::Error as ConsensusError;
-use crate::block_import::{
-	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
-	BlockCheckParams, FinalityProofImport,
-};
 
+use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
+
+use crate::{
+	error::Error as ConsensusError,
+	block_import::{
+		BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
+		BlockCheckParams, FinalityProofImport,
+	},
+	metrics::Metrics,
+};
 pub use basic_queue::BasicQueue;
 
 mod basic_queue;
@@ -187,6 +191,17 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	block: IncomingBlock<B>,
 	verifier: &mut V,
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
+	import_single_block_metered(import_handle, block_origin, block, verifier, None)
+}
+
+/// Single block import function with metering.
+pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction>(
+	import_handle: &mut dyn BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+	block_origin: BlockOrigin,
+	block: IncomingBlock<B>,
+	verifier: &mut V,
+	metrics: Option<Metrics>,
+) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
 	let peer = block.origin;
 
 	let (header, justification) = match (block.header, block.justification) {
@@ -207,8 +222,8 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	let hash = header.hash();
 	let parent_hash = header.parent_hash().clone();
 
-	let import_error = |e| {
-		match e {
+	let import_handler = |import| {
+		match import {
 			Ok(ImportResult::AlreadyInChain) => {
 				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 				Ok(BlockImportResult::ImportedKnown(number))
@@ -232,7 +247,8 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 			}
 		}
 	};
-	match import_error(import_handle.check_block(BlockCheckParams {
+
+	match import_handler(import_handle.check_block(BlockCheckParams {
 		hash,
 		number,
 		parent_hash,
@@ -243,6 +259,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
+	let started = std::time::Instant::now();
 	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {
@@ -250,8 +267,15 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 			} else {
 				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
 			}
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.report_verification(false, started.elapsed());
+			}
 			BlockImportError::VerificationFailed(peer.clone(), msg)
 		})?;
+
+	if let Some(metrics) = metrics.as_ref() {
+		metrics.report_verification(true, started.elapsed());
+	}
 
 	let mut cache = HashMap::new();
 	if let Some(keys) = maybe_keys {
@@ -259,5 +283,5 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	}
 	import_block.allow_missing_state = block.allow_missing_state;
 
-	import_error(import_handle.import_block(import_block.convert_transaction(), cache))
+	import_handler(import_handle.import_block(import_block.convert_transaction(), cache))
 }
