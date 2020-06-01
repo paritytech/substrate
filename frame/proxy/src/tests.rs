@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Tests for Utility Pallet
+// Tests for Proxy Pallet
 
 #![cfg(test)]
 
@@ -45,7 +45,7 @@ impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		frame_system::System,
 		pallet_balances::Balances,
-		proxy::Utility,
+		proxy::Proxy,
 	}
 }
 
@@ -139,7 +139,7 @@ impl Trait for Test {
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
-type Utility = Module<Test>;
+type Proxy = Module<Test>;
 
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
@@ -165,19 +165,19 @@ fn expect_event<E: Into<TestEvent>>(e: E) {
 #[test]
 fn add_remove_proxies_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::Any));
-		assert_noop!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::Any), Error::<Test>::Duplicate);
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::Any));
+		assert_noop!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::Any), Error::<Test>::Duplicate);
 		assert_eq!(Balances::reserved_balance(1), 2);
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
 		assert_eq!(Balances::reserved_balance(1), 3);
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 3, ProxyType::Any));
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 4);
-		assert_noop!(Utility::add_proxy(Origin::signed(1), 4, ProxyType::Any), Error::<Test>::TooMany);
-		assert_ok!(Utility::remove_proxy(Origin::signed(1), 3, ProxyType::Any));
+		assert_noop!(Proxy::add_proxy(Origin::signed(1), 4, ProxyType::Any), Error::<Test>::TooMany);
+		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 3);
-		assert_ok!(Utility::remove_proxy(Origin::signed(1), 2, ProxyType::Any));
+		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 2);
-		assert_ok!(Utility::remove_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
+		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }
@@ -185,10 +185,10 @@ fn add_remove_proxies_works() {
 #[test]
 fn cannot_add_proxy_without_balance() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::add_proxy(Origin::signed(5), 3, ProxyType::Any));
+		assert_ok!(Proxy::add_proxy(Origin::signed(5), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(5), 2);
 		assert_noop!(
-			Utility::add_proxy(Origin::signed(5), 4, ProxyType::Any),
+			Proxy::add_proxy(Origin::signed(5), 4, ProxyType::Any),
 			BalancesError::<Test, _>::InsufficientBalance
 		);
 	});
@@ -197,19 +197,19 @@ fn cannot_add_proxy_without_balance() {
 #[test]
 fn proxying_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
-		assert_ok!(Utility::add_proxy(Origin::signed(1), 3, ProxyType::Any));
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer));
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any));
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
-		assert_noop!(Utility::proxy(Origin::signed(4), 1, None, call.clone()), Error::<Test>::NotProxy);
-		assert_noop!(Utility::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()), Error::<Test>::NotProxy);
-		assert_ok!(Utility::proxy(Origin::signed(2), 1, None, call.clone()));
+		assert_noop!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()), Error::<Test>::NotProxy);
+		assert_noop!(Proxy::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()), Error::<Test>::NotProxy);
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(Event::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 1);
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
-		assert_noop!(Utility::proxy(Origin::signed(2), 1, None, call.clone()), Error::<Test>::Unproxyable);
-		assert_ok!(Utility::proxy(Origin::signed(3), 1, None, call.clone()));
+		assert_noop!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()), Error::<Test>::Unproxyable);
+		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
 		expect_event(Event::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 2);
 	});

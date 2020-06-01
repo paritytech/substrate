@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Benchmarks for Utility Pallet
+// Benchmarks for Proxy Pallet
 
 #![cfg(feature = "runtime-benchmarks")]
 

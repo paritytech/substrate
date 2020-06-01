@@ -19,7 +19,7 @@
 //! A module allowing accounts to give permission to other accounts to dispatch types of calls from
 //! their signed origin.
 //!
-//! - [`utility::Trait`](./trait.Trait.html)
+//! - [`proxy::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
