@@ -683,7 +683,9 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 				self.round,
 				self.set_id,
 			).ok_or(
-				Error::Signing("Signing failed".to_owned())
+				Error::Signing(format!(
+					"Failed to sign GRANDPA vote for round {} targetting {:?}", self.round, target_hash
+				))
 			)?;
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
