@@ -33,7 +33,7 @@ use rpc::futures::{
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
 use sc_rpc_api::DenyUnsafe;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::{SubscriptionManager, NumericIdProvider}};
 use codec::{Encode, Decode};
 use sp_core::{Bytes, traits::BareCryptoStorePtr};
 use sp_api::ProvideRuntimeApi;
@@ -80,7 +80,6 @@ impl<P, Client> Author<P, Client> {
 		}
 	}
 }
-
 
 /// Currently we treat all RPC transactions as externals.
 ///

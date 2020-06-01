@@ -81,7 +81,7 @@ impl TestSetup {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
-			subscriptions: Subscriptions::new(Arc::new(crate::testing::TaskExecutor)),
+			subscriptions: SubscriptionManager::new(Arc::new(crate::testing::TaskExecutor)),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
 		}
@@ -134,7 +134,11 @@ fn should_watch_extrinsic() {
 	);
 
 	// then
-	assert_eq!(executor::block_on(id_rx.compat()), Ok(Ok(1.into())));
+	assert!(matches!(
+		executor::block_on(id_rx.compat()),
+		Ok(Ok(SubscriptionId::String(_)))
+	));
+
 	// check notifications
 	let replacement = {
 		let tx = Transfer {
