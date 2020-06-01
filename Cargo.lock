@@ -3913,15 +3913,16 @@ dependencies = [
 name = "pallet-actors"
 version = "2.0.0-rc2"
 dependencies = [
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
  "parity-scale-codec",
+ "parity-wasm 0.41.0",
  "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-sandbox",
  "sp-std",
 ]
 
