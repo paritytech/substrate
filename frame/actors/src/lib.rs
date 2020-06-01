@@ -29,6 +29,7 @@ use sp_arithmetic::traits::Zero;
 use frame_support::{
 	decl_module, decl_storage, decl_event, dispatch::DispatchResult,
 	traits::{Get, Currency, ReservableCurrency},
+	storage::IterableStorageMap,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -132,6 +133,12 @@ decl_module! {
 			});
 
 			Ok(())
+		}
+
+		fn on_finalize() {
+			for (account_id, _) in ActorInfoOf::<T>::iter() {
+				while Self::process_one(account_id.clone()) { }
+			}
 		}
 	}
 }
