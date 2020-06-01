@@ -50,7 +50,7 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::{
 	collections::HashMap,
 	io::{Read, Write, Seek},
-	marker::PhantomData, sync::{Arc, atomic::Ordering}, pin::Pin
+	marker::PhantomData, sync::Arc, pin::Pin
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};

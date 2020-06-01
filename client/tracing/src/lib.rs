@@ -42,8 +42,10 @@ use tracing_core::{
 };
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-
 use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+
+const ZERO_DURATION: Duration = Duration::from_nanos(0);
+const PROXY_TARGET: &'static str = "sp_tracing::proxy";
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -60,20 +62,26 @@ impl Default for TracingReceiver {
 	}
 }
 
-#[derive(Debug)]
-struct SpanDatum {
-	id: u64,
-	name: String,
-	target: String,
-	level: Level,
-	line: u32,
-	start_time: Instant,
-	overall_time: Duration,
-	values: Visitor,
+pub trait TraceHandler {
+	fn process_span(&self, span: SpanDatum);
 }
 
+/// Represents a single instance of a tracing span
+#[derive(Debug)]
+pub struct SpanDatum {
+	pub id: u64,
+	pub name: String,
+	pub target: String,
+	pub level: Level,
+	pub line: u32,
+	pub start_time: Instant,
+	pub overall_time: Duration,
+	pub values: Visitor,
+}
+
+/// Holds associated values for a tracing span
 #[derive(Clone, Debug)]
-struct Visitor(FxHashMap<String, String>);
+pub struct Visitor(FxHashMap<String, String>);
 
 impl Visit for Visitor {
 	fn record_i64(&mut self, field: &Field, value: i64) {
@@ -141,7 +149,7 @@ impl Value for Visitor {
 pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	targets: Vec<(String, Level)>,
-	receiver: TracingReceiver,
+	trace_handler: Box<dyn TraceHandler + Send + Sync>,
 	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
 }
 
@@ -149,12 +157,20 @@ impl ProfilingSubscriber {
 	/// Takes a `Receiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace"
 	/// or without: "pallet".
-	pub fn new(receiver: TracingReceiver, targets: &str) -> Self {
+	pub fn new(receiver: TracingReceiver, targets: &str) -> ProfilingSubscriber {
+		match receiver {
+			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets),
+			TracingReceiver::Telemetry => Self::new_with_handler(Box::new(TelemetryTraceHandler), targets),
+		}
+	}
+
+	/// Allows use of a custom TraceHandler to create a new instance of ProfilingSubscriber
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler + Send + Sync>, targets: &str) -> ProfilingSubscriber {
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
 			next_id: AtomicU64::new(1),
 			targets,
-			receiver,
+			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
 		}
 	}
@@ -162,11 +178,9 @@ impl ProfilingSubscriber {
 	fn check_target(&self, target: &str, level: &Level) -> bool {
 		for t in &self.targets {
 			if target.starts_with(t.0.as_str()) && level <= &t.1 {
-				log::debug!(target: "tracing", "Enabled target: {}, level: {}", target, level);
 				return true;
 			}
 		}
-		log::debug!(target: "tracing", "Disabled target: {}, level: {}", target, level);
 		false
 	}
 }
@@ -190,7 +204,13 @@ fn parse_target(s: &str) -> (String, Level) {
 
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		metadata.target() == WASM_TARGET_KEY || self.check_target(metadata.target(), metadata.level())
+		if metadata.target() == PROXY_TARGET || self.check_target(metadata.target(), metadata.level()) {
+			log::debug!(target: "tracing", "Enabled target: {}, level: {}", metadata.target(), metadata.level());
+			true
+		} else {
+			log::debug!(target: "tracing", "Disabled target: {}, level: {}", metadata.target(), metadata.level());
+			false
+		}
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
@@ -210,7 +230,7 @@ impl Subscriber for ProfilingSubscriber {
 			level: attrs.metadata().level().clone(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
-			overall_time: Duration::from_nanos(0),
+			overall_time: ZERO_DURATION,
 			values,
 		};
 		self.span_data.lock().insert(id, span_datum);
@@ -258,32 +278,29 @@ impl Subscriber for ProfilingSubscriber {
 					span_datum.target = t;
 				}
 			}
-			self.send_span(span_datum);
+			if self.check_target(&span_datum.target, &span_datum.level) {
+				self.trace_handler.process_span(span_datum);
+			}
 		};
 		true
 	}
 }
 
-impl ProfilingSubscriber {
-	fn send_span(&self, span_datum: SpanDatum) {
-		match self.receiver {
-			TracingReceiver::Log => print_log(span_datum),
-			TracingReceiver::Telemetry => send_telemetry(span_datum),
-		}
-	}
-}
+/// TraceHandler for sending span data to the logger
+pub struct LogTraceHandler;
 
-fn print_log(span_datum: SpanDatum) {
-	if span_datum.values.0.is_empty() {
-		log::info!("TRACING: {} {}: {}, line: {}, time: {}",
+impl TraceHandler for LogTraceHandler {
+	fn process_span(&self, span_datum: SpanDatum) {
+		if span_datum.values.0.is_empty() {
+			log::info!("TRACING: {} {}: {}, line: {}, time: {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
 			span_datum.line,
 			span_datum.overall_time.as_nanos(),
 		);
-	} else {
-		log::info!("TRACING: {} {}: {}, line: {}, time: {}, {}",
+		} else {
+			log::info!("TRACING: {} {}: {}, line: {}, time: {}, {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
@@ -291,15 +308,25 @@ fn print_log(span_datum: SpanDatum) {
 			span_datum.overall_time.as_nanos(),
 			span_datum.values
 		);
+		}
 	}
 }
 
-fn send_telemetry(span_datum: SpanDatum) {
-	telemetry!(SUBSTRATE_INFO; "tracing.profiling";
+/// TraceHandler for sending span data to telemetry,
+/// Please see telemetry documentation for details on how to specify endpoints and
+/// set the required telemetry level to activate tracing messages
+pub struct TelemetryTraceHandler;
+
+impl TraceHandler for TelemetryTraceHandler {
+	fn process_span(&self, span_datum: SpanDatum) {
+		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
 		"name" => span_datum.name,
 		"target" => span_datum.target,
 		"line" => span_datum.line,
 		"time" => span_datum.overall_time.as_nanos(),
 		"values" => span_datum.values
-	);
+		);
+	}
 }
+
+

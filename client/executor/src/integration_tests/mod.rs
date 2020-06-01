@@ -658,3 +658,76 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		t.join().unwrap();
 	}
 }
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
+
+	use tracing::subscriber::set_global_default;
+	use std::sync::{Arc, Mutex};
+
+	struct TestTraceHandler(Arc<Mutex<Vec<(String,String)>>>);
+
+	impl sc_tracing::TraceHandler for TestTraceHandler {
+		fn process_span(&self, sd: sc_tracing::SpanDatum) {
+			println!("{:?}",sd);
+			self.0.lock().unwrap().push((sd.target, sd.name));
+		}
+	}
+
+	let traces = Arc::new(Mutex::new(Vec::new()));
+	let handler = TestTraceHandler(traces.clone());
+
+
+	let test_subscriber = sc_tracing::ProfilingSubscriber::new_with_handler(
+		Box::new(handler), "integration_test_span_target");
+
+	assert!(set_global_default(test_subscriber).is_ok());
+
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	// Test tracing disabled
+	assert!(!sp_tracing::wasm_tracing_enabled());
+
+	assert_eq!(
+		call_in_wasm(
+			"test_enter_span",
+			&[],
+			wasm_method,
+			&mut ext,
+		).unwrap(),
+		0u64.encode(),
+	);
+	let len = traces.lock().unwrap().len();
+	assert_eq!(len, 0);
+
+	// Test tracing enabled
+	sp_tracing::set_wasm_tracing(true);
+
+	assert_eq!(
+		call_in_wasm(
+			"test_enter_span",
+			&[],
+			wasm_method,
+			&mut ext,
+		).unwrap(),
+		1u64.encode(),
+	);
+
+	call_in_wasm(
+		"test_exit_span",
+		&[1u8,0,0,0,0,0,0,0].to_vec().encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
+	let len = traces.lock().unwrap().len();
+	assert_eq!(len, 1);
+
+	let (target, name) = traces.lock().unwrap().pop().unwrap();
+
+	assert_eq!(target, "integration_test_span_target");
+	assert_eq!(name, "integration_test_span_name_wasm");
+
+}
