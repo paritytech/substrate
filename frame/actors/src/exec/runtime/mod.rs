@@ -1,7 +1,7 @@
 #[macro_use]
 pub mod env_def;
 
-use codec::Decode;
+use codec::{Encode, Decode};
 use sp_core::H256;
 use crate::{Trait, AccountIdFor, BalanceFor, MessageFor, StorageKey};
 
@@ -188,5 +188,46 @@ define_env!(
 		let value = Some(ctx.read_sandbox_memory(value_ptr, value_len)?);
 		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
 		Ok(())
+	},
+
+	// Retrieve the value under the given key from the storage and return 0.
+	// If there is no entry under the given key then this function will return 1 and
+	// clear the scratch buffer.
+	//
+	// - key_ptr: pointer into the linear memory where the key
+	//   of the requested value is placed.
+	ext_get_storage(ctx: &mut Runtime<E>, key_ptr: u32) -> u32 => {
+		let mut key: StorageKey = [0; 32];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		if let Some(value) = ctx.ext.get_storage(&key) {
+			ctx.scratch_buf = value;
+			Ok(0)
+		} else {
+			ctx.scratch_buf.clear();
+			Ok(1)
+		}
+	},
+
+	// Retrieve the message.
+	ext_get_message(ctx: &mut Runtime<E>) -> u32 => {
+		ctx.scratch_buf = ctx.ext.get_message().encode();
+		Ok(0)
+	},
+
+	// Send a message.
+	ext_send_message(
+		ctx: &mut Runtime<E>,
+		target_ptr: u32, target_len: u32,
+		value_ptr: u32, value_len: u32,
+		data_ptr: u32, data_len: u32
+	) -> u32 => {
+		let target: AccountIdFor<E::T> = ctx.read_sandbox_memory_as(target_ptr, target_len)?;
+		let value: BalanceFor<E::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
+		let data: Vec<u8> = ctx.read_sandbox_memory_as(data_ptr, data_len)?;
+
+		match ctx.ext.send_message(target, value, data) {
+			Ok(_) => Ok(0),
+			Err(_) => Ok(1),
+		}
 	},
 );

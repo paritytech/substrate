@@ -105,12 +105,12 @@ where
 macro_rules! unmarshall_then_body_then_marshall {
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
 		let body = $crate::exec::runtime::env_def::macros::constrain_closure::<
-			<$returns as $crate::wasm::env_def::ConvertibleToWasm>::NativeType, _
+			<$returns as $crate::exec::runtime::env_def::ConvertibleToWasm>::NativeType, _
 		>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok(sp_sandbox::ReturnValue::Value({ use $crate::wasm::env_def::ConvertibleToWasm; r.to_typed_value() }))
+		return Ok(sp_sandbox::ReturnValue::Value({ use $crate::exec::runtime::env_def::ConvertibleToWasm; r.to_typed_value() }))
 	});
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::exec::runtime::env_def::macros::constrain_closure::<(), _>(|| {
