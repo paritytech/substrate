@@ -18,7 +18,7 @@ pub fn execute<E: Ext>(
 	ext: &mut E,
 	input_data: Vec<u8>,
 	memory_schedule: &MemorySchedule,
-) {
+) -> Result<(), ()> {
 	let memory = sp_sandbox::Memory::new(memory_schedule.initial, memory_schedule.maximum)
 		.unwrap_or_else(|_| {
 			// unlike `.expect`, explicit panic preserves the source location.
@@ -43,7 +43,9 @@ pub fn execute<E: Ext>(
 	);
 
 	sp_sandbox::Instance::new(code, &imports, &mut runtime)
-		.and_then(|mut instance| instance.invoke(entrypoint_name, &[], &mut runtime));
+		.and_then(|mut instance| instance.invoke(entrypoint_name, &[], &mut runtime))
+		.map(|_| ())
+		.map_err(|_| ())
 }
 
 pub struct Context<T: Trait> {
