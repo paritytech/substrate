@@ -175,7 +175,22 @@ decl_module! {
 		}
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
-		#[weight = 1_000_000]
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `proxy`: The account that the `caller` would like to make a proxy.
+		/// - `proxy_type`: The permissions allowed for this proxy account.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 17.48 + .176 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(18 * WEIGHT_PER_MICROS)
+				.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
 		fn add_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
