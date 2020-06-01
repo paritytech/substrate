@@ -25,6 +25,7 @@ use sp_std::prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 use sp_core::H256;
 use sp_runtime::RuntimeDebug;
+use sp_arithmetic::traits::Zero;
 use frame_support::{
 	decl_module, decl_storage, decl_event, dispatch::DispatchResult,
 	traits::{Get, Currency, ReservableCurrency},
@@ -136,5 +137,29 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Process one message from the target account, returns true if a message is processed, false
+	/// otherwise.
+	fn process_one(account_id: AccountIdFor<T>) -> bool {
+		let (message, code) = match ActorInfoOf::<T>::mutate(&account_id, |actor| {
+			actor.messages.pop().map(|message| (message, actor.code.clone()))
+		}) {
+			Some(val) => val,
+			None => return false,
+		};
 
+		let (imbalance, less) = T::Currency::slash_reserved(&message.source, message.value);
+		if less > Zero::zero() {
+			panic!("Runtime error: reserved fund is less than expected");
+		}
+		T::Currency::resolve_creating(&account_id, imbalance);
+
+		let mut context = exec::Context::<T>::new(account_id, message.clone());
+		exec::execute(&code, "process", &mut context, message.encode(), &exec::MemorySchedule {
+			initial: 1024,
+			maximum: None,
+		});
+
+		context.apply();
+		true
+	}
 }

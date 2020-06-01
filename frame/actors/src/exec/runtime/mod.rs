@@ -3,7 +3,7 @@ pub mod env_def;
 
 use codec::Decode;
 use sp_core::H256;
-use crate::{Trait, MessageFor, StorageKey};
+use crate::{Trait, AccountIdFor, BalanceFor, MessageFor, StorageKey};
 
 /// An interface that provides access to the external environment in which the
 /// actor is executed.
@@ -20,7 +20,12 @@ pub trait Ext {
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
 	/// Send a new message to other actors. Returns an Err if the fund cannot be paid by the current
 	/// actor or if the message payload is too large.
-	fn send_message(&mut self, message: MessageFor<Self::T>) -> Result<(), &'static str>;
+	fn send_message(
+		&mut self,
+		target: AccountIdFor<Self::T>,
+		value: BalanceFor<Self::T>,
+		data: Vec<u8>,
+	) -> Result<(), &'static str>;
 	/// Get the message that the process function is currently operating on.
 	fn get_message(&self) -> MessageFor<Self::T>;
 	/// Returns the maximum allowed size of a storage item.

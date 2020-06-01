@@ -3919,6 +3919,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "serde",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",

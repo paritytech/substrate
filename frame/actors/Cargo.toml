@@ -23,6 +23,7 @@ sp-runtime = { version = "2.0.0-rc2", default-features = false, path = "../../pr
 sp-io = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/std" }
 sp-sandbox = { version = "0.8.0-rc2", default-features = false, path = "../../primitives/sandbox" }
+sp-arithmetic = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/arithmetic" }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-rc2", path = "../../primitives/core", default-features = false }
@@ -41,4 +42,5 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"sp-sandbox/std",
+	"sp-arithmetic/std",
 ]

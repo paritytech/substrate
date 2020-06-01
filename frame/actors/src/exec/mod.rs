@@ -3,9 +3,9 @@ mod runtime;
 pub use self::runtime::Ext;
 
 use sp_std::collections::btree_map::BTreeMap;
-use frame_support::{traits::Get, storage::StorageMap};
+use frame_support::{traits::{Get, ReservableCurrency}, storage::StorageMap};
 use self::runtime::env_def::FunctionImplProvider;
-use crate::{AccountIdFor, MessageFor, ActorInfoOf, StorageKey, Trait};
+use crate::{AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait};
 
 pub struct MemorySchedule {
 	pub initial: u32,
@@ -15,7 +15,7 @@ pub struct MemorySchedule {
 pub fn execute<E: Ext>(
 	code: &[u8],
 	entrypoint_name: &'static str,
-	mut ext: E,
+	ext: &mut E,
 	input_data: Vec<u8>,
 	memory_schedule: &MemorySchedule,
 ) {
@@ -37,7 +37,7 @@ pub fn execute<E: Ext>(
 	});
 
 	let mut runtime = runtime::Runtime::new(
-		&mut ext,
+		ext,
 		input_data,
 		memory,
 	);
@@ -50,7 +50,7 @@ pub struct Context<T: Trait> {
 	account_id: AccountIdFor<T>,
 	storage_changes: BTreeMap<StorageKey, Option<Vec<u8>>>,
 	message: MessageFor<T>,
-	outgoing_messages: Vec<MessageFor<T>>,
+	outgoing_messages: Vec<(AccountIdFor<T>, MessageFor<T>)>,
 }
 
 impl<T: Trait> Context<T> {
@@ -60,6 +60,28 @@ impl<T: Trait> Context<T> {
 			storage_changes: BTreeMap::new(),
 			outgoing_messages: Vec::new(),
 			message,
+		}
+	}
+
+	pub fn apply(self) {
+		let storage_changes = self.storage_changes;
+		ActorInfoOf::<T>::mutate(self.account_id.clone(), |actor| {
+			for (key, value) in storage_changes {
+				match value {
+					Some(value) => {
+						actor.storage.insert(key, value);
+					},
+					None => {
+						actor.storage.remove(&key);
+					},
+				}
+			}
+		});
+
+		for (target, message) in self.outgoing_messages {
+			ActorInfoOf::<T>::mutate(target, |actor| {
+				actor.messages.push(message);
+			});
 		}
 	}
 }
@@ -86,12 +108,25 @@ impl<T: Trait> Ext for Context<T> {
 		Ok(())
 	}
 
-	fn send_message(&mut self, message: MessageFor<Self::T>) -> Result<(), &'static str> {
-		if message.data.len() > self.max_value_size() as usize {
+	fn send_message(
+		&mut self,
+		target: AccountIdFor<Self::T>,
+		value: BalanceFor<Self::T>,
+		data: Vec<u8>,
+	) -> Result<(), &'static str> {
+		if data.len() > self.max_value_size() as usize {
 			return Err("Message data exceeded maximum value size")
 		}
 
-		self.outgoing_messages.push(message);
+		T::Currency::reserve(&self.account_id, value).map(|_| "Reserve fund failed")?;
+
+		let message = Message {
+			source: self.account_id.clone(),
+			value,
+			data,
+		};
+
+		self.outgoing_messages.push((target, message));
 		Ok(())
 	}
 
