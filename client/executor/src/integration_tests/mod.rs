@@ -688,17 +688,19 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	// Test tracing disabled
 	assert!(!sp_tracing::wasm_tracing_enabled());
 
-	assert_eq!(
-		call_in_wasm(
+	let id = call_in_wasm(
 			"test_enter_span",
 			&[],
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		).unwrap();
+	assert_eq!(
+		id,
 		0u64.encode(),
+		"traces = {:?}", traces.lock().unwrap()
 	);
 	let len = traces.lock().unwrap().len();
-	assert_eq!(len, 0, "Len = {}, traces = {:?}", len, traces.lock().unwrap());
+	assert_eq!(len, 0);
 
 	// Test tracing enabled
 	sp_tracing::set_wasm_tracing(true);
