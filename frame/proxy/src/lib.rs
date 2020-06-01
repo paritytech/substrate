@@ -211,7 +211,22 @@ decl_module! {
 		}
 
 		/// Unregister a proxy account for the sender.
-		#[weight = 1_000_000]
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `proxy`: The account that the `caller` would like to remove as a proxy.
+		/// - `proxy_type`: The permissions currently enabled for the removed proxy account.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 14.37 + .164 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(14 * WEIGHT_PER_MICROS)
+				.saturating_add((160 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
 		fn remove_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate_exists(&who, |x| {
@@ -237,7 +252,18 @@ decl_module! {
 		}
 
 		/// Unregister all proxy accounts for the sender.
-		#[weight = 1_000_000]
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 13.73 + .129 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(14 * WEIGHT_PER_MICROS)
+				.saturating_add((130 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
 		fn remove_proxies(origin) {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
