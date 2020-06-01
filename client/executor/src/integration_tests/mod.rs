@@ -660,7 +660,6 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 }
 
 #[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use std::sync::{Arc, Mutex};
@@ -676,7 +675,6 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	let traces = Arc::new(Mutex::new(Vec::new()));
 	let handler = TestTraceHandler(traces.clone());
 
-
 	let test_subscriber = sc_tracing::ProfilingSubscriber::new_with_handler(
 		Box::new(handler), "integration_test_span_target");
 
@@ -688,16 +686,14 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	// Test tracing disabled
 	assert!(!sp_tracing::wasm_tracing_enabled());
 
-	let id = call_in_wasm(
+	assert_eq!(
+		call_in_wasm(
 			"test_enter_span",
 			&[],
 			wasm_method,
 			&mut ext,
-		).unwrap();
-	assert_eq!(
-		id,
+		).unwrap(),
 		0u64.encode(),
-		"traces = {:?}", traces.lock().unwrap()
 	);
 	let len = traces.lock().unwrap().len();
 	assert_eq!(len, 0);
@@ -729,5 +725,4 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	assert_eq!(target, "integration_test_span_target");
 	assert_eq!(name, "integration_test_span_name_wasm");
-
 }
