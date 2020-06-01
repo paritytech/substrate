@@ -1100,15 +1100,11 @@ fn is_voter(
 	match keystore {
 		Some(keystore) => voters
 			.iter()
-			.find_map(|(p, _)| {
-				let can_vote = keystore.read()
-					.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]);
-				if can_vote {
-					Some(p.clone())
-				} else {
-					None
-				}
-			}),
+			.find(|(p, _)| {
+				keystore.read()
+					.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)])
+			})
+			.map(|(p, _)| p.clone()),
 		None => None,
 	}
 }
@@ -1123,15 +1119,8 @@ fn authority_id<'a, I>(
 	match keystore {
 		Some(keystore) => {
 			authorities
-				.find_map(|p| {
-					let can_vote = keystore.read()
-						.has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]);
-					if can_vote {
-						Some(p.clone())
-					} else {
-						None
-					}
-				})
+				.find(|p| keystore.read().has_keys(&[(p.to_raw_vec(), AuthorityId::ID)]))
+				.cloned()
 		},
 		None => None,
 	}
