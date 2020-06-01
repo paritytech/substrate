@@ -201,7 +201,7 @@ fn proxying_works() {
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
 		let e = Error::<Test>::NotProxy;
-		assert_noop!(Utility::proxy(Origin::signed(4), 1, None, call.clone()), e);
+		assert_noop!(Utility::proxy(Origin::signed(4), 1, None, call.clone()), e.clone());
 		assert_noop!(Utility::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()), e);
 		assert_ok!(Utility::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(Event::ProxyExecuted(Ok(())));
