@@ -663,7 +663,6 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
-	use tracing::subscriber::set_global_default;
 	use std::sync::{Arc, Mutex};
 
 	struct TestTraceHandler(Arc<Mutex<Vec<(String,String)>>>);
@@ -681,7 +680,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	let test_subscriber = sc_tracing::ProfilingSubscriber::new_with_handler(
 		Box::new(handler), "integration_test_span_target");
 
-	assert!(set_global_default(test_subscriber).is_ok());
+	let _guard = tracing::subscriber::set_default(test_subscriber);
 
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
