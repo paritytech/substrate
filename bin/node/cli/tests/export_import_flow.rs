@@ -136,7 +136,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let _ = fs::remove_dir_all(&self.db_path);
 	}
 
-	/// Runs the `import-blocks` command, asserting that an error was found or 
+	/// Runs the `import-blocks` command, asserting that an error was found or
 	/// not depending on `expected_to_fail`.
 	fn run_import(&mut self, fmt_opt: FormatOpt, expected_to_fail: bool) {
 		let log = self.run_block_command(SubCommand::ImportBlocks, fmt_opt, expected_to_fail);

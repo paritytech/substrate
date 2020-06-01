@@ -151,7 +151,7 @@ impl BigUint {
 		// has the ability to cause this. There is nothing to do if the number already has 1
 		// limb only. call it a day and return.
 		if self.len().is_zero() { return; }
-		let index = self.digits.iter().position(|&elem| elem != 0).unwrap_or(0);
+		let index = self.digits.iter().position(|&elem| elem != 0).unwrap_or(self.len() - 1);
 
 		if index > 0 {
 			self.digits = self.digits[index..].to_vec()
@@ -581,19 +581,19 @@ pub mod tests {
 	fn strip_works() {
 		let mut a = BigUint::from_limbs(&[0, 1, 0]);
 		a.lstrip();
-		assert_eq!(a, BigUint { digits: vec![1, 0] });
+		assert_eq!(a.digits, vec![1, 0]);
 
 		let mut a = BigUint::from_limbs(&[0, 0, 1]);
 		a.lstrip();
-		assert_eq!(a, BigUint { digits: vec![1] });
+		assert_eq!(a.digits, vec![1]);
 
 		let mut a = BigUint::from_limbs(&[0, 0]);
 		a.lstrip();
-		assert_eq!(a, BigUint { digits: vec![0] });
+		assert_eq!(a.digits, vec![0]);
 
 		let mut a = BigUint::from_limbs(&[0, 0, 0]);
 		a.lstrip();
-		assert_eq!(a, BigUint { digits: vec![0] });
+		assert_eq!(a.digits, vec![0]);
 	}
 
 	#[test]

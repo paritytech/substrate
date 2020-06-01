@@ -67,6 +67,14 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		self.db.commit(tx);
 	}
 
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		let mut tx = Transaction::new();
+		tx.remove(columns::OFFCHAIN, &key);
+
+		self.db.commit(tx);
+	}
+
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.db.get(columns::OFFCHAIN, &key)
