@@ -145,6 +145,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
+/// Find the index of the Aura authority who authored the current block.
 impl<T: Trait> FindAuthor<u32> for Module<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
@@ -162,10 +163,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	}
 }
 
-/// Wraps the author-scraping logic for consensus engines that can recover
-/// the canonical index of an author. This then transforms it into the
-/// actual Aura authority Id
-pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
+struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
 
 impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	for FindAccountFromAuthorIndex<T, Inner>
@@ -180,6 +178,7 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	}
 }
 
+/// Find the authority ID of the Aura authority who authored the current block.
 pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Module<T>>;
 
 impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
