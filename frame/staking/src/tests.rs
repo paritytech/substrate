@@ -2859,7 +2859,7 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_election_flag_is_triggered() {
+	fn offchain_window_is_triggered() {
 		ExtBuilder::default()
 			.session_per_era(5)
 			.session_length(10)
@@ -2919,16 +2919,13 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_election_flag_is_triggered_when_forcing() {
+	fn offchain_window_is_triggered_when_forcing() {
 		ExtBuilder::default()
 			.session_per_era(5)
 			.session_length(10)
 			.election_lookahead(3)
 			.build()
 			.execute_with(|| {
-				run_to_block(7);
-				assert_session_era!(0, 0);
-
 				run_to_block(12);
 				ForceEra::put(Forcing::ForceNew);
 				run_to_block(13);
@@ -2936,11 +2933,90 @@ mod offchain_phragmen {
 
 				run_to_block(17); // instead of 47
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(17));
+
+				run_to_block(20);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			})
 	}
 
 	#[test]
-	fn election_on_chain_fallback_works() {
+	fn offchain_window_is_triggered_when_force_always() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(10)
+			.election_lookahead(3)
+			.build()
+			.execute_with(|| {
+
+				ForceEra::put(Forcing::ForceAlways);
+				run_to_block(16);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(17); // instead of 37
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(17));
+
+				run_to_block(20);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(26);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(27); // next one again
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(27));
+			})
+	}
+
+	#[test]
+	fn offchain_window_closes_when_forcenone() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(10)
+			.election_lookahead(3)
+			.build()
+			.execute_with(|| {
+				ForceEra::put(Forcing::ForceNone);
+
+				run_to_block(36);
+				assert_session_era!(3, 0);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				// opens
+				run_to_block(37);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
+				assert!(Staking::is_current_session_final());
+				assert!(Staking::snapshot_validators().is_some());
+
+				// closes normally
+				run_to_block(40);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert!(!Staking::is_current_session_final());
+				assert!(Staking::snapshot_validators().is_none());
+				assert_session_era!(4, 0);
+
+				run_to_block(47);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(4, 0);
+
+				run_to_block(57);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(5, 0);
+
+				run_to_block(67);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				// Will not open again as scheduled
+				run_to_block(87);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(8, 0);
+
+				run_to_block(90);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(9, 0);
+			})
+	}
+
+	#[test]
+	fn offchain_window_on_chain_fallback_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			start_session(1);
 			start_session(2);
