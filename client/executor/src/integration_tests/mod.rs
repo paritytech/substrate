@@ -698,7 +698,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 		0u64.encode(),
 	);
 	let len = traces.lock().unwrap().len();
-	assert_eq!(len, 0);
+	assert_eq!(len, 0, "Len = {}, traces = {:?}", len, traces.lock().unwrap());
 
 	// Test tracing enabled
 	sp_tracing::set_wasm_tracing(true);
