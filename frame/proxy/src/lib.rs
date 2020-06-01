@@ -66,7 +66,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
 	/// The instance filter determines whether a given call may be proxied under this type.
-	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>;
+	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>
+		+ Default;
 
 	/// The base amount of currency needed to reserve for creating a proxy.
 	///

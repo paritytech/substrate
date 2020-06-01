@@ -98,13 +98,14 @@ impl pallet_balances::Trait for Test {
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;
 	pub const ProxyDepositFactor: u64 = 1;
-	pub const MaxProxies: u16 = 3;
+	pub const MaxProxies: u16 = 1000;
 }
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
 pub enum ProxyType {
 	Any,
 	JustTransfer,
 }
+impl Default for ProxyType { fn default() -> Self { Self::Any } }
 impl InstanceFilter<Call> for ProxyType {
 	fn filter(&self, c: &Call) -> bool {
 		match self {

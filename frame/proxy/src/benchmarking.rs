@@ -23,13 +23,29 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::Saturating;
-
-use crate::Module as Utility;
+use crate::Module as Proxy;
 
 const SEED: u32 = 0;
 
+fn add_proxies<T: Trait>(n: u32) {
+	let caller: T::AccountId = account("caller", 0, SEED);
+	for i in 0..n {
+		Module::<T>::add_proxy(
+			RawOrigin::Signed(caller.clone()).into(),
+			account("target", i, SEED),
+			T::ProxyType::default()
+		);
+	}
+}
+
 benchmarks! {
-	_ { }
+	_ {
+		let p in 0 .. (T::MaxProxies::get() - 1) => add_proxies(p);
+	}
+
+	add_proxy {
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: _(RawOrigin::Signed(caller), account("target", 999, SEED), T::ProxyType::default())
 }
 
 #[cfg(test)]

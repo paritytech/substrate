@@ -205,6 +205,7 @@ pub enum ProxyType {
 	Governance,
 	Staking,
 }
+impl Default for ProxyType { fn default() -> Self { Self::Any } }
 impl InstanceFilter<Call> for ProxyType {
 	fn filter(&self, c: &Call) -> bool {
 		match self {
@@ -1050,6 +1051,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"identity", Identity);
 			add_benchmark!(params, batches, b"im-online", ImOnline);
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
+			add_benchmark!(params, batches, b"proxy", Proxy);
 			add_benchmark!(params, batches, b"scheduler", Scheduler);
 			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 			add_benchmark!(params, batches, b"staking", Staking);
