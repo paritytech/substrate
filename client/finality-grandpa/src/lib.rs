@@ -609,7 +609,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	let is_voter = is_voter(voters, keystore).is_some();
+	let is_voter = is_voter(voters, keystore.as_ref()).is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -736,7 +736,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 			.for_each(move |_| {
 				let curr = authorities.current_authorities();
 				let mut auths = curr.iter().map(|(p, _)| p);
-				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
+				let maybe_authority_id = authority_id(&mut auths, conf.keystore.as_ref())
 					.unwrap_or_default();
 
 				telemetry!(CONSENSUS_INFO; "afg.authority_set";
@@ -872,7 +872,7 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = is_voter(&self.env.voters, &self.env.config.keystore)
+		let authority_id = is_voter(&self.env.voters, self.env.config.keystore.as_ref())
 			.unwrap_or_default();
 
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
@@ -1095,7 +1095,7 @@ pub fn setup_disabled_grandpa<Block: BlockT, Client, N>(
 /// Returns the key pair of the node that is being used in the current voter set or `None`.
 fn is_voter(
 	voters: &Arc<VoterSet<AuthorityId>>,
-	keystore: &Option<BareCryptoStorePtr>,
+	keystore: Option<&BareCryptoStorePtr>,
 ) -> Option<AuthorityId> {
 	match keystore {
 		Some(keystore) => voters
@@ -1112,7 +1112,7 @@ fn is_voter(
 /// Returns the authority id of this node, if available.
 fn authority_id<'a, I>(
 	authorities: &mut I,
-	keystore: &Option<BareCryptoStorePtr>,
+	keystore: Option<&BareCryptoStorePtr>,
 ) -> Option<AuthorityId> where
 	I: Iterator<Item = &'a AuthorityId>,
 {

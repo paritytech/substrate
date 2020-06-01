@@ -703,7 +703,7 @@ where
 		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
-		let local_key = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_key = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
@@ -749,7 +749,7 @@ where
 	}
 
 	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -788,7 +788,7 @@ where
 	}
 
 	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -829,7 +829,7 @@ where
 	}
 
 	fn precommitted(&self, round: RoundNumber, precommit: Precommit<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, &self.config.keystore);
+		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
