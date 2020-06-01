@@ -1,5 +1,5 @@
 #[macro_use]
-mod env_def;
+pub mod env_def;
 
 use codec::Decode;
 use sp_core::H256;
