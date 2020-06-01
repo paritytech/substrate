@@ -22,13 +22,15 @@ use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, Num
 use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 use prometheus_endpoint::Registry;
 
-use crate::block_import::BlockOrigin;
-use crate::metrics::Metrics;
-use crate::import_queue::{
-	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
-	BoxJustificationImport, ImportQueue, Link, Origin,
-	IncomingBlock, import_single_block,
-	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
+use crate::{
+	block_import::BlockOrigin,
+	import_queue::{
+		BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
+		BoxJustificationImport, ImportQueue, Link, Origin,
+		IncomingBlock, import_single_block_metered,
+		buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver},
+	},
+	metrics::Metrics,
 };
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
@@ -146,11 +148,6 @@ struct BlockImportWorker<B: BlockT, Transaction> {
 	_phantom: PhantomData<Transaction>,
 }
 
-const METRIC_SUCCESS_FIELDS: [&'static str; 8] = [
-	"success", "incomplete_header", "verification_failed", "bad_block",
-	"missing_state", "unknown_parent", "cancelled", "failed"
-];
-
 impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 	fn new<V: 'static + Verifier<B>>(
 		result_sender: BufferedLinkSender<B>,
@@ -228,7 +225,7 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 						// a `Future` into `importing`.
 						let (bi, verif) = block_import_verifier.take()
 							.expect("block_import_verifier is always Some; qed");
-						importing = Some(worker.import_a_batch_of_blocks(bi, verif, origin, blocks));
+						importing = Some(worker.import_batch(bi, verif, origin, blocks));
 					},
 					ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
 						let (_, verif) = block_import_verifier.as_mut()
@@ -250,39 +247,18 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 	///
 	/// For lifetime reasons, the `BlockImport` implementation must be passed by value, and is
 	/// yielded back in the output once the import is finished.
-	fn import_a_batch_of_blocks<V: 'static + Verifier<B>>(
+	fn import_batch<V: 'static + Verifier<B>>(
 		&mut self,
 		block_import: BoxBlockImport<B, Transaction>,
 		verifier: V,
 		origin: BlockOrigin,
-		blocks: Vec<IncomingBlock<B>>
+		blocks: Vec<IncomingBlock<B>>,
 	) -> impl Future<Output = (BoxBlockImport<B, Transaction>, V)> {
 		let mut result_sender = self.result_sender.clone();
 		let metrics = self.metrics.clone();
 
-		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks)
+		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks, metrics)
 			.then(move |(imported, count, results, block_import, verifier)| {
-				if let Some(metrics) = metrics {
-					let amounts = results.iter().fold([0u64; 8], |mut acc, result| {
-						match result.0 {
-							Ok(_) => acc[0] += 1,
-							Err(BlockImportError::IncompleteHeader(_)) => acc[1] += 1,
-							Err(BlockImportError::VerificationFailed(_,_)) => acc[2] += 1,
-							Err(BlockImportError::BadBlock(_)) => acc[3] += 1,
-							Err(BlockImportError::MissingState) => acc[4] += 1,
-							Err(BlockImportError::UnknownParent) => acc[5] += 1,
-							Err(BlockImportError::Cancelled) => acc[6] += 1,
-							Err(BlockImportError::Other(_)) => acc[7] += 1,
-						};
-						acc
-					});
-					for (idx, field) in METRIC_SUCCESS_FIELDS.iter().enumerate() {
-						let amount = amounts[idx];
-						if amount > 0 {
-							metrics.import_queue_processed.with_label_values(&[&field]).inc_by(amount)
-						}
-					};
-				}
 				result_sender.blocks_processed(imported, count, results);
 				future::ready((block_import, verifier))
 			})
@@ -352,6 +328,7 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 	blocks: Vec<IncomingBlock<B>>,
 	verifier: V,
 	delay_between_blocks: Duration,
+	metrics: Option<Metrics>,
 ) -> impl Future<
 	Output = (
 		usize,
@@ -401,9 +378,9 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 			None => {
 				// No block left to import, success!
 				let import_handle = import_handle.take()
-					.expect("Future polled again after it has finished");
+					.expect("Future polled again after it has finished (import handle is None)");
 				let verifier = verifier.take()
-					.expect("Future polled again after it has finished");
+					.expect("Future polled again after it has finished (verifier handle is None)");
 				let results = mem::replace(&mut results, Vec::new());
 				return Poll::Ready((imported, count, results, import_handle, verifier));
 			},
@@ -413,9 +390,9 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 		// therefore `import_handle` and `verifier` are always `Some` here. It is illegal to poll
 		// a `Future` again after it has ended.
 		let import_handle = import_handle.as_mut()
-			.expect("Future polled again after it has finished");
+			.expect("Future polled again after it has finished (import handle is None)");
 		let verifier = verifier.as_mut()
-			.expect("Future polled again after it has finished");
+			.expect("Future polled again after it has finished (verifier handle is None)");
 
 		let block_number = block.header.as_ref().map(|h| h.number().clone());
 		let block_hash = block.hash;
@@ -423,13 +400,18 @@ fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
 			Err(BlockImportError::Cancelled)
 		} else {
 			// The actual import.
-			import_single_block(
+			import_single_block_metered(
 				&mut **import_handle,
 				blocks_origin.clone(),
 				block,
 				verifier,
+				metrics.clone(),
 			)
 		};
+
+		if let Some(metrics) = metrics.as_ref() {
+			metrics.report_import::<B>(&import_result);
+		}
 
 		if import_result.is_ok() {
 			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);

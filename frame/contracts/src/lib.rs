@@ -203,8 +203,15 @@ pub type AliveContractInfo<T> =
 pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
-	/// The size of stored value in octet.
+	/// The total number of bytes used by this contract.
+	///
+	/// It is a sum of each key-value pair stored by this contract.
 	pub storage_size: u32,
+	/// The number of key-value pairs that have values of zero length.
+	/// The condition `empty_pair_count ≤ total_pair_count` always holds.
+	pub empty_pair_count: u32,
+	/// The total number of key-value pairs in storage of this contract.
+	pub total_pair_count: u32,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
 	/// Pay rent at most up to this value.
@@ -338,8 +345,11 @@ pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 	/// The minimum amount required to generate a tombstone.
 	type TombstoneDeposit: Get<BalanceOf<Self>>;
 
-	/// Size of a contract at the time of instantiation. This is a simple way to ensure
-	/// that empty contracts eventually gets deleted.
+	/// A size offset for an contract. A just created account with untouched storage will have that
+	/// much of storage from the perspective of the state rent.
+	///
+	/// This is a simple way to ensure that contracts with empty storage eventually get deleted by
+	/// making them pay rent. This creates an incentive to remove them early in order to save rent.
 	type StorageSizeOffset: Get<u32>;
 
 	/// Price of a byte of storage per one block interval. Should be greater than 0.
@@ -420,8 +430,12 @@ decl_module! {
 		/// The minimum amount required to generate a tombstone.
 		const TombstoneDeposit: BalanceOf<T> = T::TombstoneDeposit::get();
 
-		/// Size of a contract at the time of instantiation. This is a simple way to ensure that
-		/// empty contracts eventually gets deleted.
+		/// A size offset for an contract. A just created account with untouched storage will have that
+		/// much of storage from the perspective of the state rent.
+		///
+		/// This is a simple way to ensure that contracts with empty storage eventually get deleted
+		/// by making them pay rent. This creates an incentive to remove them early in order to save
+		/// rent.
 		const StorageSizeOffset: u32 = T::StorageSizeOffset::get();
 
 		/// Price of a byte of storage per one block interval. Should be greater than 0.
@@ -697,7 +711,7 @@ impl<T: Trait> Module<T> {
 		dest: T::AccountId,
 		code_hash: CodeHash<T>,
 		rent_allowance: BalanceOf<T>,
-		delta: Vec<exec::StorageKey>
+		delta: Vec<exec::StorageKey>,
 	) -> DispatchResult {
 		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 			.and_then(|c| c.get_alive())
@@ -764,6 +778,8 @@ impl<T: Trait> Module<T> {
 		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
 			trie_id: origin_contract.trie_id,
 			storage_size: origin_contract.storage_size,
+			empty_pair_count: origin_contract.empty_pair_count,
+			total_pair_count: origin_contract.total_pair_count,
 			code_hash,
 			rent_allowance,
 			deduct_block: current_block,
@@ -836,6 +852,8 @@ decl_storage! {
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
+		///
+		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
 	}
 }

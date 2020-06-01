@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Proof of work consensus for Substrate.
 //!
 //! To use this engine, you can need to have a struct that implements
@@ -609,7 +610,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			continue 'outer
 		}
 
-		let mut proposer = futures::executor::block_on(env.init(&best_header))
+		let proposer = futures::executor::block_on(env.init(&best_header))
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers

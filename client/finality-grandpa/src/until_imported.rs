@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Helper stream for waiting until one or more blocks are imported before
 //! passing through inner items. This is done in a generic way to support
 //! many different kinds of items.

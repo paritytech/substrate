@@ -257,6 +257,8 @@ decl_storage! {
 		/// The next asset identifier up for grabs.
 		NextAssetId get(fn next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted, so this is safe.
 		TotalSupply: map hasher(twox_64_concat) T::AssetId => T::Balance;
 	}
 }
@@ -317,6 +319,7 @@ mod tests {
 		type DbWeight = ();
 		type BlockExecutionWeight = ();
 		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
