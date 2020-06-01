@@ -98,7 +98,7 @@ impl pallet_balances::Trait for Test {
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;
 	pub const ProxyDepositFactor: u64 = 1;
-	pub const MaxProxies: u16 = 1000;
+	pub const MaxProxies: u16 = 3;
 }
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
 pub enum ProxyType {
