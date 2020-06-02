@@ -31,11 +31,12 @@ use sc_service::{
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{net::{IpAddr, Ipv4Addr, SocketAddr}, path::PathBuf, sync::Mutex};
 use structopt::StructOpt;
+use tempfile::TempDir;
 
 /// The `run` command used to run a node.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct RunCmd {
 	/// Enable validator mode.
 	///
@@ -250,6 +251,18 @@ pub struct RunCmd {
 		conflicts_with_all = &[ "sentry", "public-addr" ]
 	)]
 	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
+
+	/// Run a temporary node.
+	///
+	/// A random temporary will be created to store the configuration and will be deleted at the end
+	/// of the process.
+	///
+	/// Note: the directory is random per process execution
+	#[structopt(long)]
+	pub tmp: bool,
+
+	#[structopt(skip)]
+	temp_base_path: Mutex<Option<TempDir>>,
 }
 
 impl RunCmd {
@@ -445,6 +458,16 @@ impl CliConfiguration for RunCmd {
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+	}
+
+	fn base_path(&self) -> Result<Option<PathBuf>> {
+		Ok(if self.tmp {
+			*self.temp_base_path.lock().unwrap() = Some(tempfile::Builder::new().prefix("substrate").tempdir()?);
+
+			self.temp_base_path.lock().unwrap().as_ref().map(|x| x.path().into())
+		} else {
+			self.shared_params().base_path()
+		})
 	}
 }
 
