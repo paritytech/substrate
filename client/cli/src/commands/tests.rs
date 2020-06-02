@@ -28,9 +28,6 @@ fn sign() {
 
 	let sign = SignCmd::from_iter(&["sign", "--suri", seed, "--message", &seed[2..], "--password", "12345"]);
 	assert!(sign.run().is_ok());
-
-	let sign = SignCmd::from_iter(&["sign", "--suri", words, "--message", &seed[2..]]);
-	assert!(matches!(sign.run(), Err(Error::Input(_))))
 }
 
 #[test]

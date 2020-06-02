@@ -132,14 +132,14 @@ fn print_ext<Pair, P>(
     genesis: P::Hash
 ) -> Result<(), Error>
     where
-        CallFor<P>: Encode + From<BalancesCall<P>>,
         Pair: sp_core::Pair,
         Pair::Public: Into<MultiSigner>,
         Pair::Signature: Into<MultiSignature>,
-        P: pallet_balances::Trait + pallet_indices::Trait + SignedExtensionProvider,
         BalancesCall<P>: Encode,
         AccountIdFor<P>: From<AccountId32>,
         AddressFor<P>: From<AccountIdFor<P>>,
+        CallFor<P>: Encode + From<BalancesCall<P>>,
+        P: pallet_balances::Trait + pallet_indices::Trait + SignedExtensionProvider,
 {
     let signer = pair_from_suri::<Pair>(uri, pass);
     let call: CallFor<P> = BalancesCall::transfer(to, amount).into();
