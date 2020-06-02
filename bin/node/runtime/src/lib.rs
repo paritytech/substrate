@@ -211,7 +211,7 @@ impl InstanceFilter<Call> for ProxyType {
 		match self {
 			ProxyType::Any => true,
 			ProxyType::NonTransfer => matches!(c,
-				Call::Balances(..)
+				Call::Balances(..) | Call::Utility(..)
 					| Call::Vesting(pallet_vesting::Call::vested_transfer(..))
 					| Call::Indices(pallet_indices::Call::transfer(..))
 			),
