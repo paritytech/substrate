@@ -21,13 +21,14 @@
 //! the offchain indexing API.
 
 use sp_std::prelude::*;
-
+use sp_io::offchain_index;
 
 use super::Trait;
 use super::super::{SessionIndex, Module as SessionModule};
 
 const PREFIX: &[u8] = b"historical";
 const LAST_PRUNE: &[u8] = b"historical_last_prune";
+const HEAD: &[u8] = b"historical_head";
 
 pub struct ValidatorSet<T: Trait> {
 	validator_set: Vec<(T::ValidatorId, T::FullIdentification)>
@@ -58,56 +59,80 @@ impl<T: Trait> ValidatorSet<T> {
 		validator_set
 	}
 
+	/// Access the underlying `ValidatorId` and `FullIdentification` tuples as slice.
 	fn as_slice(&self) -> &[(T::ValidatorId, T::FullIdentification)] {
 		self.validator_set.as_slice()
 	}
 
+	/// Convert `self` to a vector and consume `self`.
 	fn to_vec(self) -> Vec<(T::ValidatorId, T::FullIdentification)> {
 		self.validator_set
 	}
 
-	fn prune_item(everything_up_to: SessionIndex) {
-		StorageValueRef::persistent(derived_key.as_ref()).clear()
-	}
-
+	/// Prune anything older than the current session index.
+	///
+	/// For behaviour details refer to [`fn prune_older_than`](Self::prune_older_than).
+	///
+	/// **Must** be called from the offchain worker.
 	fn prune() {
 		let move_pruning_marker = SessionModule::current_index();
 		Self::prune_older_than(move_pruning_marker);
 	}
 
-	/// Attempt to prune anything that is older than `first_to_keep`.
+	/// Attempt to prune anything that is older than `first_to_keep` session index.
+	///
+	/// Due to re-ogranisation it could be that the `first_to_keep` might be less
+	/// than the stored one, in which case the conservative choice is made to keep records
+	/// up to the one that is the lesser.
+	///
+	/// **Must** be called from the offchain worker.
 	fn prune_older_than(first_to_keep: SessionIndex) {
 		let pruning_marker_key = derive_key(STATIC_LAST_PRUNE);
-		match StorageValueRef::persistent(derived_key.as_ref())
-			.mutate(|x| {
-				Ok(x.encode())
+		let mut entry = StorageValueRef::persistent(derived_key.as_ref());
+		match entry.mutate(|current: Option<Option<SessionIndex>>| {
+				match current {
+					Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
+					// do not move the cursor, if the new one would be behind ours
+					Some(Some(current)) => Ok(current),
+					None => Ok(first_to_keep),
+					// if the storage contains undecodable data, overwrite with current anyways
+					// which might leak some entries being never purged
+					Some(None) => Ok(first_to_keep),
+				}
 		}) {
-			Ok(Ok(previous)) => {
-				for session_index in previous..first_to_keep {
-					let derived_key = derive_key(STATIC_PREFIX, session_index.encode());
-					let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
+			Ok(Ok(new_value)) => {
+				// on a re-org this is not necessarily true, with the above they might be equal
+				if previous < first_to_keep {
+					for session_index in previous..first_to_keep {
+						let derived_key = derive_key(STATIC_PREFIX, session_index.encode());
+						let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
+					}
 				}
 			},
-			Ok(Err(e)) => {}, // failed to store the value calculated by the closure
+			Ok(Err(e)) => {}, // failed to store the value calculated with the given closure
 			Err(e) => {}, // failed to calculate the value to store with the given closure
 		}
 	}
 
 
-	/// Must be called from on chain.
-	fn store_current<P: AsRef<[u8]>>(prefix: P, session: SessionIndex) {
-		let session_index = SessionModule::current_index();
+	/// **Must** be called from on chain.
+	fn store_to_offchain(session: SessionIndex) {
+		let session_index = <SessionModule<T>>::current_index();
 		let derived_key = derive_key(prefix.as_ref(), session.encode());
-		StorageValueRef::persistent(derived_key.as_ref()).set();
+		//let value = SessionModule::historical_root(session_index);
+		let value = <SessionModule<T>>::validators().encode();
+		offchain_index::set(value.as_slice())
 	}
 
-	/// **Must** be called from on chain, i.e. `on_block_imported`
-	fn store() {
-
+	/// **Must** be called from on chain, i.e. `on_import`
+	fn store_current_to_offchain() {
+		Self::store_to_offchain(SessionModule::current_index());
 	}
+}
 
 
-
+/// Implement conversion into iterator for usage
+/// with [ProvingTrie](super::ProvingTrie::generate_for).
 impl<T: Trait> IntoIter for ValidatorSet<T> {
 	type Item=(T::ValidatorId, T::FullIdentification);
 	fn into_iter(self) -> impl Iterator<Item=Self::Item> {
