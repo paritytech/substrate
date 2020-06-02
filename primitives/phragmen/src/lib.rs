@@ -36,7 +36,7 @@
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
 use sp_arithmetic::{
-	PerThing, Rational128, EpsilonOrd,
+	PerThing, Rational128, ThresholdOrd,
 	helpers_128bit::multiply_by_rational,
 	traits::{Zero, Saturating, Bounded, SaturatedConversion},
 };
@@ -627,7 +627,10 @@ pub fn is_score_better<P: PerThing>(this: PhragmenScore, that: PhragmenScore, ep
 	match this
 		.iter()
 		.enumerate()
-		.map(|(i, e)| (e.ge(&that[i]), e.ecmp(&that[i], epsilon)))
+		.map(|(i, e)| (
+			e.ge(&that[i]),
+			e.tcmp(&that[i], epsilon.mul_ceil(that[i])),
+		))
 		.collect::<Vec<(bool, Ordering)>>()
 		.as_slice()
 	{

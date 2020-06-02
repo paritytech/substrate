@@ -45,39 +45,33 @@ pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perqu
 pub use rational128::Rational128;
 
 use sp_std::cmp::Ordering;
-use sp_std::ops;
-use traits::{UniqueSaturatedInto, Saturating};
 
-/// Trait for comparing two numbers with an epsilon coefficient.
+/// Trait for comparing two numbers with an threshold.
 ///
 /// Returns:
-/// - `Ordering::Greater` if `self` is greater than `other + other * epsilon`.
-/// - `Ordering::Less` if `self` is less than `other - other * epsilon`.
+/// - `Ordering::Greater` if `self` is greater than `other + threshold`.
+/// - `Ordering::Less` if `self` is less than `other - threshold`.
 /// - `Ordering::Equal` otherwise.
-pub trait EpsilonOrd<T, P> {
-	/// Compare if `self` is `epsilon` greater or less than `other`.
-	fn ecmp(&self, other: &T, epsilon: P) -> Ordering;
+pub trait ThresholdOrd<T> {
+	/// Compare if `self` is `threshold` greater or less than `other`.
+	fn tcmp(&self, other: &T, epsilon: T) -> Ordering;
 }
 
-impl<T, P> EpsilonOrd<T, P> for T
+impl<T> ThresholdOrd<T> for T
 where
-	P: PerThing,
-	T: Ord + PartialOrd + Clone + Copy + ops::Rem<T, Output=T> + ops::Mul<T, Output=T> +
-		ops::Div<T, Output=T> + ops::Add<T, Output=T> + UniqueSaturatedInto<InnerOf<P>> +
-		From<InnerOf<P>> + Saturating,
+	T: Ord + PartialOrd + Copy + Clone + traits::Zero + traits::Saturating,
 {
-	fn ecmp(&self, other: &T, epsilon: P) -> Ordering {
+	fn tcmp(&self, other: &T, threshold: T) -> Ordering {
 		// early exit.
-		if epsilon.is_zero() {
+		if threshold.is_zero() {
 			return self.cmp(&other)
 		}
 
-		let threshold = epsilon.mul_ceil(*other);
-		let lower_bound = other.saturating_sub(threshold);
 		let upper_bound = other.saturating_add(threshold);
+		let lower_bound = other.saturating_sub(threshold);
 
 		if upper_bound <= lower_bound {
-			// threshold is too small to make any difference.
+			// defensive only. Can never happen.
 			self.cmp(&other)
 		} else {
 			// upper_bound is guaranteed now to be bigger than lower.
@@ -99,36 +93,36 @@ mod tests {
 	#[test]
 	fn epsilon_ord_works() {
 		let b = 115u32;
-		let e = Perbill::from_percent(10);
+		let e = Perbill::from_percent(10).mul_ceil(b);
 
 		// [115 - 11,5 (103,5), 115 + 11,5 (126,5)] is all equal
-		assert_eq!(103u32.ecmp(&b, e), Ordering::Equal);
-		assert_eq!(104u32.ecmp(&b, e), Ordering::Equal);
-		assert_eq!(115u32.ecmp(&b, e), Ordering::Equal);
-		assert_eq!(120u32.ecmp(&b, e), Ordering::Equal);
-		assert_eq!(126u32.ecmp(&b, e), Ordering::Equal);
-		assert_eq!(127u32.ecmp(&b, e), Ordering::Equal);
+		assert_eq!(103u32.tcmp(&b, e), Ordering::Equal);
+		assert_eq!(104u32.tcmp(&b, e), Ordering::Equal);
+		assert_eq!(115u32.tcmp(&b, e), Ordering::Equal);
+		assert_eq!(120u32.tcmp(&b, e), Ordering::Equal);
+		assert_eq!(126u32.tcmp(&b, e), Ordering::Equal);
+		assert_eq!(127u32.tcmp(&b, e), Ordering::Equal);
 
-		assert_eq!(128u32.ecmp(&b, e), Ordering::Greater);
-		assert_eq!(102u32.ecmp(&b, e), Ordering::Less);
+		assert_eq!(128u32.tcmp(&b, e), Ordering::Greater);
+		assert_eq!(102u32.tcmp(&b, e), Ordering::Less);
 	}
 
 	#[test]
 	fn epsilon_ord_works_with_small_epc() {
 		let b = 115u32;
 		// way less than 1 percent. threshold will be zero. Result should be same as normal ord.
-		let e = Perbill::from_parts(100);
+		let e = Perbill::from_parts(100) * b;
 
 		// [115 - 11,5 (103,5), 115 + 11,5 (126,5)] is all equal
-		assert_eq!(103u32.ecmp(&b, e), 103u32.cmp(&b));
-		assert_eq!(104u32.ecmp(&b, e), 104u32.cmp(&b));
-		assert_eq!(115u32.ecmp(&b, e), 115u32.cmp(&b));
-		assert_eq!(120u32.ecmp(&b, e), 120u32.cmp(&b));
-		assert_eq!(126u32.ecmp(&b, e), 126u32.cmp(&b));
-		assert_eq!(127u32.ecmp(&b, e), 127u32.cmp(&b));
+		assert_eq!(103u32.tcmp(&b, e), 103u32.cmp(&b));
+		assert_eq!(104u32.tcmp(&b, e), 104u32.cmp(&b));
+		assert_eq!(115u32.tcmp(&b, e), 115u32.cmp(&b));
+		assert_eq!(120u32.tcmp(&b, e), 120u32.cmp(&b));
+		assert_eq!(126u32.tcmp(&b, e), 126u32.cmp(&b));
+		assert_eq!(127u32.tcmp(&b, e), 127u32.cmp(&b));
 
-		assert_eq!(128u32.ecmp(&b, e), 128u32.cmp(&b));
-		assert_eq!(102u32.ecmp(&b, e), 102u32.cmp(&b));
+		assert_eq!(128u32.tcmp(&b, e), 128u32.cmp(&b));
+		assert_eq!(102u32.tcmp(&b, e), 102u32.cmp(&b));
 	}
 
 	#[test]
