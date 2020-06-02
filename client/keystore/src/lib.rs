@@ -20,11 +20,13 @@
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, BareCryptoStoreError as TraitError},
+	traits::{BareCryptoStore, BareCryptoStoreError as TraitError, VRFSigner},
+	sr25519::Pair as Sr25519Pair,
 	Encode,
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
 use parking_lot::RwLock;
+use merlin::Transcript;
 
 /// Keystore pointer
 pub type KeyStorePtr = Arc<RwLock<Store>>;
@@ -296,6 +298,20 @@ impl Store {
 
 		Ok(public_keys)
 	}
+
+	fn make_vrf_transcript(
+		&self,
+		label: &'static [u8],
+		randomness: &[u8],
+		slot_number: u64,
+		epoch: u64
+	) -> Transcript {
+		let mut transcript = Transcript::new(label.clone());
+		transcript.append_u64(b"slot number", slot_number);
+		transcript.append_u64(b"current epoch", epoch);
+		transcript.append_message(b"chain randomness", &randomness[..]);
+		transcript
+	}
 }
 
 impl BareCryptoStore for Store {
@@ -437,6 +453,22 @@ impl BareCryptoStore for Store {
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(p, t)| self.key_phrase_by_type(&p, *t).is_ok())
+	}
+}
+
+impl VRFSigner for Store {
+	fn vrf_sign(
+		&self,
+		pair: &Sr25519Pair,
+		label: &'static [u8],
+		randomness: &[u8],
+		slot_number: u64,
+		epoch: u64
+	) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+		let transcript = self.make_vrf_transcript(label, randomness, slot_number, epoch);
+		let pair = pair.as_ref();
+		let (inout, proof, proof_batchable) = pair.vrf_sign(transcript);
+		(inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec(), proof_batchable.to_bytes().to_vec())
 	}
 }
 
