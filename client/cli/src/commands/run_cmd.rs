@@ -35,6 +35,7 @@ use std::{net::{IpAddr, Ipv4Addr, SocketAddr}, path::PathBuf, sync::Mutex};
 use structopt::StructOpt;
 use tempfile::TempDir;
 
+// TODO: check why all the structopt need clone?
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt)]
 pub struct RunCmd {
@@ -254,10 +255,10 @@ pub struct RunCmd {
 
 	/// Run a temporary node.
 	///
-	/// A random temporary will be created to store the configuration and will be deleted at the end
-	/// of the process.
+	/// A random temporary directory will be created to store the configuration and will be deleted
+	/// at the end of the process.
 	///
-	/// Note: the directory is random per process execution
+	/// Note: the directory is random per process execution.
 	#[structopt(long)]
 	pub tmp: bool,
 
@@ -462,6 +463,7 @@ impl CliConfiguration for RunCmd {
 
 	fn base_path(&self) -> Result<Option<PathBuf>> {
 		Ok(if self.tmp {
+			// TODO: use parking_lot to avoid the unwrap()
 			*self.temp_base_path.lock().unwrap() = Some(tempfile::Builder::new().prefix("substrate").tempdir()?);
 
 			self.temp_base_path.lock().unwrap().as_ref().map(|x| x.path().into())
