@@ -99,12 +99,11 @@ parameter_types! {
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 }
-
 pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(pallet_balances::Call::transfer(..)) => true,
+			Call::Balances(_) => true,
 			_ => false,
 		}
 	}
@@ -128,7 +127,7 @@ use pallet_balances::Error as BalancesError;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
+		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
 	}.assimilate_storage(&mut t).unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));

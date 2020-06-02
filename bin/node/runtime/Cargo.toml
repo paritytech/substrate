@@ -61,6 +61,7 @@ pallet-identity = { version = "2.0.0-rc2", default-features = false, path = "../
 pallet-membership = { version = "2.0.0-rc2", default-features = false, path = "../../../frame/membership" }
 pallet-offences = { version = "2.0.0-rc2", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "2.0.0-rc2", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
+pallet-proxy = { version = "2.0.0-rc2", default-features = false, path = "../../../frame/proxy" }
 pallet-randomness-collective-flip = { version = "2.0.0-rc2", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "2.0.0-rc2", default-features = false, path = "../../../frame/recovery" }
 pallet-session = { version = "2.0.0-rc2", features = ["historical"], path = "../../../frame/session", default-features = false }
@@ -111,6 +112,7 @@ std = [
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",
+	"pallet-proxy/std",
 	"sp-core/std",
 	"pallet-randomness-collective-flip/std",
 	"sp-std/std",
@@ -149,6 +151,7 @@ runtime-benchmarks = [
 	"pallet-elections-phragmen/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
+	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
