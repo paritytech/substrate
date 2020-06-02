@@ -19,11 +19,19 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use ansi_term::Colour;
-use sc_client_api::{BlockchainEvents, UsageProvider};
 use futures::prelude::*;
-use log::{info, warn, trace};
+use log::{info, trace, warn};
+use parity_util_mem::MallocSizeOf;
+use sc_client_api::{BlockchainEvents, UsageProvider};
+use sc_network::network_state::NetworkState;
+use sc_service::{AbstractService, NetworkStatus};
+use sp_blockchain::HeaderMetadata;
+use sp_runtime::traits::Block as BlockT;
 use sp_runtime::traits::Header;
-use sc_service::AbstractService;
+use sp_transaction_pool::TransactionPool;
+use sp_utils::mpsc::TracingUnboundedReceiver;
+use std::fmt::Display;
+use std::sync::Arc;
 use std::time::Duration;
 
 mod display;
@@ -36,17 +44,28 @@ pub enum OutputFormat {
 }
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futures::Future<Output = ()> {
-	let client = service.client();
-	let pool = service.transaction_pool();
-	let prefix = service.informant_prefix();
-
+pub fn build<B: BlockT, C>(
+	client: Arc<C>,
+	network_status_stream_builder: impl FnOnce(
+		Duration,
+	) -> TracingUnboundedReceiver<(
+		NetworkStatus<B>,
+		NetworkState,
+	)>,
+	pool: Arc<impl TransactionPool + MallocSizeOf>,
+	prefix: String,
+	format: OutputFormat,
+) -> impl futures::Future<Output = ()>
+where
+	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
+	<C as HeaderMetadata<B>>::Error: Display,
+{
 	let mut display = display::InformantDisplay::new(format, prefix.clone());
 
-	let display_notifications = service
-		.network_status(Duration::from_millis(5000))
+	let client_1 = client.clone();
+	let display_notifications = network_status_stream_builder(Duration::from_millis(5000))
 		.for_each(move |(net_status, _)| {
-			let info = client.usage_info();
+			let info = client_1.usage_info();
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);
 			} else {
@@ -65,7 +84,6 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			future::ready(())
 		});
 
-	let client = service.client();
 	let mut last_best = {
 		let info = client.usage_info();
 		Some((info.chain.best_number, info.chain.best_hash))
