@@ -118,8 +118,6 @@ decl_event! {
 	pub enum Event {
 		/// A proxy was executed correctly, with the given result.
 		ProxyExecuted(DispatchResult),
-		/// A call with a `false` IsCallable filter was attempted.
-		Uncallable(u32),
 	}
 }
 
