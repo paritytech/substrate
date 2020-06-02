@@ -93,15 +93,31 @@ pub trait UniqueSaturatedInto<T: Sized>: Sized {
 	fn unique_saturated_into(self) -> T;
 }
 
-impl<T: Sized, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
+impl<T: Sized + PartialOrd + Zero, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
 	fn unique_saturated_from(t: T) -> Self {
-		S::try_from(t).unwrap_or_else(|_| Bounded::max_value())
+		let neg = t < T::zero();
+		S::try_from(t)
+			.unwrap_or_else(move |_|
+				if neg {
+					Bounded::min_value()
+				} else {
+					Bounded::max_value()
+				}
+			)
 	}
 }
 
-impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
+impl<T: Bounded + Sized, S: PartialOrd + Zero + TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
 	fn unique_saturated_into(self) -> T {
-		self.try_into().unwrap_or_else(|_| Bounded::max_value())
+		let neg = self < S::zero();
+		self.try_into()
+			.unwrap_or_else(move |_|
+				if neg {
+					Bounded::min_value()
+				} else {
+					Bounded::max_value()
+				}
+			)
 	}
 }
 
@@ -145,7 +161,15 @@ impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Sat
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		checked_pow(self, exp).unwrap_or_else(Bounded::max_value)
+		let neg = self < T::zero() && exp % 2 != 0;
+		checked_pow(self, exp)
+			.unwrap_or_else(||
+				if neg {
+					Bounded::min_value()
+				} else {
+					Bounded::max_value()
+				}
+			)
 	}
 }
 
