@@ -33,7 +33,6 @@ use crate as proxy;
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
-
 impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
@@ -136,6 +135,7 @@ impl Trait for Test {
 	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
 }
+
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type Proxy = Module<Test>;

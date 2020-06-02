@@ -19,13 +19,13 @@ frame-system = { version = "2.0.0-rc2", default-features = false, path = "../sys
 sp-core = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/io" }
 
 frame-benchmarking = { version = "2.0.0-rc2", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
 sp-core = { version = "2.0.0-rc2", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0-rc2", path = "../balances" }
+sp-io = { version = "2.0.0-rc2", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -35,7 +35,6 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"sp-io/std",
 	"sp-std/std"
 ]
 runtime-benchmarks = [
