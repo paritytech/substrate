@@ -174,6 +174,19 @@ pub trait BareCryptoStore: Send + Sync {
 	}
 }
 
+/// VRF-signing capability.
+pub trait VRFSigner {
+	/// VRF-sign round
+	fn vrf_sign(
+		&self,
+		pair: &sr25519::Pair,
+		label: &'static [u8],
+		randomness: &[u8],
+		slot_number: u64,
+		epoch: u64
+	) -> (Vec<u8>, Vec<u8>, Vec<u8>);
+}
+
 /// A pointer to the key store.
 pub type BareCryptoStorePtr = Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
 
