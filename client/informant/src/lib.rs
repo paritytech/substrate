@@ -98,7 +98,10 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(target: "substrate", "✨ {}Imported #{} ({})", prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
+		info!(
+			target: "substrate", "✨ {}Imported #{} ({})",
+			prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash,
+		);
 		future::ready(())
 	});
 
