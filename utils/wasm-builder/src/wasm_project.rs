@@ -308,15 +308,25 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, workspace_root_path: &Pa
 	);
 }
 
+/// Find a package by the given `manifest_path` in the metadata.
+///
+/// Panics if the package could not be found.
+fn find_package_by_manifest_path<'a>(
+	manifest_path: &Path,
+	crate_metadata: &'a cargo_metadata::Metadata,
+) -> &'a cargo_metadata::Package {
+	crate_metadata.packages
+		.iter()
+		.find(|p| p.manifest_path == manifest_path)
+		.expect("Wasm project exists in its own metadata; qed")
+}
+
 /// Get a list of enabled features for the project.
 fn project_enabled_features(
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> Vec<String> {
-	let package = crate_metadata.packages
-		.iter()
-		.find(|p| p.manifest_path == cargo_manifest)
-		.expect("Wasm project exists in its own metadata; qed");
+	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
 
 	let mut enabled_features = package.features.keys()
 		.filter(|f| {
@@ -338,6 +348,16 @@ fn project_enabled_features(
 	enabled_features
 }
 
+/// Returns if the project has the `runtime-wasm` feature
+fn has_runtime_wasm_feature_declared(
+	cargo_manifest: &Path,
+	crate_metadata: &cargo_metadata::Metadata,
+) -> bool {
+	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
+
+	package.features.keys().any(|k| k == "runtime-wasm")
+}
+
 /// Create the project used to build the wasm binary.
 ///
 /// # Returns
@@ -348,9 +368,14 @@ fn create_project(cargo_manifest: &Path, wasm_workspace: &Path, crate_metadata: 
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
 	let project_folder = wasm_workspace.join(&crate_name);
 
-	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
+	fs::create_dir_all(project_folder.join("src"))
+		.expect("Wasm project dir create can not fail; qed");
 
-	let enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
+	let mut enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
+
+	if has_runtime_wasm_feature_declared(cargo_manifest, crate_metadata) {
+		enabled_features.push("runtime-wasm".into());
+	}
 
 	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
