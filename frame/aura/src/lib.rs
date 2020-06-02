@@ -145,7 +145,6 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-/// Find the index of the Aura authority who authored the current block.
 impl<T: Trait> FindAuthor<u32> for Module<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
