@@ -165,9 +165,9 @@ pub trait SubstrateCli: Sized {
 	/// Print the error message and quit the program in case of failure.
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
-	/// used. It will return a [`clap::Error`], where the [`kind`] is a
-	/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
-	/// [`Error::exit`] or perform a [`std::process::exit`].
+	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
+	/// [`clap::ErrorKind::HelpDisplayed`] or [`clap::ErrorKind::VersionDisplayed`] respectively.
+	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
 		Self: StructOpt + Sized,

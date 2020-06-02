@@ -20,7 +20,6 @@
 //! time during which certain events can and/or must occur.  This crate
 //! provides generic functionality for slots.
 
-#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
 mod slots;
@@ -239,7 +238,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let logs = self.pre_digest_data(slot_number, &claim);
 
 		// deadline our production to approx. the end of the slot
-		let proposing = awaiting_proposer.and_then(move |mut proposer| proposer.propose(
+		let proposing = awaiting_proposer.and_then(move |proposer| proposer.propose(
 			slot_info.inherent_data,
 			sp_runtime::generic::Digest {
 				logs,
