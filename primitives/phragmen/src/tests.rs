@@ -713,6 +713,60 @@ fn score_comparison_with_epsilon() {
 	}
 }
 
+#[test]
+fn score_comparison_large_value() {
+	// some random value taken from eras in kusama.
+	let initial = [12488167277027543u128, 5559266368032409496, 118749283262079244270992278287436446];
+	// this claim is 0.04090% better in the third component. It should be accepted as better if
+	// epsilon is smaller than 5/10_0000
+	let claim = [12488167277027543u128, 5559266368032409496, 118700736389524721358337889258988054];
+
+	assert_eq!(
+		is_score_better(
+			claim.clone(),
+			initial.clone(),
+			Perbill::from_rational_approximation(1u32, 10_000),
+		),
+		true,
+	);
+
+	assert_eq!(
+		is_score_better(
+			claim.clone(),
+			initial.clone(),
+			Perbill::from_rational_approximation(2u32, 10_000),
+		),
+		true,
+	);
+
+	assert_eq!(
+		is_score_better(
+			claim.clone(),
+			initial.clone(),
+			Perbill::from_rational_approximation(3u32, 10_000),
+		),
+		true,
+	);
+
+	assert_eq!(
+		is_score_better(
+			claim.clone(),
+			initial.clone(),
+			Perbill::from_rational_approximation(4u32, 10_000),
+		),
+		true,
+	);
+
+	assert_eq!(
+		is_score_better(
+			claim.clone(),
+			initial.clone(),
+			Perbill::from_rational_approximation(5u32, 10_000),
+		),
+		false,
+	);
+}
+
 mod compact {
 	use codec::{Decode, Encode};
 	use crate::{generate_compact_solution_type, VoteWeight};

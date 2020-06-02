@@ -229,7 +229,7 @@ impl staking::Trait for Test {
 	type Call = Call;
 	type UnsignedPriority = StakingUnsignedPriority;
 	type MaxIterations = ();
-	type SolutionImprovementThreshold = ();
+	type MinSolutionScoreBump = ();
 }
 
 parameter_types! {

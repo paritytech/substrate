@@ -293,7 +293,10 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
-	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo, WithPostDispatchInfo},
+	dispatch::{
+		IsSubType, DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
+		WithPostDispatchInfo,
+	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
 		UnixTime, EstimateNextNewSession, EnsureOrigin,
@@ -892,8 +895,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	type MaxIterations: Get<u32>;
 
 	/// The threshold of improvement that should be provided for a new solution to be accepted.
-	// TODO: fancy a shorter name? my fingers do not like this.
-	type SolutionImprovementThreshold: Get<Perbill>;
+	type MinSolutionScoreBump: Get<Perbill>;
 
 	/// The maximum number of nominator rewarded for each validator.
 	///
@@ -2618,7 +2620,7 @@ impl<T: Trait> Module<T> {
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
-				is_score_better(score, queued_score, T::SolutionImprovementThreshold::get()),
+				is_score_better(score, queued_score, T::MinSolutionScoreBump::get()),
 				Error::<T>::PhragmenWeakSubmission.with_weight(T::DbWeight::get().reads(3)),
 			)
 		}
@@ -3521,17 +3523,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			if let Err(error_with_post_info) = Self::pre_dispatch_checks(*score, *era) {
-				let error = error_with_post_info.error;
-				let error_number = match error {
-					DispatchError::Module { error, ..} => error,
-					_ => 0,
-				};
+				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"validate unsigned pre dispatch checks failed due to module error #{:?}.",
-					error,
+					"validate unsigned pre dispatch checks failed due to error #{:?}.",
+					invalid,
 				);
-				return InvalidTransaction::Custom(error_number).into();
+				return invalid .into();
 			}
 
 			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
@@ -3576,14 +3574,8 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			// `check_and_replace_solution`.
 			Self::pre_dispatch_checks(*score, *era)
 				.map(|_| ())
-				.map_err(|error_with_post_info| {
-					let error = error_with_post_info.error;
-					let error_number = match error {
-						DispatchError::Module { error, ..} => error,
-						_ => 0,
-					};
-					InvalidTransaction::Custom(error_number).into()
-				})
+				.map_err(to_invalid)
+				.map_err(Into::into)
 		} else {
 			Err(InvalidTransaction::Call.into())
 		}
@@ -3593,4 +3585,15 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 /// Check that list is sorted and has no duplicates.
 fn is_sorted_and_unique(list: &[u32]) -> bool {
 	list.windows(2).all(|w| w[0] < w[1])
+}
+
+/// convert a DispatchErrorWithPostInfo to a custom InvalidTransaction with the inner code being the
+/// error number.
+fn to_invalid(error_with_post_info: DispatchErrorWithPostInfo) -> InvalidTransaction {
+	let error = error_with_post_info.error;
+	let error_number = match error {
+		DispatchError::Module { error, ..} => error,
+		_ => 0,
+	};
+	InvalidTransaction::Custom(error_number)
 }
