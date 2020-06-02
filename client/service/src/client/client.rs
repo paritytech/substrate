@@ -1048,7 +1048,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			origin: notify_import.origin,
 			header: notify_import.header,
 			is_new_best: notify_import.is_new_best,
-			tree_route: notify_import.tree_route,
+			tree_route: notify_import.tree_route.map(Arc::new),
 		};
 
 		self.import_notification_sinks.lock()

@@ -42,7 +42,7 @@ fn maintained_pool() -> (
 	intervalier::BackSignalControl,
 ) {
 	let (pool, background_task, notifier) = BasicPool::new_test(
-		std::sync::Arc::new(TestApi::with_alice_nonce(209))
+		Arc::new(TestApi::with_alice_nonce(209)),
 	);
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
@@ -228,7 +228,7 @@ fn block_event_with_retracted(
 	ChainEvent::NewBlock {
 		id: BlockId::hash(header.hash()),
 		is_new_best: true,
-		tree_route: Some(tree_route),
+		tree_route: Some(Arc::new(tree_route)),
 		header,
 	}
 }

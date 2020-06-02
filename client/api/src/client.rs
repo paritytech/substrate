@@ -16,7 +16,7 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
-use std::{fmt, collections::HashSet};
+use std::{fmt, collections::HashSet, sync::Arc};
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -237,7 +237,7 @@ pub struct BlockImportNotification<Block: BlockT> {
 	/// Tree route from old best to new best.
 	///
 	/// If `None`, there was no re-org while importing.
-	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
+	pub tree_route: Option<Arc<sp_blockchain::TreeRoute<Block>>>,
 }
 
 /// Summary of a finalized block.
