@@ -1,7 +1,7 @@
 [package]
 name = "node-runtime"
 version = "2.0.0-rc2"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["allen <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
 license = "Apache-2.0"
