@@ -17,9 +17,8 @@
 use ansi_term::Colour;
 use sc_client_api::ClientInfo;
 use log::info;
-use sc_network::SyncState;
+use sc_network::{NetworkStatus, SyncState};
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
-use sc_service::NetworkStatus;
 use std::{convert::{TryFrom, TryInto}, fmt};
 use wasm_timer::Instant;
 use crate::OutputFormat;

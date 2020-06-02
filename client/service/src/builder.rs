@@ -1348,6 +1348,16 @@ ServiceBuilder<
 			}
 		}
 
+		// Spawn informant task
+		let informant_future = sc_informant::build(
+			self.client.clone(),
+			|duration| (),
+			transaction_pool.clone(),
+			informant_prefix,
+			sc_informant::OutputFormat::Coloured,
+		);
+		let _informant_handle = spawn_handle.spawn("informant", informant_future);
+
 		Ok(Service {
 			client,
 			task_manager,
@@ -1365,7 +1375,6 @@ ServiceBuilder<
 			keystore,
 			marker: PhantomData::<TBl>,
 			prometheus_registry: config.prometheus_config.map(|config| config.registry),
-			informant_prefix,
 		})
 	}
 }

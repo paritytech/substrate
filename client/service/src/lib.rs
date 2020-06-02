@@ -52,11 +52,11 @@ use futures::{
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
 };
-use sc_network::{NetworkService, network_state::NetworkState, PeerId};
+use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{Block as BlockT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
@@ -127,7 +127,6 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
-	informant_prefix: String,
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
@@ -211,9 +210,6 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
-
-	/// Get the informant's prefix for logs
-	fn informant_prefix(&self) -> String;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -313,10 +309,6 @@ where
 
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
-	}
-
-	fn informant_prefix(&self) -> String {
-		self.informant_prefix.clone()
 	}
 }
 
@@ -493,25 +485,6 @@ fn build_network_future<
 
 		Poll::Pending
 	})
-}
-
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: sc_network::SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
 }
 
 #[cfg(not(target_os = "unknown"))]

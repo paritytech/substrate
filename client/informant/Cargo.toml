@@ -19,7 +19,6 @@ parity-util-mem = { version = "0.6.1", default-features = false, features = ["pr
 wasm-timer = "0.2"
 sc-client-api = { version = "2.0.0-rc2", path = "../api" }
 sc-network = { version = "0.8.0-rc2", path = "../network" }
-sc-service = { version = "0.8.0-rc2", default-features = false, path = "../service" }
 sp-blockchain = { version = "2.0.0-rc2", path = "../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0-rc2", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-rc2", path = "../../primitives/utils" }
