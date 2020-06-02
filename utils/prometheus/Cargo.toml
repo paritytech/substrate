@@ -18,6 +18,7 @@ futures-util = { version = "0.3.1", default-features = false, features = ["io"] 
 derive_more = "0.99"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-async-std = { version = "1.0.1", features = ["unstable"] }
+# async-std is temporarily pinned to <1.6 because version 1.6.0 is buggy
+async-std = { version = "1.0.1, <1.6", features = ["unstable"] }
 hyper = { version = "0.13.1", default-features = false, features = ["stream"] }
 tokio = "0.2"

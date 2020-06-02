@@ -8256,7 +8256,7 @@ version = "2.0.0-rc2"
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.10"
+version = "1.0.11"
 dependencies = [
  "atty",
  "build-helper",
