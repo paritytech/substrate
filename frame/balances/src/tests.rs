@@ -61,6 +61,14 @@ macro_rules! decl_tests {
 			DispatchInfo { weight: w, ..Default::default() }
 		}
 
+		fn events() -> Vec<Event> {
+			let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+
+			System::reset_events();
+
+			evt
+		}
+
 		#[test]
 		fn basic_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
@@ -672,6 +680,68 @@ macro_rules! decl_tests {
 					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_existential_deposit() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 1);
+
+					assert_eq!(
+						events(),
+						[
+							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_no_existential_deposit_suicide() {
+			<$ext_builder>::default()
+				.existential_deposit(0)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 100);
+
+					// no events
+					assert_eq!(events(), []);
+
+					assert_ok!(System::suicide(Origin::signed(1)));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
 				});
 		}
 	}

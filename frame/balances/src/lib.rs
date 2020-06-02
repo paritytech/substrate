@@ -365,9 +365,6 @@ decl_storage! {
 
 		/// The balance of an account.
 		///
-		/// NOTE: THIS MAY NEVER BE IN EXISTENCE AND YET HAVE A `total().is_zero()`. If the total
-		/// is ever zero, then the entry *MUST* be removed.
-		///
 		/// NOTE: This is only used in the case that this module is used to store balances.
 		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData<T::Balance>;
 
@@ -384,10 +381,6 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
-			assert!(
-				<T as Trait<I>>::ExistentialDeposit::get() > Zero::zero(),
-				"The existential deposit should be greater than zero."
-			);
 			for (_, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
@@ -609,7 +602,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		who: &T::AccountId,
 		f: impl FnOnce(&mut AccountData<T::Balance>) -> R
 	) -> R {
-		Self::try_mutate_account(who, |a| -> Result<R, Infallible> { Ok(f(a)) })
+		Self::try_mutate_account(who, |a, _| -> Result<R, Infallible> { Ok(f(a)) })
 			.expect("Error is infallible; qed")
 	}
 
@@ -624,13 +617,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// the caller will do this.
 	fn try_mutate_account<R, E>(
 		who: &T::AccountId,
-		f: impl FnOnce(&mut AccountData<T::Balance>) -> Result<R, E>
+		f: impl FnOnce(&mut AccountData<T::Balance>, bool) -> Result<R, E>
 	) -> Result<R, E> {
 		T::AccountStore::try_mutate_exists(who, |maybe_account| {
+			let is_new = maybe_account.is_none();
 			let mut account = maybe_account.take().unwrap_or_default();
-			let was_zero = account.total().is_zero();
-			f(&mut account).map(move |result| {
-				let maybe_endowed = if was_zero { Some(account.free) } else { None };
+			f(&mut account, is_new).map(move |result| {
+				let maybe_endowed = if is_new { Some(account.free) } else { None };
 				*maybe_account = Self::post_mutation(who, account);
 				(maybe_endowed, result)
 			})
@@ -966,8 +959,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> DispatchResult {
 		if value.is_zero() || transactor == dest { return Ok(()) }
 
-		Self::try_mutate_account(dest, |to_account| -> DispatchResult {
-			Self::try_mutate_account(transactor, |from_account| -> DispatchResult {
+		Self::try_mutate_account(dest, |to_account, _| -> DispatchResult {
+			Self::try_mutate_account(transactor, |from_account, _| -> DispatchResult {
 				from_account.free = from_account.free.checked_sub(&value)
 					.ok_or(Error::<T, I>::InsufficientBalance)?;
 
@@ -1038,8 +1031,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> Result<Self::PositiveImbalance, DispatchError> {
 		if value.is_zero() { return Ok(PositiveImbalance::zero()) }
 
-		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, DispatchError> {
-			ensure!(!account.total().is_zero(), Error::<T, I>::DeadAccount);
+		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
+			ensure!(!is_new, Error::<T, I>::DeadAccount);
 			account.free = account.free.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 			Ok(PositiveImbalance::new(value))
 		})
@@ -1057,10 +1050,10 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> Self::PositiveImbalance {
 		if value.is_zero() { return Self::PositiveImbalance::zero() }
 
-		Self::try_mutate_account(who, |account| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
+		Self::try_mutate_account(who, |account, is_new| -> Result<Self::PositiveImbalance, Self::PositiveImbalance> {
 			// bail if not yet created and this operation wouldn't be enough to create it.
 			let ed = T::ExistentialDeposit::get();
-			ensure!(value >= ed || !account.total().is_zero(), Self::PositiveImbalance::zero());
+			ensure!(value >= ed || !is_new, Self::PositiveImbalance::zero());
 
 			// defensive only: overflow should never happen, however in case it does, then this
 			// operation is a no-op.
@@ -1081,7 +1074,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	) -> result::Result<Self::NegativeImbalance, DispatchError> {
 		if value.is_zero() { return Ok(NegativeImbalance::zero()); }
 
-		Self::try_mutate_account(who, |account|
+		Self::try_mutate_account(who, |account, _|
 			-> Result<Self::NegativeImbalance, DispatchError>
 		{
 			let new_free_account = account.free.checked_sub(&value)
@@ -1105,7 +1098,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 	fn make_free_balance_be(who: &T::AccountId, value: Self::Balance)
 		-> SignedImbalance<Self::Balance, Self::PositiveImbalance>
 	{
-		Self::try_mutate_account(who, |account|
+		Self::try_mutate_account(who, |account, is_new|
 			-> Result<SignedImbalance<Self::Balance, Self::PositiveImbalance>, ()>
 		{
 			let ed = T::ExistentialDeposit::get();
@@ -1116,7 +1109,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			ensure!(value.saturating_add(account.reserved) >= ed || !account.total().is_zero(), ());
+			ensure!(value.saturating_add(account.reserved) >= ed || !is_new, ());
 
 			let imbalance = if account.free <= value {
 				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
@@ -1154,7 +1147,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> DispatchResult {
 		if value.is_zero() { return Ok(()) }
 
-		Self::try_mutate_account(who, |account| -> DispatchResult {
+		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
 			Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), account.free)
@@ -1215,9 +1208,9 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			};
 		}
 
-		Self::try_mutate_account(beneficiary, |to_account| -> Result<Self::Balance, DispatchError> {
-			ensure!(!to_account.total().is_zero(), Error::<T, I>::DeadAccount);
-			Self::try_mutate_account(slashed, |from_account| -> Result<Self::Balance, DispatchError> {
+		Self::try_mutate_account(beneficiary, |to_account, is_new| -> Result<Self::Balance, DispatchError> {
+			ensure!(!is_new, Error::<T, I>::DeadAccount);
+			Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
 				let actual = cmp::min(from_account.reserved, value);
 				match status {
 					Status::Free => to_account.free = to_account.free.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
@@ -1237,7 +1230,14 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 /// storage (which is the default in most examples and tests) then there's no need.**
 impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
-		Account::<T, I>::remove(who);
+		Account::<T, I>::mutate_exists(who, |account| {
+			let total = account.as_ref().map(|acc| acc.total()).unwrap_or_default();
+			if !total.is_zero() {
+				T::DustRemoval::on_unbalanced(NegativeImbalance::new(total));
+				Self::deposit_event(RawEvent::DustLost(who.clone(), total));
+			}
+			*account = None;
+		});
 	}
 }
 
@@ -1311,7 +1311,7 @@ impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> wher
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
-		// this should always be exactly equivalent to `Self::account(who).total().is_zero()`
+		// this should always be exactly equivalent to `Self::account(who).total().is_zero()` if ExistentialDeposit > 0
 		!T::AccountStore::is_explicit(who)
 	}
 }

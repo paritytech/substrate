@@ -105,20 +105,23 @@ impl<
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
+		let existed = S::contains_key(&k);
 		S::insert(k, t);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 	}
 	fn remove(k: &K) {
-		if S::contains_key(&k) {
+		let existed = S::contains_key(&k);
+		S::remove(k);
+		if existed {
 			Removed::happened(&k);
 		}
-		S::remove(k);
 	}
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
+		let existed = S::contains_key(&k);
 		let r = S::mutate(k, f);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 		r
