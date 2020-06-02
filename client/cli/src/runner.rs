@@ -209,12 +209,9 @@ impl<C: SubstrateCli> Runner<C> {
 		F: FnOnce(Configuration) -> std::result::Result<T, sc_service::error::Error>,
 		T: AbstractService + Unpin,
 	{
-		let prefix = self.config.informant_prefix.clone();
 		let service = service_builder(self.config)?;
 
-		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured {
-			prefix,
-		});
+		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
 		let _informant_handle = self.tokio_runtime.spawn(informant_future);
 
 		// we eagerly drop the service so that the internal exit future is fired,

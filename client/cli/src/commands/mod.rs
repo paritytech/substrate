@@ -402,12 +402,6 @@ macro_rules! substrate_cli_subcommands {
 					$($enum::$variant(cmd) => cmd.log_filters()),*
 				}
 			}
-
-			fn informant_prefix<C: $crate::SubstrateCli>(&self) -> $crate::Result<String> {
-				match self {
-					$($enum::$variant(cmd) => cmd.informant_prefix::<C>()),*
-				}
-			}
 		}
 	}
 }

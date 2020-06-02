@@ -29,14 +29,10 @@ use std::time::Duration;
 mod display;
 
 /// The format to print telemetry output in.
-#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum OutputFormat {
-	Coloured {
-		prefix: String,
-	},
-	Plain {
-		prefix: String,
-	},
+	Coloured,
+	Plain,
 }
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
@@ -44,7 +40,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 	let client = service.client();
 	let pool = service.transaction_pool();
 
-	let mut display = display::InformantDisplay::new(format.clone());
+	let mut display = display::InformantDisplay::new(format);
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))
@@ -101,18 +97,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		match &format {
-			OutputFormat::Coloured { prefix } => info!(
-				target: "substrate",
-				"✨ {}Imported #{} ({})",
-				prefix, Colour::White.bold().paint(n.header.number().to_string()), n.hash,
-			),
-			OutputFormat::Plain { prefix } => info!(
-				target: "substrate", "✨ {}Imported #{} ({})",
-				prefix, n.header.number(), n.hash,
-			),
-		}
-
+		info!(target: "substrate", "✨ Imported #{} ({})", Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
 		future::ready(())
 	});
 

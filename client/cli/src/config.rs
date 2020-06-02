@@ -393,11 +393,6 @@ pub trait CliConfiguration: Sized {
 		Ok(true)
 	}
 
-	/// A prefix for the informant's logs
-	fn informant_prefix<C: SubstrateCli>(&self) -> Result<String> {
-		Ok(C::informant_prefix().to_string())
-	}
-
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCli>(
 		&self,
@@ -469,7 +464,6 @@ pub trait CliConfiguration: Sized {
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
-			informant_prefix: self.informant_prefix::<C>()?,
 		})
 	}
 

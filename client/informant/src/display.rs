@@ -67,18 +67,16 @@ impl<B: BlockT> InformantDisplay<B> {
 		self.last_update = Instant::now();
 		self.last_number = Some(best_number);
 
-		let (level, status, target) = match (net_status.sync_state, net_status.best_seen_block) {
-			(SyncState::Idle, _) => ("💤", "Idle".into(), "".into()),
-			(SyncState::Downloading, None) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => ("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
+		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
+			(SyncState::Idle, _) => ("💤 Idle".into(), "".into()),
+			(SyncState::Downloading, None) => (format!("⚙️  Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n)) => (format!("⚙️  Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
-		match &self.format {
-			OutputFormat::Coloured { prefix } => info!(
+		if self.format == OutputFormat::Coloured {
+			info!(
 				target: "substrate",
-				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
-				level,
-				prefix,
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
@@ -88,12 +86,11 @@ impl<B: BlockT> InformantDisplay<B> {
 				info.chain.finalized_hash,
 				Colour::Green.paint(format!("⬇ {}", TransferRateFormat(net_status.average_download_per_sec))),
 				Colour::Red.paint(format!("⬆ {}", TransferRateFormat(net_status.average_upload_per_sec))),
-			),
-			OutputFormat::Plain { prefix } => info!(
+			);
+		} else {
+			info!(
 				target: "substrate",
-				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
-				level,
-				prefix,
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
 				status,
 				target,
 				num_connected_peers,
@@ -103,7 +100,7 @@ impl<B: BlockT> InformantDisplay<B> {
 				info.chain.finalized_hash,
 				TransferRateFormat(net_status.average_download_per_sec),
 				TransferRateFormat(net_status.average_upload_per_sec),
-			),
+			);
 		}
 	}
 }
