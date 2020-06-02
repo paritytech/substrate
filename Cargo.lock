@@ -2353,7 +2353,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-core"
 version = "14.1.0"
-source = "git+https://github.com/paritytech/jsonrpc#1779dbef95dd5189d73516782e861661b463cd3d"
+source = "git+https://github.com/paritytech/jsonrpc#ef92a481d76802da489f0f57dfdf4d459d7f7f76"
 dependencies = [
  "futures 0.1.29",
  "log",
@@ -2399,7 +2399,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-http-server"
 version = "14.1.0"
-source = "git+https://github.com/paritytech/jsonrpc#1779dbef95dd5189d73516782e861661b463cd3d"
+source = "git+https://github.com/paritytech/jsonrpc#ef92a481d76802da489f0f57dfdf4d459d7f7f76"
 dependencies = [
  "hyper 0.12.35",
  "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
@@ -2413,7 +2413,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-pubsub"
 version = "14.1.0"
-source = "git+https://github.com/paritytech/jsonrpc#1779dbef95dd5189d73516782e861661b463cd3d"
+source = "git+https://github.com/paritytech/jsonrpc#ef92a481d76802da489f0f57dfdf4d459d7f7f76"
 dependencies = [
  "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "log",
@@ -2437,7 +2437,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-server-utils"
 version = "14.1.0"
-source = "git+https://github.com/paritytech/jsonrpc#1779dbef95dd5189d73516782e861661b463cd3d"
+source = "git+https://github.com/paritytech/jsonrpc#ef92a481d76802da489f0f57dfdf4d459d7f7f76"
 dependencies = [
  "bytes 0.4.12",
  "globset",
@@ -2452,7 +2452,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-ws-server"
 version = "14.1.0"
-source = "git+https://github.com/paritytech/jsonrpc#1779dbef95dd5189d73516782e861661b463cd3d"
+source = "git+https://github.com/paritytech/jsonrpc#ef92a481d76802da489f0f57dfdf4d459d7f7f76"
 dependencies = [
  "jsonrpc-core 14.1.0 (git+https://github.com/paritytech/jsonrpc)",
  "jsonrpc-server-utils",
@@ -9026,7 +9026,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]
