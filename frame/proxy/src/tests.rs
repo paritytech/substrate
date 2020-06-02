@@ -121,7 +121,6 @@ pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::System(_) => true,
 			Call::Balances(_) => true,
 			_ => false,
 		}
@@ -141,6 +140,7 @@ type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type Proxy = Module<Test>;
 
+use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
 
@@ -173,6 +173,7 @@ fn add_remove_proxies_works() {
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 4);
 		assert_noop!(Proxy::add_proxy(Origin::signed(1), 4, ProxyType::Any), Error::<Test>::TooMany);
+		assert_noop!(Proxy::remove_proxy(Origin::signed(1), 3, ProxyType::JustTransfer), Error::<Test>::NotFound);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 3);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::Any));
@@ -206,6 +207,9 @@ fn proxying_works() {
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(Event::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 1);
+
+		let call = Box::new(Call::System(SystemCall::remark(vec![])));
+		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
 		assert_noop!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()), Error::<Test>::Unproxyable);
