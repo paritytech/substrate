@@ -93,31 +93,15 @@ pub trait UniqueSaturatedInto<T: Sized>: Sized {
 	fn unique_saturated_into(self) -> T;
 }
 
-impl<T: Sized + PartialOrd + Zero, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
+impl<T: Sized, S: TryFrom<T> + Bounded + Sized> UniqueSaturatedFrom<T> for S {
 	fn unique_saturated_from(t: T) -> Self {
-		let neg = t < T::zero();
-		S::try_from(t)
-			.unwrap_or_else(|_|
-				if neg {
-					Bounded::min_value()
-				} else {
-					Bounded::max_value()
-				}
-			)
+		S::try_from(t).unwrap_or_else(|_| Bounded::max_value())
 	}
 }
 
-impl<T: Bounded + Sized, S: Zero + PartialOrd + TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
+impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
 	fn unique_saturated_into(self) -> T {
-		let neg = self < S::zero();
-		self.try_into()
-			.unwrap_or_else(|_|
-				if neg {
-					Bounded::min_value()
-				} else {
-					Bounded::max_value()
-				}
-			)
+		self.try_into().unwrap_or_else(|_| Bounded::max_value())
 	}
 }
 

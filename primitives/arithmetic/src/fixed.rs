@@ -83,8 +83,10 @@ pub trait FixedPointNumber:
 	/// Creates self from an integer number `int`.
 	///
 	/// Returns `Self::max` or `Self::min` if `int` exceeds accuracy.
-	fn saturating_from_integer<N: UniqueSaturatedInto<Self::Inner>>(int: N) -> Self {
-		Self::from_inner(int.saturated_into().saturating_mul(Self::DIV))
+	fn saturating_from_integer<N: FixedPointOperand>(int: N) -> Self {
+		let mut n: I129 = int.into();
+		n.value = n.value.saturating_mul(Self::DIV.saturated_into());
+		Self::from_inner(from_i129(n).unwrap_or(to_bound(int, 0)))
 	}
 
 	/// Creates `self` from an integer number `int`.
