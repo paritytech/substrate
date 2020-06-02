@@ -184,7 +184,7 @@ pub trait VRFSigner {
 		randomness: &[u8],
 		slot_number: u64,
 		epoch: u64
-	) -> (Vec<u8>, Vec<u8>, Vec<u8>);
+	) -> (Vec<u8>, Vec<u8>);
 }
 
 /// A pointer to the key store.

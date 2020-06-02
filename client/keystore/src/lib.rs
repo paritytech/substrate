@@ -464,11 +464,11 @@ impl VRFSigner for Store {
 		randomness: &[u8],
 		slot_number: u64,
 		epoch: u64
-	) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+	) -> (Vec<u8>, Vec<u8>) {
 		let transcript = self.make_vrf_transcript(label, randomness, slot_number, epoch);
 		let pair = pair.as_ref();
-		let (inout, proof, proof_batchable) = pair.vrf_sign(transcript);
-		(inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec(), proof_batchable.to_bytes().to_vec())
+		let (inout, proof, _) = pair.vrf_sign(transcript);
+		(inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec())
 	}
 }
 

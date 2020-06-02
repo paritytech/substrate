@@ -237,7 +237,7 @@ fn claim_primary_slot(
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	for (pair, authority_index) in key_pairs {
-		// let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
+		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
 
 		// Compute the threshold we will use.
 		//
@@ -245,19 +245,23 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let (inout, proof, proof_batchable) = signer.read().vrf_sign(
+		let (output, proof) = signer.read().vrf_sign(
 			pair.as_ref(), &BABE_ENGINE_ID, randomness, slot_number, *epoch_index,
 		);
 		let proof = match schnorrkel::vrf::VRFProof::from_bytes(&proof) {
 			Ok(proof) => proof,
 			Err(_) => return None,
 		};
-		let output = match schnorrkel::vrf::VRFOutput::from_bytes(&inout) {
+		let output = match schnorrkel::vrf::VRFOutput::from_bytes(&output) {
 			Ok(output) => output,
 			Err(_) => return None,
 		};
-		let pre_digest = None;
-		if super::authorship::check_primary_threshold(inout, threshold) {
+		let inout = match output.attach_input_hash(&pair.as_ref().as_ref().public, transcript) {
+			Ok(inout) => inout,
+			Err(_) => return None,
+		};
+		let mut pre_digest = None;
+		if super::authorship::check_primary_threshold(&inout, threshold) {
 			pre_digest = Some(PreDigest::Primary(PrimaryPreDigest {
 				slot_number,
 				vrf_output: VRFOutput(output),
@@ -265,16 +269,6 @@ fn claim_primary_slot(
 				authority_index: *authority_index as u32,
 			}))
 		}
-		// let pre_digest = get_keypair(pair)
-		// 	.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
-		// 	.map(|s| {
-		// 		PreDigest::Primary(PrimaryPreDigest {
-		// 			slot_number,
-		// 			vrf_output: VRFOutput(s.0.to_output()),
-		// 			vrf_proof: VRFProof(s.1),
-		// 			authority_index: *authority_index as u32,
-		// 		})
-		// 	});
 
 		// early exit on first successful claim
 		if let Some(pre_digest) = pre_digest {
