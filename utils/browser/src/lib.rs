@@ -97,7 +97,6 @@ where
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
-		informant_prefix: Default::default(),
 	};
 
 	Ok(config)
@@ -119,10 +118,7 @@ struct RpcMessage {
 pub fn start_client(mut service: impl AbstractService) -> Client {
 	// Spawn informant
 	wasm_bindgen_futures::spawn_local(
-		sc_informant::build(
-			&service,
-			sc_informant::OutputFormat::Plain { prefix: Default::default() },
-		).map(drop)
+		sc_informant::build(&service, sc_informant::OutputFormat::Plain).map(drop)
 	);
 
 	// We dispatch a background task responsible for processing the service.
