@@ -145,15 +145,7 @@ impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Sat
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		let neg = self < T::zero() && exp % 2 != 0;
-		checked_pow(self, exp)
-			.unwrap_or_else(||
-				if neg {
-					Bounded::min_value()
-				} else {
-					Bounded::max_value()
-				}
-			)
+		checked_pow(self, exp).unwrap_or_else(|| Bounded::max_value())
 	}
 }
 
