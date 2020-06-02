@@ -18,12 +18,10 @@
 
 use super::{SignCmd, VanityCmd};
 use structopt::StructOpt;
-use crate::Error;
 
 
 #[test]
 fn sign() {
-	let words = "remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
 	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
 	let sign = SignCmd::from_iter(&["sign", "--suri", seed, "--message", &seed[2..], "--password", "12345"]);
