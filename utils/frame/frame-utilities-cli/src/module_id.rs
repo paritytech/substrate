@@ -111,7 +111,7 @@ mod tests {
 	fn module_id() {
 		let seed = "sdad1fb7";
 
-		let cmd = ModuleIdCmd::from_iter(&["moduleid", "--id", seed]);
+		let cmd = ModuleIdCmd::from_iter(&["moduleid", seed]);
 		assert!(cmd.run().is_ok());
 	}
 }
