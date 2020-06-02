@@ -248,27 +248,23 @@ fn claim_primary_slot(
 		let (output, proof) = signer.read().vrf_sign(
 			pair.as_ref(), &BABE_ENGINE_ID, randomness, slot_number, *epoch_index,
 		);
-		let proof = match schnorrkel::vrf::VRFProof::from_bytes(&proof) {
-			Ok(proof) => proof,
-			Err(_) => return None,
-		};
-		let output = match schnorrkel::vrf::VRFOutput::from_bytes(&output) {
-			Ok(output) => output,
-			Err(_) => return None,
-		};
-		let inout = match output.attach_input_hash(&pair.as_ref().as_ref().public, transcript) {
-			Ok(inout) => inout,
-			Err(_) => return None,
-		};
-		let mut pre_digest = None;
-		if super::authorship::check_primary_threshold(&inout, threshold) {
-			pre_digest = Some(PreDigest::Primary(PrimaryPreDigest {
+		let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
+		let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
+		let inout = output.attach_input_hash(
+			&pair.as_ref().as_ref().public,
+			transcript
+		).ok()?;
+
+		let pre_digest = if super::authorship::check_primary_threshold(&inout, threshold) {
+			Some(PreDigest::Primary(PrimaryPreDigest {
 				slot_number,
 				vrf_output: VRFOutput(output),
 				vrf_proof: VRFProof(proof),
 				authority_index: *authority_index as u32,
 			}))
-		}
+		} else {
+			None
+		};
 
 		// early exit on first successful claim
 		if let Some(pre_digest) = pre_digest {
