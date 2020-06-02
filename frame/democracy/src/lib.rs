@@ -52,8 +52,6 @@
 //! account or an external origin) suggests that the system adopt.
 //! - **Referendum:** A proposal that is in the process of being voted on for
 //!   either acceptance or rejection as a change to the system.
-//! - **Proxy:** An account that has full voting power on behalf of a separate "Stash" account
-//!   that holds the funds.
 //! - **Delegation:** The act of granting your voting power to the decisions of another account for
 //!   up to a certain conviction.
 //!
@@ -92,18 +90,6 @@
 //! Administration actions that can be done to any account:
 //! - `reap_vote` - Remove some account's expired votes.
 //! - `unlock` - Redetermine the account's balance lock, potentially making tokens available.
-//!
-//! Proxy administration:
-//! - `activate_proxy` - Activates a proxy that is already open to the sender.
-//! - `close_proxy` - Clears the proxy status, called by the proxy.
-//! - `deactivate_proxy` - Deactivates a proxy back to the open status, called by the stash.
-//! - `open_proxy` - Opens a proxy account on behalf of the sender.
-//!
-//! Proxy actions:
-//! - `proxy_vote` - Votes in a referendum on behalf of a stash account.
-//! - `proxy_unvote` - Cancel a previous vote, done on behalf of the voter by a proxy.
-//! - `proxy_delegate` - Delegate voting power, done on behalf of the voter by a proxy.
-//! - `proxy_undelegate` - Stop delegating voting power, done on behalf of the voter by a proxy.
 //!
 //! Preimage actions:
 //! - `note_preimage` - Registers the preimage for an upcoming proposal, requires
@@ -191,7 +177,7 @@ mod types;
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use vote::{Vote, AccountVote, Voting};
 pub use conviction::Conviction;
-pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally, UnvoteScope, Delegations};
+pub use types::{ReferendumInfo, ReferendumStatus, Tally, UnvoteScope, Delegations};
 
 #[cfg(test)]
 mod tests;
@@ -376,14 +362,6 @@ decl_storage! {
 		/// TWOX-NOTE: SAFE as `AccountId`s are crypto hashes anyway.
 		pub VotingOf: map hasher(twox_64_concat) T::AccountId => Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>;
 
-		/// Who is able to vote for whom. Value is the fund-holding account, key is the
-		/// vote-transaction-sending account.
-		///
-		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
-		// TODO: Refactor proxy into its own pallet.
-		// https://github.com/paritytech/substrate/issues/5322
-		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
-
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
 		///
@@ -467,8 +445,6 @@ decl_error! {
 		ValueLow,
 		/// Proposal does not exist
 		ProposalMissing,
-		/// Not a proxy
-		NotProxy,
 		/// Unknown index
 		BadIndex,
 		/// Cannot cancel the same proposal twice
@@ -485,10 +461,6 @@ decl_error! {
 		NoProposal,
 		/// Identity may not veto a proposal twice
 		AlreadyVetoed,
-		/// Already a proxy
-		AlreadyProxy,
-		/// Wrong proxy
-		WrongProxy,
 		/// Not delegated
 		NotDelegated,
 		/// Preimage already noted
@@ -511,12 +483,6 @@ decl_error! {
 		NotLocked,
 		/// The lock on the account to be unlocked has not yet expired.
 		NotExpired,
-		/// A proxy-pairing was attempted to an account that was not open.
-		NotOpen,
-		/// A proxy-pairing was attempted to an account that was open to another account.
-		WrongOpen,
-		/// A proxy-de-pairing was attempted to an account that was not active.
-		NotActive,
 		/// The given account did not vote on the referendum.
 		NotVoter,
 		/// The actor has no permission to conduct the action.
@@ -572,27 +538,6 @@ mod weight_for {
 	pub fn undelegate<T: Trait>(votes: Weight) -> Weight {
 		T::DbWeight::get().reads_writes(votes.saturating_add(2), votes.saturating_add(2))
 			.saturating_add(33_000_000)
-			.saturating_add(votes.saturating_mul(8_000_000))
-	}
-
-	/// Calculate the weight for `proxy_delegate`.
-	/// same as `delegate with additional:
-	/// - Db reads: `Proxy`, `proxy account`
-	/// - Db writes: `proxy account`
-	/// - Base Weight: 68.61 + 8.039 * R µs
-	pub fn proxy_delegate<T: Trait>(votes: Weight) -> Weight {
-		T::DbWeight::get().reads_writes(votes.saturating_add(5), votes.saturating_add(4))
-			.saturating_add(69_000_000)
-			.saturating_add(votes.saturating_mul(8_000_000))
-	}
-
-	/// Calculate the weight for `proxy_undelegate`.
-	/// same as `undelegate with additional:
-	/// Db reads: `Proxy`
-	/// Base Weight: 39 + 7.958 * R µs
-	pub fn proxy_undelegate<T: Trait>(votes: Weight) -> Weight {
-		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(2))
-			.saturating_add(40_000_000)
 			.saturating_add(votes.saturating_mul(8_000_000))
 	}
 
@@ -764,34 +709,6 @@ decl_module! {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_vote(&who, ref_index, vote)
-		}
-
-		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
-		/// the proposal; otherwise it is a vote to keep the status quo.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// - `ref_index`: The index of the referendum to proxy vote for.
-		/// - `vote`: The vote configuration.
-		///
-		/// # <weight>
-		/// - Complexity: `O(R)` where R is the number of referendums the proxy has voted on.
-		///   weight is charged as if maximum votes.
-		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `balances locks`, `Proxy`, `proxy account`
-		/// - Db writes: `ReferendumInfoOf`, `VotingOf`, `balances locks`
-		/// ------------
-		/// - Base Weight:
-		///     - Proxy Vote New: 54.35 + .344 * R µs
-		///     - Proxy Vote Existing: 54.35 + .35 * R µs
-		/// # </weight>
-		#[weight = 55_000_000 + 350_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(5, 3)]
-		fn proxy_vote(origin,
-			#[compact] ref_index: ReferendumIndex,
-			vote: AccountVote<BalanceOf<T>>,
-		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let voter = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_vote(&voter, ref_index, vote)
 		}
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
@@ -1028,86 +945,6 @@ decl_module! {
 			})
 		}
 
-		/// Specify a proxy that is already open to us. Called by the stash.
-		///
-		/// NOTE: Used to be called `set_proxy`.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// - `proxy`: The account that will be activated as proxy.
-		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db reads: `Proxy`
-		/// - Db writes: `Proxy`
-		/// - Base Weight: 7.972 µs
-		/// # </weight>
-		#[weight = 8_000_000 + T::DbWeight::get().reads_writes(1, 1)]
-		fn activate_proxy(origin, proxy: T::AccountId) {
-			let who = ensure_signed(origin)?;
-			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
-				None => Err(Error::<T>::NotOpen),
-				Some(ProxyState::Active(_)) => Err(Error::<T>::AlreadyProxy),
-				Some(ProxyState::Open(x)) if &x == &who => {
-					*a = Some(ProxyState::Active(who));
-					Ok(())
-				}
-				Some(ProxyState::Open(_)) => Err(Error::<T>::WrongOpen),
-			})?;
-		}
-
-		/// Clear the proxy. Called by the proxy.
-		///
-		/// NOTE: Used to be called `resign_proxy`.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db reads: `Proxy`, `sender account`
-		/// - Db writes: `Proxy`, `sender account`
-		/// - Base Weight: 15.41 µs
-		/// # </weight>
-		#[weight = 16_000_000 + T::DbWeight::get().reads_writes(1, 1)]
-		fn close_proxy(origin) {
-			let who = ensure_signed(origin)?;
-			Proxy::<T>::mutate(&who, |a| {
-				if a.is_some() {
-					system::Module::<T>::dec_ref(&who);
-				}
-				*a = None;
-			});
-		}
-
-		/// Deactivate the proxy, but leave open to this account. Called by the stash.
-		///
-		/// The proxy must already be active.
-		///
-		/// NOTE: Used to be called `remove_proxy`.
-		///
-		/// The dispatch origin of this call must be _Signed_.
-		///
-		/// - `proxy`: The account that will be deactivated as proxy.
-		///
-		/// # <weight>
-		/// - Complexity: `O(1)`
-		/// - Db reads: `Proxy`
-		/// - Db writes: `Proxy`
-		/// - Base Weight: 8.03 µs
-		/// # </weight>
-		#[weight = 8_000_000 + T::DbWeight::get().reads_writes(1, 1)]
-		fn deactivate_proxy(origin, proxy: T::AccountId) {
-			let who = ensure_signed(origin)?;
-			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
-				None | Some(ProxyState::Open(_)) => Err(Error::<T>::NotActive),
-				Some(ProxyState::Active(x)) if &x == &who => {
-					*a = Some(ProxyState::Open(who));
-					Ok(())
-				}
-				Some(ProxyState::Active(_)) => Err(Error::<T>::WrongProxy),
-			})?;
-		}
-
 		/// Delegate the voting power (with some given conviction) of the sending account.
 		///
 		/// The balance delegated is locked for as long as it's delegated, and thereafter for the
@@ -1314,33 +1151,6 @@ decl_module! {
 			Self::update_lock(&target);
 		}
 
-		/// Become a proxy.
-		///
-		/// This must be called prior to a later `activate_proxy`.
-		///
-		/// Origin must be a Signed.
-		///
-		/// - `target`: The account whose votes will later be proxied.
-		///
-		/// `close_proxy` must be called before the account can be destroyed.
-		///
-		/// # <weight>
-		/// - Complexity: O(1)
-		/// - Db reads: `Proxy`, `proxy account`
-		/// - Db writes: `Proxy`, `proxy account`
-		/// - Base Weight: 14.86 µs
-		/// # </weight>
-		#[weight = 15_000_000 + T::DbWeight::get().reads_writes(2, 2)]
-		fn open_proxy(origin, target: T::AccountId) {
-			let who = ensure_signed(origin)?;
-			Proxy::<T>::mutate(&who, |a| {
-				if a.is_none() {
-					system::Module::<T>::inc_ref(&who);
-				}
-				*a = Some(ProxyState::Open(target));
-			});
-		}
-
 		/// Remove a vote for a referendum.
 		///
 		/// If:
@@ -1407,94 +1217,6 @@ decl_module! {
 			Ok(())
 		}
 
-		/// Delegate the voting power (with some given conviction) of a proxied account.
-		///
-		/// The balance delegated is locked for as long as it's delegated, and thereafter for the
-		/// time appropriate for the conviction's lock period.
-		///
-		/// The dispatch origin of this call must be _Signed_, and the signing account must have
-		/// been set as the proxy account for `target`.
-		///
-		/// - `target`: The account whole voting power shall be delegated and whose balance locked.
-		///   This account must either:
-		///   - be delegating already; or
-		///   - have no voting activity (if there is, then it will need to be removed/consolidated
-		///     through `reap_vote` or `unvote`).
-		/// - `to`: The account whose voting the `target` account's voting power will follow.
-		/// - `conviction`: The conviction that will be attached to the delegated votes. When the
-		///   account is undelegated, the funds will be locked for the corresponding period.
-		/// - `balance`: The amount of the account's balance to be used in delegating. This must
-		///   not be more than the account's current balance.
-		///
-		/// Emits `Delegated`.
-		///
-		/// # <weight>
-		/// same as `delegate with additional:
-		/// - Db reads: `Proxy`, `proxy account`
-		/// - Db writes: `proxy account`
-		/// - Base Weight: 68.61 + 8.039 * R µs
-		/// # </weight>
-		#[weight = weight_for::proxy_delegate::<T>(T::MaxVotes::get().into())]
-		pub fn proxy_delegate(origin,
-			to: T::AccountId,
-			conviction: Conviction,
-			balance: BalanceOf<T>,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			let votes = Self::try_delegate(target, to, conviction, balance)?;
-
-			Ok(Some(weight_for::proxy_delegate::<T>(votes.into())).into())
-		}
-
-		/// Undelegate the voting power of a proxied account.
-		///
-		/// Tokens may be unlocked following once an amount of time consistent with the lock period
-		/// of the conviction with which the delegation was issued.
-		///
-		/// The dispatch origin of this call must be _Signed_ and the signing account must be a
-		/// proxy for some other account which is currently delegating.
-		///
-		/// Emits `Undelegated`.
-		///
-		/// # <weight>
-		/// same as `undelegate with additional:
-		/// Db reads: `Proxy`
-		/// Base Weight: 39 + 7.958 * R µs
-		/// # </weight>
-		#[weight = weight_for::proxy_undelegate::<T>(T::MaxVotes::get().into())]
-		fn proxy_undelegate(origin) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			let votes = Self::try_undelegate(target)?;
-
-			Ok(Some(weight_for::proxy_undelegate::<T>(votes.into())).into())
-		}
-
-		/// Remove a proxied vote for a referendum.
-		///
-		/// Exactly equivalent to `remove_vote` except that it operates on the account that the
-		/// sender is a proxy for.
-		///
-		/// The dispatch origin of this call must be _Signed_ and the signing account must be a
-		/// proxy for some other account which has a registered vote for the referendum of `index`.
-		///
-		/// - `index`: The index of referendum of the vote to be removed.
-		///
-		/// # <weight>
-		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
-		///   Weight is calculated for the maximum number of vote.
-		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `Proxy`
-		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
-		/// - Base Weight: 26.35 + .36 * R µs
-		/// # </weight>
-		#[weight = 26_000_000 + 360_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 3)]
-		fn proxy_remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_remove_vote(&target, index, UnvoteScope::Any)
-		}
-
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
 		#[weight = T::MaximumBlockWeight::get()]
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
@@ -1537,16 +1259,6 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Exposed mutables.
-
-	#[cfg(feature = "std")]
-	pub fn force_proxy(stash: T::AccountId, proxy: T::AccountId) {
-		Proxy::<T>::mutate(&proxy, |o| {
-			if o.is_none() {
-				system::Module::<T>::inc_ref(&proxy);
-			}
-			*o = Some(ProxyState::Active(stash))
-		})
-	}
 
 	/// Start a referendum.
 	pub fn internal_start_referendum(
