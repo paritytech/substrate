@@ -325,6 +325,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_at(&self, at: NumberFor<Self::Block>) -> PolledIterator<PoolApi> {
 		if self.ready_poll.lock().updated_at() >= at {
+			log::trace!(target: "txpool", "Transaction pool is already processed block  #{}", at);
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
 			return Box::pin(futures::future::ready(iterator));
 		}
@@ -437,6 +438,9 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
 			ChainEvent::NewBlock { id, retracted, .. } => {
+
+				log::trace!(target: "txpool", "Processing block #{} in the transaction pool. Retracted: {:?}", id, retracted);
+
 				let id = id.clone();
 				let pool = self.pool.clone();
 				let api = self.api.clone();
@@ -471,6 +475,8 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							.into_iter()
 							.map(|tx| pool.hash_of(&tx))
 							.collect::<Vec<_>>();
+
+						log::trace!("Pruning transactions: {:?}", hashes);
 
 						if let Err(e) = pool.prune_known(&id, &hashes) {
 							log::error!("Cannot prune known in the pool {:?}!", e);
