@@ -100,6 +100,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	informant_prefix_builder: Option<Box<dyn FnOnce() -> String + Send>>,
 }
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -363,6 +364,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: None,
 			block_announce_validator_builder: None,
+			informant_prefix_builder: None,
 			marker: PhantomData,
 		})
 	}
@@ -446,6 +448,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
+			informant_prefix_builder: None,
 			marker: PhantomData,
 		})
 	}
@@ -519,6 +522,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
 		})
 	}
@@ -564,6 +568,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
 		})
 	}
@@ -602,6 +607,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
 		})
 	}
@@ -668,6 +674,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
 		})
 	}
@@ -732,6 +739,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
 		})
 	}
@@ -769,6 +777,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
 		})
 	}
@@ -814,7 +823,21 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
+			informant_prefix_builder: self.informant_prefix_builder,
 			marker: self.marker,
+		})
+	}
+
+	/// Defines the informant's prefix for the logs. An empty string by default.
+	pub fn with_informant_prefix(
+		self,
+		informant_prefix_builder: impl FnOnce() -> String + Send + 'static,
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TExPool, TRpc, Backend>, Error>
+	where TSc: Clone, TFchr: Clone {
+		Ok(ServiceBuilder {
+			informant_prefix_builder: Some(Box::new(informant_prefix_builder)),
+			..self
 		})
 	}
 }
@@ -933,7 +956,10 @@ ServiceBuilder<
 			rpc_extensions_builder,
 			remote_backend,
 			block_announce_validator_builder,
+			informant_prefix_builder,
 		} = self;
+
+		let informant_prefix = informant_prefix_builder.map(|f| f()).unwrap_or_else(String::new);
 
 		sp_session::generate_initial_session_keys(
 			client.clone(),
@@ -1338,7 +1364,8 @@ ServiceBuilder<
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 			marker: PhantomData::<TBl>,
-			prometheus_registry: config.prometheus_config.map(|config| config.registry)
+			prometheus_registry: config.prometheus_config.map(|config| config.registry),
+			informant_prefix,
 		})
 	}
 }

@@ -127,6 +127,7 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
+	informant_prefix: String,
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
