@@ -434,13 +434,12 @@ build-rust-doc:
     when:                          on_success
     expire_in:                     7 days
     paths:
-    - ./crate-docs
+    - ./crate-docs/index.html
+    - ./crate-docs/doc/
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" 
-        time cargo +nightly doc --no-deps --workspace --all-features --verbose --target-dir ./crate-docs |&
-        tee output.log
-    - echo "____Docs job successful, checking for warnings____"
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html"  
+        time cargo +nightly doc --no-deps --workspace --all-features --verbose --target-dir ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
@@ -558,7 +557,7 @@ publish-s3-doc:
   dependencies:
     - build-rust-doc
   cache:                           {}
-  <<:                              *build-only
+  # <<:                              *build-only
   <<:                              *kubernetes-build
   variables:
     GIT_STRATEGY:                  none
