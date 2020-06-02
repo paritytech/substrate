@@ -30,9 +30,13 @@ mod display;
 
 /// The format to print telemetry output in.
 #[derive(Clone)]
-pub struct OutputFormat {
-	pub prefix: String,
-	pub colors: bool,
+pub enum OutputFormat {
+	Coloured {
+		prefix: String,
+	},
+	Plain {
+		prefix: String,
+	},
 }
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
@@ -97,18 +101,16 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		if format.colors {
-			info!(
+		match &format {
+			OutputFormat::Coloured { prefix } => info!(
 				target: "substrate",
 				"✨ {}Imported #{} ({})",
-				format.prefix, Colour::White.bold().paint(n.header.number().to_string()), n.hash,
-			)
-		} else {
-			info!(
-				target: "substrate",
-				"✨ {}Imported #{} ({})",
-				format.prefix, n.header.number(), n.hash,
-			)
+				prefix, Colour::White.bold().paint(n.header.number().to_string()), n.hash,
+			),
+			OutputFormat::Plain { prefix } => info!(
+				target: "substrate", "✨ {}Imported #{} ({})",
+				prefix, n.header.number(), n.hash,
+			),
 		}
 
 		future::ready(())
