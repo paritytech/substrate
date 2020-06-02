@@ -28,7 +28,10 @@ use codec::{Encode, Decode};
 use sp_runtime::{MultiSigner, MultiSignature, AccountId32};
 use std::convert::TryFrom;
 use sp_core::{crypto::Ss58Codec, hexdisplay::HexDisplay};
-use frame_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, SignedExtensionProvider, CallFor};
+use frame_utils::{
+    AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor,
+    SignedExtensionProvider, CallFor,
+};
 use crate::utils::create_extrinsic_for;
 
 type Bytes = Vec<u8>;
@@ -90,10 +93,10 @@ impl TransferCmd {
         let nonce = self.index.parse::<IndexFor<R>>()?;
         let to = if let Ok(data_vec) = decode_hex(&self.to) {
             AccountIdFor::<R>::try_from(&data_vec)
-                .map_err(|_| Error::Other("Invalid hex length for account ID; should be 32 bytes".into()))?
+                .map_err(|_| "Invalid hex length for account ID; should be 32 bytes")?
         } else {
             AccountIdFor::<R>::from_ss58check(&self.to)
-                .map_err(|_| Error::Other("Invalid SS58-check address given for account ID.".into()))?
+                .map_err(|_| "Invalid SS58-check address given for account ID.")?
         };
         let amount = self.amount.parse::<BalanceFor<R>>()?;
         let prior_block_hash = <R::Hash as Decode>::decode(&mut &self.prior_block_hash[..])?;
