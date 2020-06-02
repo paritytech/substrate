@@ -37,6 +37,8 @@ use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
+pub use storage;
+
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
 	/// Full identification of the validator.
