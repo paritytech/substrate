@@ -131,7 +131,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 	fn prepare_batch(&mut self) -> Vec<ExHash<Api>> {
 		let mut queued_exts = Vec::new();
-		let mut left = BACKGROUND_REVALIDATION_BATCH_SIZE;
+		let mut left = std::cmp::max(BACKGROUND_REVALIDATION_BATCH_SIZE, self.members.len() / 4);
 
 		// Take maximum of count transaction by order
 		// which they got into the pool
