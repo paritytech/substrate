@@ -127,6 +127,7 @@ fn claim_secondary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	key_pairs: &[(AuthorityPair, usize)],
+	keystore: &KeyStorePtr,
 	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -144,18 +145,16 @@ fn claim_secondary_slot(
 	for (pair, authority_index) in key_pairs {
 		if pair.public() == *expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript = super::authorship::make_transcript(
-					randomness,
-					slot_number,
-					*epoch_index,
+				let (output, proof) = keystore.read().vrf_sign(
+					pair.as_ref(), &BABE_ENGINE_ID, randomness, slot_number, *epoch_index,
 				);
-
-				let s = get_keypair(&pair).vrf_sign(transcript);
+				let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
+				let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
 
 				PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 					slot_number,
-					vrf_output: VRFOutput(s.0.to_output()),
-					vrf_proof: VRFProof(s.1),
+					vrf_output: VRFOutput(output),
+					vrf_proof: VRFProof(proof),
 					authority_index: *authority_index as u32,
 				})
 			} else {
@@ -198,10 +197,10 @@ pub fn claim_slot(
 pub fn claim_slot_using_key_pairs(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	signer: &KeyStorePtr,
+	keystore: &KeyStorePtr,
 	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot_number, epoch, epoch.config.c, signer, &key_pairs)
+	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore, &key_pairs)
 		.or_else(|| {
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
@@ -210,17 +209,13 @@ pub fn claim_slot_using_key_pairs(
 					slot_number,
 					&epoch,
 					&key_pairs,
+					keystore,
 					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {
 				None
 			}
 		})
-}
-
-fn get_keypair(q: &AuthorityPair) -> &schnorrkel::Keypair {
-	use sp_core::crypto::IsWrappedBy;
-	sp_core::sr25519::Pair::from_ref(q).as_ref()
 }
 
 /// Claim a primary slot if it is our turn.  Returns `None` if it is not our turn.
@@ -231,7 +226,7 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
-	signer: &KeyStorePtr,
+	keystore: &KeyStorePtr,
 	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
@@ -245,7 +240,7 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let (output, proof) = signer.read().vrf_sign(
+		let (output, proof) = keystore.read().vrf_sign(
 			pair.as_ref(), &BABE_ENGINE_ID, randomness, slot_number, *epoch_index,
 		);
 		let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
