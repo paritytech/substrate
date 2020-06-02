@@ -33,13 +33,11 @@ use structopt::StructOpt;
 )]
 pub struct VerifyCmd {
 	/// Signature, hex-encoded.
-	#[structopt(long)]
 	sig: String,
 
 	/// The public or secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[structopt(long)]
 	uri: Option<String>,
 
 	/// Message to verify, if not provided you will be prompted to

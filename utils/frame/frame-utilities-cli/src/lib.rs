@@ -21,6 +21,8 @@ mod generate;
 mod generate_node_key;
 mod insert;
 mod inspect;
+mod inspect_node_key;
+mod module_id;
 mod key;
 mod utils;
 mod sign_transaction;
@@ -29,12 +31,21 @@ mod transfer;
 #[cfg(feature = "balances")]
 pub use transfer::TransferCmd;
 
-pub use {key::KeySubcommand, sign_transaction::SignTransactionCmd};
+pub use {
+	key::KeySubcommand,
+	module_id::ModuleIdCmd,
+	generate::GenerateCmd,
+	insert::InsertCmd,
+	inspect::InspectCmd,
+	inspect_node_key::InspectNodeKeyCmd,
+	sign_transaction::SignTransactionCmd,
+	generate_node_key::GenerateNodeKeyCmd,
+};
 
 
 #[cfg(test)]
 mod tests {
-	use super::{generate::GenerateCmd, generate_node_key::GenerateNodeIdCmd, inspect::InspectCmd};
+	use super::{generate::GenerateCmd, generate_node_key::GenerateNodeKeyCmd, inspect::InspectCmd};
 	use tempfile::Builder;
 	use structopt::StructOpt;
 	use std::io::Read;
@@ -49,7 +60,7 @@ mod tests {
 	fn generate_node_key() {
 		let mut file = Builder::new().prefix("keyfile").tempfile().unwrap();
 		let generate =
-			GenerateNodeIdCmd::from_iter(&["generate-node-key", "--file", "/tmp/keyfile"]);
+			GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", "/tmp/keyfile"]);
 		assert!(generate.run().is_ok());
 		let mut buf = String::new();
 		assert!(file.read_to_string(&mut buf).is_ok());

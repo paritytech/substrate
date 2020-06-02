@@ -78,7 +78,7 @@ pub trait SignedExtensionProvider: frame_system::Trait {
     type Extra: SignedExtension;
 
     /// construct extras and optionally additional_signed data for inclusion in extrinsics.
-    fn construct_extras(nonce: IndexFor<Self>, era: Era, genesis: Option<Self::Hash>) -> (
+    fn construct_extras(nonce: IndexFor<Self>, era: Era, prior_block_hash: Option<Self::Hash>) -> (
         Self::Extra,
         Option<<Self::Extra as SignedExtension>::AdditionalSigned>
     );

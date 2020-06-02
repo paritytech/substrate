@@ -23,23 +23,27 @@ use frame_utils::{HashFor, SignedExtensionProvider};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-	generate_node_key::GenerateNodeIdCmd,
-	generate::GenerateCmd,
+	insert::InsertCmd,
 	inspect::InspectCmd,
-	insert::InsertCmd
+	generate::GenerateCmd,
+	inspect_node_key::InspectNodeKeyCmd,
+	generate_node_key::GenerateNodeKeyCmd,
 };
 
 /// key utilities for the cli.
 #[derive(Debug, Clone, StructOpt)]
 pub enum KeySubcommand {
 	/// Generate a random node libp2p key, save it to file and print its peer ID
-	GenerateNodeKey(GenerateNodeIdCmd),
+	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
 	InspectKey(InspectCmd),
+
+	/// Print the peer ID corresponding to the node key in the given file
+	InspectNodeKey(InspectNodeKeyCmd),
 
 	/// Insert a key to the keystore of a node.
 	Insert(InsertCmd),
@@ -57,6 +61,7 @@ impl KeySubcommand {
 			KeySubcommand::Generate(cmd) => cmd.run(),
 			KeySubcommand::InspectKey(cmd) => cmd.run(),
 			KeySubcommand::Insert(cmd) => cmd.run::<P>(),
+			KeySubcommand::InspectNodeKey(cmd) => cmd.run(),
 		}
 	}
 }
@@ -65,6 +70,7 @@ impl KeySubcommand {
 substrate_cli_subcommands!(
 	KeySubcommand =>
 	GenerateNodeKey,
+	InspectNodeKey,
 	Generate,
 	InspectKey,
 	Insert

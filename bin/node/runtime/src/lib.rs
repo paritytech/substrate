@@ -534,7 +534,7 @@ parameter_types! {
 impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
 
-	fn construct_extras(index: IndexFor<Self>, era: Era, genesis: Option<Hash>) -> (
+	fn construct_extras(index: IndexFor<Self>, era: Era, prior_block_hash: Option<Hash>) -> (
 		Self::Extra,
 		Option<<Self::Extra as SignedExtension>::AdditionalSigned>
 	) {
@@ -550,12 +550,12 @@ impl SignedExtensionProvider for Runtime {
 				pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 				pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
 			),
-			genesis.map(|genesis| {
+			prior_block_hash.map(|hash| {
 				(
 					VERSION.spec_version,
 					VERSION.transaction_version,
-					genesis,
-					genesis,
+					hash,
+					hash,
 					(),
 					(),
 					(),

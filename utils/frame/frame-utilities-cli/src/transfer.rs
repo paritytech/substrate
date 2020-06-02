@@ -58,7 +58,7 @@ pub struct TransferCmd {
 
     /// genesis hash, for signed extensions.
     #[structopt(long, parse(try_from_str = decode_hex))]
-    genesis: Bytes,
+    prior_block_hash: Bytes,
 
     #[allow(missing_docs)]
     #[structopt(flatten)]
@@ -96,7 +96,7 @@ impl TransferCmd {
                 .map_err(|_| Error::Other("Invalid SS58-check address given for account ID.".into()))?
         };
         let amount = self.amount.parse::<BalanceFor<R>>()?;
-        let genesis = <R::Hash as Decode>::decode(&mut &self.genesis[..])?;
+        let prior_block_hash = <R::Hash as Decode>::decode(&mut &self.prior_block_hash[..])?;
         println!("Scheme {}", self.crypto_scheme.scheme);
 
         with_crypto_scheme!(
@@ -107,7 +107,7 @@ impl TransferCmd {
 				to.into(),
 				nonce,
 				amount,
-				genesis
+				prior_block_hash
 			)
 		)
     }
@@ -129,7 +129,7 @@ fn print_ext<Pair, P>(
     to: AddressFor<P>,
     nonce: IndexFor<P>,
     amount: BalanceFor<P>,
-    genesis: P::Hash
+    prior_block_hash: P::Hash
 ) -> Result<(), Error>
     where
         Pair: sp_core::Pair,
@@ -143,43 +143,7 @@ fn print_ext<Pair, P>(
 {
     let signer = pair_from_suri::<Pair>(uri, pass);
     let call: CallFor<P> = BalancesCall::transfer(to, amount).into();
-    let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, genesis)?;
+    let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, prior_block_hash)?;
     println!("0x{}", HexDisplay::from(&extrinsic.encode()));
     Ok(())
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use substrate_test_runtime::Runtime;
-//
-//     fn new_test_ext() -> sp_io::TestExternalities {
-//         let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-//         sp_io::TestExternalities::new(t)
-//     }
-//
-//     #[test]
-//     fn transfer() {
-//         let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
-//         let words = "remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
-//
-//         let transfer = TransferCmd::from_iter(&["transfer",
-//             "--from", seed,
-//             "--to", "0xa2bc899a8a3b16a284a8cefcbc2dc48a687cd674e89b434fbbdb06f400979744",
-//             "--amount", "5000",
-//             "--index", "1",
-//             "--password", "12345",
-//         ]);
-//
-//         new_test_ext().execute_with(|| {
-//             assert!(matches!(transfer.run::<Runtime>(), Ok(())));
-//             let transfer = TransferCmd::from_iter(&["transfer",
-//                 "--from", words,
-//                 "--to", "0xa2bc899a8a3b16a284a8cefcbc2dc48a687cd674e89b434fbbdb06f400979744",
-//                 "--amount", "5000",
-//                 "--index", "1",
-//             ]);
-//             assert!(matches!(transfer.run::<Runtime>(), Err(Error::Input(_))))
-//         });
-//     }
-// }

@@ -15,39 +15,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Implementation of the `generate-node-key` subcommand
+//! Implementation of the `inspect-node-key` subcommand
 
-use sc_cli::{Error, SharedParams, CliConfiguration};
+use sc_cli::{Error, SharedParams, NetworkSchemeFlag, CliConfiguration};
+use std::fs;
+use libp2p::identity::{PublicKey, ed25519};
+use std::path::PathBuf;
 use structopt::StructOpt;
-use std::{path::PathBuf, fs};
-use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 
-/// The `generate-node-key` command
+/// The `inspect-node-key` command
 #[derive(Debug, StructOpt, Clone)]
 #[structopt(
-	name = "generate-node-key",
-	about = "Generate a random node libp2p key, save it to file and print its peer ID"
+	name = "inspect-node-key",
+	about = "Print the peer ID corresponding to the node key in the given file."
 )]
-pub struct GenerateNodeKeyCmd {
-	/// Name of file to save secret key to.
+pub struct InspectNodeKeyCmd {
+	/// Name of file to read the secret key from.
 	#[structopt(long)]
 	file: PathBuf,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub network_scheme: NetworkSchemeFlag,
 }
 
-impl GenerateNodeKeyCmd {
-	/// Run the command
+impl InspectNodeKeyCmd {
 	pub fn run(&self) -> Result<(), Error> {
-		let file = &self.file;
+		let mut file_content = hex::decode(fs::read(&self.file)?)
+			.map_err(|_| "failed to decode secret as hex")?;
+		let secret = ed25519::SecretKey::from_bytes(&mut file_content)
+			.map_err(|_| "Bad node key file")?;
 
-		let keypair = libp2p_ed25519::Keypair::generate();
-		let secret = keypair.secret();
+		let keypair = ed25519::Keypair::from(secret);
 		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
-
-		fs::write(file, hex::encode(secret.as_ref()))?;
 
 		println!("{}", peer_id);
 
@@ -55,7 +59,7 @@ impl GenerateNodeKeyCmd {
 	}
 }
 
-impl CliConfiguration for GenerateNodeKeyCmd {
+impl CliConfiguration for InspectNodeKeyCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}
@@ -64,6 +68,7 @@ impl CliConfiguration for GenerateNodeKeyCmd {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::generate_node_key::GenerateNodeKeyCmd;
 
 	#[test]
 	fn inspect_node_key() {
@@ -71,6 +76,9 @@ mod tests {
 		let path = path.to_str().unwrap();
 		let cmd = GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", path.clone()]);
 
+		assert!(cmd.run().is_ok());
+
+		let cmd = InspectNodeKeyCmd::from_iter(&["inspect-node-key", "--file", path]);
 		assert!(cmd.run().is_ok());
 	}
 }

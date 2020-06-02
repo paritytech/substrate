@@ -28,7 +28,7 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 	call: Call,
 	nonce:  IndexFor<P>,
 	pair: Pair,
-	genesis: P::Hash,
+	hash: P::Hash,
 ) -> Result<
 		UncheckedExtrinsic<AddressFor<P>, Call, MultiSignature, P::Extra>,
 		&'static str
@@ -42,7 +42,7 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 		AccountIdFor<P>: From<AccountId32>,
 		AddressFor<P>: From<AccountIdFor<P>>,
 {
-	let (extra, additional) = P::construct_extras(nonce, Era::Immortal, Some(genesis));
+	let (extra, additional) = P::construct_extras(nonce, Era::Immortal, Some(hash));
 
 	let payload = if let Some(additional_signed) = additional {
 		SignedPayload::from_raw(call, extra, additional_signed)

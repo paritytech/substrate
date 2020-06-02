@@ -18,7 +18,7 @@
 //! Implementation of the `sign-transaction` subcommand
 use sc_cli::{
 	Error, CliConfiguration, KeystoreParams, SharedParams,
-	pair_from_suri, decode_hex,with_crypto_scheme,
+	pair_from_suri, decode_hex, with_crypto_scheme,
 	CryptoSchemeFlag, GenericNumber,
 };
 use structopt::StructOpt;
@@ -49,7 +49,7 @@ pub struct SignTransactionCmd {
 
 	/// genesis hash, for signed extensions.
 	#[structopt(long, parse(try_from_str = decode_hex))]
-	genesis: Bytes,
+	prior_block_hash: Bytes,
 
 	/// The call, hex-encoded.
 	#[structopt(long, parse(try_from_str = decode_hex))]
@@ -79,13 +79,13 @@ impl SignTransactionCmd {
 			CallFor<P>: Codec,
 	{
 		let nonce = self.nonce.parse::<IndexFor<P>>()?;
-		let genesis = <P::Hash as Decode>::decode(&mut &self.genesis[..])?;
+		let hash = <P::Hash as Decode>::decode(&mut &self.prior_block_hash[..])?;
 		let call = CallFor::<P>::decode(&mut &self.call[..])?;
 		let password = self.keystore_params.read_password()?;
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			print_ext<P>(&self.suri, password.as_ref().map(String::as_str), call, nonce, genesis)
+			print_ext<P>(&self.suri, password.as_ref().map(String::as_str), call, nonce, hash)
 		)
 	}
 }
@@ -107,7 +107,7 @@ fn print_ext<Pair, P>(
 	pass: Option<&str>,
 	call: CallFor<P>,
 	nonce: IndexFor<P>,
-	genesis: P::Hash
+	hash: P::Hash
 ) -> Result<(), Error>
 	where
 		Pair: sp_core::Pair,
@@ -119,7 +119,7 @@ fn print_ext<Pair, P>(
 		CallFor<P>: Codec,
 {
 	let signer = pair_from_suri::<Pair>(uri, pass);
-	let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, genesis)?;
+	let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, hash)?;
 	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
 	Ok(())
 }
