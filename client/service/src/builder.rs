@@ -1358,8 +1358,7 @@ ServiceBuilder<
 				stream
 			},
 			transaction_pool.clone(),
-			informant_prefix,
-			sc_informant::OutputFormat::Coloured,
+			sc_informant::OutputFormat { colors: true, prefix: informant_prefix },
 		);
 		let _informant_handle = spawn_handle.spawn("informant", informant_future);
 

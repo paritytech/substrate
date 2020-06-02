@@ -36,10 +36,12 @@ use std::time::Duration;
 mod display;
 
 /// The format to print telemetry output in.
-#[derive(PartialEq)]
-pub enum OutputFormat {
-	Coloured,
-	Plain,
+#[derive(Clone)]
+pub struct OutputFormat {
+	/// Use colors to display the logs
+	pub colors: bool,
+	/// Add a prefix before every log line
+	pub prefix: String,
 }
 
 /// Creates an informant in the form of a `Future` that must be polled regularly.
@@ -52,14 +54,13 @@ pub fn build<B: BlockT, C>(
 		NetworkState,
 	)>,
 	pool: Arc<impl TransactionPool + MallocSizeOf>,
-	prefix: String,
 	format: OutputFormat,
 ) -> impl futures::Future<Output = ()>
 where
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
 {
-	let mut display = display::InformantDisplay::new(format, prefix.clone());
+	let mut display = display::InformantDisplay::new(format.clone());
 
 	let client_1 = client.clone();
 	let display_notifications = network_status_stream_builder(Duration::from_millis(5000))
@@ -117,7 +118,7 @@ where
 
 		info!(
 			target: "substrate", "✨ {}Imported #{} ({})",
-			prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash,
+			format.prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash,
 		);
 		future::ready(())
 	});

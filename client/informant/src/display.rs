@@ -44,18 +44,15 @@ pub struct InformantDisplay<B: BlockT> {
 	last_update: Instant,
 	/// The format to print output in.
 	format: OutputFormat,
-	/// Prefix to every log line
-	prefix: String,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
 	/// Builds a new informant display system.
-	pub fn new(format: OutputFormat, prefix: String) -> InformantDisplay<B> {
+	pub fn new(format: OutputFormat) -> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
 			last_update: Instant::now(),
 			format,
-			prefix,
 		}
 	}
 
@@ -79,12 +76,12 @@ impl<B: BlockT> InformantDisplay<B> {
 			),
 		};
 
-		if self.format == OutputFormat::Coloured {
-			info!(
+		match &self.format {
+			OutputFormat { colors: true, prefix } => info!(
 				target: "substrate",
 				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
 				level,
-				self.prefix,
+				prefix,
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
@@ -94,13 +91,12 @@ impl<B: BlockT> InformantDisplay<B> {
 				info.chain.finalized_hash,
 				Colour::Green.paint(format!("⬇ {}", TransferRateFormat(net_status.average_download_per_sec))),
 				Colour::Red.paint(format!("⬆ {}", TransferRateFormat(net_status.average_upload_per_sec))),
-			);
-		} else {
-			info!(
+			),
+			OutputFormat { colors: false, prefix } => info!(
 				target: "substrate",
 				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
 				level,
-				self.prefix,
+				prefix,
 				status,
 				target,
 				num_connected_peers,
@@ -110,7 +106,7 @@ impl<B: BlockT> InformantDisplay<B> {
 				info.chain.finalized_hash,
 				TransferRateFormat(net_status.average_download_per_sec),
 				TransferRateFormat(net_status.average_upload_per_sec),
-			);
+			),
 		}
 	}
 }
