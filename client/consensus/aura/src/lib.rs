@@ -904,7 +904,7 @@ mod tests {
 		type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 		fn propose(
-			&mut self,
+			self,
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,

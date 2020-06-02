@@ -19,7 +19,7 @@
 //! A module allowing accounts to give permission to other accounts to dispatch types of calls from
 //! their signed origin.
 //!
-//! - [`utility::Trait`](./trait.Trait.html)
+//! - [`proxy::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
@@ -37,7 +37,8 @@
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
 use frame_support::{
-	traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter}, weights::GetDispatchInfo,
+	traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter},
+	weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
 use frame_system::{self as system, ensure_signed};
@@ -86,7 +87,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Utility {
+	trait Store for Module<T: Trait> as Proxy {
 		/// The set of account proxies. Maps the account which has delegated to the accounts
 		/// which are being delegated to, together with the amount held on deposit.
 		pub Proxies: map hasher(twox_64_concat) T::AccountId => (Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>);
@@ -134,13 +135,24 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
+		/// - `call`: The call to be made by the `real` account.
+		///
 		/// # <weight>
-		/// - Base weight: ??? µs, 1 storage read.
+		/// P is the number of proxies the user has
+		/// - Base weight: 19.87 + .141 * P µs
+		/// - DB weight: 1 storage read.
 		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
-			(di.weight.saturating_add(T::DbWeight::get().reads_writes(1, 0) + 3_000_000), di.class)
+			(T::DbWeight::get().reads(1)
+				.saturating_add(di.weight)
+				.saturating_add(20 * WEIGHT_PER_MICROS)
+				.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
+			di.class)
 		}]
 		fn proxy(origin,
 			real: T::AccountId,
@@ -163,7 +175,22 @@ decl_module! {
 		}
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
-		#[weight = 1_000_000]
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `proxy`: The account that the `caller` would like to make a proxy.
+		/// - `proxy_type`: The permissions allowed for this proxy account.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 17.48 + .176 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(18 * WEIGHT_PER_MICROS)
+				.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
 		fn add_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
@@ -184,7 +211,22 @@ decl_module! {
 		}
 
 		/// Unregister a proxy account for the sender.
-		#[weight = 1_000_000]
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `proxy`: The account that the `caller` would like to remove as a proxy.
+		/// - `proxy_type`: The permissions currently enabled for the removed proxy account.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 14.37 + .164 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(14 * WEIGHT_PER_MICROS)
+				.saturating_add((160 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
 		fn remove_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate_exists(&who, |x| {
@@ -210,7 +252,18 @@ decl_module! {
 		}
 
 		/// Unregister all proxy accounts for the sender.
-		#[weight = 1_000_000]
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 13.73 + .129 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(14 * WEIGHT_PER_MICROS)
+				.saturating_add((130 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
 		fn remove_proxies(origin) {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
