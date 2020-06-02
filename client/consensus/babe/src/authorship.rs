@@ -17,14 +17,16 @@
 //! BABE authority selection and slot claiming.
 
 use sp_consensus_babe::{
-	make_transcript, AuthorityId, BabeAuthorityWeight, BABE_VRF_PREFIX,
+	BABE_ENGINE_ID, BABE_VRF_PREFIX,
+	AuthorityId, BabeAuthorityWeight,
 	SlotNumber, AuthorityPair,
+	make_transcript,
 };
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256};
+use sp_core::{U256, blake2_256, traits::VRFSigner};
 use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
 use sp_core::Pair;
@@ -188,7 +190,7 @@ pub fn claim_slot(
 			})
 			.collect::<Vec<_>>()
 	};
-	claim_slot_using_key_pairs(slot_number, epoch, &key_pairs)
+	claim_slot_using_key_pairs(slot_number, epoch, keystore, &key_pairs)
 }
 
 /// Like `claim_slot`, but allows passing an explicit set of key pairs. Useful if we intend
@@ -196,9 +198,10 @@ pub fn claim_slot(
 pub fn claim_slot_using_key_pairs(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
+	signer: &KeyStorePtr,
 	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot_number, epoch, epoch.config.c, &key_pairs)
+	claim_primary_slot(slot_number, epoch, epoch.config.c, signer, &key_pairs)
 		.or_else(|| {
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
@@ -228,12 +231,13 @@ fn claim_primary_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	c: (u64, u64),
+	signer: &KeyStorePtr,
 	key_pairs: &[(AuthorityPair, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	for (pair, authority_index) in key_pairs {
-		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
+		// let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
 
 		// Compute the threshold we will use.
 		//
@@ -241,16 +245,36 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let pre_digest = get_keypair(pair)
-			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
-			.map(|s| {
-				PreDigest::Primary(PrimaryPreDigest {
-					slot_number,
-					vrf_output: VRFOutput(s.0.to_output()),
-					vrf_proof: VRFProof(s.1),
-					authority_index: *authority_index as u32,
-				})
-			});
+		let (inout, proof, proof_batchable) = signer.read().vrf_sign(
+			pair.as_ref(), &BABE_ENGINE_ID, randomness, slot_number, *epoch_index,
+		);
+		let proof = match schnorrkel::vrf::VRFProof::from_bytes(&proof) {
+			Ok(proof) => proof,
+			Err(_) => return None,
+		};
+		let output = match schnorrkel::vrf::VRFOutput::from_bytes(&inout) {
+			Ok(output) => output,
+			Err(_) => return None,
+		};
+		let pre_digest = None;
+		if super::authorship::check_primary_threshold(inout, threshold) {
+			pre_digest = Some(PreDigest::Primary(PrimaryPreDigest {
+				slot_number,
+				vrf_output: VRFOutput(output),
+				vrf_proof: VRFProof(proof),
+				authority_index: *authority_index as u32,
+			}))
+		}
+		// let pre_digest = get_keypair(pair)
+		// 	.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
+		// 	.map(|s| {
+		// 		PreDigest::Primary(PrimaryPreDigest {
+		// 			slot_number,
+		// 			vrf_output: VRFOutput(s.0.to_output()),
+		// 			vrf_proof: VRFProof(s.1),
+		// 			authority_index: *authority_index as u32,
+		// 		})
+		// 	});
 
 		// early exit on first successful claim
 		if let Some(pre_digest) = pre_digest {
