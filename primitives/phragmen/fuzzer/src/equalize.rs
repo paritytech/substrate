@@ -131,7 +131,7 @@ fn main() {
 				return;
 			}
 
-			let enhance = is_score_better(initial_score, final_score);
+			let enhance = is_score_better(final_score, initial_score, Perbill::zero());
 
 			println!(
 				"iter = {} // {:?} -> {:?} [{}]",
@@ -140,6 +140,7 @@ fn main() {
 				final_score,
 				enhance,
 			);
+
 			// if more than one iteration has been done, or they must be equal.
 			assert!(enhance || initial_score == final_score || i == 0)
 		});
