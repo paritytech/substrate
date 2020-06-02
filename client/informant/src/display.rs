@@ -14,14 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use ansi_term::Colour;
-use sc_client_api::ClientInfo;
-use log::info;
-use sc_network::{NetworkStatus, SyncState};
-use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Zero, Saturating};
-use std::{convert::{TryFrom, TryInto}, fmt};
-use wasm_timer::Instant;
 use crate::OutputFormat;
+use ansi_term::Colour;
+use log::info;
+use sc_client_api::ClientInfo;
+use sc_network::{NetworkStatus, SyncState};
+use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
+use std::{
+	convert::{TryFrom, TryInto},
+	fmt,
+};
+use wasm_timer::Instant;
 
 /// State of the informant display system.
 ///
@@ -77,7 +80,10 @@ impl<B: BlockT> InformantDisplay<B> {
 		};
 
 		match &self.format {
-			OutputFormat { colors: true, prefix } => info!(
+			OutputFormat {
+				colors: true,
+				prefix,
+			} => info!(
 				target: "substrate",
 				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
 				level,
@@ -92,7 +98,10 @@ impl<B: BlockT> InformantDisplay<B> {
 				Colour::Green.paint(format!("⬇ {}", TransferRateFormat(net_status.average_download_per_sec))),
 				Colour::Red.paint(format!("⬆ {}", TransferRateFormat(net_status.average_upload_per_sec))),
 			),
-			OutputFormat { colors: false, prefix } => info!(
+			OutputFormat {
+				colors: false,
+				prefix,
+			} => info!(
 				target: "substrate",
 				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
 				level,
