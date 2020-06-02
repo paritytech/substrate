@@ -39,8 +39,9 @@ pub enum OutputFormat {
 pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futures::Future<Output = ()> {
 	let client = service.client();
 	let pool = service.transaction_pool();
+	let prefix = service.informant_prefix();
 
-	let mut display = display::InformantDisplay::new(format);
+	let mut display = display::InformantDisplay::new(format, prefix.clone());
 
 	let display_notifications = service
 		.network_status(Duration::from_millis(5000))
@@ -97,7 +98,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(target: "substrate", "✨ Imported #{} ({})", Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
+		info!(target: "substrate", "✨ {}Imported #{} ({})", prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
 		future::ready(())
 	});
 

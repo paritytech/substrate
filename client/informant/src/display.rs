@@ -45,15 +45,18 @@ pub struct InformantDisplay<B: BlockT> {
 	last_update: Instant,
 	/// The format to print output in.
 	format: OutputFormat,
+	/// Prefix to every log line
+	prefix: String,
 }
 
 impl<B: BlockT> InformantDisplay<B> {
 	/// Builds a new informant display system.
-	pub fn new(format: OutputFormat) -> InformantDisplay<B> {
+	pub fn new(format: OutputFormat, prefix: String) -> InformantDisplay<B> {
 		InformantDisplay {
 			last_number: None,
 			last_update: Instant::now(),
 			format,
+			prefix,
 		}
 	}
 
@@ -67,16 +70,18 @@ impl<B: BlockT> InformantDisplay<B> {
 		self.last_update = Instant::now();
 		self.last_number = Some(best_number);
 
-		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
-			(SyncState::Idle, _) => ("💤 Idle".into(), "".into()),
-			(SyncState::Downloading, None) => (format!("⚙️  Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => (format!("⚙️  Syncing{}", speed), format!(", target=#{}", n)),
+		let (level, status, target) = match (net_status.sync_state, net_status.best_seen_block) {
+			(SyncState::Idle, _) => ("💤", "Idle".into(), "".into()),
+			(SyncState::Downloading, None) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n)) => ("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
 		if self.format == OutputFormat::Coloured {
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
+				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
+				level,
+				self.prefix,
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
@@ -90,7 +95,9 @@ impl<B: BlockT> InformantDisplay<B> {
 		} else {
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				level,
+				self.prefix,
 				status,
 				target,
 				num_connected_peers,

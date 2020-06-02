@@ -211,6 +211,9 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
+
+	/// Get the informant's prefix for logs
+	fn informant_prefix(&self) -> String;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -310,6 +313,10 @@ where
 
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
+	}
+
+	fn informant_prefix(&self) -> String {
+		self.informant_prefix.clone()
 	}
 }
 
