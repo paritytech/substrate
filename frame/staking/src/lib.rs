@@ -293,7 +293,10 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
-	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo, WithPostDispatchInfo},
+	dispatch::{
+		IsSubType, DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
+		WithPostDispatchInfo,
+	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
 		UnixTime, EstimateNextNewSession, EnsureOrigin,
@@ -301,7 +304,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerU16, PerThing, RuntimeDebug,
+	Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
@@ -890,6 +893,9 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// Maximum number of equalise iterations to run in the offchain submission. If set to 0,
 	/// equalize will not be executed at all.
 	type MaxIterations: Get<u32>;
+
+	/// The threshold of improvement that should be provided for a new solution to be accepted.
+	type MinSolutionScoreBump: Get<Perbill>;
 
 	/// The maximum number of nominator rewarded for each validator.
 	///
@@ -2614,7 +2620,7 @@ impl<T: Trait> Module<T> {
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
-				is_score_better(queued_score, score),
+				is_score_better(score, queued_score, T::MinSolutionScoreBump::get()),
 				Error::<T>::PhragmenWeakSubmission.with_weight(T::DbWeight::get().reads(3)),
 			)
 		}
@@ -3506,7 +3512,6 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			_,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
-			use sp_runtime::DispatchError;
 
 			// discard solution not coming from the local OCW.
 			match source {
@@ -3518,17 +3523,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			if let Err(error_with_post_info) = Self::pre_dispatch_checks(*score, *era) {
-				let error = error_with_post_info.error;
-				let error_number = match error {
-					DispatchError::Module { error, ..} => error,
-					_ => 0,
-				};
+				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"validate unsigned pre dispatch checks failed due to module error #{:?}.",
-					error,
+					"validate unsigned pre dispatch checks failed due to error #{:?}.",
+					invalid,
 				);
-				return InvalidTransaction::Custom(error_number).into();
+				return invalid .into();
 			}
 
 			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
@@ -3556,17 +3557,43 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
-		// IMPORTANT NOTE: By default, a sane `pre-dispatch` should always do the same checks as
-		// `validate_unsigned` and overriding this should be done with care. this module has only
-		// one unsigned entry point, in which we call into `<Module<T>>::pre_dispatch_checks()`
-		// which is all the important checks that we do in `validate_unsigned`. Hence, we can safely
-		// override this to save some time.
-		Ok(())
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+		if let Call::submit_election_solution_unsigned(
+			_,
+			_,
+			score,
+			era,
+			_,
+		) = call {
+			// IMPORTANT NOTE: These checks are performed in the dispatch call itself, yet we need
+			// to duplicate them here to prevent a block producer from putting a previously
+			// validated, yet no longer valid solution on chain.
+			// OPTIMISATION NOTE: we could skip this in the `submit_election_solution_unsigned`
+			// since we already do it here. The signed version needs it though. Yer for now we keep
+			// this duplicate check here so both signed and unsigned can use a singular
+			// `check_and_replace_solution`.
+			Self::pre_dispatch_checks(*score, *era)
+				.map(|_| ())
+				.map_err(to_invalid)
+				.map_err(Into::into)
+		} else {
+			Err(InvalidTransaction::Call.into())
+		}
 	}
 }
 
 /// Check that list is sorted and has no duplicates.
 fn is_sorted_and_unique(list: &[u32]) -> bool {
 	list.windows(2).all(|w| w[0] < w[1])
+}
+
+/// convert a DispatchErrorWithPostInfo to a custom InvalidTransaction with the inner code being the
+/// error number.
+fn to_invalid(error_with_post_info: DispatchErrorWithPostInfo) -> InvalidTransaction {
+	let error = error_with_post_info.error;
+	let error_number = match error {
+		DispatchError::Module { error, ..} => error,
+		_ => 0,
+	};
+	InvalidTransaction::Custom(error_number)
 }
