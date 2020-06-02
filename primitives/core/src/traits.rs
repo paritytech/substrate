@@ -179,12 +179,13 @@ pub trait VRFSigner {
 	/// VRF-sign round
 	fn vrf_sign(
 		&self,
-		pair: &sr25519::Pair,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
 		label: &'static [u8],
 		randomness: &[u8],
 		slot_number: u64,
 		epoch: u64
-	) -> (Vec<u8>, Vec<u8>);
+	) -> Result<(Vec<u8>, Vec<u8>), ()>;
 }
 
 /// A pointer to the key store.

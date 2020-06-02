@@ -126,22 +126,14 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
-			let key_pairs = {
-				let keystore = keystore.read();
-				epoch.authorities.iter()
-					.enumerate()
-					.flat_map(|(i, a)| {
-						keystore
-							.key_pair::<sp_consensus_babe::AuthorityPair>(&a.0)
-							.ok()
-							.map(|kp| (kp, i))
-					})
-					.collect::<Vec<_>>()
-			};
+			let keys = epoch.authorities.iter()
+				.enumerate()
+				.map(|(i, a)| (a.0.clone(), i))
+				.collect::<Vec<_>>();
 
 			for slot_number in epoch_start..epoch_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &keystore, &key_pairs)
+					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
