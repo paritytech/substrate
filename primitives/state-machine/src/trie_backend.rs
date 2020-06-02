@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Trie-based state machine backend.
 
@@ -166,9 +167,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, S::Overlay)
-		where I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
@@ -178,8 +180,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			let delta: Vec<_> = delta.into_iter().collect();
-			match delta_trie_root::<Layout<H>, _, _, _, _>(&mut eph, root, delta) {
+			match delta_trie_root::<Layout<H>, _, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
@@ -188,15 +189,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
-		H::Out: Ord,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		let default_root = match child_info.child_type() {
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
@@ -218,11 +215,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(
+			match child_delta_trie_root::<Layout<H>, _, _, _, _, _, _>(
 				child_info.keyspace(),
 				&mut eph,
 				root,
-				delta
+				delta,
 			) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
@@ -251,7 +248,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 #[cfg(test)]
 pub mod tests {
-	use std::collections::HashSet;
+	use std::{collections::HashSet, iter};
 	use sp_core::H256;
 	use codec::Encode;
 	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
@@ -327,19 +324,21 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(::std::iter::empty()).0 != H256::repeat_byte(0));
+		assert!(test_trie().storage_root(iter::empty()).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(::std::iter::empty()).1.drain().is_empty());
+		assert!(test_trie().storage_root(iter::empty()).1.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
+		let (new_root, mut tx) = test_trie().storage_root(
+			iter::once((&b"new-key"[..], Some(&b"new-value"[..]))),
+		);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
+		assert!(new_root != test_trie().storage_root(iter::empty()).0);
 	}
 
 	#[test]

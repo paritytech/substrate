@@ -1,27 +1,28 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! In memory client backend
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use sp_core::storage::well_known_keys;
-use sp_core::offchain::storage::{
-	InMemOffchainStorage as OffchainStorage
+use sp_core::{
+	storage::well_known_keys, offchain::storage::InMemOffchainStorage as OffchainStorage,
 };
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
@@ -517,13 +518,17 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children_default.into_iter()
+		let child_delta = storage.children_default.iter()
 			.map(|(_storage_key, child_content)|
-				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
+				 (
+					 &child_content.child_info,
+					 child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())))
+				 )
+			);
 
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta
+			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+			child_delta,
 		);
 
 		self.new_state = Some(transaction);

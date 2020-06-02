@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::InstanceWrapper;
 use sc_executor_common::{
@@ -21,6 +23,7 @@ use sc_executor_common::{
 use sp_wasm_interface::Value;
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
+use wasmtime_runtime::{ExportGlobal, Export};
 
 /// A snapshot of a global variables values. This snapshot can be used later for restoring the
 /// values to the preserved state.
@@ -37,17 +40,15 @@ impl GlobalsSnapshot {
 	pub fn take(instance_wrapper: &InstanceWrapper) -> Result<Self> {
 		// EVIL:
 		// Usage of an undocumented function.
-		let handle = instance_wrapper.instance.handle().clone();
+		let handle = unsafe { instance_wrapper.instance.handle().clone() };
 
 		let mut preserved_mut_globals = vec![];
 
 		for global_idx in instance_wrapper.imported_globals_count..instance_wrapper.globals_count {
 			let (def, global) = match handle.lookup_by_declaration(
-				&wasmtime_environ::Export::Global(GlobalIndex::from_u32(global_idx)),
+				&wasmtime_environ::EntityIndex::Global(GlobalIndex::from_u32(global_idx)),
 			) {
-				wasmtime_runtime::Export::Global {
-					definition, global, ..
-				} => (definition, global),
+				Export::Global(ExportGlobal { definition, global, .. }) => (definition, global),
 				_ => unreachable!("only globals can be returned for a global request"),
 			};
 

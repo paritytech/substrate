@@ -442,16 +442,22 @@ pub struct BalanceLock<Balance> {
 decl_storage! {
 	trait Store for Module<T: Trait> as GenericAsset {
 		/// Total issuance of a given asset.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
 		}): map hasher(twox_64_concat) T::AssetId => T::Balance;
 
 		/// The free balance of a given asset under an account.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub FreeBalance:
 			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		/// The reserved balance of a given asset under an account.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub ReservedBalance:
 			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
@@ -459,6 +465,8 @@ decl_storage! {
 		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub Permissions get(fn get_permission):
 			map hasher(twox_64_concat) T::AssetId => PermissionVersions<T::AccountId>;
 
@@ -1127,6 +1135,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;

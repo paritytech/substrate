@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Testing utilities.
 
@@ -21,10 +22,10 @@ use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable, DispatchInfoOf,
+	SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
+use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResultWithInfo};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
@@ -86,6 +87,7 @@ impl UintAuthorityId {
 
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
+	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 	type Signature = TestSignature;
 
@@ -380,7 +382,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> ApplyExtrinsicResult {
+	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let maybe_who = if let Some((who, extra)) = self.signature {
 			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
 			Some(who)
@@ -389,6 +391,6 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map(|_| ()).map_err(|e| e.error))
+		Ok(self.call.dispatch(maybe_who.into()))
 	}
 }

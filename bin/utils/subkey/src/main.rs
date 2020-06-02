@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")]
@@ -265,6 +267,9 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 						If the value is a file, the file content is used as URI. \
 						If not given, you will be prompted for the URI.'
 				"),
+			SubCommand::with_name("inspect-node-key")
+				.about("Print the peer ID corresponding to the node key in the given file")
+				.args_from_usage("[file] 'Name of file to read the secret key from'"),
 			SubCommand::with_name("sign")
 				.about("Sign a message, provided on STDIN, with a given (secret) key")
 				.args_from_usage("
@@ -437,6 +442,17 @@ where
 		("inspect", Some(matches)) => {
 			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);
 		}
+		("inspect-node-key", Some(matches)) => {
+			let file = matches.value_of("file").ok_or(Error::Static("Input file name is required"))?;
+
+			let mut file_content = fs::read(file)?;
+			let secret = libp2p_ed25519::SecretKey::from_bytes(&mut file_content)
+				.map_err(|_| Error::Static("Bad node key file"))?;
+			let keypair = libp2p_ed25519::Keypair::from(secret);
+			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+
+			println!("{}", peer_id);
+		}
 		("sign", Some(matches)) => {
 			let suri = get_uri("suri", &matches)?;
 			let should_decode = matches.is_present("hex");
@@ -523,7 +539,7 @@ where
 
 			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
 			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
-			
+
 			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
 		}
 		_ => print_usage(&matches),
@@ -702,7 +718,8 @@ fn create_extrinsic<C: Crypto>(
 {
 	let extra = |i: Index, f: Balance| {
 		(
-			frame_system::CheckVersion::<Runtime>::new(),
+			frame_system::CheckSpecVersion::<Runtime>::new(),
+			frame_system::CheckTxVersion::<Runtime>::new(),
 			frame_system::CheckGenesis::<Runtime>::new(),
 			frame_system::CheckEra::<Runtime>::from(Era::Immortal),
 			frame_system::CheckNonce::<Runtime>::from(i),
@@ -715,7 +732,8 @@ fn create_extrinsic<C: Crypto>(
 		function,
 		extra(index, 0),
 		(
-			VERSION.spec_version as u32,
+			VERSION.spec_version,
+			VERSION.transaction_version,
 			genesis_hash,
 			genesis_hash,
 			(),

@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Consensus extension module for BABE consensus. Collects on-chain randomness
 //! from VRF outputs and manages epoch transitions.
@@ -41,7 +42,7 @@ use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalE
 use sp_consensus_babe::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, PreDigest},
+	digests::{NextEpochDescriptor, NextConfigDescriptor, PreDigest},
 };
 use sp_consensus_vrf::schnorrkel;
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
@@ -135,6 +136,9 @@ decl_storage! {
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
+		/// Next epoch configuration, if changed.
+		NextEpochConfig: Option<NextConfigDescriptor>;
+
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
 
@@ -148,6 +152,8 @@ decl_storage! {
 		/// We reset all segments and return to `0` at the beginning of every
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
+
+		/// TWOX-NOTE: `SegmentIndex` is an increasing integer, so this is okay.
 		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::Randomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
@@ -349,6 +355,9 @@ impl<T: Trait> Module<T> {
 	// -------------- IMPORTANT NOTE --------------
 	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
 	// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	//
+	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you update
+	// this function, you must also update the corresponding weight.
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
@@ -358,6 +367,15 @@ impl<T: Trait> Module<T> {
 				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
 				now.saturating_add(blocks_remaining)
 			})
+	}
+
+	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
+	/// next call to `enact_epoch_change`. The config will be activated one epoch after. Multiple calls to this
+	/// method will replace any existing planned config change that had not been enacted yet.
+	pub fn plan_config_change(
+		config: NextConfigDescriptor,
+	) {
+		NextEpochConfig::put(config);
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -395,12 +413,15 @@ impl<T: Trait> Module<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
 
-		let next = NextEpochDescriptor {
+		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		if let Some(next_config) = NextEpochConfig::take() {
+			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		}
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to
@@ -549,6 +570,12 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
+	}
+
+	// The validity of this weight depends on the implementation of `estimate_next_session_rotation`
+	fn weight(_now: T::BlockNumber) -> Weight {
+		// Read: Current Slot, Epoch Index, Genesis Slot
+		T::DbWeight::get().reads(3)
 	}
 }
 

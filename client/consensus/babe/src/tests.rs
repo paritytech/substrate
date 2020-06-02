@@ -21,7 +21,7 @@
 #![allow(deprecated)]
 use super::*;
 use authorship::claim_slot;
-
+use sp_core::crypto::Pair;
 use sp_consensus_babe::{AuthorityPair, SlotNumber, AllowedSlots};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
@@ -159,7 +159,7 @@ impl Proposer<TestBlock> for DummyProposer {
 	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction>, Error>>;
 
 	fn propose(
-		&mut self,
+		mut self,
 		_: InherentData,
 		pre_digests: DigestFor<TestBlock>,
 		_: Duration,

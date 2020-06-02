@@ -1,24 +1,26 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Helpers for offchain worker election.
 
 use codec::Decode;
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
+	ElectionSize,
 };
 use frame_system::offchain::SubmitTransaction;
 use sp_phragmen::{
@@ -27,7 +29,7 @@ use sp_phragmen::{
 };
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
-use frame_support::{debug, traits::Get};
+use frame_support::traits::Get;
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
@@ -112,7 +114,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		.ok_or(OffchainElectionError::ElectionFailed)?;
 
 	// process and prepare it for submission.
-	let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
+	let (winners, compact, score, size) = prepare_submission::<T>(assignments, winners, true)?;
 
 	// defensive-only: current era can never be none except genesis.
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
@@ -123,11 +125,13 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		compact,
 		score,
 		current_era,
+		size,
 	).into();
 
 	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
+
 
 /// Takes a phragmen result and spits out some data that can be submitted to the chain.
 ///
@@ -136,7 +140,12 @@ pub fn prepare_submission<T: Trait>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore), OffchainElectionError> where
+) -> Result<(
+	Vec<ValidatorIndex>,
+	CompactAssignments,
+	PhragmenScore,
+	ElectionSize,
+), OffchainElectionError> where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
 	// make sure that the snapshot is available.
@@ -234,12 +243,18 @@ pub fn prepare_submission<T: Trait>(
 		}
 	}
 
-	debug::native::debug!(
-		target: "staking",
+	// both conversions are safe; snapshots are not created if they exceed.
+	let size = ElectionSize {
+		validators: snapshot_validators.len() as ValidatorIndex,
+		nominators: snapshot_nominators.len() as NominatorIndex,
+	};
+
+	crate::log!(
+		info,
 		"prepared solution after {} equalization iterations with score {:?}",
 		iterations_executed,
 		score,
 	);
 
-	Ok((winners_indexed, compact, score))
+	Ok((winners_indexed, compact, score, size))
 }

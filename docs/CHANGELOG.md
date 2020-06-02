@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc1 -> 2.0.0-rc2
+
+
+
+## 2.0.0-alpha.8 -> 2.0.0-rc1
+
+Runtime
+-------
+
+* Allow operational recovery path if on_initialize use fullblock. (#6089)
+* Maximum extrinsic weight limit (#6067)
+
+Client
+------
+
+* Add JSON format to import blocks and set it as default (#5816)
+* Upgrade to libp2p v0.19 - Changes the default PeerId representation (#6064)
+
+
+## 2.0.0-alpha.7 -> 2.0.0-alpha.8
+
+**License Changed**
+From this release forward, the code is released under a new – more relaxed – license scheme: Client (`sc-*`) is released under "GPL 3.0 or newer with the Classpath Exception", while primitives, FRAME, the pallets, utils and test-utils are released under "Apache 2.0". More details in the [Relax licensing scheme PR](https://github.com/paritytech/substrate/pull/5947).
+
+Runtime
+-------
+
+* Democracy weight (#5828)
+* Make `Digest` support `StorageAppend` (#5922)
+
+Client
+------
+
+* Meter block import results via prometheus (#6025)
+* Added RuntimePublic for ecdsa public key. (#6029)
+* Benchmarks for elections-phragmen pallet (#5845)
+* Monitor transactions rejected from the pool as invalid (#5992)
+* client/network: Remove default Kademlia DHT in favor of per protocol DHT (#5993)
+* Allow passing multiple --log CLI options (#5982)
+* client: Replace `unsafe_rpc_expose` with an `RpcMethods` enum (#5729)
+
 ## 2.0.0-alpha.6 -> 2.0.0-alpha.7
 
 Runtime

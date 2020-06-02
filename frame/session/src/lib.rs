@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Session Module
 //!
@@ -170,6 +171,14 @@ impl<
 			offset
 		})
 	}
+
+	fn weight(_now: BlockNumber) -> Weight {
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
+		// There should be no risk to the chain having this weight value be zero for now.
+		// However, this value of zero was not properly calculated, and so it would be reasonable
+		// to come back here and properly calculate the weight of this function.
+		0
+	}
 }
 
 /// A trait for managing creation of new validator set.
@@ -210,7 +219,7 @@ pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///
 	/// The order must be the same as it expects them in
-	/// [`on_new_session`](Self::on_new_session) and [`on_genesis_session`](Self::on_genesis_session).
+	/// [`on_new_session`](Self::on_new_session<Ks>) and [`on_genesis_session`](Self::on_genesis_session<Ks>).
 	const KEY_TYPE_IDS: &'static [KeyTypeId];
 
 	/// The given validator set will be used for the genesis session.
@@ -784,5 +793,9 @@ impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
+	}
+
+	fn weight(now: T::BlockNumber) -> Weight {
+		T::NextSessionRotation::weight(now)
 	}
 }

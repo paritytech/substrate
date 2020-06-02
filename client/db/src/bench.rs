@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! State backend that's useful for benchmarking
 
@@ -77,12 +79,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 
 		state.reopen()?;
-		let child_delta = genesis.children_default.into_iter().map(|(_storage_key, child_content)| (
-			child_content.child_info,
-			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
+			&child_content.child_info,
+			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 		));
 		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
-			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
+			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
 		);
 		state.genesis = transaction.clone().drain();
@@ -191,19 +193,18 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction) where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (B::Hash, bool, Self::Transaction) where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
 	}
 

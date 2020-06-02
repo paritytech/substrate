@@ -24,9 +24,7 @@ mod node_codec;
 mod storage_proof;
 mod trie_stream;
 
-use sp_std::boxed::Box;
-use sp_std::marker::PhantomData;
-use sp_std::vec::Vec;
+use sp_std::{boxed::Box, marker::PhantomData, vec::Vec, borrow::Borrow};
 use hash_db::{Hasher, Prefix};
 use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::proof::VerifyError;
@@ -162,23 +160,24 @@ pub fn verify_trie_proof<'a, L: TrieConfiguration, I, K, V>(
 }
 
 /// Determine a trie root given a hash DB and delta values.
-pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB>(
+pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
 	delta: I
 ) -> Result<TrieHash<L>, Box<TrieError<L>>> where
-	I: IntoIterator<Item = (A, Option<B>)>,
-	A: AsRef<[u8]> + Ord,
-	B: AsRef<[u8]>,
+	I: IntoIterator<Item = (A, B)>,
+	A: Borrow<[u8]>,
+	B: Borrow<Option<V>>,
+	V: Borrow<[u8]>,
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
 		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
 
 		for (key, change) in delta {
-			match change {
-				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?,
+			match change.borrow() {
+				Some(val) => trie.insert(key.borrow(), val.borrow())?,
+				None => trie.remove(key.borrow())?,
 			};
 		}
 	}
@@ -230,16 +229,17 @@ pub fn child_trie_root<L: TrieConfiguration, I, A, B>(
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher,
 /// but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
+pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	keyspace: &[u8],
 	db: &mut DB,
 	root_data: RD,
 	delta: I,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 	where
-		I: IntoIterator<Item = (A, Option<B>)>,
-		A: AsRef<[u8]> + Ord,
-		B: AsRef<[u8]>,
+		I: IntoIterator<Item = (A, B)>,
+		A: Borrow<[u8]>,
+		B: Borrow<Option<V>>,
+		V: Borrow<[u8]>,
 		RD: AsRef<[u8]>,
 		DB: hash_db::HashDB<L::Hash, trie_db::DBValue>
 {
@@ -252,9 +252,9 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD>(
 		let mut trie = TrieDBMut::<L>::from_existing(&mut db, &mut root)?;
 
 		for (key, change) in delta {
-			match change {
-				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?,
+			match change.borrow() {
+				Some(val) => trie.insert(key.borrow(), val.borrow())?,
+				None => trie.remove(key.borrow())?,
 			};
 		}
 	}

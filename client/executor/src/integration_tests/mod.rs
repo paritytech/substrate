@@ -1,19 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 mod sandbox;
 
 use codec::{Encode, Decode};
@@ -92,9 +93,8 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert_eq!(
-					&format!("{:?}", e),
-					"\"Wasm execution trapped: call to a missing function env:missing_external\""
+				WasmExecutionMethod::Compiled => assert!(
+					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:missing_external")
 				),
 			}
 		}
@@ -121,9 +121,8 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert_eq!(
-					&format!("{:?}", e),
-					"\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\""
+				WasmExecutionMethod::Compiled => assert!(
+					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:yet_another_missing_external")
 				),
 			}
 		}
@@ -622,4 +621,40 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 	// Cal it a second time to check that the heap was freed.
 	instance.call("check_and_set_in_heap", &params).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn parallel_execution(wasm_method: WasmExecutionMethod) {
+	let executor = std::sync::Arc::new(crate::WasmExecutor::new(
+		wasm_method,
+		Some(1024),
+		HostFunctions::host_functions(),
+		8,
+	));
+	let code_hash = blake2_256(WASM_BINARY).to_vec();
+	let threads: Vec<_> = (0..8).map(|_|
+		{
+			let executor = executor.clone();
+			let code_hash = code_hash.clone();
+			std::thread::spawn(move || {
+				let mut ext = TestExternalities::default();
+				let mut ext = ext.ext();
+				assert_eq!(
+					executor.call_in_wasm(
+						&WASM_BINARY[..],
+						Some(code_hash.clone()),
+						"test_twox_128",
+						&[0],
+						&mut ext,
+						sp_core::traits::MissingHostFunctions::Allow,
+					).unwrap(),
+					hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
+				);
+			})
+		}).collect();
+
+	for t in threads.into_iter() {
+		t.join().unwrap();
+	}
 }
