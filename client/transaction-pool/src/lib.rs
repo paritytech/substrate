@@ -58,7 +58,7 @@ type BoxedReadyIterator<Hash, Data> = Box<
 >;
 
 type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
-	sc_transaction_graph::BlockHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>
+	sc_transaction_graph::ExtrinsicHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>
 >;
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
@@ -233,7 +233,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		PoolApi: 'static + ChainApi<Block=Block>,
 {
 	type Block = PoolApi::Block;
-	type Hash = sc_transaction_graph::BlockHash<PoolApi>;
+	type Hash = sc_transaction_graph::ExtrinsicHash<PoolApi>;
 	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
 		TxHash<Self>, TransactionFor<Self>
 	>;

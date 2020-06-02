@@ -136,7 +136,7 @@ where
 	fn hash_and_length(
 		&self,
 		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (Block::Hash, usize) {
+	) -> (sc_transaction_graph::ExtrinsicHash<Self>, usize) {
 		ex.using_encoded(|x| {
 			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
@@ -231,7 +231,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for
 	fn hash_and_length(
 		&self,
 		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (Block::Hash, usize) {
+	) -> (sc_transaction_graph::ExtrinsicHash<Self>, usize) {
 		ex.using_encoded(|x| {
 			(<<Block::Header as HeaderT>::Hashing as HashT>::hash(x), x.len())
 		})

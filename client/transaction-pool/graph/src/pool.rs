@@ -43,15 +43,17 @@ pub type EventStream<H> = TracingUnboundedReceiver<H>;
 
 /// Block hash type for a pool.
 pub type BlockHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
+/// Extrinsic hash type for a pool.
+pub type ExtrinsicHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
 /// Extrinsic type for a pool.
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Block number type for the ChainApi
 pub type NumberFor<A> = traits::NumberFor<<A as ChainApi>::Block>;
 /// A type of transaction stored in the pool
-pub type TransactionFor<A> = Arc<base::Transaction<BlockHash<A>, ExtrinsicFor<A>>>;
+pub type TransactionFor<A> = Arc<base::Transaction<ExtrinsicHash<A>, ExtrinsicFor<A>>>;
 /// A type of validated transaction stored in the pool.
 pub type ValidatedTransactionFor<A> = ValidatedTransaction<
-	BlockHash<A>,
+	ExtrinsicHash<A>,
 	ExtrinsicFor<A>,
 	<A as ChainApi>::Error,
 >;
@@ -87,10 +89,10 @@ pub trait ChainApi: Send + Sync {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<BlockHash<Self>>, Self::Error>;
+	) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error>;
 
 	/// Returns hash and encoding length of the extrinsic.
-	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (<Self::Block as BlockT>::Hash, usize);
+	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
@@ -153,7 +155,7 @@ impl<B: ChainApi> Pool<B> {
 		source: TransactionSource,
 		xts: T,
 		force: bool,
-	) -> Result<Vec<Result<BlockHash<B>, B::Error>>, B::Error> where
+	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>,
 	{
 		let validated_pool = self.validated_pool.clone();
@@ -172,7 +174,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-	) -> Result<BlockHash<B>, B::Error> {
+	) -> Result<ExtrinsicHash<B>, B::Error> {
 		self.submit_at(at, source, std::iter::once(xt), false)
 			.map(|import_result| import_result.and_then(|mut import_result| import_result
 				.pop()
@@ -187,7 +189,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-	) -> Result<Watcher<BlockHash<B>, BlockHash<B>>, B::Error> {
+	) -> Result<Watcher<ExtrinsicHash<B>, ExtrinsicHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
 		let (_, tx) = self.verify_one(
 			at, block_number, source, xt, false
@@ -198,7 +200,7 @@ impl<B: ChainApi> Pool<B> {
 	/// Resubmit some transaction that were validated elsewhere.
 	pub fn resubmit(
 		&self,
-		revalidated_transactions: HashMap<BlockHash<B>, ValidatedTransactionFor<B>>,
+		revalidated_transactions: HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>,
 	) {
 
 		let now = Instant::now();
@@ -218,7 +220,7 @@ impl<B: ChainApi> Pool<B> {
 	pub fn prune_known(
 		&self,
 		at: &BlockId<B::Block>,
-		hashes: &[BlockHash<B>],
+		hashes: &[ExtrinsicHash<B>],
 	) -> Result<(), B::Error> {
 		// Get details of all extrinsics that are already in the pool
 		let in_pool_tags = self.validated_pool.extrinsics_tags(hashes)
@@ -303,7 +305,7 @@ impl<B: ChainApi> Pool<B> {
 		&self,
 		at: &BlockId<B::Block>,
 		tags: impl IntoIterator<Item=Tag>,
-		known_imported_hashes: impl IntoIterator<Item=BlockHash<B>> + Clone,
+		known_imported_hashes: impl IntoIterator<Item=ExtrinsicHash<B>> + Clone,
 	) -> Result<(), B::Error> {
 		log::debug!(target: "txpool", "Pruning at {:?}", at);
 		// Prune all transactions that provide given tags
@@ -340,7 +342,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Returns transaction hash
-	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> BlockHash<B> {
+	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExtrinsicHash<B> {
 		self.validated_pool.api().hash_and_length(xt).0
 	}
 
@@ -357,7 +359,7 @@ impl<B: ChainApi> Pool<B> {
 		at: &BlockId<B::Block>,
 		xts: impl IntoIterator<Item=(TransactionSource, ExtrinsicFor<B>)>,
 		force: bool,
-	) -> Result<HashMap<BlockHash<B>, ValidatedTransactionFor<B>>, B::Error> {
+	) -> Result<HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>, B::Error> {
 		// we need a block number to compute tx validity
 		let block_number = self.resolve_block_number(at)?;
 		let mut result = HashMap::new();
@@ -383,7 +385,7 @@ impl<B: ChainApi> Pool<B> {
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
 		force: bool,
-	) -> (BlockHash<B>, ValidatedTransactionFor<B>) {
+	) -> (ExtrinsicHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 		if !force && self.validated_pool.is_banned(&hash) {
 			return (
@@ -538,7 +540,7 @@ mod tests {
 		fn block_id_to_hash(
 			&self,
 			at: &BlockId<Self::Block>,
-		) -> Result<Option<BlockHash<Self>>, Self::Error> {
+		) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error> {
 			Ok(match at {
 				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 				BlockId::Hash(_) => None,
