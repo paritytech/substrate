@@ -94,18 +94,6 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns a block body given the block id.
 	fn block_body(&self, at: &BlockId<Self::Block>) -> Self::BodyFuture;
-
-	/// Retuns the hashes of all blocks that are leaves of the block tree.
-	fn leaves(&self) -> Result<Vec<<Self::Block as BlockT>::Hash>, Self::Error>;
-
-	/// Returns the tree route between two block hashes.
-	///
-	/// For more information see [`TreeRoute`](sp_blockchain::TreeRoute).
-	fn tree_route(
-		&self,
-		from: <Self::Block as BlockT>::Hash,
-		to: <Self::Block as BlockT>::Hash,
-	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -566,18 +554,6 @@ mod tests {
 
 		fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
 			futures::future::ready(Ok(None))
-		}
-
-		fn leaves(&self) -> Result<Vec<<Self::Block as BlockT>::Hash>, Self::Error> {
-			unimplemented!("Not implemented for tests")
-		}
-
-		fn tree_route(
-			&self,
-			_: <Self::Block as BlockT>::Hash,
-			_: <Self::Block as BlockT>::Hash,
-		) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
-			unimplemented!("Not implemented for tests")
 		}
 	}
 

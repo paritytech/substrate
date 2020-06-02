@@ -25,9 +25,7 @@ use futures::{
 };
 
 use sc_client_api::{
-	blockchain::HeaderBackend,
-	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
-	BlockBackend,
+	blockchain::HeaderBackend, light::{Fetcher, RemoteCallRequest, RemoteBodyRequest}, BlockBackend,
 };
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
@@ -35,21 +33,19 @@ use sp_runtime::{
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use sp_blockchain::Backend;
 
 use crate::error::{self, Error};
 
 /// The transaction pool logic for full client.
-pub struct FullChainApi<Client, Block, Backend> {
+pub struct FullChainApi<Client, Block> {
 	client: Arc<Client>,
 	pool: ThreadPool,
-	backend: Arc<Backend>,
 	_marker: PhantomData<Block>,
 }
 
-impl<Client, Block, Backend> FullChainApi<Client, Block, Backend> {
+impl<Client, Block> FullChainApi<Client, Block> {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<Client>, backend: Arc<Backend>) -> Self {
+	pub fn new(client: Arc<Client>) -> Self {
 		FullChainApi {
 			client,
 			pool: ThreadPoolBuilder::new()
@@ -57,20 +53,18 @@ impl<Client, Block, Backend> FullChainApi<Client, Block, Backend> {
 				.name_prefix("txpool-verifier")
 				.create()
 				.expect("Failed to spawn verifier threads, that are critical for node operation."),
-			backend,
 			_marker: Default::default(),
 		}
 	}
 }
 
-impl<Client, Block, Backend> sc_transaction_graph::ChainApi for FullChainApi<Client, Block, Backend>
+impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
-	Backend: sc_client_api::Backend<Block>,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -147,46 +141,31 @@ where
 			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
-
-	fn leaves(&self) -> Result<Vec<Block::Hash>, Self::Error> {
-		self.backend.blockchain().leaves().map_err(Into::into)
-	}
-
-	fn tree_route(
-		&self,
-		from: Block::Hash,
-		to: Block::Hash,
-	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
-		sp_blockchain::tree_route(self.backend.blockchain(), from, to).map_err(Into::into)
-	}
 }
 
 /// The transaction pool logic for light client.
-pub struct LightChainApi<Client, F, Block, Backend> {
+pub struct LightChainApi<Client, F, Block> {
 	client: Arc<Client>,
 	fetcher: Arc<F>,
-	backend: Arc<Backend>,
 	_phantom: PhantomData<Block>,
 }
 
-impl<Client, F, Block, Backend> LightChainApi<Client, F, Block, Backend> {
+impl<Client, F, Block> LightChainApi<Client, F, Block> {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<Client>, fetcher: Arc<F>, backend: Arc<Backend>) -> Self {
+	pub fn new(client: Arc<Client>, fetcher: Arc<F>) -> Self {
 		LightChainApi {
 			client,
 			fetcher,
-			backend,
 			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<Client, F, Block, Backend> sc_transaction_graph::ChainApi for
-	LightChainApi<Client, F, Block, Backend> where
+impl<Client, F, Block> sc_transaction_graph::ChainApi for
+	LightChainApi<Client, F, Block> where
 		Block: BlockT,
 		Client: HeaderBackend<Block> + 'static,
 		F: Fetcher<Block> + 'static,
-		Backend: sc_client_api::Backend<Block>,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -285,17 +264,5 @@ impl<Client, F, Block, Backend> sc_transaction_graph::ChainApi for
 
 			Ok(Some(transactions))
 		}.boxed()
-	}
-
-	fn leaves(&self) -> Result<Vec<Block::Hash>, Self::Error> {
-		self.backend.blockchain().leaves().map_err(Into::into)
-	}
-
-	fn tree_route(
-		&self,
-		from: Block::Hash,
-		to: Block::Hash,
-	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
-		sp_blockchain::tree_route(self.backend.blockchain(), from, to).map_err(Into::into)
 	}
 }

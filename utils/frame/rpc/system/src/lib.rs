@@ -222,9 +222,7 @@ mod tests {
 	use super::*;
 
 	use futures::executor::block_on;
-	use substrate_test_runtime_client::{
-		runtime::Transfer, DefaultTestClientBuilderExt, AccountKeyring, TestClientBuilderExt,
-	};
+	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]
@@ -232,14 +230,11 @@ mod tests {
 		let _ = env_logger::try_init();
 
 		// given
-		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
-		let backend = client_builder.backend();
-
-		let client = Arc::new(client_builder.build());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), backend)),
+				Arc::new(FullChainApi::new(client.clone())),
 				None,
 			).0
 		);

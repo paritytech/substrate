@@ -44,7 +44,6 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|builder| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(
 					builder.client().clone(),
-					builder.backend().clone(),
 				);
 				Ok(sc_transaction_pool::BasicPool::new(
 					builder.config().transaction_pool.clone(),
@@ -215,7 +214,6 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 			let pool_api = sc_transaction_pool::LightChainApi::new(
 				builder.client().clone(),
 				fetcher.clone(),
-				builder.backend().clone(),
 			);
 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
 				builder.config().transaction_pool.clone(),

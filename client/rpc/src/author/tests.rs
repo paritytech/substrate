@@ -45,7 +45,7 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 }
 
 type FullTransactionPool = BasicPool<
-	FullChainApi<Client<Backend>, Block, Backend>,
+	FullChainApi<Client<Backend>, Block>,
 	Block,
 >;
 
@@ -59,12 +59,11 @@ impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = KeyStore::new();
 		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
-		let backend = client_builder.backend();
-
 		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
+
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), backend)),
+			Arc::new(FullChainApi::new(client.clone())),
 			None,
 		).0);
 		TestSetup {

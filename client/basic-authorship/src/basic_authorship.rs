@@ -341,15 +341,14 @@ mod tests {
 	use parking_lot::Mutex;
 	use sp_consensus::{BlockOrigin, Proposer};
 	use substrate_test_runtime_client::{
-		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, Backend,
-		TestClientBuilderExt,
+		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, TestClientBuilderExt,
 	};
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
-	use backend::Backend as _;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
+	use sc_client_api::Backend;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -373,21 +372,14 @@ mod tests {
 		}
 	}
 
-	fn client_and_backend() -> (Arc<TestClient>, Arc<Backend>) {
-		let client_builder = TestClientBuilder::new();
-		let backend = client_builder.backend();
-
-		(Arc::new(client_builder.build()), backend)
-	}
-
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
-		let (client, backend) = client_and_backend();
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), backend)),
+				Arc::new(FullChainApi::new(client.clone())),
 				None,
 			).0
 		);
@@ -435,11 +427,11 @@ mod tests {
 
 	#[test]
 	fn should_not_panic_when_deadline_is_reached() {
-		let (client, backend) = client_and_backend();
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), backend)),
+				Arc::new(FullChainApi::new(client.clone())),
 				None,
 			).0
 		);
@@ -469,11 +461,12 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = client_and_backend();
+		let (client, backend) = TestClientBuilder::new().build_with_backend();
+		let client = Arc::new(client);
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), backend.clone())),
+				Arc::new(FullChainApi::new(client.clone())),
 				None,
 			).0
 		);
@@ -532,11 +525,11 @@ mod tests {
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
-		let (mut client, backend) = client_and_backend();
+		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), backend)),
+				Arc::new(FullChainApi::new(client.clone())),
 				None,
 			).0
 		);

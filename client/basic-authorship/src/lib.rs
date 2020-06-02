@@ -30,9 +30,8 @@
 //! #     DefaultTestClientBuilderExt, TestClientBuilderExt,
 //! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
-//! # let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new().build_with_backend();
-//! # let client = Arc::new(client);
-//! # let txpool = Arc::new(BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone(), backend)), None).0);
+//! # let client = Arc::new(substrate_test_runtime_client::new());
+//! # let txpool = Arc::new(BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())), None).0);
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 //!

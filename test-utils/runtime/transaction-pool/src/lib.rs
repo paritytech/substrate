@@ -184,6 +184,15 @@ impl TestApi {
 		let mut chain = self.chain.write();
 		chain.nonces.entry(account).and_modify(|n| *n += 1).or_insert(1);
 	}
+
+	/// Calculate a tree route between the two given blocks.
+	pub fn tree_route(
+		&self,
+		from: Hash,
+		to: Hash,
+	) -> Result<sp_blockchain::TreeRoute<Block>, Error> {
+		sp_blockchain::tree_route(self, from, to)
+	}
 }
 
 impl sc_transaction_graph::ChainApi for TestApi {
@@ -275,27 +284,6 @@ impl sc_transaction_graph::ChainApi for TestApi {
 				.get(hash)
 				.map(|b| b.extrinsics().to_vec()),
 		}))
-	}
-
-	fn leaves(&self) -> Result<Vec<Hash>, Self::Error> {
-		Ok(
-			self.chain
-				.read()
-				.block_by_number
-				.iter()
-				.rev()
-				.next()
-				.map(|blocks| blocks.1.iter().map(|b| b.header().hash()).collect())
-				.unwrap_or_default()
-		)
-	}
-
-	fn tree_route(
-		&self,
-		from: Hash,
-		to: Hash,
-	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
-		sp_blockchain::tree_route(self, from, to)
 	}
 }
 

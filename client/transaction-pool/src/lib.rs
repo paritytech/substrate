@@ -35,7 +35,7 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin};
-use futures::{prelude::*, future::ready, channel::oneshot};
+use futures::{prelude::*, future::{ready, self}, channel::oneshot};
 use parking_lot::Mutex;
 
 use sp_runtime::{
@@ -435,61 +435,30 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 	}
 }
 
-/// Find the blocks that were retracted while re-orging the chain
-/// from the old best to `new_best`. It will collect all block
-/// hashes that are reached by walking from all leaves to the common
-/// anchestor that are not part of the canonical chain. The given
-/// `tree_route` must be the one that was calculated on import.
-///
-/// Given the following:
-///
-/// ```ignore
-///     -> D0 (old best, tx0)
-///    /
-/// C - -> D1 (tx1)
-///    \
-///     -> D2 (new best)
-/// ```
-///
-/// This function will return `D0` and `D1`.
-fn find_retracted_blocks<'a, Block: BlockT>(
-	new_best: &'a Block::Hash,
-	tree_route: sp_blockchain::TreeRoute<Block>,
-	api: &'a impl ChainApi<Block = Block>,
-) -> impl Iterator<Item = Block::Hash> + 'a {
-	let leaves = api.leaves();
-
-	if leaves.is_err() {
-		log::trace!{
-			target: "txpool",
-			"Failed to extract leaves for best block at: {}",
-			new_best,
-		};
+/// Prune the known txs for the given block.
+async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
+	block_id: BlockId<Block>,
+	api: &Api,
+	pool: &sc_transaction_graph::Pool<Api>,
+) {
+	// We don't query block if we won't prune anything
+	if pool.validated_pool().status().is_empty() {
+		return;
 	}
 
-	let ignore = tree_route.retracted().first().map(|hn| hn.hash.clone());
-	leaves.ok()
-		.into_iter()
-		.flatten()
-		.into_iter()
-		.filter(move |l| Some(l) != ignore.as_ref())
-		.filter_map(move |l| {
-			match api.tree_route(l, new_best.clone()) {
-				Ok(tree_route) => Some(tree_route.into_retracted().into_iter().map(|v| v.hash)),
-				Err(_) => {
-					log::debug!(
-						target: "txpool",
-						"Failed to get tree route {} -> {}. \
-						 Ignoring while finding retracted blocks.",
-						l,
-						new_best,
-					);
-					None
-				}
-			}
+	let hashes = api.block_body(&block_id).await
+		.unwrap_or_else(|e| {
+			log::warn!("Prune known transactions: error request {:?}!", e);
+			None
 		})
-		.flatten()
-		.chain(tree_route.into_retracted().into_iter().map(|v| v.hash))
+		.unwrap_or_default()
+		.into_iter()
+		.map(|tx| pool.hash_of(&tx))
+		.collect::<Vec<_>>();
+
+	if let Err(e) = pool.prune_known(&block_id, &hashes) {
+		log::error!("Cannot prune known in the pool {:?}!", e);
+	}
 }
 
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
@@ -499,8 +468,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
-			ChainEvent::NewBlock { id, tree_route, .. } => {
-				let id = id.clone();
+			ChainEvent::NewBlock { id, tree_route, is_new_best, .. } => {
 				let pool = self.pool.clone();
 				let api = self.api.clone();
 
@@ -510,18 +478,6 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						log::trace!(
 							target: "txpool",
 							"Skipping chain event - no number for that block {:?}",
-							id,
-						);
-						return Box::pin(ready(()));
-					}
-				};
-
-				let block_hash = match api.block_id_to_hash(&id) {
-					Ok(Some(hash)) => hash,
-					_ => {
-						log::trace!(
-							target: "txpool",
-							"Skipping chain event - no hash for that block {:?}",
 							id,
 						);
 						return Box::pin(ready(()));
@@ -538,39 +494,35 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let ready_poll = self.ready_poll.clone();
 
 				async move {
-					// We don't query block if we won't prune anything
-					if !pool.validated_pool().status().is_empty() {
-						let hashes = api.block_body(&id).await
-							.unwrap_or_else(|e| {
-								log::warn!("Prune known transactions: error request {:?}!", e);
-								None
-							})
-							.unwrap_or_default()
-							.into_iter()
-							.map(|tx| pool.hash_of(&tx))
-							.collect::<Vec<_>>();
-
-						if let Err(e) = pool.prune_known(&id, &hashes) {
-							log::error!("Cannot prune known in the pool {:?}!", e);
-						}
+					// If there is a tree route, we use this to prune known tx based on the enacted
+					// blocks and otherwise we only prune known txs if the block is
+					// the new best block.
+					if let Some(ref tree_route) = tree_route {
+						future::join_all(
+							tree_route
+								.enacted()
+								.iter().map(|h|
+									prune_known_txs_for_block(
+										BlockId::Hash(h.hash.clone()),
+										&*api,
+										&*pool,
+									),
+								),
+						).await;
+					} else if is_new_best {
+						prune_known_txs_for_block(id.clone(), &*api, &*pool).await;
 					}
-
-					let extra_pool = pool.clone();
-					// After #5200 lands, this arguably might be moved to the
-					// handler of "all blocks notification".
-					ready_poll.lock().trigger(
-						block_number,
-						move || Box::new(extra_pool.validated_pool().ready())
-					);
 
 					if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
 						let mut resubmit_transactions = Vec::new();
 
-						for retracted_hash in find_retracted_blocks(&block_hash, tree_route, &*api) {
-							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(retracted_hash.clone());
+						for retracted in tree_route.retracted() {
+							let hash = retracted.hash.clone();
 
-							let block_transactions = api.block_body(&BlockId::hash(retracted_hash))
+							// notify txs awaiting finality that it has been retracted
+							pool.validated_pool().on_block_retracted(hash.clone());
+
+							let block_transactions = api.block_body(&BlockId::hash(hash))
 								.await
 								.unwrap_or_else(|e| {
 									log::warn!("Failed to fetch block body {:?}!", e);
@@ -599,6 +551,14 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							)
 						}
 					}
+
+					let extra_pool = pool.clone();
+					// After #5200 lands, this arguably might be moved to the
+					// handler of "all blocks notification".
+					ready_poll.lock().trigger(
+						block_number,
+						move || Box::new(extra_pool.validated_pool().ready()),
+					);
 
 					if next_action.revalidate {
 						let hashes = pool.validated_pool()

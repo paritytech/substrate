@@ -25,13 +25,12 @@ use sp_runtime::{
 	transaction_validity::{ValidTransaction, TransactionSource, InvalidTransaction},
 };
 use substrate_test_runtime_client::{
-	runtime::{Block, Hash, Index, Header, Extrinsic, Transfer},
-	AccountKeyring::*, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
+	runtime::{Block, Hash, Index, Header, Extrinsic, Transfer}, AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 use futures::{prelude::*, task::Poll};
 use codec::Encode;
-use sc_transaction_graph::ChainApi;
+use std::collections::BTreeSet;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
@@ -143,6 +142,37 @@ fn should_ban_invalid_transactions() {
 }
 
 #[test]
+fn only_prune_on_new_best() {
+	let pool = maintained_pool().0;
+	let uxt = uxt(Alice, 209);
+
+	let _ = block_on(
+		pool.submit_and_watch(&BlockId::number(1), SOURCE, uxt.clone())
+	).expect("1. Imported");
+	let header = pool.api.push_block(1, vec![uxt.clone()]);
+	assert_eq!(pool.status().ready, 1);
+
+	let event = ChainEvent::NewBlock {
+		id: BlockId::Number(1),
+		is_new_best: false,
+		header: header.clone(),
+		tree_route: None,
+	};
+	block_on(pool.maintain(event));
+	assert_eq!(pool.status().ready, 1);
+
+	let header = pool.api.push_block(2, vec![uxt]);
+	let event = ChainEvent::NewBlock {
+		id: BlockId::Number(2),
+		is_new_best: true,
+		header: header.clone(),
+		tree_route: None,
+	};
+	block_on(pool.maintain(event));
+	assert_eq!(pool.status().ready, 0);
+}
+
+#[test]
 fn should_correctly_prune_transactions_providing_more_than_one_tag() {
 	let api = Arc::new(TestApi::with_alice_nonce(209));
 	api.set_valid_modifier(Box::new(|v: &mut ValidTransaction| {
@@ -191,7 +221,7 @@ fn block_event(id: u64) -> ChainEvent<Block> {
 fn block_event_with_retracted(
 	header: Header,
 	retracted_start: Hash,
-	api: &impl ChainApi<Block = Block>,
+	api: &TestApi,
 ) -> ChainEvent<Block> {
 	let tree_route = api.tree_route(retracted_start, header.hash()).expect("Tree route exists");
 
@@ -696,7 +726,9 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 			tree_route: None,
 		};
 		block_on(pool.maintain(event));
-		assert_eq!(pool.status().ready, 0);
+
+		// Only transactions from new best should be pruned
+		assert_eq!(pool.status().ready, 1);
 	}
 
 	// Block D2
@@ -706,6 +738,140 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
 	}
+}
+
+#[test]
+fn resubmit_from_retracted_fork() {
+	let api = TestApi::empty();
+	// starting block A1 (last finalized.)
+	api.push_block(1, vec![]);
+
+	let (pool, _background, _) = BasicPool::new_test(api.into());
+
+	let tx0 = uxt(Alice, 1);
+	let tx1 = uxt(Dave, 2);
+	let tx2 = uxt(Bob, 3);
+
+	// Transactions of the fork that will be enacted later
+	let tx3 = uxt(Eve, 1);
+	let tx4 = uxt(Ferdie, 2);
+	let tx5 = uxt(One, 3);
+
+	pool.api.increment_nonce(Alice.into());
+	pool.api.increment_nonce(Dave.into());
+	pool.api.increment_nonce(Bob.into());
+	pool.api.increment_nonce(Eve.into());
+	pool.api.increment_nonce(Ferdie.into());
+	pool.api.increment_nonce(One.into());
+
+	// Block D0
+	{
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx0.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block(2, vec![tx0.clone()]);
+		assert_eq!(pool.status().ready, 1);
+
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Number(2),
+			is_new_best: true,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+	}
+
+	// Block E0
+	{
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx1.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block(3, vec![tx1.clone()]);
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Hash(header.hash()),
+			is_new_best: true,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+	}
+
+	// Block F0
+	let f0 = {
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx2.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block(4, vec![tx2.clone()]);
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Hash(header.hash()),
+			is_new_best: true,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+		header.hash()
+	};
+
+	// Block D1
+	let d1 = {
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx3.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block(2, vec![tx3.clone()]);
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Hash(header.hash()),
+			is_new_best: false,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 1);
+		header.hash()
+	};
+
+	// Block E1
+	let e1 = {
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx4.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block_with_parent(d1.clone(), vec![tx4.clone()]);
+		let event = ChainEvent::NewBlock {
+			id: BlockId::Hash(header.hash()),
+			is_new_best: false,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 2);
+		header.hash()
+	};
+
+	// Block F1
+	let f1_header = {
+		let _ = block_on(
+			pool.submit_and_watch(&BlockId::number(1), SOURCE, tx5.clone())
+		).expect("1. Imported");
+		let header = pool.api.push_block_with_parent(e1.clone(), vec![tx5.clone()]);
+		// Don't announce the block event to the pool directly, because we will
+		// re-org to this block.
+		assert_eq!(pool.status().ready, 3);
+		header
+	};
+
+	let ready = pool.ready().map(|t| t.data.encode()).collect::<BTreeSet<_>>();
+	let expected_ready = vec![tx3, tx4, tx5].iter().map(Encode::encode).collect::<BTreeSet<_>>();
+	assert_eq!(expected_ready, ready);
+
+	let event = block_event_with_retracted(f1_header, f0, &*pool.api);
+	block_on(pool.maintain(event));
+
+	assert_eq!(pool.status().ready, 3);
+	let ready = pool.ready().map(|t| t.data.encode()).collect::<BTreeSet<_>>();
+	let expected_ready = vec![tx0, tx1, tx2].iter().map(Encode::encode).collect::<BTreeSet<_>>();
+	assert_eq!(expected_ready, ready);
 }
 
 #[test]
@@ -764,12 +930,10 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 fn should_not_accept_old_signatures() {
 	use std::convert::TryFrom;
 
-	let client_builder = TestClientBuilder::new();
-	let backend = client_builder.backend();
-	let client = Arc::new(client_builder.build());
+	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(client, backend))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(client))).0
 	);
 
 	let transfer = Transfer {
