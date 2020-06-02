@@ -1349,9 +1349,14 @@ ServiceBuilder<
 		}
 
 		// Spawn informant task
+		let network_status_sinks_1 = network_status_sinks.clone();
 		let informant_future = sc_informant::build(
-			self.client.clone(),
-			|duration| (),
+			client.clone(),
+			move |interval| {
+				let (sink, stream) = tracing_unbounded("mpsc_network_status");
+				network_status_sinks_1.lock().push(interval, sink);
+				stream
+			},
 			transaction_pool.clone(),
 			informant_prefix,
 			sc_informant::OutputFormat::Coloured,
