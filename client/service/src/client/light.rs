@@ -16,12 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Light client components.
-
-pub mod backend;
-pub mod blockchain;
-pub mod call_executor;
-pub mod fetcher;
+//! Light client utilities.
 
 use std::sync::Arc;
 
@@ -37,10 +32,7 @@ use super::client::{Client,ClientConfig};
 use sc_client_api::{
 	light::Storage as BlockchainStorage, CloneableSpawn,
 };
-use self::backend::Backend;
-use self::blockchain::Blockchain;
-use self::call_executor::GenesisCallExecutor;
-use self::fetcher::LightDataChecker;
+use sc_light::{Backend, Blockchain, GenesisCallExecutor, LightDataChecker};
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> Arc<Blockchain<S>> {

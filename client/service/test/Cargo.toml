@@ -39,5 +39,6 @@ substrate-test-runtime-client = { version = "2.0.0-rc2", path = "../../../test-u
 sc-client-api = { version = "2.0.0-rc2", path = "../../api" }
 sc-block-builder = { version = "0.8.0-rc2", path = "../../block-builder" }
 sc-executor = { version = "0.8.0-rc2", path = "../../executor" }
+sc-light = { version = "2.0.0-rc2", path = "../../light" }
 sp-panic-handler = { version = "2.0.0-rc2", path = "../../../primitives/panic-handler" }
 parity-scale-codec = "1.3.0"

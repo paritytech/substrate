@@ -84,10 +84,9 @@ use sp_utils::mpsc::tracing_unbounded;
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 use super::{
-	genesis,
-	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	block_rules::{BlockRules, LookupResult as BlockLookupResult},
+	genesis, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
+use sc_light::{call_executor::prove_execution, fetcher::ChangesProof};
 use futures::channel::mpsc;
 use rand::Rng;
 

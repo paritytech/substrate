@@ -35,12 +35,9 @@ use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
-use sc_service::client::{
-	light::fetcher::{
-		Fetcher,
-		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
-		RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
-	},
+use sc_client_api::light::{
+	RemoteCallRequest, RemoteChangesRequest, RemoteBodyRequest,
+	Fetcher, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 };
 
 /// A prelude to import in tests.
@@ -78,10 +75,10 @@ pub type Executor = client::LocalCallExecutor<
 pub type LightBackend = substrate_test_client::LightBackend<substrate_test_runtime::Block>;
 
 /// Test client light executor.
-pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
+pub type LightExecutor = sc_light::GenesisCallExecutor<
 	LightBackend,
 	client::LocalCallExecutor<
-		client::light::backend::Backend<
+		sc_light::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>
 		>,
@@ -350,7 +347,7 @@ pub fn new_light() -> (
 ) {
 
 	let storage = sc_client_db::light::LightStorage::new_test();
-	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
+	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor(), Default::default());

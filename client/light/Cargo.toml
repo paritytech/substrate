@@ -1,26 +1,13 @@
 [package]
-name = "sc-service"
-version = "0.8.0-rc2"
+description = "components for a light client"
+name = "sc-light"
+version = "2.0.0-rc2"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Substrate service. Starts a thread that spins up the network, client, and extrinsic pool. Manages communication between them."
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
-
-[features]
-default = ["db"]
-# The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
-# a path to a database, an error will be produced at runtime.
-db = ["sc-client-db/kvdb-rocksdb", "sc-client-db/parity-db"]
-wasmtime = [
-	"sc-executor/wasmtime",
-]
-# exposes the client type
-test-helpers = []
+documentation = "https://docs.rs/sc-light"
 
 [dependencies]
 derive_more = "0.99.2"
@@ -54,7 +41,6 @@ sp-application-crypto = { version = "2.0.0-rc2", path = "../../primitives/applic
 sp-consensus = { version = "0.8.0-rc2", path = "../../primitives/consensus/common" }
 sc-network = { version = "0.8.0-rc2", path = "../network" }
 sc-chain-spec = { version = "2.0.0-rc2", path = "../chain-spec" }
-sc-light = { version = "2.0.0-rc2", path = "../light" }
 sc-client-api = { version = "2.0.0-rc2", path = "../api" }
 sp-api = { version = "2.0.0-rc2", path = "../../primitives/api" }
 sc-client-db = { version = "0.8.0-rc2", default-features = false, path = "../db" }
@@ -75,16 +61,5 @@ sc-tracing = { version = "2.0.0-rc2", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 
-
-[target.'cfg(all(any(unix, windows), not(target_os = "android")))'.dependencies]
-netstat2 = "0.8.1"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-procfs = '0.7.8'
-
-
-[dev-dependencies]
-substrate-test-runtime-client = { version = "2.0.0-rc2", path = "../../test-utils/runtime/client" }
-sp-consensus-babe = { version = "0.8.0-rc2", path = "../../primitives/consensus/babe" }
-grandpa = { version = "0.8.0-rc2", package = "sc-finality-grandpa", path = "../finality-grandpa" }
-grandpa-primitives = { version = "2.0.0-rc2", package = "sp-finality-grandpa", path = "../../primitives/finality-grandpa" }
+[features]
+default = []
