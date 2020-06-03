@@ -263,7 +263,7 @@ pub struct RunCmd {
 	///
 	/// Note: the directory is random per process execution. This directory is used as base path
 	/// which includes: database, node key and keystore.
-	#[structopt(long)]
+	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
 
 	#[structopt(skip)]
