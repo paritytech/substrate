@@ -291,8 +291,6 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.snow]
 opt-level = 3
-[profile.dev.package.soketto]
-opt-level = 3
 [profile.dev.package.twox-hash]
 opt-level = 3
 [profile.dev.package.uint]
