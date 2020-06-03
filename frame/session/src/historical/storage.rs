@@ -20,7 +20,8 @@
 //! This is used in conjunction with [`ProvingTrie`](super::ProvingTrie) and
 //! the offchain indexing API.
 
-use sp_io::offchain_index;
+use codec::{Codec, Decode, Encode};
+use sp_runtime::offchain::storage::StorageValueRef;
 use sp_std::prelude::*;
 
 use super::super::{Module as SessionModule, SessionIndex};
@@ -35,13 +36,13 @@ pub struct ValidatorSet<T: Trait> {
 }
 
 /// Derive the key used to store the list of validators
-fn derive_key<P: AsRef<[u8]>, T: Trait>(prefix: P, session_index: Vec<u8>) -> Vec<u8> {
+fn derive_key<P: AsRef<[u8]>>(prefix: P, session_index: &[u8]) -> Vec<u8> {
     assert!(session_index.len() > 0);
-    let prefix = prefix.as_ref();
+    let prefix: &[u8] = prefix.as_ref();
     let mut concatenated = Vec::with_capacity(prefix.len() + 1 + session_index.len());
     concatenated.extend_from_slice(prefix);
-    concatenated.push('/');
-    (&mut concatenated[(prefix.len() + 1)..]).extend_from_slice(session_index.as_slice());
+    concatenated.push('/' as u8);
+    concatenated.extend_from_slice(session_index);
     concatenated
 }
 
@@ -51,11 +52,11 @@ impl<T: Trait> ValidatorSet<T> {
     /// If none is found or decodable given `prefix` and `session`, it will return `None`.
     /// Empty validator sets should only ever exist for genesis blocks.
     fn load_from_offchain(session_index: SessionIndex) -> Option<Self> {
-        let derived_key = derive_key(STATIC_PREFIX, session_index.encode());
+        let derived_key = derive_key(PREFIX, session_index.encode().as_slice());
         let validator_set = StorageValueRef::persistent(derived_key.as_ref())
             .get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
             .flatten();
-        validator_set
+        validator_set.map(|validator_set| Self { validator_set })
     }
 
     /// Access the underlying `ValidatorId` and `FullIdentification` tuples as slice.
@@ -68,16 +69,6 @@ impl<T: Trait> ValidatorSet<T> {
         self.validator_set
     }
 
-    /// Prune anything older than the current session index.
-    ///
-    /// For behaviour details refer to [`fn prune_older_than`](Self::prune_older_than).
-    ///
-    /// **Must** be called from the offchain worker.
-    fn prune() {
-        let move_pruning_marker = SessionModule::current_index();
-        Self::prune_older_than(move_pruning_marker);
-    }
-
     /// Attempt to prune anything that is older than `first_to_keep` session index.
     ///
     /// Due to re-ogranisation it could be that the `first_to_keep` might be less
@@ -86,53 +77,55 @@ impl<T: Trait> ValidatorSet<T> {
     ///
     /// **Must** be called from the offchain worker.
     fn prune_older_than(first_to_keep: SessionIndex) {
-        let pruning_marker_key = derive_key(STATIC_LAST_PRUNE);
+        let derived_key = derive_key(LAST_PRUNE, b"---");
         let mut entry = StorageValueRef::persistent(derived_key.as_ref());
-        match entry.mutate(|current: Option<Option<SessionIndex>>| {
+        match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
             match current {
                 Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
                 // do not move the cursor, if the new one would be behind ours
                 Some(Some(current)) => Ok(current),
                 None => Ok(first_to_keep),
                 // if the storage contains undecodable data, overwrite with current anyways
-                // which might leak some entries being never purged
+                // which might leak some entries being never purged, but that is acceptable
+                // in this context
                 Some(None) => Ok(first_to_keep),
             }
         }) {
             Ok(Ok(new_value)) => {
                 // on a re-org this is not necessarily true, with the above they might be equal
-                if previous < first_to_keep {
-                    for session_index in previous..first_to_keep {
-                        let derived_key = derive_key(STATIC_PREFIX, session_index.encode());
+                if new_value < first_to_keep {
+                    for session_index in new_value..first_to_keep {
+                        let derived_key = derive_key(PREFIX, session_index.encode().as_slice());
                         let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
                     }
                 }
             }
-            Ok(Err(e)) => {} // failed to store the value calculated with the given closure
-            Err(e) => {}     // failed to calculate the value to store with the given closure
+            Ok(Err(_)) => {} // failed to store the value calculated with the given closure
+            Err(_) => {}     // failed to calculate the value to store with the given closure
         }
     }
 
     /// **Must** be called from on chain.
     fn store_to_offchain(session: SessionIndex) {
         let session_index = <SessionModule<T>>::current_index();
-        let derived_key = derive_key(prefix.as_ref(), session.encode());
+        let derived_key = derive_key(PREFIX, session.encode().as_slice());
         //let value = SessionModule::historical_root(session_index);
         let value = <SessionModule<T>>::validators().encode();
-        offchain_index::set(value.as_slice())
+        sp_io::offchain_index::set(derived_key.as_slice(), value.as_slice())
     }
 
-    /// **Must** be called from on chain, i.e. `on_import`
+    /// **Must** be called from on chain, i.e. `on_initialize` or `on_finalization`.
     fn store_current_to_offchain() {
-        Self::store_to_offchain(SessionModule::current_index());
+        Self::store_to_offchain(<SessionModule<T>>::current_index());
     }
 }
 
 /// Implement conversion into iterator for usage
 /// with [ProvingTrie](super::ProvingTrie::generate_for).
-impl<T: Trait> IntoIter for ValidatorSet<T> {
+impl<T: Trait> core::iter::IntoIterator for ValidatorSet<T> {
     type Item = (T::ValidatorId, T::FullIdentification);
-    fn into_iter(self) -> impl Iterator<Item = Self::Item> {
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
         self.validator_set.into_iter()
     }
 }
