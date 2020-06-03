@@ -390,9 +390,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol().num_queued_blocks()
 	}
 
-	/// Returns the number of processed blocks.
-	pub fn num_processed_blocks(&self) -> usize {
-		self.network_service.user_protocol().num_processed_blocks()
+	/// Returns the number of downloaded blocks.
+	pub fn num_downloaded_blocks(&self) -> usize {
+		self.network_service.user_protocol().num_downloaded_blocks()
 	}
 
 	/// Number of active sync requests.
