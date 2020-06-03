@@ -36,7 +36,7 @@
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
 use sp_arithmetic::{
-	PerThing, Rational128,
+	PerThing, Rational128, ThresholdOrd,
 	helpers_128bit::multiply_by_rational,
 	traits::{Zero, Saturating, Bounded, SaturatedConversion},
 };
@@ -614,23 +614,36 @@ pub fn evaluate_support<AccountId>(
 	[min_support, sum, sum_squared]
 }
 
-/// Compares two sets of phragmen scores based on desirability and returns true if `that` is
-/// better than `this`.
+/// Compares two sets of phragmen scores based on desirability and returns true if `this` is
+/// better than `that`.
 ///
-/// Evaluation is done in a lexicographic manner.
+/// Evaluation is done in a lexicographic manner, and if each element of `this` is `that * epsilon`
+/// greater or less than `that`.
 ///
 /// Note that the third component should be minimized.
-pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
-	match that
+pub fn is_score_better<P: PerThing>(this: PhragmenScore, that: PhragmenScore, epsilon: P) -> bool
+	where ExtendedBalance: From<sp_arithmetic::InnerOf<P>>
+{
+	match this
 		.iter()
 		.enumerate()
-		.map(|(i, e)| e.cmp(&this[i]))
-		.collect::<Vec<Ordering>>()
+		.map(|(i, e)| (
+			e.ge(&that[i]),
+			e.tcmp(&that[i], epsilon.mul_ceil(that[i])),
+		))
+		.collect::<Vec<(bool, Ordering)>>()
 		.as_slice()
 	{
-		[Ordering::Greater, _, _] => true,
-		[Ordering::Equal, Ordering::Greater, _] => true,
-		[Ordering::Equal, Ordering::Equal, Ordering::Less] => true,
+		// epsilon better in the score[0], accept.
+		[(_, Ordering::Greater), _, _] => true,
+
+		// less than epsilon better in score[0], but more than epsilon better in the second.
+		[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
+
+		// less than epsilon better in score[0, 1], but more than epsilon better in the third
+		[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
+
+		// anything else is not a good score.
 		_ => false,
 	}
 }

@@ -158,7 +158,7 @@ pub struct GenesisAccount {
 decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
 		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
-		AccountCodes: map hasher(blake2_128_concat) H160 => Vec<u8>;
+		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
 		AccountStorages: double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
 	}
 
@@ -288,6 +288,8 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -318,6 +320,8 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -350,6 +354,8 @@ decl_module! {
 			gas_price: U256,
 			nonce: Option<U256>,
 		) -> DispatchResult {
+			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
+
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
@@ -498,8 +504,6 @@ impl<T: Trait> Module<T> {
 	) -> Result<R, Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (R, ExitReason),
 	{
-		ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-
 		let vicinity = Vicinity {
 			gas_price,
 			origin: source,
