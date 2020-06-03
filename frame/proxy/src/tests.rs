@@ -37,7 +37,7 @@ impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
 		pallet_balances<T>,
-		proxy,
+		proxy<T>,
 	}
 }
 impl_outer_dispatch! {
@@ -144,6 +144,14 @@ use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
 
+fn last_event() -> TestEvent {
+	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+}
+
+fn expect_event<E: Into<TestEvent>>(e: E) {
+	assert_eq!(last_event(), e.into());
+}
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
@@ -152,14 +160,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
-}
-
-fn last_event() -> TestEvent {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<TestEvent>>(e: E) {
-	assert_eq!(last_event(), e.into());
 }
 
 #[test]
@@ -205,7 +205,7 @@ fn proxying_works() {
 		assert_noop!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()), Error::<Test>::NotProxy);
 		assert_noop!(Proxy::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()), Error::<Test>::NotProxy);
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		expect_event(Event::ProxyExecuted(Ok(())));
+		expect_event(RawEvent::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 1);
 
 		let call = Box::new(Call::System(SystemCall::remark(vec![])));
@@ -214,7 +214,21 @@ fn proxying_works() {
 		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
 		assert_noop!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()), Error::<Test>::Unproxyable);
 		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		expect_event(Event::ProxyExecuted(Ok(())));
+		expect_event(RawEvent::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 2);
+	});
+}
+
+#[test]
+fn anonymous_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0));
+		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
+		expect_event(RawEvent::AnonymousCreated(anon.clone(), 1, ProxyType::Any, 0));
+		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
+		assert_ok!(Balances::transfer(Origin::signed(1), anon, 5));
+		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call.clone()));
+		expect_event(RawEvent::ProxyExecuted(Ok(())));
+		assert_eq!(Balances::free_balance(6), 1);
 	});
 }
