@@ -162,6 +162,27 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	}
 }
 
+/// We can not implement `FindAuthor` twice, because the compiler does not know if 
+/// `u32 == T::AuthorityId` and thus, prevents us to implement the trait twice.
+#[doc(hidden)]
+pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);
+
+impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
+	for FindAccountFromAuthorIndex<T, Inner>
+{
+	fn find_author<'a, I>(digests: I) -> Option<T::AuthorityId>
+		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		let i = Inner::find_author(digests)?;
+
+		let validators = <Module<T>>::authorities();
+		validators.get(i as usize).map(|k| k.clone())
+	}
+}
+
+/// Find the authority ID of the Aura authority who authored the current block.
+pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Module<T>>;
+
 impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities()

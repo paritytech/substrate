@@ -286,6 +286,7 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const MinSolutionScoreBump: Perbill = Perbill::zero();
 }
 
 thread_local! {
@@ -321,6 +322,7 @@ impl Trait for Test {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type MaxIterations = MaxIterations;
+	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 }
@@ -853,7 +855,11 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
 
-		assert!(sp_phragmen::is_score_better(score, better_score));
+		assert!(sp_phragmen::is_score_better::<Perbill>(
+			better_score,
+			score,
+			MinSolutionScoreBump::get(),
+		));
 
 		score
 	};

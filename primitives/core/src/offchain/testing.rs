@@ -73,10 +73,10 @@ pub struct OffchainState {
 	pub persistent_storage: InMemOffchainStorage,
 	/// Local storage
 	pub local_storage: InMemOffchainStorage,
-	/// Current timestamp (unix millis)
-	pub timestamp: u64,
 	/// A supposedly random seed.
 	pub seed: [u8; 32],
+	/// A timestamp simulating the current time.
+	pub timestamp: Timestamp,
 }
 
 impl OffchainState {
@@ -160,11 +160,11 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		Timestamp::from_unix_millis(self.0.read().timestamp)
+		self.0.read().timestamp
 	}
 
-	fn sleep_until(&mut self, _deadline: Timestamp) {
-		unimplemented!("not needed in tests so far")
+	fn sleep_until(&mut self, deadline: Timestamp) {
+		self.0.write().timestamp = deadline;
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
@@ -177,6 +177,14 @@ impl offchain::Externalities for TestOffchainExt {
 			StorageKind::LOCAL => &mut state.local_storage,
 			StorageKind::PERSISTENT => &mut state.persistent_storage,
 		}.set(b"", key, value);
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		let mut state = self.0.write();
+		match kind {
+			StorageKind::LOCAL => &mut state.local_storage,
+			StorageKind::PERSISTENT => &mut state.persistent_storage,
+		}.remove(b"", key);
 	}
 
 	fn local_storage_compare_and_set(

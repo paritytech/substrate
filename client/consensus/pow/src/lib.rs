@@ -610,7 +610,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 			continue 'outer
 		}
 
-		let mut proposer = futures::executor::block_on(env.init(&best_header))
+		let proposer = futures::executor::block_on(env.init(&best_header))
 			.map_err(|e| Error::Environment(format!("{:?}", e)))?;
 
 		let inherent_data = inherent_data_providers
