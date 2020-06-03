@@ -37,10 +37,10 @@ pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;
 mod per_things;
-mod fixed;
+mod fixed_point;
 mod rational128;
 
-pub use fixed::{FixedPointNumber, Fixed64, Fixed128, FixedPointOperand};
+pub use fixed_point::{FixedPointNumber, Fixed64, Fixed128, FixedPointOperand};
 pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
 
