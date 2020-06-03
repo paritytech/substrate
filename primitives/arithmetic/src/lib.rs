@@ -40,7 +40,7 @@ mod per_things;
 mod fixed_point;
 mod rational128;
 
-pub use fixed_point::{FixedPointNumber, Fixed64, Fixed128, FixedPointOperand};
+pub use fixed_point::{FixedPointNumber, FixedPointOperand, FixedI64, FixedI128, FixedU128};
 pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
 

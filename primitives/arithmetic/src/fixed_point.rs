@@ -1563,19 +1563,19 @@ macro_rules! implement_fixed {
 }
 
 implement_fixed!(
-	Fixed64,
-	test_fixed_64,
+	FixedI64,
+	test_fixed_i64,
 	i64,
 	1_000_000_000,
-	"_Fixed Point 64 bits, range = [-9223372036.854775808, 9223372036.854775807]_",
+	"_Fixed Point 64 bits signed, range = [-9223372036.854775808, 9223372036.854775807]_",
 );
 
 implement_fixed!(
-	Fixed128,
-	test_fixed_128,
+	FixedI128,
+	test_fixed_i128,
 	i128,
 	1_000_000_000_000_000_000,
-	"_Fixed Point 128 bits, range = \
+	"_Fixed Point 128 bits signed, range = \
 		[-170141183460469231731.687303715884105728, 170141183460469231731.687303715884105727]_",
 );
 
