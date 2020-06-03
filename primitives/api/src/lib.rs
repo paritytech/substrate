@@ -535,7 +535,7 @@ pub struct ProofRecorder<Block: BlockT> {
 #[cfg(feature = "std")]
 impl<B: BlockT> From<StorageProofKind> for ProofRecorder<B> {
 	fn from(kind: StorageProofKind) -> Self {
-		let recorder = if kind.need_register_full() {
+		let recorder = if kind.is_full_proof_recorder_needed() {
 			sp_state_machine::ProofRecorder::<HashFor<B>>::Full(Default::default())
 		} else {
 			sp_state_machine::ProofRecorder::<HashFor<B>>::Flat(Default::default())

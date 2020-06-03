@@ -45,12 +45,16 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	empty: H::Out,
 	/// If defined, we store encoded visited roots for top_trie and child trie in this
 	/// map. It also act as a cache.
-	pub register_roots: Option<RwLock<ChildrenMap<Option<StorageValue>>>>,
+	register_roots: Option<RwLock<ChildrenMap<Option<StorageValue>>>>,
 }
 
 /// Patricia trie-based pairs storage essence, with reference to child info.
 pub struct ChildTrieBackendEssence<'a, S: TrieBackendStorage<H>, H: Hasher> {
+	/// Trie backend to use.
+	/// For the default child trie it is the top trie one.
 	pub essence: &'a TrieBackendEssence<S, H>,
+	/// Definition of the child trie, this is use to be able to pass
+	/// child_info information when registering proof.
 	pub child_info: Option<&'a ChildInfo>,
 }
 
@@ -93,6 +97,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Get backend storage reference.
 	pub fn backend_storage_mut(&mut self) -> &mut S {
 		&mut self.storage
+	}
+
+	/// Get register root reference.
+	pub fn register_roots(&self) -> Option<&RwLock<ChildrenMap<Option<StorageValue>>>> {
+		self.register_roots.as_ref()
 	}
 
 	/// Get trie root.

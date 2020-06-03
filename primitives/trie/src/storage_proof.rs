@@ -115,8 +115,8 @@ const fn no_partial_db_support() -> Error {
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StorageProofKind {
-	/// Kind for `StorageProof::Flatten`.
-	Flatten = 1,
+	/// Kind for `StorageProof::Flat`.
+	Flat = 1,
 
 	/// Kind for `StorageProof::TrieSkipHashes`.
 	TrieSkipHashes = 2,
@@ -142,9 +142,9 @@ impl StorageProofKind {
 	/// Decode a byte value representing the storage kind.
 	/// Return `None` if the kind does not exists or is not allowed.
 	#[cfg(test)]
-	pub fn read_from_byte(encoded: u8) -> Option<Self> {
+	pub fn from_byte(encoded: u8) -> Option<Self> {
 		Some(match encoded {
-			x if x == StorageProofKind::Flatten as u8 => StorageProofKind::Flatten,
+			x if x == StorageProofKind::Flat as u8 => StorageProofKind::Flat,
 			x if x == StorageProofKind::TrieSkipHashes as u8 => StorageProofKind::TrieSkipHashes,
 			x if x == StorageProofKind::KnownQueryPlanAndValues as u8
 				=> StorageProofKind::KnownQueryPlanAndValues,
@@ -161,9 +161,9 @@ impl StorageProofKind {
 	/// Decode a byte value representing the storage kind.
 	/// Return `None` if the kind does not exists or is not allowed.
 	#[cfg(not(test))]
-	pub fn read_from_byte(encoded: u8) -> Option<Self> {
+	pub fn from_byte(encoded: u8) -> Option<Self> {
 		Some(match encoded {
-			x if x == StorageProofKind::Flatten as u8 => StorageProofKind::Flatten,
+			x if x == StorageProofKind::Flat as u8 => StorageProofKind::Flat,
 			x if x == StorageProofKind::TrieSkipHashes as u8 => StorageProofKind::TrieSkipHashes,
 			x if x == StorageProofKind::KnownQueryPlanAndValues as u8
 				=> StorageProofKind::KnownQueryPlanAndValues,
@@ -193,15 +193,26 @@ pub enum Input {
 }
 
 impl Input {
-	/// Update input with new content.
+	/// Get input kind for a given input.
+	pub fn kind(&self) -> InputKind {
+		match self {
+			Input::ChildTrieRoots(..) => InputKind::ChildTrieRoots,
+			Input::None => InputKind::None,
+			Input::QueryPlan(..) => InputKind::QueryPlan,
+			Input::QueryPlanWithValues(..) => InputKind::QueryPlanWithValues,
+		}
+	}
+
+	/// Updates input with new content.
 	/// Return false on failure.
 	/// Fails when the input type differs, except for `None` input
 	/// that is always reassignable.
 	///
-	/// Not that currently query plan inputs are not mergeable
-	/// even if doable (just unimplemented).
+	/// Merging query plan inputs is not allowed (unimplemented),
+	/// but could be.
 	#[must_use]
-	pub fn consolidate(&mut self, other: Self) -> bool {
+	pub fn consolidate(&mut self, other: Self) -> Result<()> {
+		let incompatible_types = || Err(error("Incompatible types for consolidating proofs"));
 		match self {
 			Input::None => {
 				*self = other;
@@ -213,7 +224,7 @@ impl Input {
 						for (child_info, root) in children_other {
 							match children.entry(child_info) {
 								btree_map::Entry::Occupied(v) => if v.get() != &root {
-									return false;
+									return Err(error("Incompatible children root when consolidating proofs"));
 								},
 								btree_map::Entry::Vacant(v) => {
 									v.insert(root);
@@ -221,61 +232,59 @@ impl Input {
 							}
 						}
 					},
-					Input::QueryPlan(..) => return false,
-					Input::QueryPlanWithValues(..) => return false,
+					Input::QueryPlan(..) => return incompatible_types(),
+					Input::QueryPlanWithValues(..) => return incompatible_types(),
 				}
 			},
-			Input::QueryPlan(..) => return false,
-			Input::QueryPlanWithValues(..) => return false,
+			Input::QueryPlan(..) => return incompatible_types(),
+			Input::QueryPlanWithValues(..) => return incompatible_types(),
 		}
-		true
+		Ok(())
 	}
 }
 
 /// Kind for a `Input` variant.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum InputKind {
 	/// `Input::None` kind.
 	None,
-
 	/// `Input::ChildTrieRoots` kind.
 	ChildTrieRoots,
-
 	/// `Input::QueryPlan` kind.
 	QueryPlan,
-
 	/// `Input::QueryPlanWithValues` kind.
 	QueryPlanWithValues,
 }
 
 impl StorageProofKind {
 	/// Input kind needed for processing (create) the proof.
-	pub fn process_input_kind(&self) -> InputKind {
+	pub fn input_kind_for_processing(&self) -> InputKind {
 		match self {
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlan,
 			StorageProofKind::TrieSkipHashesForMerge
 				| StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => InputKind::ChildTrieRoots,
 			StorageProofKind::Full
-				| StorageProofKind::Flatten => InputKind::None,
+				| StorageProofKind::Flat => InputKind::None,
 		}
 	}
 
 	/// Input kind needed for verifying the proof.
-	pub fn verify_input_kind(&self) -> InputKind {
+	pub fn input_kind_for_checking(&self) -> InputKind {
 		match self {
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanWithValues,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull
 				| StorageProofKind::TrieSkipHashesForMerge
 				| StorageProofKind::Full
-				| StorageProofKind::Flatten => InputKind::None,
+				| StorageProofKind::Flat => InputKind::None,
 		}
 	}
 
 	/// Indicates what variant of proof recorder should be use.
-	pub fn need_register_full(&self) -> bool {
+	pub fn is_full_proof_recorder_needed(&self) -> bool {
 		match self {
-			StorageProofKind::Flatten => false,
+			StorageProofKind::Flat => false,
 			StorageProofKind::Full
 				| StorageProofKind::KnownQueryPlanAndValues
 				| StorageProofKind::TrieSkipHashes
@@ -288,7 +297,7 @@ impl StorageProofKind {
 	/// and if so, if the backend need to be full.
 	pub fn use_full_partial_db(&self) -> Option<bool> {
 		match self {
-			StorageProofKind::Flatten
+			StorageProofKind::Flat
 				| StorageProofKind::TrieSkipHashes => Some(false),
 			StorageProofKind::Full
 				| StorageProofKind::TrieSkipHashesForMerge
@@ -299,7 +308,7 @@ impl StorageProofKind {
 
 	/// Proof that should be use with `verify` method.
 	pub fn can_use_verify(&self) -> bool {
-		matches!(self.verify_input_kind(), InputKind::None)
+		matches!(self.input_kind_for_checking(), InputKind::None)
 	}
 
 	/// Can be use as a trie db backend.
@@ -323,7 +332,7 @@ impl StorageProofKind {
 }
 
 /// A collection on encoded trie nodes.
-type ProofNodes = Vec<Vec<u8>>;
+pub type ProofNodes = Vec<Vec<u8>>;
 
 /// A collection on encoded and compacted trie nodes.
 /// Nodes are sorted by trie node iteration order, and some hash
@@ -346,9 +355,11 @@ type ProofCompacted = Vec<Vec<u8>>;
 pub enum StorageProof {
 	/// Single flattened proof component, all default child trie are flattened over a same
 	/// container, no child trie information is provided.
-	Flatten(ProofNodes),
+	Flat(ProofNodes),
 
-	/// This works as `Flatten`, but skips encoding of hashes
+	/// Compacted flat proof.
+	///
+	/// This works as `Flat`, but skips encoding of hashes
 	/// that can be calculated when reading the child nodes
 	/// in the proof (nodes ordering hold the trie structure information).
 	/// This requires that the proof is collected with
@@ -358,6 +369,8 @@ pub enum StorageProof {
 	/// when decoding.
 	TrieSkipHashes(Vec<ProofCompacted>),
 
+	/// Proof for a known key value content.
+	///
 	/// This skips encoding of hashes in a similar way as `TrieSkipHashes`.
 	/// This also skips values in the proof, and can therefore only be
 	/// use to check if there was a change of content.
@@ -369,6 +382,7 @@ pub enum StorageProof {
 
 	/// This is an intermediate representation that keep trace of
 	/// input and is therefore mergeable into compact representation.
+	///
 	/// Compatible with `TrieSkipHashes` and `TrieSkipHashesFull` proofs.
 	TrieSkipHashesForMerge(ChildrenProofMap<(ProofMapTrieNodes, Vec<u8>)>),
 
@@ -376,12 +390,15 @@ pub enum StorageProof {
 	// decoding is not implemented.
 
 	///	Proof with full child trie description.
+	///
 	///	Currently Full variant is unused as all our proof kind can share a same memory db
 	///	(which is a bit more compact).
 	///	This currently mainly provided for test purpose and extensibility.
 	Full(ChildrenProofMap<ProofNodes>),
 
-	/// Compact form of proofs split by child trie, this is using the same compaction as
+	/// Compact form of proofs split by child trie.
+	///
+	/// This is using the same compaction as
 	/// `TrieSkipHashes` but keep trace of child trie origin.
 	///	This is mainly provided for test purpose and extensibility.
 	TrieSkipHashesFull(ChildrenProofMap<ProofCompacted>),
@@ -394,12 +411,12 @@ impl Decode for StorageProof {
 			Err(_) => {
 				// we allow empty proof to decode to encoded empty proof for
 				// compatibility with legacy encoding.
-				return Ok(StorageProof::Flatten(Vec::new()));
+				return Ok(StorageProof::Flat(Vec::new()));
 			},
 		};
-		Ok(match StorageProofKind::read_from_byte(kind)
+		Ok(match StorageProofKind::from_byte(kind)
 			.ok_or_else(|| codec::Error::from("Invalid storage kind"))? {
-				StorageProofKind::Flatten => StorageProof::Flatten(Decode::decode(value)?),
+				StorageProofKind::Flat => StorageProof::Flat(Decode::decode(value)?),
 				StorageProofKind::TrieSkipHashes => StorageProof::TrieSkipHashes(Decode::decode(value)?),
 				StorageProofKind::KnownQueryPlanAndValues
 					=> StorageProof::KnownQueryPlanAndValues(Decode::decode(value)?),
@@ -416,11 +433,12 @@ impl Encode for StorageProof {
 	fn encode_to<T: CodecOutput>(&self, dest: &mut T) {
 		(self.kind() as u8).encode_to(dest);
 		match self {
-			StorageProof::Flatten(p) => p.encode_to(dest),
+			StorageProof::Flat(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashes(p) => p.encode_to(dest),
 			StorageProof::KnownQueryPlanAndValues(p) => p.encode_to(dest),
 			StorageProof::Full(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashesFull(p) => p.encode_to(dest),
+			// TODO no error in encode: this should be ok after refactoring
 			StorageProof::TrieSkipHashesForMerge(..) => panic!("merge did not recurse as told"),
 		}
 	}
@@ -440,12 +458,12 @@ impl<'a> Encode for LegacyEncodeAdapter<'a> {
 /// This encodes only if storage proof is a flatten proof.
 /// It panics otherwhise, so it should only be use when we
 /// got strong guaranties of the proof kind.
-pub struct FlattenEncodeAdapter<'a>(pub &'a StorageProof);
+pub struct FlatEncodeAdapter<'a>(pub &'a StorageProof);
 
-impl<'a> Encode for FlattenEncodeAdapter<'a> {
+impl<'a> Encode for FlatEncodeAdapter<'a> {
 	fn encode_to<T: CodecOutput>(&self, dest: &mut T) {
 		match self.0 {
-			StorageProof::Flatten(nodes) => nodes.encode_to(dest),
+			StorageProof::Flat(nodes) => nodes.encode_to(dest),
 			_ => panic!("Usage of flatten encoder on non flatten proof"),
 		}
 	}
@@ -471,9 +489,9 @@ impl<'a, I: CodecInput> CodecInput for InputRevertPeek<'a, I> {
 				*self.0 = &self.0[into.len()..];
 				return Ok(());
 			} else {
-				into[..self.0.len()].copy_from_slice(&self.0[..]);
-				*self.0 = &[][..];
 				offset = self.0.len();
+				into[..offset].copy_from_slice(&self.0[..]);
+				*self.0 = &[][..];
 			}
 		}
 		self.1.read(&mut into[offset..])
@@ -498,7 +516,7 @@ impl Decode for LegacyDecodeAdapter {
 		} else {
 			let mut legacy = &[legacy][..];
 			let mut input = InputRevertPeek(&mut legacy, value);
-			LegacyDecodeAdapter(StorageProof::Flatten(Decode::decode(&mut input)?))
+			LegacyDecodeAdapter(StorageProof::Flat(Decode::decode(&mut input)?))
 		})
 	}
 }
@@ -510,13 +528,13 @@ impl StorageProof {
 	/// key-value pairs exist in storage).
 	pub fn empty() -> Self {
 		// we default to flatten for compatibility
-		Self::empty_for(StorageProofKind::Flatten)
+		Self::empty_for(StorageProofKind::Flat)
 	}
 
 	/// Returns a new empty proof of a given kind.
 	pub fn empty_for(kind: StorageProofKind) -> Self {
 		match kind {
-			StorageProofKind::Flatten => StorageProof::Flatten(Default::default()),
+			StorageProofKind::Flat => StorageProof::Flat(Default::default()),
 			StorageProofKind::Full => StorageProof::Full(ChildrenProofMap::default()),
 			StorageProofKind::TrieSkipHashesFull => StorageProof::TrieSkipHashesFull(ChildrenProofMap::default()),
 			StorageProofKind::TrieSkipHashesForMerge => StorageProof::TrieSkipHashesForMerge(
@@ -530,7 +548,7 @@ impl StorageProof {
 	/// Check if proof is empty for any kind of proof.
 	pub fn is_empty(&self) -> bool {
 		match self {
-			StorageProof::Flatten(data) => data.is_empty(),
+			StorageProof::Flat(data) => data.is_empty(),
 			StorageProof::Full(data) => data.is_empty(),
 			StorageProof::KnownQueryPlanAndValues(data) => data.is_empty(),
 			StorageProof::TrieSkipHashes(data) => data.is_empty(),
@@ -541,7 +559,7 @@ impl StorageProof {
 
 	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
 	/// to be traversed in any particular order.
-	/// This iterator is only for `Flatten` proofs, other kind of proof will return an iterator with
+	/// This iterator is only for `Flat` proofs, other kind of proof will return an iterator with
 	/// no content.
 	pub fn iter_nodes_flatten(self) -> StorageProofNodeIterator {
 		StorageProofNodeIterator::new(self)
@@ -573,7 +591,7 @@ impl StorageProof {
 					result.extend(unpacked_proof);
 				}
 
-				Ok(StorageProof::Flatten(result))
+				Ok(StorageProof::Flat(result))
 			},
 			s => Ok(s),
 		}
@@ -627,7 +645,7 @@ impl StorageProof {
 		where H::Out: Codec,
 	{
 		Ok(match kind {
-			StorageProofKind::Flatten => {
+			StorageProofKind::Flat => {
 				let mut result = Vec::new();
 				collected.iter().for_each(|(child_info, proof)| {
 					match child_info.child_type() {
@@ -640,7 +658,7 @@ impl StorageProof {
 						}
 					}
 				});
-				StorageProof::Flatten(result)
+				StorageProof::Flat(result)
 			},
 			StorageProofKind::Full => {
 				let mut result = ChildrenProofMap::default();
@@ -736,12 +754,12 @@ impl StorageProof {
 		where H::Out: Codec,
 	{
 		Ok(match kind {
-			StorageProofKind::Flatten => {
+			StorageProofKind::Flat => {
 				let trie_nodes = collected
 					.iter()
 					.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 					.collect();
-				StorageProof::Flatten(trie_nodes)
+				StorageProof::Flat(trie_nodes)
 			},
 			_ => return Err(no_partial_db_support()),
 		})
@@ -750,7 +768,7 @@ impl StorageProof {
 	/// Merges multiple storage proofs.
 	/// The merged proof output may be smaller than the aggregate size of the input
 	/// proofs due to deduplication of trie nodes.
-	/// Merge result in a `Flatten` storage proof if any of the item is flatten (we cannot unflatten).
+	/// Merge result in a `Flat` storage proof if any of the item is flatten (we cannot unflatten).
 	/// The function cannot pack back proof as it does not have reference to additional information
 	/// needed.
 	/// So packing back need to be done in a next step with aggregated proof inputs.
@@ -804,7 +822,7 @@ impl StorageProof {
 					| StorageProof::TrieSkipHashes(..)
 					| StorageProof::KnownQueryPlanAndValues(..)
 					=> unreachable!("Unpacked or early return earlier"),
-				StorageProof::Flatten(proof) => {
+				StorageProof::Flat(proof) => {
 					if packable_child_sets.is_some() {
 						return Err(error("Proof incompatibility for merging"));
 					}
@@ -854,7 +872,7 @@ impl StorageProof {
 			}
 		}
 		Ok(if do_flatten {
-			StorageProof::Flatten(unique_set.into_iter().collect())
+			StorageProof::Flat(unique_set.into_iter().collect())
 		} else {
 			let mut result = ChildrenProofMap::default();
 			for (child_info, set) in child_sets.into_iter() {
@@ -867,7 +885,7 @@ impl StorageProof {
 	/// Get kind type for the storage proof variant.
 	pub fn kind(&self) -> StorageProofKind {
 		match self {
-			StorageProof::Flatten(_) => StorageProofKind::Flatten,
+			StorageProof::Flat(_) => StorageProofKind::Flat,
 			StorageProof::TrieSkipHashes(_) => StorageProofKind::TrieSkipHashes,
 			StorageProof::KnownQueryPlanAndValues(_) => StorageProofKind::KnownQueryPlanAndValues,
 			StorageProof::Full(_) => StorageProofKind::Full,
@@ -877,18 +895,22 @@ impl StorageProof {
 	}
 
 	/// Create in-memory storage of proof check backend.
+	///
 	/// Currently child trie are all with same backend
-	/// implementation, therefore using
-	/// `as_partial_flat_db` is prefered.
-	pub fn as_partial_db<H>(self) -> Result<ChildrenProofMap<MemoryDB<H>>>
+	/// implementation, therefore using `into_partial_flat_db` is prefered.
+	///
+	/// Fail when proof do not support producing a partial db `can_use_as_partial_db`
+	/// returns false.
+	/// Can also fail on invalid compact proof.
+	pub fn into_partial_db<H>(self) -> Result<ChildrenProofMap<MemoryDB<H>>>
 	where
 		H: Hasher,
 		H::Out: Decode,
 	{
 		let mut result = ChildrenProofMap::default();
 		match self {
-			s@StorageProof::Flatten(..) => {
-				let db = s.as_partial_flat_db::<H>()?;
+			s@StorageProof::Flat(..) => {
+				let db = s.into_partial_flat_db::<H>()?;
 				result.insert(ChildInfoProof::top_trie(), db);
 			},
 			StorageProof::Full(children) => {
@@ -919,7 +941,7 @@ impl StorageProof {
 				}
 			},
 			s@StorageProof::TrieSkipHashes(..) => {
-				let db = s.as_partial_flat_db::<H>()?;
+				let db = s.into_partial_flat_db::<H>()?;
 				result.insert(ChildInfoProof::top_trie(), db);
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
@@ -930,7 +952,9 @@ impl StorageProof {
 	}
 
 	/// Create in-memory storage of proof check backend.
-	pub fn as_partial_flat_db<H>(self) -> Result<MemoryDB<H>>
+	///
+	/// Behave similarily to `into_partial_db`.
+	pub fn into_partial_flat_db<H>(self) -> Result<MemoryDB<H>>
 	where
 		H: Hasher,
 		H::Out: Decode,
@@ -938,7 +962,7 @@ impl StorageProof {
 		let mut db = MemoryDB::default();
 		let mut db_empty = true;
 		match self {
-			s@StorageProof::Flatten(..) => {
+			s@StorageProof::Flat(..) => {
 				for item in s.iter_nodes_flatten() {
 					db.insert(EMPTY_PREFIX, &item[..]);
 				}
@@ -991,11 +1015,12 @@ impl StorageProof {
 
 	/// Get flatten content form proof.
 	/// This panic on non flatten proof and should only be
-	/// use when we got strong guarantie the proof is a `Flatten`
+	/// use when we got strong guarantee the proof is a `Flat`
 	/// proof.
-	pub fn expect_flatten_content(self) -> Vec<Vec<u8>> {
+	/// TODO change result to Option<ProofNodes> (will be refactor in theory)
+	pub fn expect_flatten_content(self) -> ProofNodes {
 		match self {
-			StorageProof::Flatten(proof) => proof,
+			StorageProof::Flat(proof) => proof,
 			_ => panic!("Flat proof expected"),
 		}
 	}
@@ -1010,7 +1035,7 @@ pub struct StorageProofNodeIterator {
 impl StorageProofNodeIterator {
 	fn new(proof: StorageProof) -> Self {
 		match proof {
-			StorageProof::Flatten(data) => StorageProofNodeIterator {
+			StorageProof::Flat(data) => StorageProofNodeIterator {
 				inner: data.into_iter(),
 			},
 			_ => StorageProofNodeIterator {
@@ -1035,7 +1060,7 @@ impl<H: Hasher> TryInto<MemoryDB<H>> for StorageProof
 	type Error = Error;
 
 	fn try_into(self) -> Result<MemoryDB<H>> {
-		self.as_partial_flat_db()
+		self.into_partial_flat_db()
 	}
 }
 
@@ -1046,13 +1071,13 @@ impl<H: Hasher> TryInto<ChildrenProofMap<MemoryDB<H>>> for StorageProof
 	type Error = Error;
 
 	fn try_into(self) -> Result<ChildrenProofMap<MemoryDB<H>>> {
-		self.as_partial_db()
+		self.into_partial_db()
 	}
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 /// Type for storing a map of child trie proof related information.
 /// A few utilities methods are defined.
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 pub struct ChildrenProofMap<T>(pub BTreeMap<ChildInfoProof, T>);
 
 impl<T> sp_std::ops::Deref for ChildrenProofMap<T> {
@@ -1089,10 +1114,6 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 #[derive(Clone)]
 pub struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
 
-/// Container recording trie nodes and their encoded hash.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProofMapTrieNodes(pub HashMap<Vec<u8>, DBValue>);
-
 impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {
 	fn default() -> Self {
 		RecordMapTrieNodes(Default::default())
@@ -1122,6 +1143,10 @@ impl<H: Hasher> HashDBRef<H, DBValue> for RecordMapTrieNodes<H> {
 		self.0.get(key).map(Option::is_some).unwrap_or(false)
 	}
 }
+
+/// Container recording trie nodes and their encoded hash.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProofMapTrieNodes(pub HashMap<Vec<u8>, DBValue>);
 
 impl sp_std::default::Default for ProofMapTrieNodes {
 	fn default() -> Self {
@@ -1159,7 +1184,7 @@ impl<H: Hasher> HashDBRef<H, DBValue> for ProofMapTrieNodes
 }
 
 #[test]
-fn legacy_proof_codec() {
+fn legacy_proof_compatibility() {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	struct OldStorageProof {
 		trie_nodes: Vec<Vec<u8>>,
@@ -1171,7 +1196,7 @@ fn legacy_proof_codec() {
 
 	assert_eq!(&old_empty[..], &[0][..]);
 
-	let adapter_proof = LegacyDecodeAdapter(StorageProof::Flatten(Vec::new()));
+	let adapter_proof = LegacyDecodeAdapter(StorageProof::Flat(Vec::new()));
 	assert_eq!(LegacyDecodeAdapter::decode(&mut &old_empty[..]).unwrap(), adapter_proof);
 
 	let old_one = OldStorageProof {
@@ -1180,14 +1205,16 @@ fn legacy_proof_codec() {
 
 	assert_eq!(&old_one[..], &[4, 8, 4, 5][..]);
 
-	let adapter_proof = LegacyDecodeAdapter(StorageProof::Flatten(vec![vec![4u8, 5u8]]));
+	let adapter_proof = LegacyDecodeAdapter(StorageProof::Flat(vec![vec![4u8, 5u8]]));
 	assert_eq!(LegacyDecodeAdapter::decode(&mut &old_one[..]).unwrap(), adapter_proof);
+}
 
-
+#[test]
+fn legacy_proof_codec() {
 	// random content for proof, we test serialization
 	let content = vec![b"first".to_vec(), b"second".to_vec()];
 
-	let proof = StorageProof::Flatten(content.clone());
+	let proof = StorageProof::Flat(content.clone());
 	let encoded_proof = proof.encode();
 
 	// test adapter

@@ -388,7 +388,7 @@ fn execution_proof_is_generated_and_checked() {
 	}
 
 	let kinds = [
-		StorageProofKind::Flatten,
+		StorageProofKind::Flat,
 		StorageProofKind::TrieSkipHashes,
 	];
 
@@ -456,7 +456,7 @@ fn code_is_executed_at_genesis_only() {
 }
 
 const KINDS: [StorageProofKind; 4] = [
-	StorageProofKind::Flatten,
+	StorageProofKind::Flat,
 	StorageProofKind::Full,
 	StorageProofKind::TrieSkipHashes,
 	StorageProofKind::TrieSkipHashesFull,

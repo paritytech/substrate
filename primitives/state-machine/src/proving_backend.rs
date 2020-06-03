@@ -163,7 +163,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>, kind: StorageProofKind) -> Self {
-		let proof_recorder = if kind.need_register_full() {
+		let proof_recorder = if kind.is_full_proof_recorder_needed() {
 			ProofRecorder::Full(Default::default())
 		} else {
 			ProofRecorder::Flat(Default::default())
@@ -184,7 +184,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		let trie_backend = if let ProofInputKind::ChildTrieRoots = proof_kind.process_input_kind() {
+		let trie_backend = if let ProofInputKind::ChildTrieRoots = proof_kind.input_kind_for_processing() {
 			TrieBackend::new_with_roots(recorder, root)
 		} else {
 			TrieBackend::new(recorder, root)
@@ -204,14 +204,19 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 
 	fn update_input(&mut self) -> Result<(), String> {
-		let input = match self.proof_kind.process_input_kind() {
+		let input = match self.proof_kind.input_kind_for_processing() {
 			ProofInputKind::ChildTrieRoots => {
 				self.trie_backend.extract_registered_roots()
 			},
 			_ => ProofInput::None,
 		};
-		if !self.previous_input.consolidate(input) {
-			Err("Incompatible inputs".to_string())
+		if let Err(e) = self.previous_input.consolidate(input) {
+			Err(format!(
+				"{:?} for inputs kind {:?}, {:?}",
+				e,
+				self.previous_input.kind(),
+				ProofInputKind::ChildTrieRoots,
+			))
 		} else {
 			Ok(())
 		}
@@ -232,7 +237,9 @@ impl<H: Hasher> ProofRecorder<H>
 	where
 		H::Out: Codec,
 {
-	/// Extracts and transform the gathered unordered content.
+	/// Extracts the gathered unordered encoded trie nodes.
+	/// Depending on `kind`, encoded trie nodes can change
+	/// (usually to compact the proof).
 	pub fn extract_proof(
 		&self,
 		kind: StorageProofKind,
@@ -399,7 +406,7 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
-	let db = proof.as_partial_flat_db()
+	let db = proof.into_partial_flat_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.contains(&root, EMPTY_PREFIX) {
 		Ok(TrieBackend::new(db, root))
@@ -418,7 +425,7 @@ where
 	H::Out: Codec,
 {
 	use std::ops::Deref;
-	let db = proof.as_partial_db()
+	let db = proof.into_partial_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.deref().get(&ChildInfoProof::top_trie())
 		.map(|db| db.contains(&root, EMPTY_PREFIX))
@@ -448,7 +455,7 @@ mod tests {
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
 		let trie_backend = test_trie();
-		let kind = StorageProofKind::Flatten;
+		let kind = StorageProofKind::Flat;
 		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
 		let kind = StorageProofKind::Full;
 		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
@@ -461,7 +468,7 @@ mod tests {
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
 		let trie_backend = test_trie();
-		let kind = StorageProofKind::Flatten;
+		let kind = StorageProofKind::Flat;
 		let mut backend = test_proving(&trie_backend, kind);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().unwrap().is_empty());
@@ -494,7 +501,7 @@ mod tests {
 			assert_eq!(trie_root, proving_root);
 			assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 		};
-		test(StorageProofKind::Flatten);
+		test(StorageProofKind::Flat);
 		test(StorageProofKind::Full);
 	}
 
@@ -520,7 +527,7 @@ mod tests {
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 		};
-		test(StorageProofKind::Flatten);
+		test(StorageProofKind::Flat);
 		test(StorageProofKind::Full);
 		test(StorageProofKind::TrieSkipHashesFull);
 		test(StorageProofKind::TrieSkipHashes);
@@ -609,7 +616,7 @@ mod tests {
 				);
 			}
 		};
-		test(StorageProofKind::Flatten);
+		test(StorageProofKind::Flat);
 		test(StorageProofKind::Full);
 		test(StorageProofKind::TrieSkipHashesFull);
 		test(StorageProofKind::TrieSkipHashes);

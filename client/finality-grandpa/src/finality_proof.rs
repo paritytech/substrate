@@ -42,7 +42,7 @@ use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result a
 use sc_client_api::{
 	backend::Backend, StorageProof, StorageProofKind,
 	light::{FetchChecker, RemoteReadRequest},
-	StorageProvider, ProofProvider,
+	StorageProvider, ProofProvider, ProofNodes,
 };
 use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::BlockNumberOps;
@@ -97,7 +97,7 @@ impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn Storage
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
-		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY), StorageProofKind::Flatten)
+		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY), StorageProofKind::Flat)
 	}
 }
 
@@ -228,7 +228,7 @@ pub(crate) struct FinalityProofFragment<Header: HeaderT> {
 	/// The set of headers in the range (U; F] that we believe are unknown to the caller. Ordered.
 	pub unknown_headers: Vec<Header>,
 	/// Optional proof of execution of GRANDPA::authorities() at the `block`.
-	pub authorities_proof: Option<Vec<Vec<u8>>>,
+	pub authorities_proof: Option<ProofNodes>,
 }
 
 /// Proof of finality is the ordered set of finality fragments, where:
@@ -511,7 +511,7 @@ fn check_finality_proof_fragment<Block: BlockT, B, J>(
 		current_authorities = authorities_provider.check_authorities_proof(
 			proof_fragment.block,
 			header,
-			StorageProof::Flatten(new_authorities_proof),
+			StorageProof::Flat(new_authorities_proof),
 		)?;
 
 		current_set_id += 1;
@@ -836,8 +836,8 @@ pub(crate) mod tests {
 					_ => unreachable!("no other authorities should be fetched: {:?}", block_id),
 				},
 				|block_id| match block_id {
-					BlockId::Number(5) => Ok(StorageProof::Flatten(vec![vec![50]])),
-					BlockId::Number(7) => Ok(StorageProof::Flatten(vec![vec![70]])),
+					BlockId::Number(5) => Ok(StorageProof::Flat(vec![vec![50]])),
+					BlockId::Number(7) => Ok(StorageProof::Flat(vec![vec![70]])),
 					_ => unreachable!("no other authorities should be proved: {:?}", block_id),
 				},
 			),

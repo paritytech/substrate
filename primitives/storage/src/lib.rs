@@ -150,6 +150,11 @@ pub mod well_known_keys {
 	/// Prefix of child storage keys.
 	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
 
+	/// Prefix of child storage keys of default type.
+	/// Most of the time using `ChildInfo::from_prefixed_key` is preferable to using
+	/// this constant.
+	pub const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
+
 	/// Whether a key is a child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
@@ -358,7 +363,7 @@ impl ChildType {
 	/// is one.
 	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
-			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
+			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_TYPE_PARENT_PREFIX,
 		}
 	}
 }
@@ -391,8 +396,6 @@ impl ChildTrieParentKeyId {
 /// Map of child trie information stored by `ChildInfo`.
 pub type ChildrenMap<T> = BTreeMap<ChildInfo, T>;
 
-const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -402,6 +405,6 @@ mod tests {
 		let child_info = ChildInfo::new_default(b"any key");
 		let prefix = child_info.child_type().parent_prefix();
 		assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
-		assert!(prefix.starts_with(DEFAULT_CHILD_TYPE_PARENT_PREFIX));
+		assert!(prefix.starts_with(well_known_keys::DEFAULT_CHILD_TYPE_PARENT_PREFIX));
 	}
 }

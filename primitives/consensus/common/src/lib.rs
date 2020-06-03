@@ -150,7 +150,7 @@ impl From<bool> for RecordProof {
 	fn from(val: bool) -> Self {
 		if val {
 			// default to a flatten proof.
-			Self::Yes(StorageProofKind::Flatten)
+			Self::Yes(StorageProofKind::Flat)
 		} else {
 			Self::No
 		}

@@ -158,7 +158,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
-		let storage = remote_roots_proof.as_partial_flat_db::<H>()
+		let storage = remote_roots_proof.into_partial_flat_db::<H>()
 			.map_err(|e| format!("{}", e))?;
 
 		// remote_roots.keys() are sorted => we can use this to group changes tries roots

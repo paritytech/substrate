@@ -29,7 +29,7 @@ use crate::{
 #[cfg(test)]
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Codec};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, ChildType};
 use sp_core::offchain::storage::OffchainOverlayedChanges;
 use std::{mem, ops};
@@ -560,7 +560,7 @@ impl OverlayedChanges {
 		mut cache: StorageTransactionCache<B::Transaction, H, N>,
 	) -> Result<StorageChanges<B::Transaction, H, N>, String>
 		where
-			H::Out: Ord + Decode + Encode + 'static
+			H::Out: Ord + Codec + 'static
 	{
 		self.drain_storage_changes(backend, changes_trie_state, parent_hash, &mut cache)
 	}
@@ -574,7 +574,7 @@ impl OverlayedChanges {
 		mut cache: &mut StorageTransactionCache<B::Transaction, H, N>,
 	) -> Result<StorageChanges<B::Transaction, H, N>, String>
 		where
-			H::Out: Ord + Decode + Encode + 'static
+			H::Out: Ord + Codec + 'static
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
@@ -691,7 +691,7 @@ impl OverlayedChanges {
 		parent_hash: H::Out,
 		panic_on_storage_error: bool,
 		cache: &mut StorageTransactionCache<B::Transaction, H, N>,
-	) -> Result<Option<H::Out>, ()> where H::Out: Ord + Decode + Encode + 'static {
+	) -> Result<Option<H::Out>, ()> where H::Out: Ord + Codec + 'static {
 		build_changes_trie::<_, H, N>(
 			backend,
 			changes_trie_state,

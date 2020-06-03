@@ -591,7 +591,7 @@ mod tests {
 						inherent_data,
 						digest,
 						std::time::Duration::from_secs(1),
-						RecordProof::Yes(StorageProofKind::Flatten),
+						RecordProof::Yes(StorageProofKind::Flat),
 					).await
 				}).expect("Error making test block").block;
 

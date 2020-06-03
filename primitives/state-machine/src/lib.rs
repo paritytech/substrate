@@ -45,7 +45,7 @@ mod stats;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
 	StorageProof, StorageProofKind, ChildrenProofMap, ProofInput, ProofInputKind,
-	LegacyDecodeAdapter, LegacyEncodeAdapter, FlattenEncodeAdapter};
+	LegacyDecodeAdapter, LegacyEncodeAdapter, FlatEncodeAdapter, ProofNodes};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -1055,7 +1055,7 @@ mod tests {
 
 	#[test]
 	fn prove_execution_and_proof_check_works() {
-		prove_execution_and_proof_check_works_inner(StorageProofKind::Flatten);
+		prove_execution_and_proof_check_works_inner(StorageProofKind::Flat);
 		prove_execution_and_proof_check_works_inner(StorageProofKind::Full);
 		prove_execution_and_proof_check_works_inner(StorageProofKind::TrieSkipHashesFull);
 		prove_execution_and_proof_check_works_inner(StorageProofKind::TrieSkipHashes);
@@ -1355,7 +1355,7 @@ mod tests {
 	#[test]
 	fn prove_read_and_proof_check_works() {
 		prove_read_and_proof_check_works_inner(StorageProofKind::Full);
-		prove_read_and_proof_check_works_inner(StorageProofKind::Flatten);
+		prove_read_and_proof_check_works_inner(StorageProofKind::Flat);
 		prove_read_and_proof_check_works_inner(StorageProofKind::TrieSkipHashesFull);
 		prove_read_and_proof_check_works_inner(StorageProofKind::TrieSkipHashes);
 	}

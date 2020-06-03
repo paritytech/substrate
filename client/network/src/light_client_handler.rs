@@ -57,7 +57,7 @@ use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client_api::{
 	StorageProof, StorageProofKind, LegacyDecodeAdapter,
-	FlattenEncodeAdapter as LegacyEncodeAdapter,
+	FlatEncodeAdapter as LegacyEncodeAdapter,
 	light::{
 		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
 		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
@@ -550,7 +550,7 @@ where
 			&BlockId::Hash(block),
 			&request.method,
 			&request.data,
-			StorageProofKind::Flatten,
+			StorageProofKind::Flat,
 		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
@@ -593,7 +593,7 @@ where
 		let proof = match self.chain.read_proof(
 			&BlockId::Hash(block),
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::Flat,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -642,7 +642,7 @@ where
 			&BlockId::Hash(block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::Flat,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {

@@ -55,7 +55,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	/// Get registered roots. Empty input is returned when the backend is
 	/// not configured to register roots.
 	pub fn extract_registered_roots(&self) -> ProofInput {
-		if let Some(register_roots) = self.essence.register_roots.as_ref() {
+		if let Some(register_roots) = self.essence.register_roots() {
 			let mut dest = ChildrenProofMap::default();
 			dest.insert(ChildInfoProof::top_trie(), self.essence.root().encode());
 			let roots = {
