@@ -12,13 +12,13 @@ description = "Substrate RPC servers."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpc-core = { package = "jsonrpc-core", git = "https://github.com/paritytech/jsonrpc" }
-pubsub = { package = "jsonrpc-pubsub", git = "https://github.com/paritytech/jsonrpc" }
+jsonrpc-core = "14.2"
+pubsub = { package = "jsonrpc-pubsub", version = "14.2" }
 log = "0.4.8"
 serde = "1.0.101"
 serde_json = "1.0.41"
 sp-runtime = { version = "2.0.0-rc2", path = "../../primitives/runtime" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
-http = { package = "jsonrpc-http-server", git = "https://github.com/paritytech/jsonrpc" }
-ws = { package = "jsonrpc-ws-server", git = "https://github.com/paritytech/jsonrpc" }
+http = { package = "jsonrpc-http-server", version = "14.2" }
+ws = { package = "jsonrpc-ws-server", version = "14.2" }
