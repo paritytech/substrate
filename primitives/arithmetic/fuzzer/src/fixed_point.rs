@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! # Running
-//! Running this fuzzer can be done with `cargo hfuzz run fixed`. `honggfuzz` CLI options can
+//! Running this fuzzer can be done with `cargo hfuzz run fixed_point`. `honggfuzz` CLI options can
 //! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.
 //!
 //! # Debugging a panic
 //! Once a panic is found, it can be debugged with
-//! `cargo hfuzz run-debug fixed hfuzz_workspace/fixed/*.fuzz`.
+//! `cargo hfuzz run-debug fixed_point hfuzz_workspace/fixed_point/*.fuzz`.
 //!
 //! # More information
 //! More information about `honggfuzz` can be found
