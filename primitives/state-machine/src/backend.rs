@@ -37,8 +37,18 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Storage changes to be applied if committing
 	type Transaction: Consolidate + Default + Send;
 
-	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H>;
+	/// The proof format use while registering proof.
+	type StorageProofReg: sp_trie::RegStorageProof<H::Out> + Into<Self::StorageProof>;
+
+	/// The actual proof produced.
+	type StorageProof: sp_trie::BackendStorageProof
+		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
+
+	/// Type of proof backend.
+	type ProofRegBackend: ProofRegBackend<H, StorageProof = Self::StorageProofReg>;
+
+	/// Type of proof backend.
+	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
@@ -217,10 +227,65 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 }
 
-impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
+/// Backend that can be instantiated from its state.
+pub trait InstantiableStateBackend<H>: Backend<H>
+	where
+		H: Hasher,
+{
+	/// Storage to use to instantiate.
+	type Storage;
+
+	/// Instantiation method.
+	fn new(storage: Self::Storage, state: H::Out) -> Self;
+
+	/// Extract state out of the backend.
+	fn extract_state(self) -> (Self::Storage, H::Out);
+}
+
+/// Backend that can be instantiated from intital content.
+pub trait GenesisStateBackend<H>: Backend<H>
+	where
+		H: Hasher,
+{
+	/// Instantiation method.
+	fn new(storage: sp_core::storage::Storage) -> Self;
+}
+
+/// Backend used to register a proof record.
+pub trait ProofRegBackend<H>: crate::backend::Backend<H>
+	where
+		H: Hasher,
+{
+	/// State of a backend.
+	type State: Default + Send + Sync + Clone;
+
+	/// Extract proof when run.
+	fn extract_proof(&self) -> Self::StorageProof;
+}
+
+/// Backend used to produce proof.
+pub trait ProofCheckBackend<H>: Sized + crate::backend::Backend<H>
+	where
+		H: Hasher,
+{
+	/// Instantiate backend from proof.
+	fn create_proof_check_backend(
+		root: H::Out,
+		proof: Self::StorageProof,
+	) -> Result<Self, Box<dyn crate::Error>>;
+}
+
+
+impl<'a, T, H> Backend<H> for &'a T
+	where
+		H: Hasher,
+		T: Backend<H>,
+{
 	type Error = T::Error;
 	type Transaction = T::Transaction;
-	type TrieBackendStorage = T::TrieBackendStorage;
+	type StorageProof = T::StorageProof;
+	type ProofRegBackend = T::ProofRegBackend;
+	type ProofCheckBackend = T::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
 		(*self).storage(key)
