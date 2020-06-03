@@ -842,8 +842,8 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 						author,
 						babe_pre_digest.slot_number(),
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
+						equivocation_proof.first_header.hash(),
+						equivocation_proof.second_header.hash(),
 					);
 				}
 

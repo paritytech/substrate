@@ -71,7 +71,10 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 pub type AuthorityIndex = u32;
 
 /// A slot number.
-pub type SlotNumber = u64;
+pub use sp_consensus_slots::SlotNumber;
+
+/// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
+pub use sp_consensus_slots::EquivocationProof;
 
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other

@@ -19,6 +19,7 @@
 use codec::{Encode, Decode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use sp_consensus_slots::EquivocationProof;
 use sp_runtime::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -41,31 +42,6 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 				|e| ClientError::Backend(format!("Slots DB is corrupted. Decode error: {}", e.what())),
 			)
 			.map(Some)
-	}
-}
-
-/// Represents an equivocation proof.
-#[derive(Debug, Clone)]
-pub struct EquivocationProof<H> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
-}
-
-impl<H> EquivocationProof<H> {
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
-
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
 	}
 }
 
@@ -115,8 +91,8 @@ pub fn check_equivocation<C, H, P>(
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
 					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
+					first_header: prev_header.clone(),
+					second_header: header.clone(),
 				}));
 			} else {
 				// We don't need to continue in case of duplicated header,

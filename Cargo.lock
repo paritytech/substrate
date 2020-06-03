@@ -6136,6 +6136,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
@@ -7354,6 +7355,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
+ "sp-consensus-slots",
  "sp-consensus-vrf",
  "sp-inherents",
  "sp-runtime",
@@ -7370,6 +7372,13 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "sp-consensus-slots"
+version = "0.8.0-rc3"
+dependencies = [
+ "parity-scale-codec",
 ]
 
 [[package]]
