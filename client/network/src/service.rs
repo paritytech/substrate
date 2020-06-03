@@ -713,6 +713,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
+
+	/// This function should be called when blocks are added to the chain by something other
+	/// than the import queue.
+	///
+	/// > **Important**: This function is a hack and can be removed at any time. Do **not** use it.
+	pub fn update_chain(&self) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
+	}
+
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -778,6 +789,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol_name: Cow<'static, [u8]>,
 	},
 	DisconnectPeer(PeerId),
+	UpdateChain,
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1106,6 +1118,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
+				ServiceToWorkerMsg::UpdateChain =>
+					this.network_service.user_protocol_mut().update_chain(),
 			}
 		}
 
