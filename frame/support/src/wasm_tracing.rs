@@ -18,8 +18,17 @@
 //!
 //! Facilitated by `sp_io::wasm_tracing`
 
+static mut WASM_TRACING_ENABLED: bool = true;
+
 /// Indicates whether to run traces in wasm
-pub static mut WASM_TRACING_ENABLED: bool = true;
+pub fn wasm_tracing_enabled() -> bool {
+	unsafe { WASM_TRACING_ENABLED }
+}
+
+/// Disable wasm traces
+pub fn disable_wasm_tracing() {
+	unsafe { WASM_TRACING_ENABLED = false }
+}
 
 /// This holds a tracing span id and is to signal on drop that a tracing span has exited.
 /// It must be bound to a named variable eg. `_span_guard`.
@@ -57,13 +66,13 @@ impl Drop for TracingSpanGuard {
 macro_rules! enter_span {
 	( $name:expr ) => {
 		#[cfg(not(feature = "std"))]
-		let __span_id__ = if unsafe { $crate::wasm_tracing::WASM_TRACING_ENABLED } {
+		let __span_id__ = if $crate::wasm_tracing::wasm_tracing_enabled() {
 				let id = $crate::sp_io::wasm_tracing::enter_span(
 					module_path!(),
 					$name
 				);
 				if id == 0 {
-					unsafe { $crate::wasm_tracing::WASM_TRACING_ENABLED = false; }
+					$crate::wasm_tracing::disable_wasm_tracing();
 					$crate::wasm_tracing::TracingSpanGuard::new(None)
 				} else {
 					$crate::wasm_tracing::TracingSpanGuard::new(Some(id))
