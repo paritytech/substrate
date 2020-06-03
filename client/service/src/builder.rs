@@ -840,7 +840,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// But you can define a prefix by using this function. Example:
 	///
 	/// ```rust,ignore
-	/// service.with_informant_prefix(|| "[MyNode] ".to_string());
+	/// service.with_informant_prefix("[MyNode] ".to_string());
 	/// ```
 	///
 	/// This will output:
