@@ -21,17 +21,21 @@ use crate::error::{Error, Result};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
 use crate::params::NetworkParams;
+use crate::params::OffchainWorkerParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
-use crate::params::OffchainWorkerParams;
 use crate::CliConfiguration;
+use parking_lot::Mutex;
 use regex::Regex;
 use sc_service::{
 	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-use std::{net::{IpAddr, Ipv4Addr, SocketAddr}, path::PathBuf, sync::Mutex};
+use std::{
+	net::{IpAddr, Ipv4Addr, SocketAddr},
+	path::PathBuf,
+};
 use structopt::StructOpt;
 use tempfile::TempDir;
 
@@ -463,10 +467,10 @@ impl CliConfiguration for RunCmd {
 
 	fn base_path(&self) -> Result<Option<PathBuf>> {
 		Ok(if self.tmp {
-			// TODO: use parking_lot to avoid the unwrap()
-			*self.temp_base_path.lock().unwrap() = Some(tempfile::Builder::new().prefix("substrate").tempdir()?);
+			*self.temp_base_path.lock() =
+				Some(tempfile::Builder::new().prefix("substrate").tempdir()?);
 
-			self.temp_base_path.lock().unwrap().as_ref().map(|x| x.path().into())
+			self.temp_base_path.lock().as_ref().map(|x| x.path().into())
 		} else {
 			self.shared_params().base_path()
 		})
