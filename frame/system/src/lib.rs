@@ -114,6 +114,7 @@ use sp_runtime::{
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
 		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 	},
+	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
@@ -741,12 +742,12 @@ decl_module! {
 		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
 		#[weight = (10_000_000, DispatchClass::Operational)]
-		fn suicide(origin) {
+		pub fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
-			Account::<T>::remove(who);
+			Self::kill_account(&who);
 		}
 	}
 }
@@ -1130,6 +1131,15 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsLen::put(len as u32);
 	}
 
+	/// Reset events. Can be used as an alternative to
+	/// `initialize` for tests that don't need to bother with the other environment entries.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	pub fn reset_events() {
+		<Events<T>>::kill();
+		EventCount::kill();
+		<EventTopics<T>>::remove_all();
+	}
+
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion { T::Version::get() }
 
@@ -1221,8 +1231,8 @@ impl<T: Trait> Module<T> {
 					"WARNING: Referenced account deleted. This is probably a bug."
 				);
 			}
-			Module::<T>::on_killed_account(who.clone());
 		}
+		Module::<T>::on_killed_account(who.clone());
 	}
 
 	/// Determine whether or not it is possible to update the code.
@@ -1265,6 +1275,15 @@ pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::kill_account(who)
+	}
+}
+
+impl<T: Trait> BlockNumberProvider for Module<T>
+{
+	type BlockNumber = <T as Trait>::BlockNumber;
+
+	fn current_block_number() -> Self::BlockNumber {
+		Module::<T>::block_number()
 	}
 }
 
@@ -1877,7 +1896,7 @@ pub(crate) mod tests {
 		pub const MaximumExtrinsicWeight: Weight = 768;
 		pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 		pub const MaximumBlockLength: u32 = 1024;
-		pub const Version: RuntimeVersion = RuntimeVersion {
+		pub Version: RuntimeVersion = RuntimeVersion {
 			spec_name: sp_version::create_runtime_str!("test"),
 			impl_name: sp_version::create_runtime_str!("system-test"),
 			authoring_version: 1,

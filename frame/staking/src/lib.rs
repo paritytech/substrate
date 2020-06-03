@@ -108,7 +108,7 @@
 //! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 //! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to
 //! the validator as well as its nominators.
-//! Only the [`T::MaxNominatorRewardedPerValidator`] biggest stakers can claim their reward. This
+//! Only the [`Trait::MaxNominatorRewardedPerValidator`] biggest stakers can claim their reward. This
 //! is to limit the i/o cost to mutate storage for each nominator's account.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
@@ -290,10 +290,13 @@ use sp_std::{
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	storage::IterableStorageMap,
-	dispatch::{IsSubType, DispatchResult, DispatchResultWithPostInfo, WithPostDispatchInfo},
+	dispatch::{
+		IsSubType, DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
+		WithPostDispatchInfo,
+	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
 		UnixTime, EstimateNextNewSession, EnsureOrigin,
@@ -301,7 +304,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerU16, PerThing, RuntimeDebug,
+	Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
@@ -332,13 +335,14 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
 
-// syntactic sugar for logging
-#[cfg(feature = "std")]
-const LOG_TARGET: &'static str = "staking";
+pub(crate) const LOG_TARGET: &'static str = "staking";
+
+// syntactic sugar for logging.
+#[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		debug::native::$level!(
-			target: LOG_TARGET,
+		frame_support::debug::$level!(
+			target: crate::LOG_TARGET,
 			$patter $(, $values)*
 		)
 	};
@@ -372,7 +376,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 pub struct ActiveEraInfo {
 	/// Index of era.
 	pub index: EraIndex,
-	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
+	/// Moment of start expressed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
 	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
@@ -890,6 +894,9 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// equalize will not be executed at all.
 	type MaxIterations: Get<u32>;
 
+	/// The threshold of improvement that should be provided for a new solution to be accepted.
+	type MinSolutionScoreBump: Get<Perbill>;
+
 	/// The maximum number of nominator rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
@@ -1172,6 +1179,8 @@ decl_event!(
 		OldSlashingReportDiscarded(SessionIndex),
 		/// A new set of stakers was elected with the given computation method.
 		StakingElection(ElectionCompute),
+		/// A new solution for the upcoming election has been stored.
+		SolutionStored(ElectionCompute),
 		/// An account has bonded this amount.
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
@@ -1285,7 +1294,7 @@ decl_module! {
 				// either current session final based on the plan, or we're forcing.
 				(Self::is_current_session_final() || Self::will_era_be_forced())
 			{
-				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now){
+				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now) {
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
 						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 							// create snapshot.
@@ -1327,7 +1336,7 @@ decl_module! {
 					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
-						log!(warn, "💸 Error in phragmen offchain worker: {:?}", e);
+						log!(error, "💸 Error in phragmen offchain worker: {:?}", e);
 					} else {
 						log!(debug, "Executed offchain worker thread without errors.");
 					}
@@ -2566,16 +2575,19 @@ impl<T: Trait> Module<T> {
 				Forcing::ForceAlways => (),
 				Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
 				_ => {
-					// not forcing, not a new era either. If final, set the flag.
-					if era_length + 1 >= T::SessionsPerEra::get() {
+					// Either `ForceNone`, or `NotForcing && era_length < T::SessionsPerEra::get()`.
+					if era_length + 1 == T::SessionsPerEra::get() {
 						IsCurrentSessionFinal::put(true);
+					} else if era_length >= T::SessionsPerEra::get() {
+						// Should only happen when we are ready to trigger an era but we have ForceNone,
+						// otherwise previous arm would short circuit.
+						Self::close_election_window();
 					}
 					return None
 				},
 			}
 
 			// new era.
-			IsCurrentSessionFinal::put(false);
 			Self::new_era(session_index)
 		} else {
 			// Set initial era
@@ -2608,7 +2620,7 @@ impl<T: Trait> Module<T> {
 		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
 		if let Some(queued_score) = Self::queued_score() {
 			ensure!(
-				is_score_better(queued_score, score),
+				is_score_better(score, queued_score, T::MinSolutionScoreBump::get()),
 				Error::<T>::PhragmenWeakSubmission.with_weight(T::DbWeight::get().reads(3)),
 			)
 		}
@@ -2788,6 +2800,9 @@ impl<T: Trait> Module<T> {
 		});
 		QueuedScore::put(submitted_score);
 
+		// emit event.
+		Self::deposit_event(RawEvent::SolutionStored(compute));
+
 		Ok(Some(adjusted_weight).into())
 	}
 
@@ -2906,6 +2921,17 @@ impl<T: Trait> Module<T> {
 		maybe_new_validators
 	}
 
+
+	/// Remove all the storage items associated with the election.
+	fn close_election_window() {
+		// Close window.
+		<EraElectionStatus<T>>::put(ElectionStatus::Closed);
+		// Kill snapshots.
+		Self::kill_stakers_snapshot();
+		// Don't track final session.
+		IsCurrentSessionFinal::put(false);
+	}
+
 	/// Select the new validator set at the end of the era.
 	///
 	/// Runs [`try_do_phragmen`] and updates the following storage items:
@@ -2927,11 +2953,8 @@ impl<T: Trait> Module<T> {
 			exposures,
 			compute,
 		}) = Self::try_do_phragmen() {
-			// We have chosen the new validator set. Submission is no longer allowed.
-			<EraElectionStatus<T>>::put(ElectionStatus::Closed);
-
-			// kill the snapshots.
-			Self::kill_stakers_snapshot();
+			// Totally close the election round and data.
+			Self::close_election_window();
 
 			// Populate Stakers and write slot stake.
 			let mut total_stake: BalanceOf<T> = Zero::zero();
@@ -3489,7 +3512,6 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			_,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
-			use sp_runtime::DispatchError;
 
 			// discard solution not coming from the local OCW.
 			match source {
@@ -3501,17 +3523,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			}
 
 			if let Err(error_with_post_info) = Self::pre_dispatch_checks(*score, *era) {
-				let error = error_with_post_info.error;
-				let error_number = match error {
-					DispatchError::Module { error, ..} => error,
-					_ => 0,
-				};
+				let invalid = to_invalid(error_with_post_info);
 				log!(
 					debug,
-					"validate unsigned pre dispatch checks failed due to module error #{:?}.",
-					error,
+					"validate unsigned pre dispatch checks failed due to error #{:?}.",
+					invalid,
 				);
-				return InvalidTransaction::Custom(error_number).into();
+				return invalid .into();
 			}
 
 			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
@@ -3539,17 +3557,43 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
-		// IMPORTANT NOTE: By default, a sane `pre-dispatch` should always do the same checks as
-		// `validate_unsigned` and overriding this should be done with care. this module has only
-		// one unsigned entry point, in which we call into `<Module<T>>::pre_dispatch_checks()`
-		// which is all the important checks that we do in `validate_unsigned`. Hence, we can safely
-		// override this to save some time.
-		Ok(())
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+		if let Call::submit_election_solution_unsigned(
+			_,
+			_,
+			score,
+			era,
+			_,
+		) = call {
+			// IMPORTANT NOTE: These checks are performed in the dispatch call itself, yet we need
+			// to duplicate them here to prevent a block producer from putting a previously
+			// validated, yet no longer valid solution on chain.
+			// OPTIMISATION NOTE: we could skip this in the `submit_election_solution_unsigned`
+			// since we already do it here. The signed version needs it though. Yer for now we keep
+			// this duplicate check here so both signed and unsigned can use a singular
+			// `check_and_replace_solution`.
+			Self::pre_dispatch_checks(*score, *era)
+				.map(|_| ())
+				.map_err(to_invalid)
+				.map_err(Into::into)
+		} else {
+			Err(InvalidTransaction::Call.into())
+		}
 	}
 }
 
 /// Check that list is sorted and has no duplicates.
 fn is_sorted_and_unique(list: &[u32]) -> bool {
 	list.windows(2).all(|w| w[0] < w[1])
+}
+
+/// convert a DispatchErrorWithPostInfo to a custom InvalidTransaction with the inner code being the
+/// error number.
+fn to_invalid(error_with_post_info: DispatchErrorWithPostInfo) -> InvalidTransaction {
+	let error = error_with_post_info.error;
+	let error_number = match error {
+		DispatchError::Module { error, ..} => error,
+		_ => 0,
+	};
+	InvalidTransaction::Custom(error_number)
 }

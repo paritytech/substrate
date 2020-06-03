@@ -51,6 +51,11 @@ impl OffchainStorage for InMemOffchainStorage {
 		self.storage.insert(key, value.to_vec());
 	}
 
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		self.storage.remove(&key);
+	}
+
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.storage.get(&key).cloned()

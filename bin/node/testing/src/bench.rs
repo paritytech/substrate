@@ -222,7 +222,7 @@ impl CloneableSpawn for TaskExecutor {
 impl BenchDb {
 	/// New immutable benchmarking database.
 	///
-	/// See [`new`] method documentation for more information about the purpose
+	/// See [`BenchDb::new`] method documentation for more information about the purpose
 	/// of this structure.
 	pub fn with_key_types(
 		database_type: DatabaseType,

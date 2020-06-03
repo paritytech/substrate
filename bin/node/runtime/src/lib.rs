@@ -24,13 +24,14 @@
 
 use sp_std::prelude::*;
 use frame_support::{
-	construct_runtime, parameter_types, debug,
+	construct_runtime, parameter_types, debug, RuntimeDebug,
 	weights::{
 		Weight, IdentityFee,
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
+use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
 	u32_trait::{_1, _2, _3, _4},
@@ -40,7 +41,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult,
+	Permill, Perbill, Perquintill, Percent, PerThing, ApplyExtrinsicResult,
 	impl_opaque_keys, generic, create_runtime_str, ModuleId,
 };
 use sp_runtime::curve::PiecewiseLinear;
@@ -60,16 +61,15 @@ use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
-use codec::Encode;
 use static_assertions::const_assert;
 
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use pallet_timestamp::Call as TimestampCall;
+#[cfg(any(feature = "std", test))]
 pub use pallet_balances::Call as BalancesCall;
+#[cfg(any(feature = "std", test))]
 pub use frame_system::Call as SystemCall;
-pub use pallet_contracts::Gas;
-pub use frame_support::StorageValue;
+#[cfg(any(feature = "std", test))]
 pub use pallet_staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
@@ -79,6 +79,7 @@ use impls::{CurrencyToVoteHandler, Author, TargetedFeeAdjustment};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
+use frame_support::traits::InstanceFilter;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -93,7 +94,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 250,
+	spec_version: 251,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -126,17 +127,21 @@ impl OnUnbalanced<NegativeImbalance> for DealWithFees {
 	}
 }
 
+const AVERAGE_ON_INITIALIZE_WEIGHT: Perbill = Perbill::from_percent(10);
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
 	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	/// Assume 10% of weight for average on_initialize calls.
-	pub const MaximumExtrinsicWeight: Weight = AvailableBlockRatio::get()
-		.saturating_sub(Perbill::from_percent(10)) * MaximumBlockWeight::get();
+	pub MaximumExtrinsicWeight: Weight =
+		AvailableBlockRatio::get().saturating_sub(AVERAGE_ON_INITIALIZE_WEIGHT)
+		* MaximumBlockWeight::get();
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 }
+
+const_assert!(AvailableBlockRatio::get().deconstruct() >= AVERAGE_ON_INITIALIZE_WEIGHT.deconstruct());
 
 impl frame_system::Trait for Runtime {
 	type Origin = Origin;
@@ -164,11 +169,13 @@ impl frame_system::Trait for Runtime {
 	type OnKilledAccount = ();
 }
 
+const fn deposit(items: u32, bytes: u32) -> Balance { items as Balance * 15 * CENTS + (bytes as Balance) * 6 * CENTS }
+
 parameter_types! {
-	// One storage item; value is size 4+4+16+32 bytes = 56 bytes.
-	pub const MultisigDepositBase: Balance = 30 * CENTS;
+	// One storage item; key size is 32; value is size 4+4+16+32 bytes = 56 bytes.
+	pub const MultisigDepositBase: Balance = deposit(1, 88);
 	// Additional storage item size of 32 bytes.
-	pub const MultisigDepositFactor: Balance = 5 * CENTS;
+	pub const MultisigDepositFactor: Balance = deposit(0, 32);
 	pub const MaxSignatories: u16 = 100;
 }
 
@@ -179,10 +186,57 @@ impl pallet_utility::Trait for Runtime {
 	type MultisigDepositBase = MultisigDepositBase;
 	type MultisigDepositFactor = MultisigDepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type IsCallable = ();
 }
 
 parameter_types! {
-	pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	// One storage item; key size 32, value size 8; .
+	pub const ProxyDepositBase: Balance = deposit(1, 8);
+	// Additional storage item size of 33 bytes.
+	pub const ProxyDepositFactor: Balance = deposit(0, 33);
+	pub const MaxProxies: u16 = 32;
+}
+
+/// The type used to represent the kinds of proxying allowed.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
+pub enum ProxyType {
+	Any,
+	NonTransfer,
+	Governance,
+	Staking,
+}
+impl Default for ProxyType { fn default() -> Self { Self::Any } }
+impl InstanceFilter<Call> for ProxyType {
+	fn filter(&self, c: &Call) -> bool {
+		match self {
+			ProxyType::Any => true,
+			ProxyType::NonTransfer => !matches!(c,
+				Call::Balances(..) | Call::Utility(..)
+					| Call::Vesting(pallet_vesting::Call::vested_transfer(..))
+					| Call::Indices(pallet_indices::Call::transfer(..))
+			),
+			ProxyType::Governance => matches!(c,
+				Call::Democracy(..) | Call::Council(..) | Call::Society(..)
+					| Call::TechnicalCommittee(..) | Call::Elections(..) | Call::Treasury(..)
+			),
+			ProxyType::Staking => matches!(c, Call::Staking(..)),
+		}
+	}
+}
+
+impl pallet_proxy::Trait for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type Currency = Balances;
+	type IsCallable = ();
+	type ProxyType = ProxyType;
+	type ProxyDepositBase = ProxyDepositBase;
+	type ProxyDepositFactor = ProxyDepositFactor;
+	type MaxProxies = MaxProxies;
+}
+
+parameter_types! {
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 
 impl pallet_scheduler::Trait for Runtime {
@@ -228,9 +282,15 @@ impl pallet_balances::Trait for Runtime {
 
 parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
-	// for a sane configuration, this should always be less than `AvailableBlockRatio`.
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
 }
+
+// for a sane configuration, this should always be less than `AvailableBlockRatio`.
+const_assert!(
+	TargetBlockFullness::get().deconstruct() <
+	(AvailableBlockRatio::get().deconstruct() as <Perquintill as PerThing>::Inner)
+		* (<Perquintill as PerThing>::ACCURACY / <Perbill as PerThing>::ACCURACY as <Perquintill as PerThing>::Inner)
+);
 
 impl pallet_transaction_payment::Trait for Runtime {
 	type Currency = Balances;
@@ -309,9 +369,11 @@ parameter_types! {
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
-	pub const MaxIterations: u32 = 5;
+	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
+	pub const MaxIterations: u32 = 10;
+	// 0.05%. The higher the value, the more strict solution acceptance becomes.
+	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
 }
 
 impl pallet_staking::Trait for Runtime {
@@ -333,6 +395,7 @@ impl pallet_staking::Trait for Runtime {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type MaxIterations = MaxIterations;
+	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
 }
@@ -398,17 +461,17 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type MaxProposals = CouncilMaxProposals;
 }
 
-const DESIRED_MEMBERS: u32 = 13;
 parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
-	pub const DesiredMembers: u32 = DESIRED_MEMBERS;
+	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
+
 // Make sure that there are no more than `MAX_MEMBERS` members elected via phragmen.
-const_assert!(DESIRED_MEMBERS <= pallet_collective::MAX_MEMBERS);
+const_assert!(DesiredMembers::get() <= pallet_collective::MAX_MEMBERS);
 
 impl pallet_elections_phragmen::Trait for Runtime {
 	type ModuleId = ElectionsPhragmenModuleId;
@@ -585,7 +648,7 @@ impl pallet_im_online::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
 }
 
 impl pallet_offences::Trait for Runtime {
@@ -745,6 +808,7 @@ construct_runtime!(
 		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
+		Proxy: pallet_proxy::{Module, Call, Storage, Event},
 	}
 );
 
@@ -995,6 +1059,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"identity", Identity);
 			add_benchmark!(params, batches, b"im-online", ImOnline);
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
+			add_benchmark!(params, batches, b"proxy", Proxy);
 			add_benchmark!(params, batches, b"scheduler", Scheduler);
 			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 			add_benchmark!(params, batches, b"staking", Staking);
