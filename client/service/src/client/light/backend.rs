@@ -318,12 +318,12 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for
-		let child_delta = input.children_default.iter()
-			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), None))
-			.collect::<Vec<_>>();
+		let child_delta = input.children_default
+			.iter()
+			.map(|(_storage_key, storage_child)| (&storage_child.child_info, std::iter::empty()));
 
 		// make sure to persist the child storage
-		for (_child_key, storage_child) in input.children_default {
+		for (_child_key, storage_child) in input.children_default.clone() {
 			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
@@ -350,7 +350,11 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		Ok(())
 	}
 
-	fn mark_finalized(&mut self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
+	fn mark_finalized(
+		&mut self,
+		block: BlockId<Block>,
+		_justification: Option<Justification>,
+	) -> ClientResult<()> {
 		self.finalized_blocks.push(block);
 		Ok(())
 	}
@@ -459,10 +463,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
 				state.storage_root(delta),
@@ -470,14 +474,11 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
 				let (root, is_equal, _) = state.child_storage_root(child_info, delta);

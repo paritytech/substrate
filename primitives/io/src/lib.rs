@@ -300,6 +300,16 @@ pub trait Trie {
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
 		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
 	}
+
+	/// A trie root formed from the iterated items.
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
+		Layout::<sp_core::KeccakHasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
+		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
+	}
 }
 
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
@@ -784,6 +794,16 @@ pub trait Offchain {
 		self.extension::<OffchainExt>()
 			.expect("local_storage_set can be called only in the offchain worker context")
 			.local_storage_set(kind, key, value)
+	}
+
+	/// Remove a value from the local storage.
+	///
+	/// Note this storage is not part of the consensus, it's only accessible by
+	/// offchain worker tasks running on the same machine. It IS persisted between runs.
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		self.extension::<OffchainExt>()
+			.expect("local_storage_clear can be called only in the offchain worker context")
+			.local_storage_clear(kind, key)
 	}
 
 	/// Sets a value in the local storage if it matches current value.

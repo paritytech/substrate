@@ -20,7 +20,10 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::parameter_types;
+use frame_support::{
+	parameter_types,
+	weights::{Weight, constants::WEIGHT_PER_SECOND},
+};
 use frame_system as system;
 use sp_runtime::{
 	SaturatedConversion,
@@ -34,6 +37,10 @@ type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
+parameter_types! {
+	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
+}
+
 impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = AccountIndex;
@@ -46,7 +53,7 @@ impl frame_system::Trait for Test {
 	type Header = sp_runtime::testing::Header;
 	type Event = Event;
 	type BlockHashCount = ();
-	type MaximumBlockWeight = ();
+	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
 	type AvailableBlockRatio = ();
 	type MaximumBlockLength = ();
@@ -57,6 +64,7 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = (Balances,);
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -168,6 +176,7 @@ impl pallet_staking::Trait for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 	type MaxIterations = ();
+	type MinSolutionScoreBump = ();
 }
 
 impl pallet_im_online::Trait for Test {
@@ -178,10 +187,15 @@ impl pallet_im_online::Trait for Test {
 	type UnsignedPriority = ();
 }
 
+parameter_types! {
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+}
+
 impl pallet_offences::Trait for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {

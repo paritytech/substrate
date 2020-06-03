@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Substrate block builder
 //!
 //! This crate provides the [`BlockBuilder`] utility and the corresponding runtime api
@@ -231,7 +232,7 @@ mod tests {
 			&client,
 			client.info().best_hash,
 			client.info().best_number,
-			RecordProof::Yes(sp_api::StorageProofKind::Flatten),
+			RecordProof::Yes(sp_api::StorageProofKind::Flat),
 			Default::default(),
 			&*backend,
 		).unwrap().build().unwrap();

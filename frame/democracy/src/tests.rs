@@ -38,7 +38,6 @@ mod external_proposing;
 mod fast_tracking;
 mod lock_voting;
 mod preimage;
-mod proxying;
 mod public_proposals;
 mod scheduling;
 mod voting;
@@ -100,6 +99,7 @@ impl frame_system::Trait for Test {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -109,7 +109,7 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 parameter_types! {
-	pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 impl pallet_scheduler::Trait for Test {
 	type Event = Event;
@@ -186,6 +186,7 @@ impl super::Trait for Test {
 	type InstantAllowed = InstantAllowed;
 	type Scheduler = Scheduler;
 	type MaxVotes = MaxVotes;
+	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -197,6 +198,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
+}
+
+/// Execute the function two times, with `true` and with `false`.
+pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) {
+	new_test_ext().execute_with(|| (execute.clone())(false));
+	new_test_ext().execute_with(|| execute(true));
 }
 
 type System = frame_system::Module<Test>;

@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Substrate CLI library.
 
 #![warn(missing_docs)]
@@ -164,9 +165,9 @@ pub trait SubstrateCli: Sized {
 	/// Print the error message and quit the program in case of failure.
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
-	/// used. It will return a [`clap::Error`], where the [`kind`] is a
-	/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
-	/// [`Error::exit`] or perform a [`std::process::exit`].
+	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
+	/// [`clap::ErrorKind::HelpDisplayed`] or [`clap::ErrorKind::VersionDisplayed`] respectively.
+	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
 		Self: StructOpt + Sized,
@@ -252,7 +253,7 @@ pub fn init_logger(pattern: &str) {
 					format!("{}", Colour::Blue.bold().paint(x))
 				});
 			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-			let timestamp = format!("{}.{}", timestamp, millis);
+			let timestamp = format!("{}.{:03}", timestamp, millis);
 			format!(
 				"{} {} {} {}  {}",
 				Colour::Black.bold().paint(timestamp),

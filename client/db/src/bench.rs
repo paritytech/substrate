@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! State backend that's useful for benchmarking
 
 use std::sync::Arc;
@@ -78,12 +79,12 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 
 		state.reopen()?;
-		let child_delta = genesis.children_default.into_iter().map(|(_storage_key, child_content)| (
-			child_content.child_info,
-			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
+			&child_content.child_info,
+			child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 		));
 		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
-			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
+			genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
 		);
 		state.genesis = transaction.clone().drain();
@@ -192,19 +193,18 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction) where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.storage_root(delta))
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (B::Hash, bool, Self::Transaction) where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
 	}
 

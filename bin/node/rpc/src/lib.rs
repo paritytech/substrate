@@ -42,9 +42,10 @@ use sc_keystore::KeyStorePtr;
 use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
-use sc_consensus_babe_rpc::BabeRPCHandler;
+use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
+use sc_rpc_api::DenyUnsafe;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -84,6 +85,8 @@ pub struct FullDeps<C, P, SC> {
 	pub pool: Arc<P>,
 	/// The SelectChain Strategy
 	pub select_chain: SC,
+	/// Whether to deny unsafe calls
+	pub deny_unsafe: DenyUnsafe,
 	/// BABE specific dependencies.
 	pub babe: BabeDeps,
 	/// GRANDPA specific dependencies.
@@ -115,6 +118,7 @@ pub fn create_full<C, P, M, SC>(
 		client,
 		pool,
 		select_chain,
+		deny_unsafe,
 		babe,
 		grandpa,
 	} = deps;
@@ -142,7 +146,14 @@ pub fn create_full<C, P, M, SC>(
 	);
 	io.extend_with(
 		sc_consensus_babe_rpc::BabeApi::to_delegate(
-			BabeRPCHandler::new(client, shared_epoch_changes, keystore, babe_config, select_chain)
+			BabeRpcHandler::new(
+				client,
+				shared_epoch_changes,
+				keystore,
+				babe_config,
+				select_chain,
+				deny_unsafe,
+			),
 		)
 	);
 	io.extend_with(

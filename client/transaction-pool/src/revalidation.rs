@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Pool periodic revalidation.
 
 use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
@@ -177,7 +178,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		for ext_hash in transactions {
 			// we don't add something that already scheduled for revalidation
 			if self.members.contains_key(&ext_hash) {
-				log::debug!(
+				log::trace!(
 					target: "txpool",
 					"[{:?}] Skipped adding for revalidation: Already there.",
 					ext_hash,
@@ -244,6 +245,16 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 						Some(worker_payload) => {
 							this.best_block = worker_payload.at;
 							this.push(worker_payload);
+
+							if this.members.len() > 0 {
+								log::debug!(
+									target: "txpool",
+									"Updated revalidation queue at {}. Transactions: {:?}",
+									this.best_block,
+									this.members,
+								);
+							}
+
 							continue;
 						},
 						// R.I.P. worker!
@@ -325,7 +336,7 @@ where
 	/// revalidation is actually done.
 	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
 		if transactions.len() > 0 {
-			log::debug!(target: "txpool", "Added {} transactions to revalidation queue", transactions.len());
+			log::debug!(target: "txpool", "Sent {} transactions to revalidation queue", transactions.len());
 		}
 
 		if let Some(ref to_worker) = self.background {

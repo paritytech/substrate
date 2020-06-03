@@ -42,12 +42,14 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 mod stats;
+mod read_only;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
 	StorageProof, StorageProofKind, ChildrenProofMap, ProofInput, ProofInputKind,
 	LegacyDecodeAdapter, LegacyEncodeAdapter, FlatEncodeAdapter, ProofNodes};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
+pub use read_only::{ReadOnlyExternalities, InspectState};
 pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{

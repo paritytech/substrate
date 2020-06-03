@@ -75,6 +75,7 @@ impl frame_system::Trait for Test {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = MaximumBlockWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -98,6 +99,15 @@ parameter_types! {
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 }
+pub struct TestIsCallable;
+impl Filter<Call> for TestIsCallable {
+	fn filter(c: &Call) -> bool {
+		match *c {
+			Call::Balances(_) => true,
+			_ => false,
+		}
+	}
+}
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
@@ -105,6 +115,7 @@ impl Trait for Test {
 	type MultisigDepositBase = MultisigDepositBase;
 	type MultisigDepositFactor = MultisigDepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type IsCallable = TestIsCallable;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -116,7 +127,7 @@ use pallet_balances::Error as BalancesError;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
+		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 2)],
 	}.assimilate_storage(&mut t).unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
@@ -379,6 +390,17 @@ fn multisig_1_of_3_works() {
 }
 
 #[test]
+fn multisig_filters() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::System(frame_system::Call::remark(vec![])));
+		assert_noop!(
+			Utility::as_multi(Origin::signed(1), 1, vec![], None, call.clone()),
+			Error::<Test>::Uncallable,
+		);
+	});
+}
+
+#[test]
 fn as_sub_works() {
 	new_test_ext().execute_with(|| {
 		let sub_1_0 = Utility::sub_account_id(1, 0);
@@ -395,6 +417,17 @@ fn as_sub_works() {
 		));
 		assert_eq!(Balances::free_balance(sub_1_0), 2);
 		assert_eq!(Balances::free_balance(2), 13);
+	});
+}
+
+#[test]
+fn as_sub_filters() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Utility::as_sub(
+			Origin::signed(1),
+			1,
+			Box::new(Call::System(frame_system::Call::remark(vec![]))),
+		), Error::<Test>::Uncallable);
 	});
 }
 
@@ -425,6 +458,18 @@ fn batch_with_signed_works() {
 		);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
+	});
+}
+
+#[test]
+fn batch_with_signed_filters() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(
+			Utility::batch(Origin::signed(1), vec![
+				Call::System(frame_system::Call::remark(vec![]))
+			]),
+		);
+		expect_event(RawEvent::Uncallable(0));
 	});
 }
 

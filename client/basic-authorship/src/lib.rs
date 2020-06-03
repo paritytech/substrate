@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Basic implementation of block-authoring logic.
 //!
 //! # Example
@@ -37,7 +38,7 @@
 //! );
 //!
 //! // The proposer is created asynchronously.
-//! let mut proposer = futures::executor::block_on(proposer).unwrap();
+//! let proposer = futures::executor::block_on(proposer).unwrap();
 //!
 //! // This `Proposer` allows us to create a block proposition.
 //! // The proposer will grab transactions from the transaction pool, and put them into the block.

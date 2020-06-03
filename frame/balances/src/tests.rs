@@ -37,7 +37,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{Fixed128, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{FixedPointNumber, Fixed128, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -59,6 +59,14 @@ macro_rules! decl_tests {
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
 			DispatchInfo { weight: w, ..Default::default() }
+		}
+
+		fn events() -> Vec<Event> {
+			let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
+
+			System::reset_events();
+
+			evt
 		}
 
 		#[test]
@@ -154,7 +162,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Fixed128::from_natural(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(Fixed128::saturating_from_integer(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
@@ -672,6 +680,68 @@ macro_rules! decl_tests {
 					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_existential_deposit() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 1);
+
+					assert_eq!(
+						events(),
+						[
+							Event::balances(RawEvent::DustLost(1, 99)),
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_no_existential_deposit_suicide() {
+			<$ext_builder>::default()
+				.existential_deposit(0)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, 100, 0));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::NewAccount(1)),
+							Event::balances(RawEvent::Endowed(1, 100)),
+							Event::balances(RawEvent::BalanceSet(1, 100, 0)),
+						]
+					);
+
+					let _ = Balances::slash(&1, 100);
+
+					// no events
+					assert_eq!(events(), []);
+
+					assert_ok!(System::suicide(Origin::signed(1)));
+
+					assert_eq!(
+						events(),
+						[
+							Event::system(system::RawEvent::KilledAccount(1))
+						]
+					);
 				});
 		}
 	}
