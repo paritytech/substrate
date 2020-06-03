@@ -31,7 +31,7 @@ pub struct Cli {
 }
 
 /// Possible subcommands of the main binary.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum Subcommand {
 	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]

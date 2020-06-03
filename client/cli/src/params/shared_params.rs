@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// Shared parameters used by all `CoreParams`.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
 	#[structopt(long, value_name = "CHAIN_SPEC")]

@@ -40,7 +40,7 @@ use structopt::StructOpt;
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum Subcommand {
 	/// Build a spec.json file, outputs to stdout.
 	BuildSpec(BuildSpecCmd),

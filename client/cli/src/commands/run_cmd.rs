@@ -39,7 +39,6 @@ use std::{
 use structopt::StructOpt;
 use tempfile::TempDir;
 
-// TODO: check why all the structopt need clone?
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt)]
 pub struct RunCmd {
