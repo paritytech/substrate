@@ -21,7 +21,7 @@
 
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId /*, manager::SubscriptionManager*/};
 
 mod error;
 mod report;
@@ -64,6 +64,7 @@ pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_receiver: GrandpaJustificationReceiver<Block>,
+	// manager: SubscriptionManager,
 }
 
 impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
@@ -79,6 +80,10 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 			justification_receiver,
 		}
 	}
+
+	// fn manager(&self) -> &SubscriptionManager {
+	// 	&self.manager
+	// }
 }
 
 impl<AuthoritySet, VoterState, Block> GrandpaApi for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
@@ -95,11 +100,23 @@ where
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
 	}
 
+	// NOTE: Should be changed to Subscriber<JustificationNotification>
 	fn justification_subscription(&self, _metadata: Self::Metadata, _subscriber: Subscriber<bool>) {
+		// let stream = self.receiver.subscribe().compat();
+		//
+		// This will need to use the SubscriptionManager from `jsonrpc_pubsub`
+		//
+		// manager.add(subscriber, |sink| {
+		//      // Write to the sink using the receiver stream
+		//      // Check client/rpc/src/chain/mod.rs or the jsonrpc
+		//      // repo for examples
+		// });
+
 		todo!()
 	}
 
 	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, _id: SubscriptionId) -> FutureResult<bool> {
+		// Ok(self.manager().cancel(id))
 		todo!()
 	}
 }

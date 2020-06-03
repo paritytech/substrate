@@ -203,7 +203,7 @@ pub struct GrandpaJustificationReceiver<Block: BlockT> {
 }
 
 impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
-	/// Crate a new receiver of justification notifications.
+	/// Create a new receiver of justification notifications.
 	///
 	/// The `notifiers` should be shared with a corresponding
 	/// `GrandpaJustificationSender`.

@@ -39,7 +39,7 @@ use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
 
-use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand, };
+use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;

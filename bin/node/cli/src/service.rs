@@ -148,7 +148,7 @@ macro_rules! new_full_start {
 				})
 			})?;
 
-		(builder, import_setup, inherent_data_providers, rpc_setup, justification_sender)
+		(builder, import_setup, inherent_data_providers, rpc_setup)
 	}}
 }
 
@@ -174,7 +174,7 @@ macro_rules! new_full {
 			$config.disable_grandpa,
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup, justification_sender) =
+		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
 			new_full_start!($config);
 
 		let service = builder
