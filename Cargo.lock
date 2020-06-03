@@ -3918,6 +3918,7 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
+ "pwasm-utils",
  "serde",
  "sp-arithmetic",
  "sp-core",
@@ -3925,6 +3926,7 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
+ "wasmi-validation",
 ]
 
 [[package]]

@@ -22,7 +22,7 @@
 #[macro_export]
 macro_rules! convert_args {
 	() => (vec![]);
-	( $( $t:ty ),* ) => ( vec![ $( { use $crate::exec::runtime::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
+	( $( $t:ty ),* ) => ( vec![ $( { use $crate::exec::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
 #[macro_export]
@@ -36,7 +36,7 @@ macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) -> $returns: ty ) => (
 		{
 			parity_wasm::elements::FunctionType::new(convert_args!($($params),*), Some({
-				use $crate::exec::runtime::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE
+				use $crate::exec::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE
 			}))
 		}
 	);
@@ -66,9 +66,9 @@ macro_rules! gen_signature_dispatch {
 macro_rules! unmarshall_then_body {
 	( $body:tt, $ctx:ident, $args_iter:ident, $( $names:ident : $params:ty ),* ) => ({
 		$(
-			let $names : <$params as $crate::exec::runtime::env_def::ConvertibleToWasm>::NativeType =
+			let $names : <$params as $crate::exec::env_def::ConvertibleToWasm>::NativeType =
 				$args_iter.next()
-					.and_then(|v| <$params as $crate::exec::runtime::env_def::ConvertibleToWasm>
+					.and_then(|v| <$params as $crate::exec::env_def::ConvertibleToWasm>
 						::from_typed_value(v.clone()))
 					.expect(
 						"precondition: all imports should be checked against the signatures of corresponding
@@ -104,16 +104,16 @@ where
 #[macro_export]
 macro_rules! unmarshall_then_body_then_marshall {
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
-		let body = $crate::exec::runtime::env_def::macros::constrain_closure::<
-			<$returns as $crate::exec::runtime::env_def::ConvertibleToWasm>::NativeType, _
+		let body = $crate::exec::env_def::macros::constrain_closure::<
+			<$returns as $crate::exec::env_def::ConvertibleToWasm>::NativeType, _
 		>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok(sp_sandbox::ReturnValue::Value({ use $crate::exec::runtime::env_def::ConvertibleToWasm; r.to_typed_value() }))
+		return Ok(sp_sandbox::ReturnValue::Value({ use $crate::exec::env_def::ConvertibleToWasm; r.to_typed_value() }))
 	});
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
-		let body = $crate::exec::runtime::env_def::macros::constrain_closure::<(), _>(|| {
+		let body = $crate::exec::env_def::macros::constrain_closure::<(), _>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		body()?;
@@ -175,7 +175,7 @@ macro_rules! define_env {
 	) => {
 		pub struct $init_name;
 
-		impl $crate::exec::runtime::env_def::ImportSatisfyCheck for $init_name {
+		impl $crate::exec::env_def::ImportSatisfyCheck for $init_name {
 			fn can_satisfy(name: &[u8], func_type: &parity_wasm::elements::FunctionType) -> bool {
 				gen_signature_dispatch!( name, func_type ; $( $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )* );
 
@@ -183,8 +183,8 @@ macro_rules! define_env {
 			}
 		}
 
-		impl<E: Ext> $crate::exec::runtime::env_def::FunctionImplProvider<E> for $init_name {
-			fn impls<F: FnMut(&[u8], $crate::exec::runtime::env_def::HostFunc<E>)>(f: &mut F) {
+		impl<E: Ext> $crate::exec::env_def::FunctionImplProvider<E> for $init_name {
+			fn impls<F: FnMut(&[u8], $crate::exec::env_def::HostFunc<E>)>(f: &mut F) {
 				register_func!(f, < E: $ext_ty > ; $( $name ( $ctx : $ctx_ty $( , $names : $params )* ) $( -> $returns)* => $body )* );
 			}
 		}

@@ -33,6 +33,11 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 
 mod exec;
+mod gas;
+mod schedule;
+
+pub use crate::gas::{Gas, Token};
+pub use crate::schedule::Schedule;
 
 pub type StorageKey = [u8; 32];
 
@@ -52,7 +57,10 @@ pub type NegativeImbalanceFor<T> = <<T as Trait>::Currency as Currency<<T as fra
 pub type MessageFor<T> = Message<AccountIdFor<T>, BalanceFor<T>>;
 
 /// Actor data type from actors pallet's point of view.
-pub type ActorInfoFor<T> = ActorInfo<AccountIdFor<T>, BalanceFor<T>>;
+pub type ActorInfoFor<T> = ActorInfo<AccountIdFor<T>, BalanceFor<T>, CodeHashFor<T>>;
+
+/// Code hash type.
+pub type CodeHashFor<T> = <T as frame_system::Trait>::Hash;
 
 /// Message type that actors send around.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
@@ -67,9 +75,9 @@ pub struct Message<A, B> {
 
 /// Actor data as stored on storage.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode, Default)]
-pub struct ActorInfo<A, B> {
-	/// Code of the actor.
-	pub code: Vec<u8>,
+pub struct ActorInfo<A, B, H> {
+	/// Code hash of the actor.
+	pub code_hash: Option<H>,
 	/// Storage values of the actor.
 	pub storage: BTreeMap<StorageKey, Vec<u8>>,
 	/// Incoming messages to the actor.
@@ -84,10 +92,19 @@ pub trait Trait: frame_system::Trait {
 	type MaxValueSize: Get<u32>;
 	/// Currency type.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+	/// Schedule.
+	type Schedule: Get<Schedule>;
+	/// Single process gas limit.
+	type ProcessGasLimit: Get<Gas>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Actors {
+		/// A mapping from an original code hash to the original code, untouched by instrumentation.
+		pub PristineCode: map hasher(identity) CodeHashFor<T> => Option<Vec<u8>>;
+		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
+		pub CodeStorage: map hasher(identity) CodeHashFor<T> => Option<exec::PrefabWasmModule>;
+
 		/// Info associated with a given account.
 		///
 		/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
@@ -146,8 +163,18 @@ impl<T: Trait> Module<T> {
 	/// Process one message from the target account, returns true if a message is processed, false
 	/// otherwise.
 	fn process_one(account_id: AccountIdFor<T>) -> bool {
+		let schedule = T::Schedule::get();
+
 		let (message, code) = match ActorInfoOf::<T>::mutate(&account_id, |actor| {
-			actor.messages.pop().map(|message| (message, actor.code.clone()))
+			actor.code_hash.clone().and_then(|code_hash| {
+				actor.messages.pop().map(|message| {
+					(message,
+					 exec::load_code::<T>(
+						 &code_hash,
+						 &schedule
+					 ).expect("Code is deployed"))
+				})
+			})
 		}) {
 			Some(val) => val,
 			None => return false,
@@ -160,10 +187,14 @@ impl<T: Trait> Module<T> {
 		T::Currency::resolve_creating(&account_id, imbalance);
 
 		let mut context = exec::Context::<T>::new(account_id, message.clone());
-		match exec::execute(&code, "process", &mut context, message.encode(), &exec::MemorySchedule {
-			initial: 1024, // TODO: properly set this.
-			maximum: None, // TODO: properly set this,
-		}) {
+		match exec::execute(
+			&code,
+			"process",
+			message.encode(),
+			&mut context,
+			&schedule,
+			T::ProcessGasLimit::get()
+		) {
 			Ok(()) => (),
 			Err(()) => return false, // TODO: maybe also distinguish no message and execution failed.
 		}

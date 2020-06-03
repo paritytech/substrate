@@ -1,9 +1,9 @@
-#[macro_use]
-pub mod env_def;
-
 use codec::{Encode, Decode};
-use sp_core::H256;
-use crate::{Trait, AccountIdFor, BalanceFor, MessageFor, StorageKey};
+use sp_runtime::traits::Bounded;
+use crate::{
+	Trait, AccountIdFor, BalanceFor, MessageFor, StorageKey, Gas, Schedule,
+	Token, gas::{GasMeter, GasMeterResult},
+};
 
 /// An interface that provides access to the external environment in which the
 /// actor is executed.
@@ -44,10 +44,65 @@ enum SpecialTrap {
 	Termination,
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[derive(Copy, Clone)]
+pub enum RuntimeToken {
+	/// Explicit call to the `gas` function. Charge the gas meter
+	/// with the value provided.
+	Explicit(u32),
+	/// The given number of bytes is read from the sandbox memory.
+	ReadMemory(u32),
+	/// The given number of bytes is written to the sandbox memory.
+	WriteMemory(u32),
+	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
+	/// given number of topics.
+	DepositEvent(u32, u32),
+}
+
+impl<T: Trait> Token<T> for RuntimeToken {
+	type Metadata = Schedule;
+
+	fn calculate_amount(&self, metadata: &Schedule) -> Gas {
+		use self::RuntimeToken::*;
+		let value = match *self {
+			Explicit(amount) => Some(amount.into()),
+			ReadMemory(byte_count) => metadata
+				.sandbox_data_read_cost
+				.checked_mul(byte_count.into()),
+			WriteMemory(byte_count) => metadata
+				.sandbox_data_write_cost
+				.checked_mul(byte_count.into()),
+			DepositEvent(topic_count, data_byte_count) => {
+				let data_cost = metadata
+					.event_data_per_byte_cost
+					.checked_mul(data_byte_count.into());
+
+				let topics_cost = metadata
+					.event_per_topic_cost
+					.checked_mul(topic_count.into());
+
+				data_cost
+					.and_then(|data_cost| {
+						topics_cost.and_then(|topics_cost| {
+							data_cost.checked_add(topics_cost)
+						})
+					})
+					.and_then(|data_and_topics_cost|
+						data_and_topics_cost.checked_add(metadata.event_base_cost)
+					)
+			},
+		};
+
+		value.unwrap_or_else(|| Bounded::max_value())
+	}
+}
+
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	scratch_buf: Vec<u8>,
+	schedule: &'a Schedule,
 	memory: sp_sandbox::Memory,
+	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
 }
 
@@ -55,7 +110,9 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
 		input_data: Vec<u8>,
+		schedule: &'a Schedule,
 		memory: sp_sandbox::Memory,
+		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
 		Runtime {
 			ext,
@@ -63,6 +120,8 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			scratch_buf: input_data,
 			memory,
 			special_trap: None,
+			schedule,
+			gas_meter,
 		}
 	}
 
@@ -154,12 +213,38 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		Ok(())
 	}
 
+	/// Charge the gas meter with the specified token.
+	///
+	/// Returns `Err(HostError)` if there is not enough gas.
+	fn charge_gas(
+		&mut self,
+		token: RuntimeToken,
+	) -> Result<(), sp_sandbox::HostError> {
+		match self.gas_meter.charge(self.schedule, token) {
+			GasMeterResult::Proceed => Ok(()),
+			GasMeterResult::OutOfGas =>  {
+				self.special_trap = Some(SpecialTrap::OutOfGas);
+				Err(sp_sandbox::HostError)
+			},
+		}
+	}
 }
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.
 define_env!(
 	Env, <E: Ext>,
+
+	// Account for used gas. Traps if gas used is greater than gas limit.
+	//
+	// NOTE: This is a implementation defined call and is NOT a part of the public API.
+	// This call is supposed to be called only by instrumentation injected code.
+	//
+	// - amount: How much gas is used.
+	gas(ctx: &mut Runtime<E>, amount: u32) => {
+		ctx.charge_gas(RuntimeToken::Explicit(amount))?;
+		Ok(())
+	},
 
 	// Set the value at the given key in the contract storage.
 	//

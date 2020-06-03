@@ -1,25 +1,49 @@
+#[macro_use]
+mod env_def;
 mod runtime;
+mod prepare;
+mod code_cache;
 
-pub use self::runtime::Ext;
+pub use self::runtime::{Runtime, Ext};
+pub use self::code_cache::{load as load_code, save as save_code};
 
+use codec::{Encode, Decode};
 use sp_std::collections::btree_map::BTreeMap;
 use frame_support::{traits::{Get, ReservableCurrency}, storage::StorageMap};
-use self::runtime::env_def::FunctionImplProvider;
-use crate::{AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait};
+use crate::{
+	AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait,
+	Schedule, Gas, gas::GasMeter
+};
+use crate::exec::env_def::FunctionImplProvider;
 
-pub struct MemorySchedule {
-	pub initial: u32,
-	pub maximum: Option<u32>,
+/// A prepared wasm module ready for execution.
+#[derive(Clone, Encode, Decode)]
+pub struct PrefabWasmModule {
+	/// Version of the schedule with which the code was instrumented.
+	#[codec(compact)]
+	schedule_version: u32,
+	#[codec(compact)]
+	initial: u32,
+	#[codec(compact)]
+	maximum: u32,
+	/// This field is reserved for future evolution of format.
+	///
+	/// Basically, for now this field will be serialized as `None`. In the future
+	/// we would be able to extend this structure with.
+	_reserved: Option<()>,
+	/// Code instrumented with the latest schedule.
+	code: Vec<u8>,
 }
 
-pub fn execute<E: Ext>(
-	code: &[u8],
+pub fn execute<T: Trait, E: Ext<T=T>>(
+	module: &PrefabWasmModule,
 	entrypoint_name: &'static str,
-	ext: &mut E,
 	input_data: Vec<u8>,
-	memory_schedule: &MemorySchedule,
+	ext: &mut E,
+	schedule: &Schedule,
+	gas_limit: Gas,
 ) -> Result<(), ()> {
-	let memory = sp_sandbox::Memory::new(memory_schedule.initial, memory_schedule.maximum)
+	let memory = sp_sandbox::Memory::new(module.initial, Some(module.maximum))
 		.unwrap_or_else(|_| {
 			// unlike `.expect`, explicit panic preserves the source location.
 			// Needed as we can't use `RUST_BACKTRACE` in here.
@@ -36,13 +60,16 @@ pub fn execute<E: Ext>(
 		imports.add_host_func("env", name, func_ptr);
 	});
 
+	let mut gas_meter = GasMeter::<T>::new(gas_limit);
 	let mut runtime = runtime::Runtime::new(
 		ext,
 		input_data,
+		schedule,
 		memory,
+		&mut gas_meter,
 	);
 
-	sp_sandbox::Instance::new(code, &imports, &mut runtime)
+	sp_sandbox::Instance::new(&module.code, &imports, &mut runtime)
 		.and_then(|mut instance| instance.invoke(entrypoint_name, &[], &mut runtime))
 		.map(|_| ())
 		.map_err(|_| ())
