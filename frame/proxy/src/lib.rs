@@ -235,7 +235,7 @@ decl_module! {
 			spawner: T::AccountId,
 			proxy_type: T::ProxyType,
 			index: u16,
-			height: T::BlockNumber,
+			#[compact] height: T::BlockNumber,
 			#[compact] ext_index: u32,
 		) {
 			let who = ensure_signed(origin)?;

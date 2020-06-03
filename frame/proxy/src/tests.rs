@@ -23,7 +23,7 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event, RuntimeDebug
+	weights::Weight, impl_outer_event, RuntimeDebug, dispatch::DispatchError
 };
 use codec::{Encode, Decode};
 use sp_core::H256;
@@ -145,14 +145,6 @@ use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
 use super::Call as ProxyCall;
 
-fn last_event() -> TestEvent {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
-}
-
-fn expect_event<E: Into<TestEvent>>(e: E) {
-	assert_eq!(last_event(), e.into());
-}
-
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
@@ -161,6 +153,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
+}
+
+fn last_event() -> TestEvent {
+	system::Module::<Test>::events().pop().expect("Event expected").event
+}
+
+fn expect_event<E: Into<TestEvent>>(e: E) {
+	assert_eq!(last_event(), e.into());
 }
 
 #[test]
@@ -230,6 +230,7 @@ fn anonymous_works() {
 		// other calls to anonymous allowed as long as they're not exactly the same.
 		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::JustTransfer, 0));
 		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 1));
+		let anon2 = Proxy::anonymous_account(&2, &ProxyType::Any, 0, None);
 		assert_ok!(Proxy::anonymous(Origin::signed(2), ProxyType::Any, 0));
 		assert_noop!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0), Error::<Test>::Duplicate);
 		System::set_extrinsic_index(1);
@@ -245,6 +246,10 @@ fn anonymous_works() {
 		assert_eq!(Balances::free_balance(6), 1);
 
 		let call = Box::new(Call::Proxy(ProxyCall::kill_anonymous(1, ProxyType::Any, 0, 1, 0)));
+		assert_ok!(Proxy::proxy(Origin::signed(2), anon2, None, call.clone()));
+		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
+		expect_event(RawEvent::ProxyExecuted(Err(de)));
+		assert_noop!(Proxy::kill_anonymous(Origin::signed(1), 1, ProxyType::Any, 0, 1, 0), Error::<Test>::NoPermission);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call.clone()));
 		assert_eq!(Balances::free_balance(1), 2);
