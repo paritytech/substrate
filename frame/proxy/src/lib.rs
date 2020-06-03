@@ -36,7 +36,7 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_core::blake2_256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
 use sp_runtime::traits::Member;
 use frame_support::{
