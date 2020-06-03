@@ -1378,7 +1378,7 @@ ServiceBuilder<
 				stream
 			},
 			transaction_pool.clone(),
-			sc_informant::OutputFormat { colors: true, prefix: informant_prefix },
+			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
 		);
 		spawn_handle.spawn("informant", informant_future);
 

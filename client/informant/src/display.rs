@@ -79,7 +79,7 @@ impl<B: BlockT> InformantDisplay<B> {
 			),
 		};
 
-		if self.format.colors {
+		if self.format.enable_color {
 			info!(
 				target: "substrate",
 				"{} {}{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
