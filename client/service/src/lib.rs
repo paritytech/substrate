@@ -56,7 +56,7 @@ use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, Pee
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
