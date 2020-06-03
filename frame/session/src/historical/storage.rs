@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Validator Set Extracting an iterator from an offchain worker stored list containing historical validatorsets.
+//! Validator Set Extracting an iterator from an off-chain worker stored list containing historical validatorsets.
 //!
 //! This is used in conjunction with [`ProvingTrie`](super::ProvingTrie) and
-//! the offchain indexing API.
+//! the off-chain indexing API.
 
 use codec::{Codec, Decode, Encode};
 use sp_runtime::offchain::storage::StorageValueRef;
@@ -29,30 +29,30 @@ use super::Trait;
 
 const PREFIX: &[u8] = b"historical";
 const LAST_PRUNE: &[u8] = b"historical_last_prune";
-const HEAD: &[u8] = b"historical_head";
 
 pub struct ValidatorSet<T: Trait> {
     validator_set: Vec<(T::ValidatorId, T::FullIdentification)>,
 }
 
 /// Derive the key used to store the list of validators
-fn derive_key<P: AsRef<[u8]>>(prefix: P, session_index: &[u8]) -> Vec<u8> {
-    assert!(session_index.len() > 0);
+fn derive_key<P: AsRef<[u8]>>(prefix: P, session_index: SessionIndex) -> Vec<u8> {
     let prefix: &[u8] = prefix.as_ref();
-    let mut concatenated = Vec::with_capacity(prefix.len() + 1 + session_index.len());
+    let encoded_session_index = session_index.encode();
+    assert!(encoded_session_index.len() > 0);
+    let mut concatenated = Vec::with_capacity(prefix.len() + 1 + encoded_session_index.len());
     concatenated.extend_from_slice(prefix);
     concatenated.push('/' as u8);
-    concatenated.extend_from_slice(session_index);
+    concatenated.extend_from_slice(encoded_session_index.as_slice());
     concatenated
 }
 
 impl<T: Trait> ValidatorSet<T> {
-    /// Load the set of validators for a paritcular session index from the offchain storage.
+    /// Load the set of validators for a paritcular session index from the off-chain storage.
     ///
     /// If none is found or decodable given `prefix` and `session`, it will return `None`.
     /// Empty validator sets should only ever exist for genesis blocks.
-    fn load_from_offchain(session_index: SessionIndex) -> Option<Self> {
-        let derived_key = derive_key(PREFIX, session_index.encode().as_slice());
+    pub fn load_from_offchain(session_index: SessionIndex) -> Option<Self> {
+        let derived_key = derive_key(PREFIX, session_index);
         let validator_set = StorageValueRef::persistent(derived_key.as_ref())
             .get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
             .flatten();
@@ -60,12 +60,12 @@ impl<T: Trait> ValidatorSet<T> {
     }
 
     /// Access the underlying `ValidatorId` and `FullIdentification` tuples as slice.
-    fn as_slice(&self) -> &[(T::ValidatorId, T::FullIdentification)] {
+    pub fn as_slice(&self) -> &[(T::ValidatorId, T::FullIdentification)] {
         self.validator_set.as_slice()
     }
 
-    /// Convert `self` to a vector and consume `self`.
-    fn to_vec(self) -> Vec<(T::ValidatorId, T::FullIdentification)> {
+    /// Convert `self` into a vector and consume `self`.
+    pub fn into_vec(self) -> Vec<(T::ValidatorId, T::FullIdentification)> {
         self.validator_set
     }
 
@@ -75,10 +75,10 @@ impl<T: Trait> ValidatorSet<T> {
     /// than the stored one, in which case the conservative choice is made to keep records
     /// up to the one that is the lesser.
     ///
-    /// **Must** be called from the offchain worker.
-    fn prune_older_than(first_to_keep: SessionIndex) {
-        let derived_key = derive_key(LAST_PRUNE, b"---");
-        let mut entry = StorageValueRef::persistent(derived_key.as_ref());
+    /// **Must** be called from the off-chain worker.
+    pub fn prune_older_than(first_to_keep: SessionIndex) {
+        let derived_key = LAST_PRUNE.to_vec();
+        let entry = StorageValueRef::persistent(derived_key.as_ref());
         match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
             match current {
                 Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
@@ -95,7 +95,7 @@ impl<T: Trait> ValidatorSet<T> {
                 // on a re-org this is not necessarily true, with the above they might be equal
                 if new_value < first_to_keep {
                     for session_index in new_value..first_to_keep {
-                        let derived_key = derive_key(PREFIX, session_index.encode().as_slice());
+                        let derived_key = derive_key(PREFIX, session_index);
                         let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
                     }
                 }
@@ -105,17 +105,25 @@ impl<T: Trait> ValidatorSet<T> {
         }
     }
 
-    /// **Must** be called from on chain.
-    fn store_to_offchain(session: SessionIndex) {
+    pub fn keep_newest(number_of_sessions_to_keep: usize) {
         let session_index = <SessionModule<T>>::current_index();
-        let derived_key = derive_key(PREFIX, session.encode().as_slice());
-        //let value = SessionModule::historical_root(session_index);
-        let value = <SessionModule<T>>::validators().encode();
-        sp_io::offchain_index::set(derived_key.as_slice(), value.as_slice())
+        let number_of_sessions_to_keep = number_of_sessions_to_keep as SessionIndex;
+        if number_of_sessions_to_keep < session_index {
+            Self::prune_older_than(session_index - number_of_sessions_to_keep)
+        }
+        // otherwise we want to keep all of them
     }
 
-    /// **Must** be called from on chain, i.e. `on_initialize` or `on_finalization`.
-    fn store_current_to_offchain() {
+    /// **Must** be called from on-chain, i.e. `on_initialize` or `on_finalization`.
+    pub fn store_to_offchain(session_index: SessionIndex) {
+        let derived_key = derive_key(PREFIX, session_index);
+        //let value = SessionModule::historical_root(session_index);
+        let encoded_validator_list = <SessionModule<T>>::validators().encode();
+        sp_io::offchain_index::set(derived_key.as_slice(), encoded_validator_list.as_slice())
+    }
+
+    /// **Must** be called from on-chain, i.e. `on_initialize` or `on_finalization`.
+    pub fn store_current_to_offchain() {
         Self::store_to_offchain(<SessionModule<T>>::current_index());
     }
 }
