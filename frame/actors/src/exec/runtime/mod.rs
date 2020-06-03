@@ -37,8 +37,6 @@ pub trait Ext {
 /// In this runtime traps used not only for signaling about errors but also
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
-	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(Vec<u8>),
 	/// Signals that trap was generated because the contract exhausted its gas limit.
 	OutOfGas,
 	/// Signals that a trap was generated in response to a succesful call to the
