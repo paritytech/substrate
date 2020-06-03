@@ -120,8 +120,8 @@ pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
-			Call::Balances(_) => true,
-			_ => false,
+			Call::System(_) => false,
+			_ => true,
 		}
 	}
 }
@@ -143,6 +143,7 @@ type Proxy = Module<Test>;
 use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
+use super::Call as ProxyCall;
 
 fn last_event() -> TestEvent {
 	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
@@ -225,10 +226,28 @@ fn anonymous_works() {
 		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0));
 		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
 		expect_event(RawEvent::AnonymousCreated(anon.clone(), 1, ProxyType::Any, 0));
+
+		// other calls to anonymous allowed as long as they're not exactly the same.
+		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::JustTransfer, 0));
+		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 1));
+		assert_ok!(Proxy::anonymous(Origin::signed(2), ProxyType::Any, 0));
+		assert_noop!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0), Error::<Test>::Duplicate);
+		System::set_extrinsic_index(1);
+		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0));
+		System::set_extrinsic_index(0);
+		System::set_block_number(2);
+		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0));
+
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
-		assert_ok!(Balances::transfer(Origin::signed(1), anon, 5));
-		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call.clone()));
+		assert_ok!(Balances::transfer(Origin::signed(3), anon, 5));
+		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 1);
+
+		let call = Box::new(Call::Proxy(ProxyCall::kill_anonymous(1, ProxyType::Any, 0, 1, 0)));
+		assert_eq!(Balances::free_balance(1), 0);
+		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call.clone()));
+		assert_eq!(Balances::free_balance(1), 2);
+		assert_noop!(Proxy::proxy(Origin::signed(1), anon, None, call.clone()), Error::<Test>::NotProxy);
 	});
 }
