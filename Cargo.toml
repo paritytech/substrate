@@ -186,10 +186,15 @@ members = [
 # these dependencies with `opt-level=3` even in "dev" mode in order to make "dev" mode more
 # usable.
 #
+# Note that this does **not** affect crates that depend on Substrate. In other words, if you add
+# a dependency on Substrate, you have to copy-paste this list in your own `Cargo.toml` (assuming
+# that you want the same list). This list is only relevant when running `cargo build` from within
+# the Substrate workspace.
+#
 # If you see an error mentioning "profile package spec ... did not match any packages", it
 # probably concerns this list.
 #
-# Note: this list is ordered alphabetically.
+# This list is ordered alphabetically.
 [profile.dev.package.aes-ctr]
 opt-level = 3
 [profile.dev.package.aes-soft]
