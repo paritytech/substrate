@@ -12,7 +12,7 @@ sc-finality-grandpa = { version = "0.8.0-rc2", path = "../" }
 finality-grandpa = { version = "0.12.3", features = ["derive-codec"] }
 jsonrpc-core = "14.2"
 jsonrpc-core-client = "14.2"
-jsonrpc-derive = "14.0.5"
+jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc" }
 futures = { version = "0.3.4", features = ["compat"] }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
