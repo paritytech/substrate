@@ -1380,7 +1380,7 @@ ServiceBuilder<
 			transaction_pool.clone(),
 			sc_informant::OutputFormat { colors: true, prefix: informant_prefix },
 		);
-		let _informant_handle = spawn_handle.spawn("informant", informant_future);
+		spawn_handle.spawn("informant", informant_future);
 
 		Ok(Service {
 			client,
