@@ -16,7 +16,7 @@ derive_more = "0.99.2"
 futures = "0.3.4"
 jsonrpc-core = "14.2"
 jsonrpc-core-client = "14.2"
-jsonrpc-derive = { git = "https://github.com/paritytech/jsonrpc" }
+jsonrpc-derive = "14.2.1"
 log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
