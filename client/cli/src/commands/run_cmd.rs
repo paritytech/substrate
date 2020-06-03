@@ -25,7 +25,6 @@ use crate::params::OffchainWorkerParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
 use crate::CliConfiguration;
-use parking_lot::Mutex;
 use regex::Regex;
 use sc_service::{
 	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
@@ -33,6 +32,7 @@ use sc_service::{
 };
 use sc_telemetry::TelemetryEndpoints;
 use std::{
+	cell::RefCell,
 	net::{IpAddr, Ipv4Addr, SocketAddr},
 	path::PathBuf,
 };
@@ -267,7 +267,7 @@ pub struct RunCmd {
 	pub tmp: bool,
 
 	#[structopt(skip)]
-	temp_base_path: Mutex<Option<TempDir>>,
+	temp_base_path: RefCell<Option<TempDir>>,
 }
 
 impl RunCmd {
@@ -467,10 +467,11 @@ impl CliConfiguration for RunCmd {
 
 	fn base_path(&self) -> Result<Option<PathBuf>> {
 		Ok(if self.tmp {
-			*self.temp_base_path.lock() =
-				Some(tempfile::Builder::new().prefix("substrate").tempdir()?);
+			let tmp = tempfile::Builder::new().prefix("substrate").tempdir()?;
+			let path = tmp.path().into();
+			*self.temp_base_path.borrow_mut() = Some(tmp);
 
-			self.temp_base_path.lock().as_ref().map(|x| x.path().into())
+			Some(path)
 		} else {
 			self.shared_params().base_path()
 		})

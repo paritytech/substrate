@@ -45,7 +45,6 @@ sc-tracing = { version = "2.0.0-rc2", path = "../tracing" }
 chrono = "0.4.10"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 tempfile = "3.1.0"
-parking_lot = "0.10.2"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"

@@ -5957,7 +5957,6 @@ dependencies = [
  "names",
  "nix",
  "parity-util-mem",
- "parking_lot 0.10.2",
  "regex",
  "rpassword",
  "sc-client-api",
