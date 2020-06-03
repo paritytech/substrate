@@ -829,6 +829,26 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	}
 
 	/// Defines the informant's prefix for the logs. An empty string by default.
+	///
+	/// By default substrate will show logs without a prefix. Example:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ BOO! Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 BOO! Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	///
+	/// But you can define a prefix by using this function. Example:
+	///
+	/// ```rust,ignore
+	/// service.with_informant_prefix(|| "[MyNode] ".to_string());
+	/// ```
+	///
+	/// This will output:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ [MyNode] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [MyNode] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
 	pub fn with_informant_prefix(
 		self,
 		informant_prefix_builder: impl FnOnce() -> String + Send + 'static,
