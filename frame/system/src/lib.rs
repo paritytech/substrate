@@ -847,6 +847,27 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 }
 
+pub struct EnsureOneOf<AccountId, A, B>(A, B, sp_std::marker::PhantomData<AccountId>);
+impl<
+	AccountId,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	A: EnsureOrigin<O>,
+	B: EnsureOrigin<O>,
+> EnsureOrigin<O> for EnsureOneOf<AccountId, A, B> {
+	type Success = ();
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		A::try_origin(o).map_or_else(
+			|o| B::try_origin(o).map(|_| ()),
+			|_| Ok(()),
+		)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		A::successful_origin()
+	}
+}
+
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, BadOrigin>
@@ -1879,7 +1900,7 @@ pub(crate) mod tests {
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
 	use frame_support::{
-		impl_outer_origin, parameter_types, assert_ok, assert_noop,
+		impl_outer_origin, parameter_types, assert_ok, assert_noop, assert_err,
 		weights::WithPostDispatchInfo,
 	};
 
@@ -2700,5 +2721,16 @@ pub(crate) mod tests {
 			System::on_created_account(Default::default());
 			assert!(System::events().len() == 1);
 		});
+	}
+
+	#[test]
+	fn ensure_one_of_works() {
+		fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<(), Origin> {
+			EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
+		}
+
+		assert_ok!(ensure_root_or_signed(RawOrigin::Root));
+		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)));
+		assert_err!(ensure_root_or_signed(RawOrigin::None), Origin::from(RawOrigin::None));
 	}
 }
