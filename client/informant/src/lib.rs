@@ -37,8 +37,8 @@ mod display;
 /// The format to print telemetry output in.
 #[derive(Clone)]
 pub struct OutputFormat {
-	/// Use colors to display the logs
-	pub colors: bool,
+	/// Enable color output in logs.
+	pub enable_color: bool,
 	/// Add a prefix before every log line
 	pub prefix: String,
 }
