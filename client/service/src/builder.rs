@@ -979,7 +979,7 @@ ServiceBuilder<
 			informant_prefix_builder,
 		} = self;
 
-		let informant_prefix = informant_prefix_builder.map(|f| f()).unwrap_or_else(String::new);
+		let informant_prefix = informant_prefix_builder.map(|f| f()).unwrap_or_default();
 
 		sp_session::generate_initial_session_keys(
 			client.clone(),
