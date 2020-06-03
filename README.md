@@ -16,4 +16,4 @@ The security policy and procedures can be found in [`docs/SECURITY.md`](docs/SEC
 
 ## License
 
-Substrate is [GPL 3.0 licensed](LICENSE) .
+Substrate is [GPL 3.0 licensed](LICENSE)  .
