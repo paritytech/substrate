@@ -258,10 +258,11 @@ pub struct RunCmd {
 
 	/// Run a temporary node.
 	///
-	/// A random temporary directory will be created to store the configuration and will be deleted
+	/// A temporary directory will be created to store the configuration and will be deleted
 	/// at the end of the process.
 	///
-	/// Note: the directory is random per process execution.
+	/// Note: the directory is random per process execution. This directory is used as base path
+	/// which includes: database, node key and keystore.
 	#[structopt(long)]
 	pub tmp: bool,
 
