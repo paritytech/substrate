@@ -157,12 +157,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				Role::Sentry { validators } => {
 					for validator in validators {
 						sentries_and_validators.insert(validator.peer_id.clone());
+						reserved_nodes.insert(validator.peer_id.clone());
 						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
 					}
 				}
 				Role::Authority { sentry_nodes } => {
 					for sentry_node in sentry_nodes {
 						sentries_and_validators.insert(sentry_node.peer_id.clone());
+						reserved_nodes.insert(sentry_node.peer_id.clone());
 						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
 					}
 				}
