@@ -28,7 +28,12 @@ use rand::{self, Rng};
 use sp_npos_elections::{ElectionResult, VoteWeight};
 
 use std::collections::BTreeMap;
-use sp_runtime::{Perbill, traits::Zero};
+use sp_runtime::{Perbill, PerThing, traits::Zero};
+use sp_npos_elections::{
+	balance_solution, assignment_ratio_to_staked, build_support_map, to_without_backing, VoteWeight,
+	ExtendedBalance, Assignment, StakedAssignment, IdentifierT, assignment_ratio_to_staked,
+	seq_phragmen,
+};
 
 // default params. Each will be scaled by the benchmarks individually.
 const VALIDATORS: u64 = 100;
@@ -42,13 +47,7 @@ const PREFIX: AccountId = 1000_000;
 type AccountId = u64;
 
 mod bench_closure_and_slice {
-	use sp_npos_elections::{
-		VoteWeight, ExtendedBalance, Assignment, StakedAssignment, IdentifierT,
-		assignment_ratio_to_staked,
-	};
-	use sp_runtime::{Perbill, PerThing};
-	use rand::{self, Rng, RngCore};
-	use test::Bencher;
+	use super::*;
 
 	fn random_assignment() -> Assignment<u32, Perbill> {
 		let mut rng = rand::thread_rng();
@@ -135,7 +134,7 @@ fn do_phragmen(
 	});
 
 	b.iter(|| {
-		let ElectionResult { winners, assignments } = sp_npos_elections::seq_phragmen::<AccountId, Perbill>(
+		let ElectionResult { winners, assignments } = seq_phragmen::<AccountId, Perbill>(
 			to_elect,
 			Zero::zero(),
 			candidates.clone(),
@@ -148,7 +147,6 @@ fn do_phragmen(
 
 		// Do the benchmarking with balancing.
 		if eq_iters > 0 {
-			use sp_npos_elections::{balance_solution, assignment_ratio_to_staked, build_support_map, to_without_backing};
 			let staked = assignment_ratio_to_staked(assignments, &stake_of);
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;

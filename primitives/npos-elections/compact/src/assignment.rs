@@ -57,7 +57,13 @@ fn from_impl(count: usize) -> TokenStream2 {
 		let last = quote!(index_of_target(&distribution[#last_index].0).ok_or(_phragmen::Error::CompactInvalidIndex)?);
 
 		quote!(
-			#c => compact.#field_name.push((index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?, [#inner], #last)),
+			#c => compact.#field_name.push(
+				(
+					index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					[#inner],
+					#last,
+				)
+			),
 		)
 	}).collect::<TokenStream2>();
 

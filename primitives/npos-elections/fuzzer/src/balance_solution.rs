@@ -86,7 +86,14 @@ fn generate_random_phragmen_result(
 fn main() {
 	loop {
 		fuzz!(|data: (usize, usize, usize, usize, usize, u64)| {
-			let (mut target_count, mut voter_count, mut iterations, mut edge_per_voter, mut to_elect, seed) = data;
+			let (
+				mut target_count,
+				mut voter_count,
+				mut iterations,
+				mut edge_per_voter,
+				mut to_elect,
+				seed,
+			) = data;
 			let rng = rand::rngs::SmallRng::seed_from_u64(seed);
 			target_count = to_range(target_count, 50, 2000);
 			voter_count = to_range(voter_count, 50, 1000);
