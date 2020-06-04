@@ -106,12 +106,14 @@ impl ImportParams {
 	/// Get execution strategies for the parameters
 	pub fn execution_strategies(&self, is_dev: bool, is_validator: bool) -> ExecutionStrategies {
 		let exec = &self.execution_strategies;
-		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
-			exec.execution.unwrap_or(if strat == default && is_dev {
+		let exec_all_or = |strat: Option<ExecutionStrategy>, default: ExecutionStrategy| {
+			let default = if is_dev {
 				ExecutionStrategy::Native
 			} else {
-				strat
-			}).into()
+				default
+			};
+
+			exec.execution.unwrap_or(strat.unwrap_or(default)).into()
 		};
 
 		let default_execution_import_block = if is_validator {
@@ -142,9 +144,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_SYNCING.as_str(),
 	)]
-	pub execution_syncing: ExecutionStrategy,
+	pub execution_syncing: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime for general block import
 	/// (including locally authored blocks).
@@ -153,9 +154,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_IMPORT_BLOCK.as_str(),
 	)]
-	pub execution_import_block: ExecutionStrategy,
+	pub execution_import_block: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
 	#[structopt(
@@ -163,9 +163,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_BLOCK_CONSTRUCTION.as_str(),
 	)]
-	pub execution_block_construction: ExecutionStrategy,
+	pub execution_block_construction: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while using an off-chain worker.
 	#[structopt(
@@ -173,9 +172,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_OFFCHAIN_WORKER.as_str(),
 	)]
-	pub execution_offchain_worker: ExecutionStrategy,
+	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
 	#[structopt(
@@ -183,9 +181,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_OTHER.as_str(),
 	)]
-	pub execution_other: ExecutionStrategy,
+	pub execution_other: Option<ExecutionStrategy>,
 
 	/// The execution strategy that should be used by all execution contexts.
 	#[structopt(
