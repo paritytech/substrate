@@ -117,7 +117,7 @@ mod inner {
 
 			// and discount the messages
 			if count > 0 {
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).add(count);
+				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).inc_by(count);
 			}
 
 		}

@@ -24,7 +24,7 @@ use prometheus::{
 };
 
 #[cfg(feature = "metered")]
-use prometheus::{core::GenericGaugeVec, Opts};
+use prometheus::{core::GenericCounterVec, Opts};
 
 
 lazy_static! {
@@ -39,7 +39,7 @@ lazy_static! {
 
 #[cfg(feature = "metered")]
 lazy_static! {
-	pub static ref UNBOUNDED_CHANNELS_COUNTER : GenericGaugeVec<AtomicU64> = GenericGaugeVec::new(
+	pub static ref UNBOUNDED_CHANNELS_COUNTER : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
 		Opts::new("unbounded_channel_len", "Items in each mpsc::unbounded instance"),
 		&["entity", "action"] // 'name of channel, send|received|dropped
 	).expect("Creating of statics doesn't fail. qed");
