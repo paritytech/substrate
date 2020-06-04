@@ -1276,6 +1276,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
+			#[allow(dead_code)]
 			mod inner {
 				pub struct Module<T>(sp_std::marker::PhantomData<T>);
 				frame_support::decl_storage! {
