@@ -286,7 +286,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 /// A structure to demonstrate the election result from the perspective of the candidate, i.e. how
 /// much support each candidate is receiving.
 ///
-/// This complements the [`ElectionResult`] and is needed to run the equalize post-processing.
+/// This complements the [`ElectionResult`] and is needed to run the balancing post-processing.
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
 /// they do not necessarily have to be the same.
@@ -632,7 +632,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 	}
 }
 
-/// Performs equalize post-processing to the output of the election algorithm. This happens in
+/// Performs balancing post-processing to the output of the election algorithm. This happens in
 /// rounds. The number of rounds and the maximum diff-per-round tolerance can be tuned through input
 /// parameters.
 ///
@@ -642,7 +642,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// - `supports`: mutable reference to s `SupportMap`. This parameter is updated.
 /// - `tolerance`: maximum difference that can occur before an early quite happens.
 /// - `iterations`: maximum number of iterations that will be processed.
-pub fn equalize<AccountId>(
+pub fn balance_solution<AccountId>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
@@ -656,7 +656,7 @@ pub fn equalize<AccountId>(
 		for assignment in assignments.iter_mut() {
 			let voter_budget = assignment.total();
 			let StakedAssignment { who, distribution } =  assignment;
-			let diff = do_equalize(
+			let diff = do_balancing(
 				who,
 				voter_budget,
 				distribution,
@@ -673,9 +673,9 @@ pub fn equalize<AccountId>(
 	}
 }
 
-/// actually perform equalize. same interface is `equalize`. Just called in loops with a check for
+/// actually perform balancing. same interface is `balance_solution`. Just called in loops with a check for
 /// maximum difference.
-fn do_equalize<AccountId>(
+fn do_balancing<AccountId>(
 	voter: &AccountId,
 	budget: ExtendedBalance,
 	elected_edges: &mut Vec<(AccountId, ExtendedBalance)>,

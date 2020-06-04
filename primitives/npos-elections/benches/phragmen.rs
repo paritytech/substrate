@@ -146,14 +146,14 @@ fn do_phragmen(
 			*stake_of_tree.get(who).unwrap()
 		};
 
-		// Do the benchmarking with equalize.
+		// Do the benchmarking with balancing.
 		if eq_iters > 0 {
-			use sp_npos_elections::{equalize, assignment_ratio_to_staked, build_support_map, to_without_backing};
+			use sp_npos_elections::{balance_solution, assignment_ratio_to_staked, build_support_map, to_without_backing};
 			let staked = assignment_ratio_to_staked(assignments, &stake_of);
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
-			equalize(
+			balance_solution(
 				staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect(),
 				&mut support,
 				eq_tolerance,

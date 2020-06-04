@@ -25,5 +25,5 @@ name = "reduce"
 path = "src/reduce.rs"
 
 [[bin]]
-name = "equalize"
-path = "src/equalize.rs"
+name = "balance_solution"
+path = "src/balance_solution.rs"

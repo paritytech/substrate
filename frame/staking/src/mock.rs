@@ -915,7 +915,7 @@ pub(crate) fn prepare_submission_with(
 	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
 
 	if iterations > 0 {
-		sp_npos_elections::balancing(
+		sp_npos_elections::balance_solution(
 			&mut staked,
 			&mut support_map,
 			Zero::zero(),

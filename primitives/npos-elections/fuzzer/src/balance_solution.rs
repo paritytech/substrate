@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Fuzzing fro the equalize algorithm
+//! Fuzzing fro the balance_solution algorithm
 //!
 //! It ensures that any solution which gets equalized will lead into a better or equally scored
 //! one.
@@ -24,7 +24,7 @@ mod common;
 use common::to_range;
 use honggfuzz::fuzz;
 use sp_npos_elections::{
-	equalize, assignment_ratio_to_staked, build_support_map, to_without_backing, seq_phragmen,
+	balance_solution, assignment_ratio_to_staked, build_support_map, to_without_backing, seq_phragmen,
 	ElectionResult, VoteWeight, evaluate_support, is_score_better,
 };
 use sp_std::collections::btree_map::BTreeMap;
@@ -117,7 +117,7 @@ fn main() {
 				return;
 			}
 
-			let i = equalize(
+			let i = balance_solution(
 				&mut staked,
 				&mut support,
 				10,

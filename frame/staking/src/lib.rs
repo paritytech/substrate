@@ -894,8 +894,8 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// The overarching call type.
 	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
 
-	/// Maximum number of equalise iterations to run in the offchain submission. If set to 0,
-	/// equalize will not be executed at all.
+	/// Maximum number of balancing iterations to run in the offchain submission. If set to 0,
+	/// balance_solution will not be executed at all.
 	type MaxIterations: Get<u32>;
 
 	/// The threshold of improvement that should be provided for a new solution to be accepted.

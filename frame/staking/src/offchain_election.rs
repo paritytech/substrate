@@ -25,7 +25,7 @@ use crate::{
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, ElectionResult,
-	ElectionScore, equalize,
+	ElectionScore, balance_solution,
 };
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
@@ -181,14 +181,14 @@ pub fn prepare_submission<T: Trait>(
 	// balance a random number of times.
 	let iterations_executed = match T::MaxIterations::get() {
 		0 => {
-			// Don't run equalize at all
+			// Don't run balance_solution at all
 			0
 		}
 		iterations @ _ => {
 			let seed = sp_io::offchain::random_seed();
 			let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
 				.expect("input is padded with zeroes; qed") % iterations.saturating_add(1);
-			equalize(
+			balance_solution(
 				&mut staked,
 				&mut support_map,
 				Zero::zero(),

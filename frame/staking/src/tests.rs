@@ -3320,7 +3320,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					// the proposed slot stake, with equalize.
+					// the proposed slot stake, with balance_solution.
 					priority: UnsignedPriority::get() + 1250,
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],

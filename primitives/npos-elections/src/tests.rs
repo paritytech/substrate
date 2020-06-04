@@ -21,7 +21,7 @@
 
 use crate::mock::*;
 use crate::{
-	seq_phragmen, equalize, build_support_map, is_score_better, helpers::*,
+	seq_phragmen, balance_solution, build_support_map, is_score_better, helpers::*,
 	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
@@ -146,7 +146,7 @@ fn phragmen_poc_works() {
 		Support::<AccountId> { total: 35, voters: vec![(20, 20), (30, 15)] },
 	);
 
-	equalize(
+	balance_solution(
 		&mut staked,
 		&mut support_map,
 		0,
@@ -570,7 +570,7 @@ fn self_votes_should_be_kept() {
 		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
 	);
 
-	equalize(
+	balance_solution(
 		&mut staked_assignments,
 		&mut supports,
 		0,
