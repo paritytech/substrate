@@ -244,7 +244,10 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		2,
 		2,
 		candidates.clone(),
-		auto_generate_self_voters(&candidates).iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		auto_generate_self_voters(&candidates)
+			.iter()
+			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
