@@ -31,18 +31,18 @@
 pub mod light;
 pub mod offchain;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "kvdb-rocksdb-feature", test))]
 pub mod bench;
 
 mod children;
 mod cache;
 mod changes_tries_storage;
 mod storage_cache;
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "kvdb-rocksdb-feature", test))]
 mod upgrade;
 mod utils;
 mod stats;
-#[cfg(feature = "parity-db")]
+#[cfg(feature = "parity-db-feature")]
 mod parity_db;
 #[cfg(feature = "subdb")]
 mod subdb;
@@ -91,7 +91,7 @@ use log::{trace, debug, warn};
 pub use sp_database::Database;
 pub use sc_state_db::PruningMode;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "kvdb-rocksdb-feature", test))]
 pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
