@@ -23,12 +23,26 @@ use sp_std::marker::PhantomData;
 /// use to check if there was a change of content.
 /// This needs to be check for every children proofs, and needs to keep
 /// trace of every child trie origin.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-struct KnownQueryPlanAndValues<T>(ChildrenProofMap<ProofCompacted>, PhantomData<T>);
+#[derive(Encode, Decode)]
+pub struct KnownQueryPlanAndValues<T>(pub(crate) ChildrenProofMap<ProofCompacted>, PhantomData<T>);
 
 impl<T> sp_std::fmt::Debug for KnownQueryPlanAndValues<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "Known values compact proof: {:?}", &self.0)
+	}
+}
+
+impl<T> PartialEq<KnownQueryPlanAndValues<T>> for KnownQueryPlanAndValues<T> {
+	fn eq(&self, other: &KnownQueryPlanAndValues<T>) -> bool {
+		self.0.eq(&other.0)
+	}
+}
+
+impl<T> Eq for KnownQueryPlanAndValues<T> { }
+
+impl<T> Clone for KnownQueryPlanAndValues<T> {
+	fn clone(&self) -> Self {
+		KnownQueryPlanAndValues(self.0.clone(), PhantomData)
 	}
 }
 

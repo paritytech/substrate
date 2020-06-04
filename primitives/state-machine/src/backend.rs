@@ -44,7 +44,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// related but do not need to be usable as a backend.
 	type StorageProofReg: sp_trie::RegStorageProof<H::Out>
 		+ sp_trie::MergeableStorageProof<H::Out>
-		+ Into<Self::StorageProof>;
+		+ Into<Self::StorageProof>; // TODO EMCH consider removing this conv.
 
 	/// The actual proof produced.
 	type StorageProof: sp_trie::BackendStorageProof;
