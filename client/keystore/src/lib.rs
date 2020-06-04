@@ -20,7 +20,7 @@
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, BareCryptoStoreError as TraitError, VRFSigner},
+	traits::{BareCryptoStore, Error as TraitError, VRFSigner},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	Encode,
 };
@@ -472,14 +472,16 @@ impl VRFSigner for Store {
 		slot_number: u64,
 		epoch: u64,
 		threshold: u128,
-	) -> std::result::Result<(Vec<u8>, Vec<u8>), ()> {
+	) -> std::result::Result<Option<(Vec<u8>, Vec<u8>)>, TraitError> {
 		let transcript = self.make_vrf_transcript(label, randomness, slot_number, epoch);
-		let pair = self.key_pair_by_type::<Sr25519Pair>(public, key_type).map_err(|_| ())?;
+		let pair = self.key_pair_by_type::<Sr25519Pair>(public, key_type)
+			.map_err(|e| TraitError::PairNotFound(e.to_string()))?;
+
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 		if self.check_primary_threshold(prefix, &inout, threshold) {
-			Ok((inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec()))
+			Ok(Some((inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec())))
 		} else {
-			Err(())
+			Ok(None)
 		}
 	}
 }

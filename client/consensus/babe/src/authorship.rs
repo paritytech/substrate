@@ -153,8 +153,8 @@ fn claim_secondary_slot(
 					slot_number,
 					*epoch_index,
 					u128::MAX,
-				).ok();
-				if let Some((output, proof))  = result {
+				);
+				if let Ok(Some((output, proof)))  = result {
 					let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
 					let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
 
@@ -254,8 +254,8 @@ fn claim_primary_slot(
 			slot_number,
 			*epoch_index,
 			threshold,
-		).ok();
-		if let Some((output, proof))  = result {
+		);
+		if let Ok(Some((output, proof)))  = result {
 			let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
 			let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
 
