@@ -139,6 +139,10 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		ptr: u32,
 		len: u32,
 	) -> Result<Vec<u8>, sp_sandbox::HostError> {
+		self.charge_gas(
+			RuntimeToken::ReadMemory(len),
+		)?;
+
 		let mut buf = vec![0u8; len as usize];
 		self.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
 		Ok(buf)
@@ -157,6 +161,10 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		ptr: u32,
 		len: u32,
 	) -> Result<(), sp_sandbox::HostError> {
+		self.charge_gas(
+			RuntimeToken::ReadMemory(len),
+		)?;
+
 		self.scratch_buf.resize(len as usize, 0);
 		self.memory.get(ptr, self.scratch_buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
 		Ok(())
@@ -175,6 +183,10 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		ptr: u32,
 		buf: &mut [u8],
 	) -> Result<(), sp_sandbox::HostError> {
+		self.charge_gas(
+			RuntimeToken::ReadMemory(buf.len() as u32),
+		)?;
+
 		self.memory.get(ptr, buf).map_err(Into::into)
 	}
 
@@ -204,11 +216,49 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	/// - calculating the gas cost resulted in overflow.
 	/// - out of gas
 	/// - designated area is not within the bounds of the sandbox memory.
+	fn write_sandbox_memory_from_scratch(
+		&mut self,
+		ptr: u32,
+		offset: u32,
+		len: u32,
+	) -> Result<(), sp_sandbox::HostError> {
+		let offset = offset as usize;
+		if offset > self.scratch_buf.len() {
+			// Offset can't be larger than scratch buffer length.
+			return Err(sp_sandbox::HostError);
+		}
+
+		// This can't panic since `offset <= ctx.scratch_buf.len()`.
+		if self.scratch_buf[offset..].len() != len as usize {
+			return Err(sp_sandbox::HostError);
+		}
+		self.charge_gas(
+			RuntimeToken::WriteMemory(len),
+		)?;
+
+		let src = &self.scratch_buf[offset..];
+		self.memory.set(ptr, src)?;
+
+		Ok(())
+	}
+
+	/// Write the given buffer to the designated location in the sandbox memory, consuming
+	/// an appropriate amount of gas.
+	///
+	/// Returns `Err` if one of the following conditions occurs:
+	///
+	/// - calculating the gas cost resulted in overflow.
+	/// - out of gas
+	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(
 		&mut self,
 		ptr: u32,
 		buf: &[u8],
 	) -> Result<(), sp_sandbox::HostError> {
+		self.charge_gas(
+			RuntimeToken::WriteMemory(buf.len() as u32),
+		)?;
+
 		self.memory.set(ptr, buf)?;
 
 		Ok(())
@@ -315,6 +365,36 @@ define_env!(
 			Ok(_) => Ok(0),
 			Err(_) => Ok(1),
 		}
+	},
+
+	// Returns the size of the scratch buffer.
+	//
+	// For more details on the scratch buffer see `ext_scratch_read`.
+	ext_scratch_size(ctx: &mut Runtime<E>) -> u32 => {
+		Ok(ctx.scratch_buf.len() as u32)
+	},
+
+	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract
+	// memory. The region at which the data should be put is specified by `dest_ptr`.
+	//
+	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
+	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
+	// function that uses the scratch buffer the contents of the scratch buffer are overwritten.
+	ext_scratch_read(ctx: &mut Runtime<E>, dest_ptr: u32, offset: u32, len: u32) => {
+		ctx.write_sandbox_memory_from_scratch(
+			dest_ptr,
+			offset,
+			len,
+		)
+	},
+
+	// Copy data from contract memory starting from `src_ptr` with length `len` into the scratch
+	// buffer. This overwrites the entire scratch buffer and resizes to `len`. Specifying a `len`
+	// of zero clears the scratch buffer.
+	//
+	// This should be used before exiting a call or instantiation in order to set the return data.
+	ext_scratch_write(ctx: &mut Runtime<E>, src_ptr: u32, len: u32) => {
+		ctx.read_sandbox_memory_into_scratch(src_ptr, len)
 	},
 
 	// Prints utf8 encoded string from the data buffer.
