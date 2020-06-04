@@ -272,7 +272,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// network all within the current set.
 	pub(crate) fn round_communication(
 		&self,
-		keystore: &Option<BareCryptoStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,

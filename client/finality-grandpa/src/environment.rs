@@ -717,7 +717,7 @@ where
 		};
 
 		let (incoming, outgoing) = self.network.round_communication(
-			&self.config.keystore,
+			self.config.keystore.clone(),
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
