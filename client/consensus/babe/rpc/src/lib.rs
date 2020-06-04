@@ -32,6 +32,11 @@ use sp_consensus_babe::{
 	digests::PreDigest,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::{
+	crypto::Public,
+	traits::BareCryptoStore,
+};
+use sp_application_crypto::AppKey;
 use sc_keystore::KeyStorePtr;
 use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
@@ -128,12 +133,18 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 
 			let keys = epoch.authorities.iter()
 				.enumerate()
-				.map(|(i, a)| (a.0.clone(), i))
+				.filter_map(|(i, a)| {
+					if keystore.read().has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
+						Some((a.0.clone(), i))
+					} else {
+						None
+					}
+				})
 				.collect::<Vec<_>>();
 
 			for slot_number in epoch_start..epoch_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &keystore, &keys)
+					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {

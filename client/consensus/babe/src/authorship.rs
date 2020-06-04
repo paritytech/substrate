@@ -196,12 +196,12 @@ pub fn claim_slot(
 		.enumerate()
 		.map(|(index, a)| (a.0.clone(), index))
 		.collect::<Vec<_>>();
-	claim_slot_using_key_pairs(slot_number, epoch, keystore, &authorities)
+	claim_slot_using_keys(slot_number, epoch, keystore, &authorities)
 }
 
 /// Like `claim_slot`, but allows passing an explicit set of key pairs. Useful if we intend
 /// to make repeated calls for different slots using the same key pairs.
-pub fn claim_slot_using_key_pairs(
+pub fn claim_slot_using_keys(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
