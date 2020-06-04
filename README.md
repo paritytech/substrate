@@ -9,7 +9,9 @@ Substrate is a next-generation framework for blockchain innovation 🚀.
 
 ## Trying it out
 
-Simply go to [substrate.dev](https://substrate.dev) and follow the [getting started](https://substrate.dev/docs/en/overview/getting-started/) instructions.
+Simply go to [substrate.dev](https://substrate.dev) and follow the 
+[installation](https://substrate.dev/docs/en/knowledgebase/getting-started/) instructions. You can 
+also try out one of the [tutorials](https://substrate.dev/en/tutorials).
 
 ## Contributions & Code of Conduct
 

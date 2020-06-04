@@ -457,6 +457,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 			make_block_and_import(&first_service.get(), first_user_data);
 		}
+		(network.full_nodes[0].1).0.lock().unwrap().network().update_chain();
 		network.full_nodes[0].3.clone()
 	};
 
