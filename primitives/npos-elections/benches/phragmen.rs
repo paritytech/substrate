@@ -25,7 +25,7 @@ extern crate test;
 use test::Bencher;
 
 use rand::{self, Rng};
-use sp_phragmen::{PhragmenResult, VoteWeight};
+use sp_npos_elections::{ElectionResult, VoteWeight};
 
 use std::collections::BTreeMap;
 use sp_runtime::{Perbill, traits::Zero};
@@ -42,7 +42,7 @@ const PREFIX: AccountId = 1000_000;
 type AccountId = u64;
 
 mod bench_closure_and_slice {
-	use sp_phragmen::{
+	use sp_npos_elections::{
 		VoteWeight, ExtendedBalance, Assignment, StakedAssignment, IdentifierT,
 		assignment_ratio_to_staked,
 	};
@@ -135,7 +135,7 @@ fn do_phragmen(
 	});
 
 	b.iter(|| {
-		let PhragmenResult { winners, assignments } = sp_phragmen::elect::<AccountId, Perbill>(
+		let ElectionResult { winners, assignments } = sp_npos_elections::seq_phragmen::<AccountId, Perbill>(
 			to_elect,
 			Zero::zero(),
 			candidates.clone(),
@@ -148,7 +148,7 @@ fn do_phragmen(
 
 		// Do the benchmarking with equalize.
 		if eq_iters > 0 {
-			use sp_phragmen::{equalize, assignment_ratio_to_staked, build_support_map, to_without_backing};
+			use sp_npos_elections::{equalize, assignment_ratio_to_staked, build_support_map, to_without_backing};
 			let staked = assignment_ratio_to_staked(assignments, &stake_of);
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
