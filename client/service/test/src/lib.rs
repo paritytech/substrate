@@ -208,7 +208,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		dev_key_seed: key_seed,
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
-		wasm_tracing: Default::default(),
+		tracing_enable_wasm: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
 	}

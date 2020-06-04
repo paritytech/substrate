@@ -372,9 +372,9 @@ pub trait CliConfiguration: Sized {
 	/// Returns `Ok(true)` if wasm tracing should be enabled
 	///
 	/// By default this is `false`.
-	fn wasm_tracing(&self) -> Result<bool> {
+	fn tracing_enable_wasm(&self) -> Result<bool> {
 		Ok(self.import_params()
-			.map(|x| x.wasm_tracing())
+			.map(|x| x.tracing_enable_wasm())
 			.unwrap_or_default())
 	}
 
@@ -469,7 +469,7 @@ pub trait CliConfiguration: Sized {
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
 			tracing_receiver: self.tracing_receiver()?,
-			wasm_tracing: self.wasm_tracing()?,
+			tracing_enable_wasm: self.tracing_enable_wasm()?,
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,

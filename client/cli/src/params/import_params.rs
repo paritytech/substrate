@@ -83,7 +83,7 @@ pub struct ImportParams {
 
 	/// Enable wasm tracing
 	#[structopt(long)]
-	pub wasm_tracing: bool,
+	pub tracing_enable_wasm: bool,
 }
 
 impl ImportParams {
@@ -98,8 +98,8 @@ impl ImportParams {
 	}
 
 	/// Flag to enable wasm tracing.
-	pub fn wasm_tracing(&self) -> bool {
-		self.wasm_tracing
+	pub fn tracing_enable_wasm(&self) -> bool {
+		self.tracing_enable_wasm
 	}
 
 	/// Specify the state cache size.

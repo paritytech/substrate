@@ -1328,7 +1328,7 @@ ServiceBuilder<
 			let subscriber = sc_tracing::ProfilingSubscriber::new(
 				config.tracing_receiver, tracing_targets
 			);
-			sp_tracing::set_wasm_tracing(config.wasm_tracing);
+			sp_tracing::set_wasm_tracing(config.tracing_enable_wasm);
 			match tracing::subscriber::set_global_default(subscriber) {
 				Ok(_) => (),
 				Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),

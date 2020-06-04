@@ -384,9 +384,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn wasm_tracing(&self) -> $crate::Result<bool> {
+			fn tracing_enable_wasm(&self) -> $crate::Result<bool> {
 				match self {
-					$($enum::$variant(cmd) => cmd.wasm_tracing()),*
+					$($enum::$variant(cmd) => cmd.tracing_enable_wasm()),*
 				}
 			}
 
