@@ -225,7 +225,6 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 
 		// proceed with transactions
 		let block_timer = time::Instant::now();
-		let mut is_first = true;
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
@@ -261,10 +260,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				}
 				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
-					if is_first {
-						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
-						unqueue_invalid.push(pending_tx_hash);
-					} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
 						debug!(
 							"Block seems full, but will try {} more transactions before quitting.",
@@ -287,8 +283,6 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 					unqueue_invalid.push(pending_tx_hash);
 				}
 			}
-
-			is_first = false;
 		}
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);

@@ -640,8 +640,8 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 	num_changed
 }
 
-/// Reduce the given [`Vec<StakedAssignment<IdentifierT>>`]. This removes redundant edges from without changing the
-/// overall backing of any of the elected candidates.
+/// Reduce the given [`Vec<StakedAssignment<IdentifierT>>`]. This removes redundant edges from
+/// without changing the overall backing of any of the elected candidates.
 ///
 /// Returns the number of edges removed.
 ///
