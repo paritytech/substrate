@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	ExecutionStrategy, TracingReceiver, WasmExecutionMethod,
-	DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
+	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
 	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
 };
 use crate::params::DatabaseParams;
@@ -104,10 +104,7 @@ impl ImportParams {
 	}
 
 	/// Get execution strategies for the parameters
-	pub fn execution_strategies(
-		&self,
-		is_dev: bool,
-	) -> ExecutionStrategies {
+	pub fn execution_strategies(&self, is_dev: bool, is_validator: bool) -> ExecutionStrategies {
 		let exec = &self.execution_strategies;
 		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
 			exec.execution.unwrap_or(if strat == default && is_dev {
@@ -117,9 +114,15 @@ impl ImportParams {
 			}).into()
 		};
 
+		let default_execution_import_block = if is_validator {
+			DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR
+		} else {
+			DEFAULT_EXECUTION_IMPORT_BLOCK
+		};
+
 		ExecutionStrategies {
 			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
-			importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+			importing: exec_all_or(exec.execution_import_block, default_execution_import_block),
 			block_construction:
 				exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
 			offchain_worker:
