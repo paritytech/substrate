@@ -1285,10 +1285,9 @@ decl_module! {
 				}
 			}
 
-			inner::MigrateEra::kill();
-
 			if let Releases::V3_0_0 = StorageVersion::get() {
 				StorageVersion::put(Releases::V4_0_0);
+				inner::MigrateEra::kill();
 
 				T::DbWeight::get().reads_writes(1, 1)
 			} else {
