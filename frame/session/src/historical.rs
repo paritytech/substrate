@@ -37,7 +37,9 @@ use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
-pub mod storage;
+mod shared;
+pub mod offchain;
+pub mod onchain;
 
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
@@ -156,7 +158,7 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 /// A tuple of the validator's ID and their full identification.
 pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
 
-/// a trie instance for checking and generating proofs.
+/// A trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
 	db: MemoryDB<T::Hashing>,
 	root: T::Hash,
@@ -252,7 +254,6 @@ impl<T: Trait> ProvingTrie<T> {
 			.ok()?
 			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 	}
-
 }
 
 impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
