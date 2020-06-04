@@ -30,6 +30,7 @@ use sc_chain_spec::ChainSpec;
 use sp_core::crypto::Protected;
 pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
+#[cfg(not(target_os = "unknown"))]
 use tempfile::TempDir;
 
 /// Service configuration.
@@ -231,6 +232,7 @@ impl BasePath {
 	/// Retrieve the base path.
 	pub fn path(&self) -> &Path {
 		match self {
+			#[cfg(not(target_os = "unknown"))]
 			BasePath::Temporary(temp_dir) => temp_dir.path(),
 			BasePath::Permanenent(path) => path.as_path(),
 		}
