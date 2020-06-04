@@ -462,7 +462,7 @@ pub trait CliConfiguration: Sized {
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
-			base_path,
+			base_path: Some(base_path),
 		})
 	}
 

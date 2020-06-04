@@ -104,7 +104,7 @@ pub struct Configuration {
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
 	/// Base path of the configuration
-	pub base_path: BasePath,
+	pub base_path: Option<BasePath>,
 }
 
 /// Type for tasks spawned by the executor.
