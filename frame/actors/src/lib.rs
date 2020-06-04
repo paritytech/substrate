@@ -54,21 +54,23 @@ pub type PositiveImbalanceFor<T> = <<T as Trait>::Currency as Currency<<T as fra
 pub type NegativeImbalanceFor<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Message type from actors pallet's point of view.
-pub type MessageFor<T> = Message<AccountIdFor<T>, BalanceFor<T>>;
+pub type MessageFor<T> = Message<AccountIdFor<T>, BalanceFor<T>, HashFor<T>>;
 
 /// Actor data type from actors pallet's point of view.
-pub type ActorInfoFor<T> = ActorInfo<AccountIdFor<T>, BalanceFor<T>, CodeHashFor<T>>;
+pub type ActorInfoFor<T> = ActorInfo<AccountIdFor<T>, BalanceFor<T>, HashFor<T>>;
 
 /// Code hash type.
-pub type CodeHashFor<T> = <T as frame_system::Trait>::Hash;
+pub type HashFor<T> = <T as frame_system::Trait>::Hash;
 
 /// Message type that actors send around.
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
-pub struct Message<A, B> {
+pub struct Message<A, B, H> {
 	/// Source of the message.
 	pub source: A,
 	/// Balance encoded in the message.
 	pub value: B,
+	/// Topics of the message.
+	pub topics: Vec<H>,
 	/// Data field up to receiver's interpretation.
 	pub data: Vec<u8>,
 }
@@ -81,7 +83,7 @@ pub struct ActorInfo<A, B, H> {
 	/// Storage values of the actor.
 	pub storage: BTreeMap<StorageKey, Vec<u8>>,
 	/// Incoming messages to the actor.
-	pub messages: Vec<Message<A, B>>,
+	pub messages: Vec<Message<A, B, H>>,
 }
 
 /// Trait definition for actors pallet.
@@ -101,9 +103,9 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Actors {
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
-		pub PristineCode: map hasher(identity) CodeHashFor<T> => Option<Vec<u8>>;
+		pub PristineCode: map hasher(identity) HashFor<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
-		pub CodeStorage: map hasher(identity) CodeHashFor<T> => Option<exec::PrefabWasmModule>;
+		pub CodeStorage: map hasher(identity) HashFor<T> => Option<exec::PrefabWasmModule>;
 
 		/// Info associated with a given account.
 		///
@@ -134,6 +136,7 @@ decl_module! {
 			origin,
 			target: AccountIdFor<T>,
 			value: BalanceFor<T>,
+			topics: Vec<HashFor<T>>,
 			data: Vec<u8>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
@@ -142,6 +145,7 @@ decl_module! {
 			let message = Message {
 				source,
 				value,
+				topics,
 				data,
 			};
 			ActorInfoOf::<T>::mutate(target, |actor| {

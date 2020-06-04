@@ -11,7 +11,7 @@ use codec::{Encode, Decode};
 use sp_std::collections::btree_map::BTreeMap;
 use frame_support::{traits::{Get, ReservableCurrency}, storage::StorageMap};
 use crate::{
-	AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait,
+	AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait, HashFor,
 	Schedule, Gas, gas::GasMeter
 };
 use crate::exec::env_def::FunctionImplProvider;
@@ -141,6 +141,7 @@ impl<T: Trait> Ext for Context<T> {
 		&mut self,
 		target: AccountIdFor<Self::T>,
 		value: BalanceFor<Self::T>,
+		topics: Vec<HashFor<Self::T>>,
 		data: Vec<u8>,
 	) -> Result<(), &'static str> {
 		if data.len() > self.max_value_size() as usize {
@@ -152,6 +153,7 @@ impl<T: Trait> Ext for Context<T> {
 		let message = Message {
 			source: self.account_id.clone(),
 			value,
+			topics,
 			data,
 		};
 

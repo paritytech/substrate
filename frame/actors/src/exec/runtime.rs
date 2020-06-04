@@ -1,7 +1,7 @@
 use codec::{Encode, Decode};
 use sp_runtime::traits::Bounded;
 use crate::{
-	Trait, AccountIdFor, BalanceFor, MessageFor, StorageKey, Gas, Schedule,
+	Trait, AccountIdFor, BalanceFor, MessageFor, StorageKey, Gas, Schedule, HashFor,
 	Token, gas::{GasMeter, GasMeterResult},
 };
 
@@ -24,6 +24,7 @@ pub trait Ext {
 		&mut self,
 		target: AccountIdFor<Self::T>,
 		value: BalanceFor<Self::T>,
+		topics: Vec<HashFor<Self::T>>,
 		data: Vec<u8>,
 	) -> Result<(), &'static str>;
 	/// Get the message that the process function is currently operating on.
@@ -302,13 +303,15 @@ define_env!(
 		ctx: &mut Runtime<E>,
 		target_ptr: u32, target_len: u32,
 		value_ptr: u32, value_len: u32,
+		topics_ptr: u32, topics_len: u32,
 		data_ptr: u32, data_len: u32
 	) -> u32 => {
 		let target: AccountIdFor<E::T> = ctx.read_sandbox_memory_as(target_ptr, target_len)?;
 		let value: BalanceFor<E::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
+		let topics: Vec<HashFor<E::T>> = ctx.read_sandbox_memory_as(topics_ptr, topics_len)?;
 		let data: Vec<u8> = ctx.read_sandbox_memory_as(data_ptr, data_len)?;
 
-		match ctx.ext.send_message(target, value, data) {
+		match ctx.ext.send_message(target, value, topics, data) {
 			Ok(_) => Ok(0),
 			Err(_) => Ok(1),
 		}
@@ -317,8 +320,8 @@ define_env!(
 	// Prints utf8 encoded string from the data buffer.
 	// Only available on `--dev` chains.
 	// This function may be removed at any time, superseded by a more general contract debugging feature.
-	ext_println(ctx, str_ptr: u32, str_len: u32) => {
-		let data = read_sandbox_memory(ctx, str_ptr, str_len)?;
+	ext_println(ctx: &mut Runtime<E>, str_ptr: u32, str_len: u32) => {
+		let data = ctx.read_sandbox_memory(str_ptr, str_len)?;
 		if let Ok(utf8) = core::str::from_utf8(&data) {
 			sp_runtime::print(utf8);
 		}

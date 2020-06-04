@@ -27,7 +27,7 @@
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
 use crate::exec::{prepare, runtime::Env, PrefabWasmModule};
-use crate::{CodeHashFor, CodeStorage, PristineCode, Schedule, Trait};
+use crate::{HashFor, CodeStorage, PristineCode, Schedule, Trait};
 use sp_std::prelude::*;
 use sp_runtime::traits::Hash;
 use frame_support::StorageMap;
@@ -39,7 +39,7 @@ use frame_support::StorageMap;
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
 	schedule: &Schedule,
-) -> Result<CodeHashFor<T>, &'static str> {
+) -> Result<HashFor<T>, &'static str> {
 	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
@@ -55,7 +55,7 @@ pub fn save<T: Trait>(
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
 pub fn load<T: Trait>(
-	code_hash: &CodeHashFor<T>,
+	code_hash: &HashFor<T>,
 	schedule: &Schedule,
 ) -> Result<PrefabWasmModule, &'static str> {
 	let mut prefab_module =
