@@ -1350,7 +1350,8 @@ ServiceBuilder<
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 			marker: PhantomData::<TBl>,
-			prometheus_registry: config.prometheus_config.map(|config| config.registry)
+			prometheus_registry: config.prometheus_config.map(|config| config.registry),
+			_base_path: config.base_path,
 		})
 	}
 }
