@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! # Democracy Pallet
-//!
+//! 
 //! - [`democracy::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
 //! ## Overview
-//!
+//! 
 //! The Democracy pallet handles the administration of general stakeholder voting.
 //!
 //! There are two different queues that a proposal can be added to before it
@@ -29,7 +29,7 @@
 //! and 2) the external queue consisting of a single proposal that originates
 //! from one of the _external_ origins (such as a collective group).
 //!
-//! Every launch period - a length defined in the runtime - the Democracy pallet
+//! Every launch period - a length defined in the runtime - the Democracy pallet 
 //! launches a referendum from a proposal that it takes from either the proposal
 //! queue or the external queue in turn. Any token holder in the system can vote
 //! on referenda. The voting system
@@ -40,7 +40,7 @@
 //! ### Terminology
 //!
 //! - **Enactment Period:** The minimum period of locking and the period between a proposal being
-//! approved and enacted.
+//! approved and enacted. 
 //! - **Lock Period:** A period of time after proposal enactment that the tokens of _winning_ voters
 //! will be locked.
 //! - **Conviction:** An indication of a voter's strength of belief in their vote. An increase
@@ -50,7 +50,7 @@
 //!   of a particular referendum.
 //! - **Proposal:** A submission to the chain that represents an action that a proposer (either an
 //! account or an external origin) suggests that the system adopt.
-//! - **Referendum:** A proposal that is in the process of being voted on for
+//! - **Referendum:** A proposal that is in the process of being voted on for 
 //!   either acceptance or rejection as a change to the system.
 //! - **Proxy:** An account that has full voting power on behalf of a separate "Stash" account
 //!   that holds the funds.
@@ -62,7 +62,7 @@
 //! A _referendum_ can be either simple majority-carries in which 50%+1 of the
 //! votes decide the outcome or _adaptive quorum biased_. Adaptive quorum biasing
 //! makes the threshold for passing or rejecting a referendum higher or lower
-//! depending on how the referendum was originally proposed. There are two types of
+//! depending on how the referendum was originally proposed. There are two types of 
 //! adaptive quorum biasing: 1) _positive turnout bias_ makes a referendum
 //! require a super-majority to pass that decreases as turnout increases and
 //! 2) _negative turnout bias_ makes a referendum require a super-majority to
@@ -113,7 +113,7 @@
 //!   Does not require a deposit, but the proposal must be in the dispatch queue.
 //! - `note_imminent_preimage_operational` - same but provided by `T::OperationalPreimageOrigin`.
 //! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
-//!   work under the condition that it's the same account that noted it and
+//!   work under the condition that it's the same account that noted it and 
 //!   after the voting period, OR it's a different account after the enactment period.
 //!
 //! #### Cancellation Origin
@@ -152,7 +152,7 @@
 //!   is "majority-carries" to become a referendum immediately.
 //!
 //! #### Veto Origin
-//!
+//! 
 //! This call can only be made by the `VetoOrigin`.
 //!
 //! - `veto_external` - Vetoes and blacklists the external proposal hash.
@@ -851,7 +851,7 @@ decl_module! {
 		/// an external referendum.
 		///
 		/// The dispatch of this call must be `ExternalMajorityOrigin`.
-		///
+		/// 
 		/// - `proposal_hash`: The preimage hash of the proposal.
 		///
 		/// Unlike `external_propose`, blacklisting has no effect on this and it may replace a
@@ -948,7 +948,7 @@ decl_module! {
 		/// Veto and blacklist the external proposal hash.
 		///
 		/// The dispatch origin of this call must be `VetoOrigin`.
-		///
+		/// 
 		/// - `proposal_hash`: The preimage hash of the proposal to veto and blacklist.
 		///
 		/// Emits `Vetoed`.

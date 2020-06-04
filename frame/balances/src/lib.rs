@@ -154,6 +154,7 @@ mod tests;
 mod tests_local;
 mod tests_composite;
 mod benchmarking;
+mod migration;
 
 use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
@@ -542,6 +543,28 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
 		}
+
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T, I>();
+		}
+	}
+}
+
+#[derive(Decode)]
+struct OldBalanceLock<Balance, BlockNumber> {
+	id: LockIdentifier,
+	amount: Balance,
+	until: BlockNumber,
+	reasons: WithdrawReasons,
+}
+
+impl<Balance, BlockNumber> OldBalanceLock<Balance, BlockNumber> {
+	fn upgraded(self) -> (BalanceLock<Balance>, BlockNumber) {
+		(BalanceLock {
+			id: self.id,
+			amount: self.amount,
+			reasons: self.reasons.into(),
+		}, self.until)
 	}
 }
 
