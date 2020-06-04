@@ -12,7 +12,7 @@ use sp_std::collections::btree_map::BTreeMap;
 use frame_support::{traits::ReservableCurrency, storage::StorageMap};
 use crate::{
 	AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait, HashFor,
-	Schedule, Gas, gas::GasMeter
+	Schedule, Gas, gas::GasMeter, Module,
 };
 use crate::exec::env_def::FunctionImplProvider;
 
@@ -110,9 +110,7 @@ impl<'a, T: Trait> Context<'a, T> {
 		});
 
 		for (target, message) in self.outgoing_messages {
-			ActorInfoOf::<T>::mutate(target, |actor| {
-				actor.messages.push(message);
-			});
+			Module::<T>::store_message(target, message);
 		}
 	}
 }

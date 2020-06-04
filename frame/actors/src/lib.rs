@@ -150,7 +150,6 @@ decl_module! {
 		}
 
 		/// Send a message to an actor.
-		// TODO: if the receiver is not an actor, the send message function should fail.
 		#[weight = 0]
 		fn send_message(
 			origin,
@@ -168,9 +167,7 @@ decl_module! {
 				topics,
 				data,
 			};
-			ActorInfoOf::<T>::mutate(target, |actor| {
-				actor.messages.push(message);
-			});
+			Self::store_message(target, message);
 
 			Ok(())
 		}
@@ -225,5 +222,22 @@ impl<T: Trait> Module<T> {
 
 		context.apply();
 		true
+	}
+
+	/// Store message on destination. If the code is empty, the message should succeed instantly.
+	fn store_message(target: AccountIdFor<T>, message: MessageFor<T>) {
+		let has_code = ActorInfoOf::<T>::get(&target).code_hash.is_some();
+
+		if has_code {
+			ActorInfoOf::<T>::mutate(target, |actor| {
+				actor.messages.push(message);
+			});
+		} else {
+			let (imbalance, less) = T::Currency::slash_reserved(&message.source, message.value);
+			if less > Zero::zero() {
+				panic!("Runtime error: reserved fund is less than expected");
+			}
+			T::Currency::resolve_creating(&target, imbalance);
+		}
 	}
 }
