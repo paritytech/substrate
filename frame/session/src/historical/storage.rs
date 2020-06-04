@@ -137,3 +137,17 @@ impl<T: Trait> core::iter::IntoIterator for ValidatorSet<T> {
         self.validator_set.into_iter()
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::new_test_ext;
+    use super::*;
+
+    #[test]
+    fn justone() {
+        new_test_ext().execute_with(|| {
+
+        })
+    }
+}
