@@ -13,8 +13,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 futures = { version = "0.3.0", features = ["compat"] }
-jsonrpc-client-transports = { version = "14.2", default-features = false, features = ["http"] }
-jsonrpc-core = "14.2"
+jsonrpc-client-transports = { version = "14.0.5", default-features = false, features = ["http"] }
+jsonrpc-core = "14"
 codec = { package = "parity-scale-codec", version = "1" }
 serde = "1"
 frame-support = { version = "2.0.0-rc2", path = "../../../../frame/support" }

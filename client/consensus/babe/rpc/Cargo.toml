@@ -14,9 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sc-consensus-babe = { version = "0.8.0-rc2", path = "../" }
 sc-rpc-api = { version = "0.8.0-rc2", path = "../../../rpc-api" }
-jsonrpc-core = "14.2"
-jsonrpc-core-client = "14.2"
-jsonrpc-derive = "14.2.1"
+jsonrpc-core = "14.0.3"
+jsonrpc-core-client = "14.0.5"
+jsonrpc-derive = "14.0.3"
 sp-consensus-babe = { version = "0.8.0-rc2", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.104", features=["derive"] }
 sp-blockchain = { version = "2.0.0-rc2", path = "../../../../primitives/blockchain" }

@@ -31,7 +31,7 @@ use crate::testing::TaskExecutor;
 #[test]
 fn should_return_header() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.header(Some(client.genesis_hash()).into()).wait(),
@@ -63,7 +63,7 @@ fn should_return_header() {
 #[test]
 fn should_return_a_block() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
@@ -114,7 +114,7 @@ fn should_return_a_block() {
 #[test]
 fn should_return_block_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.block_hash(None.into()),
@@ -158,7 +158,7 @@ fn should_return_block_hash() {
 #[test]
 fn should_return_finalized_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.finalized_head(),
@@ -188,15 +188,12 @@ fn should_notify_about_latest_block() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_all_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -218,15 +215,12 @@ fn should_notify_about_best_block() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -248,15 +242,12 @@ fn should_notify_about_finalized_block() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
+		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert!(matches!(
-			executor::block_on(id.compat()),
-			Ok(Ok(SubscriptionId::String(_)))
-		));
+		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
