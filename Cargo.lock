@@ -5837,6 +5837,7 @@ dependencies = [
  "sp-version",
  "structopt",
  "substrate-prometheus-endpoint",
+ "tempfile",
  "time",
  "tokio 0.2.18",
 ]
