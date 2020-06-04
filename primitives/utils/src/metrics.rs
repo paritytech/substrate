@@ -23,7 +23,7 @@ use prometheus::{
 	core::{ AtomicU64, GenericGauge, GenericCounter },
 };
 
-#[cfg(features = "metered")]
+#[cfg(feature = "metered")]
 use prometheus::{core::GenericGaugeVec, Opts};
 
 
@@ -37,7 +37,7 @@ lazy_static! {
 	).expect("Creating of statics doesn't fail. qed");
 }
 
-#[cfg(features = "metered")]
+#[cfg(feature = "metered")]
 lazy_static! {
 	pub static ref UNBOUNDED_CHANNELS_COUNTER : GenericGaugeVec<AtomicU64> = GenericGaugeVec::new(
 		Opts::new("unbounded_channel_len", "Items in each mpsc::unbounded instance"),
@@ -52,7 +52,7 @@ pub fn register_globals(registry: &Registry) -> Result<(), PrometheusError> {
 	registry.register(Box::new(TOKIO_THREADS_ALIVE.clone()))?;
 	registry.register(Box::new(TOKIO_THREADS_TOTAL.clone()))?;
 
-	#[cfg(features = "metered")]
+	#[cfg(feature = "metered")]
 	registry.register(Box::new(UNBOUNDED_CHANNELS_COUNTER.clone()))?;
 
 	Ok(())

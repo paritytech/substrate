@@ -17,7 +17,7 @@
 
 //! Features to meter unbounded channels
 
-#[cfg(not(features = "metered"))]
+#[cfg(not(feature = "metered"))]
 mod inner {
 	// just aliased, non performance implications
 	use futures::channel::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -31,7 +31,7 @@ mod inner {
 }
 
 
-#[cfg(features = "metered")]
+#[cfg(feature = "metered")]
 mod inner {
 	//tracing implementation
 	use futures::channel::mpsc::{self,
@@ -44,8 +44,15 @@ mod inner {
 
 	/// Wrapper Type around `UnboundedSender` that increases the global
 	/// measure when a message is added
-	#[derive(Debug, Clone)]
+	#[derive(Debug)]
 	pub struct TracingUnboundedSender<T>(&'static str, UnboundedSender<T>);
+
+	// Strangely, deriving `Clone` requires that `T` is also `Clone`.
+	impl<T> Clone for TracingUnboundedSender<T> {
+		fn clone(&self) -> Self {
+			Self(self.0, self.1.clone())
+		}
+	}
 
 	/// Wrapper Type around `UnboundedReceiver` that decreases the global
 	/// measure when a message is polled
@@ -88,7 +95,7 @@ mod inner {
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
 			self.1.unbounded_send(msg).map(|s|{
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"send"]).incr();
+				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"send"]).inc();
 				s
 			})
 		}
@@ -110,7 +117,7 @@ mod inner {
 
 			// and discount the messages
 			if count > 0 {
-				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).incr_by(count);
+				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).add(count);
 			}
 
 		}
@@ -127,7 +134,7 @@ mod inner {
 		pub fn try_next(&mut self) -> Result<Option<T>, TryRecvError> {
 			self.1.try_next().map(|s| {
 				if s.is_some() {
-					UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"received"]).incr();
+					UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"received"]).inc();
 				}
 				s
 			})
@@ -153,7 +160,7 @@ mod inner {
 			match Pin::new(&mut s.1).poll_next(cx) {
 				Poll::Ready(msg) => {
 					if msg.is_some() {
-						UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, "received"]).incr();
+						UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[s.0, "received"]).inc();
 				   	}
 					Poll::Ready(msg)
 				}
