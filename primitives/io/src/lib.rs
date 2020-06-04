@@ -975,12 +975,13 @@ sp_externalities::decl_extension! {
 #[runtime_interface]
 pub trait WasmTracing {
 	/// To create and enter a `tracing` span, using `sp_tracing::proxy`
+	/// Returns 0 value to indicate that no further traces should be attempted
 	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
 		if sp_tracing::wasm_tracing_enabled() {
 			match self.extension::<TracingProxyExt>() {
 				Some(proxy) => return proxy.enter_span(target, name),
 				None => {
-					if let Ok(_) = self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new())) {
+					if self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new())).is_ok() {
 						if let Some(proxy) = self.extension::<TracingProxyExt>() {
 							return proxy.enter_span(target, name);
 						}

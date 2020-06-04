@@ -48,12 +48,14 @@ pub struct TracingProxy {
 
 impl Drop for TracingProxy {
 	fn drop(&mut self) {
-		log::debug!(
-			target: "tracing",
-			"Dropping TracingProxy with {} spans", self.spans.len()
-		);
-		while let Some((_, mut sg)) = self.spans.pop() {
-			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
+		if !self.spans.is_empty() {
+			log::debug!(
+				target: "tracing",
+				"Dropping TracingProxy with {} un-exited spans, marking as not valid", self.spans.len()
+			);
+			while let Some((_, mut sg)) = self.spans.pop() {
+				sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
+			}
 		}
 	}
 }
