@@ -292,7 +292,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn default_rpc_http_port(&self) -> $crate::Result<::std::option::Option<u16>> {
+			fn default_rpc_http_port(&self) -> $crate::Result<u16> {
 				match self {
 					$($enum::$variant(cmd) => cmd.default_rpc_http_port()),*
 				}
@@ -305,7 +305,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn default_rpc_ws_port(&self) -> $crate::Result<::std::option::Option<u16>> {
+			fn default_rpc_ws_port(&self) -> $crate::Result<u16> {
 				match self {
 					$($enum::$variant(cmd) => cmd.default_rpc_ws_port()),*
 				}
@@ -337,7 +337,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn default_prometheus_port(&self) -> $crate::Result<::std::option::Option<u16>> {
+			fn default_prometheus_port(&self) -> $crate::Result<u16> {
 				match self {
 					$($enum::$variant(cmd) => cmd.default_prometheus_port()),*
 				}
