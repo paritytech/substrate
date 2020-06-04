@@ -238,6 +238,20 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			_ => Err(Error::KeyNotSupported(id))
 		}
 	}
+
+	fn vrf_sign(
+		&self,
+		_key_type: KeyTypeId,
+		_public: &sr25519::Public,
+		_label: &'static [u8],
+		_prefix: &'static [u8],
+		_randomness: &[u8],
+		_slot_number: u64,
+		_epoch: u64,
+		_threshold: u128
+	) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error> {
+		Err(Error::Unavailable)
+	}
 }
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the

@@ -26,7 +26,7 @@ use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, traits::VRFSigner};
+use sp_core::{U256, blake2_256, traits::BareCryptoStore};
 use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
 use sc_keystore::KeyStorePtr;

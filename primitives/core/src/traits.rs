@@ -173,11 +173,8 @@ pub trait BareCryptoStore: Send + Sync {
 	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
 		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
 	}
-}
 
-/// VRF-signing capability.
-pub trait VRFSigner {
-	/// VRF-sign round
+	/// Generate VRF proof for given transacript data.
 	fn vrf_sign(
 		&self,
 		key_type: KeyTypeId,

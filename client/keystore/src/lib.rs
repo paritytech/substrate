@@ -20,7 +20,7 @@
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, Error as TraitError, VRFSigner},
+	traits::{BareCryptoStore, Error as TraitError},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	Encode,
 };
@@ -459,9 +459,7 @@ impl BareCryptoStore for Store {
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(p, t)| self.key_phrase_by_type(&p, *t).is_ok())
 	}
-}
 
-impl VRFSigner for Store {
 	fn vrf_sign(
 		&self,
 		key_type: KeyTypeId,
