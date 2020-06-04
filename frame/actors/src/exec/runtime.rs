@@ -57,7 +57,7 @@ pub enum RuntimeToken {
 	WriteMemory(u32),
 	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
 	/// given number of topics.
-	DepositEvent(u32, u32),
+	SendMessage(u32, u32),
 }
 
 impl<T: Trait> Token<T> for RuntimeToken {
@@ -73,13 +73,13 @@ impl<T: Trait> Token<T> for RuntimeToken {
 			WriteMemory(byte_count) => metadata
 				.sandbox_data_write_cost
 				.checked_mul(byte_count.into()),
-			DepositEvent(topic_count, data_byte_count) => {
+			SendMessage(topic_count, data_byte_count) => {
 				let data_cost = metadata
-					.event_data_per_byte_cost
+					.message_data_per_byte_cost
 					.checked_mul(data_byte_count.into());
 
 				let topics_cost = metadata
-					.event_per_topic_cost
+					.message_per_topic_cost
 					.checked_mul(topic_count.into());
 
 				data_cost
@@ -89,7 +89,7 @@ impl<T: Trait> Token<T> for RuntimeToken {
 						})
 					})
 					.and_then(|data_and_topics_cost|
-						data_and_topics_cost.checked_add(metadata.event_base_cost)
+						data_and_topics_cost.checked_add(metadata.message_base_cost)
 					)
 			},
 		};
@@ -360,6 +360,10 @@ define_env!(
 		let value: BalanceFor<E::T> = ctx.read_sandbox_memory_as(value_ptr, value_len)?;
 		let topics: Vec<HashFor<E::T>> = ctx.read_sandbox_memory_as(topics_ptr, topics_len)?;
 		let data: Vec<u8> = ctx.read_sandbox_memory_as(data_ptr, data_len)?;
+
+		ctx.charge_gas(
+			RuntimeToken::SendMessage(topics.len() as u32, data.len() as u32),
+		)?;
 
 		match ctx.ext.send_message(target, value, topics, data) {
 			Ok(_) => Ok(0),

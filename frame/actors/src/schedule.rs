@@ -21,13 +21,13 @@ pub struct Schedule {
 	pub regular_op_cost: Gas,
 
 	/// Gas cost to deposit an event; the per-byte portion.
-	pub event_data_per_byte_cost: Gas,
+	pub message_data_per_byte_cost: Gas,
 
 	/// Gas cost to deposit an event; the cost per topic.
-	pub event_per_topic_cost: Gas,
+	pub message_per_topic_cost: Gas,
 
 	/// Gas cost to deposit an event; the base.
-	pub event_base_cost: Gas,
+	pub message_base_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
 	pub sandbox_data_read_cost: Gas,
@@ -61,3 +61,25 @@ pub struct Schedule {
 // This is a wild guess and should be viewed as a rough estimation.
 // Proper benchmarks are needed before this value and its derivatives can be used in production.
 const WASM_INSTRUCTION_COST: Gas = 500_000;
+
+impl Default for Schedule {
+	fn default() -> Schedule {
+		Schedule {
+			version: 0,
+			put_code_per_byte_cost: WASM_INSTRUCTION_COST,
+			grow_mem_cost: WASM_INSTRUCTION_COST,
+			regular_op_cost: WASM_INSTRUCTION_COST,
+			message_data_per_byte_cost: WASM_INSTRUCTION_COST,
+			message_per_topic_cost: WASM_INSTRUCTION_COST,
+			message_base_cost: WASM_INSTRUCTION_COST,
+			sandbox_data_read_cost: WASM_INSTRUCTION_COST,
+			sandbox_data_write_cost: WASM_INSTRUCTION_COST,
+			max_event_topics: 4,
+			max_stack_height: 64 * 1024,
+			max_memory_pages: 16,
+			max_table_size: 16 * 1024,
+			max_value_size: 1024,
+			enable_println: false,
+		}
+	}
+}

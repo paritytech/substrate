@@ -9,7 +9,7 @@ pub use self::code_cache::{load as load_code, save as save_code};
 
 use codec::{Encode, Decode};
 use sp_std::collections::btree_map::BTreeMap;
-use frame_support::{traits::{Get, ReservableCurrency}, storage::StorageMap};
+use frame_support::{traits::ReservableCurrency, storage::StorageMap};
 use crate::{
 	AccountIdFor, MessageFor, BalanceFor, ActorInfoOf, StorageKey, Message, Trait, HashFor,
 	Schedule, Gas, gas::GasMeter
@@ -75,16 +75,18 @@ pub fn execute<T: Trait, E: Ext<T=T>>(
 		.map_err(|_| ())
 }
 
-pub struct Context<T: Trait> {
+pub struct Context<'a, T: Trait> {
 	account_id: AccountIdFor<T>,
 	storage_changes: BTreeMap<StorageKey, Option<Vec<u8>>>,
 	message: MessageFor<T>,
 	outgoing_messages: Vec<(AccountIdFor<T>, MessageFor<T>)>,
+	schedule: &'a Schedule,
 }
 
-impl<T: Trait> Context<T> {
-	pub fn new(account_id: AccountIdFor<T>, message: MessageFor<T>) -> Self {
+impl<'a, T: Trait> Context<'a, T> {
+	pub fn new(schedule: &'a Schedule, account_id: AccountIdFor<T>, message: MessageFor<T>) -> Self {
 		Self {
+			schedule,
 			account_id,
 			storage_changes: BTreeMap::new(),
 			outgoing_messages: Vec::new(),
@@ -115,7 +117,7 @@ impl<T: Trait> Context<T> {
 	}
 }
 
-impl<T: Trait> Ext for Context<T> {
+impl<'a, T: Trait> Ext for Context<'a, T> {
 	type T = T;
 
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
@@ -166,6 +168,6 @@ impl<T: Trait> Ext for Context<T> {
 	}
 
 	fn max_value_size(&self) -> u32 {
-		T::MaxValueSize::get()
+		self.schedule.max_value_size
 	}
 }

@@ -90,18 +90,16 @@ pub struct ActorInfo<A, B, H> {
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-	/// Max value size of storage.
-	type MaxValueSize: Get<u32>;
 	/// Currency type.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
-	/// Schedule.
-	type Schedule: Get<Schedule>;
 	/// Single process gas limit.
 	type ProcessGasLimit: Get<Gas>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Actors {
+		/// Current cost schedule for contracts.
+		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PristineCode: map hasher(identity) HashFor<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
@@ -119,10 +117,14 @@ decl_event!(
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
 	pub enum Event<T> where
-		AccountId = <T as frame_system::Trait>::AccountId
+		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Trait>::Hash
 	{
 		/// A new actor has been deployed, with `AccountId`.
 		ActorDeployed(AccountId),
+
+		/// Code with the specified hash has been stored.
+		CodeStored(Hash),
 	}
 );
 
@@ -131,6 +133,24 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
+		/// You can instantiate contracts only with stored code.
+		#[weight = 0]
+		pub fn put_code(
+			origin,
+			code: Vec<u8>
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+			let schedule = <Module<T>>::current_schedule();
+			let result = exec::save_code::<T>(code, &schedule);
+			if let Ok(code_hash) = result {
+				Self::deposit_event(RawEvent::CodeStored(code_hash));
+			}
+			result.map(|_| ()).map_err(Into::into)
+		}
+
+		/// Send a message to an actor.
+		// TODO: if the receiver is not an actor, the send message function should fail.
 		#[weight = 0]
 		fn send_message(
 			origin,
@@ -167,7 +187,7 @@ impl<T: Trait> Module<T> {
 	/// Process one message from the target account, returns true if a message is processed, false
 	/// otherwise.
 	fn process_one(account_id: AccountIdFor<T>) -> bool {
-		let schedule = T::Schedule::get();
+		let schedule = Self::current_schedule();
 
 		let (message, code) = match ActorInfoOf::<T>::mutate(&account_id, |actor| {
 			actor.code_hash.clone().and_then(|code_hash| {
@@ -190,7 +210,7 @@ impl<T: Trait> Module<T> {
 		}
 		T::Currency::resolve_creating(&account_id, imbalance);
 
-		let mut context = exec::Context::<T>::new(account_id, message.clone());
+		let mut context = exec::Context::<T>::new(&schedule, account_id, message.clone());
 		match exec::execute(
 			&code,
 			"process",
