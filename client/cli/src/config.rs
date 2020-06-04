@@ -255,14 +255,28 @@ pub trait CliConfiguration: Sized {
 	/// Get the RPC HTTP address (`None` if disabled).
 	///
 	/// By default this is `None`.
-	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_http(&self, _default_port: u16) -> Result<Option<SocketAddr>> {
+		Ok(Default::default())
+	}
+
+	/// Get the default RPC HTTP port.
+	///
+	/// By default this is `None` which will result 9933.
+	fn default_rpc_http_port(&self) -> Result<Option<u16>> {
 		Ok(Default::default())
 	}
 
 	/// Get the RPC websocket address (`None` if disabled).
 	///
 	/// By default this is `None`.
-	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_ws(&self, _default_port: u16) -> Result<Option<SocketAddr>> {
+		Ok(Default::default())
+	}
+
+	/// Get the default RPC websocket port.
+	///
+	/// By default this is `None` which will result to 9944.
+	fn default_rpc_ws_port(&self) -> Result<Option<u16>> {
 		Ok(Default::default())
 	}
 
@@ -291,7 +305,14 @@ pub trait CliConfiguration: Sized {
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
-	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(&self, _default_port: u16) -> Result<Option<PrometheusConfig>> {
+		Ok(Default::default())
+	}
+
+	/// Get the default prometheus port
+	///
+	/// By default this is `None` which will result to 9615.
+	fn default_prometheus_port(&self) -> Result<Option<u16>> {
 		Ok(Default::default())
 	}
 
@@ -445,12 +466,14 @@ pub trait CliConfiguration: Sized {
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
-			rpc_http: self.rpc_http()?,
-			rpc_ws: self.rpc_ws()?,
+			rpc_http: self.rpc_http(self.default_rpc_http_port()?.unwrap_or(9933))?,
+			rpc_ws: self.rpc_ws(self.default_rpc_ws_port()?.unwrap_or(9944))?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
-			prometheus_config: self.prometheus_config()?,
+			prometheus_config: self.prometheus_config(
+				self.default_prometheus_port()?.unwrap_or(9615),
+			)?,
 			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,

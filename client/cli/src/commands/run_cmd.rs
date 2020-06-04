@@ -368,7 +368,7 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(&self, default_port: u16) -> Result<Option<PrometheusConfig>> {
 		Ok(if self.no_prometheus {
 			None
 		} else {
@@ -379,7 +379,7 @@ impl CliConfiguration for RunCmd {
 			};
 
 			Some(PrometheusConfig::new_with_default_registry(
-				SocketAddr::new(interface.into(), self.prometheus_port.unwrap_or(9615))
+				SocketAddr::new(interface.into(), self.prometheus_port.unwrap_or(default_port))
 			))
 		})
 	}
@@ -413,7 +413,7 @@ impl CliConfiguration for RunCmd {
 			.into())
 	}
 
-	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_http(&self, default_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
@@ -421,10 +421,10 @@ impl CliConfiguration for RunCmd {
 			self.validator
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
+		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(default_port))))
 	}
 
-	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_ws(&self, default_port: u16) -> Result<Option<SocketAddr>> {
 		let interface = rpc_interface(
 			self.ws_external,
 			self.unsafe_ws_external,
@@ -432,7 +432,7 @@ impl CliConfiguration for RunCmd {
 			self.validator
 		)?;
 
-		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(9944))))
+		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(default_port))))
 	}
 
 	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {

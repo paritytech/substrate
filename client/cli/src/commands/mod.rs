@@ -285,15 +285,29 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn rpc_http(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_http(&self, default_port: u16)
+			-> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.rpc_http()),*
+					$($enum::$variant(cmd) => cmd.rpc_http(default_port)),*
 				}
 			}
 
-			fn rpc_ws(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn default_rpc_http_port(&self) -> $crate::Result<::std::option::Option<u16>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.rpc_ws()),*
+					$($enum::$variant(cmd) => cmd.default_rpc_http_port()),*
+				}
+			}
+
+			fn rpc_ws(&self, default_port: u16)
+			-> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ws(default_port)),*
+				}
+			}
+
+			fn default_rpc_ws_port(&self) -> $crate::Result<::std::option::Option<u16>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.default_rpc_ws_port()),*
 				}
 			}
 
@@ -316,10 +330,16 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn prometheus_config(&self)
+			fn prometheus_config(&self, default_port: u16)
 			-> $crate::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
 				match self {
-					$($enum::$variant(cmd) => cmd.prometheus_config()),*
+					$($enum::$variant(cmd) => cmd.prometheus_config(default_port)),*
+				}
+			}
+
+			fn default_prometheus_port(&self) -> $crate::Result<::std::option::Option<u16>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.default_prometheus_port()),*
 				}
 			}
 
