@@ -107,7 +107,7 @@ qed
 "#;
 
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
-pub struct ReadySet<Hash, Ex> {
+struct ReadySet<Hash, Ex> {
 	index: HashMap<Hash, ReadyTx<Hash, Ex>>,
 	bytes: usize,
 }
