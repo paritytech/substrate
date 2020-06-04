@@ -227,6 +227,7 @@ mod tests {
 
 	#[test]
 	fn test_benchmarks() {
+		panic!();
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_propose_spend::<Test>());
 			assert_ok!(test_benchmark_reject_proposal::<Test>());
