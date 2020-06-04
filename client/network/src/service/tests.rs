@@ -294,7 +294,7 @@ fn lots_of_incoming_peers_works() {
 	for _ in 0..256 {
 		let main_node_peer_id = main_node_peer_id.clone();
 
-		let (_dialing_node, mut event_stream) = build_test_full_node(config::NetworkConfiguration {
+		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
 			notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
 			listen_addresses: vec![],
 			reserved_nodes: vec![config::MultiaddrWithPeerId {
@@ -311,13 +311,14 @@ fn lots_of_incoming_peers_works() {
 			// make the code below way more complicated.
 			let mut timer = futures_timer::Delay::new(Duration::from_secs(3600 * 24 * 7)).fuse();
 
+			let mut event_stream = event_stream.fuse();
 			loop {
 				futures::select! {
 					_ = timer => {
 						// Test succeeds when timer fires.
 						return;
 					}
-					ev = event_stream.next().fuse() => {
+					ev = event_stream.next() => {
 						match ev.unwrap() {
 							Event::NotificationStreamOpened { remote, .. } => {
 								assert_eq!(remote, main_node_peer_id);
