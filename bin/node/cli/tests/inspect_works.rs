@@ -20,19 +20,18 @@
 
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
-use tempfile::tempdir;
 
 pub mod common;
 
-#[test]
-fn inspect_works() {
-	let base_path = tempdir().expect("could not create a temp dir");
-
-	common::run_dev_node_for_a_while(base_path.path());
+#[tokio::test]
+async fn inspect_works() {
+	let mut client = common::start_local_dev_node();
+	client.wait_until_imported(2).await.unwrap();
+	let base_path = client.path();
 
 	let status = Command::new(cargo_bin("substrate"))
 		.args(&["inspect", "--dev", "--pruning", "archive", "-d"])
-		.arg(base_path.path())
+		.arg(base_path)
 		.args(&["block", "1"])
 		.status()
 		.unwrap();

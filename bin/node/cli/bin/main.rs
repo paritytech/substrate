@@ -21,5 +21,15 @@
 #![warn(missing_docs)]
 
 fn main() -> sc_cli::Result<()> {
+	// #[cfg(all(unix, test))]
+	// {
+	// 	use libc::{prctl, PR_SET_PDEATHSIG};
+	// 	use nix::sys::signal::SIGINT;
+	// 	// receive kill the signal when parent died
+	// 	// needed so the subprocess during functional testing is stopped properly
+	// 	unsafe {
+	// 		prctl(PR_SET_PDEATHSIG, SIGINT);
+	// 	}
+	// }
 	node_cli::run()
 }

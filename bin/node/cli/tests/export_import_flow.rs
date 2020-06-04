@@ -90,7 +90,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		// Setting base_path to be a temporary folder if we are importing blocks.
 		// This allows us to make sure we are importing from scratch.
 		let base_path = match sub_command {
-			SubCommand::ExportBlocks => &self.base_path.path(),
+			SubCommand::ExportBlocks => self.base_path.path(),
 			SubCommand::ImportBlocks => {
 				tmp = tempdir().unwrap();
 				tmp.path()
@@ -187,13 +187,14 @@ impl<'a> ExportImportRevertExecutor<'a> {
 	}
 }
 
-#[test]
-fn export_import_revert() {
-	let base_path = tempdir().expect("could not create a temp dir");
+#[tokio::test]
+async fn export_import_revert() {
+	let mut client = common::start_local_dev_node();
+	// FIXME: run until a few blocks have been authored
+	client.wait_until_imported(5).await.unwrap();
+	let base_path = client.temp_dir();
 	let exported_blocks_file = base_path.path().join("exported_blocks");
 	let db_path = base_path.path().join("db");
-
-	common::run_dev_node_for_a_while(base_path.path());
 
 	let mut executor = ExportImportRevertExecutor::new(
 		&base_path,

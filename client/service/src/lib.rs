@@ -53,7 +53,7 @@ use futures::{
 	task::{Spawn, FutureObj, SpawnError},
 };
 use sc_network::{NetworkService, network_state::NetworkState, PeerId};
-use log::{log, warn, debug, error, Level};
+use log::{log, warn, debug, error, info, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
@@ -571,7 +571,10 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				config.rpc_cors.as_ref(),
 				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
 			),
-		)?.map(|s| waiting::HttpServer(Some(s))),
+		)?.map(|s| {
+			info!("📠 RPC HTTP Server available at {:}", s.address());
+			waiting::HttpServer(Some(s))
+		}),
 		maybe_start_server(
 			config.rpc_ws,
 			|address| sc_rpc_server::start_ws(
@@ -580,7 +583,10 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				config.rpc_cors.as_ref(),
 				gen_handler(deny_unsafe(&address, &config.rpc_methods)),
 			),
-		)?.map(|s| waiting::WsServer(Some(s))),
+		)?.map(|s| {
+			info!("📠 RPC Websocket Server available at {:}", s.addr());
+			waiting::WsServer(Some(s))
+		}),
 	)))
 }
 

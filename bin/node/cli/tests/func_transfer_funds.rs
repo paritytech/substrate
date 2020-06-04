@@ -18,22 +18,29 @@
 
 #![cfg(unix)]
 
-use assert_cmd::cargo::cargo_bin;
-use std::process::Command;
+use tokio;
+use node_primitives::{Hash,AccountIndex};
 
+use sc_rpc::state::{
+	StateClient,
+};
+use substrate_frame_rpc_system::SystemClient;
+use substrate_frame_rpc_support::StorageQuery;
+use sp_keyring::AccountKeyring;
+use futures::compat::Future01CompatExt;
 pub mod common;
 
-#[tokio::test]
-async fn check_block_works() {
-	let mut client = common::start_local_dev_node();
-	client.wait_until_imported(3).await.unwrap();
-	let base_path = client.path();
-
-	let status = Command::new(cargo_bin("substrate"))
-		.args(&["check-block", "--dev", "--pruning", "archive", "-d"])
-		.arg(base_path)
-		.arg("1")
-		.status()
-		.unwrap();
-	assert!(status.success());
+#[tokio::test(core_threads = 2)]
+async fn test_transfer() -> Result<(), Box<dyn std::error::Error>> {
+    let client = common::BlackBoxClient::default().await?;
+    let rpc : SystemClient<Hash, AccountIndex> = client.rpc();
+    println!("got ma client");
+    let prev_nonce = rpc.nonce(AccountKeyring::Alice.into())
+        .compat()
+        .await
+        .expect("RPC is connected");
+    assert_eq!(prev_nonce, 100, "Nonce is different");
+    // let q = StorageQuery::value::<LastActionId>();
+    // let _: Option<u64> = q.get(&cl, None).await?;
+    Ok(())
 }
