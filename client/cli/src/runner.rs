@@ -18,8 +18,8 @@
 
 use crate::CliConfiguration;
 use crate::Result;
-use crate::SubstrateCli;
 use crate::Subcommand;
+use crate::SubstrateCli;
 use chrono::prelude::*;
 use futures::pin_mut;
 use futures::select;
@@ -28,7 +28,8 @@ use log::info;
 use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::{str::FromStr, fmt::Debug, marker::PhantomData, sync::Arc};
+use sp_version::RuntimeVersion;
+use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -81,11 +82,11 @@ where
 pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new()
 		.threaded_scheduler()
-		.on_thread_start(||{
+		.on_thread_start(|| {
 			TOKIO_THREADS_ALIVE.inc();
 			TOKIO_THREADS_TOTAL.inc();
 		})
-		.on_thread_stop(||{
+		.on_thread_stop(|| {
 			TOKIO_THREADS_ALIVE.dec();
 		})
 		.enable_all()
@@ -140,19 +141,21 @@ impl<C: SubstrateCli> Runner<C> {
 		})
 	}
 
-	/// A helper function that runs an `AbstractService` with tokio and stops if the process receives
-	/// the signal `SIGTERM` or `SIGINT`.
-	pub fn run_node<FNL, FNF, SL, SF>(
-		self,
-		new_light: FNL,
-		new_full: FNF,
-		runtime_version: sp_version::RuntimeVersion,
-	) -> Result<()> where
-		FNL: FnOnce(Configuration) -> sc_service::error::Result<SL>,
-		FNF: FnOnce(Configuration) -> sc_service::error::Result<SF>,
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
-	{
+	/// Log information about the node itself.
+	///
+	/// # Example:
+	///
+	/// ```text
+	/// 2020-06-03 16:14:21 Substrate Node
+	/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc2-f4940588c-x86_64-linux-gnu
+	/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
+	/// 2020-06-03 16:14:21 📋 Chain specification: Flaming Fir
+	/// 2020-06-03 16:14:21 🏷  Node name: jolly-rod-7462
+	/// 2020-06-03 16:14:21 👤 Role: FULL
+	/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
+	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
+	/// ```
+	pub fn print_node_infos(&self, runtime_version: RuntimeVersion) {
 		info!("{}", C::impl_name());
 		info!("✌️  version {}", C::impl_version());
 		info!(
@@ -169,11 +172,63 @@ impl<C: SubstrateCli> Runner<C> {
 			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 		);
 		info!("⛓  Native runtime: {}", runtime_version);
+	}
 
+	/// A helper function that runs an `AbstractService` with tokio and stops if the process
+	/// receives the signal `SIGTERM` or `SIGINT`. It can run a full or a light node depending on
+	/// the node's configuration.
+	pub fn run_node<SL, SF>(
+		self,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<SL>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<SF>,
+		runtime_version: RuntimeVersion,
+	) -> Result<()>
+	where
+		SL: AbstractService + Unpin,
+		SF: AbstractService + Unpin,
+	{
 		match self.config.role {
-			Role::Light => self.run_service_until_exit(new_light),
-			_ => self.run_service_until_exit(new_full),
+			Role::Light => self.run_light_node(new_light, runtime_version),
+			_ => self.run_full_node(new_full, runtime_version),
 		}
+	}
+
+	/// A helper function that runs an `AbstractService` with tokio and stops if the process
+	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "full" node and will fail if
+	/// the node's configuration uses a "light" role.
+	pub fn run_full_node<S>(
+		self,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<S>,
+		runtime_version: RuntimeVersion,
+	) -> Result<()>
+	where
+		S: AbstractService + Unpin,
+	{
+		if matches!(self.config.role, Role::Light) {
+			return Err("Light node has been requested but this is not implemented".into());
+		}
+
+		self.print_node_infos(runtime_version);
+		self.run_service_until_exit(new_full)
+	}
+
+	/// A helper function that runs an `AbstractService` with tokio and stops if the process
+	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "light" node and will fail if
+	/// the node's configuration uses a "full" role.
+	pub fn run_light_node<S>(
+		self,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<S>,
+		runtime_version: RuntimeVersion,
+	) -> Result<()>
+	where
+		S: AbstractService + Unpin,
+	{
+		if !matches!(self.config.role, Role::Light) {
+			return Err("Full node has been requested but this is not implemented".into());
+		}
+
+		self.print_node_infos(runtime_version);
+		self.run_service_until_exit(new_light)
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
