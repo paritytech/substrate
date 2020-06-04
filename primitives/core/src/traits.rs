@@ -182,9 +182,11 @@ pub trait VRFSigner {
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		label: &'static [u8],
+		prefix: &'static [u8],
 		randomness: &[u8],
 		slot_number: u64,
-		epoch: u64
+		epoch: u64,
+		threshold: u128,
 	) -> Result<(Vec<u8>, Vec<u8>), ()>;
 }
 

@@ -21,15 +21,14 @@ use sp_consensus_babe::{
 	BABE_ENGINE_ID, BABE_VRF_PREFIX,
 	AuthorityId, BabeAuthorityWeight,
 	SlotNumber,
-	make_transcript,
 };
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, traits::VRFSigner, crypto::Public};
+use sp_core::{U256, blake2_256, traits::VRFSigner};
 use codec::Encode;
-use schnorrkel::{vrf::VRFInOut, keys::PublicKey};
+use schnorrkel::vrf::VRFInOut;
 use sc_keystore::KeyStorePtr;
 use super::Epoch;
 
@@ -145,31 +144,39 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let (output, proof) = keystore.read().vrf_sign(
+				let result = keystore.read().vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
 					&BABE_ENGINE_ID,
+					BABE_VRF_PREFIX,
 					randomness,
 					slot_number,
 					*epoch_index,
-				).ok()?;
-				let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
-				let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
+					u128::MAX,
+				).ok();
+				if let Some((output, proof))  = result {
+					let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
+					let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
 
-				PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
-					slot_number,
-					vrf_output: VRFOutput(output),
-					vrf_proof: VRFProof(proof),
-					authority_index: *authority_index as u32,
-				})
+					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
+						slot_number,
+						vrf_output: VRFOutput(output),
+						vrf_proof: VRFProof(proof),
+						authority_index: *authority_index as u32,
+					}))
+				} else {
+					None
+				}
 			} else {
-				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
 					authority_index: *authority_index as u32,
-				})
+				}))
 			};
 
-			return Some((pre_digest, authority_id.clone()));
+			if let Some(pre_digest) = pre_digest {
+				return Some((pre_digest, authority_id.clone()));
+			}
 		}
 	}
 
@@ -232,38 +239,33 @@ fn claim_primary_slot(
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	for (authority_id, authority_index) in keys {
-		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
-
 		// Compute the threshold we will use.
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let (output, proof) = keystore.read().vrf_sign(
-			AuthorityId::ID, authority_id.as_ref(), &BABE_ENGINE_ID, randomness, slot_number, *epoch_index,
-		).ok()?;
-		let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
-		let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
-		let public_key = PublicKey::from_bytes(authority_id.as_slice()).ok()?;
-		let inout = output.attach_input_hash(
-			&public_key,
-			transcript
-		).ok()?;
+		let result = keystore.read().vrf_sign(
+			AuthorityId::ID,
+			authority_id.as_ref(),
+			&BABE_ENGINE_ID,
+			BABE_VRF_PREFIX,
+			randomness,
+			slot_number,
+			*epoch_index,
+			threshold,
+		).ok();
+		if let Some((output, proof))  = result {
+			let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
+			let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
 
-		let pre_digest = if super::authorship::check_primary_threshold(&inout, threshold) {
-			Some(PreDigest::Primary(PrimaryPreDigest {
+			let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 				slot_number,
 				vrf_output: VRFOutput(output),
 				vrf_proof: VRFProof(proof),
 				authority_index: *authority_index as u32,
-			}))
-		} else {
-			None
-		};
+			});
 
-		// early exit on first successful claim
-		if let Some(pre_digest) = pre_digest {
 			return Some((pre_digest, authority_id.clone()));
 		}
 	}

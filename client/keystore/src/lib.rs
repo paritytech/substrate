@@ -27,6 +27,7 @@ use sp_core::{
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
 use parking_lot::RwLock;
 use merlin::Transcript;
+use schnorrkel::vrf::VRFInOut;
 
 /// Keystore pointer
 pub type KeyStorePtr = Arc<RwLock<Store>>;
@@ -312,6 +313,10 @@ impl Store {
 		transcript.append_message(b"chain randomness", &randomness[..]);
 		transcript
 	}
+
+	fn check_primary_threshold(&self, prefix: &'static [u8], inout: &VRFInOut, threshold: u128) -> bool {
+		u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(prefix)) < threshold
+	}
 }
 
 impl BareCryptoStore for Store {
@@ -462,14 +467,20 @@ impl VRFSigner for Store {
 		key_type: KeyTypeId,
 		public: &Sr25519Public,
 		label: &'static [u8],
+		prefix: &'static [u8],
 		randomness: &[u8],
 		slot_number: u64,
-		epoch: u64
+		epoch: u64,
+		threshold: u128,
 	) -> std::result::Result<(Vec<u8>, Vec<u8>), ()> {
 		let transcript = self.make_vrf_transcript(label, randomness, slot_number, epoch);
 		let pair = self.key_pair_by_type::<Sr25519Pair>(public, key_type).map_err(|_| ())?;
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-		Ok((inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec()))
+		if self.check_primary_threshold(prefix, &inout, threshold) {
+			Ok((inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec()))
+		} else {
+			Err(())
+		}
 	}
 }
 
