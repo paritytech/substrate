@@ -314,7 +314,7 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 }
 
 /// Pack proof from a collection of encoded node.
-fn pack_proof_from_collected<L: TrieConfiguration>(
+fn pack_proof_from_collected<L: TrieLayout>(
 	root: &TrieHash<L>,
 	input: &dyn hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 ) -> Result<Vec<Vec<u8>>, Box<TrieError<L>>> {
@@ -325,13 +325,14 @@ fn pack_proof_from_collected<L: TrieConfiguration>(
 /// Unpack packed proof. Packed proof here is a list of encoded
 /// packed node ordered as defined by the compact trie scheme use.
 /// Returns a root and a collection on unpacked encoded nodes.
-fn unpack_proof<L: TrieConfiguration>(input: &[Vec<u8>])
+fn unpack_proof<L: TrieLayout>(input: &[Vec<u8>])
 	-> Result<(TrieHash<L>, Vec<Vec<u8>>), Box<TrieError<L>>> {
 	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
 	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;
 	Ok((root.0, memory_db.drain().into_iter().map(|(_k, (v, _rc))| v).collect()))
 }
 
+/* TODO remove ??
 /// Unpack packed proof.
 /// This is faster than `unpack_proof`, and should be prefered is encoded node
 /// will be use in a new memory db.
@@ -341,7 +342,7 @@ fn unpack_proof_to_memdb<L: TrieConfiguration>(input: &[Vec<u8>])
 	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;
 	Ok((root.0, memory_db))
 }
-
+*/
 /// Read a value from the child trie.
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	keyspace: &[u8],

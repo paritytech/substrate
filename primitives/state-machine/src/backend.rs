@@ -38,11 +38,17 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	type Transaction: Consolidate + Default + Send;
 
 	/// The proof format use while registering proof.
-	type StorageProofReg: sp_trie::RegStorageProof<H::Out> + Into<Self::StorageProof>;
+	/// TODO EMCH on paper this is not needed, we shouldn't need this proof type to merge
+	/// but just use back proof reg backend. -> try to do it or try to remove the
+	/// storage proof constraint and rename the struct to something that is more build
+	/// related but do not need to be usable as a backend.
+	type StorageProofReg: sp_trie::RegStorageProof<H::Out>
+		+ sp_trie::MergeableStorageProof<H::Out>
+		+ Into<Self::StorageProof>;
 
 	/// The actual proof produced.
-	type StorageProof: sp_trie::BackendStorageProof
-		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
+	type StorageProof: sp_trie::BackendStorageProof;
+//		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
 
 	/// Type of proof backend.
 	type ProofRegBackend: ProofRegBackend<H, StorageProof = Self::StorageProofReg>;
@@ -274,7 +280,6 @@ pub trait ProofCheckBackend<H>: Sized + crate::backend::Backend<H>
 		proof: Self::StorageProof,
 	) -> Result<Self, Box<dyn crate::Error>>;
 }
-
 
 impl<'a, T, H> Backend<H> for &'a T
 	where

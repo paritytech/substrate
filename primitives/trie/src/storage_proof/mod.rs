@@ -10,9 +10,9 @@ use sp_std::collections::{btree_map::BTreeMap, btree_map};
 use sp_std::collections::btree_set::BTreeSet;
 use sp_std::vec::Vec;
 use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput, Error as CodecError};
-use hash_db::{Hasher, HashDB, HashDBRef, EMPTY_PREFIX, Prefix};
-use crate::{MemoryDB, Layout};
-use sp_storage::{ChildInfo, ChildInfoProof, ChildType, ChildrenMap};
+use hash_db::{Hasher, HashDBRef};
+use crate::Layout;
+use sp_storage::{ChildInfo, ChildInfoProof, ChildrenMap};
 use trie_db::DBValue;
 
 #[cfg(feature = "std")]
@@ -101,13 +101,18 @@ const fn missing_pack_input() -> Error {
 	error("Packing input missing for proof")
 }
 
+const fn pack_error() -> Error {
+	error("Error while packing for proof")
+}
+
 const fn missing_verify_input() -> Error {
 	error("Input missing for proof verification")
 }
 
-const fn no_partial_db_support() -> Error {
-	error("Partial db not supported for this proof")
+const fn incompatible_type() -> Error {
+	error("Incompatible type")
 }
+
 
 #[derive(Clone)]
 /// Additional information needed for packing or unpacking storage proof.
@@ -214,7 +219,7 @@ pub trait MergeableStorageProof: StorageProof {
 }
 
 /// Trait for proofs that can be recorded against a trie backend.
-pub trait RegStorageProof<Hash>: MergeableStorageProof {
+pub trait RegStorageProof<Hash>: StorageProof {
 	/// Variant of enum input to use.
 	const INPUT_KIND: InputKind;
 
@@ -226,7 +231,7 @@ pub trait RegStorageProof<Hash>: MergeableStorageProof {
 	/// (usually to compact the proof).
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self>;
 }
-
+/*
 /// Associate a different proof kind for recording proof.
 /// The recorded proof will need to be convertible to this type.
 ///
@@ -238,14 +243,14 @@ pub trait WithRegStorageProof<Hash>: Sized {
 	/// Associated proof to register.
 	type RegStorageProof: Into<Self> + RegStorageProof<Hash>;
 }
-
+*/
 pub trait BackendStorageProof: Codec + StorageProof {}
 
 /// Trait for proofs that can use to create a partial trie backend.
 pub trait CheckableStorageProof: Codec + StorageProof {
 	/// Run proof validation when the proof allows immediate
 	/// verification.
-	fn verify(self, input: &Input) -> Result<Option<bool>>;
+	fn verify(self, input: &Input) -> Result<bool>;
 }
 
 /// Trie encoded node recorder.
@@ -273,6 +278,7 @@ pub struct FullSyncRecorder<Hash>(Arc<RwLock<ChildrenMap<RecordMapTrieNodes<Hash
 /// (on less map access than in `Full`), but is not strictly
 /// necessary.
 pub struct FlatSyncRecorder<Hash>(Arc<RwLock<RecordMapTrieNodes<Hash>>>);
+
 
 #[cfg(feature = "std")]
 impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for FullSyncRecorder<Hash> {
@@ -302,21 +308,6 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for Fl
 /// be traversed in any particular order.
 pub struct StorageProofNodeIterator {
 	inner: <Vec<Vec<u8>> as IntoIterator>::IntoIter,
-}
-
-impl StorageProofNodeIterator {
-	// TODO EMCH looks very useless
-	fn new(proof: multiple::MultipleStorageProof) -> Self {
-/*		match proof {
-			multiple::MultipleStorageProof::Flat(data) => StorageProofNodeIterator {
-				inner: data.0.into_iter(),
-			},
-			_ => StorageProofNodeIterator {
-				inner: Vec::new().into_iter(),
-			},
-		}*/
-		unimplemented!()
-	}
 }
 
 impl Iterator for StorageProofNodeIterator {
