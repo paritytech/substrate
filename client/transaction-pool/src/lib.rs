@@ -476,7 +476,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							.map(|tx| pool.hash_of(&tx))
 							.collect::<Vec<_>>();
 
-						log::trace!("Pruning transactions: {:?}", hashes);
+						log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
 						if let Err(e) = pool.prune_known(&id, &hashes) {
 							log::error!("Cannot prune known in the pool {:?}!", e);
