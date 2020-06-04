@@ -25,10 +25,10 @@ mod state_light;
 mod tests;
 
 use std::sync::Arc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
-use sc_rpc_api::state::ReadProof;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sc_client_api::light::{RemoteBlockchain, Fetcher};
 use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
@@ -170,7 +170,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 /// Create new state API that works on full node.
 pub fn new_full<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
+	subscriptions: Subscriptions,
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
@@ -191,7 +191,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 /// Create new state API that works on light node.
 pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
 	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
+	subscriptions: Subscriptions,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
 ) -> (State<Block, Client>, ChildState<Block, Client>)

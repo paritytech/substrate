@@ -36,7 +36,6 @@ use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
 };
-use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
@@ -1197,7 +1196,7 @@ ServiceBuilder<
 				chain_type: chain_spec.chain_type().clone(),
 			};
 
-			let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
+			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(task_manager.spawn_handle()));
 
 			let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {
