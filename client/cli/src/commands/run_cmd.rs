@@ -27,17 +27,12 @@ use crate::params::TransactionPoolParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-use std::{
-	cell::RefCell,
-	net::{IpAddr, Ipv4Addr, SocketAddr},
-	path::PathBuf,
-};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
-use tempfile::TempDir;
 
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt)]
@@ -265,9 +260,6 @@ pub struct RunCmd {
 	/// which includes: database, node key and keystore.
 	#[structopt(long, conflicts_with = "base-path")]
 	pub tmp: bool,
-
-	#[structopt(skip)]
-	temp_base_path: RefCell<Option<TempDir>>,
 }
 
 impl RunCmd {
@@ -465,13 +457,9 @@ impl CliConfiguration for RunCmd {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
 	}
 
-	fn base_path(&self) -> Result<Option<PathBuf>> {
+	fn base_path(&self) -> Result<Option<BasePath>> {
 		Ok(if self.tmp {
-			let tmp = tempfile::Builder::new().prefix("substrate").tempdir()?;
-			let path = tmp.path().into();
-			*self.temp_base_path.borrow_mut() = Some(tmp);
-
-			Some(path)
+			Some(BasePath::new_temp_dir()?)
 		} else {
 			self.shared_params().base_path()
 		})

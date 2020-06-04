@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use sc_service::config::BasePath;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -31,12 +32,7 @@ pub struct SharedParams {
 	pub dev: bool,
 
 	/// Specify custom base path.
-	#[structopt(
-		long,
-		short = "d",
-		value_name = "PATH",
-		parse(from_os_str)
-	)]
+	#[structopt(long, short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
 	/// Sets a custom logging filter. Syntax is <target>=<level>, e.g. -lsync=debug.
@@ -49,8 +45,8 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Specify custom base path.
-	pub fn base_path(&self) -> Option<PathBuf> {
-		self.base_path.clone()
+	pub fn base_path(&self) -> Option<BasePath> {
+		self.base_path.clone().map(|x| x.into())
 	}
 
 	/// Specify the development chain.

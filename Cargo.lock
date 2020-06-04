@@ -5948,7 +5948,6 @@ dependencies = [
  "atty",
  "chrono",
  "derive_more",
- "directories",
  "env_logger 0.7.1",
  "fdlimit",
  "futures 0.3.4",
@@ -5976,7 +5975,6 @@ dependencies = [
  "sp-version",
  "structopt",
  "substrate-prometheus-endpoint",
- "tempfile",
  "time",
  "tokio 0.2.18",
 ]
@@ -6706,6 +6704,7 @@ name = "sc-service"
 version = "0.8.0-rc2"
 dependencies = [
  "derive_more",
+ "directories",
  "exit-future",
  "futures 0.1.29",
  "futures 0.3.4",
@@ -6758,6 +6757,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "sysinfo",
+ "tempfile",
  "tracing",
  "wasm-timer",
 ]
