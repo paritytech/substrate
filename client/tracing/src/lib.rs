@@ -62,7 +62,9 @@ impl Default for TracingReceiver {
 	}
 }
 
+/// A handler for tracing `SpanDatum`
 pub trait TraceHandler {
+	/// Process a `SpanDatum`
 	fn process_span(&self, span: SpanDatum);
 }
 
