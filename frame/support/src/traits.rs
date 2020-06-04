@@ -43,6 +43,16 @@ impl<T> Filter<T> for () {
 	fn filter(_: &T) -> bool { true }
 }
 
+/// Simple trait for providing a filter over a reference to some type, given an instance of itself.
+pub trait InstanceFilter<T> {
+	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
+	fn filter(&self, _: &T) -> bool;
+}
+
+impl<T> InstanceFilter<T> for () {
+	fn filter(&self, _: &T) -> bool { true }
+}
+
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
 pub trait StoredMap<K, T> {
@@ -105,20 +115,23 @@ impl<
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
+		let existed = S::contains_key(&k);
 		S::insert(k, t);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 	}
 	fn remove(k: &K) {
-		if S::contains_key(&k) {
+		let existed = S::contains_key(&k);
+		S::remove(k);
+		if existed {
 			Removed::happened(&k);
 		}
-		S::remove(k);
 	}
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
+		let existed = S::contains_key(&k);
 		let r = S::mutate(k, f);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 		r
