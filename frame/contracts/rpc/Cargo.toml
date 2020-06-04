@@ -13,9 +13,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.3.0" }
-jsonrpc-core = "14.0.3"
-jsonrpc-core-client = "14.0.5"
-jsonrpc-derive = "14.0.3"
+jsonrpc-core = "14.2"
+jsonrpc-core-client = "14.2"
+jsonrpc-derive = "14.2.1"
 sp-blockchain = { version = "2.0.0-rc2", path = "../../../primitives/blockchain" }
 sp-core = { version = "2.0.0-rc2", path = "../../../primitives/core" }
 sp-rpc = { version = "2.0.0-rc2", path = "../../../primitives/rpc" }
