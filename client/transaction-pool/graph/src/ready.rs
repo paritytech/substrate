@@ -107,13 +107,76 @@ qed
 "#;
 
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
+pub struct ReadySet<Hash, Ex> {
+	index: HashMap<Hash, ReadyTx<Hash, Ex>>,
+	bytes: usize,
+}
+
+impl<Hash: hash::Hash, Ex> Default for ReadySet<Hash, Ex> {
+	fn default() -> Self {
+		ReadySet {
+			index: HashMap::default(),
+			bytes: 0,
+		}
+	}
+}
+
+impl<Hash: hash::Hash + Eq, Ex> ReadySet<Hash, Ex> {
+	pub fn insert(&mut self, key: Hash, val: ReadyTx<Hash, Ex>) {
+		let new_bytes = val.transaction.transaction.bytes;
+		self.bytes += new_bytes;
+		self.index.insert(key, val);
+	}
+
+	pub fn remove(&mut self, key: &Hash) -> Option<ReadyTx<Hash, Ex>> {
+		let val = self.index.remove(key);
+		let deduced_bytes = val.as_ref().map(|val| val.transaction.transaction.bytes).unwrap_or(0);
+		if self.bytes < deduced_bytes {
+			log::warn!(
+				"Some consistent data in ready set limit, bytes = {} while removing tx of size {}",
+				self.bytes,
+				deduced_bytes,
+			);
+			self.bytes = 0;
+		} else {
+			self.bytes -= deduced_bytes;
+		}
+		val
+	}
+
+	pub fn contains_key(&self, key: &Hash) -> bool {
+		self.index.contains_key(key)
+	}
+
+	pub fn get(&self, key: &Hash) -> Option<&ReadyTx<Hash, Ex>> {
+		self.index.get(key)
+	}
+
+	pub fn get_mut(&mut self, key: &Hash) -> Option<&mut ReadyTx<Hash, Ex>> {
+		self.index.get_mut(key)
+	}
+
+	pub fn len(&self) -> usize {
+		self.index.len()
+	}
+
+	pub fn bytes(&self) -> usize {
+		self.bytes
+	}
+
+	pub fn values(&self) -> std::collections::hash_map::Values<Hash, ReadyTx<Hash, Ex>> {
+		self.index.values()
+	}
+}
+
+#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Insertion id
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	ready: Arc<RwLock<ReadySet<Hash, Ex>>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
@@ -473,13 +536,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
-		self.ready.read().values().fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
+		self.ready.read().bytes()
 	}
 }
 
 /// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
-	all: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	all: Arc<RwLock<ReadySet<Hash, Ex>>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
