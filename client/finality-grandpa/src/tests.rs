@@ -1160,7 +1160,7 @@ fn voter_persists_its_votes() {
 		);
 
 		let (round_rx, round_tx) = network.round_communication(
-			&Some(keystore),
+			Some(keystore),
 			communication::Round(1),
 			communication::SetId(0),
 			Arc::new(VoterSet::new(voters).unwrap()),
