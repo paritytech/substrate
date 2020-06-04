@@ -251,10 +251,8 @@ sp_core::wasm_export_functions! {
 		wasm_tracing::enter_span("integration_test_span_target", "integration_test_span_name")
 	}
 
-	fn test_exit_span(input: Vec<u8>) {
-		let mut array = [0u8; 8];
-		array.clone_from_slice(&input);
-		wasm_tracing::exit_span(u64::from_le_bytes(array))
+	fn test_exit_span(span_id: u64) {
+		wasm_tracing::exit_span(span_id)
 	}
 
 	fn returns_mutable_static() -> u64 {

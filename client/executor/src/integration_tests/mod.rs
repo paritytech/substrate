@@ -686,43 +686,69 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	// Test tracing disabled
 	assert!(!sp_tracing::wasm_tracing_enabled());
 
+	let span_id = call_in_wasm(
+		"test_enter_span",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
 	assert_eq!(
-		call_in_wasm(
-			"test_enter_span",
-			&[],
-			wasm_method,
-			&mut ext,
-		).unwrap(),
 		0u64.encode(),
+		span_id
 	);
+	// Repeat to check span id always 0 when deactivated
+	let span_id = call_in_wasm(
+		"test_enter_span",
+		&[],
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
+	assert_eq!(
+		0u64.encode(),
+		span_id
+	);
+
+	call_in_wasm(
+		"test_exit_span",
+		&span_id.encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+	// Check span has not been recorded
 	let len = traces.lock().unwrap().len();
 	assert_eq!(len, 0);
 
 	// Test tracing enabled
 	sp_tracing::set_wasm_tracing(true);
 
-	assert_eq!(
-		call_in_wasm(
-			"test_enter_span",
-			&[],
-			wasm_method,
-			&mut ext,
-		).unwrap(),
-		1u64.encode(),
-	);
-
-	call_in_wasm(
-		"test_exit_span",
-		&[1u8,0,0,0,0,0,0,0].to_vec().encode(),
+	let span_id = call_in_wasm(
+		"test_enter_span",
+		&[],
 		wasm_method,
 		&mut ext,
 	).unwrap();
 
+	let span_id = u64::decode(&mut &span_id[..]).unwrap();
+
+	assert!(
+		span_id > 0
+	);
+
+	call_in_wasm(
+		"test_exit_span",
+		&span_id.encode(),
+		wasm_method,
+		&mut ext,
+	).unwrap();
+
+	// Check there is only the single trace
 	let len = traces.lock().unwrap().len();
 	assert_eq!(len, 1);
 
 	let (target, name) = traces.lock().unwrap().pop().unwrap();
-
+	// Ensure that the wasm trace has correct target and name and has "_wasm" appended to the name
 	assert_eq!(target, "integration_test_span_target");
 	assert_eq!(name, "integration_test_span_name_wasm");
 }
