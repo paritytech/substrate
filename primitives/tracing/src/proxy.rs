@@ -102,7 +102,7 @@ impl TracingProxy {
 			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
 			return;
 		}
-		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop");
+		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop; qed");
 		while id < last_span.0 {
 			log::warn!(
 				target: "tracing",
