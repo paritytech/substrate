@@ -133,6 +133,7 @@ impl<Hash: hash::Hash + Eq, Ex> ReadySet<Hash, Ex> {
 		let deduced_bytes = val.as_ref().map(|val| val.transaction.transaction.bytes).unwrap_or(0);
 		if self.bytes < deduced_bytes {
 			log::warn!(
+				target: "txpool",
 				"Some consistent data in ready set limit, bytes = {} while removing tx of size {}",
 				self.bytes,
 				deduced_bytes,
