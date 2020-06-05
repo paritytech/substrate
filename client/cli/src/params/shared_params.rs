@@ -46,7 +46,7 @@ pub struct SharedParams {
 impl SharedParams {
 	/// Specify custom base path.
 	pub fn base_path(&self) -> Option<BasePath> {
-		self.base_path.clone().map(|x| x.into())
+		self.base_path.clone().map(Into::into)
 	}
 
 	/// Specify the development chain.
