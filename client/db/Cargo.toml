@@ -47,6 +47,6 @@ tempfile = "3"
 [features]
 default = []
 test-helpers = []
-kvdb-rocksdb-feature = ["kvdb-rocksdb"]
-parity-db-feature = ["parity-db"]
+with-kvdb-rocksdb = ["kvdb-rocksdb"]
+with-parity-db = ["parity-db"]
 subdb = []
