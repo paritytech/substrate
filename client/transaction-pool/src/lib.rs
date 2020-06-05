@@ -28,7 +28,7 @@ mod metrics;
 
 pub mod error;
 
-#[cfg(any(feature = "test-helpers", test))]
+#[cfg(test)]
 pub mod testing;
 
 pub use sc_transaction_graph as txpool;
