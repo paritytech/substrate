@@ -162,7 +162,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn base_path(&self) -> $crate::Result<::std::option::Option<::sc_service::config::BasePath>> {
+			fn base_path(&self) -> $crate::Result<::std::option::Option<sc_service::config::BasePath>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
 				}
