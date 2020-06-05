@@ -23,17 +23,18 @@ use codec::Encode;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::{self, BlockId},
-	traits::{BlakeTwo256, Hash as HashT},
+	traits::{BlakeTwo256, Hash as HashT, Block as _, Header as _},
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 		TransactionSource,
 	},
 };
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet, HashMap, BTreeMap};
 use substrate_test_runtime_client::{
 	runtime::{Index, AccountId, Block, BlockNumber, Extrinsic, Hash, Header, Transfer},
 	AccountKeyring::{self, *},
 };
+use sp_blockchain::CachedHeaderMetadata;
 
 /// Error type used by [`TestApi`].
 #[derive(Debug, derive_more::From, derive_more::Display)]
@@ -53,9 +54,8 @@ impl std::error::Error for Error {
 
 #[derive(Default)]
 pub struct ChainState {
-	pub block_by_number: HashMap<BlockNumber, Vec<Extrinsic>>,
-	pub block_by_hash: HashMap<Hash, Vec<Extrinsic>>,
-	pub header_by_number: HashMap<BlockNumber, Header>,
+	pub block_by_number: BTreeMap<BlockNumber, Vec<Block>>,
+	pub block_by_hash: HashMap<Hash, Block>,
 	pub nonces: HashMap<AccountId, u64>,
 	pub invalid_hashes: HashSet<Hash>,
 }
@@ -70,11 +70,7 @@ pub struct TestApi {
 impl TestApi {
 	/// Test Api with Alice nonce set initially.
 	pub fn with_alice_nonce(nonce: u64) -> Self {
-		let api = TestApi {
-			valid_modifier: RwLock::new(Box::new(|_| {})),
-			chain: Default::default(),
-			validation_requests: RwLock::new(Default::default()),
-		};
+		let api = Self::empty();
 
 		api.chain.write().nonces.insert(Alice.into(), nonce);
 
@@ -89,6 +85,9 @@ impl TestApi {
 			validation_requests: RwLock::new(Default::default()),
 		};
 
+		// Push genesis block
+		api.push_block(0, Vec::new());
+
 		api
 	}
 
@@ -97,46 +96,61 @@ impl TestApi {
 		*self.valid_modifier.write() = modifier;
 	}
 
-	/// Push block as a part of canonical chain under given number.
+	/// Push block under given number.
+	///
+	/// If multiple blocks exists with the same block number, the first inserted block will be
+	/// interpreted as part of the canonical chain.
 	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) -> Header {
+		let parent_hash = {
+			let chain = self.chain.read();
+			block_number
+				.checked_sub(1)
+				.and_then(|num| {
+					chain.block_by_number
+						.get(&num)
+						.map(|blocks| {
+							blocks[0].header.hash()
+						})
+				}).unwrap_or_default()
+		};
+
+		self.push_block_with_parent(parent_hash, xts)
+	}
+
+	/// Push a block using the given `parent`.
+	///
+	/// Panics if `parent` does not exists.
+	pub fn push_block_with_parent(
+		&self,
+		parent: Hash,
+		xts: Vec<Extrinsic>,
+	) -> Header {
 		let mut chain = self.chain.write();
-		chain.block_by_number.insert(block_number, xts.clone());
+
+		// `Hash::default()` is the genesis parent hash
+		let block_number = if parent == Hash::default() {
+			0
+		} else {
+			*chain.block_by_hash
+				.get(&parent)
+				.expect("`parent` exists")
+				.header()
+				.number() + 1
+		};
+
 		let header = Header {
 			number: block_number,
 			digest: Default::default(),
-			extrinsics_root:  Default::default(),
-			parent_hash: block_number
-				.checked_sub(1)
-				.and_then(|num| {
-					chain.header_by_number.get(&num)
-						.cloned().map(|h| h.hash())
-				}).unwrap_or_default(),
-			state_root: Default::default(),
-		};
-		chain.block_by_hash.insert(header.hash(), xts);
-		chain.header_by_number.insert(block_number, header.clone());
-		header
-	}
-
-	/// Push a block without a number.
-	///
-	/// As a part of non-canonical chain.
-	pub fn push_fork_block(&self, block_hash: Hash, xts: Vec<Extrinsic>) {
-		let mut chain = self.chain.write();
-		chain.block_by_hash.insert(block_hash, xts);
-	}
-
-	pub fn push_fork_block_with_parent(&self, parent: Hash, xts: Vec<Extrinsic>) -> Header {
-		let mut chain = self.chain.write();
-		let blocknum = chain.block_by_number.keys().max().expect("block_by_number shouldn't be empty");
-		let header = Header {
-			number: *blocknum,
-			digest: Default::default(),
-			extrinsics_root:  Default::default(),
+			extrinsics_root: Hash::random(),
 			parent_hash: parent,
 			state_root: Default::default(),
 		};
-		chain.block_by_hash.insert(header.hash(), xts);
+
+		let hash = header.hash();
+		let block = Block::new(header.clone(), xts);
+		chain.block_by_hash.insert(hash, block.clone());
+		chain.block_by_number.entry(block_number).or_default().push(block);
+
 		header
 	}
 
@@ -170,11 +184,19 @@ impl TestApi {
 		let mut chain = self.chain.write();
 		chain.nonces.entry(account).and_modify(|n| *n += 1).or_insert(1);
 	}
+
+	/// Calculate a tree route between the two given blocks.
+	pub fn tree_route(
+		&self,
+		from: Hash,
+		to: Hash,
+	) -> Result<sp_blockchain::TreeRoute<Block>, Error> {
+		sp_blockchain::tree_route(self, from, to)
+	}
 }
 
 impl sc_transaction_graph::ChainApi for TestApi {
 	type Block = Block;
-	type Hash = Hash;
 	type Error = Error;
 	type ValidationFuture = futures::future::Ready<Result<TransactionValidity, Error>>;
 	type BodyFuture = futures::future::Ready<Result<Option<Vec<Extrinsic>>, Error>>;
@@ -218,7 +240,14 @@ impl sc_transaction_graph::ChainApi for TestApi {
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<sc_transaction_graph::NumberFor<Self>>, Error> {
-		Ok(Some(number_of(at)))
+		Ok(match at {
+			generic::BlockId::Hash(x) => self.chain
+				.read()
+				.block_by_hash
+				.get(x)
+				.map(|b| *b.header.number()),
+			generic::BlockId::Number(num) => Some(*num),
+		})
 	}
 
 	fn block_id_to_hash(
@@ -227,34 +256,60 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	) -> Result<Option<sc_transaction_graph::BlockHash<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
-			generic::BlockId::Number(num) => {
-				self.chain.read()
-					.header_by_number.get(num)
-					.map(|h| h.hash())
-					.or_else(|| Some(Default::default()))
-			},
+			generic::BlockId::Number(num) => self.chain
+				.read()
+				.block_by_number
+				.get(num)
+				.map(|blocks| blocks[0].header().hash()),
 		})
 	}
 
 	fn hash_and_length(
 		&self,
 		ex: &sc_transaction_graph::ExtrinsicFor<Self>,
-	) -> (Self::Hash, usize) {
+	) -> (Hash, usize) {
 		Self::hash_and_length_inner(ex)
 	}
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
 		futures::future::ready(Ok(match id {
-			BlockId::Number(num) => self.chain.read().block_by_number.get(num).cloned(),
-			BlockId::Hash(hash) => self.chain.read().block_by_hash.get(hash).cloned(),
+			BlockId::Number(num) => self.chain
+				.read()
+				.block_by_number
+				.get(num)
+				.map(|b| b[0].extrinsics().to_vec()),
+			BlockId::Hash(hash) => self.chain
+				.read()
+				.block_by_hash
+				.get(hash)
+				.map(|b| b.extrinsics().to_vec()),
 		}))
 	}
 }
 
-fn number_of(at: &BlockId<Block>) -> u64 {
-	match at {
-		generic::BlockId::Number(n) => *n as u64,
-		_ => 0,
+impl sp_blockchain::HeaderMetadata<Block> for TestApi {
+	type Error = Error;
+
+	fn header_metadata(
+		&self,
+		hash: Hash,
+	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+		let chain = self.chain.read();
+		let block = chain.block_by_hash.get(&hash).expect("Hash exists");
+
+		Ok(block.header().into())
+	}
+
+	fn insert_header_metadata(
+		&self,
+		_: Hash,
+		_: CachedHeaderMetadata<Block>,
+	) {
+		unimplemented!("Not implemented for tests")
+	}
+
+	fn remove_header_metadata(&self, _: Hash) {
+		unimplemented!("Not implemented for tests")
 	}
 }
 
