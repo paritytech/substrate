@@ -206,7 +206,10 @@ fn proxying_works() {
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
 		assert_noop!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()), Error::<Test>::NotProxy);
-		assert_noop!(Proxy::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()), Error::<Test>::NotProxy);
+		assert_noop!(
+			Proxy::proxy(Origin::signed(2), 1, Some(ProxyType::Any), call.clone()),
+			Error::<Test>::NotProxy
+		);
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 1);
@@ -251,7 +254,10 @@ fn anonymous_works() {
 		assert_ok!(Proxy::proxy(Origin::signed(2), anon2, None, call.clone()));
 		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
 		expect_event(RawEvent::ProxyExecuted(Err(de)));
-		assert_noop!(Proxy::kill_anonymous(Origin::signed(1), 1, ProxyType::Any, 0, 1, 0), Error::<Test>::NoPermission);
+		assert_noop!(
+			Proxy::kill_anonymous(Origin::signed(1), 1, ProxyType::Any, 0, 1, 0),
+			Error::<Test>::NoPermission
+		);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_ok!(Proxy::proxy(Origin::signed(1), anon, None, call.clone()));
 		assert_eq!(Balances::free_balance(1), 2);
