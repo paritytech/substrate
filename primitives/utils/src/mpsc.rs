@@ -38,7 +38,7 @@ mod inner {
 		UnboundedReceiver, UnboundedSender,
 		TryRecvError, TrySendError, SendError
 	};
-	use futures::{sink::Sink, task::{Poll, Context}, stream::Stream};
+	use futures::{sink::Sink, task::{Poll, Context}, stream::{Stream, FusedStream}};
 	use std::pin::Pin;
 	use crate::metrics::UNBOUNDED_CHANNELS_COUNTER;
 
@@ -111,10 +111,16 @@ mod inner {
 		fn consume(&mut self) {
 			// consume all items, make sure to reflect the updated count
 			let mut count = 0;
-			while let Ok(Some(..)) = self.try_next() {
-				count += 1;
-			}
+			loop {
+				if self.1.is_terminated() {
+					break;
+				}
 
+				match self.try_next() {
+					Ok(Some(..)) => count += 1,
+					_ => break
+				}
+			}
 			// and discount the messages
 			if count > 0 {
 				UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).inc_by(count);
