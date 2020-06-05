@@ -259,10 +259,11 @@ pub trait CheckableStorageProof: Codec + StorageProof {
 /// TODO EMCH consider using &mut and change reg storage (consume) proof
 /// to implement without rc & sync, and encapsulate from calling
 /// code.
-pub trait RecordBackend<Hash>: Clone + Default {
+pub trait RecordBackend<Hash>: Sync + Send + Clone + Default {
 	/// Access recorded value, allow using the backend as a cache.
 	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>>;
 	/// Record the actual value.
+	/// TODO EMCH switch to all ref or all value for param.
 	fn record(&self, child_info: &ChildInfo, key: &Hash, value: Option<DBValue>);
 	/// Merge two record, can fail.
 	fn merge(&mut self, other: Self) -> bool;
@@ -322,8 +323,6 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for Fu
 		}
 		true
 	}
-
-
 }
 
 #[cfg(feature = "std")]

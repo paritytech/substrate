@@ -426,6 +426,14 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }
 
+impl<'a, H: Hasher, S: TrieBackendStorage<H>> TrieBackendStorage<H> for &'a S {
+	type Overlay = S::Overlay;
+
+	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		<S as TrieBackendStorage<H>>::get(self, child_info, key, prefix)
+	}
+}
+
 // This implementation is used by normal storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;

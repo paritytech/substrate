@@ -24,6 +24,7 @@ use crate::{
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
+use sp_trie::ProofInput;
 
 /// Access the state of the proof backend of a backend.
 pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
@@ -53,10 +54,10 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 //		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
 
 	/// Type of proof backend.
-	type ProofRegBackend: ProofRegBackend<H, StorageProof = Self::StorageProofReg>;
+	type ProofRegBackend: ProofRegBackend<H, StorageProofReg = Self::StorageProofReg, StorageProof = Self::StorageProof>;
 
 	/// Type of proof backend.
-	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
+	type ProofCheckBackend: ProofCheckBackend<H, StorageProofReg = Self::StorageProofReg, StorageProof = Self::StorageProof>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
@@ -275,7 +276,7 @@ pub trait ProofRegBackend<H>: crate::backend::Backend<H>
 	type State: Default + Send + Sync + Clone;
 
 	/// Extract proof when run.
-	fn extract_proof(&self) -> Self::StorageProof;
+	fn extract_proof(&self, input: ProofInput) -> Self::StorageProofReg;
 }
 
 /// Backend used to produce proof.

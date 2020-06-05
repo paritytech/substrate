@@ -96,6 +96,14 @@ pub trait DefaultKind: 'static + Clone {
 	const KIND: StorageProofKind;
 }
 
+/// Default the multiple proof to flat.
+#[derive(Clone, Copy)]
+pub struct FlatDefault;
+
+impl DefaultKind for FlatDefault {
+	const KIND: StorageProofKind = StorageProofKind::Flat;
+}
+
 impl<H, D> Decode for MultipleStorageProof<H, D> {
 	fn decode<I: CodecInput>(value: &mut I) -> CodecResult<Self> {
 		let kind = value.read_byte()?;

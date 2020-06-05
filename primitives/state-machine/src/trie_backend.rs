@@ -22,6 +22,7 @@ use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
 	ChildrenProofMap, ProofInput};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
+use sp_trie::RegStorageProof;
 use crate::backend::{ProofRegStateFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
@@ -110,8 +111,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type StorageProof = sp_trie::TrieNodesStorageProof;
-	type ProofRegBackend = crate::proving_backend::ProvingBackend<S, H>;
+	type StorageProof = sp_trie::TrieNodesStorageProof<H, sp_trie::ProofFlatDefault>;
+	type StorageProofReg = sp_trie::TrieNodesStorageProof<H, sp_trie::ProofFlatDefault>;
+	type ProofRegBackend = crate::proving_backend::ProvingBackend<S, H, <Self::StorageProofReg as RegStorageProof<H>>::RecordBackend>;
 	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
