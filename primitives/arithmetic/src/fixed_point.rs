@@ -809,8 +809,8 @@ macro_rules! implement_fixed {
 				let a = $name::saturating_from_integer(42);
 				assert_eq!(a.into_inner(), 42 * accuracy);
 
-				// let a = $name::saturating_from_integer(-42);
-				// assert_eq!(a.into_inner(), 0.saturating_sub(42 * accuracy));
+				let a = $name::saturating_from_integer(-42);
+				assert_eq!(a.into_inner(), 0.saturating_sub(42 * accuracy));
 
 				// Max/min integers that fit.
 				let a = $name::saturating_from_integer(inner_max / accuracy);
