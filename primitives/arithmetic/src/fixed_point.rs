@@ -64,6 +64,9 @@ pub trait FixedPointNumber:
 	/// Precision of this fixed point implementation. It should be a power of `10`.
 	const DIV: Self::Inner;
 
+	/// Indicates if this fixed point implementation is signed or not.
+	const SIGNED: bool;
+
 	/// Precision of this fixed point implementation.
 	fn accuracy() -> Self::Inner {
 		Self::DIV
@@ -74,11 +77,6 @@ pub trait FixedPointNumber:
 
 	/// Consumes `self` and returns the inner raw value.
 	fn into_inner(self) -> Self::Inner;
-
-	/// Returns the negation. Saturates if result does not fit.
-	fn saturating_negate(self) -> Self {
-		Self::from_inner(Self::Inner::zero().saturating_sub(self.into_inner()))
-	}
 
 	/// Creates self from an integer number `int`.
 	///
@@ -171,7 +169,7 @@ pub trait FixedPointNumber:
 	/// Returns `N::min` or `N::max` if the multiplication or final result does not fit in `N`.
 	fn saturating_mul_acc_int<N: FixedPointOperand>(self, n: N) -> N {
 		if self.is_negative() && n > N::zero() {
-			n.saturating_sub(self.saturating_negate().saturating_mul_int(n))
+			n.saturating_sub(Self::zero().saturating_sub(self).saturating_mul_int(n))
 		} else {
 			self.saturating_mul_int(n).saturating_add(n)
 		}
@@ -337,6 +335,7 @@ macro_rules! implement_fixed {
 		$name:ident,
 		$test_mod:ident,
 		$inner_type:ty,
+		$signed:tt,
 		$div:tt,
 		$title:expr $(,)?
 	) => {
@@ -362,6 +361,7 @@ macro_rules! implement_fixed {
 			type Inner = $inner_type;
 
 			const DIV: Self::Inner = $div;
+			const SIGNED: bool = $signed;
 
 			fn from_inner(inner: Self::Inner) -> Self {
 				Self(inner)
@@ -685,7 +685,7 @@ macro_rules! implement_fixed {
 				// Zero.
 				assert_eq!(a, b);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let a = $name::saturating_from_integer(5);
 					let b = -a;
 
@@ -728,7 +728,7 @@ macro_rules! implement_fixed {
 				// Positive case: 6/2 = 3.
 				assert_eq!($name::saturating_from_integer(3), a + b);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Negative case: 4/2 = 2.
 					let b = $name::saturating_from_rational(1, -2);
 					assert_eq!($name::saturating_from_integer(2), a + b);
@@ -779,8 +779,8 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn op_checked_div_overflow_works() {
-				let a = $name::min_value();
-				if a.is_negative() {
+				if $name::SIGNED {
+					let a = $name::min_value();
 					let b = $name::zero().saturating_sub($name::one());
 					assert!(a.checked_div(&b).is_none());
 				}
@@ -792,7 +792,7 @@ macro_rules! implement_fixed {
 				let b = $name::saturating_from_integer(2);
 				assert_eq!($name::saturating_from_integer(21), a / b);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let a = $name::saturating_from_integer(42);
 					let b = $name::saturating_from_integer(-2);
 					assert_eq!($name::saturating_from_integer(-21), a / b);
@@ -847,7 +847,7 @@ macro_rules! implement_fixed {
 				let a = $name::checked_from_integer(inner_max / accuracy + 1);
 				assert_eq!(a, None);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Case where integer fits.
 					let a = $name::checked_from_integer(0.saturating_sub(42))
 						.expect("-42 * accuracy >= inner_min; qed");
@@ -910,7 +910,7 @@ macro_rules! implement_fixed {
 				let a = $name::saturating_from_rational(0, 1);
 				assert_eq!(a.into_inner(), 0);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Negative case: -2.5
 					let a = $name::saturating_from_rational(-5, 2);
 					assert_eq!(a.into_inner(),  0 - 25 * accuracy / 10);
@@ -1031,7 +1031,7 @@ macro_rules! implement_fixed {
 				let a = $name::checked_from_rational(inner_min, 0.saturating_sub(accuracy));
 				assert_eq!(a, None);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Min - 1 => Underflow => None.
 					let a = $name::checked_from_rational(inner_max as u128 + 2, 0.saturating_sub(accuracy));
 					assert_eq!(a, None);
@@ -1075,7 +1075,7 @@ macro_rules! implement_fixed {
 				// Max + 1 => None.
 				assert_eq!(a.checked_mul_int(i128::max_value() / 2 + 1), None);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Min - 1.
 					assert_eq!(a.checked_mul_int((i128::min_value() + 1) / 2), Some(i128::min_value() + 2));
 					// Min.
@@ -1119,7 +1119,7 @@ macro_rules! implement_fixed {
 				// Min + 1 => saturates to min.
 				assert_eq!(a.saturating_mul_int(i128::min_value() / 2 - 1), i128::min_value());
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let b = $name::saturating_from_rational(1, -2);
 					assert_eq!(b.saturating_mul_int(42i32), -21);
 					assert_eq!(b.saturating_mul_int(i128::max_value()), i128::max_value() / -2);
@@ -1158,7 +1158,7 @@ macro_rules! implement_fixed {
 				let e = $name::from_inner(1);
 				assert_eq!(a.checked_mul(&(c/2.into()+e)), None);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Min + 1.
 					let b = $name::from_inner(inner_min + 1) / 2.into();
 					let c = $name::from_inner(inner_min + 2);
@@ -1260,7 +1260,7 @@ macro_rules! implement_fixed {
 				let a = $name::min_value();
 				assert_eq!(a.saturating_div_int(1i128), (inner_min / accuracy) as i128);
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let a = $name::saturating_from_integer(5);
 					assert_eq!(a.saturating_div_int(-2), -2);
 
@@ -1277,7 +1277,7 @@ macro_rules! implement_fixed {
 				assert_eq!($name::from_inner(inner_max).saturating_abs(), $name::max_value());
 				assert_eq!($name::zero().saturating_abs(), 0.into());
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					assert_eq!($name::from_inner(inner_min).saturating_abs(), $name::max_value());
 					assert_eq!($name::saturating_from_rational(-1, 2).saturating_abs(), (1, 2).into());
 				}
@@ -1294,7 +1294,7 @@ macro_rules! implement_fixed {
 				assert_eq!($name::one().saturating_mul_acc_int(u128::max_value() / 2), u128::max_value() - 1);
 				assert_eq!($name::one().saturating_mul_acc_int(u128::min_value()), u128::min_value());
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let a = $name::saturating_from_rational(-1, 2);
 					assert_eq!(a.saturating_mul_acc_int(42i8), 21i8);
 					assert_eq!(a.saturating_mul_acc_int(42u8), 21u8);
@@ -1314,7 +1314,7 @@ macro_rules! implement_fixed {
 				assert_eq!($name::saturating_from_integer(1).saturating_pow(1000), (1).into());
 				assert_eq!($name::saturating_from_integer(1).saturating_pow(usize::max_value()), (1).into());
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					// Saturating.
 					assert_eq!($name::saturating_from_integer(2).saturating_pow(68), $name::max_value());
 
@@ -1381,10 +1381,7 @@ macro_rules! implement_fixed {
 				let n = $name::saturating_from_rational(5, 2).trunc();
 				assert_eq!(n, $name::saturating_from_integer(2));
 
-				if $name::min_value() == $name::zero() {
-					let n = $name::saturating_from_rational(-5, 2).trunc();
-					assert_eq!(n, $name::zero());
-				} else {
+				if $name::SIGNED {
 					let n = $name::saturating_from_rational(-5, 2).trunc();
 					assert_eq!(n, $name::saturating_from_integer(-2));
 				}
@@ -1408,7 +1405,7 @@ macro_rules! implement_fixed {
 					.saturating_mul(10.into());
 				assert_eq!(n, 5.into());
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let n = $name::saturating_from_rational(-5, 2);
 					let i = n.trunc();
 					let f = n.frac();
@@ -1498,8 +1495,7 @@ macro_rules! implement_fixed {
 
 				assert_eq!(n.round(), $name::max_value().trunc());
 
-				if $name::min_value() != $name::zero() {
-
+				if $name::SIGNED {
 					// floor(min + 1) - 0.33..
 					let n = $name::min_value()
 						.saturating_add(1.into())
@@ -1550,7 +1546,7 @@ macro_rules! implement_fixed {
 				let frac = $name::saturating_from_rational(314, 100);
 				assert_eq!(format!("{:?}", frac), format!("{}(3.{:0<weight$})", stringify!($name), 14, weight=precision()));
 
-				if $name::min_value() != $name::zero() {
+				if $name::SIGNED {
 					let neg = -$name::one();
 					assert_eq!(format!("{:?}", neg), format!("{}(-1.{:0>weight$})", stringify!($name), 0, weight=precision()));
 
@@ -1566,6 +1562,7 @@ implement_fixed!(
 	FixedI64,
 	test_fixed_i64,
 	i64,
+	true,
 	1_000_000_000,
 	"_Fixed Point 64 bits signed, range = [-9223372036.854775808, 9223372036.854775807]_",
 );
@@ -1574,6 +1571,7 @@ implement_fixed!(
 	FixedI128,
 	test_fixed_i128,
 	i128,
+	true,
 	1_000_000_000_000_000_000,
 	"_Fixed Point 128 bits signed, range = \
 		[-170141183460469231731.687303715884105728, 170141183460469231731.687303715884105727]_",
@@ -1583,6 +1581,7 @@ implement_fixed!(
 	FixedU128,
 	test_fixed_u128,
 	u128,
+	false,
 	1_000_000_000_000_000_000,
 	"_Fixed Point 128 bits unsigned, range = \
 		[0.000000000000000000, 340282366920938463463.374607431768211455]_",
