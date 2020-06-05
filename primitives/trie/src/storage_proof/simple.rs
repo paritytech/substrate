@@ -74,7 +74,7 @@ impl MergeableStorageProof for Full {
 
 // TODO EMCH can remove Default bound with manual impl on recorder
 #[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send> RegStorageProof<Hash> for Flat {
+impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RegStorageProof<Hash> for Flat {
 	const INPUT_KIND: InputKind = InputKind::None;
 
 	type RecordBackend = super::FlatSyncRecorder<Hash>;
@@ -89,7 +89,7 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send> RegStorageProof<Has
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send> RegStorageProof<Hash> for Full {
+impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RegStorageProof<Hash> for Full {
 	const INPUT_KIND: InputKind = InputKind::None;
 
 	type RecordBackend = super::FullSyncRecorder<Hash>;

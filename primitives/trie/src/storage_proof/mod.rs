@@ -286,7 +286,7 @@ pub struct FlatSyncRecorder<Hash>(Arc<RwLock<RecordMapTrieNodes<Hash>>>);
 
 
 #[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for FullSyncRecorder<Hash> {
+impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RecordBackend<Hash> for FullSyncRecorder<Hash> {
 	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>> {
 		self.0.read().get(child_info).and_then(|s| (**s).get(&key).cloned())
 	}
@@ -326,7 +326,7 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for Fu
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for FlatSyncRecorder<Hash> {
+impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RecordBackend<Hash> for FlatSyncRecorder<Hash> {
 	fn get(&self, _child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>> {
 		(**self.0.read()).get(&key).cloned()
 	}

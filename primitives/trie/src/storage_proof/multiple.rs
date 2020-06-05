@@ -92,7 +92,7 @@ impl<H, D> sp_std::fmt::Debug for MultipleStorageProof<H, D> {
 }
 
 /// Allow to use specific kind of proof by default.
-pub trait DefaultKind: 'static + Clone {
+pub trait DefaultKind: 'static + Clone + Send + Sync {
 	const KIND: StorageProofKind;
 }
 
@@ -194,7 +194,7 @@ impl<Hash: Default, D: DefaultKind> Default for MultipleSyncRecorder<Hash, D> {
 }
 
 #[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash, D: DefaultKind> RecordBackend<Hash> for MultipleSyncRecorder<Hash, D> {
+impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Sync + Send, D: DefaultKind> RecordBackend<Hash> for MultipleSyncRecorder<Hash, D> {
 	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>> {
 		match self {
 			MultipleSyncRecorder::Flat(rec, _ ,_) => rec.get(child_info, key),

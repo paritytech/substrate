@@ -189,7 +189,7 @@ impl<T> RegStorageProof<TrieHash<T>> for Full<T>
 #[cfg(feature = "std")]
 impl<Hash> RegStorageProof<Hash> for FullForMerge
 	where
-		Hash: Default + Eq + Clone + Encode + sp_std::hash::Hash,
+		Hash: Default + Eq + Clone + Encode + sp_std::hash::Hash + Send + Sync,
 {
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 

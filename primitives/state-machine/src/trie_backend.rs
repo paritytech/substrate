@@ -27,9 +27,10 @@ use crate::backend::{ProofRegStateFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
 use crate::{
-	StorageKey, StorageValue, Backend,
+	StorageKey, StorageValue, Backend, backend::ProofCheckBackend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
+use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
@@ -290,6 +291,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 }
 
+impl<H: Hasher> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H> where
+	H::Out: Ord + Codec,
+{
+	fn create_proof_check_backend(
+		root: H::Out,
+		proof: Self::StorageProof,
+	) -> Result<Self, Box<dyn crate::Error>> {
+	}
+}
+	
 #[cfg(test)]
 pub mod tests {
 	use std::{collections::HashSet, iter};
