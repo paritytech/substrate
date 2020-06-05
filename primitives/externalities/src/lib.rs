@@ -195,6 +195,31 @@ pub trait Externalities: ExtensionStore {
 	/// The returned hash is defined by the `Block` and is SCALE encoded.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
+	/// Start a new nested transaction.
+	///
+	/// This allows to either commit or roll back all changes that are made after this call.
+	/// For every transaction there must be a matching call to either `storage_rollback_transaction`
+	/// or `storage_commit_transaction`.
+	///
+	/// Changes made without any open transaction are comitted immediatly
+	fn storage_start_transaction(&mut self);
+
+	/// Rollback the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are discarded.
+	///
+	/// Panics:
+	/// Will panic if there is no open transaction.
+	fn storage_rollback_transaction(&mut self);
+
+	/// Commit the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are committed.
+	///
+	/// Panics:
+	/// Will panic if there is no open transaction.
+	fn storage_commit_transaction(&mut self);
+
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

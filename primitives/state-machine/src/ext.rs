@@ -546,6 +546,18 @@ where
 		root.map(|r| r.map(|o| o.encode()))
 	}
 
+	fn storage_start_transaction(&mut self) {
+		self.overlay.start_transaction();
+	}
+
+	fn storage_rollback_transaction(&mut self) {
+		self.overlay.rollback_transaction();
+	}
+
+	fn storage_commit_transaction(&mut self) {
+		self.overlay.commit_transaction();
+	}
+
 	fn wipe(&mut self) {
 		for _ in 0..self.overlay.transaction_depth() {
 			self.overlay.rollback_transaction();
