@@ -120,6 +120,8 @@ pub struct TestIsCallable;
 impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
+			// Remark is used as a no-op call in the benchmarking
+			Call::System(SystemCall::remark(_)) => true,
 			Call::System(_) => false,
 			_ => true,
 		}
@@ -209,7 +211,7 @@ fn proxying_works() {
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(Call::System(SystemCall::remark(vec![])));
+		let call = Box::new(Call::System(SystemCall::set_code(vec![])));
 		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));

@@ -69,12 +69,15 @@ benchmarks! {
 		let caller: T::AccountId = account("caller", 0, SEED);
 	}: _(RawOrigin::Signed(caller))
 
-	anonymous {}: _(RawOrigin::Signed(account("caller", 0, SEED)), T::ProxyType::default(), 0)
+	anonymous {
+		let p in ...;
+	}: _(RawOrigin::Signed(account("caller", 0, SEED)), T::ProxyType::default(), 0)
 
 	kill_anonymous {
 		let p in 0 .. (T::MaxProxies::get() - 2).into();
 
 		let caller: T::AccountId = account("caller", 0, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		Module::<T>::anonymous(RawOrigin::Signed(account("caller", 0, SEED)).into(), T::ProxyType::default(), 0)?;
 		let height = system::Module::<T>::block_number();
 		let ext_index = system::Module::<T>::extrinsic_index().unwrap_or(0);
@@ -98,6 +101,8 @@ mod tests {
 			assert_ok!(test_benchmark_add_proxy::<Test>());
 			assert_ok!(test_benchmark_remove_proxy::<Test>());
 			assert_ok!(test_benchmark_remove_proxies::<Test>());
+			assert_ok!(test_benchmark_anonymous::<Test>());
+			assert_ok!(test_benchmark_kill_anonymous::<Test>());
 		});
 	}
 }
