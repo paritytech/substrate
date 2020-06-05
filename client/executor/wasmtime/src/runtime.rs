@@ -17,55 +17,103 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::host::HostState;
-use crate::imports::{resolve_imports, Imports};
-use crate::instance_wrapper::InstanceWrapper;
-use crate::state_holder::StateHolder;
+use crate::imports::{Imports, resolve_imports};
+use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot};
+use crate::state_holder;
 
+use std::rc::Rc;
+use std::sync::Arc;
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
-	wasm_runtime::WasmRuntime,
+	wasm_runtime::{WasmModule, WasmInstance},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
-use wasmtime::{Config, Engine, Module, Store};
+use wasmtime::{Config, Engine, Store};
 
-/// A `WasmRuntime` implementation using wasmtime to compile the runtime module to machine code
+/// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	module: Module,
-	imports: Imports,
-	state_holder: StateHolder,
+	module_wrapper: Arc<ModuleWrapper>,
 	heap_pages: u32,
+	allow_missing_func_imports: bool,
 	host_functions: Vec<&'static dyn Function>,
 }
 
-impl WasmRuntime for WasmtimeRuntime {
-	fn host_functions(&self) -> &[&'static dyn Function] {
-		&self.host_functions
-	}
-
-	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
-		call_method(
-			&self.module,
-			&mut self.imports,
-			&self.state_holder,
-			method,
-			data,
+impl WasmModule for WasmtimeRuntime {
+	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
+		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
+		// and results.
+		let imports = resolve_imports(
+			self.module_wrapper.module(),
+			&self.host_functions,
 			self.heap_pages,
+			self.allow_missing_func_imports,
+		)?;
+
+		let instance_wrapper =
+			InstanceWrapper::new(&self.module_wrapper, &imports, self.heap_pages)?;
+		let heap_base = instance_wrapper.extract_heap_base()?;
+		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
+
+		Ok(Box::new(WasmtimeInstance {
+			instance_wrapper: Rc::new(instance_wrapper),
+			module_wrapper: Arc::clone(&self.module_wrapper),
+			imports,
+			globals_snapshot,
+			heap_pages: self.heap_pages,
+			heap_base,
+		}))
+	}
+}
+
+/// A `WasmInstance` implementation that reuses compiled module and spawns instances
+/// to execute the compiled code.
+pub struct WasmtimeInstance {
+	module_wrapper: Arc<ModuleWrapper>,
+	instance_wrapper: Rc<InstanceWrapper>,
+	globals_snapshot: GlobalsSnapshot,
+	imports: Imports,
+	heap_pages: u32,
+	heap_base: u32,
+}
+
+// This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
+// and all imports don't reference any anything, other than host functions and memory
+unsafe impl Send for WasmtimeInstance {}
+
+impl WasmInstance for WasmtimeInstance {
+	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
+		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
+
+		self.module_wrapper
+			.data_segments_snapshot()
+			.apply(|offset, contents| {
+				self.instance_wrapper
+					.write_memory_from(Pointer::new(offset), contents)
+			})?;
+
+		self.globals_snapshot.apply(&*self.instance_wrapper)?;
+
+		perform_call(
+			data,
+			Rc::clone(&self.instance_wrapper),
+			entrypoint,
+			allocator,
 		)
 	}
 
-	fn get_global_val(&self, name: &str) -> Result<Option<Value>> {
-		// Yeah, there is no better way currently :(
-		InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?
-			.get_global_val(name)
+	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
+		let instance = InstanceWrapper::new(&self.module_wrapper, &self.imports, self.heap_pages)?;
+		instance.get_global_val(name)
 	}
 }
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
-pub fn create_instance(
+pub fn create_runtime(
 	code: &[u8],
 	heap_pages: u64,
 	host_functions: Vec<&'static dyn Function>,
@@ -77,58 +125,28 @@ pub fn create_instance(
 
 	let engine = Engine::new(&config);
 	let store = Store::new(&engine);
-	let module = Module::new(&store, code)
+
+	let module_wrapper = ModuleWrapper::new(&store, code)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
-	let state_holder = StateHolder::empty();
-
-	// Scan all imports, find the matching host functions, and create stubs that adapt arguments
-	// and results.
-	let imports = resolve_imports(
-		&state_holder,
-		&module,
-		&host_functions,
-		heap_pages as u32,
-		allow_missing_func_imports,
-	)?;
-
 	Ok(WasmtimeRuntime {
-		module,
-		imports,
-		state_holder,
+		module_wrapper: Arc::new(module_wrapper),
 		heap_pages: heap_pages as u32,
+		allow_missing_func_imports,
 		host_functions,
 	})
 }
 
-/// Call a function inside a precompiled Wasm module.
-fn call_method(
-	module: &Module,
-	imports: &mut Imports,
-	state_holder: &StateHolder,
-	method: &str,
-	data: &[u8],
-	heap_pages: u32,
-) -> Result<Vec<u8>> {
-	let instance_wrapper = InstanceWrapper::new(module, imports, heap_pages)?;
-	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
-	let heap_base = instance_wrapper.extract_heap_base()?;
-	let allocator = FreeingBumpHeapAllocator::new(heap_base);
-
-	perform_call(data, state_holder, instance_wrapper, entrypoint, allocator)
-}
-
 fn perform_call(
 	data: &[u8],
-	state_holder: &StateHolder,
-	instance_wrapper: InstanceWrapper,
+	instance_wrapper: Rc<InstanceWrapper>,
 	entrypoint: wasmtime::Func,
 	mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
-	let host_state = HostState::new(allocator, instance_wrapper);
-	let (ret, host_state) = state_holder.with_initialized_state(host_state, || {
+	let host_state = HostState::new(allocator, instance_wrapper.clone());
+	let ret = state_holder::with_initialized_state(&host_state, || {
 		match entrypoint.call(&[
 			wasmtime::Val::I32(u32::from(data_ptr) as i32),
 			wasmtime::Val::I32(u32::from(data_len) as i32),
@@ -140,15 +158,13 @@ fn perform_call(
 			Err(trap) => {
 				return Err(Error::from(format!(
 					"Wasm execution trapped: {}",
-					trap.message()
+					trap
 				)));
 			}
 		}
 	});
 	let (output_ptr, output_len) = ret?;
-
-	let instance = host_state.into_instance();
-	let output = extract_output_data(&instance, output_ptr, output_len)?;
+	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
 
 	Ok(output)
 }

@@ -26,7 +26,7 @@ use sp_std::collections::btree_map::{BTreeMap, Entry};
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
-use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance};
+use frame_support::traits::{Currency, Imbalance, SignedImbalance};
 use frame_support::{storage::child, StorageMap};
 use frame_system;
 
@@ -108,7 +108,12 @@ pub trait AccountDb<T: Trait> {
 	///
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
-	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
+	fn get_storage(
+		&self,
+		account: &T::AccountId,
+		trie_id: Option<&TrieId>,
+		location: &StorageKey,
+	) -> Option<Vec<u8>>;
 	/// If account has an alive contract then return the code hash associated.
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	/// If account has an alive contract then return the rent allowance associated.
@@ -126,9 +131,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		&self,
 		_account: &T::AccountId,
 		trie_id: Option<&TrieId>,
-		location: &StorageKey
+		location: &StorageKey,
 	) -> Option<Vec<u8>> {
-		trie_id.and_then(|id| child::get_raw(id, crate::trie_unique_id(&id[..]), &blake2_256(location)))
+		trie_id
+			.and_then(|id| child::get_raw(&crate::child_trie_info(&id[..]), &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -146,16 +152,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance() {
-				let existed  = !T::Currency::total_balance(&address).is_zero();
 				let imbalance = T::Currency::make_free_balance_be(&address, balance);
-				let exists  = !T::Currency::total_balance(&address).is_zero();
 				total_imbalance = total_imbalance.merge(imbalance);
-				if existed && !exists {
-					// Account killed. This will ultimately lead to calling `OnKilledAccount` callback
-					// which will make removal of CodeHashOf and AccountStorage for this account.
-					// In order to avoid writing over the deleted properties we `continue` here.
-					continue;
-				}
 			}
 
 			if changed.code_hash().is_some()
@@ -175,16 +173,18 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+						child::kill_storage(&info.child_trie_info());
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+						child::kill_storage(&info.child_trie_info());
 						AliveContractInfo::<T> {
 							code_hash,
-							storage_size: T::StorageSizeOffset::get(),
+							storage_size: 0,
+							empty_pair_count: 0,
+							total_pair_count: 0,
 							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
 							deduct_block: <frame_system::Module<T>>::block_number(),
 							rent_allowance: <BalanceOf<T>>::max_value(),
@@ -192,16 +192,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 						}
 					}
 					// New contract is being instantiated.
-					(_, None, Some(code_hash)) => {
-						AliveContractInfo::<T> {
-							code_hash,
-							storage_size: T::StorageSizeOffset::get(),
-							trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
-							deduct_block: <frame_system::Module<T>>::block_number(),
-							rent_allowance: <BalanceOf<T>>::max_value(),
-							last_write: None,
-						}
-					}
+					(_, None, Some(code_hash)) => AliveContractInfo::<T> {
+						code_hash,
+						storage_size: 0,
+						empty_pair_count: 0,
+						total_pair_count: 0,
+						trie_id: <T as Trait>::TrieIdGenerator::trie_id(&address),
+						deduct_block: <frame_system::Module<T>>::block_number(),
+						rent_allowance: <BalanceOf<T>>::max_value(),
+						last_write: None,
+					},
 					// There is no existing at the address nor a new one to be instantiated.
 					(_, None, None) => continue,
 				};
@@ -218,19 +218,69 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
-				for (k, v) in changed.storage.into_iter() {
-					if let Some(value) = child::get_raw(
-						&new_info.trie_id[..],
-						new_info.child_trie_unique_id(),
-						&blake2_256(&k),
-					) {
-						new_info.storage_size -= value.len() as u32;
+				// NB: this call allocates internally. To keep allocations to the minimum we cache
+				// the child trie info here.
+				let child_trie_info = new_info.child_trie_info();
+
+				// Here we iterate over all storage key-value pairs that were changed throughout the
+				// execution of a contract and apply them to the substrate storage.
+				for (key, opt_new_value) in changed.storage.into_iter() {
+					let hashed_key = blake2_256(&key);
+
+					// In order to correctly update the book keeping we need to fetch the previous
+					// value of the key-value pair.
+					//
+					// It might be a bit more clean if we had an API that supported getting the size
+					// of the value without going through the loading of it. But at the moment of
+					// writing, there is no such API.
+					//
+					// That's not a show stopper in any case, since the performance cost is
+					// dominated by the trie traversal anyway.
+					let opt_prev_value = child::get_raw(&child_trie_info, &hashed_key);
+
+					// Update the total number of KV pairs and the number of empty pairs.
+					match (&opt_prev_value, &opt_new_value) {
+						(Some(prev_value), None) => {
+							new_info.total_pair_count -= 1;
+							if prev_value.is_empty() {
+								new_info.empty_pair_count -= 1;
+							}
+						},
+						(None, Some(new_value)) => {
+							new_info.total_pair_count += 1;
+							if new_value.is_empty() {
+								new_info.empty_pair_count += 1;
+							}
+						},
+						(Some(prev_value), Some(new_value)) => {
+							if prev_value.is_empty() {
+								new_info.empty_pair_count -= 1;
+							}
+							if new_value.is_empty() {
+								new_info.empty_pair_count += 1;
+							}
+						}
+						(None, None) => {}
 					}
-					if let Some(value) = v {
-						new_info.storage_size += value.len() as u32;
-						child::put_raw(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
-					} else {
-						child::kill(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k));
+
+					// Update the total storage size.
+					let prev_value_len = opt_prev_value
+						.as_ref()
+						.map(|old_value| old_value.len() as u32)
+						.unwrap_or(0);
+					let new_value_len = opt_new_value
+						.as_ref()
+						.map(|new_value| new_value.len() as u32)
+						.unwrap_or(0);
+					new_info.storage_size = new_info
+						.storage_size
+						.saturating_add(new_value_len)
+						.saturating_sub(prev_value_len);
+
+					// Finally, perform the change on the storage.
+					match opt_new_value {
+						Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, &new_value[..]),
+						None => child::kill(&child_trie_info, &hashed_key),
 					}
 				}
 
@@ -248,12 +298,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			// then it's indicative of a buggy contracts system.
 			// Panicking is far from ideal as it opens up a DoS attack on block validators, however
 			// it's a less bad option than allowing arbitrary value to be created.
-			SignedImbalance::Positive(ref p) if !p.peek().is_zero() =>
-				panic!("contract subsystem resulting in positive imbalance!"),
+			SignedImbalance::Positive(ref p) if !p.peek().is_zero() => {
+				panic!("contract subsystem resulting in positive imbalance!")
+			}
 			_ => {}
 		}
 	}
 }
+
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	local: RefCell<ChangeSet<T>>,
 	underlying: &'a dyn AccountDb<T>,
@@ -276,7 +328,8 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		location: StorageKey,
 		value: Option<Vec<u8>>,
 	) {
-		self.local.borrow_mut()
+		self.local
+			.borrow_mut()
 			.entry(account.clone())
 			.or_insert(Default::default())
 			.storage
@@ -294,7 +347,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		}
 
 		let mut local = self.local.borrow_mut();
-		let contract = local.entry(account.clone()).or_insert_with(|| Default::default());
+		let contract = local.entry(account.clone()).or_default();
 
 		contract.code_hash = Some(code_hash);
 		contract.rent_allowance = Some(<BalanceOf<T>>::max_value());
@@ -310,7 +363,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			ChangeEntry {
 				reset: true,
 				..Default::default()
-			}
+			},
 		);
 	}
 
@@ -336,7 +389,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 		&self,
 		account: &T::AccountId,
 		trie_id: Option<&TrieId>,
-		location: &StorageKey
+		location: &StorageKey,
 	) -> Option<Vec<u8>> {
 		self.local
 			.borrow()

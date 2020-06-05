@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Chain api required for the transaction pool.
 
@@ -25,15 +27,14 @@ use futures::{
 use sc_client_api::{
 	blockchain::HeaderBackend,
 	light::{Fetcher, RemoteCallRequest, RemoteBodyRequest},
-	BlockBody,
+	BlockBackend,
 };
-use sp_core::Hasher;
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, ApiExt};
 
 use crate::error::{self, Error};
 
@@ -64,7 +65,7 @@ impl<Client, Block> FullChainApi<Client, Block> where
 
 impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Block> where
 	Block: BlockT,
-	Client: ProvideRuntimeApi<Block> + BlockBody<Block> + BlockIdTo<Block>,
+	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 	sp_api::ApiErrorFor<Client, Block>: Send,
@@ -82,6 +83,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
@@ -89,8 +91,24 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 		let at = at.clone();
 
 		self.pool.spawn_ok(futures_diagnose::diagnose("validate-transaction", async move {
-			let res = client.runtime_api().validate_transaction(&at, uxt)
-				.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
+			sp_tracing::enter_span!("validate_transaction");
+			let runtime_api = client.runtime_api();
+			let has_v2 = sp_tracing::tracing_span! { "check_version";
+				runtime_api
+				.has_api_with::<dyn TaggedTransactionQueue<Self::Block, Error=()>, _>(
+					&at, |v| v >= 2,
+				)
+				.unwrap_or_default()
+			};
+
+			sp_tracing::enter_span!("runtime::validate_transaction");
+			let res = if has_v2 {
+				runtime_api.validate_transaction(&at, source, uxt)
+			} else {
+				#[allow(deprecated)] // old validate_transaction
+				runtime_api.validate_transaction_before_version_2(&at, uxt)
+			};
+			let res = res.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
 			if let Err(e) = tx.send(res) {
 				log::warn!("Unable to send a validate transaction result: {:?}", e);
 			}
@@ -120,7 +138,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 
 	fn hash_and_length(&self, ex: &sc_transaction_graph::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
 		ex.using_encoded(|x| {
-			(traits::HasherFor::<Block>::hash(x), x.len())
+			(<traits::HashFor::<Block> as traits::Hash>::hash(x), x.len())
 		})
 	}
 }
@@ -161,6 +179,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let header_hash = self.client.expect_block_hash_from_id(at);
@@ -175,7 +194,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 			block,
 			header,
 			method: "TaggedTransactionQueue_validate_transaction".into(),
-			call_data: uxt.encode(),
+			call_data: (source, uxt).encode(),
 			retry_count: None,
 		});
 		let remote_validation_request = remote_validation_request.then(move |result| {

@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Generators are a set of trait on which storage traits are implemented.
 //!
@@ -23,23 +24,21 @@
 //!
 //! This is internal api and is subject to change.
 
-mod linked_map;
 mod map;
 mod double_map;
 mod value;
 
-pub use linked_map::{StorageLinkedMap, Enumerator, Linkage, KeyFormat as LinkedMapKeyFormat};
 pub use map::StorageMap;
 pub use double_map::StorageDoubleMap;
 pub use value::StorageValue;
-
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
 	use sp_io::TestExternalities;
-	use codec::{Encode, Decode};
-	use crate::storage::{unhashed, generator::{StorageValue, StorageLinkedMap}};
+	use codec::Encode;
+	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
+	use crate::{assert_noop, assert_ok};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -56,16 +55,11 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
-	#[derive(Encode, Decode, Clone, Debug, Eq, PartialEq)]
-	struct NumberNumber {
-		a: u32,
-		b: u32,
-	}
-
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Runtime {
 			Value get(fn value) config(): (u64, u64);
-			NumberMap: linked_map hasher(blake2_256) NumberNumber => u64;
+			NumberMap: map hasher(identity) u32 => u64;
+			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
 		}
 	}
 
@@ -89,42 +83,76 @@ mod tests {
 	}
 
 	#[test]
-	fn linked_map_translate_works() {
-		use super::linked_map::{self, Enumerator, KeyFormat};
-
-		type Format = <NumberMap as StorageLinkedMap<NumberNumber, u64>>::KeyFormat;
-
+	fn map_translate_works() {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			// start with a map of u32 -> u32.
 			for i in 0u32..100u32 {
-				let final_key = <Format as KeyFormat>::storage_linked_map_final_key(&i);
-
-				let linkage = linked_map::new_head_linkage::<_, u32, u32, Format>(&i);
-				unhashed::put(final_key.as_ref(), &(&i, linkage));
+				unhashed::put(&NumberMap::hashed_key_for(&i), &(i as u64));
 			}
 
-			let head = linked_map::read_head::<u32, Format>().unwrap();
-
 			assert_eq!(
-				Enumerator::<u32, u32, Format>::from_head(head).collect::<Vec<_>>(),
-				(0..100).rev().map(|x| (x, x)).collect::<Vec<_>>(),
+				NumberMap::iter().collect::<Vec<_>>(),
+				(0..100).map(|x| (x as u32, x as u64)).collect::<Vec<_>>(),
 			);
 
 			// do translation.
-			NumberMap::translate(
-				|k: u32| NumberNumber { a: k, b: k },
-				|v: u32| (v as u64) << 32 | v as u64,
-			).unwrap();
+			NumberMap::translate(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
 
-			assert!(linked_map::read_head::<NumberNumber, Format>().is_some());
 			assert_eq!(
-				NumberMap::enumerate().collect::<Vec<_>>(),
-				(0..100u32).rev().map(|x| (
-					NumberNumber { a: x, b: x },
-					(x as u64) << 32 | x as u64,
-				)).collect::<Vec<_>>(),
+				NumberMap::iter().collect::<Vec<_>>(),
+				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
 			);
 		})
+	}
+
+	#[test]
+	fn try_mutate_works() {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
+			assert_eq!(Value::get(), (0, 0));
+			assert_eq!(NumberMap::get(0), 0);
+			assert_eq!(DoubleMap::get(0, 0), 0);
+
+			// `assert_noop` ensures that the state does not change
+			assert_noop!(Value::try_mutate(|value| -> Result<(), &'static str> {
+				*value = (2, 2);
+				Err("don't change value")
+			}), "don't change value");
+
+			assert_noop!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+				*value = 4;
+				Err("don't change value")
+			}), "don't change value");
+
+			assert_noop!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+				*value = 6;
+				Err("don't change value")
+			}), "don't change value");
+
+			// Showing this explicitly for clarity
+			assert_eq!(Value::get(), (0, 0));
+			assert_eq!(NumberMap::get(0), 0);
+			assert_eq!(DoubleMap::get(0, 0), 0);
+
+			assert_ok!(Value::try_mutate(|value| -> Result<(), &'static str> {
+				*value = (2, 2);
+				Ok(())
+			}));
+
+			assert_ok!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+				*value = 4;
+				Ok(())
+			}));
+
+			assert_ok!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+				*value = 6;
+				Ok(())
+			}));
+
+			assert_eq!(Value::get(), (2, 2));
+			assert_eq!(NumberMap::get(0), 4);
+			assert_eq!(DoubleMap::get(0, 0), 6);
+		});
 	}
 }

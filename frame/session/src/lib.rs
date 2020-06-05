@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Session Module
 //!
@@ -102,16 +103,22 @@
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use frame_support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
-use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId};
-use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
-use frame_support::dispatch::{self, DispatchResult, DispatchError};
+use frame_support::{
+	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
+	traits::{
+		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+	},
+	dispatch::{self, DispatchResult, DispatchError},
+	weights::Weight,
+};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
 mod mock;
+#[cfg(test)]
+mod tests;
 
 #[cfg(feature = "historical")]
 pub mod historical;
@@ -143,6 +150,37 @@ impl<
 	}
 }
 
+impl<
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
+	Period: Get<BlockNumber>,
+	Offset: Get<BlockNumber>,
+> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
+		let offset = Offset::get();
+		let period = Period::get();
+		Some(if now > offset {
+			let block_after_last_session = (now.clone() - offset) % period.clone();
+			if block_after_last_session > Zero::zero() {
+				now.saturating_add(
+					period.saturating_sub(block_after_last_session)
+				)
+			} else {
+				Zero::zero()
+			}
+		} else {
+			offset
+		})
+	}
+
+	fn weight(_now: BlockNumber) -> Weight {
+		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial computational overhead.
+		// There should be no risk to the chain having this weight value be zero for now.
+		// However, this value of zero was not properly calculated, and so it would be reasonable
+		// to come back here and properly calculate the weight of this function.
+		0
+	}
+}
+
 /// A trait for managing creation of new validator set.
 pub trait SessionManager<ValidatorId> {
 	/// Plan a new session, and optionally provide the new validator set.
@@ -156,16 +194,23 @@ pub trait SessionManager<ValidatorId> {
 	/// `new_index` is strictly greater than from previous call.
 	///
 	/// The first session start at index 0.
+	///
+	/// `new_session(session)` is guaranteed to be called before `end_session(session-1)`.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
 	/// End the session.
 	///
 	/// Because the session pallet can queue validator set the ending session can be lower than the
 	/// last new session index.
 	fn end_session(end_index: SessionIndex);
+	/// Start the session.
+	///
+	/// The session start to be used for validation
+	fn start_session(start_index: SessionIndex);
 }
 
 impl<A> SessionManager<A> for () {
 	fn new_session(_: SessionIndex) -> Option<Vec<A>> { None }
+	fn start_session(_: SessionIndex) {}
 	fn end_session(_: SessionIndex) {}
 }
 
@@ -174,7 +219,7 @@ pub trait SessionHandler<ValidatorId> {
 	/// All the key type ids this session handler can process.
 	///
 	/// The order must be the same as it expects them in
-	/// [`on_new_session`](Self::on_new_session) and [`on_genesis_session`](Self::on_genesis_session).
+	/// [`on_new_session`](Self::on_new_session<Ks>) and [`on_genesis_session`](Self::on_genesis_session<Ks>).
 	const KEY_TYPE_IDS: &'static [KeyTypeId];
 
 	/// The given validator set will be used for the genesis session.
@@ -314,10 +359,17 @@ pub trait Trait: frame_system::Trait {
 	type ValidatorId: Member + Parameter;
 
 	/// A conversion from account ID to validator ID.
+	///
+	/// Its cost must be at most one storage read.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
+
+	/// Something that can predict the next session rotation. This should typically come from the
+	/// same logical unit that provides [`ShouldEndSession`], yet, it gives a best effort estimate.
+	/// It is helpful to implement [`EstimateNextNewSession`].
+	type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
 
 	/// Handler for managing new session.
 	type SessionManager: SessionManager<Self::ValidatorId>;
@@ -334,8 +386,6 @@ pub trait Trait: frame_system::Trait {
 	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
 }
-
-const DEDUP_KEY_PREFIX: &[u8] = b":session:keys";
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -359,20 +409,10 @@ decl_storage! {
 		DisabledValidators get(fn disabled_validators): Vec<u32>;
 
 		/// The next session keys for a validator.
-		///
-		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
-		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
-		NextKeys: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) T::ValidatorId
-			=> Option<T::Keys>;
+		NextKeys: map hasher(twox_64_concat) T::ValidatorId => Option<T::Keys>;
 
-		/// The owner of a key. The second key is the `KeyTypeId` + the encoded key.
-		///
-		/// The first key is always `DEDUP_KEY_PREFIX` to have all the data in the same branch of
-		/// the trie. Having all data in the same branch should prevent slowing down other queries.
-		// TODO: Migrate to a normal map now https://github.com/paritytech/substrate/issues/4917
-		KeyOwner: double_map hasher(twox_64_concat) Vec<u8>, hasher(blake2_256) (KeyTypeId, Vec<u8>)
-			=> Option<T::ValidatorId>;
+		/// The owner of a key. The key is the `KeyTypeId` + the encoded key.
+		KeyOwner: map hasher(twox_64_concat) (KeyTypeId, Vec<u8>) => Option<T::ValidatorId>;
 	}
 	add_extra_genesis {
 		config(keys): Vec<(T::AccountId, T::ValidatorId, T::Keys)>;
@@ -423,6 +463,8 @@ decl_storage! {
 
 			<Validators<T>>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
+
+			T::SessionManager::start_session(0);
 		});
 	}
 }
@@ -451,10 +493,6 @@ decl_error! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Used as first key for `NextKeys` and `KeyOwner` to put all the data into the same branch
-		/// of the trie.
-		const DEDUP_KEY_PREFIX: &[u8] = DEDUP_KEY_PREFIX;
-
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -466,13 +504,17 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(log n) in number of accounts.
-		/// - One extra DB entry.
-		/// - Increases system account refs by one on success iff there were previously no keys set.
-		///   In this case, purge_keys will need to be called before the account can be removed.
+		/// - Complexity: `O(1)`
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `origin account`, `T::ValidatorIdOf`, `NextKeys`
+		/// - DbWrites: `origin account`, `NextKeys`
+		/// - DbReads per key id: `KeyOwner`
+		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
+		#[weight = 200_000_000
+			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len() as Weight)
+			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len() as Weight)]
+		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(keys.ownership_proof_is_valid(&proof), Error::<T>::InvalidProof);
@@ -488,21 +530,30 @@ decl_module! {
 		/// The dispatch origin of this function must be signed.
 		///
 		/// # <weight>
-		/// - O(N) in number of key types.
-		/// - Removes N + 1 DB entries.
-		/// - Reduces system account refs by one on success.
+		/// - Complexity: `O(1)` in number of key types.
+		///   Actual cost depends on the number of length of `T::Keys::key_ids()` which is fixed.
+		/// - DbReads: `T::ValidatorIdOf`, `NextKeys`, `origin account`
+		/// - DbWrites: `NextKeys`, `origin account`
+		/// - DbWrites per key id: `KeyOwnder`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000)]
-		fn purge_keys(origin) {
+		#[weight = 120_000_000
+			+ T::DbWeight::get().reads_writes(2, 1 + T::Keys::key_ids().len() as Weight)]
+		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;
 		}
 
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
+				T::MaximumBlockWeight::get()
+			} else {
+				// NOTE: the non-database part of the weight for `should_end_session(n)` is
+				// included as weight for empty block, the database part is expected to be in
+				// cache.
+				0
 			}
 		}
 	}
@@ -520,6 +571,8 @@ impl<T: Trait> Module<T> {
 		// Inform the session handlers that a session is going to end.
 		T::SessionHandler::on_before_session_ending();
 
+		T::SessionManager::end_session(session_index);
+
 		// Get queued session keys and validators.
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators = session_keys.iter()
@@ -532,11 +585,11 @@ impl<T: Trait> Module<T> {
 			DisabledValidators::take();
 		}
 
-		T::SessionManager::end_session(session_index);
-
 		// Increment session index.
 		let session_index = session_index + 1;
 		CurrentIndex::put(session_index);
+
+		T::SessionManager::start_session(session_index);
 
 		// Get next validator set.
 		let maybe_next_validators = T::SessionManager::new_session(session_index + 1);
@@ -693,27 +746,27 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn load_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::get(DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::get(v)
 	}
 
 	fn take_keys(v: &T::ValidatorId) -> Option<T::Keys> {
-		<NextKeys<T>>::take(DEDUP_KEY_PREFIX, v)
+		<NextKeys<T>>::take(v)
 	}
 
 	fn put_keys(v: &T::ValidatorId, keys: &T::Keys) {
-		<NextKeys<T>>::insert(DEDUP_KEY_PREFIX, v, keys);
+		<NextKeys<T>>::insert(v, keys);
 	}
 
 	fn key_owner(id: KeyTypeId, key_data: &[u8]) -> Option<T::ValidatorId> {
-		<KeyOwner<T>>::get(DEDUP_KEY_PREFIX, (id, key_data))
+		<KeyOwner<T>>::get((id, key_data))
 	}
 
 	fn put_key_owner(id: KeyTypeId, key_data: &[u8], v: &T::ValidatorId) {
-		<KeyOwner<T>>::insert(DEDUP_KEY_PREFIX, (id, key_data), v)
+		<KeyOwner<T>>::insert((id, key_data), v)
 	}
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
-		<KeyOwner<T>>::remove(DEDUP_KEY_PREFIX, (id, key_data));
+		<KeyOwner<T>>::remove((id, key_data));
 	}
 }
 
@@ -735,307 +788,14 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use frame_support::assert_ok;
-	use sp_core::crypto::key_types::DUMMY;
-	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
-	use mock::{
-		NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
-		set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
-		reset_before_session_end_called, before_session_end_called,
-	};
-
-	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-			),
-		}.assimilate_storage(&mut t).unwrap();
-		sp_io::TestExternalities::new(t)
+impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
+	/// This session module always calls new_session and next_session at the same time, hence we
+	/// do a simple proxy and pass the function to next rotation.
+	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
+		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 
-	fn initialize_block(block: u64) {
-		SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
-		System::set_block_number(block);
-		Session::on_initialize(block);
-	}
-
-	#[test]
-	fn simple_setup_should_work() {
-		new_test_ext().execute_with(|| {
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-			assert_eq!(Session::validators(), vec![1, 2, 3]);
-		});
-	}
-
-	#[test]
-	fn put_get_keys() {
-		new_test_ext().execute_with(|| {
-			Session::put_keys(&10, &UintAuthorityId(10).into());
-			assert_eq!(Session::load_keys(&10), Some(UintAuthorityId(10).into()));
-		})
-	}
-
-	#[test]
-	fn keys_cleared_on_kill() {
-		let mut ext = new_test_ext();
-		ext.execute_with(|| {
-			assert_eq!(Session::validators(), vec![1, 2, 3]);
-			assert_eq!(Session::load_keys(&1), Some(UintAuthorityId(1).into()));
-
-			let id = DUMMY;
-			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
-
-			assert!(!System::allow_death(&1));
-			assert_ok!(Session::purge_keys(Origin::signed(1)));
-			assert!(System::allow_death(&1));
-
-			assert_eq!(Session::load_keys(&1), None);
-			assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), None);
-		})
-	}
-
-	#[test]
-	fn authorities_should_track_validators() {
-		reset_before_session_end_called();
-
-		new_test_ext().execute_with(|| {
-			set_next_validators(vec![1, 2]);
-			force_new_session();
-			initialize_block(1);
-			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1).into()),
-				(2, UintAuthorityId(2).into()),
-			]);
-			assert_eq!(Session::validators(), vec![1, 2, 3]);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			force_new_session();
-			initialize_block(2);
-			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1).into()),
-				(2, UintAuthorityId(2).into()),
-			]);
-			assert_eq!(Session::validators(), vec![1, 2]);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			set_next_validators(vec![1, 2, 4]);
-			assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
-			force_new_session();
-			initialize_block(3);
-			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1).into()),
-				(2, UintAuthorityId(2).into()),
-				(4, UintAuthorityId(4).into()),
-			]);
-			assert_eq!(Session::validators(), vec![1, 2]);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2)]);
-			assert!(before_session_end_called());
-
-			force_new_session();
-			initialize_block(4);
-			assert_eq!(Session::queued_keys(), vec![
-				(1, UintAuthorityId(1).into()),
-				(2, UintAuthorityId(2).into()),
-				(4, UintAuthorityId(4).into()),
-			]);
-			assert_eq!(Session::validators(), vec![1, 2, 4]);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(4)]);
-		});
-	}
-
-	#[test]
-	fn should_work_with_early_exit() {
-		new_test_ext().execute_with(|| {
-			set_session_length(10);
-
-			initialize_block(1);
-			assert_eq!(Session::current_index(), 0);
-
-			initialize_block(2);
-			assert_eq!(Session::current_index(), 0);
-
-			force_new_session();
-			initialize_block(3);
-			assert_eq!(Session::current_index(), 1);
-
-			initialize_block(9);
-			assert_eq!(Session::current_index(), 1);
-
-			initialize_block(10);
-			assert_eq!(Session::current_index(), 2);
-		});
-	}
-
-	#[test]
-	fn session_change_should_work() {
-		new_test_ext().execute_with(|| {
-			// Block 1: No change
-			initialize_block(1);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-
-			// Block 2: Session rollover, but no change.
-			initialize_block(2);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-
-			// Block 3: Set new key for validator 2; no visible change.
-			initialize_block(3);
-			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-
-			// Block 4: Session rollover; no visible change.
-			initialize_block(4);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-
-			// Block 5: No change.
-			initialize_block(5);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-
-			// Block 6: Session rollover; authority 2 changes.
-			initialize_block(6);
-			assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
-		});
-	}
-
-	#[test]
-	fn duplicates_are_not_allowed() {
-		new_test_ext().execute_with(|| {
-			System::set_block_number(1);
-			Session::on_initialize(1);
-			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_err());
-			assert!(Session::set_keys(Origin::signed(1), UintAuthorityId(10).into(), vec![]).is_ok());
-
-			// is fine now that 1 has migrated off.
-			assert!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]).is_ok());
-		});
-	}
-
-	#[test]
-	fn session_changed_flag_works() {
-		reset_before_session_end_called();
-
-		new_test_ext().execute_with(|| {
-			TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
-
-			force_new_session();
-			initialize_block(1);
-			assert!(!session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			force_new_session();
-			initialize_block(2);
-			assert!(!session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			Session::disable_index(0);
-			force_new_session();
-			initialize_block(3);
-			assert!(!session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			force_new_session();
-			initialize_block(4);
-			assert!(session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			force_new_session();
-			initialize_block(5);
-			assert!(!session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
-			force_new_session();
-			initialize_block(6);
-			assert!(!session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			// changing the keys of a validator leads to change.
-			assert_ok!(Session::set_keys(Origin::signed(69), UintAuthorityId(69).into(), vec![]));
-			force_new_session();
-			initialize_block(7);
-			assert!(session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-
-			// while changing the keys of a non-validator does not.
-			force_new_session();
-			initialize_block(7);
-			assert!(!session_changed());
-			assert!(before_session_end_called());
-			reset_before_session_end_called();
-		});
-	}
-
-	#[test]
-	fn periodic_session_works() {
-		struct Period;
-		struct Offset;
-
-		impl Get<u64> for Period {
-			fn get() -> u64 { 10 }
-		}
-
-		impl Get<u64> for Offset {
-			fn get() -> u64 { 3 }
-		}
-
-
-		type P = PeriodicSessions<Period, Offset>;
-
-		for i in 0..3 {
-			assert!(!P::should_end_session(i));
-		}
-
-		assert!(P::should_end_session(3));
-
-		for i in (1..10).map(|i| 3 + i) {
-			assert!(!P::should_end_session(i));
-		}
-
-		assert!(P::should_end_session(13));
-	}
-
-	#[test]
-	fn session_keys_generate_output_works_as_set_keys_input() {
-		new_test_ext().execute_with(|| {
-			let new_keys = mock::MockSessionKeys::generate(None);
-			assert_ok!(
-				Session::set_keys(
-					Origin::signed(2),
-					<mock::Test as Trait>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
-					vec![],
-				)
-			);
-		});
-	}
-
-	#[test]
-	fn return_true_if_more_than_third_is_disabled() {
-		new_test_ext().execute_with(|| {
-			set_next_validators(vec![1, 2, 3, 4, 5, 6, 7]);
-			force_new_session();
-			initialize_block(1);
-			// apply the new validator set
-			force_new_session();
-			initialize_block(2);
-
-			assert_eq!(Session::disable_index(0), false);
-			assert_eq!(Session::disable_index(1), false);
-			assert_eq!(Session::disable_index(2), true);
-			assert_eq!(Session::disable_index(3), true);
-		});
+	fn weight(now: T::BlockNumber) -> Weight {
+		T::NextSessionRotation::weight(now)
 	}
 }

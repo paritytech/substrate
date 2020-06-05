@@ -97,12 +97,14 @@ where H: Clone + Debug + PartialEq,
 			}
 		}
 
-		AuthoritySet {
-			current_authorities: self.current_authorities,
-			set_id: self.set_id,
-			pending_forced_changes: Vec::new(),
-			pending_standard_changes
-		}
+		let authority_set = AuthoritySet::new(
+			self.current_authorities,
+			self.set_id,
+			pending_standard_changes,
+			Vec::new(),
+		);
+
+		authority_set.expect("current_authorities is non-empty and weights are non-zero; qed.")
 	}
 }
 
@@ -152,7 +154,7 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 			None => (0, genesis_round()),
 		};
 
-		let set_id = new_set.current().0;
+		let set_id = new_set.set_id;
 
 		let base = last_round_state.prevote_ghost
 			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
@@ -199,7 +201,7 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 		backend,
 		AUTHORITY_SET_KEY,
 	)? {
-		let set_id = set.current().0;
+		let set_id = set.set_id;
 
 		let completed_rounds = |number, state, base| CompletedRounds::new(
 			CompletedRound {
@@ -310,7 +312,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 							.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 						VoterSetState::live(
-							set.current().0,
+							set.set_id,
 							&set,
 							base,
 						)
@@ -326,15 +328,16 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		}
 		Some(other) => return Err(ClientError::Backend(
 			format!("Unsupported GRANDPA DB version: {:?}", other)
-		).into()),
+		)),
 	}
 
 	// genesis.
-	info!(target: "afg", "Loading GRANDPA authority set \
+	info!(target: "afg", "👴 Loading GRANDPA authority set \
 		from genesis on what appears to be first startup.");
 
 	let genesis_authorities = genesis_authorities()?;
-	let genesis_set = AuthoritySet::genesis(genesis_authorities.clone());
+	let genesis_set = AuthoritySet::genesis(genesis_authorities)
+		.expect("genesis authorities is non-empty; all weights are non-zero; qed.");
 	let state = make_genesis_round();
 	let base = state.prevote_ghost
 		.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
@@ -503,12 +506,12 @@ mod test {
 
 		assert_eq!(
 			*authority_set.inner().read(),
-			AuthoritySet {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			AuthoritySet::new(
+				authorities.clone(),
 				set_id,
-			},
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap(),
 		);
 
 		let mut current_rounds = CurrentRounds::new();
@@ -547,12 +550,12 @@ mod test {
 		};
 
 		{
-			let authority_set = AuthoritySet::<H256, u64> {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			let authority_set = AuthoritySet::<H256, u64>::new(
+				authorities.clone(),
 				set_id,
-			};
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap();
 
 			let voter_set_state = V1VoterSetState::Live(round_number, round_state.clone());
 
@@ -593,12 +596,12 @@ mod test {
 
 		assert_eq!(
 			*authority_set.inner().read(),
-			AuthoritySet {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			AuthoritySet::new(
+				authorities.clone(),
 				set_id,
-			},
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap(),
 		);
 
 		let mut current_rounds = CurrentRounds::new();

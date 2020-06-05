@@ -1,34 +1,49 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! A method call executor interface.
 
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, HasherFor},
+	generic::BlockId, traits::{Block as BlockT, HashFor},
 };
 use sp_state_machine::{
 	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
-use sp_core::NativeOrEncoded;
+use sp_core::{NativeOrEncoded,offchain::storage::OffchainOverlayedChanges};
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use crate::execution_extensions::ExecutionExtensions;
+
+/// Executor Provider
+pub trait ExecutorProvider<Block: BlockT> {
+	/// executor instance
+	type Executor: CallExecutor<Block>;
+
+	/// Get call executor reference.
+	fn executor(&self) -> &Self::Executor;
+
+	/// Get a reference to the execution extensions.
+	fn execution_extensions(&self) -> &ExecutionExtensions<Block>;
+}
 
 /// Method call executor.
 pub trait CallExecutor<B: BlockT> {
@@ -71,6 +86,7 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
+		offchain_changes: &RefCell<OffchainOverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<
 			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
 		>>,
@@ -89,7 +105,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HasherFor<B>>>(
+	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
@@ -107,9 +123,9 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<B>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<B>>,
+		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

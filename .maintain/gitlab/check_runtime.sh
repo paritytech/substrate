@@ -30,8 +30,11 @@ github_label () {
 boldprint "latest 10 commits of ${CI_COMMIT_REF_NAME}"
 git log --graph --oneline --decorate=short -n 10
 
-boldprint "make sure the master branch is available in shallow clones"
+boldprint "make sure the master branch and release tag are available in shallow clones"
 git fetch --depth=${GIT_DEPTH:-100} origin master
+git fetch --depth=${GIT_DEPTH:-100} origin release
+git tag -f release FETCH_HEAD
+git log -n1 release
 
 
 boldprint "check if the wasm sources changed"
@@ -54,9 +57,9 @@ fi
 # consensus-critical logic that has changed. the runtime wasm blobs must be
 # rebuilt.
 
-add_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+add_spec_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
-sub_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+sub_spec_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
 
 
@@ -79,9 +82,9 @@ else
 	# check for impl_version updates: if only the impl versions changed, we assume
 	# there is no consensus-critical logic that has changed.
 
-	add_impl_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	add_impl_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 		| sed -n -r 's/^\+[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
-	sub_impl_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	sub_impl_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 		| sed -n -r 's/^\-[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
 
 

@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
@@ -37,10 +38,10 @@ mod tests {
 			// non-getters: pub / $default
 
 			/// Hello, this is doc!
-			U32 : Option<u32>;
-			pub PUBU32 : Option<u32>;
-			U32MYDEF : Option<u32>;
-			pub PUBU32MYDEF : Option<u32>;
+			U32: Option<u32>;
+			pub PUBU32: Option<u32>;
+			U32MYDEF: Option<u32>;
+			pub PUBU32MYDEF: Option<u32>;
 
 			// getters: pub / $default
 			// we need at least one type which uses T, otherwise GenesisConfig will complain.
@@ -59,31 +60,23 @@ mod tests {
 			GetOptU32WithBuilderNone get(fn opt_u32_with_builder_none) build(|_| None): Option<u32>;
 
 			// map non-getters: pub / $default
-			MAPU32 : map hasher(blake2_256) u32 => Option<String>;
-			pub PUBMAPU32 : map hasher(blake2_256) u32 => Option<String>;
-			MAPU32MYDEF : map hasher(blake2_256) u32 => Option<String>;
-			pub PUBMAPU32MYDEF : map hasher(blake2_256) u32 => Option<String>;
+			MAPU32: map hasher(blake2_128_concat) u32 => Option<String>;
+			pub PUBMAPU32: map hasher(blake2_128_concat) u32 => Option<String>;
+			MAPU32MYDEF: map hasher(blake2_128_concat) u32 => Option<String>;
+			pub PUBMAPU32MYDEF: map hasher(blake2_128_concat) u32 => Option<String>;
 
 			// map getters: pub / $default
-			GETMAPU32 get(fn map_u32_getter): map hasher(blake2_256) u32 => String;
-			pub PUBGETMAPU32 get(fn pub_map_u32_getter): map hasher(blake2_256) u32 => String;
+			GETMAPU32 get(fn map_u32_getter): map hasher(blake2_128_concat) u32 => String;
+			pub PUBGETMAPU32 get(fn pub_map_u32_getter): map hasher(blake2_128_concat) u32 => String;
 
 			GETMAPU32MYDEF get(fn map_u32_getter_mydef):
-				map hasher(blake2_256) u32 => String = "map".into();
+				map hasher(blake2_128_concat) u32 => String = "map".into();
 			pub PUBGETMAPU32MYDEF get(fn pub_map_u32_getter_mydef):
-				map hasher(blake2_256) u32 => String = "pubmap".into();
-
-			// linked map
-			LINKEDMAPU32 : linked_map hasher(blake2_256) u32 => Option<String>;
-			pub PUBLINKEDMAPU32MYDEF : linked_map hasher(blake2_256) u32 => Option<String>;
-			GETLINKEDMAPU32 get(fn linked_map_u32_getter):
-				linked_map hasher(blake2_256) u32 => String;
-			pub PUBGETLINKEDMAPU32MYDEF get(fn pub_linked_map_u32_getter_mydef):
-				linked_map hasher(blake2_256) u32 => String = "pubmap".into();
+				map hasher(blake2_128_concat) u32 => String = "pubmap".into();
 
 			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
-			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEXTYPE3: [u32;25];
+			COMPLEXTYPE2: (Vec<Vec<(u16, Box<()>)>>, u32);
+			COMPLEXTYPE3: [u32; 25];
 		}
 		add_extra_genesis {
 			build(|_| {});
@@ -249,10 +242,10 @@ mod tests {
 					name: DecodeDifferent::Encode("MAPU32"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructMAPU32(PhantomData::<TraitImpl>))
@@ -263,10 +256,10 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBMAPU32"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBMAPU32(PhantomData::<TraitImpl>))
@@ -277,10 +270,10 @@ mod tests {
 					name: DecodeDifferent::Encode("MAPU32MYDEF"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -291,10 +284,10 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -305,10 +298,10 @@ mod tests {
 					name: DecodeDifferent::Encode("GETMAPU32"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETMAPU32(PhantomData::<TraitImpl>))
@@ -319,10 +312,10 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBGETMAPU32"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETMAPU32(PhantomData::<TraitImpl>))
@@ -333,10 +326,10 @@ mod tests {
 					name: DecodeDifferent::Encode("GETMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGETMAPU32MYDEF(PhantomData::<TraitImpl>))
@@ -347,69 +340,13 @@ mod tests {
 					name: DecodeDifferent::Encode("PUBGETMAPU32MYDEF"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
+						hasher: StorageHasher::Blake2_128Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("String"),
-						is_linked: false,
+						unused: false,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructPUBGETMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("LINKEDMAPU32"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
-					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructLINKEDMAPU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBLINKEDMAPU32MYDEF"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
-					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBLINKEDMAPU32MYDEF(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GETLINKEDMAPU32"),
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
-					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGETLINKEDMAPU32(PhantomData::<TraitImpl>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("PUBGETLINKEDMAPU32MYDEF"),
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_256,
-						key: DecodeDifferent::Encode("u32"),
-						value: DecodeDifferent::Encode("String"),
-						is_linked: true,
-					},
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructPUBGETLINKEDMAPU32MYDEF(PhantomData::<TraitImpl>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
@@ -562,17 +499,13 @@ mod test_append_and_len {
 			JustVecWithDefault: Vec<u32> = vec![6, 9];
 			OptionVec: Option<Vec<u32>>;
 
-			MapVec: map hasher(blake2_256) u32 => Vec<u32>;
-			MapVecWithDefault: map hasher(blake2_256) u32 => Vec<u32> = vec![6, 9];
-			OptionMapVec: map hasher(blake2_256) u32 => Option<Vec<u32>>;
+			MapVec: map hasher(blake2_128_concat) u32 => Vec<u32>;
+			MapVecWithDefault: map hasher(blake2_128_concat) u32 => Vec<u32> = vec![6, 9];
+			OptionMapVec: map hasher(blake2_128_concat) u32 => Option<Vec<u32>>;
 
-			DoubleMapVec: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => Vec<u32>;
-			DoubleMapVecWithDefault: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => Vec<u32> = vec![6, 9];
-			OptionDoubleMapVec: double_map hasher(blake2_256) u32, hasher(blake2_256) u32 => Option<Vec<u32>>;
-
-			LinkedMapVec: linked_map hasher(blake2_256) u32 => Vec<u32>;
-			LinkedMapVecWithDefault: linked_map hasher(blake2_256) u32 => Vec<u32> = vec![6, 9];
-			OptionLinkedMapVec: linked_map hasher(blake2_256) u32 => Option<Vec<u32>>;
+			DoubleMapVec: double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) u32 => Vec<u32>;
+			DoubleMapVecWithDefault: double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) u32 => Vec<u32> = vec![6, 9];
+			OptionDoubleMapVec: double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) u32 => Option<Vec<u32>>;
 		}
 	}
 
@@ -594,47 +527,55 @@ mod test_append_and_len {
 	#[test]
 	fn append_works() {
 		TestExternalities::default().execute_with(|| {
-			let _ = MapVec::append(1, [1, 2, 3].iter());
-			let _ = MapVec::append(1, [4, 5].iter());
+			for val in &[1, 2, 3, 4, 5] {
+				MapVec::append(1, val);
+			}
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
-			let _ = JustVec::append([1, 2, 3].iter());
-			let _ = JustVec::append([4, 5].iter());
+			MapVec::remove(1);
+			MapVec::append(1, 1);
+			assert_eq!(MapVec::get(1), vec![1]);
+
+			for val in &[1, 2, 3, 4, 5] {
+				JustVec::append(val);
+			}
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+
+			JustVec::kill();
+			JustVec::append(1);
+			assert_eq!(JustVec::get(), vec![1]);
 		});
 	}
 
 	#[test]
-	fn append_works_for_default() {
+	fn append_overwrites_invalid_data() {
+		TestExternalities::default().execute_with(|| {
+			let key = JustVec::hashed_key();
+			// Set it to some invalid value.
+			frame_support::storage::unhashed::put_raw(&key, &*b"1");
+			assert_eq!(JustVec::get(), Vec::new());
+			assert_eq!(frame_support::storage::unhashed::get_raw(&key), Some(b"1".to_vec()));
+
+			JustVec::append(1);
+			JustVec::append(2);
+			assert_eq!(JustVec::get(), vec![1, 2]);
+		});
+	}
+
+	#[test]
+	fn append_overwrites_default() {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			let _ = JustVecWithDefault::append([1].iter());
-			assert_eq!(JustVecWithDefault::get(), vec![6, 9, 1]);
+			JustVecWithDefault::append(1);
+			assert_eq!(JustVecWithDefault::get(), vec![1]);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			let _ = MapVecWithDefault::append(0, [1].iter());
-			assert_eq!(MapVecWithDefault::get(0), vec![6, 9, 1]);
+			MapVecWithDefault::append(0, 1);
+			assert_eq!(MapVecWithDefault::get(0), vec![1]);
 
 			assert_eq!(OptionVec::get(), None);
-			let _ = OptionVec::append([1].iter());
+			OptionVec::append(1);
 			assert_eq!(OptionVec::get(), Some(vec![1]));
-		});
-	}
-
-	#[test]
-	fn append_or_put_works() {
-		TestExternalities::default().execute_with(|| {
-			let _ = MapVec::append_or_insert(1, &[1, 2, 3][..]);
-			let _ = MapVec::append_or_insert(1, &[4, 5][..]);
-			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
-
-			let _ = JustVec::append_or_put(&[1, 2, 3][..]);
-			let _ = JustVec::append_or_put(&[4, 5][..]);
-			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
-
-			let _ = OptionVec::append_or_put(&[1, 2, 3][..]);
-			let _ = OptionVec::append_or_put(&[4, 5][..]);
-			assert_eq!(OptionVec::get(), Some(vec![1, 2, 3, 4, 5]));
 		});
 	}
 
@@ -644,59 +585,49 @@ mod test_append_and_len {
 			JustVec::put(&vec![1, 2, 3, 4]);
 			OptionVec::put(&vec![1, 2, 3, 4, 5]);
 			MapVec::insert(1, &vec![1, 2, 3, 4, 5, 6]);
-			LinkedMapVec::insert(2, &vec![1, 2, 3]);
 			DoubleMapVec::insert(0, 1, &vec![1, 2]);
 
 			assert_eq!(JustVec::decode_len().unwrap(), 4);
 			assert_eq!(OptionVec::decode_len().unwrap(), 5);
 			assert_eq!(MapVec::decode_len(1).unwrap(), 6);
-			assert_eq!(LinkedMapVec::decode_len(2).unwrap(), 3);
 			assert_eq!(DoubleMapVec::decode_len(0, 1).unwrap(), 2);
 		});
 	}
 
+	// `decode_len` should always return `None` for default assigments
+	// in `decl_storage!`.
 	#[test]
-	fn len_works_for_default() {
+	fn len_works_ignores_default_assignment() {
 		TestExternalities::default().execute_with(|| {
 			// vec
 			assert_eq!(JustVec::get(), vec![]);
-			assert_eq!(JustVec::decode_len(), Ok(0));
+			assert_eq!(JustVec::decode_len(), None);
 
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
-			assert_eq!(JustVecWithDefault::decode_len(), Ok(2));
+			assert_eq!(JustVecWithDefault::decode_len(), None);
 
 			assert_eq!(OptionVec::get(), None);
-			assert_eq!(OptionVec::decode_len(), Ok(0));
+			assert_eq!(OptionVec::decode_len(), None);
 
 			// map
 			assert_eq!(MapVec::get(0), vec![]);
-			assert_eq!(MapVec::decode_len(0), Ok(0));
+			assert_eq!(MapVec::decode_len(0), None);
 
 			assert_eq!(MapVecWithDefault::get(0), vec![6, 9]);
-			assert_eq!(MapVecWithDefault::decode_len(0), Ok(2));
+			assert_eq!(MapVecWithDefault::decode_len(0), None);
 
 			assert_eq!(OptionMapVec::get(0), None);
-			assert_eq!(OptionMapVec::decode_len(0), Ok(0));
-
-			// linked map
-			assert_eq!(LinkedMapVec::get(0), vec![]);
-			assert_eq!(LinkedMapVec::decode_len(0), Ok(0));
-
-			assert_eq!(LinkedMapVecWithDefault::get(0), vec![6, 9]);
-			assert_eq!(LinkedMapVecWithDefault::decode_len(0), Ok(2));
-
-			assert_eq!(OptionLinkedMapVec::get(0), None);
-			assert_eq!(OptionLinkedMapVec::decode_len(0), Ok(0));
+			assert_eq!(OptionMapVec::decode_len(0), None);
 
 			// Double map
 			assert_eq!(DoubleMapVec::get(0, 0), vec![]);
-			assert_eq!(DoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(DoubleMapVec::decode_len(0, 1), None);
 
 			assert_eq!(DoubleMapVecWithDefault::get(0, 0), vec![6, 9]);
-			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), Ok(2));
+			assert_eq!(DoubleMapVecWithDefault::decode_len(0, 1), None);
 
 			assert_eq!(OptionDoubleMapVec::get(0, 0), None);
-			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), Ok(0));
+			assert_eq!(OptionDoubleMapVec::decode_len(0, 1), None);
 		});
 	}
 }

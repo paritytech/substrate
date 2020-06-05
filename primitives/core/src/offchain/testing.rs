@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Utilities for offchain calls testing.
 //!
@@ -72,8 +73,10 @@ pub struct OffchainState {
 	pub persistent_storage: InMemOffchainStorage,
 	/// Local storage
 	pub local_storage: InMemOffchainStorage,
-	/// Current timestamp (unix millis)
-	pub timestamp: u64,
+	/// A supposedly random seed.
+	pub seed: [u8; 32],
+	/// A timestamp simulating the current time.
+	pub timestamp: Timestamp,
 }
 
 impl OffchainState {
@@ -103,7 +106,7 @@ impl OffchainState {
 	fn fulfill_expected(&mut self, id: u16) {
 		if let Some(mut req) = self.expected_requests.remove(&RequestId(id)) {
 			let response = req.response.take().expect("Response checked while added.");
-			let headers = std::mem::replace(&mut req.response_headers, vec![]);
+			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
 		}
 	}
@@ -157,15 +160,15 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		Timestamp::from_unix_millis(self.0.read().timestamp)
+		self.0.read().timestamp
 	}
 
-	fn sleep_until(&mut self, _deadline: Timestamp) {
-		unimplemented!("not needed in tests so far")
+	fn sleep_until(&mut self, deadline: Timestamp) {
+		self.0.write().timestamp = deadline;
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		unimplemented!("not needed in tests so far")
+		self.0.read().seed
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
@@ -174,6 +177,14 @@ impl offchain::Externalities for TestOffchainExt {
 			StorageKind::LOCAL => &mut state.local_storage,
 			StorageKind::PERSISTENT => &mut state.persistent_storage,
 		}.set(b"", key, value);
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		let mut state = self.0.write();
+		match kind {
+			StorageKind::LOCAL => &mut state.local_storage,
+			StorageKind::PERSISTENT => &mut state.persistent_storage,
+		}.remove(b"", key);
 	}
 
 	fn local_storage_compare_and_set(

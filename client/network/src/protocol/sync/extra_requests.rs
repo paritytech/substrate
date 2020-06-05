@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sp_blockchain::Error as ClientError;
 use crate::protocol::sync::{PeerSync, PeerSyncState};
@@ -51,6 +53,15 @@ pub(crate) struct ExtraRequests<B: BlockT> {
 	importing_requests: HashSet<ExtraRequest<B>>,
 	/// the name of this type of extra request (useful for logging.)
 	request_type_name: &'static str,
+}
+
+#[derive(Debug)]
+pub(crate) struct Metrics {
+	pub(crate) pending_requests: u32,
+	pub(crate) active_requests: u32,
+	pub(crate) importing_requests: u32,
+	pub(crate) failed_requests: u32,
+	_priv: ()
 }
 
 impl<B: BlockT> ExtraRequests<B> {
@@ -93,11 +104,9 @@ impl<B: BlockT> ExtraRequests<B> {
 				// we have finalized further than the given request, presumably
 				// by some other part of the system (not sync). we can safely
 				// ignore the `Revert` error.
-				return;
 			},
 			Err(err) => {
 				debug!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
-				return;
 			}
 			_ => ()
 		}
@@ -212,7 +221,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		};
 
 		if self.tree.finalize_root(&finalized_hash).is_none() {
-			warn!(target: "sync", "Imported {:?} {:?} which isn't a root in the tree: {:?}",
+			warn!(target: "sync", "‼️ Imported {:?} {:?} which isn't a root in the tree: {:?}",
 				finalized_hash,
 				finalized_number,
 				self.tree.roots().collect::<Vec<_>>()
@@ -239,6 +248,18 @@ impl<B: BlockT> ExtraRequests<B> {
 	#[cfg(test)]
 	pub(crate) fn pending_requests(&self) -> impl Iterator<Item = &ExtraRequest<B>> {
 		self.pending_requests.iter()
+	}
+
+	/// Get some key metrics.
+	pub(crate) fn metrics(&self) -> Metrics {
+		use std::convert::TryInto;
+		Metrics {
+			pending_requests: self.pending_requests.len().try_into().unwrap_or(std::u32::MAX),
+			active_requests: self.active_requests.len().try_into().unwrap_or(std::u32::MAX),
+			failed_requests: self.failed_requests.len().try_into().unwrap_or(std::u32::MAX),
+			importing_requests: self.importing_requests.len().try_into().unwrap_or(std::u32::MAX),
+			_priv: ()
+		}
 	}
 }
 

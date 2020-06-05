@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate state API.
 
@@ -26,27 +28,28 @@ use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
-use sc_rpc_api::Subscriptions;
-use sc_client::{Client, CallExecutor, light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
-use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
+use sc_rpc_api::{Subscriptions, state::ReadProof};
+use sc_client_api::light::{RemoteBlockchain, Fetcher};
+use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
 use sp_runtime::traits::Block as BlockT;
 
-use sp_api::{Metadata, ProvideRuntimeApi};
+use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
+pub use sc_rpc_api::child_state::*;
+use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider};
+use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
-pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
+pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
-		RA: Send + Sync + 'static,
+		Client: Send + Sync + 'static,
 {
 	/// Call runtime method at given block.
 	fn call(
@@ -103,49 +106,6 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 			.map(|x| x.map(|x| x.0.len() as u64)))
 	}
 
-	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	fn child_storage_keys(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>>;
-
-	/// Returns a child storage entry at a specific block's state.
-	fn child_storage(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageData>>;
-
-	/// Returns the hash of a child storage entry at a block's state.
-	fn child_storage_hash(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>>;
-
-	/// Returns the size of a child storage entry at a block's state.
-	fn child_storage_size(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<u64>> {
-		Box::new(self.child_storage(block, child_storage_key, child_info, child_type, key)
-			.map(|x| x.map(|x| x.0.len() as u64)))
-	}
-
 	/// Returns the runtime metadata as an opaque blob.
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes>;
 
@@ -162,6 +122,20 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		to: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
+
+	/// Query storage entries (by key) starting at block hash given as the second parameter.
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
+
+	/// Returns proof of storage entries at a specific block's state.
+	fn read_proof(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>>;
 
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
@@ -194,59 +168,67 @@ pub trait StateBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 }
 
 /// Create new state API that works on full node.
-pub fn new_full<B, E, Block: BlockT, RA>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn new_full<BE, Block: BlockT, Client>(
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
-) -> State<B, E, Block, RA>
+) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
-		Client<B, E, Block, RA>: ProvideRuntimeApi<Block>,
-		<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
-			Metadata<Block, Error = sp_blockchain::Error>,
+		BE: Backend<Block> + 'static,
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
+			+ CallApiAt<Block, Error = sp_blockchain::Error>
+			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
+		Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
 {
-	State {
-		backend: Box::new(self::state_full::FullState::new(client, subscriptions)),
-	}
+	let child_backend = Box::new(
+		self::state_full::FullState::new(client.clone(), subscriptions.clone())
+	);
+	let backend = Box::new(self::state_full::FullState::new(client, subscriptions));
+	(State { backend }, ChildState { backend: child_backend })
 }
 
 /// Create new state API that works on light node.
-pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-) -> State<B, E, Block, RA>
+) -> (State<Block, Client>, ChildState<Block, Client>)
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		BE: Backend<Block> + 'static,
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+			+ ProvideRuntimeApi<Block> + HeaderBackend<Block> + BlockchainEvents<Block>
+			+ Send + Sync + 'static,
 		F: Send + Sync + 'static,
 {
-	State {
-		backend: Box::new(self::state_light::LightState::new(
+	let child_backend = Box::new(self::state_light::LightState::new(
+			client.clone(),
+			subscriptions.clone(),
+			remote_blockchain.clone(),
+			fetcher.clone(),
+	));
+
+	let backend = Box::new(self::state_light::LightState::new(
 			client,
 			subscriptions,
 			remote_blockchain,
 			fetcher,
-		)),
-	}
+	));
+	(State { backend }, ChildState { backend: child_backend })
 }
 
 /// State API with subscriptions support.
-pub struct State<B, E, Block, RA> {
-	backend: Box<dyn StateBackend<B, E, Block, RA>>,
+pub struct State<Block, Client> {
+	backend: Box<dyn StateBackend<Block, Client>>,
 }
 
-impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
+impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		Client: Send + Sync + 'static,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -300,50 +282,6 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		self.backend.storage_size(block, key)
 	}
 
-	fn child_storage(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		block: Option<Block::Hash>
-	) -> FutureResult<Option<StorageData>> {
-		self.backend.child_storage(block, child_storage_key, child_info, child_type, key)
-	}
-
-	fn child_storage_keys(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key_prefix: StorageKey,
-		block: Option<Block::Hash>
-	) -> FutureResult<Vec<StorageKey>> {
-		self.backend.child_storage_keys(block, child_storage_key, child_info, child_type, key_prefix)
-	}
-
-	fn child_storage_hash(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		block: Option<Block::Hash>
-	) -> FutureResult<Option<Block::Hash>> {
-		self.backend.child_storage_hash(block, child_storage_key, child_info, child_type, key)
-	}
-
-	fn child_storage_size(
-		&self,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-		block: Option<Block::Hash>
-	) -> FutureResult<Option<u64>> {
-		self.backend.child_storage_size(block, child_storage_key, child_info, child_type, key)
-	}
-
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		self.backend.metadata(block)
 	}
@@ -355,6 +293,18 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 		to: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.backend.query_storage(from, to, keys)
+	}
+
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		self.backend.query_storage_at(keys, at)
+	}
+
+	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<ReadProof<Block::Hash>> {
+		self.backend.read_proof(block, keys)
 	}
 
 	fn subscribe_storage(
@@ -387,12 +337,98 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA>
 	}
 }
 
-fn client_err(err: sp_blockchain::Error) -> Error {
-	Error::Client(Box::new(err))
+/// Child state backend API.
+pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
+	where
+		Block: BlockT + 'static,
+		Client: Send + Sync + 'static,
+{
+	/// Returns the keys with prefix from a child storage,
+	/// leave prefix empty to get all the keys.
+	fn storage_keys(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>>;
+
+	/// Returns a child storage entry at a specific block's state.
+	fn storage(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<StorageData>>;
+
+	/// Returns the hash of a child storage entry at a block's state.
+	fn storage_hash(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<Block::Hash>>;
+
+	/// Returns the size of a child storage entry at a block's state.
+	fn storage_size(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<u64>> {
+		Box::new(self.storage(block, storage_key, key)
+			.map(|x| x.map(|x| x.0.len() as u64)))
+	}
 }
 
-const CHILD_RESOLUTION_ERROR: &str = "Unexpected child info and type";
+/// Child state API with subscriptions support.
+pub struct ChildState<Block, Client> {
+	backend: Box<dyn ChildStateBackend<Block, Client>>,
+}
 
-fn child_resolution_error() -> sp_blockchain::Error {
-	sp_blockchain::Error::Msg(CHILD_RESOLUTION_ERROR.to_string())
+impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
+	where
+		Block: BlockT + 'static,
+		Client: Send + Sync + 'static,
+{
+	type Metadata = crate::metadata::Metadata;
+
+	fn storage(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> FutureResult<Option<StorageData>> {
+		self.backend.storage(block, storage_key, key)
+	}
+
+	fn storage_keys(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key_prefix: StorageKey,
+		block: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageKey>> {
+		self.backend.storage_keys(block, storage_key, key_prefix)
+	}
+
+	fn storage_hash(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> FutureResult<Option<Block::Hash>> {
+		self.backend.storage_hash(block, storage_key, key)
+	}
+
+	fn storage_size(
+		&self,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+		block: Option<Block::Hash>
+	) -> FutureResult<Option<u64>> {
+		self.backend.storage_size(block, storage_key, key)
+	}
+}
+
+fn client_err(err: sp_blockchain::Error) -> Error {
+	Error::Client(Box::new(err))
 }

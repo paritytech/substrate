@@ -1,27 +1,36 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use codec::{Encode, Decode};
+use frame_system::offchain::AppCrypto;
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_core::{
-	Blake2Hasher, NeverNativeValue, NativeOrEncoded,
-	traits::CodeExecutor,
+	NeverNativeValue, NativeOrEncoded,
+	crypto::KeyTypeId,
+	sr25519::Signature,
+	traits::{CodeExecutor, RuntimeCode},
 };
-use sp_runtime::{ApplyExtrinsicResult, traits::Header as HeaderT};
+use sp_runtime::{
+	ApplyExtrinsicResult,
+	MultiSigner,
+	MultiSignature,
+	traits::{Header as HeaderT, BlakeTwo256},
+};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
@@ -32,6 +41,26 @@ use node_runtime::{
 };
 use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
+use sp_externalities::Externalities;
+
+pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
+
+pub mod sr25519 {
+	mod app_sr25519 {
+		use sp_application_crypto::{app_crypto, sr25519};
+		use super::super::TEST_KEY_TYPE_ID;
+		app_crypto!(sr25519, TEST_KEY_TYPE_ID);
+	}
+
+	pub type AuthorityId = app_sr25519::Public;
+}
+
+pub struct TestAuthorityId;
+impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
+	type RuntimeAppPublic = sr25519::AuthorityId;
+	type GenericSignature = Signature;
+	type GenericPublic = sp_core::sr25519::Public;
+}
 
 /// The wasm runtime code.
 ///
@@ -43,12 +72,14 @@ pub const COMPACT_CODE: &[u8] = node_runtime::WASM_BINARY;
 
 pub const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
-pub const VERSION: u32 = node_runtime::VERSION.spec_version;
+pub const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
+
+pub const TRANSACTION_VERSION: u32 = node_runtime::VERSION.transaction_version;
 
 pub type TestExternalities<H> = CoreTestExternalities<H, u64>;
 
 pub fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
-	node_testing::keyring::sign(xt, VERSION, GENESIS_HASH)
+	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 
 pub fn default_transfer_call() -> pallet_balances::Call<Runtime> {
@@ -60,22 +91,32 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeExecutor<Executor> {
-	NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+	NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 }
 
 pub fn executor_call<
 	R:Decode + Encode + PartialEq,
 	NC: FnOnce() -> std::result::Result<R, String> + std::panic::UnwindSafe
 >(
-	t: &mut TestExternalities<Blake2Hasher>,
+	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
 	data: &[u8],
 	use_native: bool,
 	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
-	executor().call::<_, R, NC>(
+
+	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
+	let heap_pages = t.storage(sp_core::storage::well_known_keys::HEAP_PAGES);
+	let runtime_code = RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(code.as_slice().into()),
+		hash: sp_core::blake2_256(&code).to_vec(),
+		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
+	};
+
+	executor().call::<R, NC>(
 		&mut t,
+		&runtime_code,
 		method,
 		data,
 		use_native,
@@ -83,7 +124,7 @@ pub fn executor_call<
 	)
 }
 
-pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<BlakeTwo256> {
 	let mut ext = TestExternalities::new_with_code(
 		code,
 		node_testing::genesis::config(support_changes_trie, Some(code)).build_storage().unwrap(),
@@ -97,7 +138,7 @@ pub fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalitie
 /// `extrinsics` must be a list of valid extrinsics, i.e. none of the extrinsics for example
 /// can report `ExhaustResources`. Otherwise, this function panics.
 pub fn construct_block(
-	env: &mut TestExternalities<Blake2Hasher>,
+	env: &mut TestExternalities<BlakeTwo256>,
 	number: BlockNumber,
 	parent_hash: Hash,
 	extrinsics: Vec<CheckedExtrinsic>,
@@ -109,7 +150,7 @@ pub fn construct_block(
 
 	// calculate the header fields that we can.
 	let extrinsics_root =
-		Layout::<Blake2Hasher>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+		Layout::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
 			.to_fixed_bytes()
 			.into();
 

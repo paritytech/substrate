@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
 
@@ -21,15 +23,16 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use sp_core::{
 	H256, blake2_256, hexdisplay::HexDisplay, testing::{ED25519, SR25519, KeyStore},
-	traits::BareCryptoStorePtr, ed25519, crypto::{Pair, Public},
+	traits::BareCryptoStorePtr, ed25519, sr25519,
+	crypto::{CryptoTypePublicPair, Pair, Public},
 };
 use rpc::futures::Stream as _;
 use substrate_test_runtime_client::{
-	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, RuntimeApi, Block},
-	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client, Executor,
+	self, AccountKeyring, runtime::{Extrinsic, Transfer, SessionKeys, Block},
+	DefaultTestClientBuilderExt, TestClientBuilderExt, Backend, Client,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
-use tokio::runtime;
+use futures::{executor, compat::Future01CompatExt};
 
 fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	let tx = Transfer {
@@ -47,7 +50,6 @@ type FullTransactionPool = BasicPool<
 >;
 
 struct TestSetup {
-	pub runtime: runtime::Runtime,
 	pub client: Arc<Client<Backend>>,
 	pub keystore: BareCryptoStorePtr,
 	pub pool: Arc<FullTransactionPool>,
@@ -64,9 +66,9 @@ impl Default for TestSetup {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
+			None,
 		).0);
 		TestSetup {
-			runtime: runtime::Runtime::new().expect("Failed to create runtime in test setup"),
 			client,
 			keystore,
 			pool,
@@ -75,12 +77,13 @@ impl Default for TestSetup {
 }
 
 impl TestSetup {
-	fn author(&self) -> Author<Backend, Executor, FullTransactionPool, Block, RuntimeApi> {
+	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
-			subscriptions: Subscriptions::new(Arc::new(self.runtime.executor())),
+			subscriptions: Subscriptions::new(Arc::new(crate::testing::TaskExecutor)),
 			keystore: self.keystore.clone(),
+			deny_unsafe: DenyUnsafe::No,
 		}
 	}
 }
@@ -118,16 +121,20 @@ fn submit_rich_transaction_should_not_cause_error() {
 #[test]
 fn should_watch_extrinsic() {
 	//given
-	let mut setup = TestSetup::default();
+	let setup = TestSetup::default();
 	let p = setup.author();
 
 	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 0).encode().into());
+	p.watch_extrinsic(
+		Default::default(),
+		subscriber,
+		uxt(AccountKeyring::Alice, 0).encode().into(),
+	);
 
 	// then
-	assert_eq!(setup.runtime.block_on(id_rx), Ok(Ok(1.into())));
+	assert_eq!(executor::block_on(id_rx.compat()), Ok(Ok(1.into())));
 	// check notifications
 	let replacement = {
 		let tx = Transfer {
@@ -139,14 +146,14 @@ fn should_watch_extrinsic() {
 		tx.into_signed_tx()
 	};
 	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).wait().unwrap();
-	let (res, data) = setup.runtime.block_on(data.into_future()).unwrap();
+	let (res, data) = executor::block_on(data.into_future().compat()).unwrap();
 	assert_eq!(
 		res,
 		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":"ready","subscription":1}}"#.into())
 	);
 	let h = blake2_256(&replacement.encode());
 	assert_eq!(
-		setup.runtime.block_on(data.into_future()).unwrap().0,
+		executor::block_on(data.into_future().compat()).unwrap().0,
 		Some(format!(r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":1}}}}"#, HexDisplay::from(&h)))
 	);
 }
@@ -154,7 +161,7 @@ fn should_watch_extrinsic() {
 #[test]
 fn should_return_watch_validation_error() {
 	//given
-	let mut setup = TestSetup::default();
+	let setup = TestSetup::default();
 	let p = setup.author();
 
 	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
@@ -163,7 +170,7 @@ fn should_return_watch_validation_error() {
 	p.watch_extrinsic(Default::default(), subscriber, uxt(AccountKeyring::Alice, 179).encode().into());
 
 	// then
-	let res = setup.runtime.block_on(id_rx).unwrap();
+	let res = executor::block_on(id_rx.compat()).unwrap();
 	assert!(res.is_err(), "Expected the transaction to be rejected as invalid.");
 }
 
@@ -173,7 +180,7 @@ fn should_return_pending_extrinsics() {
 
 	let ex = uxt(AccountKeyring::Alice, 0);
 	AuthorApi::submit_extrinsic(&p, ex.encode().into()).wait().unwrap();
- 	assert_matches!(
+	assert_matches!(
 		p.pending_extrinsics(),
 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
 	);
@@ -199,7 +206,7 @@ fn should_remove_extrinsics() {
 		hash::ExtrinsicOrHash::Extrinsic(ex1.encode().into()),
 	]).unwrap();
 
- 	assert_eq!(removed.len(), 3);
+	assert_eq!(removed.len(), 3);
 }
 
 #[test]
@@ -215,10 +222,9 @@ fn should_insert_key() {
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
-	let store_key_pair = setup.keystore.read()
-		.ed25519_key_pair(ED25519, &key_pair.public()).expect("Key exists in store");
+	let public_keys = setup.keystore.read().keys(ED25519).unwrap();
 
-	assert_eq!(key_pair.public(), store_key_pair.public());
+	assert!(public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
 }
 
 #[test]
@@ -231,18 +237,11 @@ fn should_rotate_keys() {
 	let session_keys = SessionKeys::decode(&mut &new_public_keys[..])
 		.expect("SessionKeys decode successfully");
 
-	let ed25519_key_pair = setup.keystore.read().ed25519_key_pair(
-		ED25519,
-		&session_keys.ed25519.clone().into(),
-	).expect("ed25519 key exists in store");
+	let ed25519_public_keys = setup.keystore.read().keys(ED25519).unwrap();
+	let sr25519_public_keys = setup.keystore.read().keys(SR25519).unwrap();
 
-	let sr25519_key_pair = setup.keystore.read().sr25519_key_pair(
-		SR25519,
-		&session_keys.sr25519.clone().into(),
-	).expect("sr25519 key exists in store");
-
-	assert_eq!(session_keys.ed25519, ed25519_key_pair.public().into());
-	assert_eq!(session_keys.sr25519, sr25519_key_pair.public().into());
+	assert!(ed25519_public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
+	assert!(sr25519_public_keys.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
 }
 
 #[test]

@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! This module implements sandboxing support in the runtime.
 //!
@@ -236,21 +238,33 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 			.supervisor_externals
 			.allocate_memory(invoke_args_len)
 			.map_err(|_| trap("Can't allocate memory in supervisor for the arguments"))?;
-		self
+
+		let deallocate = |this: &mut GuestExternals<FE>, ptr, fail_msg| {
+			this
+				.supervisor_externals
+				.deallocate_memory(ptr)
+				.map_err(|_| trap(fail_msg))
+		};
+
+		if self
 			.supervisor_externals
 			.write_memory(invoke_args_ptr, &invoke_args_data)
-			.map_err(|_| trap("Can't write invoke args into memory"))?;
+			.is_err()
+		{
+			deallocate(self, invoke_args_ptr, "Failed dealloction after failed write of invoke arguments")?;
+			return Err(trap("Can't write invoke args into memory"));
+		}
+
 		let result = self.supervisor_externals.invoke(
 			&self.sandbox_instance.dispatch_thunk,
 			invoke_args_ptr,
 			invoke_args_len,
 			state,
 			func_idx,
-		)?;
-		self
-			.supervisor_externals
-			.deallocate_memory(invoke_args_ptr)
-			.map_err(|_| trap("Can't deallocate memory for dispatch thunk's invoke arguments"))?;
+		);
+
+		deallocate(self, invoke_args_ptr, "Can't deallocate memory for dispatch thunk's invoke arguments")?;
+		let result = result?;
 
 		// dispatch_thunk returns pointer to serialized arguments.
 		// Unpack pointer and len of the serialized result data.
@@ -264,12 +278,11 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 
 		let serialized_result_val = self.supervisor_externals
 			.read_memory(serialized_result_val_ptr, serialized_result_val_len)
-			.map_err(|_| trap("Can't read the serialized result from dispatch thunk"))?;
-		self.supervisor_externals
-			.deallocate_memory(serialized_result_val_ptr)
-			.map_err(|_| trap("Can't deallocate memory for dispatch thunk's result"))?;
+			.map_err(|_| trap("Can't read the serialized result from dispatch thunk"));
 
-		deserialize_result(&serialized_result_val)
+		deallocate(self, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
+			.and_then(|_| serialized_result_val)
+			.and_then(|serialized_result_val| deserialize_result(&serialized_result_val))
 	}
 }
 

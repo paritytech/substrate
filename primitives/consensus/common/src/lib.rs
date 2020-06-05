@@ -32,7 +32,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HasherFor},
+	generic::BlockId, traits::{Block as BlockT, DigestFor, NumberFor, HashFor},
 };
 use futures::prelude::*;
 pub use sp_inherents::InherentData;
@@ -44,6 +44,7 @@ pub mod block_import;
 mod select_chain;
 pub mod import_queue;
 pub mod evaluation;
+mod metrics;
 
 // block size limit.
 const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
@@ -71,7 +72,9 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-/// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
+/// Environment for a Consensus instance.
+///
+/// Creates proposer instance.
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B> + Send + 'static;
@@ -93,7 +96,7 @@ pub struct Proposal<Block: BlockT, Transaction> {
 	/// Optional proof that was recorded while building the block.
 	pub proof: Option<sp_state_machine::StorageProof>,
 	/// The storage changes while building this block.
-	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HasherFor<Block>, NumberFor<Block>>,
+	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
 
 /// Used as parameter to [`Proposer`] to tell the requirement on recording a proof.
@@ -152,9 +155,9 @@ pub trait Proposer<B: BlockT> {
 	///
 	/// # Return
 	///
-	/// Returns a future that resolves to a [`Proposal`] or to [`Self::Error`].
+	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
 	fn propose(
-		&mut self,
+		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,

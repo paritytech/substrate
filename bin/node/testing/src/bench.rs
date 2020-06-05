@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Benchmarking module.
 //!
@@ -20,7 +22,7 @@
 //! can pregenerate seed database and `clone` it for every iteration of your benchmarks
 //! or tests to get consistent, smooth benchmark experience!
 
-use std::{sync::Arc, path::Path, collections::BTreeMap};
+use std::{sync::Arc, path::{Path, PathBuf}, collections::BTreeMap};
 
 use node_primitives::Block;
 use crate::client::{Client, Backend};
@@ -43,11 +45,12 @@ use node_runtime::{
 	constants::currency::DOLLARS,
 	UncheckedExtrinsic,
 	MinimumPeriod,
+	SystemCall,
 	BalancesCall,
 	AccountId,
 	Signature,
 };
-use sp_core::ExecutionContext;
+use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -55,7 +58,9 @@ use sc_client_api::{
 	ExecutionStrategy,
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
-use sp_core::{Pair, Public, sr25519};
+use sp_core::{Pair, Public, sr25519, ed25519};
+use sc_block_builder::BlockBuilderProvider;
+use futures::{executor, task};
 
 /// Keyring full of accounts for benching.
 ///
@@ -66,7 +71,22 @@ use sp_core::{Pair, Public, sr25519};
 ///     //endowed-user//N
 #[derive(Clone)]
 pub struct BenchKeyring {
-	accounts: BTreeMap<AccountId, sr25519::Pair>,
+	accounts: BTreeMap<AccountId, BenchPair>,
+}
+
+#[derive(Clone)]
+enum BenchPair {
+	Sr25519(sr25519::Pair),
+	Ed25519(ed25519::Pair),
+}
+
+impl BenchPair {
+	fn sign(&self, payload: &[u8]) -> Signature {
+		match self {
+			Self::Sr25519(pair) => pair.sign(payload).into(),
+			Self::Ed25519(pair) => pair.sign(payload).into(),
+		}
+	}
 }
 
 /// Pre-initialized benchmarking database.
@@ -76,11 +96,13 @@ pub struct BenchKeyring {
 pub struct BenchDb {
 	keyring: BenchKeyring,
 	directory_guard: Guard,
+	database_type: DatabaseType,
 }
 
 impl Clone for BenchDb {
 	fn clone(&self) -> Self {
 		let keyring = self.keyring.clone();
+		let database_type = self.database_type;
 		let dir = tempfile::tempdir().expect("temp dir creation failed");
 
 		let seed_dir = self.directory_guard.0.path();
@@ -104,21 +126,110 @@ impl Clone for BenchDb {
 			&fs_extra::dir::CopyOptions::new(),
 		).expect("Copy of seed database is ok");
 
-		BenchDb { keyring, directory_guard: Guard(dir) }
+		BenchDb { keyring, directory_guard: Guard(dir), database_type }
+	}
+}
+
+/// Type of block for generation
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BlockType {
+	/// Bunch of random transfers.
+	RandomTransfersKeepAlive,
+	/// Bunch of random transfers that drain all of the source balance.
+	RandomTransfersReaping,
+	/// Bunch of "no-op" calls.
+	Noop,
+}
+
+impl BlockType {
+	/// Create block content description with specified number of transactions.
+	pub fn to_content(self, size: Option<usize>) -> BlockContent {
+		BlockContent {
+			block_type: self,
+			size: size,
+		}
+	}
+}
+
+/// Content of the generated block.
+pub struct BlockContent {
+	block_type: BlockType,
+	size: Option<usize>,
+}
+
+impl BlockContent {
+	fn iter_while(&self, mut f: impl FnMut(usize) -> bool) {
+		match self.size {
+			Some(v) => { for i in 0..v { if !f(i) { break; }}}
+			None => { for i in 0.. { if !f(i) { break; }}}
+		}
+	}
+}
+
+/// Type of backend database.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum DatabaseType {
+	/// RocksDb backend.
+	RocksDb,
+	/// Parity DB backend.
+	ParityDb,
+}
+
+impl DatabaseType {
+	fn into_settings(self, path: PathBuf) -> sc_client_db::DatabaseSettingsSrc {
+		match self {
+			Self::RocksDb => sc_client_db::DatabaseSettingsSrc::RocksDb {
+				path,
+				cache_size: 512,
+			},
+			Self::ParityDb => sc_client_db::DatabaseSettingsSrc::ParityDb {
+				path,
+			}
+		}
+	}
+}
+
+/// Benchmarking task executor.
+///
+/// Uses multiple threads as the regular executable.
+#[derive(Debug, Clone)]
+pub struct TaskExecutor {
+	pool: executor::ThreadPool,
+}
+
+impl TaskExecutor {
+	fn new() -> Self {
+		Self {
+			pool: executor::ThreadPool::new()
+				.expect("Failed to create task executor")
+		}
+	}
+}
+
+impl task::Spawn for TaskExecutor {
+	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
+	-> Result<(), task::SpawnError> {
+		self.pool.spawn_obj(future)
+	}
+}
+
+impl CloneableSpawn for TaskExecutor {
+	fn clone(&self) -> Box<dyn CloneableSpawn> {
+		Box::new(Clone::clone(self))
 	}
 }
 
 impl BenchDb {
 	/// New immutable benchmarking database.
 	///
-	/// This will generate database files in random temporary directory
-	/// and keep it there until struct is dropped.
-	///
-	/// You can `clone` this database or you can `create_context` from it
-	/// (which also do `clone`) to run actual operation against new database
-	/// which will be identical to this.
-	pub fn new(keyring_length: usize) -> Self {
-		let keyring = BenchKeyring::new(keyring_length);
+	/// See [`BenchDb::new`] method documentation for more information about the purpose
+	/// of this structure.
+	pub fn with_key_types(
+		database_type: DatabaseType,
+		keyring_length: usize,
+		key_types: KeyTypes,
+	) -> Self {
+		let keyring = BenchKeyring::new(keyring_length, key_types);
 
 		let dir = tempfile::tempdir().expect("temp dir creation failed");
 		log::trace!(
@@ -126,10 +237,22 @@ impl BenchDb {
 			"Created seed db at {}",
 			dir.path().to_string_lossy(),
 		);
-		let (_client, _backend) = Self::bench_client(dir.path(), Profile::Native, &keyring);
+		let (_client, _backend) = Self::bench_client(database_type, dir.path(), Profile::Native, &keyring);
 		let directory_guard = Guard(dir);
 
-		BenchDb { keyring, directory_guard }
+		BenchDb { keyring, directory_guard, database_type }
+	}
+
+	/// New immutable benchmarking database.
+	///
+	/// This will generate database files in random temporary directory
+	/// and keep it there until struct is dropped.
+	///
+	/// You can `clone` this database or you can `create_context` from it
+	/// (which also does `clone`) to run actual operation against new database
+	/// which will be identical to the original.
+	pub fn new(database_type: DatabaseType, keyring_length: usize) -> Self {
+		Self::with_key_types(database_type, keyring_length, KeyTypes::Sr25519)
 	}
 
 	// This should return client that is doing everything that full node
@@ -137,40 +260,45 @@ impl BenchDb {
 	//
 	// - This client should use best wasm execution method.
 	// - This client should work with real database only.
-	fn bench_client(dir: &std::path::Path, profile: Profile, keyring: &BenchKeyring) -> (Client, std::sync::Arc<Backend>) {
+	fn bench_client(
+		database_type: DatabaseType,
+		dir: &std::path::Path,
+		profile: Profile,
+		keyring: &BenchKeyring,
+	) -> (Client, std::sync::Arc<Backend>) {
 		let db_config = sc_client_db::DatabaseSettings {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
 			pruning: PruningMode::ArchiveAll,
-			source: sc_client_db::DatabaseSettingsSrc::Path {
-				path: dir.into(),
-				cache_size: None,
-			},
+			source: database_type.into_settings(dir.into()),
 		};
 
-		let (client, backend) = sc_client_db::new_client(
+		let (client, backend) = sc_service::new_client(
 			db_config,
-			NativeExecutor::new(WasmExecutionMethod::Compiled, None),
+			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
+			Box::new(TaskExecutor::new()),
+			None,
+			Default::default(),
 		).expect("Should not fail");
 
 		(client, backend)
 	}
 
 	/// Generate new block using this database.
-	pub fn generate_block(&mut self, transactions: usize) -> Block {
+	pub fn generate_block(&mut self, content: BlockContent) -> Block {
 		let (client, _backend) = Self::bench_client(
+			self.database_type,
 			self.directory_guard.path(),
 			Profile::Wasm,
 			&self.keyring,
 		);
 
-		let version = client.runtime_version_at(&BlockId::number(0))
-			.expect("There should be runtime version at 0")
-			.spec_version;
+		let runtime_version = client.runtime_version_at(&BlockId::number(0))
+			.expect("There should be runtime version at 0");
 
 		let genesis_hash = client.block_hash(Zero::zero())
 			.expect("Database error?")
@@ -199,10 +327,8 @@ impl BenchDb {
 			block.push(extrinsic).expect("Push inherent failed");
 		}
 
-		let mut iteration = 0;
 		let start = std::time::Instant::now();
-		for _ in 0..transactions {
-
+		content.iter_while(|iteration| {
 			let sender = self.keyring.at(iteration);
 			let receiver = get_account_id_from_seed::<sr25519::Public>(
 				&format!("random-user//{}", iteration)
@@ -210,15 +336,35 @@ impl BenchDb {
 
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
-					signed: Some((sender, signed_extra(0, 1*DOLLARS))),
-					function: Call::Balances(
-						BalancesCall::transfer(
-							pallet_indices::address::Address::Id(receiver),
-							1*DOLLARS
-						)
-					),
+					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
+					function: match content.block_type {
+						BlockType::RandomTransfersKeepAlive => {
+							Call::Balances(
+								BalancesCall::transfer_keep_alive(
+									pallet_indices::address::Address::Id(receiver),
+									node_runtime::ExistentialDeposit::get() + 1,
+								)
+							)
+						},
+						BlockType::RandomTransfersReaping => {
+							Call::Balances(
+								BalancesCall::transfer(
+									pallet_indices::address::Address::Id(receiver),
+									// Transfer so that ending balance would be 1 less than existential deposit
+									// so that we kill the sender account.
+									100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+								)
+							)
+						},
+						BlockType::Noop => {
+							Call::System(
+								SystemCall::remark(Vec::new())
+							)
+						},
+					},
 				},
-				version,
+				runtime_version.spec_version,
+				runtime_version.transaction_version,
 				genesis_hash,
 			);
 
@@ -231,13 +377,13 @@ impl BenchDb {
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(
 						sp_blockchain::ApplyExtrinsicFailed::Validity(e)
 				)) if e.exhausted_resources() => {
-					break;
+					return false;
 				},
 				Err(err) => panic!("Error pushing transaction: {:?}", err),
-				Ok(_) => {},
+				Ok(_) => true,
 			}
-			iteration += 1;
-		}
+		});
+
 		let block = block.build().expect("Block build failed").block;
 
 		log::info!(
@@ -256,8 +402,13 @@ impl BenchDb {
 
 	/// Clone this database and create context for testing/benchmarking.
 	pub fn create_context(&self, profile: Profile) -> BenchContext {
-		let BenchDb { directory_guard, keyring } = self.clone();
-		let (client, backend) = Self::bench_client(directory_guard.path(), profile, &keyring);
+		let BenchDb { directory_guard, keyring, database_type } = self.clone();
+		let (client, backend) = Self::bench_client(
+			database_type,
+			directory_guard.path(),
+			profile,
+			&keyring
+		);
 
 		BenchContext {
 			client, backend, db_guard: directory_guard,
@@ -265,17 +416,35 @@ impl BenchDb {
 	}
 }
 
+/// Key types to be used in benching keyring
+pub enum KeyTypes {
+	/// sr25519 signing keys
+	Sr25519,
+	/// ed25519 signing keys
+	Ed25519,
+}
+
 impl BenchKeyring {
 	/// New keyring.
 	///
 	/// `length` is the number of accounts generated.
-	pub fn new(length: usize) -> Self {
+	pub fn new(length: usize, key_types: KeyTypes) -> Self {
 		let mut accounts = BTreeMap::new();
 
 		for n in 0..length {
 			let seed = format!("//endowed-user/{}", n);
-			let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
-			let account_id = AccountPublic::from(pair.public()).into_account();
+			let (account_id, pair) = match key_types {
+				KeyTypes::Sr25519 => {
+					let pair = sr25519::Pair::from_string(&seed, None).expect("failed to generate pair");
+					let account_id = AccountPublic::from(pair.public()).into_account();
+					(account_id, BenchPair::Sr25519(pair))
+				},
+				KeyTypes::Ed25519 => {
+					let pair = ed25519::Pair::from_seed(&blake2_256(seed.as_bytes()));
+					let account_id = AccountPublic::from(pair.public()).into_account();
+					(account_id, BenchPair::Ed25519(pair))
+				},
+			};
 			accounts.insert(account_id, pair);
 		}
 
@@ -293,10 +462,16 @@ impl BenchKeyring {
 	}
 
 	/// Sign transaction with keypair from this keyring.
-	pub fn sign(&self, xt: CheckedExtrinsic, version: u32, genesis_hash: [u8; 32]) -> UncheckedExtrinsic {
+	pub fn sign(
+		&self,
+		xt: CheckedExtrinsic,
+		spec_version: u32,
+		tx_version: u32,
+		genesis_hash: [u8; 32]
+	) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, extra)) => {
-				let payload = (xt.function, extra.clone(), version, genesis_hash, genesis_hash);
+				let payload = (xt.function, extra.clone(), spec_version, tx_version, genesis_hash, genesis_hash);
 				let key = self.accounts.get(&signed).expect("Account id not found in keyring");
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {

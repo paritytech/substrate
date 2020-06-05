@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Tests for the runtime interface traits and proc macros.
 
@@ -21,7 +22,7 @@
 use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
+use sp_std::{prelude::*, mem, convert::TryFrom};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
@@ -103,23 +104,15 @@ pub trait TestApi {
 	fn get_and_return_i128(val: i128) -> i128 {
 		val
 	}
-}
 
-/// Two random external functions from the old runtime interface.
-/// This ensures that we still inherently export these functions from the host and that we are still
-/// compatible with old wasm runtimes.
-#[cfg(not(feature = "std"))]
-extern "C" {
-	pub fn ext_clear_storage(key_data: *const u8, key_len: u32);
-	pub fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
-}
+	fn test_versionning(&self, data: u32) -> bool {
+		data == 42 || data == 50
+	}
 
-/// Make sure the old runtime interface needs to be imported.
-#[no_mangle]
-#[cfg(not(feature = "std"))]
-pub fn force_old_runtime_interface_import() {
-	unsafe { ext_clear_storage(sp_std::ptr::null(), 0); }
-	unsafe { ext_keccak_256(sp_std::ptr::null(), 0, sp_std::ptr::null_mut()); }
+	#[version(2)]
+	fn test_versionning(&self, data: u32) -> bool {
+		data == 42
+	}
 }
 
 /// This function is not used, but we require it for the compiler to include `sp-io`.
@@ -247,5 +240,15 @@ wasm_export_functions! {
 			len += test_api::get_and_return_array([0; 34])[1];
 		}
 		assert_eq!(0, len);
+	}
+
+	fn test_versionning_works() {
+		// we fix new api to accept only 42 as a proper input
+		// as opposed to sp-runtime-interface-test-wasm-deprecated::test_api::verify_input
+		// which accepted 42 and 50.
+		assert!(test_api::test_versionning(42));
+
+		assert!(!test_api::test_versionning(50));
+		assert!(!test_api::test_versionning(102));
 	}
 }

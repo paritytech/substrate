@@ -1,35 +1,34 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-use std::io;
-use std::fs;
-use std::path::PathBuf;
-use std::fmt::Debug;
-use log::info;
-use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig, Roles,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::{SharedParams, BlockNumber, PruningParams};
+use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
+use crate::CliConfiguration;
+use log::info;
+use sc_service::{
+	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
+};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::fmt::Debug;
+use std::fs;
+use std::io;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -50,9 +49,9 @@ pub struct ExportBlocksCmd {
 	#[structopt(long = "to", value_name = "BLOCK")]
 	pub to: Option<BlockNumber>,
 
-	/// Use JSON output rather than binary.
-	#[structopt(long = "json")]
-	pub json: bool,
+	/// Use binary output rather than JSON.
+	#[structopt(long)]
+	pub binary: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -61,57 +60,57 @@ pub struct ExportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		config: Configuration<G, E>,
+	pub async fn run<B, BC, BB>(
+		&self,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
+		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
+
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
-		let json = self.json;
+		let binary = self.binary;
 
 		let file: Box<dyn io::Write> = match &self.output {
 			Some(filename) => Box::new(fs::File::create(filename)?),
 			None => Box::new(io::stdout()),
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
-		})
+		builder(config)?
+			.export_blocks(file, from.into(), to, binary)
+			.await
+			.map_err(Into::into)
+	}
+}
+
+impl CliConfiguration for ExportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
-		config.use_in_memory_keystore()?;
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
+	}
 
-		Ok(())
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

@@ -1,26 +1,27 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use sp_api::ProvideRuntimeApi;
 use substrate_test_runtime_client::{
 	prelude::*,
 	DefaultTestClientBuilderExt, TestClientBuilder,
-	runtime::{TestAPI, DecodeFails, Transfer, Header},
+	runtime::{TestAPI, DecodeFails, Transfer, Block},
 };
-use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, Hash as HashT}};
+use sp_runtime::{generic::BlockId, traits::{Header as HeaderT, HashFor}};
 use sp_state_machine::{
 	ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend,
@@ -28,6 +29,7 @@ use sp_state_machine::{
 
 use sp_consensus::SelectChain;
 use codec::Encode;
+use sc_block_builder::BlockBuilderProvider;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
@@ -163,6 +165,12 @@ fn record_proof_works() {
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
 
+	let runtime_code = sp_core::traits::RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(client.code_at(&block_id).unwrap().into()),
+		hash: vec![1],
+		heap_pages: None,
+	};
+
 	let transaction = Transfer {
 		amount: 1000,
 		nonce: 0,
@@ -177,19 +185,25 @@ fn record_proof_works() {
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
-	let backend = create_proof_check_backend::<<<Header as HeaderT>::Hashing as HashT>::Hasher>(
+	let backend = create_proof_check_backend::<HashFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
 	).expect("Creates proof backend.");
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None);
+	let executor = NativeExecutor::<LocalExecutor>::new(
+		WasmExecutionMethod::Interpreted,
+		None,
+		8,
+	);
 	execution_proof_check_on_trie_backend::<_, u64, _>(
 		&backend,
 		&mut overlay,
 		&executor,
+		sp_core::tasks::executor(),
 		"Core_execute_block",
 		&block.encode(),
+		&runtime_code,
 	).expect("Executes block while using the proof backend");
 }

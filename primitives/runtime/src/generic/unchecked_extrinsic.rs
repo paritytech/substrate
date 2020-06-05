@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
@@ -24,7 +25,7 @@ use crate::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
 		IdentifyAccount,
 	},
-	generic::{CheckSignature, CheckedExtrinsic}, 
+	generic::CheckedExtrinsic,
 	transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
@@ -121,26 +122,16 @@ where
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
-	fn check(self, check_signature: CheckSignature, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
+	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
+				let raw_payload = SignedPayload::new(self.function, extra)?;
+				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
+					return Err(InvalidTransaction::BadProof.into())
+				}
 
-				let (function, extra) = if let CheckSignature::No = check_signature {
-					(self.function, extra)
-				} else {
-					let raw_payload = SignedPayload::new(self.function, extra)?;
-
-					if !raw_payload.using_encoded(|payload| {
-						signature.verify(payload, &signed)
-					}) {
-						return Err(InvalidTransaction::BadProof.into())
-					}
-					let (function, extra, _) = raw_payload.deconstruct();
-
-					(function, extra)
-				};
-
+				let (function, extra, _) = raw_payload.deconstruct();
 				CheckedExtrinsic {
 					signed: Some((signed, extra)),
 					function,
@@ -330,30 +321,10 @@ mod tests {
 	use super::*;
 	use sp_io::hashing::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
-	use crate::generic::CheckSignature;
-	use serde::{Serialize, Deserialize};
+	use crate::traits::{SignedExtension, IdentityLookup};
+	use crate::testing::TestSignature as TestSig;
 
 	type TestContext = IdentityLookup<u64>;
-
-	#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Encode, Decode)]
-	pub struct TestSigner(pub u64);
-	impl From<u64> for TestSigner { fn from(x: u64) -> Self { Self(x) } }
-	impl From<TestSigner> for u64 { fn from(x: TestSigner) -> Self { x.0 } }
-	impl IdentifyAccount for TestSigner {
-		type AccountId = u64;
-		fn into_account(self) -> u64 { self.into() }
-	}
-
-	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
-	struct TestSig(u64, Vec<u8>);
-	impl traits::Verify for TestSig {
-		type Signer = TestSigner;
-		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &u64) -> bool {
-			signer == &self.0 && msg.get() == &self.1[..]
-		}
-	}
-
 	type TestAccountId = u64;
 	type TestCall = Vec<u8>;
 
@@ -367,7 +338,6 @@ mod tests {
 		type AccountId = u64;
 		type Call = ();
 		type AdditionalSigned = ();
-		type DispatchInfo = ();
 		type Pre = ();
 
 		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -412,7 +382,7 @@ mod tests {
 	fn unsigned_check_should_work() {
 		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		assert!(!ux.is_signed().unwrap_or(false));
-		assert!(<Ex as Checkable<TestContext>>::check(ux, CheckSignature::Yes, &Default::default()).is_ok());
+		assert!(<Ex as Checkable<TestContext>>::check(ux, &Default::default()).is_ok());
 	}
 
 	#[test]
@@ -425,7 +395,7 @@ mod tests {
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, CheckSignature::Yes, &Default::default()),
+			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
 			Err(InvalidTransaction::BadProof.into()),
 		);
 	}
@@ -440,7 +410,7 @@ mod tests {
 		);
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(
-			<Ex as Checkable<TestContext>>::check(ux, CheckSignature::Yes, &Default::default()),
+			<Ex as Checkable<TestContext>>::check(ux, &Default::default()),
 			Ok(CEx { signed: Some((TEST_ACCOUNT, TestExtra)), function: vec![0u8; 0] }),
 		);
 	}

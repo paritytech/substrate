@@ -1,27 +1,32 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate transaction pool implementation.
 
+#![recursion_limit="256"]
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
 mod api;
-pub mod error;
 mod revalidation;
+mod metrics;
+
+pub mod error;
 
 #[cfg(any(feature = "test-helpers", test))]
 pub mod testing;
@@ -30,18 +35,28 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin};
-use futures::{Future, FutureExt, future::ready};
+use futures::{prelude::*, future::ready, channel::oneshot};
 use parking_lot::Mutex;
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic},
+	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero},
 };
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
+	TransactionSource,
 };
 use wasm_timer::Instant;
+
+use prometheus_endpoint::Registry as PrometheusRegistry;
+use crate::metrics::MetricsLink as PrometheusMetrics;
+
+type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
+
+type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<sc_transaction_graph::ExHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>>;
+
+type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -53,6 +68,49 @@ pub struct BasicPool<PoolApi, Block>
 	api: Arc<PoolApi>,
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
+	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
+	metrics: PrometheusMetrics,
+}
+
+struct ReadyPoll<T, Block: BlockT> {
+	updated_at: NumberFor<Block>,
+	pollers: Vec<(NumberFor<Block>, oneshot::Sender<T>)>,
+}
+
+impl<T, Block: BlockT> Default for ReadyPoll<T, Block> {
+	fn default() -> Self {
+		Self {
+			updated_at: NumberFor::<Block>::zero(),
+			pollers: Default::default(),
+		}
+	}
+}
+
+impl<T, Block: BlockT> ReadyPoll<T, Block> {
+	fn trigger(&mut self, number: NumberFor<Block>, iterator_factory: impl Fn() -> T) {
+		self.updated_at = number;
+
+		let mut idx = 0;
+		while idx < self.pollers.len() {
+			if self.pollers[idx].0 <= number {
+				let poller_sender = self.pollers.swap_remove(idx);
+				log::debug!(target: "txpool", "Sending ready signal at block {}", number);
+				let _ = poller_sender.1.send(iterator_factory());
+			} else {
+				idx += 1;
+			}
+		}
+	}
+
+	fn add(&mut self, number: NumberFor<Block>) -> oneshot::Receiver<T> {
+		let (sender, receiver) = oneshot::channel();
+		self.pollers.push((number, sender));
+		receiver
+	}
+
+	fn updated_at(&self) -> NumberFor<Block> {
+		self.updated_at
+	}
 }
 
 #[cfg(not(target_os = "unknown"))]
@@ -97,8 +155,31 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn new(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
+		prometheus: Option<&PrometheusRegistry>,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
-		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
+		Self::with_revalidation_type(options, pool_api, prometheus, RevalidationType::Full)
+	}
+
+	/// Create new basic transaction pool with provided api, for tests.
+	#[cfg(test)]
+	pub fn new_test(
+		pool_api: Arc<PoolApi>,
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl) {
+		let pool = Arc::new(sc_transaction_graph::Pool::new(Default::default(), pool_api.clone()));
+		let (revalidation_queue, background_task, notifier) =
+			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
+		(
+			BasicPool {
+				api: pool_api,
+				pool,
+				revalidation_queue: Arc::new(revalidation_queue),
+				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
+				ready_poll: Default::default(),
+				metrics: Default::default(),
+			},
+			background_task,
+			notifier,
+		)
 	}
 
 	/// Create new basic transaction pool with provided api and custom
@@ -106,6 +187,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
+		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
@@ -116,6 +198,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				(queue, Some(background))
 			},
 		};
+
 		(
 			BasicPool {
 				api: pool_api,
@@ -127,6 +210,8 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 						RevalidationType::Full => RevalidationStrategy::Always,
 					}
 				)),
+				ready_poll: Default::default(),
+				metrics: PrometheusMetrics::new(prometheus),
 			},
 			background_task,
 		)
@@ -151,52 +236,75 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
+
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc_by(xts.len() as u64));
+
+		let metrics = self.metrics.clone();
 		async move {
-			pool.submit_at(&at, xts, false).await
+			let tx_count = xts.len();
+			let res = pool.submit_at(&at, source, xts, false).await;
+			metrics.report(|metrics| metrics.validations_finished.inc_by(tx_count as u64));
+			res
 		}.boxed()
 	}
 
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
+
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+
+		let metrics = self.metrics.clone();
 		async move {
-			pool.submit_one(&at, xt).await
+			let res = pool.submit_one(&at, source, xt).await;
+
+			metrics.report(|metrics| metrics.validations_finished.inc());
+			res
+
 		}.boxed()
 	}
 
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
 		let at = *at;
 		let pool = self.pool.clone();
 
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+
+		let metrics = self.metrics.clone();
 		async move {
-			pool.submit_and_watch(&at, xt)
+			let result = pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-				.await
+				.await;
+
+			metrics.report(|metrics| metrics.validations_finished.inc());
+
+			result
 		}.boxed()
 	}
 
 	fn remove_invalid(&self, hashes: &[TxHash<Self>]) -> Vec<Arc<Self::InPoolTransaction>> {
-		self.pool.validated_pool().remove_invalid(hashes)
+		let removed = self.pool.validated_pool().remove_invalid(hashes);
+		self.metrics.report(|metrics| metrics.validations_invalid.inc_by(removed.len() as u64));
+		removed
 	}
 
 	fn status(&self) -> PoolStatus {
 		self.pool.validated_pool().status()
-	}
-
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>> {
-		Box::new(self.pool.validated_pool().ready())
 	}
 
 	fn import_notification_stream(&self) -> ImportNotificationStream<TxHash<Self>> {
@@ -213,6 +321,27 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>> {
 		self.pool.validated_pool().ready_by_hash(hash)
+	}
+
+	fn ready_at(&self, at: NumberFor<Self::Block>) -> PolledIterator<PoolApi> {
+		if self.ready_poll.lock().updated_at() >= at {
+			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
+			return Box::pin(futures::future::ready(iterator));
+		}
+
+		Box::pin(
+			self.ready_poll
+				.lock()
+				.add(at)
+				.map(|received| received.unwrap_or_else(|e| {
+					log::warn!("Error receiving pending set: {:?}", e);
+					Box::new(vec![].into_iter())
+				}))
+		)
+	}
+
+	fn ready(&self) -> ReadyIteratorFor<PoolApi> {
+		Box::new(self.pool.validated_pool().ready())
 	}
 }
 
@@ -315,7 +444,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let block_number = match api.block_id_to_number(&id) {
 					Ok(Some(number)) => number,
 					_ => {
-						log::trace!(target: "txqueue", "Skipping chain event - no number for that block {:?}", id);
+						log::trace!(target: "txpool", "Skipping chain event - no number for that block {:?}", id);
 						return Box::pin(ready(()));
 					}
 				};
@@ -328,6 +457,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let retracted = retracted.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
+				let ready_poll = self.ready_poll.clone();
 
 				async move {
 					// We don't query block if we won't prune anything
@@ -347,6 +477,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						}
 					}
 
+					let extra_pool = pool.clone();
+					// After #5200 lands, this arguably might be moved to the handler of "all blocks notification".
+					ready_poll.lock().trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
+
 					if next_action.resubmit {
 						let mut resubmit_transactions = Vec::new();
 
@@ -365,7 +499,14 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 							resubmit_transactions.extend(block_transactions);
 						}
-						if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
+						if let Err(e) = pool.submit_at(
+							&id,
+							// These transactions are coming from retracted blocks, we should
+							// simply consider them external.
+							TransactionSource::External,
+							resubmit_transactions,
+							true
+						).await {
 							log::debug!(
 								target: "txpool",
 								"[{:?}] Error re-submitting transactions: {:?}", id, e

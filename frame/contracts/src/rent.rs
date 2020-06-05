@@ -92,8 +92,13 @@ fn compute_fee_per_block<T: Trait>(
 		.checked_div(&T::RentDepositOffset::get())
 		.unwrap_or_else(Zero::zero);
 
-	let effective_storage_size =
-		<BalanceOf<T>>::from(contract.storage_size).saturating_sub(free_storage);
+	// For now, we treat every empty KV pair as if it was one byte long.
+	let empty_pairs_equivalent = contract.empty_pair_count;
+
+	let effective_storage_size = <BalanceOf<T>>::from(
+		contract.storage_size + T::StorageSizeOffset::get() + empty_pairs_equivalent,
+	)
+	.saturating_sub(free_storage);
 
 	effective_storage_size
 		.checked_mul(&T::RentByteFee::get())
@@ -223,8 +228,7 @@ fn enact_verdict<T: Trait>(
 		Verdict::Kill => {
 			<ContractInfoOf<T>>::remove(account);
 			child::kill_storage(
-				&alive_contract_info.trie_id,
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_info(),
 			);
 			<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), false));
 			None
@@ -235,7 +239,9 @@ fn enact_verdict<T: Trait>(
 			}
 
 			// Note: this operation is heavy.
-			let child_storage_root = child::child_root(&alive_contract_info.trie_id);
+			let child_storage_root = child::root(
+				&alive_contract_info.child_trie_info(),
+			);
 
 			let tombstone = <TombstoneContractInfo<T>>::new(
 				&child_storage_root[..],
@@ -245,8 +251,7 @@ fn enact_verdict<T: Trait>(
 			<ContractInfoOf<T>>::insert(account, &tombstone_info);
 
 			child::kill_storage(
-				&alive_contract_info.trie_id,
-				alive_contract_info.child_trie_unique_id(),
+				&alive_contract_info.child_trie_info(),
 			);
 
 			<Module<T>>::deposit_event(RawEvent::Evicted(account.clone(), true));

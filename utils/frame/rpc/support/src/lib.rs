@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Combines [sc_rpc_api::state::StateClient] with [frame_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
@@ -25,7 +26,7 @@ use jsonrpc_client_transports::RpcError;
 use codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
 use frame_support::storage::generator::{
-	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
+	StorageDoubleMap, StorageMap, StorageValue
 };
 use sp_storage::{StorageData, StorageKey};
 use sc_rpc_api::state::StateClient;
@@ -33,9 +34,7 @@ use sc_rpc_api::state::StateClient;
 /// A typed query on chain state usable from an RPC client.
 ///
 /// ```no_run
-/// # use futures::compat::Compat;
 /// # use futures::compat::Future01CompatExt;
-/// # use futures::future::FutureExt;
 /// # use jsonrpc_client_transports::RpcError;
 /// # use jsonrpc_client_transports::transports::http;
 /// # use codec::Encode;
@@ -49,7 +48,7 @@ use sc_rpc_api::state::StateClient;
 /// # type Hash = ();
 /// #
 /// # fn main() -> Result<(), RpcError> {
-/// #     tokio::runtime::Runtime::new().unwrap().block_on(Compat::new(test().boxed()))
+/// #     tokio::runtime::Runtime::new().unwrap().block_on(test())
 /// # }
 /// #
 /// # struct TestRuntime;
@@ -65,9 +64,9 @@ use sc_rpc_api::state::StateClient;
 /// decl_storage! {
 ///     trait Store for Module<T: Trait> as TestRuntime {
 ///         pub LastActionId: u64;
-///         pub Voxels: map hasher(blake2_256) Loc => Block;
-///         pub Actions: linked_map hasher(blake2_256) u64 => Loc;
-///         pub Prefab: double_map hasher(blake2_256) u128, hasher(blake2_256) (i8, i8, i8) => Block;
+///         pub Voxels: map hasher(blake2_128_concat) Loc => Block;
+///         pub Actions: map hasher(blake2_128_concat) u64 => Loc;
+///         pub Prefab: double_map hasher(blake2_128_concat) u128, hasher(blake2_128_concat) (i8, i8, i8) => Block;
 ///     }
 /// }
 ///
@@ -81,7 +80,7 @@ use sc_rpc_api::state::StateClient;
 /// let q = StorageQuery::map::<Voxels, _>((0, 0, 0));
 /// let _: Option<Block> = q.get(&cl, None).await?;
 ///
-/// let q = StorageQuery::linked_map::<Actions, _>(12);
+/// let q = StorageQuery::map::<Actions, _>(12);
 /// let _: Option<Loc> = q.get(&cl, None).await?;
 ///
 /// let q = StorageQuery::double_map::<Prefab, _, _>(3, (0, 0, 0));
@@ -109,14 +108,6 @@ impl<V: FullCodec> StorageQuery<V> {
 	pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
 		Self {
 			key: StorageKey(St::storage_map_final_key(key)),
-			_spook: PhantomData,
-		}
-	}
-
-	/// Create a storage query for a value in a StorageLinkedMap.
-	pub fn linked_map<St: StorageLinkedMap<K, V>, K: FullCodec>(key: K) -> Self {
-		Self {
-			key: StorageKey(St::storage_linked_map_final_key(key)),
 			_spook: PhantomData,
 		}
 	}

@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Voting thresholds.
 
@@ -21,6 +22,7 @@ use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_runtime::traits::{Zero, IntegerSquareRoot};
 use sp_std::ops::{Add, Mul, Div, Rem};
+use crate::Tally;
 
 /// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
@@ -35,10 +37,9 @@ pub enum VoteThreshold {
 }
 
 pub trait Approved<Balance> {
-	/// Given `approve` votes for and `against` votes against from a total electorate size of
-	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
-	/// overall outcome is in favor of approval.
-	fn approved(&self, approve: Balance, against: Balance, voters: Balance, electorate: Balance) -> bool;
+	/// Given a `tally` of votes and a total size of `electorate`, this returns `true` if the
+	/// overall outcome is in favor of approval according to `self`'s threshold method.
+	fn approved(&self, tally: Tally<Balance>, electorate: Balance) -> bool;
 }
 
 /// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
@@ -69,23 +70,21 @@ fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, 
 	}
 }
 
-impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Rem<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
-	/// Given `approve` votes for and `against` votes against from a total electorate size of
-	/// `electorate` of whom `voters` voted (`electorate - voters` are abstainers) then returns true if the
-	/// overall outcome is in favor of approval.
-	///
-	/// We assume each *voter* may cast more than one *vote*, hence `voters` is not necessarily equal to
-	/// `approve + against`.
-	fn approved(&self, approve: Balance, against: Balance, voters: Balance, electorate: Balance) -> bool {
-		let sqrt_voters = voters.integer_sqrt();
+impl<
+	Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance>
+		+ Mul<Balance, Output = Balance> + Div<Balance, Output = Balance>
+		+ Rem<Balance, Output = Balance> + Copy,
+> Approved<Balance> for VoteThreshold {
+	fn approved(&self, tally: Tally<Balance>, electorate: Balance) -> bool {
+		let sqrt_voters = tally.turnout.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();
 		if sqrt_voters.is_zero() { return false; }
 		match *self {
 			VoteThreshold::SuperMajorityApprove =>
-				compare_rationals(against, sqrt_voters, approve, sqrt_electorate),
+				compare_rationals(tally.nays, sqrt_voters, tally.ayes, sqrt_electorate),
 			VoteThreshold::SuperMajorityAgainst =>
-				compare_rationals(against, sqrt_electorate, approve, sqrt_voters),
-			VoteThreshold::SimpleMajority => approve > against,
+				compare_rationals(tally.nays, sqrt_electorate, tally.ayes, sqrt_voters),
+			VoteThreshold::SimpleMajority => tally.ayes > tally.nays,
 		}
 	}
 }
@@ -96,7 +95,7 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(60, 50, 110, 210), false);
-		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(100, 50, 150, 210), true);
+		assert!(!VoteThreshold::SuperMajorityApprove.approved(Tally{ayes: 60, nays: 50, turnout: 110}, 210));
+		assert!(VoteThreshold::SuperMajorityApprove.approved(Tally{ayes: 100, nays: 50, turnout: 150}, 210));
 	}
 }

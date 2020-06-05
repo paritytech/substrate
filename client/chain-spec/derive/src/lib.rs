@@ -16,8 +16,6 @@
 
 //! Macros to derive chain spec extension traits implementation.
 
-extern crate proc_macro;
-
 mod impls;
 
 use proc_macro::TokenStream;

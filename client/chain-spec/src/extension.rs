@@ -17,6 +17,8 @@
 //! Chain Spec extensions helpers.
 
 use std::fmt::Debug;
+use std::any::{TypeId, Any};
+
 use std::collections::BTreeMap;
 
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
@@ -120,6 +122,8 @@ pub trait Extension: Serialize + DeserializeOwned + Clone {
 
 	/// Get an extension of specific type.
 	fn get<T: 'static>(&self) -> Option<&T>;
+	/// Get an extension of specific type as refernce to `Any`
+	fn get_any(&self, t: TypeId) -> &dyn Any;
 
 	/// Get forkable extensions of specific type.
 	fn forks<BlockNumber, T>(&self) -> Option<Forks<BlockNumber, T>> where
@@ -137,6 +141,7 @@ impl Extension for crate::NoExtension {
 	type Forks = Self;
 
 	fn get<T: 'static>(&self) -> Option<&T> { None }
+	fn get_any(&self, _t: TypeId) -> &dyn Any { self }
 }
 
 pub trait IsForks {
@@ -225,11 +230,16 @@ impl<B, E> Extension for Forks<B, E> where
 	type Forks = Self;
 
 	fn get<T: 'static>(&self) -> Option<&T> {
-		use std::any::{TypeId, Any};
-
 		match TypeId::of::<T>() {
 			x if x == TypeId::of::<E>() => Any::downcast_ref(&self.base),
 			_ => self.base.get(),
+		}
+	}
+
+	fn get_any(&self, t: TypeId) -> &dyn Any {
+		match t {
+			x if x == TypeId::of::<E>() => &self.base,
+			_ => self.base.get_any(t),
 		}
 	}
 
@@ -239,8 +249,6 @@ impl<B, E> Extension for Forks<B, E> where
 		<Self::Forks as IsForks>::Extension: Extension,
 		<<Self::Forks as IsForks>::Extension as Group>::Fork: Extension,
 	{
-		use std::any::{TypeId, Any};
-
 		if TypeId::of::<BlockNumber>() == TypeId::of::<B>() {
 			Any::downcast_ref(&self.for_type::<T>()?).cloned()
 		} else {
@@ -248,6 +256,24 @@ impl<B, E> Extension for Forks<B, E> where
 				.for_type()
 		}
 	}
+}
+
+/// A subset if the `Extension` trait that only allows for quering extensions.
+pub trait GetExtension {
+	/// Get an extension of specific type.
+	fn get_any(&self, t: TypeId) -> &dyn Any;
+}
+
+impl <E: Extension> GetExtension for E {
+	fn get_any(&self, t: TypeId) -> &dyn Any {
+		Extension::get_any(self, t)
+	}
+}
+
+/// Helper function that queries an extension by type from `GetExtension`
+/// trait object.
+pub fn get_extension<T: 'static>(e: &dyn GetExtension) -> Option<&T> {
+	Any::downcast_ref(GetExtension::get_any(e, TypeId::of::<T>()))
 }
 
 #[cfg(test)]

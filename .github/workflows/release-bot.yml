@@ -1,0 +1,18 @@
+name: Pushes release updates to a pre-defined Matrix room
+on:
+  release:
+    types:
+      - edited
+      - prereleased
+      - published
+jobs:
+  ping_matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: send message
+        uses: s3krit/matrix-message-action@v0.0.2
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          message: "**${{github.event.repository.full_name}}:** A release has been ${{github.event.action}}<br/>Release version [${{github.event.release.tag_name}}](${{github.event.release.html_url}})<br/><br/>***Description:***<br/>${{github.event.release.body}}<br/>"
+          server: "matrix.parity.io"

@@ -1,10 +1,17 @@
-# Substrate &middot; [![GitHub license](https://img.shields.io/github/license/paritytech/substrate)](LICENSE) [![GitLab Status](https://gitlab.parity.io/parity/substrate/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/substrate/pipelines) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/CONTRIBUTING.adoc)
+# Substrate &middot; [![GitHub license](https://img.shields.io/badge/license-GPL3%2FApache2-blue)](LICENSE) [![GitLab Status](https://gitlab.parity.io/parity/substrate/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/substrate/pipelines) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/CONTRIBUTING.adoc)
 
-Substrate is a next-generation framework for blockchain innovation.
+<p align="center">
+  <img src="/docs/media/sub.gif">
+</p>
+
+
+Substrate is a next-generation framework for blockchain innovation 🚀.
 
 ## Trying it out
 
-Simply go to [substrate.dev](https://substrate.dev) and follow the [getting started](https://substrate.dev/docs/en/overview/getting-started/) instructions.
+Simply go to [substrate.dev](https://substrate.dev) and follow the 
+[installation](https://substrate.dev/docs/en/knowledgebase/getting-started/) instructions. You can 
+also try out one of the [tutorials](https://substrate.dev/en/tutorials).
 
 ## Contributions & Code of Conduct
 
@@ -16,4 +23,4 @@ The security policy and procedures can be found in [`docs/SECURITY.md`](docs/SEC
 
 ## License
 
-Substrate is [GPL 3.0 licensed](LICENSE).
+Substrate Client (`/client/*` / `sc-*`) is licensed under [GPL v3.0 with a classpath linking exception](LICENSE-GPL3), primitives (`sp-*`), FRAME (`frame-*`) and pallets (`pallets-*`), binaries (`/bin`) and all other utilities are licensed under [Apache 2.0](LICENSE-APACHE2).

@@ -1,26 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // tag::description[]
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
 #![recursion_limit="512"]
-
-extern crate proc_macro;
 
 mod storage;
 mod construct_runtime;
@@ -35,8 +34,8 @@ use proc_macro::TokenStream;
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Foo get(fn foo) config(): u32=12;
-/// 		Bar: map hasher(blake2_256) u32 => u32;
-/// 		pub Zed build(|config| vec![(0, 0)]): linked_map hasher(blake2_256) u32 => u32;
+/// 		Bar: map hasher(identity) u32 => u32;
+/// 		pub Zed build(|config| vec![(0, 0)]): map hasher(identity) u32 => u32;
 /// 	}
 /// }
 /// ```
@@ -72,10 +71,28 @@ use proc_macro::TokenStream;
 ///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
+///   [`Hashable`](../frame_support/trait.Hashable.html) trait. You will generally want to use one
+///   of three hashers:
+///   * `blake2_128_concat`: The default, safe choice. Use if you are unsure or don't care. It is
+///     secure against user-tainted keys, fairly fast and memory-efficient and supports
+///     iteration over its keys and values. This must be used if the keys of your map can be
+///     selected *en masse* by untrusted users.
+///   * `twox_64_concat`: This is an insecure hasher and can only be used safely if you know that
+///     the preimages cannot be chosen at will by untrusted users. It is memory-efficient, extremely
+///     performant and supports iteration over its keys and values. You can safely use this is the
+///     key is:
+///     - A (slowly) incrementing index.
+///     - Known to be the result of a cryptographic hash (though `identity` is a better choice here).
+///     - Known to be the public key of a cryptographic key pair in existence.
+///   * `identity`: This is not a hasher at all, and just uses the key material directly. Since it
+///     does no hashing or appending, it's the fastest possible hasher, however, it's also the least
+///     secure. It can be used only if you know that the key will be cryptographically/securely
+///     randomly distributed over the binary encoding space. In most cases this will not be true.
+///     One case where it is true, however, if where the key is itself the result of a cryptographic
+///     hash of some existent data.
 ///
-///   `blake2_256` and `blake2_128_concat` are strong hasher. One should use another hasher
-///   with care, see generator documentation.
+///   Other hashers will tend to be "opaque" and not support iteration over the keys in the
+///   map. It is not recommended to use these.
 ///
 ///   The generator is implemented with:
 ///   * `module_prefix`: $module_prefix
@@ -87,36 +104,6 @@ use proc_macro::TokenStream;
 ///   twox128(module_prefix) ++ twox128(storage_prefix) ++ hasher(encode(key))
 ///   ```
 ///
-/// * Linked map: `Foo: linked_map hasher($hash) type => type`: Implements the
-///   [`StorageLinkedMap`](../frame_support/storage/trait.StorageLinkedMap.html) trait using the
-///   [`StorageLinkedMap generator`](../frame_support/storage/generator/trait.StorageLinkedMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
-///
-///   `$hash` representing a choice of hashing algorithms available in the
-///   [`Hashable`](../frame_support/trait.Hashable.html) trait.
-///
-///   `blake2_256` and `blake2_128_concat` are strong hasher. One should use another hasher
-///   with care, see generator documentation.
-///
-///   All key formatting logic can be accessed in a type-agnostic format via the
-///   `KeyFormat` trait, which
-///   is implemented for the storage linked map type as well.
-///
-///   The generator key format is implemented with:
-///   * `module_prefix`: $module_prefix
-///   * `storage_prefix`: storage_name
-///   * `head_prefix`: `"HeadOf" ++ storage_name`
-///   * `Hasher`: $hash
-///
-///   Thus the keys are stored at:
-///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(storage_prefix) ++ Hasher(encode(key))
-///   ```
-///   and head is stored at:
-///   ```nocompile
-///   Twox128(module_prefix) ++ Twox128(head_prefix)
-///   ```
-///
 /// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
 ///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
 ///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
@@ -125,14 +112,6 @@ use proc_macro::TokenStream;
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be chosen with care, see
 ///   generator documentation.
-///
-///   If the first key is untrusted, a cryptographic `hasher` such as `blake2_256` or
-///   `blake2_128_concat`  must be used.
-///   Otherwise, other values of all storage items can be compromised.
-///
-///   If the second key is untrusted, a cryptographic `hasher` such as `blake2_256` or
-///   `blake2_128_concat` must be used.
-///   Otherwise, other items in storage with the same first key can be compromised.
 ///
 ///   The generator is implemented with:
 ///   * `module_prefix`: $module_prefix
@@ -147,10 +126,16 @@ use proc_macro::TokenStream;
 ///
 /// Supported hashers (ordered from least to best security):
 ///
-/// * `twox_64_concat` - TwoX with 64bit + key concatenated.
+/// * `identity` - Just the unrefined key material. Use only when it is known to be a secure hash
+///   already. The most efficient and iterable over keys.
+/// * `twox_64_concat` - TwoX with 64bit + key concatenated. Use only when an untrusted source
+///   cannot select and insert key values. Very efficient and iterable over keys.
+/// * `blake2_128_concat` - Blake2 with 128bit + key concatenated. Slower but safe to use in all
+///   circumstances. Iterable over keys.
+///
+/// Deprecated hashers, which do not support iteration over keys include:
 /// * `twox_128` - TwoX with 128bit.
 /// * `twox_256` - TwoX with with 256bit.
-/// * `blake2_128_concat` - Blake2 with 128bit + key concatenated.
 /// * `blake2_128` - Blake2 with 128bit.
 /// * `blake2_256` - Blake2 with 256bit.
 ///
@@ -160,12 +145,12 @@ use proc_macro::TokenStream;
 ///
 /// * `#vis`: Set the visibility of the structure. `pub` or nothing.
 /// * `#name`: Name of the storage item, used as a prefix in storage.
-/// * [optional] `get(fn #getter)`: Implements the function #getter to `Module`.
-/// * [optional] `config(#field_name)`: `field_name` is optional if get is set.
+/// * \[optional\] `get(fn #getter)`: Implements the function #getter to `Module`.
+/// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
-/// * [optional] `build(#closure)`: Closure called with storage overlays.
+/// * \[optional\] `build(#closure)`: Closure called with storage overlays.
 /// * `#type`: Storage type.
-/// * [optional] `#default`: Value returned when none.
+/// * \[optional\] `#default`: Value returned when none.
 ///
 /// Storage items are accessible in multiple ways:
 ///

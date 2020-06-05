@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Provides the `buffered_link` utility.
 //!
@@ -37,8 +38,9 @@
 //! ```
 //!
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
@@ -46,7 +48,7 @@ use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
 /// them to another link.
 pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
 	let tx = BufferedLinkSender { tx };
 	let rx = BufferedLinkReceiver { rx };
 	(tx, rx)
@@ -54,7 +56,7 @@ pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceive
 
 /// See [`buffered_link`].
 pub struct BufferedLinkSender<B: BlockT> {
-	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
+	tx: TracingUnboundedSender<BlockImportWorkerMsg<B>>,
 }
 
 impl<B: BlockT> BufferedLinkSender<B> {
@@ -125,7 +127,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 /// See [`buffered_link`].
 pub struct BufferedLinkReceiver<B: BlockT> {
-	rx: mpsc::UnboundedReceiver<BlockImportWorkerMsg<B>>,
+	rx: TracingUnboundedReceiver<BlockImportWorkerMsg<B>>,
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {

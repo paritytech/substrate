@@ -1,34 +1,41 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
+use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable,
+	SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
-use crate::{generic::{self, CheckSignature}, KeyTypeId, ApplyExtrinsicResult};
+use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResultWithInfo};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::{TransactionValidity, TransactionValidityError, InvalidTransaction};
-/// Authority Id
+use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
+
+/// A dummy type which can be used instead of regular cryptographic primitives.
+///
+/// 1. Wraps a `u64` `AccountId` and is able to `IdentifyAccount`.
+/// 2. Can be converted to any `Public` key.
+/// 3. Implements `RuntimeAppPublic` so it can be used instead of regular application-specific
+///    crypto.
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
 
@@ -80,8 +87,9 @@ impl UintAuthorityId {
 
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
+	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
-	type Signature = u64;
+	type Signature = TestSignature;
 
 	fn all() -> Vec<Self> {
 		ALL_KEYS.with(|l| l.borrow().clone())
@@ -93,25 +101,11 @@ impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	}
 
 	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
-		let mut signature = [0u8; 8];
-		msg.as_ref().iter()
-			.chain(std::iter::repeat(&42u8))
-			.take(8)
-			.enumerate()
-			.for_each(|(i, v)| { signature[i] = *v; });
-
-		Some(u64::from_le_bytes(signature))
+		Some(TestSignature(self.0, msg.as_ref().to_vec()))
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		let mut msg_signature = [0u8; 8];
-		msg.as_ref().iter()
-			.chain(std::iter::repeat(&42))
-			.take(8)
-			.enumerate()
-			.for_each(|(i, v)| { msg_signature[i] = *v; });
-
-		u64::from_le_bytes(msg_signature) == *signature
+		traits::Verify::verify(signature, msg.as_ref(), &self.0)
 	}
 
 	fn to_raw_vec(&self) -> Vec<u8> {
@@ -137,6 +131,26 @@ impl OpaqueKeys for UintAuthorityId {
 
 impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
 	type Public = Self;
+}
+
+impl traits::IdentifyAccount for UintAuthorityId {
+	type AccountId = u64;
+
+	fn into_account(self) -> Self::AccountId {
+		self.0
+	}
+}
+
+/// A dummy signature type, to match `UintAuthorityId`.
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
+pub struct TestSignature(pub u64, pub Vec<u8>);
+
+impl traits::Verify for TestSignature {
+	type Signer = UintAuthorityId;
+
+	fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &u64) -> bool {
+		signer == &self.0 && msg.get() == &self.1[..]
+	}
 }
 
 /// Digest item
@@ -293,69 +307,24 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
-/// Test validity.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub enum TestValidity {
-	/// Valid variant that will pass all checks.
-	Valid,
-	/// Variant with invalid signature.
-	///
-	/// Will fail signature check.
-	SignatureInvalid(TransactionValidityError),
-	/// Variant with invalid logic.
-	///
-	/// Will fail all checks.
-	OtherInvalid(TransactionValidityError),
-}
-
-/// Test transaction.
+/// Test transaction, tuple of (sender, call, signed_extra)
+/// with index only used if sender is some.
 ///
-/// Used to mock actual transaction.
+/// If sender is some then the transaction is signed otherwise it is unsigned.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call, Extra> {
-	/// Signature with extra.
-	///
-	/// if some, then the transaction is signed. Transaction is unsigned otherwise.
+	/// Signature of the extrinsic.
 	pub signature: Option<(u64, Extra)>,
-	/// Validity.
-	///
-	/// Instantiate invalid variant and transaction will fail correpsonding checks.
-	pub validity: TestValidity,
-	/// Call.
+	/// Call of the extrinsic.
 	pub call: Call,
 }
 
 impl<Call, Extra> TestXt<Call, Extra> {
-	/// New signed test `TextXt`.
-	pub fn new_signed(signature: (u64, Extra), call: Call) -> Self {
-		TestXt {
-			signature: Some(signature),
-			validity: TestValidity::Valid,
-			call,
-		}
+	/// Create a new `TextXt`.
+	pub fn new(call: Call, signature: Option<(u64, Extra)>) -> Self {
+		Self { call, signature }
 	}
-
-	/// New unsigned test `TextXt`.
-	pub fn new_unsigned(call: Call) -> Self {
-		TestXt {
-			signature: None,
-			validity: TestValidity::Valid,
-			call,
-		}
-	}
-
-	/// Build invalid variant of `TestXt`.
-	pub fn invalid(mut self, err: TransactionValidityError) -> Self {
-		self.validity = TestValidity::OtherInvalid(err);
-		self
-	}
-
-	/// Build badly signed variant of `TestXt`.
-	pub fn badly_signed(mut self) -> Self {
-		self.validity = TestValidity::SignatureInvalid(TransactionValidityError::Invalid(InvalidTransaction::BadProof));
-		self
-	}
- }
+}
 
 // Non-opaque extrinsics always 0.
 parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
@@ -368,27 +337,13 @@ impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: E
 
 impl<Call, Extra> Debug for TestXt<Call, Extra> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "TestXt({:?}, {}, ...)",
-			self.signature.as_ref().map(|x| &x.0),
-			if let TestValidity::Valid = self.validity { "valid" } else { "invalid" }
-		)
+		write!(f, "TestXt({:?}, ...)", self.signature.as_ref().map(|x| &x.0))
 	}
 }
 
 impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
-	fn check(self, signature: CheckSignature, _: &Context) -> Result<Self::Checked, TransactionValidityError> {
-		match self.validity {
-			TestValidity::Valid => Ok(self),
-			TestValidity::SignatureInvalid(e) =>
-				if let CheckSignature::No = signature {
-					Ok(self)
-				} else {
-					Err(e)
-				},
-			TestValidity::OtherInvalid(e)  => Err(e),
-		}
-	 }
+	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
 
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
@@ -399,27 +354,23 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 		Some(self.signature.is_some())
 	}
 
-	fn new(call: Call, signature: Option<Self::SignaturePayload>) -> Option<Self> {
-		Some(TestXt { signature, call, validity: TestValidity::Valid })
+	fn new(c: Call, sig: Option<Self::SignaturePayload>) -> Option<Self> {
+		Some(TestXt { signature: sig, call: c })
 	}
 }
 
-impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
+impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call, DispatchInfo=Info>,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>,
-	Info: Clone,
 {
-	type AccountId = u64;
 	type Call = Call;
-	type DispatchInfo = Info;
-
-	fn sender(&self) -> Option<&Self::AccountId> { self.signature.as_ref().map(|x| &x.0) }
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
-		_info: Self::DispatchInfo,
+		_source: TransactionSource,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(Default::default())
@@ -429,9 +380,9 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	/// index and sender.
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> ApplyExtrinsicResult {
+	) -> ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
 		let maybe_who = if let Some((who, extra)) = self.signature {
 			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
 			Some(who)
@@ -440,6 +391,6 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map_err(Into::into))
+		Ok(self.call.dispatch(maybe_who.into()))
 	}
 }

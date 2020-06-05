@@ -17,18 +17,25 @@
 //! Definitions for a wasm runtime.
 
 use crate::error::Error;
-use sp_wasm_interface::{Function, Value};
+use sp_wasm_interface::Value;
 
-/// A trait that defines an abstract wasm runtime.
+/// A trait that defines an abstract WASM runtime module.
 ///
 /// This can be implemented by an execution engine.
-pub trait WasmRuntime {
-	/// Return the host functions that are registered for this Wasm runtime.
-	fn host_functions(&self) -> &[&'static dyn Function];
+pub trait WasmModule: Sync + Send {
+	/// Create a new instance.
+	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error>;
+}
 
-	/// Call a method in the Substrate runtime by name. Returns the encoded result on success.
-	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
+/// A trait that defines an abstract wasm module instance.
+///
+/// This can be implemented by an execution engine.
+pub trait WasmInstance: Send {
+	/// Call a method on this WASM instance and reset it afterwards.
+	/// Returns the encoded result on success.
+	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
 
 	/// Get the value from a global with the given `name`.
-	fn get_global_val(&self, name: &str) -> Result<Option<Value>, Error>;
+	/// This method is only suitable for getting immutable globals.
+	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
 }

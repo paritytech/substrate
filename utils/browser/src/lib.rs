@@ -1,73 +1,103 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use std::sync::Arc;
+use sc_network::config::TransportConfig;
 use sc_service::{
-	AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
-	ChainSpec, RuntimeGenesis
+	AbstractService, RpcSession, Role, Configuration,
+	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
+	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
 use std::task::Poll;
 use std::pin::Pin;
 use sc_chain_spec::Extension;
+use libp2p_wasm_ext::{ExtTransport, ffi};
 
-pub use libp2p::wasm_ext::{ExtTransport, ffi::Transport};
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 pub use console_log::init_with_level as init_console_log;
 
-/// Create a service configuration from a chain spec and the websocket transport.
+/// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(
-	transport: Transport,
-	chain_spec: ChainSpec<G, E>,
-) -> Result<Configuration<G, E>, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
+	-> Result<Configuration, Box<dyn std::error::Error>>
 where
-	G: RuntimeGenesis,
-	E: Extension,
+	G: RuntimeGenesis + 'static,
+	E: Extension + 'static + Send,
 {
 	let name = chain_spec.name().to_string();
 
-	let transport = ExtTransport::new(transport);
-	let mut config = Configuration::default();
-	config.network.boot_nodes = chain_spec.boot_nodes().to_vec();
-	config.telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
-	config.chain_spec = Some(chain_spec);
-	config.network.transport = sc_network::config::TransportConfig::Normal {
+	let transport = ExtTransport::new(ffi::websocket_transport());
+	let mut network = NetworkConfiguration::new(
+		format!("{} (Browser)", name),
+		"unknown",
+		Default::default(),
+		None,
+	);
+	network.boot_nodes = chain_spec.boot_nodes().to_vec();
+	network.transport = TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
 		use_yamux_flow_control: true,
 	};
-	config.task_executor = Some(Arc::new(move |fut| {
-		wasm_bindgen_futures::spawn_local(fut)
-	}));
-	config.telemetry_external_transport = Some(transport);
-	config.roles = Roles::LIGHT;
-	config.name = format!("{} (Browser)", name);
-	config.database = Some({
-		info!("Opening Indexed DB database '{}'...", name);
-		let db = kvdb_web::Database::open(name, 10)
-			.await?;
-		DatabaseConfig::Custom(Arc::new(db))
-	});
-	config.keystore = KeystoreConfig::InMemory;
+
+	let config = Configuration {
+		network,
+		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
+		chain_spec: Box::new(chain_spec),
+		task_executor: Arc::new(move |fut, _| wasm_bindgen_futures::spawn_local(fut)),
+		telemetry_external_transport: Some(transport),
+		role: Role::Light,
+		database: {
+			info!("Opening Indexed DB database '{}'...", name);
+			let db = kvdb_web::Database::open(name, 10).await?;
+
+			DatabaseConfig::Custom(sp_database::as_database(db))
+		},
+		keystore: KeystoreConfig::InMemory,
+		default_heap_pages: Default::default(),
+		dev_key_seed: Default::default(),
+		disable_grandpa: Default::default(),
+		execution_strategies: Default::default(),
+		force_authoring: Default::default(),
+		impl_name: "parity-substrate",
+		impl_version: "0.0.0",
+		offchain_worker: Default::default(),
+		prometheus_config: Default::default(),
+		pruning: Default::default(),
+		rpc_cors: Default::default(),
+		rpc_http: Default::default(),
+		rpc_ws: Default::default(),
+		rpc_ws_max_connections: Default::default(),
+		rpc_methods: Default::default(),
+		state_cache_child_ratio: Default::default(),
+		state_cache_size: Default::default(),
+		tracing_receiver: Default::default(),
+		tracing_targets: Default::default(),
+		transaction_pool: Default::default(),
+		wasm_method: Default::default(),
+		max_runtime_instances: 8,
+		announce_block: true,
+	};
 
 	Ok(config)
 }

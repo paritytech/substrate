@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Transaction pool primitives types & Runtime API.
 
@@ -22,16 +23,14 @@ use std::{
 	sync::Arc,
 	pin::Pin,
 };
-use futures::{
-	Future, Stream,
-	channel::mpsc,
-};
+use futures::{Future, Stream,};
 use serde::{Deserialize, Serialize};
+use sp_utils::mpsc;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Member},
+	traits::{Block as BlockT, Member, NumberFor},
 	transaction_validity::{
-		TransactionLongevity, TransactionPriority, TransactionTag,
+		TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 	},
 };
 
@@ -132,7 +131,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = mpsc::UnboundedReceiver<H>;
+pub type ImportNotificationStream<H> = mpsc::TracingUnboundedReceiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -192,6 +191,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
@@ -199,6 +199,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
@@ -206,12 +207,20 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
 	// *** Block production / Networking
-	/// Get an iterator for ready transactions ordered by priority
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>>;
+	/// Get an iterator for ready transactions ordered by priority.
+	///
+	/// Guarantees to return only when transaction pool got updated at `at` block.
+	/// Guarantees to return immediately when `None` is passed.
+	fn ready_at(&self, at: NumberFor<Self::Block>)
+		-> Pin<Box<dyn Future<Output=Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>> + Send>>;
+
+	/// Get an iterator for ready transactions ordered by priority.
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
@@ -292,7 +301,9 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+		let result = futures::executor::block_on(self.submit_one(
+				&at, TransactionSource::Local, extrinsic,
+		));
 
 		result.map(|_| ())
 			.map_err(|e| log::warn!(

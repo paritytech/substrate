@@ -1,24 +1,28 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Integration tests for sr25519
 
 
 use sp_runtime::generic::BlockId;
-use sp_core::{testing::{KeyStore, SR25519}, crypto::Pair};
+use sp_core::{
+	crypto::Pair,
+	testing::{KeyStore, SR25519},
+};
 use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	runtime::TestAPI,
@@ -34,8 +38,7 @@ fn sr25519_works_in_runtime() {
 		.test_sr25519_crypto(&BlockId::Number(0))
 		.expect("Tests `sr25519` crypto.");
 
-	let key_pair = keystore.read().sr25519_key_pair(SR25519, public.as_ref())
-		.expect("There should be at a `sr25519` key in the keystore for the given public key.");
-
-	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(key_pair.public())));
+	let supported_keys = keystore.read().keys(SR25519).unwrap();
+	assert!(supported_keys.contains(&public.clone().into()));
+	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }

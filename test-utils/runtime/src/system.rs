@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
@@ -29,7 +30,6 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionValidityError,
 	},
-	generic::CheckSignature,
 };
 use codec::{KeyedVec, Encode, Decode};
 use frame_system::Trait;
@@ -47,7 +47,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TestRuntime {
-		ExtrinsicData: map hasher(blake2_256) u32 => Vec<u8>;
+		ExtrinsicData: map hasher(blake2_128_concat) u32 => Vec<u8>;
 		// The current block number being processed. Set by `execute_block`.
 		Number get(fn number): Option<BlockNumber>;
 		ParentHash get(fn parent_hash): Hash;
@@ -192,7 +192,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
-	let result = execute_transaction_backend(&utx);
+	let result = execute_transaction_backend(&utx, extrinsic_index);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result
@@ -237,23 +237,28 @@ pub fn finalize_block() -> Header {
 		extrinsics_root,
 		state_root: storage_root,
 		parent_hash,
-		digest: digest,
+		digest,
 	}
 }
 
 #[inline(always)]
 fn check_signature(utx: &Extrinsic) -> Result<(), TransactionValidityError> {
 	use sp_runtime::traits::BlindCheckable;
-	utx.clone().check(CheckSignature::Yes).map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
+	utx.clone().check().map_err(|_| InvalidTransaction::BadProof.into()).map(|_| ())
 }
 
-fn execute_transaction_backend(utx: &Extrinsic) -> ApplyExtrinsicResult {
+fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyExtrinsicResult {
 	check_signature(utx)?;
 	match utx {
-		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
-		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
+		Extrinsic::Transfer { exhaust_resources_when_not_first: true, .. } if extrinsic_index != 0 =>
+			Err(InvalidTransaction::ExhaustsResources.into()),
+		Extrinsic::Transfer { ref transfer, .. } =>
+			execute_transfer_backend(transfer),
+		Extrinsic::AuthoritiesChange(ref new_auth) =>
+			execute_new_authorities_backend(new_auth),
 		Extrinsic::IncludeData(_) => Ok(Ok(())),
-		Extrinsic::StorageChange(key, value) => execute_storage_change(key, value.as_ref().map(|v| &**v)),
+		Extrinsic::StorageChange(key, value) =>
+			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::ChangesTrieConfigUpdate(ref new_config) =>
 			execute_changes_trie_config_update(new_config.clone()),
 	}
@@ -338,7 +343,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
-	use sp_core::{NeverNativeValue, map, traits::CodeExecutor};
+	use sp_core::{NeverNativeValue, map, traits::{CodeExecutor, RuntimeCode}};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use sp_io::hashing::twox_128;
 
@@ -350,7 +355,7 @@ mod tests {
 	);
 
 	fn executor() -> NativeExecutor<NativeDispatch> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn new_test_ext() -> TestExternalities {
@@ -369,7 +374,7 @@ mod tests {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 					}
 				],
-				children: map![],
+				children_default: map![],
 			},
 		)
 	}
@@ -401,8 +406,15 @@ mod tests {
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
-			executor().call::<_, NeverNativeValue, fn() -> _>(
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				hash: Vec::new(),
+				heap_pages: None,
+			};
+
+			executor().call::<NeverNativeValue, fn() -> _>(
 				&mut ext,
+				&runtime_code,
 				"Core_execute_block",
 				&b.encode(),
 				false,
@@ -494,8 +506,15 @@ mod tests {
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
-			executor().call::<_, NeverNativeValue, fn() -> _>(
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				hash: Vec::new(),
+				heap_pages: None,
+			};
+
+			executor().call::<NeverNativeValue, fn() -> _>(
 				&mut ext,
+				&runtime_code,
 				"Core_execute_block",
 				&b.encode(),
 				false,

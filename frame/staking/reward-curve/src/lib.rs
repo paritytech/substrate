@@ -1,4 +1,21 @@
-extern crate proc_macro;
+// This file is part of Substrate.
+
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Proc macro to generate the reward curve functions and tests.
 
 mod log;
 
@@ -252,10 +269,14 @@ impl INPoS {
 		}
 	}
 
+	// calculates x from:
+	// y = i_0 + (i_ideal * x_ideal - i_0) * 2^((x_ideal - x)/d)
+	// See web3 docs for the details
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
 		if y == self.i_0 {
 			return u32::max_value();
 		}
+		// Note: the log term calculated here represents a per_million value
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
 
 		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000).try_into().unwrap();

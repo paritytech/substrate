@@ -50,6 +50,15 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 						_ => None,
 					}
 				}
+
+				fn get_any(&self, t: std::any::TypeId) -> &dyn std::any::Any {
+					use std::any::{Any, TypeId};
+
+					match t {
+						#( x if x == TypeId::of::<#field_types>() => &self.#field_names ),*,
+						_ => self,
+					}
+				}
 			}
 		}
 	})

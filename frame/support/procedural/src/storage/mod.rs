@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! `decl_storage` input definition and expansion.
 
@@ -235,10 +236,6 @@ impl StorageLineDefExt {
 				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
 			}
-			StorageLineTypeDef::LinkedMap(map) => {
-				ext::type_contains_ident(&map.key, &def.module_runtime_generic)
-					|| ext::type_contains_ident(&map.value, &def.module_runtime_generic)
-			}
 			StorageLineTypeDef::DoubleMap(map) => {
 				ext::type_contains_ident(&map.key1, &def.module_runtime_generic)
 					|| ext::type_contains_ident(&map.key2, &def.module_runtime_generic)
@@ -249,7 +246,6 @@ impl StorageLineDefExt {
 		let query_type = match &storage_def.storage_type {
 			StorageLineTypeDef::Simple(value) => value.clone(),
 			StorageLineTypeDef::Map(map) => map.value.clone(),
-			StorageLineTypeDef::LinkedMap(map) => map.value.clone(),
 			StorageLineTypeDef::DoubleMap(map) => map.value.clone(),
 		};
 		let is_option = ext::extract_type_option(&query_type).is_some();
@@ -290,10 +286,6 @@ impl StorageLineDefExt {
 			StorageLineTypeDef::Map(map) => {
 				let key = &map.key;
 				quote!( StorageMap<#key, #value_type> )
-			},
-			StorageLineTypeDef::LinkedMap(map) => {
-				let key = &map.key;
-				quote!( StorageLinkedMap<#key, #value_type> )
 			},
 			StorageLineTypeDef::DoubleMap(map) => {
 				let key1 = &map.key1;
@@ -336,7 +328,6 @@ impl StorageLineDefExt {
 
 pub enum StorageLineTypeDef {
 	Map(MapDef),
-	LinkedMap(MapDef),
 	DoubleMap(DoubleMapDef),
 	Simple(syn::Type),
 }
@@ -372,6 +363,7 @@ pub enum HasherKind {
 	Twox256,
 	Twox128,
 	Twox64Concat,
+	Identity,
 }
 
 impl HasherKind {
@@ -383,6 +375,7 @@ impl HasherKind {
 			HasherKind::Twox256 => quote!( Twox256 ),
 			HasherKind::Twox128 => quote!( Twox128 ),
 			HasherKind::Twox64Concat => quote!( Twox64Concat ),
+			HasherKind::Identity => quote!( Identity ),
 		}
 	}
 
@@ -394,6 +387,7 @@ impl HasherKind {
 			HasherKind::Twox256 => quote!( StorageHasher::Twox256 ),
 			HasherKind::Twox128 => quote!( StorageHasher::Twox128 ),
 			HasherKind::Twox64Concat => quote!( StorageHasher::Twox64Concat ),
+			HasherKind::Identity => quote!( StorageHasher::Identity ),
 		}
 	}
 }
@@ -420,7 +414,6 @@ pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 		use #scrate::{
 			StorageValue as _,
 			StorageMap as _,
-			StorageLinkedMap as _,
 			StorageDoubleMap as _,
 			StoragePrefixedMap as _,
 		};

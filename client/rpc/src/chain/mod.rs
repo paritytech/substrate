@@ -1,18 +1,20 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate blockchain API.
 
@@ -31,10 +33,7 @@ use rpc::{
 };
 
 use sc_rpc_api::Subscriptions;
-use sc_client::{
-	self, Client, BlockchainEvents,
-	light::{fetcher::Fetcher, blockchain::RemoteBlockchain},
-};
+use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{
@@ -45,16 +44,17 @@ use sp_runtime::{
 use self::error::{Result, Error, FutureResult};
 
 pub use sc_rpc_api::chain::*;
+use sp_blockchain::HeaderBackend;
+use sc_client_api::BlockBackend;
 
 /// Blockchain backend API
-trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
+trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
+		Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	/// Get client reference.
-	fn client(&self) -> &Arc<Client<B, E, Block, RA>>;
+	fn client(&self) -> &Arc<Client>;
 
 	/// Get subscriptions reference.
 	fn subscriptions(&self) -> &Subscriptions;
@@ -62,7 +62,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
 		match hash.into() {
-			None => self.client().chain_info().best_hash,
+			None => self.client().info().best_hash,
 			Some(hash) => hash,
 		}
 	}
@@ -81,9 +81,9 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		number: Option<NumberOrHex<NumberFor<Block>>>,
 	) -> Result<Option<Block::Hash>> {
 		Ok(match number {
-			None => Some(self.client().chain_info().best_hash),
+			None => Some(self.client().info().best_hash),
 			Some(num_or_hex) => self.client()
-				.header(&BlockId::number(num_or_hex.to_number()?))
+				.header(BlockId::number(num_or_hex.to_number()?))
 				.map_err(client_err)?
 				.map(|h| h.hash()),
 		})
@@ -91,10 +91,36 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 
 	/// Get hash of the last finalized block in the canon chain.
 	fn finalized_head(&self) -> Result<Block::Hash> {
-		Ok(self.client().chain_info().finalized_hash)
+		Ok(self.client().info().finalized_hash)
 	}
 
-	/// New head subscription
+	/// All new head subscription
+	fn subscribe_all_heads(
+		&self,
+		_metadata: crate::metadata::Metadata,
+		subscriber: Subscriber<Block::Header>,
+	) {
+		subscribe_headers(
+			self.client(),
+			self.subscriptions(),
+			subscriber,
+			|| self.client().info().best_hash,
+			|| self.client().import_notification_stream()
+				.map(|notification| Ok::<_, ()>(notification.header))
+				.compat(),
+		)
+	}
+
+	/// Unsubscribe from all head subscription.
+	fn unsubscribe_all_heads(
+		&self,
+		_metadata: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
+		Ok(self.subscriptions().cancel(id))
+	}
+
+	/// New best head subscription
 	fn subscribe_new_heads(
 		&self,
 		_metadata: crate::metadata::Metadata,
@@ -104,7 +130,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 			self.client(),
 			self.subscriptions(),
 			subscriber,
-			|| self.client().chain_info().best_hash,
+			|| self.client().info().best_hash,
 			|| self.client().import_notification_stream()
 				.filter(|notification| future::ready(notification.is_new_best))
 				.map(|notification| Ok::<_, ()>(notification.header))
@@ -112,7 +138,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		)
 	}
 
-	/// Unsubscribe from new head subscription.
+	/// Unsubscribe from new best head subscription.
 	fn unsubscribe_new_heads(
 		&self,
 		_metadata: Option<crate::metadata::Metadata>,
@@ -121,7 +147,7 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 		Ok(self.subscriptions().cancel(id))
 	}
 
-	/// New head subscription
+	/// Finalized head subscription
 	fn subscribe_finalized_heads(
 		&self,
 		_metadata: crate::metadata::Metadata,
@@ -131,14 +157,14 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 			self.client(),
 			self.subscriptions(),
 			subscriber,
-			|| self.client().chain_info().finalized_hash,
+			|| self.client().info().finalized_hash,
 			|| self.client().finality_notification_stream()
 				.map(|notification| Ok::<_, ()>(notification.header))
 				.compat(),
 		)
 	}
 
-	/// Unsubscribe from new head subscription.
+	/// Unsubscribe from finalized head subscription.
 	fn unsubscribe_finalized_heads(
 		&self,
 		_metadata: Option<crate::metadata::Metadata>,
@@ -149,15 +175,13 @@ trait ChainBackend<B, E, Block: BlockT, RA>: Send + Sync + 'static
 }
 
 /// Create new state API that works on full node.
-pub fn new_full<B, E, Block: BlockT, RA>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn new_full<Block: BlockT, Client>(
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
-) -> Chain<B, E, Block, RA>
+) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: sc_client::CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	Chain {
 		backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)),
@@ -165,17 +189,15 @@ pub fn new_full<B, E, Block: BlockT, RA>(
 }
 
 /// Create new state API that works on light node.
-pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
-	client: Arc<Client<B, E, Block, RA>>,
+pub fn new_light<Block: BlockT, Client, F: Fetcher<Block>>(
+	client: Arc<Client>,
 	subscriptions: Subscriptions,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 	fetcher: Arc<F>,
-) -> Chain<B, E, Block, RA>
+) -> Chain<Block, Client>
 	where
 		Block: BlockT + 'static,
-		B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-		E: sc_client::CallExecutor<Block> + Send + Sync + 'static + Clone,
-		RA: Send + Sync + 'static,
+		Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 		F: Send + Sync + 'static,
 {
 	Chain {
@@ -189,15 +211,15 @@ pub fn new_light<B, E, Block: BlockT, RA, F: Fetcher<Block>>(
 }
 
 /// Chain API with subscriptions support.
-pub struct Chain<B, E, Block: BlockT, RA> {
-	backend: Box<dyn ChainBackend<B, E, Block, RA>>,
+pub struct Chain<Block: BlockT, Client> {
+	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for Chain<B, E, Block, RA> where
-	Block: BlockT + 'static,
-	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-	E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
-	RA: Send + Sync + 'static
+impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for
+	Chain<Block, Client>
+		where
+			Block: BlockT + 'static,
+			Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	type Metadata = crate::metadata::Metadata;
 
@@ -229,6 +251,14 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		self.backend.finalized_head()
 	}
 
+	fn subscribe_all_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
+		self.backend.subscribe_all_heads(metadata, subscriber)
+	}
+
+	fn unsubscribe_all_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+		self.backend.unsubscribe_all_heads(metadata, id)
+	}
+
 	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
 		self.backend.subscribe_new_heads(metadata, subscriber)
 	}
@@ -247,16 +277,15 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 }
 
 /// Subscribe to new headers.
-fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
-	client: &Arc<Client<B, E, Block, RA>>,
+fn subscribe_headers<Block, Client, F, G, S, ERR>(
+	client: &Arc<Client>,
 	subscriptions: &Subscriptions,
 	subscriber: Subscriber<Block::Header>,
 	best_block_hash: G,
 	stream: F,
 ) where
 	Block: BlockT + 'static,
-	B: sc_client_api::backend::Backend<Block> + Send + Sync + 'static,
-	E: sc_client::CallExecutor<Block> + Send + Sync + 'static,
+	Client: HeaderBackend<Block> + 'static,
 	F: FnOnce() -> S,
 	G: FnOnce() -> Block::Hash,
 	ERR: ::std::fmt::Debug,
@@ -264,7 +293,7 @@ fn subscribe_headers<B, E, Block, RA, F, G, S, ERR>(
 {
 	subscriptions.add(subscriber, |sink| {
 		// send current head right at the start.
-		let header = client.header(&BlockId::Hash(best_block_hash()))
+		let header = client.header(BlockId::Hash(best_block_hash()))
 			.map_err(client_err)
 			.and_then(|header| {
 				header.ok_or_else(|| "Best header missing.".to_owned().into())

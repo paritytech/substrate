@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Generates the bare function interface for a given trait definition.
 //!
@@ -30,7 +31,7 @@
 
 use crate::utils::{
 	generate_crate_access, create_exchangeable_host_function_ident, get_function_arguments,
-	get_function_argument_names, get_trait_methods,
+	get_function_argument_names, get_runtime_interface, create_function_ident_with_version,
 };
 
 use syn::{
@@ -47,19 +48,40 @@ use std::iter;
 /// of the trait method.
 pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
-	get_trait_methods(trait_def).try_fold(TokenStream::new(), |mut t, m| {
-		t.extend(function_for_method(trait_name, m, is_wasm_only)?);
+	let runtime_interface = get_runtime_interface(trait_def)?;
+
+	// latest version dispatch
+	let token_stream: Result<TokenStream> = runtime_interface.latest_versions()
+		.try_fold(
+			TokenStream::new(),
+			|mut t, (latest_version, method)| {
+				t.extend(function_for_method(method, latest_version, is_wasm_only)?);
+				Ok(t)
+			}
+		);
+
+	// earlier versions compatibility dispatch (only std variant)
+	let result: Result<TokenStream> = runtime_interface.all_versions().try_fold(token_stream?, |mut t, (version, method)|
+	{
+		t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
 		Ok(t)
-	})
+	});
+
+	result
 }
 
 /// Generates the bare function implementation for the given method for the host and wasm side.
 fn function_for_method(
-	trait_name: &Ident,
 	method: &TraitItemMethod,
+	latest_version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
-	let std_impl = function_std_impl(trait_name, method, is_wasm_only)?;
+	let std_impl = if !is_wasm_only {
+		function_std_latest_impl(method, latest_version)?
+	} else {
+		quote!()
+	};
+
 	let no_std_impl = function_no_std_impl(method)?;
 
 	Ok(
@@ -78,7 +100,7 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
 	let return_value = &method.sig.output;
-	let attrs = &method.attrs;
+	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 
 	Ok(
 		quote! {
@@ -92,13 +114,41 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 	)
 }
 
+/// Generate call to latest function version for `cfg((feature = "std")`
+///
+/// This should generate simple `fn func(..) { func_version_<latest_version>(..) }`.
+fn function_std_latest_impl(
+	method: &TraitItemMethod,
+	latest_version: u32,
+) -> Result<TokenStream> {
+	let function_name = &method.sig.ident;
+	let args = get_function_arguments(&method.sig).map(FnArg::Typed);
+	let arg_names = get_function_argument_names(&method.sig).collect::<Vec<_>>();
+	let return_value = &method.sig.output;
+	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
+	let latest_function_name = create_function_ident_with_version(&method.sig.ident, latest_version);
+
+	Ok(quote_spanned! { method.span() =>
+		#[cfg(feature = "std")]
+		#( #attrs )*
+		pub fn #function_name( #( #args, )* ) #return_value {
+			#latest_function_name(
+				#( #arg_names, )*
+			)
+		}
+	})
+}
+
 /// Generates the bare function implementation for `cfg(feature = "std")`.
 fn function_std_impl(
 	trait_name: &Ident,
 	method: &TraitItemMethod,
+	version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
-	let function_name = &method.sig.ident;
+	let function_name = create_function_ident_with_version(&method.sig.ident, version);
+	let function_name_str = function_name.to_string();
+
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed).chain(
 		// Add the function context as last parameter when this is a wasm only interface.
@@ -115,16 +165,16 @@ fn function_std_impl(
 		).take(1),
 	);
 	let return_value = &method.sig.output;
-	let attrs = &method.attrs;
+	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
-	let vis = if is_wasm_only { quote!() } else { quote!(pub) };
-	let call_to_trait = generate_call_to_trait(trait_name, method, is_wasm_only);
+	let call_to_trait = generate_call_to_trait(trait_name, method, version, is_wasm_only);
 
 	Ok(
 		quote_spanned! { method.span() =>
 			#[cfg(feature = "std")]
 			#( #attrs )*
-			#vis fn #function_name( #( #args, )* ) #return_value {
+			fn #function_name( #( #args, )* ) #return_value {
+				#crate_::sp_tracing::enter_span!(#function_name_str);
 				#call_to_trait
 			}
 		}
@@ -135,10 +185,11 @@ fn function_std_impl(
 fn generate_call_to_trait(
 	trait_name: &Ident,
 	method: &TraitItemMethod,
+	version: u32,
 	is_wasm_only: bool,
 ) -> TokenStream {
 	let crate_ = generate_crate_access();
-	let method_name = &method.sig.ident;
+	let method_name = create_function_ident_with_version(&method.sig.ident, version);
 	let expect_msg = format!(
 		"`{}` called outside of an Externalities-provided environment.",
 		method_name,

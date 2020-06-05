@@ -1,18 +1,19 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // tag::description[]
 //! Simple sr25519 (Schnorr-Ristretto) API.
@@ -39,7 +40,7 @@ use crate::crypto::{
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 use sp_std::ops::Deref;
@@ -53,6 +54,9 @@ use sp_runtime_interface::pass_by::PassByInner;
 // signing context
 #[cfg(feature = "full_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
+
+/// An identifier used to match public keys against sr25519 keys
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -388,6 +392,22 @@ impl TraitPublic for Public {
 		r.copy_from_slice(data);
 		Public(r)
 	}
+
+	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
+		CryptoTypePublicPair(CRYPTO_ID, self.to_raw_vec())
+	}
+}
+
+impl From<Public> for CryptoTypePublicPair {
+    fn from(key: Public) -> Self {
+        (&key).into()
+    }
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+    fn from(key: &Public) -> Self {
+        CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+    }
 }
 
 #[cfg(feature = "std")]
@@ -529,25 +549,24 @@ impl TraitPair for Pair {
 		self.0.sign(context.bytes(message)).into()
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
 		Self::verify_weak(&sig.0[..], message, pubkey)
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
-		// that have not been upgraded and those that have. To swap to 0.8.0 only,
-		// create `schnorrkel::Signature` and pass that into `verify_simple`
-		match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => pk.verify_simple_preaudit_deprecated(
-				SIGNING_CTX, message.as_ref(), &sig,
-			).is_ok(),
-			Err(_) => false,
-		}
+		let signature = match schnorrkel::Signature::from_bytes(sig) {
+			Ok(signature) => signature,
+			Err(_) => return false,
+		};
+
+		let pub_key = match PublicKey::from_bytes(pubkey.as_ref()) {
+			Ok(pub_key) => pub_key,
+			Err(_) => return false,
+		};
+
+		pub_key.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
 	}
 
-	/// Return a vec filled with raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
 		self.0.secret.to_bytes().to_vec()
 	}
@@ -566,6 +585,20 @@ impl Pair {
 		let kp = mini_key.expand_to_keypair(ExpansionMode::Ed25519);
 		(Pair(kp), mini_key.to_bytes())
 	}
+
+	/// Verify a signature on a message. Returns `true` if the signature is good.
+	/// Supports old 0.1.1 deprecated signatures and should be used only for backward
+	/// compatibility.
+	pub fn verify_deprecated<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
+		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
+		// that have not been upgraded and those that have.
+		match PublicKey::from_bytes(pubkey.as_ref()) {
+			Ok(pk) => pk.verify_simple_preaudit_deprecated(
+				SIGNING_CTX, message.as_ref(), &sig.0[..],
+			).is_ok(),
+			Err(_) => false,
+		}
+	}
 }
 
 impl CryptoType for Public {
@@ -583,10 +616,49 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
+/// Batch verification.
+///
+/// `messages`, `signatures` and `pub_keys` should all have equal length.
+///
+/// Returns `true` if all signatures are correct, `false` otherwise.
+#[cfg(feature = "std")]
+pub fn verify_batch(
+	messages: Vec<&[u8]>,
+	signatures: Vec<&Signature>,
+	pub_keys: Vec<&Public>,
+) -> bool {
+	let mut sr_pub_keys = Vec::with_capacity(pub_keys.len());
+	for pub_key in pub_keys {
+		match schnorrkel::PublicKey::from_bytes(pub_key.as_ref()) {
+			Ok(pk) => sr_pub_keys.push(pk),
+			Err(_) => return false,
+		};
+	}
+
+	let mut sr_signatures = Vec::with_capacity(signatures.len());
+	for signature in signatures {
+		match schnorrkel::Signature::from_bytes(signature.as_ref()) {
+			Ok(s) => sr_signatures.push(s),
+			Err(_) => return false
+		};
+	}
+
+	let mut messages: Vec<merlin::Transcript> = messages.into_iter().map(
+		|msg| signing_context(SIGNING_CTX).bytes(msg)
+	).collect();
+
+	schnorrkel::verify_batch(
+		&mut messages,
+		&sr_signatures,
+		&sr_pub_keys,
+		true,
+	).is_ok()
+}
+
 #[cfg(test)]
 mod compatibility_test {
 	use super::*;
-	use crate::crypto::{DEV_PHRASE};
+	use crate::crypto::DEV_PHRASE;
 	use hex_literal::hex;
 
 	// NOTE: tests to ensure addresses that are created with the `0.1.x` version (pre-audit) are
@@ -609,14 +681,15 @@ mod compatibility_test {
 	}
 
 	#[test]
-	fn verify_known_message_should_work() {
+	fn verify_known_old_message_should_work() {
 		let public = Public::from_raw(hex!("b4bfa1f7a5166695eb75299fd1c4c03ea212871c342f2c5dfea0902b2c246918"));
 		// signature generated by the 1.1 version with the same ^^ public key.
 		let signature = Signature::from_raw(hex!(
 			"5a9755f069939f45d96aaf125cf5ce7ba1db998686f87f2fb3cbdea922078741a73891ba265f70c31436e18a9acd14d189d73c12317ab6c313285cd938453202"
 		));
 		let message = b"Verifying that I am the owner of 5G9hQLdsKQswNPgB499DeA5PkFBbgkLPJWkkS6FAM6xGQ8xD. Hash: 221455a3\n";
-		assert!(Pair::verify(&signature, &message[..], &public));
+		assert!(Pair::verify_deprecated(&signature, &message[..], &public));
+		assert!(!Pair::verify(&signature, &message[..], &public));
 	}
 }
 
@@ -776,7 +849,7 @@ mod test {
 	}
 
 	#[test]
-	fn verify_from_wasm_works() {
+	fn verify_from_old_wasm_works() {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
 		//
 		// This is to make sure that the wasm library is compatible.
@@ -787,7 +860,8 @@ mod test {
 		let js_signature = Signature::from_raw(hex!(
 			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
 		));
-		assert!(Pair::verify(&js_signature, b"SUBSTRATE", &public));
+		assert!(Pair::verify_deprecated(&js_signature, b"SUBSTRATE", &public));
+		assert!(!Pair::verify(&js_signature, b"SUBSTRATE", &public));
 	}
 
 	#[test]

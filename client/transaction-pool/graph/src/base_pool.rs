@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! A basic version of the dependency graph.
 //!
@@ -33,6 +35,7 @@ use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 	TransactionLongevity as Longevity,
 	TransactionPriority as Priority,
+	TransactionSource as Source,
 };
 use sp_transaction_pool::{error, PoolStatus, InPoolTransaction};
 
@@ -102,6 +105,8 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub provides: Vec<Tag>,
 	/// Should that transaction be propagated.
 	pub propagate: bool,
+	/// Source of that transaction.
+	pub source: Source,
 }
 
 impl<Hash, Extrinsic> AsRef<Extrinsic> for Transaction<Hash, Extrinsic> {
@@ -155,6 +160,7 @@ impl<Hash: Clone, Extrinsic: Clone> Transaction<Hash, Extrinsic> {
 			bytes: self.bytes.clone(),
 			hash: self.hash.clone(),
 			priority: self.priority.clone(),
+			source: self.source,
 			valid_till: self.valid_till.clone(),
 			requires: self.requires.clone(),
 			provides: self.provides.clone(),
@@ -185,6 +191,7 @@ impl<Hash, Extrinsic> fmt::Debug for Transaction<Hash, Extrinsic> where
 		write!(fmt, "valid_till: {:?}, ", &self.valid_till)?;
 		write!(fmt, "bytes: {:?}, ", &self.bytes)?;
 		write!(fmt, "propagate: {:?}, ", &self.propagate)?;
+		write!(fmt, "source: {:?}, ", &self.source)?;
 		write!(fmt, "requires: [")?;
 		print_tags(fmt, &self.requires)?;
 		write!(fmt, "], provides: [")?;
@@ -556,6 +563,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		// then
@@ -578,6 +586,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![1u8],
@@ -588,6 +597,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap_err();
 
 		// then
@@ -611,6 +621,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -623,6 +634,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![0]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		// then
@@ -645,6 +657,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -655,6 +668,7 @@ mod tests {
 			requires: vec![vec![2]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
@@ -665,6 +679,7 @@ mod tests {
 			requires: vec![vec![1]],
 			provides: vec![vec![3], vec![2]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
@@ -675,6 +690,7 @@ mod tests {
 			requires: vec![vec![3], vec![4]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -688,6 +704,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![0], vec![4]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		// then
@@ -720,6 +737,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -730,6 +748,7 @@ mod tests {
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -744,6 +763,7 @@ mod tests {
 			requires: vec![vec![2]],
 			provides: vec![vec![0]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		// then
@@ -764,6 +784,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![0]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 		assert_eq!(it.next(), Some(4));
@@ -792,6 +813,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -802,6 +824,7 @@ mod tests {
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
@@ -816,6 +839,7 @@ mod tests {
 			requires: vec![vec![2]],
 			provides: vec![vec![0]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		// then
@@ -836,6 +860,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![0]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap_err();
 		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 		assert_eq!(it.next(), None);
@@ -859,6 +884,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![0], vec![4]],
 			propagate: true,
+			source: Source::External,
 		}).expect("import 1 should be ok");
 		pool.import(Transaction {
 			data: vec![3u8; 1024],
@@ -869,6 +895,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![2], vec![7]],
 			propagate: true,
+			source: Source::External,
 		}).expect("import 2 should be ok");
 
 		assert!(parity_util_mem::malloc_size(&pool) > 5000);
@@ -887,6 +914,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![0], vec![4]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![1u8],
@@ -897,6 +925,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -907,6 +936,7 @@ mod tests {
 			requires: vec![vec![2]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
@@ -917,6 +947,7 @@ mod tests {
 			requires: vec![vec![1]],
 			provides: vec![vec![3], vec![2]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
@@ -927,6 +958,7 @@ mod tests {
 			requires: vec![vec![3], vec![4]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		// future
 		pool.import(Transaction {
@@ -938,6 +970,7 @@ mod tests {
 			requires: vec![vec![11]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 5);
 		assert_eq!(pool.future.len(), 1);
@@ -964,6 +997,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![100]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		// ready
 		pool.import(Transaction {
@@ -975,6 +1009,7 @@ mod tests {
 			requires: vec![],
 			provides: vec![vec![1]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
@@ -985,6 +1020,7 @@ mod tests {
 			requires: vec![vec![2]],
 			provides: vec![vec![3]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
@@ -995,6 +1031,7 @@ mod tests {
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
@@ -1005,6 +1042,7 @@ mod tests {
 			requires: vec![vec![3], vec![2]],
 			provides: vec![vec![4]],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		assert_eq!(pool.ready().count(), 4);
@@ -1040,10 +1078,11 @@ mod tests {
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: true,
+				source: Source::External,
 			}),
 			"Transaction { \
 hash: 4, priority: 1000, valid_till: 64, bytes: 1, propagate: true, \
-requires: [03,02], provides: [04], data: [4]}".to_owned()
+source: TransactionSource::External, requires: [03,02], provides: [04], data: [4]}".to_owned()
 		);
 	}
 
@@ -1058,6 +1097,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: true,
+				source: Source::External,
 		}.is_propagable(), true);
 
 		assert_eq!(Transaction {
@@ -1069,6 +1109,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![3], vec![2]],
 				provides: vec![vec![4]],
 				propagate: false,
+				source: Source::External,
 		}.is_propagable(), false);
 	}
 
@@ -1090,6 +1131,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 			requires: vec![vec![0]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		});
 
 		if let Err(error::Error::RejectedFutureTransaction) = err {
@@ -1113,6 +1155,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 			requires: vec![vec![0]],
 			provides: vec![],
 			propagate: true,
+			source: Source::External,
 		}).unwrap();
 
 		// then
@@ -1142,6 +1185,7 @@ requires: [03,02], provides: [04], data: [4]}".to_owned()
 				requires: vec![vec![0]],
 				provides: vec![],
 				propagate: true,
+				source: Source::External,
 			}).unwrap();
 
 			flag

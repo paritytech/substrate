@@ -17,7 +17,6 @@
 //! Macros for declaring and implementing runtime apis.
 
 #![recursion_limit = "512"]
-extern crate proc_macro;
 
 use proc_macro::TokenStream;
 
@@ -104,6 +103,7 @@ mod utils;
 ///     impl_version: 0,
 ///     // Here we are exposing the runtime api versions.
 ///     apis: RUNTIME_API_VERSIONS,
+///     transaction_version: 1,
 /// };
 ///
 /// # fn main() {}

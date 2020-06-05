@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
 	collections::{HashMap, HashSet},
@@ -249,6 +251,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_runtime::transaction_validity::TransactionSource;
 
 	#[test]
 	fn can_track_heap_size() {
@@ -263,6 +266,7 @@ mod tests {
 				requires: vec![vec![1], vec![2]],
 				provides: vec![vec![3], vec![4]],
 				propagate: true,
+				source: TransactionSource::External,
 			}.into(),
 			missing_tags: vec![vec![1u8], vec![2u8]].into_iter().collect(),
 			imported_at: std::time::Instant::now(),
