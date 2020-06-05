@@ -24,13 +24,14 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys, StorageProofKind, StorageProof, ProofInputKind, ProofInput,
-	RecordMapTrieNodes,
+	record_all_keys, StorageProofKind, TrieNodesStorageProof as StorageProof, ProofInputKind,
+	ProofInput, RecordMapTrieNodes,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use crate::{Error, ExecutionError, Backend, DBValue};
+use crate::{Error, ExecutionError, DBValue};
+use crate::backend::{Backend, ProofRegStateFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildrenMap};
 
 /// Patricia trie-based backend specialized in get value proofs.
@@ -144,37 +145,31 @@ impl<H: Hasher> Clone for ProofRecorder<H> {
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	trie_backend: TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
-	previous_input: ProofInput,
-	proof_kind: StorageProofKind,
-}
+pub struct ProvingBackend<S: TrieBackendStorage<T::Hash>, T: TrieConfiguration> (
+	pub TrieBackend<ProofRecorderBackend<S, T::Hash>, T>,
+);
 
 /// Trie backend storage with its proof recorder.
-pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	backend: &'a S,
+pub struct ProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher> {
+	backend: S,
 	proof_recorder: ProofRecorder<H>,
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
-	where H::Out: Codec
+impl<'a, S, T> ProvingBackend<&'a S, T>
+	where
+		S: TrieBackendStorage<T::Hash>,
+		T: TrieConfiguration,
+		TrieHash<T>: Codec,
 {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H>, kind: StorageProofKind) -> Self {
-		let proof_recorder = if kind.is_full_proof_recorder_needed() {
-			ProofRecorder::Full(Default::default())
-		} else {
-			ProofRecorder::Flat(Default::default())
-		};
-		Self::new_with_recorder(backend, proof_recorder, kind, ProofInput::None)
+	pub fn new(backend: &'a TrieBackend<S, T>) -> Self {
+		let proof_recorder = Default::default();
+		Self::new_with_recorder(backend, proof_recorder)
 	}
 
-	/// Create new proving backend with the given recorder.
-	pub fn new_with_recorder(
-		backend: &'a TrieBackend<S, H>,
-		proof_recorder: ProofRecorder<H>,
-		proof_kind: StorageProofKind,
-		previous_input: ProofInput,
+	fn new_with_recorder(
+		backend: &'a TrieBackend<S, T>,
+		proof_recorder: ProofRecorder<T::Hash>,
 	) -> Self {
 		let essence = backend.essence();
 		let root = essence.root().clone();
@@ -182,84 +177,38 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		let trie_backend = if let ProofInputKind::ChildTrieRoots = proof_kind.input_kind_for_processing() {
-			TrieBackend::new_with_roots(recorder, root)
-		} else {
-			TrieBackend::new(recorder, root)
-		};
-		ProvingBackend {
-			trie_backend,
-			previous_input,
-			proof_kind,
-		}
-	}
-
-	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&mut self) -> Result<StorageProof, String> {
-		self.update_input()?;
-		self.trie_backend.essence().backend_storage().proof_recorder
-			.extract_proof(self.proof_kind, self.previous_input.clone())
-	}
-
-	fn update_input(&mut self) -> Result<(), String> {
-		let input = match self.proof_kind.input_kind_for_processing() {
-			ProofInputKind::ChildTrieRoots => {
-				self.trie_backend.extract_registered_roots()
-			},
-			_ => ProofInput::None,
-		};
-		if let Err(e) = self.previous_input.consolidate(input) {
-			Err(format!(
-				"{:?} for inputs kind {:?}, {:?}",
-				e,
-				self.previous_input.kind(),
-				ProofInputKind::ChildTrieRoots,
-			))
-		} else {
-			Ok(())
-		}
-	}
-
-	/// Extract current recording state, this allows using the state back when recording
-	/// multiple operations.
-	pub fn recording_state(mut self) -> Result<(ProofRecorder<H>, ProofInput), String> {
-		self.update_input()?;
-		Ok((
-			self.trie_backend.essence().backend_storage().proof_recorder.clone(),
-			self.previous_input
-		))
+		ProvingBackend(TrieBackend::new(recorder, root))
 	}
 }
 
-impl<H: Hasher> ProofRecorder<H>
+impl<S, T> ProvingBackend<S, T>
 	where
-		H::Out: Codec,
+		S: TrieBackendStorage<T::Hash>,
+		T: TrieConfiguration,
+		TrieHash<T>: Codec,
 {
-	/// Extracts the gathered unordered encoded trie nodes.
-	/// Depending on `kind`, encoded trie nodes can change
-	/// (usually to compact the proof).
-	pub fn extract_proof(
-		&self,
-		kind: StorageProofKind,
-		input: ProofInput,
-	) -> Result<StorageProof, String> {
-		Ok(match self {
-			ProofRecorder::Flat(rec) => StorageProof::extract_proof_from_flat(
-				&*rec.read(),
-				kind,
-				&input,
-			).map_err(|e| format!("{}", e))?,
-			ProofRecorder::Full(rec) => StorageProof::extract_proof(
-				&*rec.read(),
-				kind,
-				&input,
-			).map_err(|e| format!("{}", e))?,
-		})
+	/// Create new proving backend with the given recorder.
+	pub fn from_backend_with_recorder(
+		backend: S,
+		root: TrieHash<T>,
+		proof_recorder: ProofRecorder<T::Hash>,
+	) -> Self {
+		let recorder = ProofRecorderBackend {
+			backend,
+			proof_recorder,
+		};
+		ProvingBackend(TrieBackend::new(recorder, root))
+	}
+
+	/// Extract current recording state.
+	/// This is sharing a rc over a sync reference.
+	pub fn extract_recorder(&self) -> ProofRecorder<T::Hash> {
+		self.0.backend_storage().proof_recorder.clone()
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
-	for ProofRecorderBackend<'a, S, H>
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H>
+	for ProofRecorderBackend<S, H>
 {
 	type Overlay = S::Overlay;
 
@@ -303,7 +252,9 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type TrieBackendStorage = S;
+	type StorageProof = sp_trie::TrieNodesStorageProof;
+	type ProofRegBackend = Self;
+	type ProofCheckBackend = TrieBackend<MemoryDB<H>, H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.trie_backend.storage(key)
@@ -389,6 +340,22 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.trie_backend.usage_info()
+	}
+
+	fn as_proof_backend(self) -> Option<Self::ProofRegBackend> {
+		Some(self)
+	}
+
+	fn from_reg_state(self, previous_recorder: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+		let root = self.0.essence().root().clone();
+		let storage = self.0.into_storage();
+		let current_recorder = storage.proof_recorder;
+		let backend = storage.backend;
+		if current_recorder.merge(previous_recorder) {
+			ProvingBackend::<S, H>::from_backend_with_recorder(backend, root, current_recorder)
+		} else {
+			None
+		}
 	}
 }
 

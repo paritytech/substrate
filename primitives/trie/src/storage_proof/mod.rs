@@ -6,8 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use sp_std::collections::{btree_map::BTreeMap, btree_map};
+use sp_std::collections::{btree_map::BTreeMap, btree_map, btree_map::Entry};
 use sp_std::collections::btree_set::BTreeSet;
+#[cfg(feature = "std")]
+use std::collections::hash_map::Entry as HEntry;
 use sp_std::vec::Vec;
 use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput, Error as CodecError};
 use hash_db::{Hasher, HashDBRef};
@@ -262,6 +264,8 @@ pub trait RecordBackend<Hash>: Clone + Default {
 	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>>;
 	/// Record the actual value.
 	fn record(&self, child_info: &ChildInfo, key: &Hash, value: Option<DBValue>);
+	/// Merge two record, can fail.
+	fn merge(&mut self, other: Self) -> bool;
 }
 
 #[cfg(feature = "std")]
@@ -291,6 +295,35 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for Fu
 			.or_default()
 			.insert(key.clone(), value.clone());
 	}
+
+	fn merge(&mut self, other: Self) -> bool {
+		let mut first = self.0.write();
+		let mut second = other.0.write();
+		for (child_info, other) in std::mem::replace(&mut *second, Default::default()) {
+			match first.entry(child_info) {
+				Entry::Occupied(mut entry) => {
+					for (key, value) in other.0 { 
+						match entry.get_mut().entry(key) {
+							HEntry::Occupied(entry) => {
+								if entry.get() != &value {
+									return false;
+								}
+							},
+							HEntry::Vacant(entry) => {
+								entry.insert(value);
+							},
+						}
+					}
+				},
+				Entry::Vacant(entry) => {
+					entry.insert(other);
+				},
+			}
+		}
+		true
+	}
+
+
 }
 
 #[cfg(feature = "std")]
@@ -301,6 +334,24 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash> RecordBackend<Hash> for Fl
 
 	fn record(&self, _child_info: &ChildInfo, key: &Hash, value: Option<DBValue>) {
 		self.0.write().insert(key.clone(), value.clone());
+	}
+
+	fn merge(&mut self, other: Self) -> bool {
+		let mut first = self.0.write();
+		let mut second = other.0.write();
+		for (key, value) in std::mem::replace(&mut *second, Default::default()).0 {
+			match first.entry(key) {
+				HEntry::Occupied(entry) => {
+					if entry.get() != &value {
+						return false;
+					}
+				},
+				HEntry::Vacant(entry) => {
+					entry.insert(value);
+				},
+			}
+		}
+		true
 	}
 }
 

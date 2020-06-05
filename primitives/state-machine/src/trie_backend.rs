@@ -22,6 +22,7 @@ use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
 	ChildrenProofMap, ProofInput};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
+use crate::backend::{ProofRegStateFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
 use crate::{
@@ -109,7 +110,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type TrieBackendStorage = S;
+	type StorageProof = sp_trie::TrieNodesStorageProof;
+	type ProofRegBackend = crate::proving_backend::ProvingBackend<S, H>;
+	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)
@@ -265,8 +268,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, is_default, write_overlay)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		Some(self)
+	fn from_reg_state(self, recorder: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+		let root = self.essence.root().clone();
+		Some(crate::proving_backend::ProvingBackend::from_backend_with_recorder(
+			self.essence.into_storage(),
+			root,
+			recorder,
+		))
 	}
 
 	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }

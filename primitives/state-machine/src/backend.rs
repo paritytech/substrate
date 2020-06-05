@@ -21,10 +21,12 @@ use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use crate::{
-	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
+
+/// Access the state of the proof backend of a backend.
+pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -43,7 +45,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// storage proof constraint and rename the struct to something that is more build
 	/// related but do not need to be usable as a backend.
 	type StorageProofReg: sp_trie::RegStorageProof<H::Out>
-		+ sp_trie::MergeableStorageProof<H::Out>
+		+ sp_trie::MergeableStorageProof
 		+ Into<Self::StorageProof>; // TODO EMCH consider removing this conv.
 
 	/// The actual proof produced.
@@ -169,10 +171,17 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		all
 	}
 
-	/// Try convert into trie backend.
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
-		None
+	/// Try convert into a proof backend.
+	/// If one do not want to consume the backend, calling on '&self' is fine
+	/// since '&Backend' implement 'Backend'.
+	fn as_proof_backend(self) -> Option<Self::ProofRegBackend> {
+		self.from_reg_state(Default::default())
 	}
+
+	/// Try convert into a proof backend.
+	/// We can optionally use a previous proof backend to avoid having to merge
+	/// proof later.
+	fn from_reg_state(self, previous: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend>;
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
