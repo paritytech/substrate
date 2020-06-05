@@ -1351,7 +1351,7 @@ ServiceBuilder<
 			keystore,
 			marker: PhantomData::<TBl>,
 			prometheus_registry: config.prometheus_config.map(|config| config.registry),
-			_base_path: config.base_path,
+			_base_path: config.base_path.map(Arc::new),
 		})
 	}
 }
