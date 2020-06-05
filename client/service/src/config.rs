@@ -201,7 +201,7 @@ pub enum BasePath {
 	/// A temporary directory is used as base path and will be deleted when dropped.
 	#[cfg(not(target_os = "unknown"))]
 	Temporary(TempDir),
-	/// An path existing path on the disk.
+	/// A path on the disk.
 	Permanenent(PathBuf),
 }
 
