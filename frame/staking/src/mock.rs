@@ -17,7 +17,7 @@
 
 //! Test utilities
 
-use std::{collections::{HashSet, HashMap}, cell::RefCell};
+use std::{collections::HashSet, cell::RefCell};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
@@ -978,38 +978,6 @@ pub(crate) fn prepare_submission_with(
 	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
 
 	(compact, winners, score)
-}
-
-/// Make all validator and nominator request their payment
-pub(crate) fn make_all_reward_payment_before_migration(era: EraIndex) {
-	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
-		.cloned()
-		.collect::<Vec<_>>();
-
-	// reward nominators
-	let mut nominator_controllers = HashMap::new();
-	for validator in Staking::eras_reward_points(era).individual.keys() {
-		let validator_exposure = Staking::eras_stakers_clipped(era, validator);
-		for (nom_index, nom) in validator_exposure.others.iter().enumerate() {
-			if let Some(nom_ctrl) = Staking::bonded(nom.who) {
-				nominator_controllers.entry(nom_ctrl)
-					.or_insert(vec![])
-					.push((validator.clone(), nom_index as u32));
-			}
-		}
-	}
-	for (nominator_controller, validators_with_nom_index) in nominator_controllers {
-		assert_ok!(Staking::payout_nominator(
-			Origin::signed(nominator_controller),
-			era,
-			validators_with_nom_index,
-		));
-	}
-
-	// reward validators
-	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
-		assert_ok!(Staking::payout_validator(Origin::signed(validator_controller), era));
-	}
 }
 
 /// Make all validator and nominator request their payment
