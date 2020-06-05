@@ -177,6 +177,11 @@ mod inner {
 		}
 	}
 
+	impl<T> FusedStream for TracingUnboundedReceiver<T> {
+		fn is_terminated(&self) -> bool {
+			self.1.is_terminated()
+		}
+	}
 
 	impl<T> Sink<T> for TracingUnboundedSender<T> {
 		type Error = SendError;
