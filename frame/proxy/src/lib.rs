@@ -295,9 +295,15 @@ decl_module! {
 		/// same sender, with the same parameters.
 		///
 		/// Fails if there are insufficient funds to pay for deposit.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 36.48 + .039 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+			.saturating_add(36 * WEIGHT_PER_MICROS)
+			.saturating_add((40 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
 		fn anonymous(origin, proxy_type: T::ProxyType, index: u16) {
 			let who = ensure_signed(origin)?;
@@ -326,9 +332,15 @@ decl_module! {
 		///
 		/// Fails with `NoPermission` in case the caller is not a previously created anonymous
 		/// account whose `anonymous` call has corresponding parameters.
+		///
+		/// # <weight>
+		/// P is the number of proxies the user has
+		/// - Base weight: 15.65 + .137 * P µs
+		/// - DB weight: 1 storage read and write.
+		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+			.saturating_add(15 * WEIGHT_PER_MICROS)
+			.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
 		fn kill_anonymous(origin,
 			spawner: T::AccountId,
