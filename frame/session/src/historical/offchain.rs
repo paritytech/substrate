@@ -27,6 +27,7 @@ use super::super::{Module as SessionModule, SessionIndex};
 use super::{IdentificationTuple, ProvingTrie, Trait};
 
 use super::shared::*;
+use sp_std::prelude::*;
 
 pub struct ValidatorSet<T: Trait> {
     validator_set: Vec<IdentificationTuple<T>>,
@@ -138,14 +139,83 @@ pub fn prove_session_membership<T: Trait, D: AsRef<[u8]>>(
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::new_test_ext;
+    use super::super::tests;
+    use super::super::{onchain,Module};
     use super::*;
+    use codec::Encode;
+	use sp_core::crypto::key_types::DUMMY;
+	use sp_runtime::testing::UintAuthorityId;
+	use crate::mock::{
+		NEXT_VALIDATORS, force_new_session,
+		set_next_validators, Test, System, Session,
+	};
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
+    use sp_core::offchain::{
+        OpaquePeerId,
+        OffchainExt,
+        TransactionPoolExt,
+        testing::{TestOffchainExt, TestTransactionPoolExt},
+    };
+
+    type Historical = Module<Test>;
+
+    pub fn new_test_ext() -> sp_io::TestExternalities {
+        let mut ext = frame_system::GenesisConfig::default()
+            .build_storage::<Test>()
+            .expect("Failed to create test externalities.");
+
+        crate::GenesisConfig::<Test> {
+            keys: NEXT_VALIDATORS.with(|l|
+                l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+            ),
+        }.assimilate_storage(&mut ext).unwrap();
+
+
+        let (offchain, offchain_state) = TestOffchainExt::new();
+
+        const ITERATIONS: u32 = 5u32;
+        let mut seed = [0u8; 32];
+        seed[0..4].copy_from_slice(&ITERATIONS.to_le_bytes());
+        offchain_state.write().seed = seed;
+
+        let mut ext = sp_io::TestExternalities::new(ext);
+        ext.register_extension(OffchainExt::new(offchain));
+        ext
+    }
 
     #[test]
-    fn justone() {
-        new_test_ext().execute_with(|| {
-            // @todo think of a way to test this properly, not sure yet if we can just call
-            // on-chain and off-chain all at once from here and get meaningful results
-        })
+    fn historical_proof_offchain() {
+        let mut x = new_test_ext();
+        let encoded_key_1 = UintAuthorityId(1).encode();
+
+        x.execute_with(|| {
+			set_next_validators(vec![1, 2]);
+			force_new_session();
+
+			System::set_block_number(1);
+			Session::on_initialize(1);
+
+            // "on-chain"
+            onchain::store_current_session_validator_set_to_offchain::<Test>();
+        });
+        x.commit_all();
+
+        x.execute_with(|| {
+
+            set_next_validators(vec![7, 8]);
+
+            force_new_session();
+
+            System::set_block_number(2);
+			Session::on_initialize(2);
+
+            // "off-chain"
+            let proof = prove_session_membership::<Test, _>(1, (DUMMY, &encoded_key_1));
+            assert!(proof.is_some());
+            let proof = proof.expect("Must be Some(Proof)");
+
+
+			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
+        });
     }
 }
