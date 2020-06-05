@@ -22,7 +22,7 @@ use sc_network::{self, PeerId};
 use sc_network::config::Role;
 use substrate_test_runtime_client::runtime::Block;
 use assert_matches::assert_matches;
-use futures::{prelude::*};
+use futures::prelude::*;
 use sp_utils::mpsc::tracing_unbounded;
 use std::thread;
 
