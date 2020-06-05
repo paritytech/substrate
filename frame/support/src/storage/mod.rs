@@ -29,6 +29,24 @@ pub mod child;
 pub mod generator;
 pub mod migration;
 
+/// Execute the supplied function in a new storage transaction.
+///
+/// All changes to storage performed by the supplied function are discarded if an
+/// error is returned and comitted on success.
+///
+/// Transactions can be nested to any depth. Commits happen to the parent transaction.
+pub fn with_transaction<T, E, F>(f: F) -> Result<T, E> where
+	F: FnOnce() -> Result<T, E>
+{
+	sp_io::storage::start_transaction();
+	let result = f();
+	match result {
+		Ok(_) => sp_io::storage::commit_transaction(),
+		Err(_) => sp_io::storage::rollback_transaction(),
+	}
+	result
+}
+
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
 /// Details on implementation can be found at
