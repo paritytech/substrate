@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Mock file for phragmen.
+//! Mock file for npos-elections.
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult, Assignment, VoteWeight, ExtendedBalance};
+use crate::{seq_phragmen, ElectionResult, Assignment, VoteWeight, ExtendedBalance};
 use sp_arithmetic::{PerThing, traits::{SaturatedConversion, Zero, One}};
 use sp_std::collections::btree_map::BTreeMap;
 use sp_runtime::assert_eq_error_rate;
@@ -326,7 +326,7 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, Output>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),

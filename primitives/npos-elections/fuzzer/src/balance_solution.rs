@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Fuzzing fro the equalize algorithm
+//! Fuzzing fro the balance_solution algorithm
 //!
 //! It ensures that any solution which gets equalized will lead into a better or equally scored
 //! one.
@@ -23,9 +23,9 @@
 mod common;
 use common::to_range;
 use honggfuzz::fuzz;
-use sp_phragmen::{
-	equalize, assignment_ratio_to_staked, build_support_map, to_without_backing, elect,
-	PhragmenResult, VoteWeight, evaluate_support, is_score_better,
+use sp_npos_elections::{
+	balance_solution, assignment_ratio_to_staked, build_support_map, to_without_backing, seq_phragmen,
+	ElectionResult, VoteWeight, evaluate_support, is_score_better,
 };
 use sp_std::collections::btree_map::BTreeMap;
 use sp_runtime::Perbill;
@@ -39,7 +39,7 @@ fn generate_random_phragmen_result(
 	to_elect: usize,
 	edge_per_voter: u64,
 	mut rng: impl RngCore,
-) -> (PhragmenResult<AccountId, Perbill>, BTreeMap<AccountId, VoteWeight>) {
+) -> (ElectionResult<AccountId, Perbill>, BTreeMap<AccountId, VoteWeight>) {
 	let prefix = 100_000;
 	// Note, it is important that stakes are always bigger than ed and
 	let base_stake: u64 = 1_000_000_000;
@@ -73,7 +73,7 @@ fn generate_random_phragmen_result(
 	});
 
 	(
-		elect::<AccountId, sp_runtime::Perbill>(
+		seq_phragmen::<AccountId, sp_runtime::Perbill>(
 			to_elect,
 			0,
 			candidates,
@@ -86,7 +86,14 @@ fn generate_random_phragmen_result(
 fn main() {
 	loop {
 		fuzz!(|data: (usize, usize, usize, usize, usize, u64)| {
-			let (mut target_count, mut voter_count, mut iterations, mut edge_per_voter, mut to_elect, seed) = data;
+			let (
+				mut target_count,
+				mut voter_count,
+				mut iterations,
+				mut edge_per_voter,
+				mut to_elect,
+				seed,
+			) = data;
 			let rng = rand::rngs::SmallRng::seed_from_u64(seed);
 			target_count = to_range(target_count, 50, 2000);
 			voter_count = to_range(voter_count, 50, 1000);
@@ -95,7 +102,7 @@ fn main() {
 			edge_per_voter = to_range(edge_per_voter, 1, target_count);
 
 			println!("++ [{} / {} / {} / {}]", voter_count, target_count, to_elect, iterations);
-			let (PhragmenResult { winners, assignments }, stake_of_tree) = generate_random_phragmen_result(
+			let (ElectionResult { winners, assignments }, stake_of_tree) = generate_random_phragmen_result(
 				voter_count as u64,
 				target_count as u64,
 				to_elect,
@@ -117,7 +124,7 @@ fn main() {
 				return;
 			}
 
-			let i = equalize(
+			let i = balance_solution(
 				&mut staked,
 				&mut support,
 				10,

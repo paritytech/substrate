@@ -520,6 +520,13 @@ impl Peerset {
 		trace!(target: "peerset", "Incoming {:?}", peer_id);
 		self.update_time();
 
+		if self.reserved_only {
+			if !self.priority_groups.get(RESERVED_NODES).map_or(false, |n| n.contains(&peer_id)) {
+				self.message_queue.push_back(Message::Reject(index));
+				return;
+			}
+		}
+
 		let not_connected = match self.data.peer(&peer_id) {
 			// If we're already connected, don't answer, as the docs mention.
 			peersstate::Peer::Connected(_) => return,
@@ -737,6 +744,26 @@ mod tests {
 			Message::Accept(ii),
 			Message::Accept(ii2),
 			Message::Reject(ii3),
+		]);
+	}
+
+	#[test]
+	fn test_peerset_reject_incoming_in_reserved_only() {
+		let incoming = PeerId::random();
+		let ii = IncomingIndex(1);
+		let config = PeersetConfig {
+			in_peers: 50,
+			out_peers: 50,
+			bootnodes: vec![],
+			reserved_only: true,
+			priority_groups: vec![],
+		};
+
+		let (mut peerset, _) = Peerset::from_config(config);
+		peerset.incoming(incoming.clone(), ii);
+
+		assert_messages(peerset, vec![
+			Message::Reject(ii),
 		]);
 	}
 
