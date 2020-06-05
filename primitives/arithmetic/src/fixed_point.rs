@@ -75,8 +75,8 @@ pub trait FixedPointNumber:
 	/// Consumes `self` and returns the inner raw value.
 	fn into_inner(self) -> Self::Inner;
 
-	/// Returns the negation.
-	fn negate(self) -> Self {
+	/// Returns the negation. Saturates if result does not fit.
+	fn saturating_negate(self) -> Self {
 		Self::from_inner(Self::Inner::zero().saturating_sub(self.into_inner()))
 	}
 
@@ -171,7 +171,7 @@ pub trait FixedPointNumber:
 	/// Returns `N::min` or `N::max` if the multiplication or final result does not fit in `N`.
 	fn saturating_mul_acc_int<N: FixedPointOperand>(self, n: N) -> N {
 		if self.is_negative() && n > N::zero() {
-			n.saturating_sub(self.negate().saturating_mul_int(n))
+			n.saturating_sub(self.saturating_negate().saturating_mul_int(n))
 		} else {
 			self.saturating_mul_int(n).saturating_add(n)
 		}
