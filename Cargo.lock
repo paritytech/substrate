@@ -4044,7 +4044,7 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-io",
- "sp-phragmen",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
@@ -4435,7 +4435,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-io",
- "sp-phragmen",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
  "sp-std",
@@ -4460,7 +4460,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-core",
  "sp-io",
- "sp-phragmen",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-std",
 ]
@@ -7474,6 +7474,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-npos-elections"
+version = "2.0.0-rc2"
+dependencies = [
+ "parity-scale-codec",
+ "rand 0.7.3",
+ "serde",
+ "sp-arithmetic",
+ "sp-npos-elections",
+ "sp-npos-elections-compact",
+ "sp-runtime",
+ "sp-std",
+ "substrate-test-utils",
+]
+
+[[package]]
+name = "sp-npos-elections-compact"
+version = "2.0.0-rc2"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote 1.0.3",
+ "syn 1.0.17",
+]
+
+[[package]]
+name = "sp-npos-elections-fuzzer"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "honggfuzz",
+ "rand 0.7.3",
+ "sp-npos-elections",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-offchain"
 version = "2.0.0-rc2"
 dependencies = [
@@ -7489,42 +7525,6 @@ version = "2.0.0-rc2"
 dependencies = [
  "backtrace",
  "log",
-]
-
-[[package]]
-name = "sp-phragmen"
-version = "2.0.0-rc2"
-dependencies = [
- "parity-scale-codec",
- "rand 0.7.3",
- "serde",
- "sp-arithmetic",
- "sp-phragmen",
- "sp-phragmen-compact",
- "sp-runtime",
- "sp-std",
- "substrate-test-utils",
-]
-
-[[package]]
-name = "sp-phragmen-compact"
-version = "2.0.0-rc2"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote 1.0.3",
- "syn 1.0.17",
-]
-
-[[package]]
-name = "sp-phragmen-fuzzer"
-version = "2.0.0-alpha.5"
-dependencies = [
- "honggfuzz",
- "rand 0.7.3",
- "sp-phragmen",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

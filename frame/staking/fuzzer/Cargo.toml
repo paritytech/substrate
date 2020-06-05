@@ -26,7 +26,7 @@ frame-support = { version = "2.0.0-rc2", path = "../../support" }
 sp-std = { version = "2.0.0-rc2", path = "../../../primitives/std" }
 sp-io ={ version = "2.0.0-rc2", path = "../../../primitives/io" }
 sp-core = { version = "2.0.0-rc2", path = "../../../primitives/core" }
-sp-phragmen = { version = "2.0.0-rc2", path = "../../../primitives/phragmen" }
+sp-npos-elections = { version = "2.0.0-rc2", path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "2.0.0-rc2", path = "../../../primitives/runtime" }
 
 [[bin]]
