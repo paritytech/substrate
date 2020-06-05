@@ -180,74 +180,6 @@ decl_module! {
 			Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 		}
 
-		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
-		/// initialize it with a proxy of `proxy_type` for `origin` sender.
-		///
-		/// Requires a `Signed` origin.
-		///
-		/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
-		/// new account. This will almost always be the most permissive `ProxyType` possible to
-		/// allow for maximum flexibility.
-		/// - `index`: A disambiguation index, in case this is called multiple times in the same
-		/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
-		/// want to use `0`.
-		///
-		/// Fails with `Duplicate` if this has already been called in this transaction, from the
-		/// same sender, with the same parameters.
-		///
-		/// Fails if there are insufficient funds to pay for deposit.
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
-		fn anonymous(origin, proxy_type: T::ProxyType, index: u16) {
-			let who = ensure_signed(origin)?;
-
-			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
-			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
-			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
-			T::Currency::reserve(&who, deposit)?;
-			Proxies::<T>::insert(&anonymous, (vec![(who.clone(), proxy_type.clone())], deposit));
-			Self::deposit_event(RawEvent::AnonymousCreated(anonymous, who, proxy_type, index));
-		}
-
-		/// Removes a previously spawned anonymous proxy.
-		///
-		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
-		/// inaccessible.
-		///
-		/// Requires a `Signed` origin, and the sender account must have been created by a call to
-		/// `anonymous` with corresponding parameters.
-		///
-		/// - `spawner`: The account that originally called `anonymous` to create this account.
-		/// - `index`: The disambiguation index originally passed to `anonymous`. Probably `0`.
-		/// - `proxy_type`: The proxy type originally passed to `anonymous`.
-		/// - `height`: The height of the chain when the call to `anonymous` was processed.
-		/// - `ext_index`: The extrinsic index in which the call to `anonymous` was processed.
-		///
-		/// Fails with `NoPermission` in case the caller is not a previously created anonymous
-		/// account whose `anonymous` call has corresponding parameters.
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			.saturating_add(18 * WEIGHT_PER_MICROS)
-			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
-		]
-		fn kill_anonymous(origin,
-			spawner: T::AccountId,
-			proxy_type: T::ProxyType,
-			index: u16,
-			#[compact] height: T::BlockNumber,
-			#[compact] ext_index: u32,
-		) {
-			let who = ensure_signed(origin)?;
-
-			let when = (height, ext_index);
-			let proxy = Self::anonymous_account(&spawner, &proxy_type, index, Some(when));
-			ensure!(proxy == who, Error::<T>::NoPermission);
-
-			let (_, deposit) = Proxies::<T>::take(&who);
-			T::Currency::unreserve(&spawner, deposit);
-		}
-
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -345,6 +277,74 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&who, old_deposit);
+		}
+
+		/// Spawn a fresh new account that is guaranteed to be otherwise inaccessible, and
+		/// initialize it with a proxy of `proxy_type` for `origin` sender.
+		///
+		/// Requires a `Signed` origin.
+		///
+		/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
+		/// new account. This will almost always be the most permissive `ProxyType` possible to
+		/// allow for maximum flexibility.
+		/// - `index`: A disambiguation index, in case this is called multiple times in the same
+		/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
+		/// want to use `0`.
+		///
+		/// Fails with `Duplicate` if this has already been called in this transaction, from the
+		/// same sender, with the same parameters.
+		///
+		/// Fails if there are insufficient funds to pay for deposit.
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(18 * WEIGHT_PER_MICROS)
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
+		fn anonymous(origin, proxy_type: T::ProxyType, index: u16) {
+			let who = ensure_signed(origin)?;
+
+			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
+			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
+			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
+			T::Currency::reserve(&who, deposit)?;
+			Proxies::<T>::insert(&anonymous, (vec![(who.clone(), proxy_type.clone())], deposit));
+			Self::deposit_event(RawEvent::AnonymousCreated(anonymous, who, proxy_type, index));
+		}
+
+		/// Removes a previously spawned anonymous proxy.
+		///
+		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
+		/// inaccessible.
+		///
+		/// Requires a `Signed` origin, and the sender account must have been created by a call to
+		/// `anonymous` with corresponding parameters.
+		///
+		/// - `spawner`: The account that originally called `anonymous` to create this account.
+		/// - `index`: The disambiguation index originally passed to `anonymous`. Probably `0`.
+		/// - `proxy_type`: The proxy type originally passed to `anonymous`.
+		/// - `height`: The height of the chain when the call to `anonymous` was processed.
+		/// - `ext_index`: The extrinsic index in which the call to `anonymous` was processed.
+		///
+		/// Fails with `NoPermission` in case the caller is not a previously created anonymous
+		/// account whose `anonymous` call has corresponding parameters.
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(18 * WEIGHT_PER_MICROS)
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+		]
+		fn kill_anonymous(origin,
+			spawner: T::AccountId,
+			proxy_type: T::ProxyType,
+			index: u16,
+			#[compact] height: T::BlockNumber,
+			#[compact] ext_index: u32,
+		) {
+			let who = ensure_signed(origin)?;
+
+			let when = (height, ext_index);
+			let proxy = Self::anonymous_account(&spawner, &proxy_type, index, Some(when));
+			ensure!(proxy == who, Error::<T>::NoPermission);
+
+			let (_, deposit) = Proxies::<T>::take(&who);
+			T::Currency::unreserve(&spawner, deposit);
 		}
 	}
 }
