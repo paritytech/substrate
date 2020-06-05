@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Helper methods for phragmen.
+//! Helper methods for npos-elections.
 
 use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf};
 use sp_arithmetic::PerThing;

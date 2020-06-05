@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Proc macro for phragmen compact assignment.
+//! Proc macro for a npos compact assignment.
 
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span, Ident};
@@ -29,7 +29,7 @@ mod staked;
 // prefix used for struct fields in compact.
 const PREFIX: &'static str = "votes";
 
-/// Generates a struct to store the phragmen assignments in a compact way. The struct can only store
+/// Generates a struct to store the election assignments in a compact way. The struct can only store
 /// distributions up to the given input count. The given count must be greater than 2.
 ///
 /// ```ignore
@@ -176,7 +176,7 @@ fn struct_def(
 	}).collect::<TokenStream2>();
 
 	Ok(quote! (
-		/// A struct to encode a Phragmen assignment in a compact way.
+		/// A struct to encode a election assignment in a compact way.
 		#[derive(
 			Default,
 			PartialEq,
@@ -224,9 +224,9 @@ fn struct_def(
 }
 
 fn imports() -> Result<TokenStream2> {
-	let sp_phragmen_imports = match crate_name("sp-phragmen") {
-		Ok(sp_phragmen) => {
-			let ident = syn::Ident::new(&sp_phragmen, Span::call_site());
+	let sp_phragmen_imports = match crate_name("sp-npos-elections") {
+		Ok(sp_npos_elections) => {
+			let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
 			quote!( extern crate #ident as _phragmen; )
 		}
 		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
