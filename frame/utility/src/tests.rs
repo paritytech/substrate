@@ -59,6 +59,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BasicCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -180,7 +181,7 @@ fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
-		assert_ok!(Utility::batch(Origin::ROOT, vec![
+		assert_ok!(Utility::batch(Origin::root(), vec![
 			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
 			Call::Balances(BalancesCall::force_transfer(1, 2, 5))
 		]));

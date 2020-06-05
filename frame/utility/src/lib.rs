@@ -55,7 +55,8 @@ use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
-use frame_support::{traits::{Filter, FilterStack, ClearFilterGuard},
+use frame_support::{
+	traits::{Filter, FilterStack, ClearFilterGuard, OriginTrait},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays}, dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -225,11 +226,12 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn as_limited_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let mut origin = origin;
+			let who = ensure_signed(origin.clone())?;
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 			let pseudonym = Self::sub_account_id(who, index);
-			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
-				.map(|_| ()).map_err(|e| e.error)
+			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
+			call.dispatch(origin).map(|_| ()).map_err(|e| e.error)
 		}
 	}
 }

@@ -51,13 +51,13 @@ pub use sp_runtime::RuntimeDebug;
 #[macro_use]
 pub mod debug;
 #[macro_use]
+mod origin;
+#[macro_use]
 pub mod dispatch;
 pub mod storage;
 mod hash;
 #[macro_use]
 pub mod event;
-#[macro_use]
-mod origin;
 #[macro_use]
 pub mod metadata;
 #[macro_use]

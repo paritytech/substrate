@@ -123,7 +123,7 @@ use frame_support::{
 	storage,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap, EnsureOrigin,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
@@ -149,11 +149,15 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
-	/// The aggregated `Origin` type used by dispatchable calls.
+	/// The basic call filter to use in Origin.
+	type BasicCallFilter: Filter<Self::Call>;
+
+	/// The `Origin` type used by dispatchable calls.
 	type Origin:
 		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>
-		+ Clone;
+		+ Clone
+		+ OriginTrait<Call = Self::Call>;
 
 	/// The aggregated `Call` type.
 	type Call: Dispatchable + Debug;
@@ -1950,7 +1954,7 @@ pub(crate) mod tests {
 	pub struct Call;
 
 	impl Dispatchable for Call {
-		type Origin = ();
+		type Origin = Origin;
 		type Trait = ();
 		type Info = DispatchInfo;
 		type PostInfo = PostDispatchInfo;
@@ -1961,6 +1965,7 @@ pub(crate) mod tests {
 	}
 
 	impl Trait for Test {
+		type BasicCallFilter = ();
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
@@ -2010,7 +2015,7 @@ pub(crate) mod tests {
 	fn origin_works() {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
 		let x: Result<RawOrigin<u64>, Origin> = o.into();
-		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+		assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
 	}
 
 	#[test]

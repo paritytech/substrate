@@ -143,6 +143,7 @@ mod tests {
 	}
 
 	impl frame_system::Trait for Test {
+		type BasicCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;

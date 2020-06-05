@@ -41,8 +41,8 @@ use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
 use sp_runtime::traits::Member;
 use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, traits::{
-		Get, ReservableCurrency, Currency, Filter, FilterStack, FilterStackGuard,
-		ClearFilterGuard, InstanceFilter
+		Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard, InstanceFilter,
+		OriginTrait, IsType,
 	}, weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
@@ -60,7 +60,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>;
+		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>
+		+ IsType<<Self as frame_system::Trait>::Call>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -174,16 +175,18 @@ decl_module! {
 			// We're now executing as a freshly authenticated new account, so the previous call
 			// restrictions no longer apply.
 			let _clear_guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			let _filter_guard = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(
-				move |c| match c.is_sub_type() {
-					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
-						if !proxy_type.is_superset(&pt) => false,
-					_ => proxy_type.filter(&c)
-				}
-			);
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 
-			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
+			let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
+			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
+				let c = <T as Trait>::Call::from_ref(c);
+				match c.is_sub_type() {
+					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
+						if !proxy_type.is_superset(&pt) => false,
+					_ => proxy_type.filter(c)
+				}
+			});
+			let e = call.dispatch(origin);
 			Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 		}
 
