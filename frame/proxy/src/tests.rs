@@ -104,7 +104,7 @@ impl pallet_utility::Trait for Test {
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;
 	pub const ProxyDepositFactor: u64 = 1;
-	pub const MaxProxies: u16 = 3;
+	pub const MaxProxies: u16 = 4;
 }
 pub struct IsCallable;
 impl_filter_stack!(crate::tests::IsCallable, crate::tests::BaseFilter, crate::tests::Call, is_callable);
@@ -210,28 +210,30 @@ fn filtering_works() {
 		let call = Box::new(Call::Utility(UtilityCall::as_sub(0, inner.clone())));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
-
 		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
-
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
 
 		let call = Box::new(Call::Utility(UtilityCall::as_limited_sub(0, inner.clone())));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Ok(())));
-
 		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
-
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		let de = DispatchError::from(UtilityError::<Test>::Uncallable).stripped();
 		expect_event(RawEvent::ProxyExecuted(Err(de)));
 
 		let call = Box::new(Call::Utility(UtilityCall::batch(vec![*inner])));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
-
+		expect_events(vec![UtilityEvent::BatchCompleted.into(), RawEvent::ProxyExecuted(Ok(())).into()]);
 		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
+		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
+		expect_events(vec![UtilityEvent::Uncallable(0).into(), RawEvent::ProxyExecuted(Ok(())).into()]);
 
+		let inner = Box::new(Call::Proxy(ProxyCall::add_proxy(5, ProxyType::Any)));
+		let call = Box::new(Call::Utility(UtilityCall::batch(vec![*inner])));
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
+		expect_events(vec![UtilityEvent::BatchCompleted.into(), RawEvent::ProxyExecuted(Ok(())).into()]);
+		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_events(vec![UtilityEvent::Uncallable(0).into(), RawEvent::ProxyExecuted(Ok(())).into()]);
 	});
@@ -247,8 +249,12 @@ fn add_remove_proxies_works() {
 		assert_eq!(Balances::reserved_balance(1), 3);
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 4);
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 4, ProxyType::JustUtility));
+		assert_eq!(Balances::reserved_balance(1), 5);
 		assert_noop!(Proxy::add_proxy(Origin::signed(1), 4, ProxyType::Any), Error::<Test>::TooMany);
 		assert_noop!(Proxy::remove_proxy(Origin::signed(1), 3, ProxyType::JustTransfer), Error::<Test>::NotFound);
+		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 4, ProxyType::JustUtility));
+		assert_eq!(Balances::reserved_balance(1), 4);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 3, ProxyType::Any));
 		assert_eq!(Balances::reserved_balance(1), 3);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::Any));
