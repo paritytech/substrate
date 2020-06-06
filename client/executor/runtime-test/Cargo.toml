@@ -31,4 +31,3 @@ std = [
 	"sp-std/std",
 	"sp-allocator/std",
 ]
-strict = ["default"]
