@@ -1032,7 +1032,7 @@ impl<T: Trait> Module<T> {
 
 		let index = Self::bounty_count();
 
-		let (bond, status) = if let Some(parent_bounty_id) = parent_bounty_id {
+		let (bond, status, is_sub) = if let Some(parent_bounty_id) = parent_bounty_id {
 			// this is a sub bounty
 			Bounties::<T>::try_mutate_exists(parent_bounty_id, |bounty| -> DispatchResult {
 				let parent = bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
@@ -1054,7 +1054,7 @@ impl<T: Trait> Module<T> {
 				Ok(())
 			})?;
 
-			(0.into(), BountyStatus::Active)
+			(0.into(), BountyStatus::Active, true)
 		} else {
 			// reserve deposit for new bounty
 			let bond = T::BountyDepositBase::get()
@@ -1062,7 +1062,7 @@ impl<T: Trait> Module<T> {
 			T::Currency::reserve(&proposer, bond)
 				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
-			(bond, BountyStatus::Proposed)
+			(bond, BountyStatus::Proposed, false)
 		};
 
 		BountyCount::put(index + 1);
@@ -1075,6 +1075,9 @@ impl<T: Trait> Module<T> {
 		BountyDescriptions::insert(index, description);
 
 		Self::deposit_event(RawEvent::BountyProposed(index));
+		if is_sub {
+			Self::deposit_event(RawEvent::BountyBecameActive(index));
+		}
 
 		Ok(())
 	}
