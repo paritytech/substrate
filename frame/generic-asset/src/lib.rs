@@ -842,6 +842,21 @@ impl<T: Trait> Module<T> {
 		<FreeBalance<T>>::insert(asset_id, who, &balance);
 	}
 
+	// Gets a lock by `id` on an account, returning `None` if there is no lock.
+	fn get_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+	) -> Option<(T::Balance, WithdrawReasons)> {
+		Self::locks(who).into_iter()
+		.find_map(|l| {
+			if l.id == id {
+				Some((l.amount, l.reasons.into()))
+			} else {
+				None
+			}
+		})
+	}
+
 	fn set_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
@@ -1346,6 +1361,13 @@ where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {
 	type Moment = T::BlockNumber;
+
+	fn get_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+	) -> Option<(T::Balance, WithdrawReasons)> {
+		<Module<T>>::get_lock(id, who)
+	}
 
 	fn set_lock(
 		id: LockIdentifier,
