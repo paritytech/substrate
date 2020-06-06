@@ -32,7 +32,7 @@ use frame_support::{
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
-use frame_support::traits::{Filter, InstanceFilter, FilterStack};
+use frame_support::traits::{Filter, InstanceFilter};
 use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,

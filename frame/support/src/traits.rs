@@ -115,6 +115,7 @@ impl<T> InstanceFilter<T> for () {
 /// Re-expected for the macro.
 pub use sp_std::{mem::swap, cell::RefCell, vec::Vec, boxed::Box};
 
+// TODO: Tests for this logic.
 #[macro_export]
 macro_rules! impl_filter_stack {
 	($target:ty, $base:ty, $call:ty, $module:ident) => {

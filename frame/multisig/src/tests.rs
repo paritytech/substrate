@@ -108,6 +108,13 @@ impl Filter<Call> for TestIsCallable {
 		}
 	}
 }
+impl FilterStack<Call> for TestIsCallable {
+	type Stack = ();
+	fn push(_: impl Fn(&Call) -> bool + 'static) {}
+	fn pop() {}
+	fn take() -> Self::Stack { () }
+	fn restore(_: Self::Stack) {}
+}
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;

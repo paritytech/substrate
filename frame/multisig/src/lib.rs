@@ -273,7 +273,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			let _ = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
+			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;

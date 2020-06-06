@@ -171,12 +171,14 @@ decl_module! {
 				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
 				.ok_or(Error::<T>::NotProxy)?;
 
-			let _ = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			let _ = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(move |c| match c.is_sub_type() {
-				Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
-					if !proxy_type.is_superset(&pt) => false,
-				_ => proxy_type.filter(&c),
-			});
+			let _clear_guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
+			let _filter_guard = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(
+				move |c| match c.is_sub_type() {
+					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
+						if !proxy_type.is_superset(&pt) => false,
+					_ => proxy_type.filter(&c)
+				}
+			);
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 
 			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
