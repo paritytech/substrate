@@ -80,7 +80,7 @@ use sc_client_api::{
 	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider,
 	cht, UsageProvider
 };
-use sp_utils::mpsc::tracing_unbounded;
+use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 use super::{
@@ -88,7 +88,6 @@ use super::{
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
-use futures::channel::mpsc;
 use rand::Rng;
 
 #[cfg(feature="test-helpers")]
@@ -99,7 +98,7 @@ use {
 	super::call_executor::LocalCallExecutor,
 };
 
-type NotificationSinks<T> = Mutex<Vec<mpsc::UnboundedSender<T>>>;
+type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
