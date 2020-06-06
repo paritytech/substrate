@@ -62,6 +62,12 @@ benchmarks! {
 		let call = Box::new(frame_system::Call::remark(vec![]).into());
 	}: _(RawOrigin::Signed(caller), u as u16, call)
 
+	as_limited_sub {
+		let u in 0 .. 1000;
+		let caller = account("caller", u, SEED);
+		let call = Box::new(frame_system::Call::remark(vec![]).into());
+	}: _(RawOrigin::Signed(caller), u as u16, call)
+
 	as_multi_create {
 		// Signatories, need at least 2 total people
 		let s in 2 .. T::MaxSignatories::get() as u32;
