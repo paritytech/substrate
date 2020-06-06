@@ -82,6 +82,29 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn get_lock_works() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_eq!(Balances::free_balance(1), 10);
+				Balances::set_lock(ID_1, &1, 9, WithdrawReasons::all());
+				let lock = Balances::get_lock(ID_1, &1).unwrap();
+				assert_eq!(lock, (9, WithdrawReasons::all()));
+
+				Balances::set_lock(ID_1, &1, 42, WithdrawReasons::from(WithdrawReason::TransactionPayment));
+				let lock = Balances::get_lock(ID_1, &1).unwrap();
+				assert_eq!(lock, (42, WithdrawReasons::from(WithdrawReason::TransactionPayment)));
+
+				Balances::set_lock(ID_1, &1, 69, WithdrawReasons::except(WithdrawReason::TransactionPayment));
+				let lock = Balances::get_lock(ID_1, &1).unwrap();
+				assert_eq!(lock, (69, WithdrawReasons::except(WithdrawReason::TransactionPayment)));
+
+				// Unfortunately this is a lossy conversion... We do best effort.
+				Balances::set_lock(ID_1, &1, 3, WithdrawReasons::except(WithdrawReason::Tip));
+				let lock = Balances::get_lock(ID_1, &1).unwrap();
+				assert_eq!(lock, (3, WithdrawReasons::all()));
+			});
+		}
+
+		#[test]
 		fn account_should_be_reaped() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
 				assert_eq!(Balances::free_balance(1), 10);
