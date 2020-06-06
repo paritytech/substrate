@@ -35,7 +35,7 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin};
-use futures::{prelude::*, future::ready, channel::oneshot};
+use futures::{prelude::*, future::{ready, self}, channel::oneshot};
 use parking_lot::Mutex;
 
 use sp_runtime::{
@@ -47,14 +47,19 @@ use sp_transaction_pool::{
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
 	TransactionSource,
 };
+use sc_transaction_graph::ChainApi;
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use crate::metrics::MetricsLink as PrometheusMetrics;
 
-type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
+type BoxedReadyIterator<Hash, Data> = Box<
+	dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send
+>;
 
-type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<sc_transaction_graph::ExHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>>;
+type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
+	sc_transaction_graph::ExtrinsicHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>
+>;
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
 
@@ -62,7 +67,7 @@ type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolAp
 pub struct BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: ChainApi<Block=Block>,
 {
 	pool: Arc<sc_transaction_graph::Pool<PoolApi>>,
 	api: Arc<PoolApi>,
@@ -116,8 +121,7 @@ impl<T, Block: BlockT> ReadyPoll<T, Block> {
 #[cfg(not(target_os = "unknown"))]
 impl<PoolApi, Block> parity_util_mem::MallocSizeOf for BasicPool<PoolApi, Block>
 where
-	PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
-	PoolApi::Hash: parity_util_mem::MallocSizeOf,
+	PoolApi: ChainApi<Block=Block>,
 	Block: BlockT,
 {
 	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
@@ -146,7 +150,7 @@ pub enum RevalidationType {
 impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash> + 'static,
+		PoolApi: ChainApi<Block=Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api.
 	///
@@ -226,11 +230,13 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: 'static + ChainApi<Block=Block>,
 {
 	type Block = PoolApi::Block;
-	type Hash = sc_transaction_graph::ExHash<PoolApi>;
-	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<TxHash<Self>, TransactionFor<Self>>;
+	type Hash = sc_transaction_graph::ExtrinsicHash<PoolApi>;
+	type InPoolTransaction = sc_transaction_graph::base_pool::Transaction<
+		TxHash<Self>, TransactionFor<Self>
+	>;
 	type Error = PoolApi::Error;
 
 	fn submit_at(
@@ -429,22 +435,51 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 	}
 }
 
+/// Prune the known txs for the given block.
+async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
+	block_id: BlockId<Block>,
+	api: &Api,
+	pool: &sc_transaction_graph::Pool<Api>,
+) {
+	// We don't query block if we won't prune anything
+	if pool.validated_pool().status().is_empty() {
+		return;
+	}
+
+	let hashes = api.block_body(&block_id).await
+		.unwrap_or_else(|e| {
+			log::warn!("Prune known transactions: error request {:?}!", e);
+			None
+		})
+		.unwrap_or_default()
+		.into_iter()
+		.map(|tx| pool.hash_of(&tx))
+		.collect::<Vec<_>>();
+
+	if let Err(e) = pool.prune_known(&block_id, &hashes) {
+		log::error!("Cannot prune known in the pool {:?}!", e);
+	}
+}
+
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 	where
 		Block: BlockT,
-		PoolApi: 'static + sc_transaction_graph::ChainApi<Block=Block, Hash=Block::Hash>,
+		PoolApi: 'static + ChainApi<Block=Block>,
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
-			ChainEvent::NewBlock { id, retracted, .. } => {
-				let id = id.clone();
+			ChainEvent::NewBlock { id, tree_route, is_new_best, .. } => {
 				let pool = self.pool.clone();
 				let api = self.api.clone();
 
 				let block_number = match api.block_id_to_number(&id) {
 					Ok(Some(number)) => number,
 					_ => {
-						log::trace!(target: "txpool", "Skipping chain event - no number for that block {:?}", id);
+						log::trace!(
+							target: "txpool",
+							"Skipping chain event - no number for that block {:?}",
+							id,
+						);
 						return Box::pin(ready(()));
 					}
 				};
@@ -455,40 +490,40 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					Some(20.into()),
 				);
 				let revalidation_strategy = self.revalidation_strategy.clone();
-				let retracted = retracted.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
 				let ready_poll = self.ready_poll.clone();
 
 				async move {
-					// We don't query block if we won't prune anything
-					if !pool.validated_pool().status().is_empty() {
-						let hashes = api.block_body(&id).await
-							.unwrap_or_else(|e| {
-								log::warn!("Prune known transactions: error request {:?}!", e);
-								None
-							})
-							.unwrap_or_default()
-							.into_iter()
-							.map(|tx| pool.hash_of(&tx))
-							.collect::<Vec<_>>();
-
-						if let Err(e) = pool.prune_known(&id, &hashes) {
-							log::error!("Cannot prune known in the pool {:?}!", e);
-						}
+					// If there is a tree route, we use this to prune known tx based on the enacted
+					// blocks and otherwise we only prune known txs if the block is
+					// the new best block.
+					if let Some(ref tree_route) = tree_route {
+						future::join_all(
+							tree_route
+								.enacted()
+								.iter().map(|h|
+									prune_known_txs_for_block(
+										BlockId::Hash(h.hash.clone()),
+										&*api,
+										&*pool,
+									),
+								),
+						).await;
+					} else if is_new_best {
+						prune_known_txs_for_block(id.clone(), &*api, &*pool).await;
 					}
 
-					let extra_pool = pool.clone();
-					// After #5200 lands, this arguably might be moved to the handler of "all blocks notification".
-					ready_poll.lock().trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
-
-					if next_action.resubmit {
+					if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
 						let mut resubmit_transactions = Vec::new();
 
-						for retracted_hash in retracted {
-							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(retracted_hash.clone());
+						for retracted in tree_route.retracted() {
+							let hash = retracted.hash.clone();
 
-							let block_transactions = api.block_body(&BlockId::hash(retracted_hash.clone())).await
+							// notify txs awaiting finality that it has been retracted
+							pool.validated_pool().on_block_retracted(hash.clone());
+
+							let block_transactions = api.block_body(&BlockId::hash(hash))
+								.await
 								.unwrap_or_else(|e| {
 									log::warn!("Failed to fetch block body {:?}!", e);
 									None
@@ -499,23 +534,37 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 							resubmit_transactions.extend(block_transactions);
 						}
+
 						if let Err(e) = pool.submit_at(
 							&id,
 							// These transactions are coming from retracted blocks, we should
 							// simply consider them external.
 							TransactionSource::External,
 							resubmit_transactions,
-							true
+							true,
 						).await {
 							log::debug!(
 								target: "txpool",
-								"[{:?}] Error re-submitting transactions: {:?}", id, e
+								"[{:?}] Error re-submitting transactions: {:?}",
+								id,
+								e,
 							)
 						}
 					}
 
+					let extra_pool = pool.clone();
+					// After #5200 lands, this arguably might be moved to the
+					// handler of "all blocks notification".
+					ready_poll.lock().trigger(
+						block_number,
+						move || Box::new(extra_pool.validated_pool().ready()),
+					);
+
 					if next_action.revalidate {
-						let hashes = pool.validated_pool().ready().map(|tx| tx.hash.clone()).collect();
+						let hashes = pool.validated_pool()
+							.ready()
+							.map(|tx| tx.hash.clone())
+							.collect();
 						revalidation_queue.revalidate_later(block_number, hashes).await;
 					}
 
