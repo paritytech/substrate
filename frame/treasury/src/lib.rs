@@ -184,6 +184,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Minimum value for a bounty.
 	type BountyValueMinimum: Get<BalanceOf<Self>>;
+
+	/// Minimum requirement for bounty contribution.
+	type BountyContributionMinimum: Get<BalanceOf<Self>>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -301,6 +304,9 @@ decl_storage! {
 
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
+
+		/// External bounty contributions.
+		pub BountyContributions get(fn bounty_contributions): double_map hasher(twox_64_concat) BountyIndex, hasher(twox_64_concat) T::AccountId => BalanceOf<T>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -692,7 +698,7 @@ decl_module! {
 		#[weight = 150_000_000]
 		fn create_sub_bounty(
 			origin,
-			parent_bounty_id: BountyIndex,
+			#[compact] parent_bounty_id: BountyIndex,
 			curator: <T::Lookup as StaticLookup>::Source,
 			#[compact] fee: BalanceOf<T>,
 			#[compact] value: BalanceOf<T>,
@@ -782,7 +788,7 @@ decl_module! {
 		}
 
 		#[weight = 100_000_000]
-		fn claim_bounty(origin, #[compact] bounty_id: ProposalIndex) {
+		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
@@ -795,6 +801,7 @@ decl_module! {
 					*maybe_bounty = None;
 
 					BountyDescriptions::remove(bounty_id);
+					BountyContributions::<T>::remove_prefix(bounty_id);
 
 					Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, balance, beneficiary));
 					Ok(())
@@ -802,6 +809,34 @@ decl_module! {
 					Err(Error::<T>::UnexpectedStatus.into())
 				}
 			})?;
+		}
+
+		#[weight = 100_000_000]
+		fn contribute_bounty(
+			origin,
+			#[compact] bounty_id: BountyIndex,
+			#[compact] amount: BalanceOf<T>
+		) {
+			let sender = ensure_signed(origin)?;
+
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+
+				ensure!(bounty.status == BountyStatus::Active, Error::<T>::UnexpectedStatus);
+
+				let acc = Self::bounty_account_id(bounty_id);
+				T::Currency::transfer(&sender, &acc, amount, AllowDeath)?;
+
+				// Transfer succeeded so this cannot overflow.
+				bounty.value += amount;
+
+				Ok(())
+			})?;
+
+			BountyContributions::<T>::mutate(bounty_id, sender, |val| {
+				// Transfer succeeded so this cannot overflow.
+				*val += amount;
+			});
 		}
 
 		/// # <weight>

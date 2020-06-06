@@ -677,3 +677,14 @@ fn award_and_claim_bounty_works() {
 	});
 }
 
+#[test]
+fn create_sub_bounty() {
+	// TODO
+	assert!(false);
+}
+
+#[test]
+fn contribute_bounty_and_refund() {
+	// TODO
+	assert!(false);
+}
