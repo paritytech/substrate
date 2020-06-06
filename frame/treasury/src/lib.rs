@@ -181,6 +181,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
+
+	/// Minimum value for a bounty.
+	type BountyValueMinimum: Get<BalanceOf<Self>>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -235,6 +238,8 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	curator: AccountId,
 	/// The (total) amount that should be paid if the bounty is rewarded.
 	value: Balance,
+	/// The curator fee. Included in value.
+	fee: Balance,
 	/// The amount held on deposit (reserved) for making this proposal.
 	bond: Balance,
 	/// The status of this bounty.
@@ -355,8 +360,8 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Proposer's balance is too low.
 		InsufficientProposersBalance,
-		/// No proposal at that index.
-		InvalidProposalIndex,
+		/// No proposal or bounty at that index.
+		InvalidIndex,
 		/// The reason given is just too big.
 		ReasonTooBig,
 		/// The tip was already found/started.
@@ -373,6 +378,10 @@ decl_error! {
 		UnexpectedStatus,
 		/// Require bounty curator.
 		RequireCurator,
+		/// Invalid bounty value.
+		InvalidValue,
+		/// Invalid bounty fee.
+		InvalidFee,
 	}
 }
 
@@ -458,7 +467,7 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidIndex)?;
 			let value = proposal.bond;
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::ProposalRejection::on_unbalanced(imbalance);
@@ -480,7 +489,7 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
+			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidIndex);
 			Approvals::mutate(|v| v.push(proposal_id));
 		}
 
@@ -670,30 +679,29 @@ decl_module! {
 		fn propose_bounty(
 			origin,
 			curator: <T::Lookup as StaticLookup>::Source,
+			#[compact] fee: BalanceOf<T>,
 			#[compact] value: BalanceOf<T>,
 			description: Vec<u8>,
 		) {
 			let proposer = ensure_signed(origin)?;
 			let curator = T::Lookup::lookup(curator)?;
 
-			ensure!(description.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+			Self::create_bounty(proposer, curator, description, fee, value, None)?;
+		}
 
-			let bond = T::BountyDepositBase::get()
-				+ T::DataDepositPerByte::get() * (description.len() as u32).into();
-			T::Currency::reserve(&proposer, bond)
-				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
+		#[weight = 150_000_000]
+		fn create_sub_bounty(
+			origin,
+			parent_bounty_id: BountyIndex,
+			curator: <T::Lookup as StaticLookup>::Source,
+			#[compact] fee: BalanceOf<T>,
+			#[compact] value: BalanceOf<T>,
+			description: Vec<u8>,
+		) {
+			let proposer = ensure_signed(origin)?;
+			let curator = T::Lookup::lookup(curator)?;
 
-			let index = Self::bounty_count();
-			BountyCount::put(index + 1);
-
-			let bounty = Bounty {
-				proposer, curator, value, bond, status: BountyStatus::Proposed
-			};
-
-			Bounties::<T>::insert(index, &bounty);
-			BountyDescriptions::insert(index, description);
-
-			Self::deposit_event(RawEvent::BountyProposed(index));
+			Self::create_bounty(proposer, curator, description, fee, value, Some(parent_bounty_id))?;
 		}
 
 		/// Reject a bounty proposal. The original deposit will be slashed.
@@ -710,7 +718,7 @@ decl_module! {
 				.or_else(ensure_root)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidProposalIndex)?;
+				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 				ensure!(bounty.status == BountyStatus::Proposed, Error::<T>::UnexpectedStatus);
 
 				BountyDescriptions::remove(bounty_id);
@@ -742,7 +750,7 @@ decl_module! {
 				.or_else(ensure_root)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidProposalIndex)?;
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				ensure!(bounty.status == BountyStatus::Proposed, Error::<T>::UnexpectedStatus);
 
 				bounty.status = BountyStatus::Approved;
@@ -759,7 +767,7 @@ decl_module! {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidProposalIndex)?;
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				ensure!(bounty.status == BountyStatus::Active, Error::<T>::UnexpectedStatus);
 				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
 				bounty.status = BountyStatus::PendingPayout {
@@ -778,7 +786,7 @@ decl_module! {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
-				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidProposalIndex)?;
+				let bounty = maybe_bounty.take().ok_or(Error::<T>::InvalidIndex)?;
 				if let BountyStatus::PendingPayout { beneficiary, unlock_at } = bounty.status {
 					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
 					let bounty_account = Self::bounty_account_id(bounty_id);
@@ -1008,6 +1016,67 @@ impl<T: Trait> Module<T> {
 		T::Currency::free_balance(&Self::account_id())
 			// Must never be less than 0 but better be safe.
 			.saturating_sub(T::Currency::minimum_balance())
+	}
+
+	fn create_bounty(
+		proposer: T::AccountId,
+		curator: T::AccountId,
+		description: Vec<u8>,
+		fee: BalanceOf<T>,
+		value: BalanceOf<T>,
+		parent_bounty_id: Option<BountyIndex>,
+	) -> DispatchResult {
+		ensure!(description.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
+		ensure!(fee < value, Error::<T>::InvalidFee);
+
+		let index = Self::bounty_count();
+
+		let (bond, status) = if let Some(parent_bounty_id) = parent_bounty_id {
+			// this is a sub bounty
+			Bounties::<T>::try_mutate_exists(parent_bounty_id, |bounty| -> DispatchResult {
+				let parent = bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+
+				ensure!(proposer == parent.curator, Error::<T>::RequireCurator);
+				ensure!(fee < parent.fee, Error::<T>::InvalidFee);
+				ensure!(value < parent.value, Error::<T>::InvalidValue);
+
+				let bounty_acc = Self::bounty_account_id(index);
+				let parent_acc = Self::bounty_account_id(parent_bounty_id);
+
+				// fund sub bounty from parent bounty
+				T::Currency::transfer(&parent_acc, &bounty_acc, value, KeepAlive)?;
+
+				// Already checked cannot underflow.
+				parent.fee -= fee;
+				parent.value -= value;
+
+				Ok(())
+			})?;
+
+			(0.into(), BountyStatus::Active)
+		} else {
+			// reserve deposit for new bounty
+			let bond = T::BountyDepositBase::get()
+				+ T::DataDepositPerByte::get() * (description.len() as u32).into();
+			T::Currency::reserve(&proposer, bond)
+				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
+
+			(bond, BountyStatus::Proposed)
+		};
+
+		BountyCount::put(index + 1);
+
+		let bounty = Bounty {
+			proposer, curator, value, fee, bond, status
+		};
+
+		Bounties::<T>::insert(index, &bounty);
+		BountyDescriptions::insert(index, description);
+
+		Self::deposit_event(RawEvent::BountyProposed(index));
+
+		Ok(())
 	}
 }
 
