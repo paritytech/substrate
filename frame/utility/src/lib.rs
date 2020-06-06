@@ -168,7 +168,7 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
-		/// A call with a `false` IsCallable filter was attempted.
+		/// A call with a `false` `IsCallable` filter was attempted.
 		Uncallable,
 	}
 }

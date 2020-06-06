@@ -43,6 +43,31 @@ impl<T> Filter<T> for () {
 	fn filter(_: &T) -> bool { true }
 }
 
+/// Simple trait for providing a filter over a reference to some type, given an instance of itself.
+pub trait InstanceFilter<T> {
+	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
+	fn filter(&self, _: &T) -> bool;
+
+	/// Determines whether `self` matches at least all items that `o` does.
+	fn is_no_less_permissive(&self, o: &Self) -> bool { !self.is_less_permissive(o) }
+
+	/// Determines whether `self` matches at most only the items that `o` does.
+	fn is_no_more_permissive(&self, o: &Self) -> bool { !o.is_less_permissive(&self) }
+
+	/// Determines whether `self` matches all the items that `o` does and others.
+	fn is_more_permissive(&self, o: &Self) -> bool { o.is_less_permissive(self) }
+
+	/// Determines whether `self` does not match all the items that `_o` does, nor any others.
+	///
+	/// NOTE: This is the only `*permissive` function that needs to be reimplemented.
+	fn is_less_permissive(&self, _o: &Self) -> bool { true }
+}
+
+impl<T> InstanceFilter<T> for () {
+	fn filter(&self, _: &T) -> bool { true }
+	fn is_less_permissive(&self, _o: &Self) -> bool { false }
+}
+
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
 pub trait StoredMap<K, T> {
@@ -105,20 +130,23 @@ impl<
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
+		let existed = S::contains_key(&k);
 		S::insert(k, t);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 	}
 	fn remove(k: &K) {
-		if S::contains_key(&k) {
+		let existed = S::contains_key(&k);
+		S::remove(k);
+		if existed {
 			Removed::happened(&k);
 		}
-		S::remove(k);
 	}
 	fn mutate<R>(k: &K, f: impl FnOnce(&mut T) -> R) -> R {
+		let existed = S::contains_key(&k);
 		let r = S::mutate(k, f);
-		if !S::contains_key(&k) {
+		if !existed {
 			Created::happened(k);
 		}
 		r

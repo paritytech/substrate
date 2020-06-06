@@ -25,7 +25,10 @@
 //! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
-//! # use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
+//! # use substrate_test_runtime_client::{
+//! #     runtime::{Extrinsic, Transfer}, AccountKeyring,
+//! #     DefaultTestClientBuilderExt, TestClientBuilderExt,
+//! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
 //! # let client = Arc::new(substrate_test_runtime_client::new());
 //! # let txpool = Arc::new(BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())), None).0);
@@ -38,7 +41,7 @@
 //! );
 //!
 //! // The proposer is created asynchronously.
-//! let mut proposer = futures::executor::block_on(proposer).unwrap();
+//! let proposer = futures::executor::block_on(proposer).unwrap();
 //!
 //! // This `Proposer` allows us to create a block proposition.
 //! // The proposer will grab transactions from the transaction pool, and put them into the block.

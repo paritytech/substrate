@@ -58,7 +58,6 @@ use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get
 };
-
 use frame_system::{self as system, ensure_signed};
 
 mod benchmarking;

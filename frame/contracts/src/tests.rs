@@ -290,7 +290,9 @@ fn account_removal_does_not_remove_storage() {
 			let _ = Balances::deposit_creating(&1, 110);
 			ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id1.clone(),
-				storage_size: <Test as Trait>::StorageSizeOffset::get(),
+				storage_size: 0,
+				empty_pair_count: 0,
+				total_pair_count: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
@@ -305,7 +307,9 @@ fn account_removal_does_not_remove_storage() {
 			let _ = Balances::deposit_creating(&2, 110);
 			ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id2.clone(),
-				storage_size: <Test as Trait>::StorageSizeOffset::get(),
+				storage_size: 0,
+				empty_pair_count: 0,
+				total_pair_count: 0,
 				deduct_block: System::block_number(),
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
@@ -752,7 +756,15 @@ fn storage_size() {
 				.unwrap();
 			assert_eq!(
 				bob_contract.storage_size,
-				<Test as Trait>::StorageSizeOffset::get() + 4
+				4
+			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				1,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				0,
 			);
 
 			assert_ok!(Contracts::call(
@@ -768,7 +780,15 @@ fn storage_size() {
 				.unwrap();
 			assert_eq!(
 				bob_contract.storage_size,
-				<Test as Trait>::StorageSizeOffset::get() + 4 + 4
+				4 + 4
+			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				2,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				0,
 			);
 
 			assert_ok!(Contracts::call(
@@ -784,7 +804,51 @@ fn storage_size() {
 				.unwrap();
 			assert_eq!(
 				bob_contract.storage_size,
-				<Test as Trait>::StorageSizeOffset::get() + 4
+				4
+			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				1,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				0,
+			);
+		});
+}
+
+#[test]
+fn empty_kv_pairs() {
+	let (wasm, code_hash) = compile_module::<Test>("set_empty_storage").unwrap();
+
+	ExtBuilder::default()
+		.build()
+		.execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+			assert_ok!(Contracts::instantiate(
+				Origin::signed(ALICE),
+				30_000,
+				GAS_LIMIT,
+				code_hash.into(),
+				vec![],
+			));
+			let bob_contract = ContractInfoOf::<Test>::get(BOB)
+				.unwrap()
+				.get_alive()
+				.unwrap();
+
+			assert_eq!(
+				bob_contract.storage_size,
+				0,
+			);
+			assert_eq!(
+				bob_contract.total_pair_count,
+				1,
+			);
+			assert_eq!(
+				bob_contract.empty_pair_count,
+				1,
 			);
 		});
 }
@@ -1316,7 +1380,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 				let django_contract = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 					.get_alive().unwrap();
-				assert_eq!(django_contract.storage_size, 16);
+				assert_eq!(django_contract.storage_size, 8);
 				assert_eq!(django_contract.trie_id, django_trie_id);
 				assert_eq!(django_contract.deduct_block, System::block_number());
 				match (test_different_storage, test_restore_to_with_dirty_storage) {
@@ -1390,7 +1454,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap()
 					.get_alive().unwrap();
 				assert_eq!(bob_contract.rent_allowance, 50);
-				assert_eq!(bob_contract.storage_size, 12);
+				assert_eq!(bob_contract.storage_size, 4);
 				assert_eq!(bob_contract.trie_id, django_trie_id);
 				assert_eq!(bob_contract.deduct_block, System::block_number());
 				assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
