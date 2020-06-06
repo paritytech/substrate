@@ -325,12 +325,15 @@ pub fn testnet_genesis(
 }
 
 fn development_config_genesis() -> GenesisConfig {
+
+	let endowed = (0..75000u32).into_iter().map(|x| get_account_id_from_seed::<sr25519::Public>(&format!("user/{}", x))).collect::<Vec<_>>();
+
 	testnet_genesis(
 		vec![
 			authority_keys_from_seed("Alice"),
 		],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
-		None,
+		Some(endowed),
 		true,
 	)
 }
@@ -351,6 +354,9 @@ pub fn development_config() -> ChainSpec {
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
+
+	let endowed = (0..75000u32).into_iter().map(|x| get_account_id_from_seed::<sr25519::Public>(&format!("user/{}", x))).collect::<Vec<_>>();
+
 	testnet_genesis(
 		vec![
 			authority_keys_from_seed("Alice"),
@@ -359,7 +365,7 @@ fn local_testnet_genesis() -> GenesisConfig {
 			authority_keys_from_seed("Dave"),
 		],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
-		None,
+		Some(endowed),
 		false,
 	)
 }
