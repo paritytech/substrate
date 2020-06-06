@@ -174,7 +174,7 @@ decl_module! {
 			let _ = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			let _ = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(move |c| match c.is_sub_type() {
 				Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
-					if pt.is_more_permissive(&proxy_type) => false,
+					if !proxy_type.is_superset(&pt) => false,
 				_ => proxy_type.filter(&c),
 			});
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);

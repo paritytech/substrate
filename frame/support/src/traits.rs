@@ -103,24 +103,13 @@ pub trait InstanceFilter<T>: Sized + Send + Sync {
 	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
 	fn filter(&self, _: &T) -> bool;
 
-	/// Determines whether `self` matches at least all items that `o` does.
-	fn is_no_less_permissive(&self, o: &Self) -> bool { !self.is_less_permissive(o) }
-
-	/// Determines whether `self` matches at most only the items that `o` does.
-	fn is_no_more_permissive(&self, o: &Self) -> bool { !o.is_less_permissive(&self) }
-
-	/// Determines whether `self` matches all the items that `o` does and others.
-	fn is_more_permissive(&self, o: &Self) -> bool { o.is_less_permissive(self) }
-
-	/// Determines whether `self` does not match all the items that `_o` does, nor any others.
-	///
-	/// NOTE: This is the only `*permissive` function that needs to be reimplemented.
-	fn is_less_permissive(&self, _o: &Self) -> bool { true }
+	/// Determines whether `self` matches at least everything that `_o` does.
+	fn is_superset(&self, _o: &Self) -> bool { false }
 }
 
 impl<T> InstanceFilter<T> for () {
 	fn filter(&self, _: &T) -> bool { true }
-	fn is_less_permissive(&self, _o: &Self) -> bool { false }
+	fn is_superset(&self, _o: &Self) -> bool { true }
 }
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite

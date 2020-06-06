@@ -87,8 +87,6 @@ sp-io = { version = "2.0.0-rc2", path = "../../../primitives/io" }
 [features]
 default = ["std"]
 std = [
-	"spin",
-	"lazy_static",
 	"sp-authority-discovery/std",
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
