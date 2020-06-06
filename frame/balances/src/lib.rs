@@ -265,6 +265,8 @@ pub enum Reasons {
 	All = 2,
 }
 
+// Converts from `WithdrawReasons` to `Reasons`, only keeping data about the ability
+// to withdraw for paying fees.
 impl From<WithdrawReasons> for Reasons {
 	fn from(r: WithdrawReasons) -> Reasons {
 		if r == WithdrawReasons::from(WithdrawReason::TransactionPayment) {
@@ -273,6 +275,19 @@ impl From<WithdrawReasons> for Reasons {
 			Reasons::All
 		} else {
 			Reasons::Misc
+		}
+	}
+}
+
+// Conversion from `Reasons` to `WithdrawReasons` as best as we can.
+// These conversions are potentially lossy if going from `WithdrawReasons`
+// to `Reasons`, then back to `WithdrawReasons`.
+impl From<Reasons> for WithdrawReasons {
+	fn from(r: Reasons) -> WithdrawReasons {
+		match r {
+			Reasons::Fee => WithdrawReasons::from(WithdrawReason::TransactionPayment),
+			Reasons::Misc => WithdrawReasons::except(WithdrawReason::TransactionPayment),
+			Reasons::All => WithdrawReasons::all(),
 		}
 	}
 }
@@ -1246,6 +1261,21 @@ where
 	T::Balance: MaybeSerializeDeserialize + Debug
 {
 	type Moment = T::BlockNumber;
+
+	// Gets a lock by `id` on an account, returning `None` if there is no lock.
+	fn get_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+	) -> Option<(T::Balance, WithdrawReasons)> {
+		Self::locks(who).into_iter()
+		.find_map(|l| {
+			if l.id == id {
+				Some((l.amount, l.reasons.into()))
+			} else {
+				None
+			}
+		})
+	}
 
 	// Set a lock on the balance of `who`.
 	// Is a no-op if lock amount is zero or `reasons` `is_none()`.

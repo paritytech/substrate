@@ -852,6 +852,12 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
+	/// Retrieve lock information for `id`, returning `None` if no lock exists.
+	fn get_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+	) -> Option<(Self::Balance, WithdrawReasons)>;
+
 	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
