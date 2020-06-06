@@ -22,7 +22,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-use sp_std::{prelude::*, mem::swap};
+use sp_std::prelude::*;
 
 use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
@@ -32,7 +32,7 @@ use frame_support::{
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
-use frame_support::traits::Filter;
+use frame_support::traits::{Filter, InstanceFilter, FilterStack};
 use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
@@ -81,7 +81,6 @@ use impls::{CurrencyToVoteHandler, Author, TargetedFeeAdjustment};
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
-use frame_support::traits::{InstanceFilter, FilterStack};
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -120,79 +119,7 @@ impl Filter<Call> for BaseFilter {
 	}
 }
 pub struct IsCallable;
-
-#[cfg(feature = "std")]
-mod is_callable {
-	use super::*;
-	use std::cell::RefCell;
-
-	thread_local! {
-		static FILTER: RefCell<Vec<Box<dyn Fn(&Call) -> bool + 'static>>> = RefCell::new(Vec::new());
-	}
-
-	impl Filter<Call> for IsCallable {
-		fn filter(call: &Call) -> bool {
-			BaseFilter::filter(call) &&
-				FILTER.with(|filter| filter.borrow().iter().all(|f| f(call)))
-		}
-	}
-
-	impl FilterStack<Call> for IsCallable {
-		type Stack = Vec<Box<dyn Fn(&Call) -> bool + 'static>>;
-		fn push(f: impl Fn(&Call) -> bool + 'static) {
-			FILTER.with(|filter| filter.borrow_mut().push(Box::new(f)));
-		}
-		fn pop() {
-			FILTER.with(|filter| filter.borrow_mut().pop());
-		}
-		fn take() -> Self::Stack {
-			let mut result = vec![];
-			FILTER.with(|filter| swap(filter.borrow_mut().as_mut(), &mut result));
-			result
-		}
-		fn restore(mut s: Self::Stack) {
-			FILTER.with(|filter| swap(filter.borrow_mut().as_mut(), &mut s));
-		}
-	}
-}
-
-#[cfg(not(feature = "std"))]
-mod is_callable {
-	use super::*;
-	use sp_std::cell::RefCell;
-	use frame_support::traits::Filter;
-
-	struct ThisFilter(RefCell<Vec<Box<dyn Fn(&Call) -> bool + 'static>>>);
-	// NOTE: Safe only in wasm (guarded above) because there's only one thread.
-	unsafe impl Send for ThisFilter {}
-	unsafe impl Sync for ThisFilter {}
-
-	static FILTER: ThisFilter = ThisFilter(RefCell::new(Vec::new()));
-
-	impl Filter<Call> for IsCallable {
-		fn filter(call: &Call) -> bool {
-			BaseFilter::filter(call) && FILTER.0.borrow().iter().all(|f| f(call))
-		}
-	}
-
-	impl FilterStack<Call> for IsCallable {
-		type Stack = Vec<Box<dyn Fn(&Call) -> bool + 'static>>;
-		fn push(f: impl Fn(&Call) -> bool + 'static) {
-			FILTER.0.borrow_mut().push(Box::new(f));
-		}
-		fn pop() {
-			FILTER.0.borrow_mut().pop();
-		}
-		fn take() -> Self::Stack {
-			let mut result = vec![];
-			swap(FILTER.0.borrow_mut().as_mut(), &mut result);
-			result
-		}
-		fn restore(mut s: Self::Stack) {
-			swap(FILTER.0.borrow_mut().as_mut(), &mut s);
-		}
-	}
-}
+frame_support::impl_filter_stack!(crate::IsCallable, crate::BaseFilter, crate::Call, is_callable);
 
 pub struct DealWithFees;
 impl OnUnbalanced<NegativeImbalance> for DealWithFees {

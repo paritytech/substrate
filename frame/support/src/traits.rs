@@ -112,6 +112,84 @@ impl<T> InstanceFilter<T> for () {
 	fn is_superset(&self, _o: &Self) -> bool { true }
 }
 
+/// Re-expected for the macro.
+pub use sp_std::{mem::swap, cell::RefCell, vec::Vec};
+
+#[macro_export]
+macro_rules! impl_filter_stack {
+	($target:ty, $base:ty, $call:ty, $module:ident) => {
+		#[cfg(feature = "std")]
+		mod $module {
+			use $crate::traits::{swap, RefCell, Vec, Filter, FilterStack};
+
+			thread_local! {
+				static FILTER: RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>> = RefCell::new(Vec::new());
+			}
+
+			impl Filter<$call> for $target {
+				fn filter(call: &$call) -> bool {
+					<$base>::filter(call) &&
+						FILTER.with(|filter| filter.borrow().iter().all(|f| f(call)))
+				}
+			}
+
+			impl FilterStack<$call> for $target {
+				type Stack = Vec<Box<dyn Fn(&$call) -> bool + 'static>>;
+				fn push(f: impl Fn(&$call) -> bool + 'static) {
+					FILTER.with(|filter| filter.borrow_mut().push(Box::new(f)));
+				}
+				fn pop() {
+					FILTER.with(|filter| filter.borrow_mut().pop());
+				}
+				fn take() -> Self::Stack {
+					let mut result = Vec::new();
+					FILTER.with(|filter| swap(filter.borrow_mut().as_mut(), &mut result));
+					result
+				}
+				fn restore(mut s: Self::Stack) {
+					FILTER.with(|filter| swap(filter.borrow_mut().as_mut(), &mut s));
+				}
+			}
+		}
+
+		#[cfg(not(feature = "std"))]
+		mod $module {
+			use $crate::traits::{swap, RefCell, Vec, Filter, FilterStack};
+
+			struct ThisFilter(RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>>);
+			// NOTE: Safe only in wasm (guarded above) because there's only one thread.
+			unsafe impl Send for ThisFilter {}
+			unsafe impl Sync for ThisFilter {}
+
+			static FILTER: ThisFilter = ThisFilter(RefCell::new(Vec::new()));
+
+			impl Filter<$call> for $target {
+				fn filter(call: &$call) -> bool {
+					<$base>::filter(call) && FILTER.0.borrow().iter().all(|f| f(call))
+				}
+			}
+
+			impl FilterStack<$call> for $target {
+				type Stack = Vec<Box<dyn Fn(&$call) -> bool + 'static>>;
+				fn push(f: impl Fn(&$call) -> bool + 'static) {
+					FILTER.0.borrow_mut().push(Box::new(f));
+				}
+				fn pop() {
+					FILTER.0.borrow_mut().pop();
+				}
+				fn take() -> Self::Stack {
+					let mut result = Vec::new();
+					swap(FILTER.0.borrow_mut().as_mut(), &mut result);
+					result
+				}
+				fn restore(mut s: Self::Stack) {
+					swap(FILTER.0.borrow_mut().as_mut(), &mut s);
+				}
+			}
+		}
+	}
+}
+
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
 pub trait StoredMap<K, T> {
