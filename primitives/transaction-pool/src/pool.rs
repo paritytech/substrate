@@ -255,8 +255,10 @@ pub enum ChainEvent<B: BlockT> {
 		id: BlockId<B>,
 		/// Header of the just imported block
 		header: B::Header,
-		/// List of retracted blocks ordered by block number.
-		retracted: Vec<B::Hash>,
+		/// Tree route from old best to new best that was calculated on import.
+		///
+		/// If `None`, no re-org happened on import.
+		tree_route: Option<Arc<sp_blockchain::TreeRoute<B>>>,
 	},
 	/// An existing block has been finalized.
 	Finalized {
