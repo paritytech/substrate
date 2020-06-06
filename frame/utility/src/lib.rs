@@ -67,7 +67,7 @@ use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter},
+use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
@@ -106,7 +106,7 @@ pub trait Trait: frame_system::Trait {
 	type MaxSignatories: Get<u16>;
 
 	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: Filter<<Self as Trait>::Call>;
+	type IsCallable: FilterStack<<Self as Trait>::Call>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -292,7 +292,12 @@ decl_module! {
 
 		/// Send a call through an indexed pseudonym of the sender.
 		///
-		/// Calls must each fulfil the `IsCallable` filter.
+		/// The call must fulfil only the pre-cleared `IsCallable` filter (i.e. only the level of
+		/// filtering that remains after calling `take()`).
+		///
+		/// NOTE: If you need to ensure that any account-based filtering is honored (i.e. because
+		/// you expect `proxy` to have been used prior in the call stack and you want it to apply to
+		/// any sub-accounts), then use `as_limited_sub` instead.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -308,6 +313,36 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let _ = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
+			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
+			let pseudonym = Self::sub_account_id(who, index);
+			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
+				.map(|_| ()).map_err(|e| e.error)
+		}
+
+		/// Send a call through an indexed pseudonym of the sender.
+		///
+		/// Calls must each fulfil the `IsCallable` filter; it is not cleared before.
+		///
+		/// NOTE: If you need to ensure that any account-based filtering is not honored (i.e.
+		/// because you expect `proxy` to have been used prior in the call stack and you do not want
+		/// the call restrictions to apply to any sub-accounts), then use `as_sub` instead.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - Base weight: 2.861 µs
+		/// - Plus the weight of the `call`
+		/// # </weight>
+		#[weight = FunctionOf(
+			|args: (&u16, &Box<<T as Trait>::Call>)| {
+				args.1.get_dispatch_info().weight.saturating_add(3_000_000)
+			},
+			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
+			Pays::Yes,
+		)]
+		fn as_limited_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 			let pseudonym = Self::sub_account_id(who, index);
@@ -382,6 +417,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let _ = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
