@@ -115,7 +115,6 @@ impl<T> InstanceFilter<T> for () {
 /// Re-expected for the macro.
 pub use sp_std::{mem::swap, cell::RefCell, vec::Vec, boxed::Box};
 
-// TODO: Tests for this logic.
 #[macro_export]
 macro_rules! impl_filter_stack {
 	($target:ty, $base:ty, $call:ty, $module:ident) => {
@@ -188,6 +187,98 @@ macro_rules! impl_filter_stack {
 				}
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod test_impl_filter_stack {
+	use super::*;
+
+	pub struct IsCallable;
+	pub struct BaseFilter;
+	impl Filter<u32> for BaseFilter {
+		fn filter(x: &u32) -> bool { x % 2 == 0 }
+	}
+	impl_filter_stack!(
+		crate::traits::test_impl_filter_stack::IsCallable,
+		crate::traits::test_impl_filter_stack::BaseFilter,
+		u32,
+		is_callable
+	);
+
+	#[test]
+	fn impl_filter_stack_should_work() {
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+
+		IsCallable::push(|x| *x < 42);
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(!IsCallable::filter(&42));
+
+		IsCallable::push(|x| *x % 3 == 0);
+		assert!(IsCallable::filter(&36));
+		assert!(!IsCallable::filter(&40));
+
+		IsCallable::pop();
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(!IsCallable::filter(&42));
+
+		let saved = IsCallable::take();
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+
+		IsCallable::restore(saved);
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(!IsCallable::filter(&42));
+
+		IsCallable::pop();
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+	}
+
+	#[test]
+	fn guards_should_work() {
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
+		{
+			let _guard_1 = FilterStackGuard::<IsCallable, u32>::new(|x| *x < 42);
+			assert!(IsCallable::filter(&36));
+			assert!(IsCallable::filter(&40));
+			assert!(!IsCallable::filter(&42));
+			{
+				let _guard_2 = FilterStackGuard::<IsCallable, u32>::new(|x| *x % 3 == 0);
+				assert!(IsCallable::filter(&36));
+				assert!(!IsCallable::filter(&40));
+			}
+			assert!(IsCallable::filter(&36));
+			assert!(IsCallable::filter(&40));
+			assert!(!IsCallable::filter(&42));
+			{
+				let _guard_2 = ClearFilterGuard::<IsCallable, u32>::new();
+				assert!(IsCallable::filter(&36));
+				assert!(IsCallable::filter(&40));
+				assert!(IsCallable::filter(&42));
+				assert!(!IsCallable::filter(&43));
+			}
+			assert!(IsCallable::filter(&36));
+			assert!(IsCallable::filter(&40));
+			assert!(!IsCallable::filter(&42));
+		}
+		assert!(IsCallable::filter(&36));
+		assert!(IsCallable::filter(&40));
+		assert!(IsCallable::filter(&42));
+		assert!(!IsCallable::filter(&43));
 	}
 }
 
