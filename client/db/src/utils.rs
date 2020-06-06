@@ -257,7 +257,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
-			return db_open_error("kvdb-rocksdb");
+			return db_open_error("with-kvdb-rocksdb");
 		},
 		#[cfg(feature = "subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
@@ -266,7 +266,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(not(feature = "subdb"))]
 		DatabaseSettingsSrc::SubDb { .. } => {
-			return db_open_error("subdb");
+			return db_open_error("with-subdb");
 		},
 		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
@@ -275,7 +275,7 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
-			return db_open_error("parity-db");
+			return db_open_error("with-parity-db");
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
