@@ -155,7 +155,8 @@ macro_rules! impl_filter_stack {
 
 		#[cfg(not(feature = "std"))]
 		mod $module {
-			use $crate::traits::{swap, RefCell, Vec, Box, Filter, FilterStack};
+			use super::*;
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
 
 			struct ThisFilter(RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>>);
 			// NOTE: Safe only in wasm (guarded above) because there's only one thread.
