@@ -120,7 +120,8 @@ macro_rules! impl_filter_stack {
 	($target:ty, $base:ty, $call:ty, $module:ident) => {
 		#[cfg(feature = "std")]
 		mod $module {
-			use $crate::traits::{swap, RefCell, Vec, Box, Filter, FilterStack};
+			use super::*;
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
 
 			thread_local! {
 				static FILTER: RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>> = RefCell::new(Vec::new());
