@@ -468,10 +468,11 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>> {
 		match event {
-			ChainEvent::NewBlock { id, tree_route, is_new_best, .. } => {
+			ChainEvent::NewBlock { hash, tree_route, is_new_best, .. } => {
 				let pool = self.pool.clone();
 				let api = self.api.clone();
 
+				let id = BlockId::hash(hash);
 				let block_number = match api.block_id_to_number(&id) {
 					Ok(Some(number)) => number,
 					_ => {
@@ -495,13 +496,13 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 				async move {
 					// If there is a tree route, we use this to prune known tx based on the enacted
-					// blocks and otherwise we only prune known txs if the block is
-					// the new best block.
+					// blocks.
 					if let Some(ref tree_route) = tree_route {
 						future::join_all(
 							tree_route
 								.enacted()
-								.iter().map(|h|
+								.iter()
+								.map(|h|
 									prune_known_txs_for_block(
 										BlockId::Hash(h.hash.clone()),
 										&*api,
@@ -509,7 +510,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 									),
 								),
 						).await;
-					} else if is_new_best {
+					}
+
+					// If this is a new best block, we need to prune its transactions from the pool.
+					if is_new_best {
 						prune_known_txs_for_block(id.clone(), &*api, &*pool).await;
 					}
 
