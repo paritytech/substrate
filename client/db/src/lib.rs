@@ -44,7 +44,7 @@ mod utils;
 mod stats;
 #[cfg(feature = "with-parity-db")]
 mod parity_db;
-#[cfg(feature = "subdb")]
+#[cfg(feature = "with-subdb")]
 mod subdb;
 
 use std::sync::Arc;
