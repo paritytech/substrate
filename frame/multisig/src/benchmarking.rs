@@ -28,7 +28,9 @@ use crate::Module as Utility;
 
 const SEED: u32 = 0;
 
-fn setup_multi<T: Trait>(s: u32, z: u32) -> Result<(Vec<T::AccountId>, Box<<T as Trait>::Call>), &'static str>{
+fn setup_multi<T: Trait>(s: u32, z: u32)
+	-> Result<(Vec<T::AccountId>, Box<<T as Trait>::Call>), &'static str>
+{
 	let mut signatories: Vec<T::AccountId> = Vec::new();
 	for i in 0 .. s {
 		let signatory = account("signatory", i, SEED);
@@ -86,7 +88,8 @@ benchmarks! {
 		for i in 1 .. s - 1 {
 			let mut signatories_loop = signatories2.clone();
 			let caller_loop = signatories_loop.remove(i as usize);
-			Utility::<T>::as_multi(RawOrigin::Signed(caller_loop).into(), s as u16, signatories_loop, Some(timepoint), call.clone())?;
+			let o = RawOrigin::Signed(caller_loop).into();
+			Utility::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone())?;
 		}
 		let caller2 = signatories2.remove(0);
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call)
@@ -128,7 +131,8 @@ benchmarks! {
 		let call_hash = call.using_encoded(blake2_256);
 		let timepoint = Utility::<T>::timepoint();
 		// Create the multi
-		Utility::<T>::as_multi(RawOrigin::Signed(caller.clone()).into(), s as u16, signatories.clone(), None, call.clone())?;
+		let o = RawOrigin::Signed(caller.clone()).into();
+		Utility::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone())?;
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 }
 

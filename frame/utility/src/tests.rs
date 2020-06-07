@@ -32,7 +32,6 @@ use crate as utility;
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
-
 impl_outer_event! {
 	pub enum TestEvent for Test {
 		system<T>,
@@ -89,8 +88,8 @@ parameter_types! {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type Event = TestEvent;
 	type DustRemoval = ();
+	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 }
@@ -107,6 +106,13 @@ impl Filter<Call> for TestIsCallable {
 			_ => false,
 		}
 	}
+}
+impl FilterStack<Call> for TestIsCallable {
+	type Stack = ();
+	fn push(_: impl Fn(&Call) -> bool + 'static) {}
+	fn pop() {}
+	fn take() -> Self::Stack { () }
+	fn restore(_: Self::Stack) {}
 }
 impl Trait for Test {
 	type Event = TestEvent;
@@ -207,7 +213,7 @@ fn batch_with_signed_filters() {
 				Call::System(frame_system::Call::remark(vec![]))
 			]),
 		);
-		expect_event(RawEvent::Uncallable(0));
+		expect_event(Event::Uncallable(0));
 	});
 }
 
