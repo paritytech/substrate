@@ -27,7 +27,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
-use crate as utility;
+use crate as multisig;
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
