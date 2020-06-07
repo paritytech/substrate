@@ -179,9 +179,7 @@ macro_rules! impl_filter_stack {
 					FILTER.0.borrow_mut().pop();
 				}
 				fn take() -> Self::Stack {
-					let mut result = Vec::new();
-					swap(FILTER.0.borrow_mut().as_mut(), &mut result);
-					result
+					take(FILTER.0.borrow_mut().as_mut());
 				}
 				fn restore(mut s: Self::Stack) {
 					swap(FILTER.0.borrow_mut().as_mut(), &mut s);
