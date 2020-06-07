@@ -113,7 +113,8 @@ impl<T> InstanceFilter<T> for () {
 }
 
 /// Re-expected for the macro.
-pub use sp_std::{mem::swap, cell::RefCell, vec::Vec, boxed::Box};
+#[doc(hidden)]
+pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
 
 #[macro_export]
 macro_rules! impl_filter_stack {
