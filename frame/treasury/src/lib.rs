@@ -101,7 +101,7 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
+use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter, IterableStorageDoubleMap};
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
 	ReservableCurrency, WithdrawReason
@@ -358,6 +358,8 @@ decl_event!(
 		BountyAwarded(BountyIndex, AccountId),
 		/// A bounty is claimed by beneficiary.
 		BountyClaimed(BountyIndex, Balance, AccountId),
+		/// A bounty is cancelled.
+		BountyCanceled(BountyIndex),
 	}
 );
 
@@ -837,6 +839,33 @@ decl_module! {
 				// Transfer succeeded so this cannot overflow.
 				*val += amount;
 			});
+		}
+
+		#[weight = 100_000_000]
+		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
+			let curator = ensure_signed(origin)?;
+
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
+				ensure!(bounty.status == BountyStatus::Active, Error::<T>::UnexpectedStatus);
+				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+
+				let bounty_account = Self::bounty_account_id(bounty_id);
+
+				BountyDescriptions::remove(bounty_id);
+
+				for (acc, amount) in BountyContributions::<T>::drain_prefix(bounty_id) {
+					let _ = T::Currency::transfer(&bounty_account, &acc, amount, AllowDeath); // should not fail
+				}
+
+				let balance = T::Currency::free_balance(&bounty_account);
+				let _ = T::Currency::transfer(&bounty_account, &Self::account_id(), balance, AllowDeath); // should not fail
+				*maybe_bounty = None;
+
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
 		}
 
 		/// # <weight>
