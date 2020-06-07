@@ -131,10 +131,11 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
+			let ks = keystore.read();
 			let keys = epoch.authorities.iter()
 				.enumerate()
 				.filter_map(|(i, a)| {
-					if keystore.read().has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
+					if ks.has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
 						Some((a.0.clone(), i))
 					} else {
 						None
