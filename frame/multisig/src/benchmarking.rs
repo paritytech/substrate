@@ -35,7 +35,7 @@ fn setup_multi<T: Trait>(s: u32, z: u32)
 	for i in 0 .. s {
 		let signatory = account("signatory", i, SEED);
 		// Give them some balance for a possible deposit
-		let deposit = T::MultisigDepositBase::get() + T::MultisigDepositFactor::get() * s.into();
+		let deposit = T::DepositBase::get() + T::DepositFactor::get() * s.into();
 		let balance = T::Currency::minimum_balance().saturating_mul(100.into()) + deposit;
 		T::Currency::make_free_balance_be(&signatory, balance);
 		signatories.push(signatory);
