@@ -22,10 +22,12 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::Error
+	traits::{Error, VRFSignature},
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+#[cfg(feature = "std")]
+use merlin::Transcript;
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
@@ -243,13 +245,8 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&self,
 		_key_type: KeyTypeId,
 		_public: &sr25519::Public,
-		_label: &'static [u8],
-		_prefix: &'static [u8],
-		_randomness: &[u8],
-		_slot_number: u64,
-		_epoch: u64,
-		_threshold: u128
-	) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error> {
+		_transcript: Transcript,
+	) -> Result<VRFSignature, Error> {
 		Err(Error::Unavailable)
 	}
 }

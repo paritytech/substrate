@@ -28,6 +28,7 @@ use std::{
 	panic::UnwindSafe,
 	sync::Arc,
 };
+use merlin::Transcript;
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
@@ -51,6 +52,13 @@ pub enum Error {
 	Other(String)
 }
 
+/// VRF signature data
+pub struct VRFSignature {
+	/// The VRFOutput serialized
+	pub output: Vec<u8>,
+	/// The calculated VRFProof
+	pub proof: Vec<u8>,
+}
 
 /// Something that generates, stores and provides access to keys.
 pub trait BareCryptoStore: Send + Sync {
@@ -174,18 +182,26 @@ pub trait BareCryptoStore: Send + Sync {
 		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
 	}
 
-	/// Generate VRF proof for given transacript data.
+	/// Generate VRF signature for given transcript data.
+	///
+	/// Receives KeyTypeId and Public key to be able to map
+	/// them to a private key that exists in the keystore which
+	/// is, in turn, used for signing the provided transcript.
+	///
+	/// Returns a result containing the signature data.
+	/// Namely, VRFOutput and VRFProof which are returned
+	/// inside the `VRFSignature` container struct.
+	///
+	/// This function will return an error in the cases where
+	/// the public key and key type provided do not match a private
+	/// key in the keystore. Or, in the context of remote signing
+	/// an error could be a network one.
 	fn vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		label: &'static [u8],
-		prefix: &'static [u8],
-		randomness: &[u8],
-		slot_number: u64,
-		epoch: u64,
-		threshold: u128,
-	) -> Result<Option<(Vec<u8>, Vec<u8>)>, Error>;
+		transcript: Transcript,
+	) -> Result<VRFSignature, Error>;
 }
 
 /// A pointer to the key store.

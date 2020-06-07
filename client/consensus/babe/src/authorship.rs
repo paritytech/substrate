@@ -18,17 +18,21 @@
 
 use sp_application_crypto::AppKey;
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, BABE_VRF_PREFIX,
+	BABE_VRF_PREFIX,
 	AuthorityId, BabeAuthorityWeight,
 	SlotNumber,
+	make_transcript,
 };
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::{U256, blake2_256, traits::BareCryptoStore};
+use sp_core::{U256, blake2_256, crypto::Public, traits::BareCryptoStore};
 use codec::Encode;
-use schnorrkel::vrf::VRFInOut;
+use schnorrkel::{
+	keys::PublicKey,
+	vrf::VRFInOut,
+};
 use sc_keystore::KeyStorePtr;
 use super::Epoch;
 
@@ -144,19 +148,19 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let result = keystore.read().vrf_sign(
-					AuthorityId::ID,
-					authority_id.as_ref(),
-					&BABE_ENGINE_ID,
-					BABE_VRF_PREFIX,
+				let transcript = super::authorship::make_transcript(
 					randomness,
 					slot_number,
 					*epoch_index,
-					u128::MAX,
 				);
-				if let Ok(Some((output, proof)))  = result {
-					let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
-					let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
+				let result = keystore.read().vrf_sign(
+					AuthorityId::ID,
+					authority_id.as_ref(),
+					transcript,
+				);
+				if let Ok(signature)  = result {
+					let proof = schnorrkel::vrf::VRFProof::from_bytes(&signature.proof).ok()?;
+					let output = schnorrkel::vrf::VRFOutput::from_bytes(&signature.output).ok()?;
 
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot_number,
@@ -239,6 +243,7 @@ fn claim_primary_slot(
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
 	for (authority_id, authority_index) in keys {
+		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
 		// Compute the threshold we will use.
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
@@ -248,25 +253,26 @@ fn claim_primary_slot(
 		let result = keystore.read().vrf_sign(
 			AuthorityId::ID,
 			authority_id.as_ref(),
-			&BABE_ENGINE_ID,
-			BABE_VRF_PREFIX,
-			randomness,
-			slot_number,
-			*epoch_index,
-			threshold,
+			transcript.clone(),
 		);
-		if let Ok(Some((output, proof)))  = result {
-			let proof = schnorrkel::vrf::VRFProof::from_bytes(&proof).ok()?;
-			let output = schnorrkel::vrf::VRFOutput::from_bytes(&output).ok()?;
+		if let Ok(signature)  = result {
+			let proof = schnorrkel::vrf::VRFProof::from_bytes(&signature.proof).ok()?;
+			let output = schnorrkel::vrf::VRFOutput::from_bytes(&signature.output).ok()?;
+			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
+			let inout = match output.attach_input_hash(&public, transcript) {
+				Ok(inout) => inout,
+				Err(_) => continue,
+			};
+			if super::authorship::check_primary_threshold(&inout, threshold) {
+				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
+					slot_number,
+					vrf_output: VRFOutput(output),
+					vrf_proof: VRFProof(proof),
+					authority_index: *authority_index as u32,
+				});
 
-			let pre_digest = PreDigest::Primary(PrimaryPreDigest {
-				slot_number,
-				vrf_output: VRFOutput(output),
-				vrf_proof: VRFProof(proof),
-				authority_index: *authority_index as u32,
-			});
-
-			return Some((pre_digest, authority_id.clone()));
+				return Some((pre_digest, authority_id.clone()));
+			}
 		}
 	}
 

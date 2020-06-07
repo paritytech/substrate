@@ -20,14 +20,13 @@
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, Error as TraitError},
+	traits::{BareCryptoStore, Error as TraitError, VRFSignature},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	Encode,
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
 use parking_lot::RwLock;
 use merlin::Transcript;
-use schnorrkel::vrf::VRFInOut;
 
 /// Keystore pointer
 pub type KeyStorePtr = Arc<RwLock<Store>>;
@@ -299,24 +298,6 @@ impl Store {
 
 		Ok(public_keys)
 	}
-
-	fn make_vrf_transcript(
-		&self,
-		label: &'static [u8],
-		randomness: &[u8],
-		slot_number: u64,
-		epoch: u64
-	) -> Transcript {
-		let mut transcript = Transcript::new(label.clone());
-		transcript.append_u64(b"slot number", slot_number);
-		transcript.append_u64(b"current epoch", epoch);
-		transcript.append_message(b"chain randomness", &randomness[..]);
-		transcript
-	}
-
-	fn check_primary_threshold(&self, prefix: &'static [u8], inout: &VRFInOut, threshold: u128) -> bool {
-		u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(prefix)) < threshold
-	}
 }
 
 impl BareCryptoStore for Store {
@@ -464,23 +445,16 @@ impl BareCryptoStore for Store {
 		&self,
 		key_type: KeyTypeId,
 		public: &Sr25519Public,
-		label: &'static [u8],
-		prefix: &'static [u8],
-		randomness: &[u8],
-		slot_number: u64,
-		epoch: u64,
-		threshold: u128,
-	) -> std::result::Result<Option<(Vec<u8>, Vec<u8>)>, TraitError> {
-		let transcript = self.make_vrf_transcript(label, randomness, slot_number, epoch);
+		transcript: Transcript,
+	) -> std::result::Result<VRFSignature, TraitError> {
 		let pair = self.key_pair_by_type::<Sr25519Pair>(public, key_type)
 			.map_err(|e| TraitError::PairNotFound(e.to_string()))?;
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
-		if self.check_primary_threshold(prefix, &inout, threshold) {
-			Ok(Some((inout.to_output().to_bytes().to_vec(), proof.to_bytes().to_vec())))
-		} else {
-			Ok(None)
-		}
+		Ok(VRFSignature {
+			output: inout.to_output().to_bytes().to_vec(),
+			proof: proof.to_bytes().to_vec(),
+		})
 	}
 }
 
