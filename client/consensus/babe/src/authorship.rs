@@ -145,6 +145,7 @@ fn claim_secondary_slot(
 		*randomness,
 	)?;
 
+	let ks = keystore.read();
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
@@ -153,7 +154,7 @@ fn claim_secondary_slot(
 					slot_number,
 					*epoch_index,
 				);
-				let result = keystore.read().vrf_sign(
+				let result = ks.vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
 					transcript,
@@ -242,6 +243,7 @@ fn claim_primary_slot(
 ) -> Option<(PreDigest, AuthorityId)> {
 	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
 
+	let ks = keystore.read();
 	for (authority_id, authority_index) in keys {
 		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
 		// Compute the threshold we will use.
@@ -250,7 +252,7 @@ fn claim_primary_slot(
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let result = keystore.read().vrf_sign(
+		let result = ks.vrf_sign(
 			AuthorityId::ID,
 			authority_id.as_ref(),
 			transcript.clone(),
