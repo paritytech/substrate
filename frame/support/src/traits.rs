@@ -113,14 +113,16 @@ impl<T> InstanceFilter<T> for () {
 }
 
 /// Re-expected for the macro.
-pub use sp_std::{mem::swap, cell::RefCell, vec::Vec, boxed::Box};
+#[doc(hidden)]
+pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
 
 #[macro_export]
 macro_rules! impl_filter_stack {
 	($target:ty, $base:ty, $call:ty, $module:ident) => {
 		#[cfg(feature = "std")]
 		mod $module {
-			use $crate::traits::{swap, RefCell, Vec, Box, Filter, FilterStack};
+			use super::*;
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
 
 			thread_local! {
 				static FILTER: RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>> = RefCell::new(Vec::new());
@@ -154,7 +156,8 @@ macro_rules! impl_filter_stack {
 
 		#[cfg(not(feature = "std"))]
 		mod $module {
-			use $crate::traits::{swap, RefCell, Vec, Box, Filter, FilterStack};
+			use super::*;
+			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
 
 			struct ThisFilter(RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>>);
 			// NOTE: Safe only in wasm (guarded above) because there's only one thread.
