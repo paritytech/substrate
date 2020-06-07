@@ -12,7 +12,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-client-api = { version = "2.0.0-rc2", path = "../../../client/api" }
-jsonrpc-core = "14.2"
+jsonrpc-core = "14.0.3"
 node-primitives = { version = "2.0.0-rc2", path = "../primitives" }
 node-runtime = { version = "2.0.0-rc2", path = "../runtime" }
 sp-runtime = { version = "2.0.0-rc2", path = "../../../primitives/runtime" }
