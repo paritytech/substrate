@@ -32,7 +32,7 @@ pub mod migration;
 /// Execute the supplied function in a new storage transaction.
 ///
 /// All changes to storage performed by the supplied function are discarded if an
-/// error is returned and comitted on success.
+/// error is returned and committed on success.
 ///
 /// Transactions can be nested to any depth. Commits happen to the parent transaction.
 pub fn with_transaction<T, E, F>(f: F) -> Result<T, E> where

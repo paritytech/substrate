@@ -155,7 +155,7 @@ impl OverlayedChangeSet {
 
 	/// Set a new value for the specified key.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	pub fn set(
 		&mut self,
 		key: StorageKey,
@@ -168,7 +168,7 @@ impl OverlayedChangeSet {
 
 	/// Get a mutable reference for a value.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	#[must_use = "A change was registered, so this value MUST be modified."]
 	pub fn modify(
 		&mut self,
@@ -196,7 +196,7 @@ impl OverlayedChangeSet {
 
 	/// Set all values to deleted which are matched by the predicate.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	pub fn clear(
 		&mut self,
 		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
@@ -230,7 +230,7 @@ impl OverlayedChangeSet {
 
 	/// Returns the current nesting depth of the transaction stack.
 	///
-	/// A value of zero means that no transaction is open and changes are comitted on write.
+	/// A value of zero means that no transaction is open and changes are committed on write.
 	pub fn transaction_depth(&self) -> usize {
 		self.dirty_keys.len()
 	}
@@ -241,7 +241,7 @@ impl OverlayedChangeSet {
 	/// transaction was open. Any transaction must be closed by one of the aforementioned
 	/// functions before this overlay can be converted into storage changes.
 	///
-	/// Changes made without any open transaction are comitted immediatly.
+	/// Changes made without any open transaction are committed immediatly.
 	pub fn start_transaction(&mut self) {
 		self.dirty_keys.push(Default::default());
 	}
@@ -481,7 +481,7 @@ mod test {
 		assert_eq!(changeset.transaction_depth(), 0);
 		let init = || b"valinit".to_vec();
 
-		// comitted set
+		// committed set
 		changeset.set(b"key0".to_vec(), Some(b"val0".to_vec()), Some(0));
 		changeset.set(b"key1".to_vec(), None, Some(1));
 		let val = changeset.modify(b"key3".to_vec(), init, Some(3));

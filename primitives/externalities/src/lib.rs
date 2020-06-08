@@ -201,7 +201,7 @@ pub trait Externalities: ExtensionStore {
 	/// For every transaction there must be a matching call to either `storage_rollback_transaction`
 	/// or `storage_commit_transaction`.
 	///
-	/// Changes made without any open transaction are comitted immediatly
+	/// Changes made without any open transaction are committed immediatly
 	fn storage_start_transaction(&mut self);
 
 	/// Rollback the last transaction started by `start_transaction`.

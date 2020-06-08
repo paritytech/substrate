@@ -184,7 +184,7 @@ impl OverlayedChanges {
 	/// If there is no value in the overlay, the default callback is used to initiate the value.
 	/// Warning this function registers a change, so the mutable reference MUST be modified.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	#[must_use = "A change was registered, so this value MUST be modified."]
 	pub fn value_mut_or_insert_with(
 		&mut self,
@@ -217,7 +217,7 @@ impl OverlayedChanges {
 
 	/// Set a new value for the specified key.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
@@ -228,7 +228,7 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn set_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
@@ -254,7 +254,7 @@ impl OverlayedChanges {
 
 	/// Clear child storage of given storage key.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
@@ -270,14 +270,14 @@ impl OverlayedChanges {
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
-	/// Can be rolled back or comitted when called inside a transaction.
+	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.top.clear(|key, _| key.starts_with(prefix), self.extrinsic_index());
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
-	/// Can be rolled back or comitted when called inside a transaction
+	/// Can be rolled back or committed when called inside a transaction
 	pub(crate) fn clear_child_prefix(
 		&mut self,
 		child_info: &ChildInfo,
@@ -294,7 +294,7 @@ impl OverlayedChanges {
 
 	/// Returns the current nesting depth of the transaction stack.
 	///
-	/// A value of zero means that no transaction is open and changes are comitted on write.
+	/// A value of zero means that no transaction is open and changes are committed on write.
 	pub fn transaction_depth(&self) -> usize {
 		// The top changeset and all child changesets transact in lockstep and are
 		// therefore always at the same transaction depth.
@@ -307,7 +307,7 @@ impl OverlayedChanges {
 	/// transaction was open. Any transaction must be closed by one of the aforementioned
 	/// functions before this overlay can be converted into storage changes.
 	///
-	/// Changes made without any open transaction are comitted immediatly.
+	/// Changes made without any open transaction are committed immediatly.
 	pub fn start_transaction(&mut self) {
 		self.top.start_transaction();
 		for (_, (changeset, _)) in self.children.iter_mut() {
