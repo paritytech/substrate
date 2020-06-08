@@ -846,8 +846,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// This will output:
 	///
 	/// ```text
-	/// 2020-05-28 15:11:06 ✨ [MyNode] Imported #2 (0xc21c…2ca8)
-	/// 2020-05-28 15:11:07 💤 [MyNode] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
 	/// ```
 	pub fn with_informant_prefix(
 		self,
