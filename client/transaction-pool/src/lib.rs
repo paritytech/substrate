@@ -549,7 +549,12 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 									let tx_hash = pool.hash_of(&tx);
 									let contains = pruned_log.contains(&tx_hash);
 									if !contains {
-										log::debug!(target: "txpool", "[{:?}]: Resubmitting from retracted block {:?}", tx_hash, hash);
+										log::debug!(
+											target: "txpool",
+											"[{:?}]: Resubmitting from retracted block {:?}",
+											tx_hash,
+											hash,
+										);
 									}
 									!contains
 								})
