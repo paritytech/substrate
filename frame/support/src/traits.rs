@@ -145,7 +145,7 @@ macro_rules! impl_filter_stack {
 					FILTER.with(|filter| filter.borrow_mut().pop());
 				}
 				fn take() -> Self::Stack {
-					FILTER.with(|filter| take(filter.borrow_mut().as_mut()));
+					FILTER.with(|filter| take(filter.borrow_mut().as_mut()))
 				}
 				fn restore(mut s: Self::Stack) {
 					FILTER.with(|filter| swap(filter.borrow_mut().as_mut(), &mut s));
@@ -180,7 +180,7 @@ macro_rules! impl_filter_stack {
 					FILTER.0.borrow_mut().pop();
 				}
 				fn take() -> Self::Stack {
-					take(FILTER.0.borrow_mut().as_mut());
+					take(FILTER.0.borrow_mut().as_mut())
 				}
 				fn restore(mut s: Self::Stack) {
 					swap(FILTER.0.borrow_mut().as_mut(), &mut s);
