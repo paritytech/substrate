@@ -22,6 +22,7 @@ use sp_consensus_babe::{
 	AuthorityId, BabeAuthorityWeight,
 	SlotNumber,
 	make_transcript,
+	make_transcript_data,
 };
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
@@ -149,15 +150,11 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript = super::authorship::make_transcript(
-					randomness,
-					slot_number,
-					*epoch_index,
-				);
-				let result = ks.vrf_sign(
+				let transcript_data = super::authorship::make_transcript_data(randomness, slot_number, *epoch_index);
+				let result = ks.sr25519_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
-					transcript,
+					transcript_data,
 				);
 				if let Ok(signature)  = result {
 					let proof = schnorrkel::vrf::VRFProof::from_bytes(&signature.proof).ok()?;
@@ -246,16 +243,17 @@ fn claim_primary_slot(
 	let ks = keystore.read();
 	for (authority_id, authority_index) in keys {
 		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
+		let transcript_data = super::authorship::make_transcript_data(randomness, slot_number, *epoch_index);
 		// Compute the threshold we will use.
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
 		// be empty.  Therefore, this division in `calculate_threshold` is safe.
 		let threshold = super::authorship::calculate_primary_threshold(c, authorities, *authority_index);
 
-		let result = ks.vrf_sign(
+		let result = ks.sr25519_vrf_sign(
 			AuthorityId::ID,
 			authority_id.as_ref(),
-			transcript.clone(),
+			transcript_data,
 		);
 		if let Ok(signature)  = result {
 			let proof = schnorrkel::vrf::VRFProof::from_bytes(&signature.proof).ok()?;
