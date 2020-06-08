@@ -6309,7 +6309,6 @@ dependencies = [
  "merlin",
  "parking_lot 0.10.2",
  "rand 0.7.3",
- "schnorrkel",
  "serde_json",
  "sp-application-crypto",
  "sp-core",

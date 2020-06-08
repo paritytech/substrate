@@ -150,7 +150,11 @@ fn claim_secondary_slot(
 	for (authority_id, authority_index) in keys {
 		if authority_id == expected_author {
 			let pre_digest = if author_secondary_vrf {
-				let transcript_data = super::authorship::make_transcript_data(randomness, slot_number, *epoch_index);
+				let transcript_data = super::authorship::make_transcript_data(
+					randomness,
+					slot_number,
+					*epoch_index
+				);
 				let result = ks.sr25519_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
@@ -242,8 +246,16 @@ fn claim_primary_slot(
 
 	let ks = keystore.read();
 	for (authority_id, authority_index) in keys {
-		let transcript = super::authorship::make_transcript(randomness, slot_number, *epoch_index);
-		let transcript_data = super::authorship::make_transcript_data(randomness, slot_number, *epoch_index);
+		let transcript = super::authorship::make_transcript(
+			randomness,
+			slot_number,
+			*epoch_index
+		);
+		let transcript_data = super::authorship::make_transcript_data(
+			randomness,
+			slot_number,
+			*epoch_index
+		);
 		// Compute the threshold we will use.
 		//
 		// We already checked that authorities contains `key.public()`, so it can't
