@@ -193,6 +193,7 @@ impl OverlayedChanges {
 	) -> &mut StorageValue {
 		let value = self.top.modify(key.to_owned(), init, self.extrinsic_index());
 
+		// if the value was deleted initialise it back with an empty vec
 		if value.is_none() {
 			*value = Some(Default::default());
 		}
