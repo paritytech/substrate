@@ -413,9 +413,10 @@ mod tests {
 		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
+		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
 		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
-			id: BlockId::Number(1),
-			header: client.header(&BlockId::Number(1)).expect("db error").expect("imported above"),
+			hash: header.hash(),
+			header,
 			is_new_best: true,
 			tree_route: None,
 		}).await;
