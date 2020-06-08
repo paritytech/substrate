@@ -21,7 +21,7 @@ use crate::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
 };
-
+use codec::Encode;
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
@@ -53,6 +53,7 @@ pub enum Error {
 
 /// An enum whose variants represent possible
 /// accepted values to construct the VRF transcript
+#[derive(Encode)]
 pub enum VRFTranscriptValue<'a> {
 	/// Value is an array of bytes
 	Bytes(&'a [u8]),
@@ -60,6 +61,7 @@ pub enum VRFTranscriptValue<'a> {
 	U64(u64),
 }
 /// VRF Transcript data
+#[derive(Encode)]
 pub struct VRFTranscriptData<'a> {
 	/// The transcript's label
 	pub label: &'static [u8],

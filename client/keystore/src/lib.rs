@@ -304,7 +304,7 @@ impl Store {
 		for (label, value) in data.items.into_iter() {
 			match value {
 				VRFTranscriptValue::Bytes(bytes) => {
-					transcript.append_message(label.as_bytes(), bytes);
+					transcript.append_message(label.as_bytes(), &bytes);
 				},
 				VRFTranscriptValue::U64(val) => {
 					transcript.append_u64(label.as_bytes(), val);
