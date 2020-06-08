@@ -152,7 +152,7 @@ fn claim_secondary_slot(
 				let transcript_data = super::authorship::make_transcript_data(
 					randomness,
 					slot_number,
-					*epoch_index
+					*epoch_index,
 				);
 				let result = keystore.read().sr25519_vrf_sign(
 					AuthorityId::ID,

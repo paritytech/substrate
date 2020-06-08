@@ -17,14 +17,11 @@
 
 //! VRF-specifc data types and helpers
 
-/// An enum whose variants represent possible
-/// accepted values to construct the VRF transcript
-
 use codec::Encode;
 use merlin::Transcript;
 
-/// A enum which holds a single VRF transcript
-/// supported value.
+/// An enum whose variants represent possible
+/// accepted values to construct the VRF transcript
 #[derive(Clone, Encode)]
 pub enum VRFTranscriptValue<'a> {
 	/// Value is an array of bytes
