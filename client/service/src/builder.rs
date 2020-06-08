@@ -833,8 +833,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// By default substrate will show logs without a prefix. Example:
 	///
 	/// ```text
-	/// 2020-05-28 15:11:06 ✨ BOO! Imported #2 (0xc21c…2ca8)
-	/// 2020-05-28 15:11:07 💤 BOO! Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
 	/// ```
 	///
 	/// But you can define a prefix by using this function. Example:
