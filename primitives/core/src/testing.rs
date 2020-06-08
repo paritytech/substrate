@@ -22,7 +22,8 @@ use crate::crypto::KeyTypeId;
 use crate::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519, ecdsa,
-	traits::{Error, VRFTranscriptData, VRFSignature},
+	traits::Error,
+	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;

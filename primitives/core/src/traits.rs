@@ -19,9 +19,9 @@
 
 use crate::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
+	vrf::{VRFTranscriptData, VRFSignature},
 	ed25519, sr25519, ecdsa,
 };
-use codec::Encode;
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
@@ -49,31 +49,6 @@ pub enum Error {
 	/// Programming errors
 	#[display(fmt="An unknown keystore error occurred: {}", _0)]
 	Other(String)
-}
-
-/// An enum whose variants represent possible
-/// accepted values to construct the VRF transcript
-#[derive(Encode)]
-pub enum VRFTranscriptValue<'a> {
-	/// Value is an array of bytes
-	Bytes(&'a [u8]),
-	/// Value is a u64 integer
-	U64(u64),
-}
-/// VRF Transcript data
-#[derive(Encode)]
-pub struct VRFTranscriptData<'a> {
-	/// The transcript's label
-	pub label: &'static [u8],
-	/// Additional data to be registered into the transcript
-	pub items: Vec<(&'static str, VRFTranscriptValue<'a>)>,
-}
-/// VRF signature data
-pub struct VRFSignature {
-	/// The VRFOutput serialized
-	pub output: Vec<u8>,
-	/// The calculated VRFProof
-	pub proof: Vec<u8>,
 }
 
 /// Something that generates, stores and provides access to keys.

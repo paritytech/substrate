@@ -20,13 +20,13 @@
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, Error as TraitError, VRFTranscriptData, VRFTranscriptValue, VRFSignature},
+	traits::{BareCryptoStore, Error as TraitError},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
+	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 	Encode,
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519, ecdsa};
 use parking_lot::RwLock;
-use merlin::Transcript;
 
 /// Keystore pointer
 pub type KeyStorePtr = Arc<RwLock<Store>>;
@@ -298,21 +298,6 @@ impl Store {
 
 		Ok(public_keys)
 	}
-
-	fn make_transcript(&self, data: VRFTranscriptData) -> Transcript {
-		let mut transcript = Transcript::new(data.label);
-		for (label, value) in data.items.into_iter() {
-			match value {
-				VRFTranscriptValue::Bytes(bytes) => {
-					transcript.append_message(label.as_bytes(), &bytes);
-				},
-				VRFTranscriptValue::U64(val) => {
-					transcript.append_u64(label.as_bytes(), val);
-				}
-			}
-		}
-		transcript
-	}
 }
 
 impl BareCryptoStore for Store {
@@ -462,7 +447,7 @@ impl BareCryptoStore for Store {
 		public: &Sr25519Public,
 		transcript_data: VRFTranscriptData,
 	) -> std::result::Result<VRFSignature, TraitError> {
-		let transcript = self.make_transcript(transcript_data);
+		let transcript = make_transcript(transcript_data);
 		let pair = self.key_pair_by_type::<Sr25519Pair>(public, key_type)
 			.map_err(|e| TraitError::PairNotFound(e.to_string()))?;
 
