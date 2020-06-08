@@ -42,21 +42,21 @@ type FutureResult<T> =
 #[rpc]
 pub trait GrandpaApi {
 	/// RPC Metadata
-	type Metadata;
+	// type Metadata;
 
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
 	#[rpc(name = "grandpa_roundState")]
 	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
 
-	/// Returns the block most recently finalized by Grandpa, alongside
-	/// side its justification.
-	#[pubsub(subscription = "grandpa_justifications", subscribe, name = "grandpa_subscribeJustifications")]
-	fn justification_subscription(&self, metadata: Self::Metadata, subscriber: Subscriber<bool>);
-
-	/// Unsubscribe from receiving notifications about recently finalized blocks.
-	#[pubsub(subscription = "grandpa_justifications", unsubscribe, name = "grandpa_unsubscribeJustifications")]
-	fn unsubscribe_justifications(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool>;
+//	/// Returns the block most recently finalized by Grandpa, alongside
+//	/// side its justification.
+//	#[pubsub(subscription = "grandpa_justifications", subscribe, name = "grandpa_subscribeJustifications")]
+//	fn justification_subscription(&self, metadata: Self::Metadata, subscriber: Subscriber<bool>);
+//
+//	/// Unsubscribe from receiving notifications about recently finalized blocks.
+//	#[pubsub(subscription = "grandpa_justifications", unsubscribe, name = "grandpa_unsubscribeJustifications")]
+//	fn unsubscribe_justifications(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -92,7 +92,7 @@ where
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
 {
-	type Metadata = Metadata;
+	// type Metadata = Metadata;
 
 	fn round_state(&self) -> FutureResult<ReportedRoundStates> {
 		let round_states = ReportedRoundStates::from(&self.authority_set, &self.voter_state);
@@ -101,24 +101,24 @@ where
 	}
 
 	// NOTE: Should be changed to Subscriber<JustificationNotification>
-	fn justification_subscription(&self, _metadata: Self::Metadata, _subscriber: Subscriber<bool>) {
-		// let stream = self.receiver.subscribe().compat();
-		//
-		// This will need to use the SubscriptionManager from `jsonrpc_pubsub`
-		//
-		// manager.add(subscriber, |sink| {
-		//      // Write to the sink using the receiver stream
-		//      // Check client/rpc/src/chain/mod.rs or the jsonrpc
-		//      // repo for examples
-		// });
+	//fn justification_subscription(&self, _metadata: Self::Metadata, _subscriber: Subscriber<bool>) {
+	//	// let stream = self.receiver.subscribe().compat();
+	//	//
+	//	// This will need to use the SubscriptionManager from `jsonrpc_pubsub`
+	//	//
+	//	// manager.add(subscriber, |sink| {
+	//	//      // Write to the sink using the receiver stream
+	//	//      // Check client/rpc/src/chain/mod.rs or the jsonrpc
+	//	//      // repo for examples
+	//	// });
 
-		todo!()
-	}
+	//	todo!()
+	//}
 
-	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, _id: SubscriptionId) -> FutureResult<bool> {
-		// Ok(self.manager().cancel(id))
-		todo!()
-	}
+	//fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, _id: SubscriptionId) -> FutureResult<bool> {
+	//	// Ok(self.manager().cancel(id))
+	//	todo!()
+	//}
 }
 
 #[cfg(test)]
