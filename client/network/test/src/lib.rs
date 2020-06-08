@@ -221,9 +221,9 @@ impl<D> Peer<D> {
 		self.network.num_connected_peers()
 	}
 
-	/// Returns the number of processed blocks.
-	pub fn num_processed_blocks(&self) -> usize {
-		self.network.num_processed_blocks()
+	/// Returns the number of downloaded blocks.
+	pub fn num_downloaded_blocks(&self) -> usize {
+		self.network.num_downloaded_blocks()
 	}
 
 	/// Returns true if we have no peer.

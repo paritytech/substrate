@@ -67,8 +67,10 @@ pub struct ImportSummary<Block: BlockT> {
 	pub is_new_best: bool,
 	/// Optional storage changes.
 	pub storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
-	/// Blocks that got retracted because of this one got imported.
-	pub retracted: Vec<Block::Hash>,
+	/// Tree route from old best to new best.
+	///
+	/// If `None`, there was no re-org while importing.
+	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
 }
 
 /// Import operation wrapper

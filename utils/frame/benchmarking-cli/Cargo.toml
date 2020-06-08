@@ -26,4 +26,4 @@ codec = { version = "1.3.0", package = "parity-scale-codec" }
 
 [features]
 default = ["db"]
-db = ["sc-client-db/kvdb-rocksdb", "sc-client-db/parity-db"]
+db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
