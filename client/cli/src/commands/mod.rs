@@ -286,7 +286,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn rpc_http(&self, default_port: u16)
-			-> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			-> $crate::Result<std::option::Option<std::net::SocketAddr>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_http(default_port)),*
 				}
@@ -411,4 +411,3 @@ macro_rules! substrate_cli_subcommands {
 substrate_cli_subcommands!(
 	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
 );
-
