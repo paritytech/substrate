@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 default = ["db"]
 # The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
 # a path to a database, an error will be produced at runtime.
-db = ["sc-client-db/kvdb-rocksdb", "sc-client-db/parity-db"]
+db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
 wasmtime = [
 	"sc-executor/wasmtime",
 ]
