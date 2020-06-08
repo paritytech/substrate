@@ -31,6 +31,7 @@ pub use merlin::Transcript;
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+#[cfg(feature = "std")]
 use sp_core::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use crate::digests::{NextEpochDescriptor, NextConfigDescriptor};
 
@@ -96,18 +97,19 @@ pub fn make_transcript(
 }
 
 /// Make a VRF transcript data container
+#[cfg(feature = "std")]
 pub fn make_transcript_data(
 	randomness: &Randomness,
 	slot_number: u64,
 	epoch: u64,
 ) -> VRFTranscriptData {
+	let mut items = Vec::new();
+	items.push(("slot_number", VRFTranscriptValue::U64(slot_number)));
+	items.push(("current epoch", VRFTranscriptValue::U64(epoch)));
+	items.push(("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])));
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
-		items: vec![
-			("slot number", VRFTranscriptValue::U64(slot_number)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])),
-		]
+		items,
 	}
 }
 
