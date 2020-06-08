@@ -27,7 +27,7 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-#[cfg(feature = "std")]
+
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
