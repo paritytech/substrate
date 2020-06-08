@@ -51,7 +51,7 @@ use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
-	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
+	weights::{Weight, GetDispatchInfo, DispatchClass, Pays},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
@@ -268,13 +268,9 @@ decl_module! {
 		///     - Writes: Multisig Storage, [Caller Account]
 		/// - Plus Call Weight
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, signatories, _, call): (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				weight_of::as_multi::<T>(signatories.len(), call.get_dispatch_info().weight)
-			},
-			|(_, _, _, call): (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				call.get_dispatch_info().class
-			},
+		#[weight = (
+			weight_of::as_multi::<T>(other_signatories.len(), call.get_dispatch_info().weight),
+			call.get_dispatch_info().class,
 			Pays::Yes,
 		)]
 		fn as_multi(origin,
@@ -402,12 +398,10 @@ decl_module! {
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
-				T::DbWeight::get().reads_writes(1, 1)
-					.saturating_add(45_000_000)
-					.saturating_add((args.1.len() as Weight).saturating_mul(120_000))
-			},
+		#[weight = (
+			T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(45_000_000)
+				.saturating_add((other_signatories.len() as Weight).saturating_mul(120_000)),
 			DispatchClass::Normal,
 			Pays::Yes,
 		)]
@@ -484,12 +478,10 @@ decl_module! {
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
-				T::DbWeight::get().reads_writes(1, 1)
-					.saturating_add(40_000_000)
-					.saturating_add((args.1.len() as Weight).saturating_mul(100_000))
-			},
+		#[weight = (
+			T::DbWeight::get().reads_writes(1, 1)
+				.saturating_add(40_000_000)
+				.saturating_add((other_signatories.len() as Weight).saturating_mul(100_000)),
 			DispatchClass::Normal,
 			Pays::Yes,
 		)]
