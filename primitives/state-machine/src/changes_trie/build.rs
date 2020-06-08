@@ -115,14 +115,14 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		};
 
 		let iter = prepare_extrinsics_input_inner(
-			backend, block, changes,
+			backend, block, overlay,
 			Some(child_info.clone()),
 			child_changes,
 		)?;
 		children_result.insert(child_index, iter);
 	}
 
-	let top = prepare_extrinsics_input_inner(backend, block, changes, None, overlay.changes())?;
+	let top = prepare_extrinsics_input_inner(backend, block, overlay, None, overlay.changes())?;
 
 	Ok((top, children_result))
 }
