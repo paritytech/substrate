@@ -142,6 +142,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 					}
 				})
 				.collect::<Vec<_>>();
+			drop(ks);
 
 			for slot_number in epoch_start..epoch_end {
 				if let Some((claim, key)) =
