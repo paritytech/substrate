@@ -175,6 +175,46 @@ fn doesnt_deposit_event_for_dups() {
 }
 
 #[test]
+fn reports_if_an_offence_is_dup() {
+	new_test_ext().execute_with(|| {
+		let time_slot = 42;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence = |time_slot, offenders| Offence {
+			validator_set_count: 5,
+			time_slot,
+			offenders,
+		};
+
+		let mut test_offence = offence(time_slot, vec![0]);
+
+		// we report an offence for authority 0 at time slot 42
+		Offences::report_offence(vec![], test_offence.clone()).unwrap();
+
+		// the same report should not be an unknown offence anymore
+		assert!(!Offences::is_unknown_offence(&test_offence));
+
+		// and reporting it again should yield a duplicate report error
+		assert_eq!(
+			Offences::report_offence(vec![], test_offence.clone()),
+			Err(OffenceError::DuplicateReport)
+		);
+
+		// after adding a new offender to the offence report
+		test_offence.offenders.push(1);
+		// it should not be an unknown offence anymore
+		assert!(Offences::is_unknown_offence(&test_offence));
+		// and reporting it again should work without any error
+		assert_eq!(Offences::report_offence(vec![], test_offence), Ok(()));
+
+		// creating an offence for the same authorities on the next slot
+		// should be considered a new offence and thefore unknown
+		let test_offence_next_slot = offence(time_slot + 1, vec![0, 1]);
+		assert!(Offences::is_unknown_offence(&test_offence_next_slot));
+	});
+}
+
+#[test]
 fn should_properly_count_offences() {
 	// We report two different authorities for the same issue. Ultimately, the 1st authority
 	// should have `count` equal 2 and the count of the 2nd one should be equal to 1.
