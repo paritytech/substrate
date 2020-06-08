@@ -269,11 +269,11 @@ decl_module! {
 		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				weight_of::as_multi::<T>(args.1.len(),args.3.get_dispatch_info().weight)
+			|(_, signatories, _, call): (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
+				weight_of::as_multi::<T>(signatories.len(), call.get_dispatch_info().weight)
 			},
-			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().class
+			|(_, _, _, call): (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
+				call.get_dispatch_info().class
 			},
 			Pays::Yes,
 		)]
