@@ -251,11 +251,11 @@ pub enum ChainEvent<B: BlockT> {
 	NewBlock {
 		/// Is this the new best block.
 		is_new_best: bool,
-		/// Id of the just imported block.
-		id: BlockId<B>,
+		/// Hash of the block.
+		hash: B::Hash,
 		/// Header of the just imported block
 		header: B::Header,
-		/// Tree route from old best to new best that was calculated on import.
+		/// Tree route from old best to new best parent that was calculated on import.
 		///
 		/// If `None`, no re-org happened on import.
 		tree_route: Option<Arc<sp_blockchain::TreeRoute<B>>>,
