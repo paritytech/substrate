@@ -79,7 +79,7 @@ impl TestSetup {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
-			subscriptions: Subscriptions::new(Arc::new(crate::testing::TaskExecutor)),
+			subscriptions: SubscriptionManager::new(Arc::new(crate::testing::TaskExecutor)),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
 		}
@@ -131,8 +131,14 @@ fn should_watch_extrinsic() {
 		uxt(AccountKeyring::Alice, 0).encode().into(),
 	);
 
-	// then
-	assert_eq!(executor::block_on(id_rx.compat()), Ok(Ok(1.into())));
+	let id = executor::block_on(id_rx.compat()).unwrap().unwrap();
+	assert_matches!(id, SubscriptionId::String(_));
+
+	let id = match id {
+		SubscriptionId::String(id) => id,
+		_ => unreachable!(),
+	};
+
 	// check notifications
 	let replacement = {
 		let tx = Transfer {
@@ -145,15 +151,22 @@ fn should_watch_extrinsic() {
 	};
 	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).wait().unwrap();
 	let (res, data) = executor::block_on(data.into_future().compat()).unwrap();
-	assert_eq!(
-		res,
-		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":"ready","subscription":1}}"#.into())
-	);
+
+	let expected = Some(format!(
+		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":"ready","subscription":"{}"}}}}"#,
+		id,
+	));
+	assert_eq!(res, expected);
+
 	let h = blake2_256(&replacement.encode());
-	assert_eq!(
-		executor::block_on(data.into_future().compat()).unwrap().0,
-		Some(format!(r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":1}}}}"#, HexDisplay::from(&h)))
-	);
+	let expected = Some(format!(
+		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":"{}"}}}}"#,
+		HexDisplay::from(&h),
+		id,
+	));
+
+	let res = executor::block_on(data.into_future().compat()).unwrap().0;
+	assert_eq!(res, expected);
 }
 
 #[test]

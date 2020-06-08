@@ -14,9 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 derive_more = "0.99.2"
 futures = "0.3.4"
-jsonrpc-core = "14.0.5"
-jsonrpc-core-client = "14.0.5"
-jsonrpc-derive = "14.0.5"
+jsonrpc-core = "14.2.0"
+jsonrpc-core-client = "14.2.0"
+jsonrpc-derive = "14.2.1"
 log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0", features=["derive"] }
