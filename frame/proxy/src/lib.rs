@@ -171,6 +171,8 @@ decl_module! {
 				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
 				.ok_or(Error::<T>::NotProxy)?;
 
+			// We're now executing as a freshly authenticated new account, so the previous call
+			// restrictions no longer apply.
 			let _clear_guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			let _filter_guard = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(
 				move |c| match c.is_sub_type() {

@@ -194,6 +194,8 @@ decl_module! {
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			// We're now executing as a freshly authenticated new account, so the previous call
+			// restrictions no longer apply.
 			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 			let pseudonym = Self::sub_account_id(who, index);
