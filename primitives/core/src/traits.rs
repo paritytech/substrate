@@ -28,7 +28,6 @@ use std::{
 	panic::UnwindSafe,
 	sync::Arc,
 };
-use merlin::Transcript;
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
@@ -52,6 +51,21 @@ pub enum Error {
 	Other(String)
 }
 
+/// An enum whose variants represent possible
+/// accepted values to construct the VRF transcript
+pub enum VRFTranscriptValue<'a> {
+	/// Value is an array of bytes
+	Bytes(&'a [u8]),
+	/// Value is a u64 integer
+	U64(u64),
+}
+/// VRF Transcript data
+pub struct VRFTranscriptData<'a> {
+	/// The transcript's label
+	pub label: &'static [u8],
+	/// Additional data to be registered into the transcript
+	pub items: Vec<(&'static str, VRFTranscriptValue<'a>)>,
+}
 /// VRF signature data
 pub struct VRFSignature {
 	/// The VRFOutput serialized
@@ -196,11 +210,11 @@ pub trait BareCryptoStore: Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	fn vrf_sign(
+	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript: Transcript,
+		transcript_data: VRFTranscriptData,
 	) -> Result<VRFSignature, Error>;
 }
 
