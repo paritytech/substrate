@@ -32,21 +32,8 @@ use super::client::{Client,ClientConfig};
 use sc_client_api::{
 	light::Storage as BlockchainStorage, CloneableSpawn,
 };
-use sc_light::{Backend, Blockchain, GenesisCallExecutor, LightDataChecker};
+use sc_light::{Backend, GenesisCallExecutor};
 
-/// Create an instance of light client blockchain backend.
-pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> Arc<Blockchain<S>> {
-	Arc::new(Blockchain::new(storage))
-}
-
-/// Create an instance of light client backend.
-pub fn new_light_backend<B, S>(blockchain: Arc<Blockchain<S>>) -> Arc<Backend<S, HashFor<B>>>
-	where
-		B: BlockT,
-		S: BlockchainStorage<B>,
-{
-	Arc::new(Backend::new(blockchain))
-}
 
 /// Create an instance of light client.
 pub fn new_light<B, S, RA, E>(
@@ -88,16 +75,4 @@ pub fn new_light<B, S, RA, E>(
 		prometheus_registry,
 		ClientConfig::default(),
 	)
-}
-
-/// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
-	blockchain: Arc<Blockchain<S>>,
-	executor: E,
-	spawn_handle: Box<dyn CloneableSpawn>,
-) -> LightDataChecker<E, HashFor<B>, B, S>
-	where
-		E: CodeExecutor,
-{
-	LightDataChecker::new(blockchain, executor, spawn_handle)
 }

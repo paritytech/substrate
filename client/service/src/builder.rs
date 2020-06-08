@@ -413,16 +413,16 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
-		let light_blockchain = light::new_light_blockchain(db_storage);
+		let light_blockchain = sc_light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(
-			light::new_fetch_checker::<_, TBl, _>(
+			sc_light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
 				executor.clone(),
 				Box::new(task_manager.spawn_handle()),
 			),
 		);
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-		let backend = light::new_light_backend(light_blockchain);
+		let backend = sc_light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(light::new_light(
 			backend.clone(),
