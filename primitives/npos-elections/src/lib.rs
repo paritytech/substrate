@@ -15,22 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Rust implementation of the Phragmén election algorithm. This is used in several pallets to
-//! optimally distribute the weight of a set of voters among an elected set of candidates. In the
-//! context of staking this is mapped to validators and nominators.
+//! A set of election algorithms to be used with a substrate runtime, typically within the staking
+//! sub-system. Notable implementation include
 //!
-//! The algorithm has two phases:
-//!   - Sequential phragmen: performed in [`elect`] function which is first pass of the distribution
-//!     The results are not optimal but the execution time is less.
-//!   - Equalize post-processing: tries to further distribute the weight fairly among candidates.
-//!     Incurs more execution time.
+//! - [`seq_phragmen`]: Implements the Phragmén Sequential Method. An un-ranked, relatively fast
+//!   election method that ensures PJR, but does not provide a constant factor approximation of the
+//!   maximin problem.
+//! - [`balance_solution`]: Implements the star balancing algorithm. This iterative process can
+//!   increase a solutions score, as described in [`evaluate_support`].
 //!
-//! The main objective of the assignments done by phragmen is to maximize the minimum backed
-//! candidate in the elected set.
-//!
-//! Reference implementation: https://github.com/w3f/consensus
-//! Further details:
-//! https://research.web3.foundation/en/latest/polkadot/NPoS/4.%20Sequential%20Phragm%C3%A9n%E2%80%99s%20method/
+//! More information can be found at: https://arxiv.org/abs/2004.12990
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -67,7 +61,7 @@ pub use codec;
 pub use sp_arithmetic;
 
 // re-export the compact solution type.
-pub use sp_phragmen_compact::generate_compact_solution_type;
+pub use sp_npos_elections_compact::generate_compact_solution_type;
 
 /// A trait to limit the number of votes per voter. The generated compact type will implement this.
 pub trait VotingLimit {
@@ -100,7 +94,7 @@ pub type VoteWeight = u64;
 pub type ExtendedBalance = u128;
 
 /// The score of an assignment. This can be computed from the support map via [`evaluate_support`].
-pub type PhragmenScore = [ExtendedBalance; 3];
+pub type ElectionScore = [ExtendedBalance; 3];
 
 /// A winner, with their respective approval stake.
 pub type WithApprovalOf<A> = (A, ExtendedBalance);
@@ -110,7 +104,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 /// bigger than u64::max_value() is needed. For maximum accuracy we simply use u128;
 const DEN: u128 = u128::max_value();
 
-/// A candidate entity for phragmen election.
+/// A candidate entity for the election.
 #[derive(Clone, Default, Debug)]
 struct Candidate<AccountId> {
 	/// Identifier.
@@ -147,9 +141,9 @@ struct Edge<AccountId> {
 	candidate_index: usize,
 }
 
-/// Final result of the phragmen election.
+/// Final result of the election.
 #[derive(Debug)]
-pub struct PhragmenResult<AccountId, T: PerThing> {
+pub struct ElectionResult<AccountId, T: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
 	pub winners: Vec<WithApprovalOf<AccountId>>,
@@ -298,10 +292,10 @@ impl<AccountId> StakedAssignment<AccountId> {
 	}
 }
 
-/// A structure to demonstrate the phragmen result from the perspective of the candidate, i.e. how
+/// A structure to demonstrate the election result from the perspective of the candidate, i.e. how
 /// much support each candidate is receiving.
 ///
-/// This complements the [`PhragmenResult`] and is needed to run the equalize post-processing.
+/// This complements the [`ElectionResult`] and is needed to run the balancing post-processing.
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
 /// they do not necessarily have to be the same.
@@ -332,12 +326,12 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 /// responsibility of the caller to make sure only those candidates who have a sensible economic
 /// value are passed in. From the perspective of this function, a candidate can easily be among the
 /// winner with no backing stake.
-pub fn elect<AccountId, R>(
+pub fn seq_phragmen<AccountId, R>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-) -> Option<PhragmenResult<AccountId, R>> where
+) -> Option<ElectionResult<AccountId, R>> where
 	AccountId: Default + Ord + Clone,
 	R: PerThing,
 {
@@ -388,7 +382,6 @@ pub fn elect<AccountId, R>(
 
 
 	// we have already checked that we have more candidates than minimum_candidate_count.
-	// run phragmen.
 	let to_elect = candidate_count.min(candidates.len());
 	elected_candidates = Vec::with_capacity(candidate_count);
 	assigned = Vec::with_capacity(candidate_count);
@@ -524,13 +517,13 @@ pub fn elect<AccountId, R>(
 		}
 	}
 
-	Some(PhragmenResult {
+	Some(ElectionResult {
 		winners: elected_candidates,
 		assignments: assigned,
 	})
 }
 
-/// Build the support map from the given phragmen result. It maps a flat structure like
+/// Build the support map from the given election result. It maps a flat structure like
 ///
 /// ```nocompile
 /// assignments: vec![
@@ -588,7 +581,7 @@ pub fn build_support_map<AccountId>(
 	(supports, errors)
 }
 
-/// Evaluate a phragmen result, given the support map. The returned tuple contains:
+/// Evaluate a support map. The returned tuple contains:
 ///
 /// - Minimum support. This value must be **maximized**.
 /// - Sum of all supports. This value must be **maximized**.
@@ -597,7 +590,7 @@ pub fn build_support_map<AccountId>(
 /// `O(E)` where `E` is the total number of edges.
 pub fn evaluate_support<AccountId>(
 	support: &SupportMap<AccountId>,
-) -> PhragmenScore {
+) -> ElectionScore {
 	let mut min_support = ExtendedBalance::max_value();
 	let mut sum: ExtendedBalance = Zero::zero();
 	// NOTE: The third element might saturate but fine for now since this will run on-chain and need
@@ -614,14 +607,14 @@ pub fn evaluate_support<AccountId>(
 	[min_support, sum, sum_squared]
 }
 
-/// Compares two sets of phragmen scores based on desirability and returns true if `this` is
+/// Compares two sets of election scores based on desirability and returns true if `this` is
 /// better than `that`.
 ///
 /// Evaluation is done in a lexicographic manner, and if each element of `this` is `that * epsilon`
 /// greater or less than `that`.
 ///
 /// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: PhragmenScore, that: PhragmenScore, epsilon: P) -> bool
+pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool
 	where ExtendedBalance: From<sp_arithmetic::InnerOf<P>>
 {
 	match this
@@ -648,17 +641,17 @@ pub fn is_score_better<P: PerThing>(this: PhragmenScore, that: PhragmenScore, ep
 	}
 }
 
-/// Performs equalize post-processing to the output of the election algorithm. This happens in
+/// Performs balancing post-processing to the output of the election algorithm. This happens in
 /// rounds. The number of rounds and the maximum diff-per-round tolerance can be tuned through input
 /// parameters.
 ///
 /// Returns the number of iterations that were preformed.
 ///
-/// - `assignments`: exactly the same is the output of phragmen.
+/// - `assignments`: exactly the same as the output of [`seq_phragmen`].
 /// - `supports`: mutable reference to s `SupportMap`. This parameter is updated.
 /// - `tolerance`: maximum difference that can occur before an early quite happens.
 /// - `iterations`: maximum number of iterations that will be processed.
-pub fn equalize<AccountId>(
+pub fn balance_solution<AccountId>(
 	assignments: &mut Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
@@ -672,7 +665,7 @@ pub fn equalize<AccountId>(
 		for assignment in assignments.iter_mut() {
 			let voter_budget = assignment.total();
 			let StakedAssignment { who, distribution } =  assignment;
-			let diff = do_equalize(
+			let diff = do_balancing(
 				who,
 				voter_budget,
 				distribution,
@@ -689,9 +682,9 @@ pub fn equalize<AccountId>(
 	}
 }
 
-/// actually perform equalize. same interface is `equalize`. Just called in loops with a check for
+/// actually perform balancing. same interface is `balance_solution`. Just called in loops with a check for
 /// maximum difference.
-fn do_equalize<AccountId>(
+fn do_balancing<AccountId>(
 	voter: &AccountId,
 	budget: ExtendedBalance,
 	elected_edges: &mut Vec<(AccountId, ExtendedBalance)>,
