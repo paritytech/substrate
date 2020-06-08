@@ -25,15 +25,17 @@ use std::{
 
 use serde::Serialize;
 use log::trace;
-use parking_lot::RwLock;
 use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 use sp_transaction_pool::error;
 
-use crate::future::WaitingTransaction;
-use crate::base_pool::Transaction;
+use crate::{
+	base_pool::Transaction,
+	future::WaitingTransaction,
+	tracked_map::{ReadOnlyTrackedMap, TrackedMap, TrackedSize},
+};
 
 /// An in-pool transaction reference.
 ///
@@ -107,79 +109,21 @@ qed
 "#;
 
 #[derive(Debug, parity_util_mem::MallocSizeOf)]
-struct ReadySet<Hash, Ex> {
-	index: HashMap<Hash, ReadyTx<Hash, Ex>>,
-	bytes: usize,
-}
-
-impl<Hash: hash::Hash, Ex> Default for ReadySet<Hash, Ex> {
-	fn default() -> Self {
-		ReadySet {
-			index: HashMap::default(),
-			bytes: 0,
-		}
-	}
-}
-
-impl<Hash: hash::Hash + Eq, Ex> ReadySet<Hash, Ex> {
-	pub fn insert(&mut self, key: Hash, val: ReadyTx<Hash, Ex>) {
-		let new_bytes = val.transaction.transaction.bytes;
-		self.bytes += new_bytes;
-		self.index.insert(key, val);
-	}
-
-	pub fn remove(&mut self, key: &Hash) -> Option<ReadyTx<Hash, Ex>> {
-		let val = self.index.remove(key);
-		let deduced_bytes = val.as_ref().map(|val| val.transaction.transaction.bytes).unwrap_or(0);
-		if self.bytes < deduced_bytes {
-			log::warn!(
-				target: "txpool",
-				"Some consistent data in ready set limit, bytes = {} while removing tx of size {}",
-				self.bytes,
-				deduced_bytes,
-			);
-			self.bytes = 0;
-		} else {
-			self.bytes -= deduced_bytes;
-		}
-		val
-	}
-
-	pub fn contains_key(&self, key: &Hash) -> bool {
-		self.index.contains_key(key)
-	}
-
-	pub fn get(&self, key: &Hash) -> Option<&ReadyTx<Hash, Ex>> {
-		self.index.get(key)
-	}
-
-	pub fn get_mut(&mut self, key: &Hash) -> Option<&mut ReadyTx<Hash, Ex>> {
-		self.index.get_mut(key)
-	}
-
-	pub fn len(&self) -> usize {
-		self.index.len()
-	}
-
-	pub fn bytes(&self) -> usize {
-		self.bytes
-	}
-
-	pub fn values(&self) -> std::collections::hash_map::Values<Hash, ReadyTx<Hash, Ex>> {
-		self.index.values()
-	}
-}
-
-#[derive(Debug, parity_util_mem::MallocSizeOf)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Insertion id
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: Arc<RwLock<ReadySet<Hash, Ex>>>,
+	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
+}
+
+impl<Hash, Ex> TrackedSize for ReadyTx<Hash, Ex> {
+	fn tracked_size(&self) -> usize {
+		self.transaction.transaction.bytes
+	}
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
@@ -532,18 +476,18 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Returns number of transactions in this queue.
 	pub fn len(&self) -> usize {
-		self.ready.read().len()
+		self.ready.len()
 	}
 
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
-		self.ready.read().bytes()
+		self.ready.bytes()
 	}
 }
 
 /// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
-	all: Arc<RwLock<ReadySet<Hash, Ex>>>,
+	all: ReadOnlyTrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
