@@ -103,13 +103,13 @@ pub fn make_transcript_data(
 	slot_number: u64,
 	epoch: u64,
 ) -> VRFTranscriptData {
-	let mut items = Vec::new();
-	items.push(("slot_number", VRFTranscriptValue::U64(slot_number)));
-	items.push(("current epoch", VRFTranscriptValue::U64(epoch)));
-	items.push(("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])));
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
-		items,
+		items: vec![
+			("slot_number", VRFTranscriptValue::U64(slot_number)),
+			("current epoch", VRFTranscriptValue::U64(epoch)),
+			("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])),
+		]
 	}
 }
 
