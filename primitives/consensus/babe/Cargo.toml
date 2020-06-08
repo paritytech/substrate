@@ -20,6 +20,7 @@ sp-api = { version = "2.0.0-rc3", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.8.0-rc3", optional = true, path = "../common" }
 sp-consensus-slots = { version = "0.8.0-rc3", default-features = false, path = "../slots" }
 sp-consensus-vrf = { version = "0.8.0-rc3", path = "../vrf", default-features = false }
+sp-core = { version = "2.0.0-dev", default-features = false, path = "../../core" }
 sp-inherents = { version = "2.0.0-rc3", default-features = false, path = "../../inherents" }
 sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "2.0.0-rc3", default-features = false, path = "../../timestamp" }
@@ -35,6 +36,7 @@ std = [
 	"sp-consensus",
 	"sp-consensus-slots/std",
 	"sp-consensus-vrf/std",
+	"sp-core/std",
 	"sp-inherents/std",
 	"sp-runtime/std",
 	"sp-timestamp/std",

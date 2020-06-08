@@ -18,6 +18,7 @@ sp-inherents = { version = "2.0.0-rc3", default-features = false, path = "../../
 sp-application-crypto = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/application-crypto" }
 sp-std = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/runtime" }
+sp-session = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0-rc3", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc3", default-features = false, path = "../system" }
@@ -40,6 +41,7 @@ std = [
 	"sp-application-crypto/std",
 	"frame-support/std",
 	"sp-runtime/std",
+	"sp-session/std",
 	"sp-staking/std",
 	"frame-system/std",
 	"pallet-timestamp/std",

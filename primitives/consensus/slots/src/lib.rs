@@ -28,12 +28,12 @@ pub type SlotNumber = u64;
 /// produces more than one block on the same slot. The proof of equivocation
 /// are the given distinct headers that were signed by the validator and which
 /// include the slot number.
-#[derive(Clone, Debug, Decode, Encode)]
-pub struct EquivocationProof<H> {
-	/// The slot number at which the equivocation happened.
-	pub slot: SlotNumber,
+#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+pub struct EquivocationProof<Header, Id> {
+	/// Returns the authority id of the equivocator.
+	pub offender: Id,
 	/// The first header involved in the equivocation.
-	pub first_header: H,
+	pub first_header: Header,
 	/// The second header involved in the equivocation.
-	pub second_header: H,
+	pub second_header: Header,
 }

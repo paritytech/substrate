@@ -30,8 +30,11 @@ pub use merlin::Transcript;
 
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
-use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::Header};
 use crate::digests::{NextEpochDescriptor, NextConfigDescriptor};
+
+/// Key type for BABE module.
+pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -74,7 +77,7 @@ pub type AuthorityIndex = u32;
 pub use sp_consensus_slots::SlotNumber;
 
 /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
-pub use sp_consensus_slots::EquivocationProof;
+pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
 
 /// The weight of an authority.
 // NOTE: we use a unique name for the weight to avoid conflicts with other
@@ -238,6 +241,60 @@ pub struct BabeEpochConfiguration {
 	/// Whether this chain should run with secondary slots, which are assigned
 	/// in round-robin manner.
 	pub allowed_slots: AllowedSlots,
+}
+
+/// TODO
+pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> Option<SlotNumber>
+where
+	H: Header,
+{
+	use digests::*;
+	use sp_core::Pair;
+
+	// we must have different headers for the equivocation to be valid
+	if proof.first_header.hash() == proof.second_header.hash() {
+		return None;
+	}
+
+	let find_pre_digest = |header: &H| {
+		header
+			.digest()
+			.logs()
+			.iter()
+			.find_map(|log| log.as_babe_pre_digest())
+	};
+
+	let first_pre_digest = find_pre_digest(&proof.first_header)?;
+	let second_pre_digest = find_pre_digest(&proof.second_header)?;
+
+	// and both headers must be targetting the same slot
+	if first_pre_digest.slot_number() != second_pre_digest.slot_number() {
+		return None;
+	}
+
+	// and must be authored by the same authority
+	if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
+		return None;
+	}
+
+	let offender = proof.offender;
+	let verify_seal_signature = |mut header: H| {
+		let seal = header.digest_mut().pop()?.as_babe_seal()?;
+		let pre_hash = header.hash();
+
+		if !AuthorityPair::verify(&seal, pre_hash.as_ref(), &offender) {
+			return None;
+		}
+
+		Some(())
+	};
+
+	// we finally verify that the expected authority has signed both headers and
+	// that the signature is valid.
+	verify_seal_signature(proof.first_header)?;
+	verify_seal_signature(proof.second_header)?;
+
+	Some(first_pre_digest.slot_number())
 }
 
 sp_api::decl_runtime_apis! {

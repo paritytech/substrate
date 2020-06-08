@@ -25,11 +25,14 @@ use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
 use frame_support::{
-	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
+	decl_storage, decl_module,
+	traits::{FindAuthor, Get, Randomness as RandomnessT, KeyOwnerProofSystem},
 	weights::Weight,
+	Parameter,
 };
+use frame_system::{ensure_none, ensure_signed};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, KeyTypeId};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
 use sp_staking::{
 	SessionIndex,
@@ -40,7 +43,7 @@ use sp_application_crypto::Public;
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber, EquivocationProof,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
 	digests::{NextEpochDescriptor, NextConfigDescriptor, PreDigest},
 };
@@ -70,6 +73,22 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
 	/// when no other module is responsible for changing authority set.
 	type EpochChangeTrigger: EpochChangeTrigger;
+
+	/// The proof of key ownership, used for validating equivocation reports.
+	/// The proof must include the session index and validator count of the
+	/// session at which the equivocation occurred.
+	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+	/// The identification of a key owner, used when reporting equivocations.
+	type KeyOwnerIdentification: Parameter;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set, needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, AuthorityId),
+		Proof = Self::KeyOwnerProof,
+		IdentificationTuple = Self::KeyOwnerIdentification,
+	>;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -208,8 +227,61 @@ decl_module! {
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
 		}
+
+		#[weight = 100000]
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			let _who = ensure_signed(origin)?;
+		}
+
+		#[weight = 0]
+		fn report_equivocation_unsigned(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			ensure_none(origin)?;
+
+			let offender = equivocation_proof.offender.clone();
+
+			let slot_number = match sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
+				Some(slot_number) => slot_number,
+				None => return Err("".into()),
+			};
+
+			let validator_set_count = key_owner_proof.validator_count();
+			let session_index = key_owner_proof.session();
+
+			let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) / T::EpochDuration::get())
+				.saturated_into::<u32>();
+
+			// check that the slot number is consistent with the session index
+			// in the key ownership proof (i.e. slot is for that epoch)
+			if epoch_index != session_index {
+				return Err("".into());
+			}
+
+			// check the membership and extract the offender's id
+			let offender =
+				T::KeyOwnerProofSystem::check_proof(
+					(sp_consensus_babe::KEY_TYPE, offender),
+					key_owner_proof,
+				);
+
+			let offence = BabeEquivocationOffence {
+				slot: slot_number,
+				validator_set_count,
+				offender,
+				session_index,
+			};
+		}
 	}
 }
+
+// TODO: Create ValidateUnsigned to restrict only to block author
 
 impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
 	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
@@ -662,5 +734,40 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		} else {
 			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
 		}
+	}
+}
+
+/// A trait to get a session number the `MembershipProof` belongs to.
+pub trait GetSessionNumber {
+	fn session(&self) -> SessionIndex;
+}
+
+/// A trait to get the validator count at the session the `MembershipProof`
+/// belongs to.
+pub trait GetValidatorCount {
+	fn validator_count(&self) -> sp_session::ValidatorCount;
+}
+
+impl GetSessionNumber for frame_support::Void {
+	fn session(&self) -> SessionIndex {
+		Default::default()
+	}
+}
+
+impl GetValidatorCount for frame_support::Void {
+	fn validator_count(&self) -> sp_session::ValidatorCount {
+		Default::default()
+	}
+}
+
+impl GetSessionNumber for sp_session::MembershipProof {
+	fn session(&self) -> SessionIndex {
+		self.session
+	}
+}
+
+impl GetValidatorCount for sp_session::MembershipProof {
+	fn validator_count(&self) -> sp_session::ValidatorCount {
+		self.validator_count
 	}
 }
