@@ -23,7 +23,6 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::Bounded;
-use frame_support::assert_ok;
 
 use crate::Module as Indices;
 
@@ -53,7 +52,7 @@ benchmarks! {
 		let recipient: T::AccountId = account("recipient", i, SEED);
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
-		assert_ok!(Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index));
+		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
 	}: _(RawOrigin::Signed(caller.clone()), recipient.clone(), account_index)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index).unwrap().0, recipient);
@@ -67,7 +66,7 @@ benchmarks! {
 		let caller: T::AccountId = account("caller", 0, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// Claim the index
-		assert_ok!(Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index));
+		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
 	}: _(RawOrigin::Signed(caller.clone()), account_index)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index), None);
@@ -83,7 +82,7 @@ benchmarks! {
 		let recipient: T::AccountId = account("recipient", i, SEED);
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
-		assert_ok!(Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index));
+		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
 	}: _(RawOrigin::Root, recipient.clone(), account_index)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index).unwrap().0, recipient);
