@@ -786,7 +786,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			NewBlockState::Normal
 		};
 
-		let tree_route = if is_new_best {
+		let tree_route = if is_new_best && info.best_hash != parent_hash {
 			let route_from_best = sp_blockchain::tree_route(
 				self.backend.blockchain(),
 				info.best_hash,
