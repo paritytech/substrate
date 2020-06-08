@@ -19,8 +19,8 @@
 
 /// converts x into the range [a, b] in a pseudo-fair way.
 pub fn to_range(x: usize, a: usize, b: usize) -> usize {
-	// does not work correctly if b < 2*a
-	assert!(b > 2 * a);
+	// does not work correctly if b < 2 * a
+	assert!(b >= 2 * a);
 	let collapsed = x % b;
 	if collapsed >= a {
 		collapsed
