@@ -131,8 +131,11 @@ where
 		}
 
 		info!(
-			target: "substrate", "✨ {}Imported #{} ({})",
-			format.prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash,
+			target: "substrate",
+			"✨ {}Imported #{} ({})",
+			format.prefix,
+			Colour::White.bold().paint(format!("{}", n.header.number())), 
+			n.hash,
 		);
 		future::ready(())
 	});
