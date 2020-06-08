@@ -47,7 +47,7 @@ pub struct OutputFormat {
 #[cfg(target_os = "unknown")]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
 
-/// An empty trait that implements `TransactionPool` and `MallocSizeOf`
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
 #[cfg(not(target_os = "unknown"))]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
 
