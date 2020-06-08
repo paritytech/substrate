@@ -119,7 +119,7 @@ impl Filter<Call> for BaseFilter {
 	}
 }
 pub struct IsCallable;
-frame_support::impl_filter_stack!(crate::IsCallable, crate::BaseFilter, crate::Call, is_callable);
+frame_support::impl_filter_stack!(IsCallable, BaseFilter, Call, is_callable);
 
 pub struct DealWithFees;
 impl OnUnbalanced<NegativeImbalance> for DealWithFees {
