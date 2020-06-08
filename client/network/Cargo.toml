@@ -65,7 +65,7 @@ zeroize = "1.0.0"
 [dependencies.libp2p]
 version = "0.19.1"
 default-features = false
-features = ["websocket", "kad", "mdns", "ping", "identify", "mplex", "yamux", "noise", "tcp-async-std"]
+features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "tcp-async-std", "websocket", "yamux"]
 
 [dev-dependencies]
 async-std = "1.5"
