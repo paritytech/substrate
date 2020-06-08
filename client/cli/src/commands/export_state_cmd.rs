@@ -20,7 +20,7 @@ use crate::{
 	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
 };
 use log::info;
-use sc_service::{Configuration, ServiceBuilderCommand};
+use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr, io::Write};
 use structopt::StructOpt;
@@ -44,27 +44,28 @@ pub struct ExportStateCmd {
 
 impl ExportStateCmd {
 	/// Run the `export-state` command
-	pub fn run<B, BC, BB>(
+	pub fn run<B, BA, CE, RA>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
+		chain_spec: Box<dyn sc_service::ChainSpec>,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: BlockT + Debug,
-		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
-		BB::Hash: FromStr,
-		<BB::Hash as FromStr>::Err: std::fmt::Debug,
+		B: BlockT,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
+		<B as sp_runtime::traits::Block>::Hash: FromStr,
+		<<B as sp_runtime::traits::Block>::Hash as FromStr>::Err: Debug,
+		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
 		info!("Exporting raw state...");
-		let mut input_spec = config.chain_spec.cloned_box();
+		let mut input_spec = chain_spec;
 		let block_id = self.input.clone().map(|b| b.parse()).transpose()?;
-		let raw_state = builder(config)?.export_raw_state(block_id)?;
+		let raw_state = sc_service::export_raw_state(client, block_id)?;
 		input_spec.set_storage(raw_state);
 
 		info!("Generating new chain spec...");
-		let json = sc_service::chain_ops::build_spec(&*input_spec, true)?;
+		let json = sc_service::build_spec(&*input_spec, true)?;
 		if std::io::stdout().write_all(json.as_bytes()).is_err() {
 			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
 		}

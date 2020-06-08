@@ -5,7 +5,7 @@ use std::time::Duration;
 use sc_client_api::ExecutorProvider;
 use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
-use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
+use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
@@ -29,66 +29,52 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
 		use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-
-		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-		let builder = sc_service::ServiceBuilder::new_full::<
-			node_template_runtime::opaque::Block,
-			node_template_runtime::RuntimeApi,
-			crate::service::Executor
-		>($config)?
-			.with_select_chain(|_config, backend| {
-				Ok(sc_consensus::LongestChain::new(backend.clone()))
-			})?
-			.with_transaction_pool(|builder| {
-				let pool_api = sc_transaction_pool::FullChainApi::new(
-					builder.client().clone(),
-				);
-				Ok(sc_transaction_pool::BasicPool::new(
-					builder.config().transaction_pool.clone(),
-					std::sync::Arc::new(pool_api),
-					builder.prometheus_registry(),
-				))
-			})?
-			.with_import_queue(|
-				_config,
-				client,
-				mut select_chain,
-				_transaction_pool,
-				spawn_task_handle,
-				registry,
-			| {
-				let select_chain = select_chain.take()
-					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
+		let (client, backend, keystore, task_manager) = sc_service::new_full_parts::<
+			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
+		>(&$config)?;
+		let client = Arc::new(client);
+		let select_chain = sc_consensus::LongestChain::new(backend.clone());
+		let pool_api = sc_transaction_pool::FullChainApi::new(Arc::clone(&client));
+		let registry = $config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());
+		let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new($config.transaction_pool.clone(), std::sync::Arc::new(pool_api), registry.as_ref());
+		let transaction_pool = Arc::new(transaction_pool);
+		let mut background_tasks = Vec::new();
 
-				let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-					client.clone(),
-					&(client.clone() as Arc<_>),
-					select_chain,
-				)?;
+		if let Some(bg_t) = background_task_one {
+			background_tasks.push(("txpool-background", bg_t));
+		}
 
-				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-					grandpa_block_import.clone(), client.clone(),
-				);
+		let (import_queue, import_setup) = {
+			let (grandpa_block_import, grandpa_link) =
+				sc_finality_grandpa::block_import(Arc::clone(&client), &(Arc::clone(&client) as Arc<_>), select_chain.clone())?;
 
-				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-					sc_consensus_aura::slot_duration(&*client)?,
-					aura_block_import,
-					Some(Box::new(grandpa_block_import.clone())),
-					None,
-					client,
-					inherent_data_providers.clone(),
-					spawn_task_handle,
-					registry,
-				)?;
+			let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+				grandpa_block_import.clone(), Arc::clone(&client),
+			);
 
-				import_setup = Some((grandpa_block_import, grandpa_link));
+			let spawn_task_handle = task_manager.spawn_handle();
+			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+				sc_consensus_aura::slot_duration(&*client)?,
+				aura_block_import,
+				Some(Box::new(grandpa_block_import.clone())),
+				None,
+				client.clone(),
+				inherent_data_providers.clone(),
+				&spawn_task_handle,
+				registry.as_ref(),
+			)?;
 
-				Ok(import_queue)
-			})?;
+			let import_setup = Some((grandpa_block_import, grandpa_link));
 
-		(builder, import_setup, inherent_data_providers)
+			(import_queue, import_setup)
+		};
+
+		(
+			client, import_setup, inherent_data_providers, backend, task_manager, keystore,
+			import_queue, select_chain, transaction_pool, background_tasks,
+		)
 	}}
 }
 
@@ -99,19 +85,35 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 	let name = config.network.node_name.clone();
 	let disable_grandpa = config.disable_grandpa;
 
-	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
+	let (
+		client, mut import_setup, inherent_data_providers, backend, task_manager, keystore,
+		import_queue, select_chain, transaction_pool, background_tasks,
+	) = new_full_start!(config);
 
 	let (block_import, grandpa_link) =
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let service = builder
-		.with_finality_proof_provider(|client, backend| {
-			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
-			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
-		})?
-		.build()?;
+	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+	let service = sc_service::build(
+		config,
+		client,
+		backend,
+		task_manager,
+		keystore,
+		None,
+		Some(select_chain),
+		import_queue,
+		None,
+		Some(finality_proof_provider),
+		transaction_pool,
+		(),
+		None,
+		background_tasks,
+		None,
+		Box::new(|_| ()),
+	)?;
 
 	if role.is_authority() {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
@@ -203,66 +205,60 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
-		.with_select_chain(|_config, backend| {
-			Ok(LongestChain::new(backend.clone()))
-		})?
-		.with_transaction_pool(|builder| {
-			let fetcher = builder.fetcher()
-				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
+	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) = sc_service::new_light_parts::<
+		Block, RuntimeApi, Executor
+	>(&config)?;
+	let select_chain = LongestChain::new(backend.clone());
+	let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
+	let registry = config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());
+	let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new(config.transaction_pool.clone(), std::sync::Arc::new(pool_api), registry.as_ref());
+	let transaction_pool = Arc::new(transaction_pool);
+	let mut background_tasks = Vec::new();
 
-			let pool_api = sc_transaction_pool::LightChainApi::new(
-				builder.client().clone(),
-				fetcher.clone(),
-			);
-			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				builder.config().transaction_pool.clone(),
-				Arc::new(pool_api),
-				builder.prometheus_registry(),
-				sc_transaction_pool::RevalidationType::Light,
-			);
-			Ok(pool)
-		})?
-		.with_import_queue_and_fprb(|
-			_config,
-			client,
-			backend,
-			fetcher,
-			_select_chain,
-			_tx_pool,
-			spawn_task_handle,
-			prometheus_registry,
-		| {
-			let fetch_checker = fetcher
-				.map(|fetcher| fetcher.checker().clone())
-				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = sc_finality_grandpa::light_block_import(
-				client.clone(),
-				backend,
-				&(client.clone() as Arc<_>),
-				Arc::new(fetch_checker),
-			)?;
-			let finality_proof_import = grandpa_block_import.clone();
-			let finality_proof_request_builder =
-				finality_proof_import.create_finality_proof_request_builder();
+	if let Some(bg_t) = background_task_one {
+		background_tasks.push(("txpool-background", bg_t));
+	}
+	let fetch_checker = fetcher.checker().clone();
+	let grandpa_block_import = sc_finality_grandpa::light_block_import(
+		client.clone(),
+		backend.clone(),
+		&(client.clone() as Arc<_>),
+		Arc::new(fetch_checker),
+	)?;
+	let finality_proof_import = grandpa_block_import.clone();
+	let finality_proof_request_builder =
+		finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-				sc_consensus_aura::slot_duration(&*client)?,
-				grandpa_block_import,
-				None,
-				Some(Box::new(finality_proof_import)),
-				client,
-				inherent_data_providers.clone(),
-				spawn_task_handle,
-				prometheus_registry,
-			)?;
-
-			Ok((import_queue, finality_proof_request_builder))
-		})?
-		.with_finality_proof_provider(|client, backend| {
-			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
-			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
-		})?
-		.build()
+	let spawn_task_handle = task_manager.spawn_handle();
+	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+		sc_consensus_aura::slot_duration(&*client)?,
+		grandpa_block_import,
+		None,
+		Some(Box::new(finality_proof_import)),
+		client.clone(),
+		inherent_data_providers.clone(),
+		&spawn_task_handle,
+		registry.as_ref()
+	)?;
+	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+	sc_service::build(
+		config,
+		client,
+		backend,
+		task_manager,
+		keystore,
+		None,
+		Some(select_chain),
+		import_queue,
+		Some(finality_proof_request_builder),
+		Some(finality_proof_provider),
+		transaction_pool,
+		(),
+		Some(remote_blockchain),
+		background_tasks,
+		None,
+		Box::new(|_| ()),
+	)
 }

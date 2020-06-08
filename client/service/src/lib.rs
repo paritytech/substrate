@@ -23,8 +23,6 @@
 #![recursion_limit="128"]
 
 pub mod config;
-#[macro_use]
-pub mod chain_ops;
 pub mod error;
 
 mod metrics;
@@ -35,8 +33,21 @@ pub mod client;
 mod client;
 mod status_sinks;
 mod task_manager;
+mod revert_chain;
+mod check_block;
+mod import_blocks;
+mod export_blocks;
+mod export_raw_state;
 
-use std::{io, pin::Pin};
+pub use revert_chain::*;
+pub use check_block::*;
+pub use import_blocks::*;
+pub use export_blocks::*;
+pub use export_raw_state::*;
+use crate::config::RpcMethods;
+pub use sp_consensus::import_queue::ImportQueue;
+pub use builder::*;
+use std::{borrow::Cow, io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -45,7 +56,7 @@ use wasm_timer::Instant;
 use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
-use client::Client;
+pub use client::Client;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
 	compat::*,
@@ -61,12 +72,14 @@ use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
 pub use self::error::Error;
+/*
 pub use self::builder::{
 	new_full_client, new_client,
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
 };
-pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
+*/
+pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,

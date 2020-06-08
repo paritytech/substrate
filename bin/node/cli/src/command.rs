@@ -95,7 +95,14 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
 
-			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+			runner.run_subcommand(subcommand, |config| {
+				let (
+					client, _import_setup, _inherent_data_providers, _backend, _tasks_builder,
+					_keystore, import_queue, _select_chain, _transaction_pool, _background_tasks, _, _
+				) = new_full_start!(config);
+
+				Ok((client, import_queue))
+			})
 		}
 	}
 }

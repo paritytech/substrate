@@ -37,7 +37,7 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration, TaskType};
+use sc_service::{ChainSpec, Configuration, config::TaskType};
 use std::future::Future;
 use std::io::Write;
 use std::pin::Pin;

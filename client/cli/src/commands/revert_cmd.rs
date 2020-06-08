@@ -19,10 +19,11 @@
 use crate::error;
 use crate::params::{BlockNumber, PruningParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::{Configuration, ServiceBuilderCommand};
+//use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use structopt::StructOpt;
+use sc_service::revert_chain;
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
@@ -42,16 +43,16 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+	pub fn run<B, BA, CE, RA>(&self, client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
+		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
 		let blocks = self.num.parse()?;
-		builder(config)?.revert_chain(blocks)?;
+		revert_chain(client, blocks)?;
 
 		Ok(())
 	}

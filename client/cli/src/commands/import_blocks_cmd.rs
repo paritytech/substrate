@@ -20,13 +20,14 @@ use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
-use sc_service::{Configuration, ServiceBuilderCommand};
+//use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Read, Seek};
 use std::path::PathBuf;
 use structopt::StructOpt;
+use sc_service::import_blocks;
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -61,17 +62,17 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, BA, CE, RA, IQ>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
+		import_queue: IQ,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT + for<'de> serde::Deserialize<'de>,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
 	{
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
@@ -82,8 +83,7 @@ impl ImportBlocksCmd {
 			}
 		};
 
-		builder(config)?
-			.import_blocks(file, false, self.binary)
+		import_blocks(client, import_queue, file, false, self.binary)
 			.await
 			.map_err(Into::into)
 	}

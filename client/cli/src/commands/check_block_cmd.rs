@@ -16,12 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
-};
-use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{fmt::Debug, str::FromStr};
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::params::BlockNumberOrHash;
+use crate::CliConfiguration;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::fmt::Debug;
+use std::str::FromStr;
 use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
@@ -48,21 +51,24 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, BA, CE, IQ, RA>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
+		import_queue: IQ,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: BlockT + Debug,
-		<NumberFor<BB> as FromStr>::Err: std::fmt::Debug,
-		BB::Hash: FromStr,
-		<BB::Hash as FromStr>::Err: std::fmt::Debug,
+		B: BlockT + for<'de> serde::Deserialize<'de>,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
+		RA: Send + Sync + 'static,
+		<B as sp_runtime::traits::Block>::Hash: FromStr,
+		<<B as sp_runtime::traits::Block>::Hash as FromStr>::Err: Debug,
+		<<<B as sp_runtime::traits::Block>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let start = std::time::Instant::now();
-		builder(config)?.check_block(self.input.parse()?).await?;
+		let block_id = self.input.parse()?;
+		sc_service::check_block(client, import_queue, block_id).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

@@ -20,15 +20,14 @@ use crate::error;
 use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
-use sc_service::{
-	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
-};
+use sc_service::config::DatabaseConfig;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use sc_service::export_blocks;
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -68,21 +67,23 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, BA, CE, RA>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
+		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
+		// TODO: should probably not be here
+		/*
 		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
+		*/
 
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
@@ -94,8 +95,7 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		builder(config)?
-			.export_blocks(file, from.into(), to, binary)
+		export_blocks(client, file, from.into(), to, binary)
 			.await
 			.map_err(Into::into)
 	}

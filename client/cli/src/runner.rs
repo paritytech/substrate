@@ -25,7 +25,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
+use sc_service::{AbstractService, Configuration, Role, config::TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
@@ -233,29 +233,37 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
+	pub fn run_subcommand<BU, B, BA, CE, RA, IQ>(self, subcommand: &Subcommand, builder: BU) -> Result<()>
 	where
-		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
-		<BB as BlockT>::Hash: FromStr,
-		<<BB as BlockT>::Hash as FromStr>::Err: Debug,
+		BU: FnOnce(Configuration) -> sc_service::error::Result<(std::sync::Arc<sc_service::Client<BA, CE, B, RA>>, IQ)>,
+		B: BlockT + for<'de> serde::Deserialize<'de>,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
+		RA: Send + Sync + 'static,
+		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
+		<<B as sp_runtime::traits::Block>::Hash as FromStr>::Err: Debug,
+		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
+		let chain_spec = self.config.chain_spec.cloned_box();
+		let network_config = self.config.network.clone();
+		let db_config = self.config.database.clone();
+		let (client, import_queue) = builder(self.config)?;
+
 		match subcommand {
-			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
+			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
 			Subcommand::ExportBlocks(cmd) => {
-				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
+				run_until_exit(self.tokio_runtime, cmd.run(client))
 			}
 			Subcommand::ImportBlocks(cmd) => {
-				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
+				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue))
 			}
 			Subcommand::CheckBlock(cmd) => {
-				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
+				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue))
 			}
-			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
-			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
-			Subcommand::ExportState(cmd) => cmd.run(self.config, builder),
+			Subcommand::Revert(cmd) => cmd.run(client),
+			Subcommand::PurgeChain(cmd) => cmd.run(db_config),
+			Subcommand::ExportState(cmd) => cmd.run(client, chain_spec),
 		}
 	}
 

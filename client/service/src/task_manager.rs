@@ -184,7 +184,7 @@ impl TaskManager {
 		self.spawn_handle().spawn(name, task)
 	}
 
-	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
