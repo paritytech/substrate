@@ -43,7 +43,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	backend: &'a B,
 	storage: &'a dyn Storage<H, Number>,
 	config: ConfigurationRange<'a, Number>,
-	changes: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges,
 	parent: &'a AnchorBlockId<H::Out, Number>,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
@@ -60,7 +60,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	let (extrinsics_input, children_extrinsics_input) = prepare_extrinsics_input(
 		backend,
 		&number,
-		changes,
+		overlay,
 	)?;
 	let (digest_input, mut children_digest_input, digest_input_blocks) = prepare_digest_input::<H, Number>(
 		parent,
@@ -96,7 +96,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 fn prepare_extrinsics_input<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
-	changes: &'a OverlayedChanges,
+	overlay: &'a OverlayedChanges,
 ) -> Result<(
 		impl Iterator<Item=InputPair<Number>> + 'a,
 		BTreeMap<ChildIndex<Number>, impl Iterator<Item=InputPair<Number>> + 'a>,
@@ -108,7 +108,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 {
 	let mut children_result = BTreeMap::new();
 
-	for (child_changes, child_info) in changes.children() {
+	for (child_changes, child_info) in overlay.children() {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
 			storage_key: child_info.prefixed_storage_key(),
@@ -122,7 +122,7 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		children_result.insert(child_index, iter);
 	}
 
-	let top = prepare_extrinsics_input_inner(backend, block, changes, None, changes.changes())?;
+	let top = prepare_extrinsics_input_inner(backend, block, changes, None, overlay.changes())?;
 
 	Ok((top, children_result))
 }
