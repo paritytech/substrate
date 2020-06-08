@@ -265,14 +265,14 @@ impl OverlayedChanges {
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		changeset.clear(|_, _| true, extrinsic_index);
+		changeset.clear_where(|_, _| true, extrinsic_index);
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.top.clear(|key, _| key.starts_with(prefix), self.extrinsic_index());
+		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index());
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -289,7 +289,7 @@ impl OverlayedChanges {
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		changeset.clear(|key, _| key.starts_with(prefix), extrinsic_index);
+		changeset.clear_where(|key, _| key.starts_with(prefix), extrinsic_index);
 	}
 
 	/// Returns the current nesting depth of the transaction stack.

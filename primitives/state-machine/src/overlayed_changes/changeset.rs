@@ -197,7 +197,7 @@ impl OverlayedChangeSet {
 	/// Set all values to deleted which are matched by the predicate.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn clear(
+	pub fn clear_where(
 		&mut self,
 		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
 		at_extrinsic: Option<u32>
@@ -541,7 +541,7 @@ mod test {
 
 		changeset.start_transaction();
 
-		changeset.clear(|k, _| k.starts_with(b"del"), Some(5));
+		changeset.clear_where(|k, _| k.starts_with(b"del"), Some(5));
 
 		assert_changes(&changeset, &vec![
 			(b"del1", (None, vec![3, 5])),
