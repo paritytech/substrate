@@ -62,3 +62,36 @@ pub fn make_transcript(data: VRFTranscriptData) -> Transcript {
 	}
 	transcript
 }
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::vrf::VRFTranscriptValue;
+	use rand::RngCore;
+	use rand_chacha::rand_core::SeedableRng;
+	use rand_chacha::ChaChaRng;
+
+	#[test]
+	fn transcript_creation_matches() {
+		let mut orig_transcript = Transcript::new(b"My label");
+		orig_transcript.append_u64(b"one", 1);
+		orig_transcript.append_message(b"two", "test".as_bytes());
+
+		let new_transcript = make_transcript(VRFTranscriptData {
+			label: b"My label",
+			items: vec![
+				("one", VRFTranscriptValue::U64(1)),
+				("two", VRFTranscriptValue::Bytes("test".as_bytes())),
+			],
+		});
+		let test = |t: Transcript| -> [u8; 16] {
+			let mut b = [0u8; 16];
+			t.build_rng()
+				.finalize(&mut ChaChaRng::from_seed([0u8;32]))
+				.fill_bytes(&mut b);
+			b
+		};
+		debug_assert!(test(orig_transcript) == test(new_transcript));
+	}
+}

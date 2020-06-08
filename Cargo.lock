@@ -7385,6 +7385,7 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "regex",
  "schnorrkel",
  "serde",
