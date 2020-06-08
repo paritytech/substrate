@@ -368,6 +368,8 @@ decl_event!(
 		BountyClaimed(BountyIndex, Balance, AccountId),
 		/// A bounty is cancelled.
 		BountyCanceled(BountyIndex),
+		/// A bounty expiry is extended.
+		BountyExtended(BountyIndex),
 	}
 );
 
@@ -850,6 +852,30 @@ decl_module! {
 			})?;
 
 			Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
+		}
+
+		#[weight = 100_000_000]
+		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex) {
+			let curator = ensure_signed(origin)?;
+
+			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
+				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+
+				ensure!(bounty.status.is_active(), Error::<T>::UnexpectedStatus);
+				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+
+				match bounty.status {
+					BountyStatus::Active { expires } => {
+						let expires = expires.max(system::Module::<T>::block_number() + T::BountyDuration::get());
+						bounty.status = BountyStatus::Active { expires };
+					},
+					_ => return Err(Error::<T>::UnexpectedStatus.into()),
+				}
+
+				Ok(())
+			})?;
+
+			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
 		}
 
 		/// # <weight>

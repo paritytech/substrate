@@ -694,3 +694,9 @@ fn expire_and_cancel() {
 	// TODO
 	assert!(false);
 }
+
+#[test]
+fn extend_expiry() {
+	// TODO
+	assert!(false);
+}
