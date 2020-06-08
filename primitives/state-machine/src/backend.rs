@@ -40,24 +40,15 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Storage changes to be applied if committing
 	type Transaction: Consolidate + Default + Send;
 
-	/// The proof format use while registering proof.
-	/// TODO EMCH on paper this is not needed, we shouldn't need this proof type to merge
-	/// but just use back proof reg backend. -> try to do it or try to remove the
-	/// storage proof constraint and rename the struct to something that is more build
-	/// related but do not need to be usable as a backend.
-	type StorageProofReg: sp_trie::RegStorageProof<H::Out>
-		+ sp_trie::MergeableStorageProof
-		+ Into<Self::StorageProof>; // TODO EMCH consider removing this conv.
-
 	/// The actual proof produced.
 	type StorageProof: sp_trie::BackendStorageProof;
 //		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
 
 	/// Type of proof backend.
-	type ProofRegBackend: ProofRegBackend<H, StorageProofReg = Self::StorageProofReg, StorageProof = Self::StorageProof>;
+	type ProofRegBackend: ProofRegBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Type of proof backend.
-	type ProofCheckBackend: ProofCheckBackend<H, StorageProofReg = Self::StorageProofReg, StorageProof = Self::StorageProof>;
+	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;

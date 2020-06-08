@@ -81,7 +81,7 @@ impl<T> sp_std::fmt::Debug for Full<T> {
 pub struct FullForMerge(ChildrenProofMap<(ProofMapTrieNodes, Vec<u8>)>);
 
 
-impl<T: 'static> StorageProof for Flat<T> {
+impl<T> StorageProof for Flat<T> {
 	fn empty() -> Self {
 		Flat(Default::default(), PhantomData)
 	}
@@ -91,7 +91,7 @@ impl<T: 'static> StorageProof for Flat<T> {
 	}
 }
 
-impl<T: 'static> StorageProof for Full<T> {
+impl<T> StorageProof for Full<T> {
 	fn empty() -> Self {
 		Full(Default::default(), PhantomData)
 	}
@@ -132,20 +132,19 @@ impl MergeableStorageProof for FullForMerge {
 }
 
 // TODO EMCH can remove Default bound with manual impl on recorder
-#[cfg(feature = "std")]
-impl<T> RegStorageProof<TrieHash<T>> for Flat<T>
+impl<T> RegStorageProof<T::Hash> for Flat<T>
 	where
-		T: 'static + TrieLayout,
+		T: TrieLayout,
 		TrieHash<T>: Decode,
 {
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 
-	type RecordBackend = super::FullSyncRecorder<TrieHash<T>>;
+	type RecordBackend = super::FullRecorder<T::Hash>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self> {
 		if let Input::ChildTrieRoots(roots) = input {
 			let mut result = Vec::default();
-			for (child_info, set) in recorder.0.read().iter() {
+			for (child_info, set) in recorder.0.iter() {
 				let root = roots.get(&child_info.proof_info())
 					.and_then(|r| Decode::decode(&mut &r[..]).ok())
 					.ok_or_else(|| missing_pack_input())?;
@@ -159,20 +158,19 @@ impl<T> RegStorageProof<TrieHash<T>> for Flat<T>
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T> RegStorageProof<TrieHash<T>> for Full<T>
+impl<T> RegStorageProof<T::Hash> for Full<T>
 	where
-		T: 'static + TrieLayout,
+		T: TrieLayout,
 		TrieHash<T>: Decode,
 {
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 
-	type RecordBackend = super::FullSyncRecorder<TrieHash<T>>;
+	type RecordBackend = super::FullRecorder<T::Hash>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self> {
 		if let Input::ChildTrieRoots(roots) = input {
 			let mut result = ChildrenProofMap::default();
-			for (child_info, set) in recorder.0.read().iter() {
+			for (child_info, set) in recorder.0.iter() {
 				let root = roots.get(&child_info.proof_info())
 					.and_then(|r| Decode::decode(&mut &r[..]).ok())
 					.ok_or_else(|| missing_pack_input())?;
@@ -186,19 +184,19 @@ impl<T> RegStorageProof<TrieHash<T>> for Full<T>
 	}
 }
 
-#[cfg(feature = "std")]
-impl<Hash> RegStorageProof<Hash> for FullForMerge
+impl<H> RegStorageProof<H> for FullForMerge
 	where
-		Hash: Default + Eq + Clone + Encode + sp_std::hash::Hash + Send + Sync,
+		H: Hasher,
+		H::Out: Encode,
 {
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 
-	type RecordBackend = super::FullSyncRecorder<Hash>;
+	type RecordBackend = super::FullRecorder<H>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self> {
 		if let Input::ChildTrieRoots(roots) = input {
 			let mut result = ChildrenProofMap::default();
-			for (child_info, set) in recorder.0.read().iter() {
+			for (child_info, set) in recorder.0.iter() {
 				let root = roots.get(&child_info.proof_info())
 					.ok_or_else(|| missing_pack_input())?.clone();
 				let trie_nodes: BTreeMap<_, _> = set
@@ -214,9 +212,21 @@ impl<Hash> RegStorageProof<Hash> for FullForMerge
 	}
 }
 
-impl<T: 'static> BackendStorageProof for Flat<T> { }
+impl<T> BackendStorageProof<T::Hash>  for Flat<T>
+	where
+		T: TrieLayout,
+		TrieHash<T>: Codec,
+{
+	type StorageProofReg = FullForMerge;
+}
 
-impl<T: 'static> BackendStorageProof for Full<T> { }
+impl<T> BackendStorageProof<T::Hash> for Full<T>
+	where
+		T: TrieLayout,
+		TrieHash<T>: Codec,
+{
+	type StorageProofReg = FullForMerge;
+}
 
 // Note that this implementation is only possible
 // as long as we only have default child trie which
@@ -246,7 +256,7 @@ impl FullForMerge {
 	// TODO EMCH use try_into!
 	fn to_full<L>(self) -> Result<Full<L>>
 		where
-			L: 'static + TrieLayout,
+			L: TrieLayout,
 			TrieHash<L>: Codec,
 	{
 		let mut result = ChildrenProofMap::<ProofCompacted>::default();
@@ -263,7 +273,7 @@ impl FullForMerge {
 	// TODO EMCH use try_into!
 	fn to_flat<L>(self) -> Result<Flat<L>>
 		where
-			L: 'static + TrieLayout,
+			L: TrieLayout,
 			TrieHash<L>: Codec,
 	{
 		let mut result = Vec::<ProofCompacted>::default();
@@ -280,7 +290,7 @@ impl FullForMerge {
 
 impl<L> Into<Full<L>> for FullForMerge
 	where
-		L: 'static + TrieLayout,
+		L: TrieLayout,
 		TrieHash<L>: Codec,
 {
 	// TODO consider only using try into (may not be very straightforward with backend)
@@ -292,12 +302,24 @@ impl<L> Into<Full<L>> for FullForMerge
 
 impl<L> Into<Flat<L>> for FullForMerge
 	where
-		L: 'static + TrieLayout,
+		L: TrieLayout,
 		TrieHash<L>: Codec,
 {
 	fn into(self) -> Flat<L> {
 		self.to_flat()
 			.expect("Full for merge was recorded on a correct state")
+	}
+}
+
+impl Into<super::simple::Flat> for FullForMerge
+{
+	fn into(self) -> super::simple::Flat {
+		let mut result = ProofNodes::default();
+		for (_child_info, (nodes, _root)) in self.0 {
+			// TODO EMCH do not extend on first
+			result.extend(nodes.0.into_iter().map(|(_k, v)| v));
+		}
+		super::simple::Flat(result)
 	}
 }
 

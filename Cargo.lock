@@ -7900,7 +7900,6 @@ dependencies = [
  "hex-literal",
  "memory-db",
  "parity-scale-codec",
- "parking_lot 0.10.2",
  "sp-core",
  "sp-runtime",
  "sp-std",

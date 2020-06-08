@@ -92,7 +92,7 @@ impl<H, D> sp_std::fmt::Debug for MultipleStorageProof<H, D> {
 }
 
 /// Allow to use specific kind of proof by default.
-pub trait DefaultKind: 'static + Clone + Send + Sync {
+pub trait DefaultKind: Clone + Send + Sync {
 	const KIND: StorageProofKind;
 }
 
@@ -134,7 +134,7 @@ impl<H, D> Encode for MultipleStorageProof<H, D> {
 	}
 }
 
-impl<H: 'static, D: DefaultKind> StorageProof for MultipleStorageProof<H, D> {
+impl<H, D: DefaultKind> StorageProof for MultipleStorageProof<H, D> {
 	fn empty() -> Self {
 		match D::KIND {
 			StorageProofKind::Flat =>
@@ -160,69 +160,76 @@ impl<H: 'static, D: DefaultKind> StorageProof for MultipleStorageProof<H, D> {
 	}
 }
 
-#[cfg(feature = "std")]
-#[derive(Clone)]
-pub enum MultipleSyncRecorder<Hash, D> {
-	Flat(super::FlatSyncRecorder<Hash>, StorageProofKind, PhantomData<D>),
-	Full(super::FullSyncRecorder<Hash>, StorageProofKind),
+pub enum MultipleRecorder<H: Hasher, D> {
+	Flat(super::FlatRecorder<H>, StorageProofKind, PhantomData<D>),
+	Full(super::FullRecorder<H>, StorageProofKind),
 }
 
-impl<Hash: Default, D: DefaultKind> MultipleSyncRecorder<Hash, D> {
+impl<H: Hasher, D: DefaultKind> MultipleRecorder<H, D> {
 	/// Instantiate a recorder of a given type.
 	pub fn new_recorder(kind: StorageProofKind) -> Self {
 		match kind {
-			StorageProofKind::Flat => MultipleSyncRecorder::Flat(Default::default(), D::KIND, PhantomData),
-			StorageProofKind::TrieSkipHashes => MultipleSyncRecorder::Full(Default::default(), D::KIND),
-			StorageProofKind::FullForMerge => MultipleSyncRecorder::Full(Default::default(), D::KIND),
-			StorageProofKind::KnownQueryPlanAndValues => MultipleSyncRecorder::Full(Default::default(), D::KIND),
+			StorageProofKind::Flat => MultipleRecorder::Flat(Default::default(), D::KIND, PhantomData),
+			StorageProofKind::TrieSkipHashes => MultipleRecorder::Full(Default::default(), D::KIND),
+			StorageProofKind::FullForMerge => MultipleRecorder::Full(Default::default(), D::KIND),
+			StorageProofKind::KnownQueryPlanAndValues => MultipleRecorder::Full(Default::default(), D::KIND),
 		}
 	}
 
 	/// Targetted storage proof kind.
 	pub fn target(&self) -> StorageProofKind {
 		match self {
-			MultipleSyncRecorder::Flat(_, k, _) => *k,
-			MultipleSyncRecorder::Full(_, k) => *k,
+			MultipleRecorder::Flat(_, k, _) => *k,
+			MultipleRecorder::Full(_, k) => *k,
 		}
 	}
 }
 
-impl<Hash: Default, D: DefaultKind> Default for MultipleSyncRecorder<Hash, D> {
+impl<H: Hasher, D: DefaultKind> Default for MultipleRecorder<H, D> {
 	fn default() -> Self {
 		Self::new_recorder(D::KIND)
 	}
 }
 
-#[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Sync + Send, D: DefaultKind> RecordBackend<Hash> for MultipleSyncRecorder<Hash, D> {
-	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>> {
+impl<H: Hasher, D> Clone for MultipleRecorder<H, D> {
+	fn clone(&self) -> Self {
 		match self {
-			MultipleSyncRecorder::Flat(rec, _ ,_) => rec.get(child_info, key),
-			MultipleSyncRecorder::Full(rec, _) => rec.get(child_info, key),
+			MultipleRecorder::Flat(data, kind, _) => MultipleRecorder::Flat(data.clone(), *kind, PhantomData),
+			MultipleRecorder::Full(data, kind) => MultipleRecorder::Full(data.clone(), *kind),
+		}
+	}
+}
+
+
+impl<H: Hasher, D: DefaultKind> RecordBackend<H> for MultipleRecorder<H, D> {
+	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>> {
+		match self {
+			MultipleRecorder::Flat(rec, _ ,_) => rec.get(child_info, key),
+			MultipleRecorder::Full(rec, _) => rec.get(child_info, key),
 		}
 	}
 
-	fn record(&self, child_info: &ChildInfo, key: &Hash, value: Option<DBValue>) {
+	fn record(&mut self, child_info: ChildInfo, key: H::Out, value: Option<DBValue>) {
 		match self {
-			MultipleSyncRecorder::Flat(rec, _, _) => rec.record(child_info, key, value),
-			MultipleSyncRecorder::Full(rec, _) => rec.record(child_info, key, value),
+			MultipleRecorder::Flat(rec, _, _) => rec.record(child_info, key, value),
+			MultipleRecorder::Full(rec, _) => rec.record(child_info, key, value),
 		}
 	}
 
 	fn merge(&mut self, other: Self) -> bool {
 		match self {
-			MultipleSyncRecorder::Flat(rec, _, _) => {
+			MultipleRecorder::Flat(rec, _, _) => {
 				match other {
-					MultipleSyncRecorder::Flat(oth, _, _) => {
+					MultipleRecorder::Flat(oth, _, _) => {
 						rec.merge(oth);
 						true
 					},
 					_ => false
 				}
 			},
-			MultipleSyncRecorder::Full(rec, _) => {
+			MultipleRecorder::Full(rec, _) => {
 				match other {
-					MultipleSyncRecorder::Full(oth, _) => {
+					MultipleRecorder::Full(oth, _) => {
 						rec.merge(oth);
 						true
 					},
@@ -234,11 +241,10 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Sync + Send, D: DefaultKi
 }
 
 // TODO EMCH can remove Default bound with manual impl on recorder
-#[cfg(feature = "std")]
-impl<Hash, D: DefaultKind> RegStorageProof<Hash::Out> for MultipleStorageProof<Hash, D>
+impl<H, D: DefaultKind> RegStorageProof<H> for MultipleStorageProof<H, D>
 	where
-		Hash: Hasher + 'static,
-		Hash::Out: Codec,
+		H: Hasher,
+		H::Out: Codec,
 		D: DefaultKind,
 {
 	// Actually one could ignore this if he knows its type to be non compact.
@@ -246,17 +252,17 @@ impl<Hash, D: DefaultKind> RegStorageProof<Hash::Out> for MultipleStorageProof<H
 	// Maybe switch that to Option so we can put it to None here as it is variable
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 
-	type RecordBackend = MultipleSyncRecorder<Hash::Out, D>;
+	type RecordBackend = MultipleRecorder<H, D>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self> {
 		match recorder.target() {
 			StorageProofKind::Flat => {
-				if let MultipleSyncRecorder::Flat(rec, _, _) = recorder {
+				if let MultipleRecorder::Flat(rec, _, _) = recorder {
 					return Ok(MultipleStorageProof::Flat(super::simple::Flat::extract_proof(rec, input)?))
 				}
 			},
 			StorageProofKind::TrieSkipHashes => {
-				if let MultipleSyncRecorder::Full(rec, _) = recorder {
+				if let MultipleRecorder::Full(rec, _) = recorder {
 					return Ok(MultipleStorageProof::TrieSkipHashes(
 						super::compact::Flat::extract_proof(rec, input)?,
 						PhantomData,
@@ -264,14 +270,14 @@ impl<Hash, D: DefaultKind> RegStorageProof<Hash::Out> for MultipleStorageProof<H
 				}
 			},
 			StorageProofKind::FullForMerge => {
-				if let MultipleSyncRecorder::Full(rec, _) = recorder {
+				if let MultipleRecorder::Full(rec, _) = recorder {
 					return Ok(MultipleStorageProof::FullForMerge(
 						super::compact::FullForMerge::extract_proof(rec, input)?,
 					))
 				}
 			},
 			StorageProofKind::KnownQueryPlanAndValues => {
-				if let MultipleSyncRecorder::Full(rec, _) = recorder {
+				if let MultipleRecorder::Full(rec, _) = recorder {
 					return Ok(MultipleStorageProof::KnownQueryPlanAndValues(
 						super::query_plan::KnownQueryPlanAndValues::extract_proof(rec, input)?,
 					))
@@ -282,7 +288,14 @@ impl<Hash, D: DefaultKind> RegStorageProof<Hash::Out> for MultipleStorageProof<H
 	}
 }
 
-impl<H: 'static, D: DefaultKind> BackendStorageProof for MultipleStorageProof<H, D> { }
+impl<H, D> BackendStorageProof<H> for MultipleStorageProof<H, D>
+	where
+		H: Hasher,
+		H::Out: Codec,
+		D: DefaultKind,
+{
+	type StorageProofReg = super::compact::FullForMerge;
+}
 
 impl<H, D> TryInto<super::simple::Flat> for MultipleStorageProof<H, D> {
 	type Error = super::Error;
@@ -339,6 +352,26 @@ impl<H, D> MultipleStorageProof<H, D> {
 		}
 	}
 }
+
+
+impl<H: Hasher, D: DefaultKind> Into<MultipleStorageProof<H, D>> for super::compact::FullForMerge
+	where
+		H::Out: Codec,
+{
+	fn into(self) -> MultipleStorageProof<H, D> {
+		match D::KIND {
+			StorageProofKind::Flat => MultipleStorageProof::Flat(self.into()),
+			StorageProofKind::TrieSkipHashes => MultipleStorageProof::TrieSkipHashes(self.into(), PhantomData),
+			StorageProofKind::FullForMerge => MultipleStorageProof::FullForMerge(self),
+			// we cannot convert, actually this should not be in storage proof kind TODO EMCH
+			// this was only here to be able to product query plan without using different backend.
+			// User shall therefore register and try into: but target is that user uses the query_plan
+			// backend.
+			StorageProofKind::KnownQueryPlanAndValues => MultipleStorageProof::FullForMerge(self),
+		}
+	}
+}
+
 
 /*
 	/// Can also fail on invalid compact proof.

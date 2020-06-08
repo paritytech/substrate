@@ -72,15 +72,13 @@ impl MergeableStorageProof for Full {
 	}
 }
 
-// TODO EMCH can remove Default bound with manual impl on recorder
-#[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RegStorageProof<Hash> for Flat {
+impl<H: Hasher> RegStorageProof<H> for Flat {
 	const INPUT_KIND: InputKind = InputKind::None;
 
-	type RecordBackend = super::FlatSyncRecorder<Hash>;
+	type RecordBackend = super::FlatRecorder<H>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, _input: Input) -> Result<Self> {
-		let trie_nodes = recorder.0.read()
+		let trie_nodes = recorder.0
 			.iter()
 			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 			.collect();
@@ -88,15 +86,14 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RegStoragePr
 	}
 }
 
-#[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RegStorageProof<Hash> for Full {
+impl<H: Hasher> RegStorageProof<H> for Full {
 	const INPUT_KIND: InputKind = InputKind::None;
 
-	type RecordBackend = super::FullSyncRecorder<Hash>;
+	type RecordBackend = super::FullRecorder<H>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, _input: Input) -> Result<Self> {
 		let mut result = ChildrenProofMap::default();
-		for (child_info, set) in recorder.0.read().iter() {
+		for (child_info, set) in recorder.0.iter() {
 			let trie_nodes: Vec<Vec<u8>> = set
 				.iter()
 				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
@@ -107,9 +104,13 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RegStoragePr
 	}
 }
 
-impl BackendStorageProof for Flat { }
+impl<H: Hasher> BackendStorageProof<H> for Flat {
+	type StorageProofReg = Self;
+}
 
-impl BackendStorageProof for Full { }
+impl<H: Hasher> BackendStorageProof<H> for Full {
+	type StorageProofReg = Self;
+}
 
 // Note that this implementation is only possible
 // as long as we only have default child trie which

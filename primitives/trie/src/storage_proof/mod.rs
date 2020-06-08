@@ -17,11 +17,6 @@ use crate::Layout;
 use sp_storage::{ChildInfo, ChildInfoProof, ChildrenMap};
 use trie_db::DBValue;
 
-#[cfg(feature = "std")]
-use std::sync::Arc;
-#[cfg(feature = "std")]
-use parking_lot::RwLock;
-
 pub mod simple;
 pub mod compact;
 pub mod query_plan;
@@ -201,7 +196,7 @@ pub enum InputKind {
 }
 
 /// Trait for proofs that can be use as a partial backend for verification.
-pub trait StorageProof: sp_std::fmt::Debug + Sized + 'static {
+pub trait StorageProof: sp_std::fmt::Debug + Sized {
 	/// Returns a new empty proof.
 	///
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
@@ -221,12 +216,12 @@ pub trait MergeableStorageProof: StorageProof {
 }
 
 /// Trait for proofs that can be recorded against a trie backend.
-pub trait RegStorageProof<Hash>: StorageProof {
+pub trait RegStorageProof<H: Hasher>: StorageProof {
 	/// Variant of enum input to use.
 	const INPUT_KIND: InputKind;
 
 	/// The data structure for recording proof entries.
-	type RecordBackend: RecordBackend<Hash>;
+	type RecordBackend: RecordBackend<H>;
 
 	/// Extracts the gathered unordered encoded trie nodes.
 	/// Depending on `kind`, encoded trie nodes can change
@@ -246,7 +241,12 @@ pub trait WithRegStorageProof<Hash>: Sized {
 	type RegStorageProof: Into<Self> + RegStorageProof<Hash>;
 }
 */
-pub trait BackendStorageProof: Codec + StorageProof {}
+pub trait BackendStorageProof<H: Hasher>: Codec + StorageProof {
+	/// The proof format use while registering proof.
+	type StorageProofReg: RegStorageProof<H>
+		+ MergeableStorageProof
+		+ Into<Self>; // TODO EMCH consider removing this conv or make it a try into??
+}
 
 /// Trait for proofs that can use to create a partial trie backend.
 pub trait CheckableStorageProof: Codec + StorageProof {
@@ -259,49 +259,65 @@ pub trait CheckableStorageProof: Codec + StorageProof {
 /// TODO EMCH consider using &mut and change reg storage (consume) proof
 /// to implement without rc & sync, and encapsulate from calling
 /// code.
-pub trait RecordBackend<Hash>: Sync + Send + Clone + Default {
+/// TODO EMCH here we pass Hasher as parameter for convenience, but we only really need H::Out
+pub trait RecordBackend<H: Hasher>: Clone + Default {
 	/// Access recorded value, allow using the backend as a cache.
-	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>>;
+	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>>;
 	/// Record the actual value.
-	/// TODO EMCH switch to all ref or all value for param.
-	fn record(&self, child_info: &ChildInfo, key: &Hash, value: Option<DBValue>);
+	fn record(&mut self, child_info: ChildInfo, key: H::Out, value: Option<DBValue>);
 	/// Merge two record, can fail.
 	fn merge(&mut self, other: Self) -> bool;
 }
 
-#[cfg(feature = "std")]
-#[derive(Clone, Default)]
 /// Records are separated by child trie, this is needed for
 /// proof compaction.
-pub struct FullSyncRecorder<Hash>(Arc<RwLock<ChildrenMap<RecordMapTrieNodes<Hash>>>>);
+pub struct FullRecorder<H: Hasher>(ChildrenMap<RecordMapTrieNodes<H>>);
 
-#[cfg(feature = "std")]
-#[derive(Clone, Default)]
 /// Single storage for all recoded nodes (as in
 /// state db column).
 /// That this variant exists only for performance
 /// (on less map access than in `Full`), but is not strictly
 /// necessary.
-pub struct FlatSyncRecorder<Hash>(Arc<RwLock<RecordMapTrieNodes<Hash>>>);
+pub struct FlatRecorder<H: Hasher>(RecordMapTrieNodes<H>);
 
+impl<H: Hasher> Default for FlatRecorder<H> {
+	fn default() -> Self {
+		FlatRecorder(Default::default())
+	}
+}
 
-#[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RecordBackend<Hash> for FullSyncRecorder<Hash> {
-	fn get(&self, child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>> {
-		self.0.read().get(child_info).and_then(|s| (**s).get(&key).cloned())
+impl<H: Hasher> Default for FullRecorder<H> {
+	fn default() -> Self {
+		FullRecorder(Default::default())
+	}
+}
+
+impl<H: Hasher> Clone for FlatRecorder<H> {
+	fn clone(&self) -> Self {
+		FlatRecorder(self.0.clone())
+	}
+}
+
+impl<H: Hasher> Clone for FullRecorder<H> {
+	fn clone(&self) -> Self {
+		FullRecorder(self.0.clone())
+	}
+}
+
+impl<H: Hasher> RecordBackend<H> for FullRecorder<H> {
+	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>> {
+		self.0.get(child_info).and_then(|s| (**s).get(&key).cloned())
 	}
 
-	fn record(&self, child_info: &ChildInfo, key: &Hash, value: Option<DBValue>) {
-		self.0.write().entry(child_info.clone())
+	fn record(&mut self, child_info: ChildInfo, key: H::Out, value: Option<DBValue>) {
+		self.0.entry(child_info)
 			.or_default()
-			.insert(key.clone(), value.clone());
+			.insert(key, value);
 	}
 
-	fn merge(&mut self, other: Self) -> bool {
-		let mut first = self.0.write();
-		let mut second = other.0.write();
-		for (child_info, other) in std::mem::replace(&mut *second, Default::default()) {
-			match first.entry(child_info) {
+	fn merge(&mut self, mut other: Self) -> bool {
+		for (child_info, other) in std::mem::replace(&mut other.0, Default::default()) {
+			match self.0.entry(child_info) {
 				Entry::Occupied(mut entry) => {
 					for (key, value) in other.0 { 
 						match entry.get_mut().entry(key) {
@@ -325,21 +341,18 @@ impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RecordBacken
 	}
 }
 
-#[cfg(feature = "std")]
-impl<Hash: Default + Clone + Eq + sp_std::hash::Hash + Send + Sync> RecordBackend<Hash> for FlatSyncRecorder<Hash> {
-	fn get(&self, _child_info: &ChildInfo, key: &Hash) -> Option<Option<DBValue>> {
-		(**self.0.read()).get(&key).cloned()
+impl<H: Hasher> RecordBackend<H> for FlatRecorder<H> {
+	fn get(&self, _child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>> {
+		(*self.0).get(&key).cloned()
 	}
 
-	fn record(&self, _child_info: &ChildInfo, key: &Hash, value: Option<DBValue>) {
-		self.0.write().insert(key.clone(), value.clone());
+	fn record(&mut self, _child_info: ChildInfo, key: H::Out, value: Option<DBValue>) {
+		(*self.0).insert(key.clone(), value.clone());
 	}
 
-	fn merge(&mut self, other: Self) -> bool {
-		let mut first = self.0.write();
-		let mut second = other.0.write();
-		for (key, value) in std::mem::replace(&mut *second, Default::default()).0 {
-			match first.entry(key) {
+	fn merge(&mut self, mut other: Self) -> bool {
+		for (key, value) in std::mem::replace(&mut other.0, Default::default()).0 {
+			match self.0.entry(key) {
 				HEntry::Occupied(entry) => {
 					if entry.get() != &value {
 						return false;
@@ -403,30 +416,36 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 }
 
 /// Container recording trie nodes.
-#[derive(Clone)]
-pub struct RecordMapTrieNodes<Hash>(HashMap<Hash, Option<DBValue>>);
+pub struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
 
-impl<H> sp_std::default::Default for RecordMapTrieNodes<H> {
+impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {
 	fn default() -> Self {
 		RecordMapTrieNodes(Default::default())
 	}
 }
 
-impl<H> sp_std::ops::Deref for RecordMapTrieNodes<H> {
-	type Target = HashMap<H, Option<DBValue>>;
+impl<H: Hasher> Clone for RecordMapTrieNodes<H> {
+	fn clone(&self) -> Self {
+		RecordMapTrieNodes(self.0.clone())
+	}
+}
+
+
+impl<H: Hasher> sp_std::ops::Deref for RecordMapTrieNodes<H> {
+	type Target = HashMap<H::Out, Option<DBValue>>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
 }
 
-impl<H> sp_std::ops::DerefMut for RecordMapTrieNodes<H> {
+impl<H: Hasher> sp_std::ops::DerefMut for RecordMapTrieNodes<H> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
 }
 
-impl<H: Hasher> HashDBRef<H, DBValue> for RecordMapTrieNodes<H::Out> {
+impl<H: Hasher> HashDBRef<H, DBValue> for RecordMapTrieNodes<H> {
 	fn get(&self, key: &H::Out, _prefix: hash_db::Prefix) -> Option<DBValue> {
 		self.0.get(key).and_then(Clone::clone)
 	}

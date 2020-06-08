@@ -46,7 +46,7 @@ impl<T> Clone for KnownQueryPlanAndValues<T> {
 	}
 }
 
-impl<T: 'static> StorageProof for KnownQueryPlanAndValues<T> {
+impl<T> StorageProof for KnownQueryPlanAndValues<T> {
 	fn empty() -> Self {
 		KnownQueryPlanAndValues(Default::default(), PhantomData)
 	}
@@ -56,21 +56,20 @@ impl<T: 'static> StorageProof for KnownQueryPlanAndValues<T> {
 	}
 }
 
-#[cfg(feature = "std")]
-impl<T> RegStorageProof<TrieHash<T>> for KnownQueryPlanAndValues<T>
+impl<T> RegStorageProof<T::Hash> for KnownQueryPlanAndValues<T>
 	where
-		T: 'static + TrieConfiguration,
+		T: TrieConfiguration,
 		TrieHash<T>: Decode,
 {
 	const INPUT_KIND: InputKind = InputKind::QueryPlan;
 
-	type RecordBackend = super::FullSyncRecorder<TrieHash<T>>;
+	type RecordBackend = super::FullRecorder<T::Hash>;
 
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self> {
 		if let Input::QueryPlan(input_children) = input {
 			let mut result = ChildrenProofMap::default();
 			let mut root_hash = TrieHash::<T>::default();
-			for (child_info, set) in recorder.0.read().iter() {
+			for (child_info, set) in recorder.0.iter() {
 				let child_info_proof = child_info.proof_info();
 				if let Some((root, keys)) = input_children.get(&child_info_proof) {
 					// Layout h is the only supported one at the time being
@@ -94,7 +93,7 @@ impl<T> RegStorageProof<TrieHash<T>> for KnownQueryPlanAndValues<T>
 
 impl<T> CheckableStorageProof for KnownQueryPlanAndValues<T>
 	where
-		T: 'static + TrieConfiguration,
+		T: TrieConfiguration,
 		TrieHash<T>: Decode,
 {
 	fn verify(self, input: &Input) -> Result<bool> {

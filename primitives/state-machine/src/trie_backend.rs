@@ -34,8 +34,9 @@ use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, R, P> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
+	_ph: PhantomData<(R, P)>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
@@ -101,21 +102,30 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> std::fmt::Debug for TrieBackend<S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher, R, P> std::fmt::Debug for TrieBackend<S, H, R, P> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "TrieBackend")
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
+impl<S, H, R, P> Backend<H> for TrieBackend<S, H, R, P> where
+	H: Hasher,
+	S: TrieBackendStorage<H>,
 	H::Out: Ord + Codec,
+	R: RegStorageProof<H::Out>,
+	P: BackendStorageProof,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type StorageProof = sp_trie::TrieNodesStorageProof<H, sp_trie::ProofFlatDefault>;
-	type StorageProofReg = sp_trie::TrieNodesStorageProof<H, sp_trie::ProofFlatDefault>;
-	type ProofRegBackend = crate::proving_backend::ProvingBackend<S, H, <Self::StorageProofReg as RegStorageProof<H>>::RecordBackend>;
-	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H>;
+	type StorageProofReg = R,
+	type StorageProof = P,
+	type ProofRegBackend = crate::proving_backend::ProvingBackend<
+		S,
+		H,
+		<Self::StorageProofReg as RegStorageProof<H>>::RecordBackend,
+		Self::StorageProof,
+	>;
+	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H, R, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)
