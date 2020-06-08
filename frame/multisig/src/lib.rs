@@ -117,7 +117,7 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Utility {
+	trait Store for Module<T: Trait> as Multisig {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
@@ -205,6 +205,15 @@ decl_module! {
 
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
+
+		#[weight(1_000_000_000)]
+		fn on_runtime_upgrade() {
+			// Utility.Multisigs -> Multisig.Multisigs
+			use frame_support::migration::{StorageIterator, put_storage_value};
+			for (hash, multisig) in StorageIterator::<Hash, Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>::new(b"Utility", b"Multisigs").drain() {
+				put_storage_value(b"Multisig", b"Multisigs", &hash, multisig);
+			}
+		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
