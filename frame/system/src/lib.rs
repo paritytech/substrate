@@ -866,7 +866,7 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		A::successful_origin()
+		L::successful_origin()
 	}
 }
 
