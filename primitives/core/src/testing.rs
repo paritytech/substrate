@@ -243,11 +243,19 @@ impl crate::traits::BareCryptoStore for KeyStore {
 
 	fn sr25519_vrf_sign(
 		&self,
-		_key_type: KeyTypeId,
-		_public: &sr25519::Public,
-		_transcript: VRFTranscriptData,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
 	) -> Result<VRFSignature, Error> {
-		Err(Error::Unavailable)
+		let transcript = make_transcript(transcript_data);
+		let pair = self.sr25519_key_pair(key_type, public)
+			.ok_or(Error::PairNotFound("Not found".to_owned()))?;
+
+		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
+		Ok(VRFSignature {
+			output: inout.to_output().to_bytes().to_vec(),
+			proof: proof.to_bytes().to_vec(),
+		})
 	}
 }
 
@@ -380,6 +388,7 @@ mod tests {
 	use super::*;
 	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
+	use crate::vrf::VRFTranscriptValue;
 
 	#[test]
 	fn store_key_and_extract() {
@@ -410,5 +419,43 @@ mod tests {
 		let public_keys = store.read().keys(SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
+	}
+
+	#[test]
+	fn vrf_sign() {
+		let store = KeyStore::new();
+
+		let secret_uri = "//Alice";
+		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		let transcript_data = VRFTranscriptData {
+			label: b"Test",
+			items: vec![
+				("one", VRFTranscriptValue::U64(1)),
+				("two", VRFTranscriptValue::U64(2)),
+				("three", VRFTranscriptValue::Bytes("test".as_bytes())),
+			]
+		};
+
+		let result = store.read().sr25519_vrf_sign(
+			SR25519,
+			&key_pair.public(),
+			transcript_data.clone(),
+		);
+		assert!(result.is_err());
+
+		store.write().insert_unknown(
+			SR25519,
+			secret_uri,
+			key_pair.public().as_ref(),
+		).expect("Inserts unknown key");
+
+		let result = store.read().sr25519_vrf_sign(
+			SR25519,
+			&key_pair.public(),
+			transcript_data,
+		);
+
+		assert!(result.is_ok());
 	}
 }
