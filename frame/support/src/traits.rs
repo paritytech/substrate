@@ -122,6 +122,7 @@ macro_rules! impl_filter_stack {
 	($target:ty, $base:ty, $call:ty, $module:ident) => {
 		#[cfg(feature = "std")]
 		mod $module {
+			#[allow(unused_imports)]
 			use super::*;
 			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
 
@@ -155,6 +156,7 @@ macro_rules! impl_filter_stack {
 
 		#[cfg(not(feature = "std"))]
 		mod $module {
+			#[allow(unused_imports)]
 			use super::*;
 			use $crate::traits::{swap, take, RefCell, Vec, Box, Filter, FilterStack};
 
