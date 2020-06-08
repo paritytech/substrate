@@ -293,7 +293,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn rpc_ws(&self, default_port: u16)
-			-> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+			-> $crate::Result<std::option::Option<std::net::SocketAddr>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_ws(default_port)),*
 				}
