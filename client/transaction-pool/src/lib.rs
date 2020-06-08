@@ -331,7 +331,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_at(&self, at: NumberFor<Self::Block>) -> PolledIterator<PoolApi> {
 		if self.ready_poll.lock().updated_at() >= at {
-			log::trace!(target: "txpool", "Transaction pool is already processed block  #{}", at);
+			log::trace!(target: "txpool", "Transaction pool already processed block  #{}", at);
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
 			return Box::pin(futures::future::ready(iterator));
 		}
