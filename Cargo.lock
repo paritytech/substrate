@@ -4201,6 +4201,7 @@ dependencies = [
 name = "pallet-indices"
 version = "2.0.0-rc2"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
