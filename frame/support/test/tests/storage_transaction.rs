@@ -16,7 +16,9 @@
 // limitations under the License.
 
 use codec::{Encode, Decode, EncodeLike};
-use frame_support::{StorageMap, StorageValue, storage::with_transaction};
+use frame_support::{
+	StorageMap, StorageValue, storage::{with_transaction, TransactionOutcome::*},
+};
 use sp_io::TestExternalities;
 
 pub trait Trait {
@@ -43,12 +45,12 @@ fn storage_transaction_basic_commit() {
 		assert_eq!(Value::get(), 0);
 		assert!(!Map::contains_key("val0"));
 
-		let _: Result<(), ()> = with_transaction(|| {
+		with_transaction(|| {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			Ok(())
+			((), Commit)
 		});
 
 		assert_eq!(Value::get(), 99);
@@ -63,12 +65,12 @@ fn storage_transaction_basic_rollback() {
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
 
-		let _: Result<(), ()> = with_transaction(|| {
+		with_transaction(|| {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			Err(())
+			((), Rollback)
 		});
 
 		assert_eq!(Value::get(), 0);
@@ -82,12 +84,12 @@ fn storage_transaction_rollback_then_commit() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		let _: Result<(), ()> = with_transaction(|| {
+		with_transaction(|| {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
-			let _: Result<(), ()> = with_transaction(|| {
+			with_transaction(|| {
 				Value::set(3);
 				Map::insert("val1", 3);
 				Map::insert("val2", 3);
@@ -98,7 +100,7 @@ fn storage_transaction_rollback_then_commit() {
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				Err(())
+				((), Rollback)
 			});
 
 			assert_eq!(Value::get(), 2);
@@ -106,7 +108,7 @@ fn storage_transaction_rollback_then_commit() {
 			assert_eq!(Map::get("val2"), 2);
 			assert_eq!(Map::get("val3"), 0);
 
-			Ok(())
+			((), Commit)
 		});
 
 		assert_eq!(Value::get(), 2);
@@ -122,12 +124,12 @@ fn storage_transaction_commit_then_rollback() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		let _: Result<(), ()> = with_transaction(|| {
+		with_transaction(|| {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
-			let _: Result<(), ()> = with_transaction(|| {
+			with_transaction(|| {
 				Value::set(3);
 				Map::insert("val1", 3);
 				Map::insert("val2", 3);
@@ -138,7 +140,7 @@ fn storage_transaction_commit_then_rollback() {
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				Ok(())
+				((), Commit)
 			});
 
 			assert_eq!(Value::get(), 3);
@@ -146,7 +148,7 @@ fn storage_transaction_commit_then_rollback() {
 			assert_eq!(Map::get("val2"), 3);
 			assert_eq!(Map::get("val3"), 3);
 
-			Err(())
+			((), Rollback)
 		});
 
 		assert_eq!(Value::get(), 1);
