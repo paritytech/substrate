@@ -1465,12 +1465,12 @@ pub mod schedule {
 
 	/// The highest priority. We invert the value so that normal sorting will place the highest
 	/// priority at the beginning of the list.
-	pub const HIGHEST_PRORITY: Priority = 0;
+	pub const HIGHEST_PRIORITY: Priority = 0;
 	/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
 	/// if it breaches the `MaximumWeight` limitation.
 	pub const HARD_DEADLINE: Priority = 63;
 	/// The lowest priority. Most stuff should be around here.
-	pub const LOWEST_PRORITY: Priority = 255;
+	pub const LOWEST_PRIORITY: Priority = 255;
 
 	/// A type that can be used as a scheduler.
 	pub trait Anon<BlockNumber, Call> {
