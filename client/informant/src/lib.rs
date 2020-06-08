@@ -57,7 +57,7 @@ impl<T: TransactionPool> TransactionPoolAndMaybeMallogSizeOf for T {}
 #[cfg(not(target_os = "unknown"))]
 impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for T {}
 
-/// Creates an informant in the form of a `Future` that must be polled regularly.
+/// Builds the informant and returns a `Future` that drives the informant.
 pub fn build<B: BlockT, C>(
 	client: Arc<C>,
 	network_status_stream_builder: impl FnOnce(
