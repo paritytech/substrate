@@ -376,8 +376,8 @@ impl OverlayedChanges {
 	}
 
 	/// Get an optional iterator over all child changes stored under the supplied key.
-	pub fn child_changes(&self, key: &[u8]
-	) -> Option<(impl Iterator<Item=(&StorageKey, &OverlayedValue)>, &ChildInfo)> {
+	pub fn child_changes(&self, key: &[u8])
+		-> Option<(impl Iterator<Item=(&StorageKey, &OverlayedValue)>, &ChildInfo)> {
 		self.children.get(key).map(|(overlay, info)| (overlay.changes(), info))
 	}
 
