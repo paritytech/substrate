@@ -246,6 +246,9 @@ pub trait BackendStorageProof<H: Hasher>: Codec + StorageProof {
 	type StorageProofReg: RegStorageProof<H>
 		+ MergeableStorageProof
 		+ Into<Self>; // TODO EMCH consider removing this conv or make it a try into??
+
+	/// To check proof over a trie backend.
+	fn trie_backend_nodes(self) -> Result<impl Iterator<Vec<u8>>>;
 }
 
 /// Trait for proofs that can use to create a partial trie backend.
@@ -260,7 +263,7 @@ pub trait CheckableStorageProof: Codec + StorageProof {
 /// to implement without rc & sync, and encapsulate from calling
 /// code.
 /// TODO EMCH here we pass Hasher as parameter for convenience, but we only really need H::Out
-pub trait RecordBackend<H: Hasher>: Clone + Default {
+pub trait RecordBackend<H: Hasher>: Send + Sync + Clone + Default {
 	/// Access recorded value, allow using the backend as a cache.
 	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>>;
 	/// Record the actual value.

@@ -23,7 +23,7 @@ use codec::{Decode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
-	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
+	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with, RecordBackendFor,
 	record_all_keys, StorageProofKind, TrieNodesStorageProof as StorageProof, ProofInputKind,
 	ProofInput, RecordMapTrieNodes, RecordBackend, RegStorageProof, ProofFlatDefault, BackendStorageProof,
 };
@@ -120,10 +120,9 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 pub struct ProvingBackend<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	R: RegStorageProof<H::Out>,
-	P,
+	P: BackendStorageProof<H>,
 	> (
-	pub TrieBackend<ProofRecorderBackend<S, H, R::RecordBackend>, H>,
+	pub TrieBackend<ProofRecorderBackend<S, H, RecordBackendFor<P, H>>, H, P>,
 	PhantomData<P>,
 );
 
@@ -134,22 +133,22 @@ pub struct ProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher, R: RecordBa
 	_ph: PhantomData<H>,
 }
 
-impl<'a, S, H, R, P> ProvingBackend<&'a S, H, R, P>
+impl<'a, S, H, P> ProvingBackend<&'a S, H, P>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Codec,
-		R: RegStorageProof<H::Out>,
+		P: BackendStorageProof<H>,
 {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
+	pub fn new(backend: &'a TrieBackend<S, H, P>) -> Self {
 		let proof_recorder = Default::default();
 		Self::new_with_recorder(backend, proof_recorder)
 	}
 
 	fn new_with_recorder(
-		backend: &'a TrieBackend<S, H>,
-		proof_recorder: R,
+		backend: &'a TrieBackend<S, H, P>,
+		proof_recorder: RecordBackendFor<P, H>,
 	) -> Self {
 		let essence = backend.essence();
 		let root = essence.root().clone();
@@ -161,18 +160,18 @@ impl<'a, S, H, R, P> ProvingBackend<&'a S, H, R, P>
 	}
 }
 
-impl<S, H, R, P> ProvingBackend<S, H, R, P>
+impl<S, H, P> ProvingBackend<S, H, P>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Codec,
-		R: RegStorageProof<H::Out>,
+		P: BackendStorageProof<H>,
 {
 	/// Create new proving backend with the given recorder.
 	pub fn from_backend_with_recorder(
 		backend: S,
 		root: H::Out,
-		proof_recorder: R,
+		proof_recorder: RecordBackendFor<P, H>,
 	) -> Self {
 		let recorder = ProofRecorderBackend {
 			backend,
@@ -183,7 +182,7 @@ impl<S, H, R, P> ProvingBackend<S, H, R, P>
 
 	/// Extract current recording state.
 	/// This is sharing a rc over a sync reference.
-	pub fn extract_recorder(&self) -> R {
+	pub fn extract_recorder(&self) -> RecordBackendFor<P, H> {
 		self.0.backend_storage().proof_recorder.clone()
 	}
 }
@@ -203,46 +202,43 @@ impl<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> TrieBackendStorag
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, R: RegStorageProof<H::Out>, P> std::fmt::Debug
-	for ProvingBackend<S, H, R, P>
+impl<S: TrieBackendStorage<H>, H: Hasher, P: BackendStorageProof<H>> std::fmt::Debug
+	for ProvingBackend<S, H, P>
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
 	}
 }
 
-impl<S, H, R, P> ProofRegBackend<H> for ProvingBackend<S, H, R, P>
+impl<S, H, P> ProofRegBackend<H> for ProvingBackend<S, H, P>
 	where
 		S: TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: Ord + Codec,
-		R: RegStorageProof<H::Out>,
-		P: BackendStorageProof,
+		P: BackendStorageProof<H>,
 {
 	type State = <StorageProof::<H, ProofFlatDefault> as RegStorageProof<H>>::RecordBackend;
 
-	fn extract_proof(&self, input: ProofInput) -> Self::StorageProofReg {
-		StorageProof::<H, ProofFlatDefault>::extract_proof(
+	fn extract_proof(&self, input: ProofInput) -> <Self::StorageProof as BackendStorageProof<H>>::StorageProofReg {
+		<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg::<H>::extract_proof(
 			&self.0.essence().backend_storage().proof_recorder,
 			input,
 		)
 	}
 }
 
-impl<S, H, R, P> Backend<H> for ProvingBackend<S, H, R, P>
+impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
-		R: RegStorageProof<H::Out>,
-		P: BackendStorageProof,
+		P: BackendStorageProof<H>,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type StorageProofReg = R;
 	type StorageProof = P;
 	type ProofRegBackend = Self;
-	type ProofCheckBackend = TrieBackend<MemoryDB<H>, H>;
+	type ProofCheckBackend = TrieBackend<MemoryDB<H>, H, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.trie_backend.storage(key)
@@ -348,10 +344,10 @@ impl<S, H, R, P> Backend<H> for ProvingBackend<S, H, R, P>
 }
 
 /// Create flat proof check backend.
-pub fn create_flat_proof_check_backend<H>(
+pub fn create_flat_proof_check_backend<H, P>(
 	root: H::Out,
-	proof: StorageProof<H, ProofFlatDefault>,
-) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
+	proof: P,
+) -> Result<TrieBackend<MemoryDB<H>, H, P>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
@@ -366,10 +362,10 @@ where
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend<H>(
+pub fn create_proof_check_backend<H, P>(
 	root: H::Out,
-	proof: StorageProof<H, ProofFlatDefault>,
-) -> Result<TrieBackend<ChildrenProofMap<MemoryDB<H>>, H>, Box<dyn Error>>
+	proof: P,
+) -> Result<TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,

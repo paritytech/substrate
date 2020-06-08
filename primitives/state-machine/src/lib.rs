@@ -93,7 +93,7 @@ pub type ChangesTrieTransaction<H, N> = (
 );
 
 /// Trie backend with in-memory storage.
-pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
+pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H, sp_trie::SimpleProof>;
 
 /// Strategy for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]

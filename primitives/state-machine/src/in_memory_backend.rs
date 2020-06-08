@@ -59,7 +59,7 @@ where
 }
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H: Hasher>() -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem<H: Hasher, P>() -> TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -69,7 +69,7 @@ where
 	backend
 }
 
-impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -133,7 +133,7 @@ where
 	}
 }
 
-impl<H: Hasher> Clone for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> Clone for TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -142,7 +142,7 @@ where
 	}
 }
 
-impl<H: Hasher> Default for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> Default for TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -151,8 +151,8 @@ where
 	}
 }
 
-impl<H: Hasher> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>>
-	for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>>
+	for TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -163,7 +163,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<Storage> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> From<Storage> for TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -175,7 +175,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<BTreeMap<StorageKey, StorageValue>> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> From<BTreeMap<StorageKey, StorageValue>> for TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -186,8 +186,8 @@ where
 	}
 }
 
-impl<H: Hasher> From<Vec<(Option<ChildInfo>, StorageCollection)>>
-	for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher, P> From<Vec<(Option<ChildInfo>, StorageCollection)>>
+	for TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {

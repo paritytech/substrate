@@ -20,7 +20,7 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
-	ChildrenProofMap, ProofInput};
+	ChildrenProofMap, ProofInput, BackendStorageProof};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_trie::RegStorageProof;
 use crate::backend::{ProofRegStateFor};
@@ -32,18 +32,20 @@ use crate::{
 };
 use sp_trie::MemoryDB;
 use parking_lot::RwLock;
+use std::marker::PhantomData;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, R, P> {
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, P> {
 	pub (crate) essence: TrieBackendEssence<S, H>,
-	_ph: PhantomData<(R, P)>,
+	_ph: PhantomData<P>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
+impl<S: TrieBackendStorage<H>, H: Hasher, P> TrieBackend<S, H, P> where H::Out: Codec {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root, None),
+			_ph: PhantomData,
 		}
 	}
 
@@ -53,6 +55,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 		let register_roots = Some(RwLock::new(Default::default()));
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root, register_roots),
+			_ph: PhantomData,
 		}
 	}
 
@@ -102,30 +105,27 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, R, P> std::fmt::Debug for TrieBackend<S, H, R, P> {
+impl<S: TrieBackendStorage<H>, H: Hasher, P> std::fmt::Debug for TrieBackend<S, H, P> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "TrieBackend")
 	}
 }
 
-impl<S, H, R, P> Backend<H> for TrieBackend<S, H, R, P> where
+impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 	H: Hasher,
 	S: TrieBackendStorage<H>,
 	H::Out: Ord + Codec,
-	R: RegStorageProof<H::Out>,
-	P: BackendStorageProof,
+	P: BackendStorageProof<H>,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
-	type StorageProofReg = R,
-	type StorageProof = P,
+	type StorageProof = P;
 	type ProofRegBackend = crate::proving_backend::ProvingBackend<
 		S,
 		H,
-		<Self::StorageProofReg as RegStorageProof<H>>::RecordBackend,
 		Self::StorageProof,
 	>;
-	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H, R, P>;
+	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)
@@ -301,13 +301,25 @@ impl<S, H, R, P> Backend<H> for TrieBackend<S, H, R, P> where
 	}
 }
 
-impl<H: Hasher> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H> where
-	H::Out: Ord + Codec,
+impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H, P>
+	where
+		H::Out: Ord + Codec,
+		P: BackendStorageProof<H>,
 {
 	fn create_proof_check_backend(
 		root: H::Out,
 		proof: Self::StorageProof,
 	) -> Result<Self, Box<dyn crate::Error>> {
+		use hash_db::HashDB;
+		let mut mem_db = MemoryDB::new();
+		for node in proof.trie_backend_nodes()? {
+			let hash = H::hash(node.as_ref();
+			mem_db.emplace(key, hash_db::EMPTY_PREFIX, node);
+		}
+		if !mem_db.contains(key, hash_db::EMPTY_PREFIX) {
+			return Err("No matching root for proof".into());
+		}
+		Ok(TrieBackend::new(mem_db, root))
 	}
 }
 	

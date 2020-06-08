@@ -24,7 +24,7 @@ use crate::{
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
-use sp_trie::ProofInput;
+use sp_trie::{ProofInput, BackendStorageProof};
 
 /// Access the state of the proof backend of a backend.
 pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
@@ -41,7 +41,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	type Transaction: Consolidate + Default + Send;
 
 	/// The actual proof produced.
-	type StorageProof: sp_trie::BackendStorageProof;
+	type StorageProof: BackendStorageProof<H>;
 //		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
 
 	/// Type of proof backend.
@@ -267,7 +267,7 @@ pub trait ProofRegBackend<H>: crate::backend::Backend<H>
 	type State: Default + Send + Sync + Clone;
 
 	/// Extract proof when run.
-	fn extract_proof(&self, input: ProofInput) -> Self::StorageProofReg;
+	fn extract_proof(&self, input: ProofInput) -> <Self::StorageProof as BackendStorageProof<H>>::StorageProofReg;
 }
 
 /// Backend used to produce proof.
@@ -365,6 +365,12 @@ impl<'a, T, H> Backend<H> for &'a T
 
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
+	}
+
+	fn from_reg_state(self, _previous: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+		// cannot move out of reference, consider cloning or
+		// if needed.
+		None
 	}
 }
 
