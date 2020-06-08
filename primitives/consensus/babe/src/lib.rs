@@ -23,15 +23,16 @@
 pub mod digests;
 pub mod inherents;
 
-pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH
-};
 pub use merlin::Transcript;
+pub use sp_consensus_vrf::schnorrkel::{
+	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
-use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::Header};
-use crate::digests::{NextEpochDescriptor, NextConfigDescriptor};
+
+use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;

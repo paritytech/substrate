@@ -21,34 +21,33 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
-use pallet_timestamp;
-
-use sp_std::{result, prelude::*};
+use codec::{Decode, Encode};
 use frame_support::{
-	decl_storage, decl_module,
-	traits::{FindAuthor, Get, Randomness as RandomnessT, KeyOwnerProofSystem},
+	decl_module, decl_storage,
+	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
 	weights::Weight,
 	Parameter,
 };
 use frame_system::{ensure_none, ensure_signed};
-use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, KeyTypeId};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
-use sp_staking::{
-	SessionIndex,
-	offence::{Offence, Kind},
-};
 use sp_application_crypto::Public;
+use sp_runtime::traits::{Hash, IsMember, One, SaturatedConversion, Saturating};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, KeyTypeId, Perbill};
+use sp_staking::{
+	offence::{Kind, Offence},
+	SessionIndex,
+};
+use sp_std::{prelude::*, result};
+use sp_timestamp::OnTimestampSet;
 
-use codec::{Encode, Decode};
-use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber, EquivocationProof,
-	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, NextConfigDescriptor, PreDigest},
+	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
+	inherents::{BabeInherentData, INHERENT_IDENTIFIER},
+	BabeAuthorityWeight, ConsensusLog, EquivocationProof, SlotNumber, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
-pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
+use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent};
+
+pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
 #[cfg(all(feature = "std", test))]
 mod tests;
