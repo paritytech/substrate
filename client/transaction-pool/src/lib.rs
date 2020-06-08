@@ -440,11 +440,10 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 	block_id: BlockId<Block>,
 	api: &Api,
 	pool: &sc_transaction_graph::Pool<Api>,
-	pruned_log: &mut HashSet<ExtrinsicHash<Api>>,
-) {
+) -> Vec<ExtrinsicHash<Api>> {
 	// We don't query block if we won't prune anything
 	if pool.validated_pool().status().is_empty() {
-		return;
+		return Vec::new();
 	}
 
 	let hashes = api.block_body(&block_id).await
@@ -457,11 +456,11 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 		.map(|tx| pool.hash_of(&tx))
 		.collect::<Vec<_>>();
 
-	pruned_log.extend(&hashes);
-
 	if let Err(e) = pool.prune_known(&block_id, &hashes) {
 		log::error!("Cannot prune known in the pool {:?}!", e);
 	}
+
+	hashes
 }
 
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
@@ -505,33 +504,25 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					// If there is a tree route, we use this to prune known tx based on the enacted
 					// blocks.
 					if let Some(ref tree_route) = tree_route {
-						for enacted_log in future::join_all(
+						future::join_all(
 							tree_route
 								.enacted()
 								.iter()
-								.map(|enacted| {
-									let api = api.clone();
-									let pool = pool.clone();
-									async move {
-										let mut log = HashSet::<ExtrinsicHash<PoolApi>>::new();
-										prune_known_txs_for_block(
-											BlockId::Hash(enacted.hash.clone()),
-											&*api,
-											&*pool,
-											&mut log,
-										).await;
-										log
-									}
-								}
-							)
-						).await {
+								.map(|h|
+									prune_known_txs_for_block(
+										BlockId::Hash(h.hash.clone()),
+										&*api,
+										&*pool,
+									),
+								),
+						).await.into_iter().for_each(|enacted_log|{
 							pruned_log.extend(enacted_log);
-						}
+						})
 					}
 
 					// If this is a new best block, we need to prune its transactions from the pool.
 					if is_new_best {
-						prune_known_txs_for_block(id.clone(), &*api, &*pool, &mut pruned_log).await;
+						pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
 					}
 
 					if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
