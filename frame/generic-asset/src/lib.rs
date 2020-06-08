@@ -848,13 +848,13 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 	) -> Option<(T::Balance, WithdrawReasons)> {
 		Self::locks(who).into_iter()
-		.find_map(|l| {
-			if l.id == id {
-				Some((l.amount, l.reasons.into()))
-			} else {
-				None
-			}
-		})
+			.find_map(|l| {
+				if l.id == id {
+					Some((l.amount, l.reasons.into()))
+				} else {
+					None
+				}
+			})
 	}
 
 	fn set_lock(

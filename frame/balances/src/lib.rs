@@ -1268,13 +1268,13 @@ where
 		who: &T::AccountId,
 	) -> Option<(T::Balance, WithdrawReasons)> {
 		Self::locks(who).into_iter()
-		.find_map(|l| {
-			if l.id == id {
-				Some((l.amount, l.reasons.into()))
-			} else {
-				None
-			}
-		})
+			.find_map(|l| {
+				if l.id == id {
+					Some((l.amount, l.reasons.into()))
+				} else {
+					None
+				}
+			})
 	}
 
 	// Set a lock on the balance of `who`.
