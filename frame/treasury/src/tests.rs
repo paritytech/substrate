@@ -688,3 +688,9 @@ fn cancel_and_refund() {
 	// TODO
 	assert!(false);
 }
+
+#[test]
+fn expire_and_cancel() {
+	// TODO
+	assert!(false);
+}

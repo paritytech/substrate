@@ -184,6 +184,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Minimum value for a bounty.
 	type BountyValueMinimum: Get<BalanceOf<Self>>;
+
+	/// Bounty duration in blocks.
+	type BountyDuration: Get<Self::BlockNumber>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -254,7 +257,9 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	/// The bounty is approved and waiting to become active at next spend period.
 	Approved,
 	/// The bounty is active and waiting to be awarded.
-	Active,
+	Active {
+		expires: BlockNumber,
+	},
 	/// The bounty is awarded and waiting to released after a delay.
 	PendingPayout {
 		/// The beneficiary of the bounty.
@@ -262,6 +267,15 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 		/// When the bounty can be claimed.
 		unlock_at: BlockNumber,
 	},
+}
+
+impl<AccountId, BlockNumber> BountyStatus<AccountId, BlockNumber> {
+	pub fn is_active(&self) -> bool {
+		match self {
+			BountyStatus::Active { .. } => true,
+			_ => false,
+		}
+	}
 }
 
 decl_storage! {
@@ -770,7 +784,7 @@ decl_module! {
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-				ensure!(bounty.status == BountyStatus::Active, Error::<T>::UnexpectedStatus);
+				ensure!(bounty.status.is_active(), Error::<T>::UnexpectedStatus);
 				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
 				bounty.status = BountyStatus::PendingPayout {
 					beneficiary: beneficiary.clone(),
@@ -812,8 +826,17 @@ decl_module! {
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
-				ensure!(bounty.status == BountyStatus::Active, Error::<T>::UnexpectedStatus);
-				ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+
+				match bounty.status {
+					BountyStatus::Active { expires } => {
+						let now = system::Module::<T>::block_number();
+						if expires < now {
+							// only curator can cancel unexpired bounty
+							ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+						}
+					},
+					_ => return Err(Error::<T>::UnexpectedStatus.into()),
+				}
 
 				let bounty_account = Self::bounty_account_id(bounty_id);
 
@@ -986,7 +1009,9 @@ impl<T: Trait> Module<T> {
 						if bounty.value <= budget_remaining {
 							budget_remaining -= bounty.value;
 
-							bounty.status = BountyStatus::Active;
+							// we trust bounty duration is configured with a sane value
+							let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
+							bounty.status = BountyStatus::Active { expires };
 
 							// return their deposit.
 							let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
@@ -1079,7 +1104,9 @@ impl<T: Trait> Module<T> {
 				Ok(())
 			})?;
 
-			(0.into(), BountyStatus::Active, true)
+			// we trust bounty duration is configured with a sane value
+			let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
+			(0.into(), BountyStatus::Active { expires }, true)
 		} else {
 			// reserve deposit for new bounty
 			let bond = T::BountyDepositBase::get()
