@@ -684,7 +684,7 @@ fn create_sub_bounty() {
 }
 
 #[test]
-fn contribute_bounty_and_refund() {
+fn cancel_and_refund() {
 	// TODO
 	assert!(false);
 }
