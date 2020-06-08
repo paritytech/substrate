@@ -33,6 +33,10 @@ use crate::storage::StorageMap;
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 
+/// Re-expected for the macro.
+#[doc(hidden)]
+pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
+
 /// Simple trait for providing a filter over a reference to some type.
 pub trait Filter<T> {
 	/// Determine if a given value should be allowed through the filter (returns `true`) or not.
@@ -64,7 +68,8 @@ pub trait FilterStack<T>: Filter<T> {
 /// Guard type for pushing a constraint to a `FilterStack` and popping when dropped.
 pub struct FilterStackGuard<F: FilterStack<T>, T>(PhantomData<(F, T)>);
 
-/// Guard type for pushing a constraint to a `FilterStack` and popping when dropped.
+/// Guard type for clearing all pushed constraints from a `FilterStack` and reinstating them when
+/// dropped.
 pub struct ClearFilterGuard<F: FilterStack<T>, T>(Option<F::Stack>, PhantomData<T>);
 
 impl<F: FilterStack<T>, T> FilterStackGuard<F, T> {
@@ -111,10 +116,6 @@ impl<T> InstanceFilter<T> for () {
 	fn filter(&self, _: &T) -> bool { true }
 	fn is_superset(&self, _o: &Self) -> bool { true }
 }
-
-/// Re-expected for the macro.
-#[doc(hidden)]
-pub use sp_std::{mem::{swap, take}, cell::RefCell, vec::Vec, boxed::Box};
 
 #[macro_export]
 macro_rules! impl_filter_stack {
