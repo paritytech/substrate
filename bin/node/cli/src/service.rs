@@ -490,7 +490,7 @@ mod tests {
 					service.transaction_pool().maintain(
 						ChainEvent::NewBlock {
 							is_new_best: true,
-							id: parent_id.clone(),
+							hash: parent_header.hash(),
 							tree_route: None,
 							header: parent_header.clone(),
 						},
