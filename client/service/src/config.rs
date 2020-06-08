@@ -206,7 +206,11 @@ pub enum BasePath {
 }
 
 impl BasePath {
-	/// Create a temporary directory prefixed with "substrate" and use it as base path.
+	/// Create a `BasePath` instance using a temporary directory prefixed with "substrate" and use
+	/// it as base path.
+	///
+	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
+	/// instance is dropped.
 	#[cfg(not(target_os = "unknown"))]
 	pub fn new_temp_dir() -> io::Result<BasePath> {
 		Ok(BasePath::Temporary(
@@ -214,7 +218,10 @@ impl BasePath {
 		))
 	}
 
-	/// Create a base path based on an existing path on disk.
+	/// Create a `BasePath` instance based on an existing path on disk.
+	///
+	/// Note: this function will not ensure that the directory exist nor create the directory. It
+	/// will also not delete the directory when the instance is dropped.
 	pub fn new<P: AsRef<Path>>(path: P) -> BasePath {
 		BasePath::Permanenent(path.as_ref().to_path_buf())
 	}
