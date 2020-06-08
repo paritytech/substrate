@@ -22,6 +22,8 @@ sp-core = { version = "2.0.0-rc2", default-features = false, path = "../../primi
 frame-support = { version = "2.0.0-rc2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc2", default-features = false, path = "../system" }
 
+frame-benchmarking = { version = "2.0.0-rc2", default-features = false, path = "../benchmarking", optional = true }
+
 [dev-dependencies]
 pallet-balances = { version = "2.0.0-rc2", path = "../balances" }
 
@@ -37,4 +39,8 @@ std = [
 	"frame-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
 ]
