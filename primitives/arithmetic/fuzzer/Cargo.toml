@@ -33,5 +33,5 @@ name = "rational128"
 path = "src/rational128.rs"
 
 [[bin]]
-name = "fixed"
-path = "src/fixed.rs"
+name = "fixed_point"
+path = "src/fixed_point.rs"
