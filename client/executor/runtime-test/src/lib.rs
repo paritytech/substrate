@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "strict", deny(warnings))]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]

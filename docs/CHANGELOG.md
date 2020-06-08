@@ -6,9 +6,30 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc2 -> 2.0.0-rc3
+
+Runtime
+-------
+
+* Introduce stacked filtering (#6273)
+* Allow "anonymous" proxied accounts (#6236)
+* Allow over-weight collective proposals to be closed (#6163)
+* Fix Election when ForceNone V1 (#6166)
+
+Client
+------
+
+* Make transaction pool prune transactions only of canonical blocks (#6123)
+* Rename all the election operations (#6245)
+* Sentry nodes and validator nodes also imply reserved (#6251)
+* Fix peerset not filtering incoming connections in reserved-only (#6249)
+* Use Subscription Manager from `jsonrpc-pubsub` (#6208)
+* Add a Substrate networking Grafana dashboard template (#6171)
+* Add subkey inspect-node-key (#6153)
+
 ## 2.0.0-rc1 -> 2.0.0-rc2
 
-
+(nothing of note)
 
 ## 2.0.0-alpha.8 -> 2.0.0-rc1
 

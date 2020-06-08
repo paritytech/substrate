@@ -166,7 +166,7 @@ mod tests {
 	use super::*;
 	use std::sync::Arc;
 	use sc_network::{Multiaddr, PeerId};
-	use substrate_test_runtime_client::runtime::Block;
+	use substrate_test_runtime_client::{TestClient, runtime::Block};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 	use sc_client_api::ExecutorProvider;
@@ -183,7 +183,9 @@ mod tests {
 		}
 	}
 
-	struct TestPool(BasicPool<FullChainApi<substrate_test_runtime_client::TestClient, Block>, Block>);
+	struct TestPool(
+		BasicPool<FullChainApi<TestClient, Block>, Block>
+	);
 
 	impl sp_transaction_pool::OffchainSubmitTransaction<Block> for TestPool {
 		fn submit_at(
@@ -200,8 +202,8 @@ mod tests {
 
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
-		// given
 		let _ = env_logger::try_init();
+
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(TestPool(BasicPool::new(
 			Default::default(),
