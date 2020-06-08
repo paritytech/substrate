@@ -3497,6 +3497,7 @@ dependencies = [
  "pallet-im-online",
  "pallet-indices",
  "pallet-membership",
+ "pallet-multisig",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-proxy",
@@ -4235,6 +4236,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-multisig"
+version = "2.0.0-rc2"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-nicks"
 version = "2.0.0-rc2"
 dependencies = [
@@ -4298,6 +4315,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-utility",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -6754,10 +6772,12 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.10.2",
+ "sc-block-builder",
  "sc-client-api",
  "sc-transaction-graph",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-keyring",
  "sp-runtime",
