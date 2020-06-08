@@ -1036,10 +1036,14 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
+			let mut weight = 0;
+
 			// Run a candidate/membership rotation
 			if (n % T::RotationPeriod::get()).is_zero() {
 				members = <Members<T, I>>::get();
 				Self::rotate_period(&mut members);
+
+				weight += T::MaximumBlockWeight::get() / 20;
 			}
 
 			// Run a challenge rotation
@@ -1049,9 +1053,11 @@ decl_module! {
 					members = <Members<T, I>>::get();
 				}
 				Self::rotate_challenge(&mut members);
+
+				weight += T::MaximumBlockWeight::get() / 20;
 			}
 
-			0
+			weight
 		}
 	}
 }
