@@ -34,6 +34,7 @@ use self::address::Address as RawAddress;
 mod mock;
 pub mod address;
 mod tests;
+mod benchmarking;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;

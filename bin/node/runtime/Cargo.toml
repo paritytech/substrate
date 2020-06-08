@@ -153,6 +153,7 @@ runtime-benchmarks = [
 	"pallet-elections-phragmen/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
+	"pallet-indices/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
