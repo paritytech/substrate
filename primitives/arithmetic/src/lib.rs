@@ -37,10 +37,10 @@ pub mod biguint;
 pub mod helpers_128bit;
 pub mod traits;
 mod per_things;
-mod fixed;
+mod fixed_point;
 mod rational128;
 
-pub use fixed::{FixedPointNumber, Fixed64, Fixed128, FixedPointOperand};
+pub use fixed_point::{FixedPointNumber, FixedPointOperand, FixedI64, FixedI128, FixedU128};
 pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
 
@@ -88,6 +88,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::traits::Saturating;
 	use sp_std::cmp::Ordering;
 
 	#[test]
@@ -130,5 +131,20 @@ mod tests {
 		// A historical example that will panic only for per_thing type that are created with
 		// maximum capacity of their type, e.g. PerU16.
 		let _ = PerU16::from_rational_approximation(17424870u32, 17424870);
+	}
+
+	#[test]
+	fn saturating_mul_works() {
+		assert_eq!(Saturating::saturating_mul(2, i32::min_value()), i32::min_value());
+		assert_eq!(Saturating::saturating_mul(2, i32::max_value()), i32::max_value());
+	}
+
+	#[test]
+	fn saturating_pow_works() {
+		assert_eq!(Saturating::saturating_pow(i32::min_value(), 0), 1);
+		assert_eq!(Saturating::saturating_pow(i32::max_value(), 0), 1);
+		assert_eq!(Saturating::saturating_pow(i32::min_value(), 3), i32::min_value());
+		assert_eq!(Saturating::saturating_pow(i32::min_value(), 2), i32::max_value());
+		assert_eq!(Saturating::saturating_pow(i32::max_value(), 2), i32::max_value());
 	}
 }

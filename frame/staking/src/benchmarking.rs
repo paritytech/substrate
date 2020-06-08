@@ -565,7 +565,7 @@ benchmarks! {
 		let caller: T::AccountId = account("caller", n, SEED);
 		let era = <Staking<T>>::current_era().unwrap_or(0);
 
-		// submit a seq-phragmen with all the good stuff on chain
+		// submit a seq-phragmen with all the good stuff on chain.
 		{
 			let (winners, compact, score, size) = get_seq_phragmen_solution::<T>(true);
 			assert!(

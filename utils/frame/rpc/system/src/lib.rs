@@ -222,16 +222,14 @@ mod tests {
 	use super::*;
 
 	use futures::executor::block_on;
-	use substrate_test_runtime_client::{
-		runtime::Transfer,
-		AccountKeyring,
-	};
+	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
-		// given
 		let _ = env_logger::try_init();
+
+		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(
 			BasicPool::new(

@@ -157,12 +157,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				Role::Sentry { validators } => {
 					for validator in validators {
 						sentries_and_validators.insert(validator.peer_id.clone());
+						reserved_nodes.insert(validator.peer_id.clone());
 						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
 					}
 				}
 				Role::Authority { sentry_nodes } => {
 					for sentry_node in sentry_nodes {
 						sentries_and_validators.insert(sentry_node.peer_id.clone());
+						reserved_nodes.insert(sentry_node.peer_id.clone());
 						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
 					}
 				}
@@ -390,9 +392,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol().num_queued_blocks()
 	}
 
-	/// Returns the number of processed blocks.
-	pub fn num_processed_blocks(&self) -> usize {
-		self.network_service.user_protocol().num_processed_blocks()
+	/// Returns the number of downloaded blocks.
+	pub fn num_downloaded_blocks(&self) -> usize {
+		self.network_service.user_protocol().num_downloaded_blocks()
 	}
 
 	/// Number of active sync requests.
@@ -713,6 +715,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
+
+	/// This function should be called when blocks are added to the chain by something other
+	/// than the import queue.
+	///
+	/// > **Important**: This function is a hack and can be removed at any time. Do **not** use it.
+	pub fn update_chain(&self) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
+	}
+
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -778,6 +791,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		protocol_name: Cow<'static, [u8]>,
 	},
 	DisconnectPeer(PeerId),
+	UpdateChain,
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1106,6 +1120,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
+				ServiceToWorkerMsg::UpdateChain =>
+					this.network_service.user_protocol_mut().update_chain(),
 			}
 		}
 

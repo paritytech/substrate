@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for phragmen.
+//! Tests for npos-elections.
 
 #![cfg(test)]
 
 use crate::mock::*;
 use crate::{
-	elect, equalize, build_support_map, is_score_better, helpers::*,
-	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
+	seq_phragmen, balance_solution, build_support_map, is_score_better, helpers::*,
+	Support, StakedAssignment, Assignment, ElectionResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
 use sp_arithmetic::{Perbill, Permill, Percent, PerU16};
@@ -83,7 +83,7 @@ fn phragmen_poc_works() {
 	];
 
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -146,7 +146,7 @@ fn phragmen_poc_works() {
 		Support::<AccountId> { total: 35, voters: vec![(20, 20), (30, 15)] },
 	);
 
-	equalize(
+	balance_solution(
 		&mut staked,
 		&mut support_map,
 		0,
@@ -240,11 +240,14 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		(5, (u64::max_value() - 2).into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
 		2,
 		candidates.clone(),
-		auto_generate_self_voters(&candidates).iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+		auto_generate_self_voters(&candidates)
+			.iter()
+			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
+			.collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
@@ -270,7 +273,7 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		(14, u64::max_value().into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -313,7 +316,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
 		3,
 		3,
 		candidates,
@@ -343,7 +346,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
 		3,
 		3,
 		candidates,
@@ -376,7 +379,7 @@ fn phragmen_large_scale_test() {
 		(50, 990000000000000000),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -402,7 +405,7 @@ fn phragmen_large_scale_test_2() {
 		(50, nom_budget.into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -478,7 +481,7 @@ fn elect_has_no_entry_barrier() {
 		(2, 10),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, Perbill>(
+	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
 		3,
 		3,
 		candidates,
@@ -505,7 +508,7 @@ fn minimum_to_elect_is_respected() {
 		(2, 10),
 	]);
 
-	let maybe_result = elect::<_, Perbill>(
+	let maybe_result = seq_phragmen::<_, Perbill>(
 		10,
 		10,
 		candidates,
@@ -531,7 +534,7 @@ fn self_votes_should_be_kept() {
 		(1, 8),
 	]);
 
-	let result = elect::<_, Perbill>(
+	let result = seq_phragmen::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -570,7 +573,7 @@ fn self_votes_should_be_kept() {
 		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
 	);
 
-	equalize(
+	balance_solution(
 		&mut staked_assignments,
 		&mut supports,
 		0,
@@ -771,8 +774,8 @@ mod compact {
 	use codec::{Decode, Encode};
 	use crate::{generate_compact_solution_type, VoteWeight};
 	use super::{AccountId};
-	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
-	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
+	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
+	use sp_npos_elections::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
 	use sp_arithmetic::Percent;
 
