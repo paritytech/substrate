@@ -102,7 +102,7 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchError, DispatchResult,
+	RuntimeDebug, Perbill, DispatchError, DispatchResult, Either,
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -847,18 +847,20 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 }
 
-pub struct EnsureOneOf<AccountId, A, B>(A, B, sp_std::marker::PhantomData<AccountId>);
+/// The "OR gate" implementation of `EnsureOrigin`. Origin check would pass if any of `L`'s or
+/// `R`'s origin check passes.
+pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
 impl<
 	AccountId,
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	A: EnsureOrigin<O>,
-	B: EnsureOrigin<O>,
-> EnsureOrigin<O> for EnsureOneOf<AccountId, A, B> {
-	type Success = ();
+	L: EnsureOrigin<O>,
+	R: EnsureOrigin<O>,
+> EnsureOrigin<O> for EnsureOneOf<AccountId, L, R> {
+	type Success = Either<L::Success, R::Success>;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
-		A::try_origin(o).map_or_else(
-			|o| B::try_origin(o).map(|_| ()),
-			|_| Ok(()),
+		L::try_origin(o).map_or_else(
+			|o| R::try_origin(o).map(|o| Either::Right(o)),
+			|o| Ok(Either::Left(o)),
 		)
 	}
 
@@ -2725,12 +2727,12 @@ pub(crate) mod tests {
 
 	#[test]
 	fn ensure_one_of_works() {
-		fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<(), Origin> {
+		fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<Either<(), u64>, Origin> {
 			EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
 		}
 
-		assert_ok!(ensure_root_or_signed(RawOrigin::Root));
-		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)));
+		assert_ok!(ensure_root_or_signed(RawOrigin::Root), Either::Left(()));
+		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)), Either::Right(0));
 		assert_err!(ensure_root_or_signed(RawOrigin::None), Origin::from(RawOrigin::None));
 	}
 }
