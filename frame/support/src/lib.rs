@@ -44,7 +44,7 @@ pub use paste;
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
 #[doc(hidden)]
-pub use sp_io::storage::root as storage_root;
+pub use sp_io::{storage::root as storage_root, self};
 #[doc(hidden)]
 pub use sp_runtime::RuntimeDebug;
 
@@ -205,8 +205,10 @@ macro_rules! parameter_types {
 	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
 		impl $name {
 			/// Returns the key for this parameter type.
-			pub fn key() -> &'static [u8] {
-				concat!(":", stringify!($name), ":").as_bytes()
+			pub fn key() -> [u8; 16] {
+				$crate::sp_io::hashing::twox_128(
+					concat!(":", stringify!($name), ":").as_bytes()
+				)
 			}
 
 			/// Set the value of this parameter type in the storage.
@@ -214,7 +216,7 @@ macro_rules! parameter_types {
 			/// This needs to be executed in an externalities provided
 			/// environment.
 			pub fn set(value: &$type) {
-				$crate::storage::unhashed::put(Self::key(), value);
+				$crate::storage::unhashed::put(&Self::key(), value);
 			}
 
 			/// Returns the value of this parameter type.
@@ -222,7 +224,7 @@ macro_rules! parameter_types {
 			/// This needs to be executed in an externalities provided
 			/// environment.
 			pub fn get() -> $type {
-				$crate::storage::unhashed::get(Self::key()).unwrap_or_else(|| $value)
+				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
 			}
 		}
 
@@ -766,7 +768,7 @@ mod tests {
 	#[test]
 	fn check_storage_parameter_type_works() {
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(b":StorageParameter:", StorageParameter::key());
+			assert_eq!(sp_io::hashing::twox_128(b":StorageParameter:"), StorageParameter::key());
 
 			assert_eq!(10, StorageParameter::get());
 
