@@ -52,7 +52,7 @@ use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	ConvertInto, OpaqueKeys, NumberFor, Saturating, SignedExtension,
 };
-use frame_utils::{SignedExtensionProvider, IndexFor};
+use frame_utils::{SignedExtensionProvider, SystemExtraParams};
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
@@ -608,15 +608,61 @@ parameter_types! {
 	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
+#[derive(Default)]
+pub struct ExtrasParams<T: frame_system::Trait> {
+	era: Option<Era>,
+	index: Option<T::Index>,
+	tip: Option<u128>,
+	prior_block_hash: Option<T::Hash>,
+}
+
+impl SystemExtraParams<Runtime> for ExtrasParams<Runtime> {
+	fn set_nonce(&mut self, index: <Runtime as frame_system::Trait>::Index) {
+		self.index = Some(index);
+	}
+
+	fn set_era(&mut self, era: Era) {
+		self.era = Some(era);
+	}
+
+	fn set_prior_block_hash(&mut self, hash: <Runtime as frame_system::Trait>::Hash) {
+		self.prior_block_hash = Some(hash);
+	}
+}
+
+
 impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
+	type Params = ExtrasParams<Runtime>;
 
-	fn construct_extras(index: IndexFor<Self>, era: Era, prior_block_hash: Option<Hash>) -> (
-		Self::Extra,
-		Option<<Self::Extra as SignedExtension>::AdditionalSigned>
-	) {
-		let tip = 0;
+	fn extension_params() -> ExtrasParams<Runtime> {
+		ExtrasParams {
+			prior_block_hash: None,
+			index: None,
+			era: None,
+			tip: Some(0),
+		}
+	}
+
+	fn construct_extras(params: ExtrasParams<Runtime>) -> Result<
 		(
+			Self::Extra,
+			Option<<Self::Extra as SignedExtension>::AdditionalSigned>
+		),
+		&'static str
+	> {
+		let ExtrasParams {
+			tip,
+			era,
+			index,
+			prior_block_hash
+		} = params;
+		let (era, index) = (
+			era.ok_or("era is required")?,
+			index.ok_or("index is required")?,
+		);
+		let tip = tip.unwrap_or(0);
+		let data = (
 			(
 				frame_system::CheckSpecVersion::<Runtime>::new(),
 				frame_system::CheckTxVersion::<Runtime>::new(),
@@ -639,7 +685,9 @@ impl SignedExtensionProvider for Runtime {
 					(),
 				)
 			})
-		)
+		);
+
+		Ok(data)
 	}
 }
 
@@ -664,7 +712,13 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			// so the actual block number is `n`.
 			.saturating_sub(1);
 		let era = Era::mortal(period, current_block);
-		let (extra, additional) = Runtime::construct_extras(nonce, era, None);
+		let mut input = Runtime::extension_params();
+		input.set_nonce(nonce);
+		input.set_era(era);
+		let (extra, additional) = match Runtime::construct_extras(input) {
+			Ok(d) => d,
+			Err(_) => return None,
+		};
 		let raw_payload = if let Some(additional_signed) = additional {
 			SignedPayload::from_raw(call, extra, additional_signed)
 		} else {

@@ -20,7 +20,7 @@ use sp_runtime::{
 	MultiSigner, AccountId32, traits::IdentifyAccount, MultiSignature,
 };
 use codec::Encode;
-use frame_utils::{SignedExtensionProvider, IndexFor, AddressFor, AccountIdFor};
+use frame_utils::{SignedExtensionProvider, SystemExtraParams, IndexFor, AddressFor, AccountIdFor};
 use sp_runtime::generic::Era;
 
 /// create an extrinsic for the runtime.
@@ -42,7 +42,11 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 		AccountIdFor<P>: From<AccountId32>,
 		AddressFor<P>: From<AccountIdFor<P>>,
 {
-	let (extra, additional) = P::construct_extras(nonce, Era::Immortal, Some(hash));
+	let mut input = P::extension_params();
+	input.set_nonce(nonce);
+	input.set_era(Era::Immortal);
+	input.set_prior_block_hash(hash);
+	let (extra, additional) = P::construct_extras(input)?;
 
 	let payload = if let Some(additional_signed) = additional {
 		SignedPayload::from_raw(call, extra, additional_signed)

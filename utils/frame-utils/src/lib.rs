@@ -75,12 +75,30 @@ pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
 ///
 pub trait SignedExtensionProvider: frame_system::Trait {
     /// Concrete SignedExtension type.
-    type Extra: SignedExtension;
+	type Extra: SignedExtension;
+	/// Concrete type for params
+	type Params: SystemExtraParams<Self>;
+
+	/// retrieve an instance of the input object.
+	fn extension_params() -> Self::Params;
 
     /// construct extras and optionally additional_signed data for inclusion in extrinsics.
-    fn construct_extras(nonce: IndexFor<Self>, era: Era, prior_block_hash: Option<Self::Hash>) -> (
-        Self::Extra,
-        Option<<Self::Extra as SignedExtension>::AdditionalSigned>
-    );
+    fn construct_extras(input: Self::Params) -> Result<
+	    (
+		    Self::Extra,
+		    Option<<Self::Extra as SignedExtension>::AdditionalSigned>
+	    ),
+	    &'static str
+    >;
 }
 
+/// used internally by substrate to set extras for inclusion in 
+/// `SignedExtensionProvider`
+pub trait SystemExtraParams<T: frame_system::Trait> {
+	/// sets the nonce
+	fn set_nonce(&mut self, index: T::Index);
+	/// sets the nonce
+	fn set_era(&mut self, era: Era);
+	/// sets the prior block hash
+	fn set_prior_block_hash(&mut self, hash: T::Hash);
+}
