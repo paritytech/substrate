@@ -96,25 +96,25 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
 	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
-	let service = sc_service::build(
+	let service = sc_service::build(sc_service::ServiceDescriptor {
 		config,
 		client,
 		backend,
 		task_manager,
 		keystore,
-		None,
-		Some(select_chain),
+		on_demand: None,
+		select_chain: Some(select_chain),
 		import_queue,
-		None,
-		Some(finality_proof_provider),
+		finality_proof_request_builder: None,
+		finality_proof_provider: Some(finality_proof_provider),
 		transaction_pool,
-		(),
-		None,
+		rpc_extensions: (),
+		remote_blockchain: None,
 		background_tasks,
-		None,
-		Box::new(|_| ()),
-		String::new()
-	)?;
+		block_announce_validator_builder: None,
+		rpc_extensions_builder: Box::new(|_| ()),
+		informant_prefix: String::new()
+	})?;
 
 	if role.is_authority() {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
@@ -244,23 +244,23 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
 	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
-	sc_service::build(
+	sc_service::build(sc_service::ServiceDescriptor {
 		config,
 		client,
 		backend,
 		task_manager,
 		keystore,
-		None,
-		Some(select_chain),
+		on_demand: None,
+		select_chain: Some(select_chain),
 		import_queue,
-		Some(finality_proof_request_builder),
-		Some(finality_proof_provider),
+		finality_proof_request_builder: Some(finality_proof_request_builder),
+		finality_proof_provider: Some(finality_proof_provider),
 		transaction_pool,
-		(),
-		Some(remote_blockchain),
+		rpc_extensions: (),
+		remote_blockchain: Some(remote_blockchain),
 		background_tasks,
-		None,
-		Box::new(|_| ()),
-		String::new()
-	)
+		block_announce_validator_builder: None,
+		rpc_extensions_builder: Box::new(|_| ()),
+		informant_prefix: String::new()
+	})
 }

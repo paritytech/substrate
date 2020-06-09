@@ -353,6 +353,26 @@ pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch +
 	Ok(((client, backend, keystore, task_manager), fetcher, remote_blockchain))
 }
 
+pub struct ServiceDescriptor<TBl: BlockT, TRtApi, TSc, TImpQu, TExPool, TRpc, TBackend, TExec, URpcBuilder> {
+	pub config: Configuration,
+	pub client: Arc<Client<TBackend, TExec, TBl, TRtApi>,>,
+	pub backend: Arc<TBackend>,
+	pub task_manager: TaskManager,
+	pub keystore: Arc<RwLock<Keystore>>,
+	pub on_demand: Option<Arc<OnDemand<TBl>>>,
+	pub select_chain: Option<TSc>,
+	pub import_queue: TImpQu,
+	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
+	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
+	pub transaction_pool: Arc<TExPool>,
+	pub rpc_extensions: TRpc,
+	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
+	pub background_tasks: Vec<(&'static str, BackgroundTask)>,
+	pub block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>,>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send + 'static>>,
+	pub rpc_extensions_builder: URpcBuilder,
+	pub informant_prefix: String,
+}
+
 /// Builds the service.
 pub fn build<
 	TBl,
@@ -366,23 +386,7 @@ pub fn build<
 	URpcBuilder,
 	URpc,
 >(
-	mut config: Configuration,
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>,>,
-	backend: Arc<TBackend>,
-	task_manager: TaskManager,
-	keystore: Arc<RwLock<Keystore>>,
-	on_demand: Option<Arc<OnDemand<TBl>>>,
-	select_chain: Option<TSc>,
-	import_queue: TImpQu,
-	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
-	transaction_pool: Arc<TExPool>,
-	rpc_extensions: TRpc,
-	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
-	background_tasks: Vec<(&'static str, BackgroundTask)>,
-	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>,>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send + 'static>>,
-	rpc_extensions_builder: URpcBuilder,
-	informant_prefix: String,
+	service_descriptor: ServiceDescriptor<TBl, TRtApi, TSc, TImpQu, TExPool, TRpc, TBackend, TExec, URpcBuilder>,
 ) -> Result<Service<
 	TBl,
 	Client<TBackend, TExec, TBl, TRtApi>,
@@ -417,6 +421,12 @@ where
 	URpcBuilder: RpcExtensionBuilder<Output = URpc> + Send + 'static,
 	URpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
+	let ServiceDescriptor {
+		mut config,
+		client, backend, task_manager, keystore, on_demand, select_chain, import_queue, finality_proof_request_builder, finality_proof_provider, transaction_pool, rpc_extensions, 
+		remote_blockchain, background_tasks, block_announce_validator_builder, rpc_extensions_builder, informant_prefix
+	} = service_descriptor;
+
 	sp_session::generate_initial_session_keys(
 		client.clone(),
 		&BlockId::Hash(client.chain_info().best_hash),
@@ -650,19 +660,19 @@ where
 
 	let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
 
-	let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
-		(remote_backend.as_ref(), on_demand.as_ref()) {
+	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+		(remote_blockchain.as_ref(), on_demand.as_ref()) {
 		// Light clients
 		let chain = sc_rpc::chain::new_light(
 			client.clone(),
 			subscriptions.clone(),
-			remote_backend.clone(),
+			remote_blockchain.clone(),
 			on_demand.clone()
 		);
 		let (state, child_state) = sc_rpc::state::new_light(
 			client.clone(),
 			subscriptions.clone(),
-			remote_backend.clone(),
+			remote_blockchain.clone(),
 			on_demand.clone()
 		);
 		(chain, state, child_state)

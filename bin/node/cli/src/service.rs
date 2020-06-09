@@ -174,25 +174,25 @@ macro_rules! new_full {
 		let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
 		let finality_proof_provider = Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider)) as _;
 		
-		let service = sc_service::build(
-			$config,
+		let service = sc_service::build(sc_service::ServiceDescriptor {
+			config: $config,
 			client,
 			backend,
 			task_manager,
 			keystore,
-			None,
-			Some(select_chain),
+			on_demand: None,
+			select_chain: Some(select_chain),
 			import_queue,
-			None,
-			Some(finality_proof_provider),
+			finality_proof_request_builder: None,
+			finality_proof_provider: Some(finality_proof_provider),
 			transaction_pool,
-			(),
-			None,
+			rpc_extensions: (),
+			remote_blockchain: None,
 			background_tasks,
-			None,
+			block_announce_validator_builder: None,
 			rpc_extensions_builder,
-			String::new()
-		)?;
+			informant_prefix: String::new()
+		})?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup;
 
@@ -398,7 +398,7 @@ pub fn new_light(config: Configuration)
 	let rpc_transaction_pool = transaction_pool.clone();
 	let rpc_remote_blockchain = remote_blockchain.clone();
 
-	let rpc_extensions = move |_| {
+	let rpc_extensions_builder = move |_| {
 		let light_deps = node_rpc::LightDeps {
 			remote_blockchain: rpc_remote_blockchain.clone(),
 			fetcher: fetcher.clone(),
@@ -409,25 +409,25 @@ pub fn new_light(config: Configuration)
 		node_rpc::create_light::<_, _, sc_rpc::Metadata, _>(light_deps)
 	};
 
-	sc_service::build(
+	sc_service::build(sc_service::ServiceDescriptor {
 		config,
 		client,
 		backend,
 		task_manager,
 		keystore,
-		None,
-		Some(select_chain),
+		on_demand: None,
+		select_chain: Some(select_chain),
 		import_queue,
-		Some(finality_proof_request_builder),
-		Some(finality_proof_provider),
+		finality_proof_request_builder: Some(finality_proof_request_builder),
+		finality_proof_provider: Some(finality_proof_provider),
 		transaction_pool,
-		(),
-		Some(remote_blockchain),
+		rpc_extensions: (),
+		remote_blockchain: Some(remote_blockchain),
 		background_tasks,
-		None,
-		rpc_extensions,
-		String::new()
-	)
+		block_announce_validator_builder: None,
+		rpc_extensions_builder,
+		informant_prefix: String::new()
+	})
 }
 
 #[cfg(test)]
