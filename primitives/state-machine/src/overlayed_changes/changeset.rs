@@ -279,14 +279,14 @@ impl OverlayedChangeSet {
 					self.changes.remove(&key);
 				}
 			} else {
-				let has_predecessor = ! if let Some(dirty_keys) = self.dirty_keys.last_mut() {
+				let has_predecessor = if let Some(dirty_keys) = self.dirty_keys.last_mut() {
 					// Not the last tx: Did the previous tx write to this key?
-					dirty_keys.insert(key)
+					!dirty_keys.insert(key)
 				} else {
 					// Last tx: Is there already a value in the committed set?
 					// Check against one rather than empty because the current tx is still
 					// in the list as it is popped later in this function.
-					overlayed.transactions.len() == 1
+					overlayed.transactions.len() != 1
 				};
 
 				// We only need to merge if in the previous tx (or committed set) there is
