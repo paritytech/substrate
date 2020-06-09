@@ -83,7 +83,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(original).into(), account_index)?;
-	}: _(RawOrigin::Root, recipient.clone(), account_index, true)
+	}: _(RawOrigin::Root, recipient.clone(), account_index, false)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index).unwrap().0, recipient);
 	}
