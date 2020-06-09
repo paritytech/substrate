@@ -37,6 +37,10 @@ use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+const BENCHMARKING_FN: &str = "\
+	This is a special fn only for benchmarking where a database commit happens from the runtime.
+	For that reason client started transactions before calling into runtime are not allowed.
+	Without client transactions the loop condition garantuees the success of the tx close.";
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -109,6 +113,7 @@ where
 		changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
+		overlay.enter_runtime();
 		Self {
 			overlay,
 			offchain_overlay,
@@ -152,6 +157,17 @@ where
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 			.collect()
+	}
+}
+
+impl<'a, H, B, N> Drop for Ext<'a, H, N, B>
+where
+	H: Hasher,
+	B: 'a + Backend<H>,
+	N: crate::changes_trie::BlockNumber
+{
+	fn drop(&mut self) {
+		self.overlay.exit_runtime();
 	}
 }
 
@@ -547,21 +563,21 @@ where
 	}
 
 	fn storage_start_transaction(&mut self) {
-		self.overlay.start_transaction();
+		self.overlay.start_transaction()
 	}
 
-	fn storage_rollback_transaction(&mut self) {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		self.mark_dirty();
-		self.overlay.rollback_transaction();
+		self.overlay.rollback_transaction().map_err(|_| ())
 	}
 
-	fn storage_commit_transaction(&mut self) {
-		self.overlay.commit_transaction();
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+		self.overlay.commit_transaction().map_err(|_| ())
 	}
 
 	fn wipe(&mut self) {
 		for _ in 0..self.overlay.transaction_depth() {
-			self.overlay.rollback_transaction();
+			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
 		}
 		self.overlay.drain_storage_changes(
 			&self.backend,
@@ -569,13 +585,13 @@ where
 			Default::default(),
 			self.storage_transaction_cache,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
-		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn commit(&mut self) {
 		for _ in 0..self.overlay.transaction_depth() {
-			self.overlay.commit_transaction();
+			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
 		}
 		let changes = self.overlay.drain_storage_changes(
 			&self.backend,
@@ -587,7 +603,7 @@ where
 			changes.transaction_storage_root,
 			changes.transaction,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.storage_transaction_cache.reset();
+		self.mark_dirty();
 	}
 }
 

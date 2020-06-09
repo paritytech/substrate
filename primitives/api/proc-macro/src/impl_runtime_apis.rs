@@ -385,11 +385,16 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn commit_on_ok<R, E>(&self, res: &std::result::Result<R, E>) {
+				let proof = "\
+					We only close a transaction when we opened one ourself.
+					Other parts of the runtime that make use of transactions (state-machine)
+					also balance their transactions. The runtime cannot close client initiated
+					transactions. qed";
 				if *self.commit_on_success.borrow() {
 					if res.is_err() {
-						self.changes.borrow_mut().rollback_transaction();
+						self.changes.borrow_mut().rollback_transaction().expect(proof);
 					} else {
-						self.changes.borrow_mut().commit_transaction();
+						self.changes.borrow_mut().commit_transaction().expect(proof);
 					}
 				}
 			}

@@ -311,11 +311,11 @@ impl Externalities for BasicExternalities {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 
-	fn storage_commit_transaction(&mut self) {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by BasicExternalities");
 	}
 

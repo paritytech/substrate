@@ -206,19 +206,15 @@ pub trait Externalities: ExtensionStore {
 
 	/// Rollback the last transaction started by `start_transaction`.
 	///
-	/// Any changes made during that transaction are discarded.
-	///
-	/// Panics:
-	/// Will panic if there is no open transaction.
-	fn storage_rollback_transaction(&mut self);
+	/// Any changes made during that transaction are discarded. Returns an error when
+	/// no transaction is open that can be closed.
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()>;
 
 	/// Commit the last transaction started by `start_transaction`.
 	///
-	/// Any changes made during that transaction are committed.
-	///
-	/// Panics:
-	/// Will panic if there is no open transaction.
-	fn storage_commit_transaction(&mut self);
+	/// Any changes made during that transaction are committed. Returns an error when
+	/// no transaction is open that can be closed.
+	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	/// Benchmarking related functionality and shouldn't be used anywhere else!

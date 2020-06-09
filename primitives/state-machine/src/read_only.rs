@@ -174,11 +174,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
-	fn storage_rollback_transaction(&mut self) {
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 
-	fn storage_commit_transaction(&mut self) {
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by ReadOnlyExternalities");
 	}
 

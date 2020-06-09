@@ -38,6 +38,9 @@ use hash_db::Hasher;
 /// Re-export of `changeset::OverlayedValue`.
 pub use self::changeset::OverlayedValue;
 
+/// Re-export of `changeset::NoOpenTransaction`.
+pub use self::changeset::NoOpenTransaction;
+
 /// Storage key.
 pub type StorageKey = Vec<u8>;
 
@@ -237,11 +240,13 @@ impl OverlayedChanges {
 		self.stats.tally_write_overlay(size_write);
 		let storage_key = child_info.storage_key().to_vec();
 		let tx_depth = self.transaction_depth();
+		let num_client_tx = self.top.num_client_transactions();
+		let exec_mode = self.top.execution_mode();
 		let (overlay, info) = self.children.entry(storage_key)
 			.or_insert_with(|| (
 				// This changeset might be created when there are already open transactions.
 				// We need to catch up here so it is at the same transaction depth.
-				OverlayedChangeSet::with_depth(tx_depth),
+				OverlayedChangeSet::new(tx_depth, num_client_tx, exec_mode),
 				child_info.to_owned()
 			));
 		let updatable = info.try_update(child_info);
@@ -301,8 +306,8 @@ impl OverlayedChanges {
 	/// Start a new nested transaction.
 	///
 	/// This allows to either commit or roll back all changes that where made while this
-	/// transaction was open. Any transaction must be closed by one of the aforementioned
-	/// functions before this overlay can be converted into storage changes.
+	/// transaction was open. Any transaction must be closed by either `rollback_transaction` or
+	/// `commit_transaction` before this overlay can be converted into storage changes.
 	///
 	/// Changes made without any open transaction are committed immediatly.
 	pub fn start_transaction(&mut self) {
@@ -314,28 +319,48 @@ impl OverlayedChanges {
 
 	/// Rollback the last transaction started by `start_transaction`.
 	///
-	/// Any changes made during that transaction are discarded.
-	///
-	/// Panics:
-	/// Will panic if there is no open transaction.
-	pub fn rollback_transaction(&mut self) {
-		self.top.rollback_transaction();
+	/// Any changes made during that transaction are discarded. Returns an error if
+	/// there is no open transaction that can be rolled back.
+	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.top.rollback_transaction()?;
 		self.children.retain(|_, (changeset, _)| {
-			changeset.rollback_transaction();
+			changeset.rollback_transaction()
+				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.is_empty()
 		});
+		Ok(())
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
 	///
-	/// Any changes made during that transaction are committed.
-	///
-	/// Panics:
-	/// Will panic if there is no open transaction.
-	pub fn commit_transaction(&mut self) {
-		self.top.commit_transaction();
+	/// Any changes made during that transaction are committed. Returns an error if there
+	/// is no open transaction that can be committed.
+	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.top.commit_transaction()?;
 		for (_, (changeset, _)) in self.children.iter_mut() {
-			changeset.commit_transaction();
+			changeset.commit_transaction()
+				.expect("Top and children changesets are started in lockstep; qed");
+		}
+		Ok(())
+	}
+
+	/// Call this before transfering control to the runtime.
+	///
+	/// This protects all existing transactions from being removed by the runtime.
+	pub fn enter_runtime(&mut self) {
+		self.top.enter_runtime();
+		for (_, (changeset, _)) in self.children.iter_mut() {
+			changeset.enter_runtime();
+		}
+	}
+
+	/// Call this when control returns from the runtime.
+	///
+	/// This commits all dangeling transaction left open by the runtime.
+	pub fn exit_runtime(&mut self) {
+		self.top.exit_runtime();
+		for (_, (changeset, _)) in self.children.iter_mut() {
+			changeset.exit_runtime();
 		}
 	}
 
@@ -566,7 +591,7 @@ mod tests {
 		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
-		overlayed.commit_transaction();
+		overlayed.commit_transaction().unwrap();
 
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
@@ -578,7 +603,7 @@ mod tests {
 		overlayed.set_storage(key.clone(), None);
 		assert!(overlayed.storage(&key).unwrap().is_none());
 
-		overlayed.rollback_transaction();
+		overlayed.rollback_transaction().unwrap();
 
 		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
 
@@ -602,7 +627,7 @@ mod tests {
 		overlay.set_storage(b"dog".to_vec(), Some(b"puppy".to_vec()));
 		overlay.set_storage(b"dogglesworth".to_vec(), Some(b"catYYY".to_vec()));
 		overlay.set_storage(b"doug".to_vec(), Some(vec![]));
-		overlay.commit_transaction();
+		overlay.commit_transaction().unwrap();
 
 		overlay.start_transaction();
 		overlay.set_storage(b"dogglesworth".to_vec(), Some(b"cat".to_vec()));
@@ -657,7 +682,7 @@ mod tests {
 		assert_extrinsics(&overlay.top, vec![3], vec![1, 3]);
 		assert_extrinsics(&overlay.top, vec![100], vec![NO_EXTRINSIC_INDEX]);
 
-		overlay.rollback_transaction();
+		overlay.rollback_transaction().unwrap();
 
 		assert_extrinsics(&overlay.top, vec![1], vec![0, 2]);
 		assert_extrinsics(&overlay.top, vec![3], vec![1]);
@@ -671,7 +696,7 @@ mod tests {
 		overlay.set_storage(vec![20], Some(vec![20]));
 		overlay.set_storage(vec![30], Some(vec![30]));
 		overlay.set_storage(vec![40], Some(vec![40]));
-		overlay.commit_transaction();
+		overlay.commit_transaction().unwrap();
 		overlay.set_storage(vec![10], Some(vec![10]));
 		overlay.set_storage(vec![30], None);
 
@@ -712,7 +737,7 @@ mod tests {
 		overlay.set_child_storage(child_info, vec![20], Some(vec![20]));
 		overlay.set_child_storage(child_info, vec![30], Some(vec![30]));
 		overlay.set_child_storage(child_info, vec![40], Some(vec![40]));
-		overlay.commit_transaction();
+		overlay.commit_transaction().unwrap();
 		overlay.set_child_storage(child_info, vec![10], Some(vec![10]));
 		overlay.set_child_storage(child_info, vec![30], None);
 

@@ -79,6 +79,10 @@ pub use in_memory_backend::new_in_mem;
 pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use sp_core::traits::CloneableSpawn;
 
+const PROOF_CLOSE_TRANSACTION: &str = "\
+	Closing a transaction that was started in this function. Client initiated transactions
+	are protected from being closed by the runtime. qed";
+
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
 /// Default handler of the execution manager.
@@ -351,7 +355,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.rollback_transaction();
+			self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -366,7 +370,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				on_consensus_failure(wasm_result, result)
 			}
 		} else {
-			self.overlay.commit_transaction();
+			self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			result
 		}
 	}
@@ -386,10 +390,10 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		);
 
 		if !was_native || result.is_ok() {
-			self.overlay.commit_transaction();
+			self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			result
 		} else {
-			self.overlay.rollback_transaction();
+			self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -996,7 +1000,7 @@ mod tests {
 			);
 			ext.clear_prefix(b"ab");
 		}
-		overlay.commit_transaction();
+		overlay.commit_transaction().unwrap();
 
 		assert_eq!(
 			overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned()))
@@ -1104,7 +1108,7 @@ mod tests {
 				Some(reference_data.encode()),
 			);
 		}
-		overlay.rollback_transaction();
+		overlay.rollback_transaction().unwrap();
 		{
 			let ext = Ext::new(
 				&mut overlay,
@@ -1172,7 +1176,7 @@ mod tests {
 				Some(vec![Item::InitializationItem, Item::DiscardedItem].encode()),
 			);
 		}
-		overlay.rollback_transaction();
+		overlay.rollback_transaction().unwrap();
 
 		// Then we apply next transaction which is valid this time.
 		{
@@ -1296,6 +1300,7 @@ mod tests {
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
 			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
+			drop(ext);
 			cache.transaction.unwrap()
 		};
 		let mut duplicate = false;

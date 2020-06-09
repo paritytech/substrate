@@ -179,7 +179,8 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn rollback_transaction(&mut self) {
-		self.storage_rollback_transaction();
+		self.storage_rollback_transaction()
+			.expect("No open transaction that can be rolled back.");
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
@@ -190,7 +191,8 @@ pub trait Storage {
 	///
 	/// Will panic if there is no open transaction.
 	fn commit_transaction(&mut self) {
-		self.storage_commit_transaction();
+		self.storage_commit_transaction()
+			.expect("No open transaction that can be committed.");
 	}
 }
 

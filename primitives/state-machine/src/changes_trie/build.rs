@@ -410,7 +410,7 @@ mod test {
 		changes.set_storage(vec![100], Some(vec![202]));
 		changes.set_child_storage(&child_info_1, vec![100], Some(vec![202]));
 
-		changes.commit_transaction();
+		changes.commit_transaction().unwrap();
 
 		changes.set_extrinsic_index(0);
 		changes.set_storage(vec![100], Some(vec![0]));

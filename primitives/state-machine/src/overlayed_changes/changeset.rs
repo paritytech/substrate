@@ -23,22 +23,35 @@ use itertools::Itertools;
 use std::collections::{HashSet, BTreeMap, BTreeSet};
 use smallvec::SmallVec;
 
-const PROOF_DIRTY_KEYS: &str = "\
-	We assume transactions are balanced. Every start of a transaction created one dirty
-	keys element. This function is only called on transaction close. Therefore an element
-	created when starting the transaction must exist; qed";
-
-const PROOF_DIRTY_OVERLAY_VALUE: &str = "\
-	A write to an OverlayedValue is recorded in the dirty key set. Before an OverlayedValues
-	is removed its containing dirty set is removed. This function is only called for keys that
-	are in the dirty set. Therefore the entry must exist; qed";
-
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
 
 type DirtyKeys = SmallVec<[HashSet<StorageKey>; 5]>;
 type Transactions = SmallVec<[InnerValue; 5]>;
+
+/// Error returned when trying to commit or rollback while no transaction is open.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct NoOpenTransaction;
+
+/// Describes in which mode the node is currently executing.
+#[derive(Debug, Clone, Copy)]
+pub enum ExecutionMode {
+	/// Exeuting in client mode: Removal of all transactions possible.
+	Client,
+	/// Executing in runtime mode: Transactions started by the client are protected.
+	Runtime,
+}
+
+/// Describes which kind of transaction close should be performed.
+#[derive(Debug, Clone, Copy)]
+enum CloseType {
+	/// Commit the transaction.
+	Commit,
+	/// Rollback the transaction.
+	Rollback,
+}
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -68,6 +81,18 @@ pub struct OverlayedChangeSet {
 	/// values to merge into the parent transaction on commit. The length of this vector
 	/// therefore determines how many nested transactions are currently open (depth).
 	dirty_keys: DirtyKeys,
+	/// The number of how many transactions beginning from the first transactions are started
+	/// by the client. Those transactions are protected against close (commit, rollback)
+	/// when in runtime mode.
+	num_client_transactions: usize,
+	/// Determines whether the node is using the overlay from the client or the runtime.
+	execution_mode: ExecutionMode,
+}
+
+impl Default for ExecutionMode {
+	fn default() -> Self {
+		Self::Client
+	}
 }
 
 impl OverlayedValue {
@@ -134,11 +159,13 @@ fn insert_dirty(set: &mut DirtyKeys, key: StorageKey) -> bool {
 }
 
 impl OverlayedChangeSet {
-	/// Create a new changeset with the specified transaction depth.
-	pub fn with_depth(depth: usize) -> Self {
+	/// Create a new changeset.
+	pub fn new(depth: usize, num_client_transactions: usize, mode: ExecutionMode) -> Self {
 		use std::iter::repeat;
 		Self {
 			dirty_keys: repeat(HashSet::new()).take(depth).collect(),
+			num_client_transactions,
+			execution_mode: mode,
 			.. Default::default()
 		}
 	}
@@ -235,6 +262,36 @@ impl OverlayedChangeSet {
 		self.dirty_keys.len()
 	}
 
+	/// Returns how many of the open transactions are opened by the client.
+	///
+	/// These are alwyays the first transaction to open and the last to close.
+	pub fn num_client_transactions(&self) -> usize {
+		self.num_client_transactions
+	}
+
+	/// Returns whether we are executing in client or runtime mode.
+	pub fn execution_mode(&self) -> ExecutionMode {
+		self.execution_mode
+	}
+
+	/// Call this before entering runtime.
+	pub fn enter_runtime(&mut self) {
+		if let ExecutionMode::Runtime = self.execution_mode {
+			return;
+		}
+		self.execution_mode = ExecutionMode::Runtime;
+		self.num_client_transactions = self.transaction_depth();
+	}
+
+	/// Call this when returning from runtime.
+	pub fn exit_runtime(&mut self) {
+		self.execution_mode = ExecutionMode::Client;
+		while self.transaction_depth() > self.num_client_transactions {
+			self.commit_transaction()
+				.expect("The loop condition checks that the transaction depth is > 0; qed");
+		}
+	}
+
 	/// Start a new nested transaction.
 	///
 	/// This allows to either commit or roll back all changes that were made while this
@@ -248,29 +305,36 @@ impl OverlayedChangeSet {
 
 	/// Rollback the last transaction started by `start_transaction`.
 	///
-	/// Any changes made during that transaction are discarded.
-	///
-	/// Panics:
-	/// Will panic if there is no open transaction.
-	pub fn rollback_transaction(&mut self) {
-		self.close_transaction(true);
+	/// Any changes made during that transaction are discarded. Returns an error if
+	/// there is no open transaction that can be rolled back.
+	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.close_transaction(CloseType::Rollback)
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
 	///
-	/// Any changes made during that transaction are committed.
-	///
-	/// Panics:
-	/// Will panic if there is no open transaction.
-	pub fn commit_transaction(&mut self) {
-		self.close_transaction(false);
+	/// Any changes made during that transaction are committed. Returns an error if
+	/// there is no open transaction that can be committed.
+	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.close_transaction(CloseType::Commit)
 	}
 
-	fn close_transaction(&mut self, rollback: bool) {
-		for key in self.dirty_keys.pop().expect(PROOF_DIRTY_KEYS) {
-			let overlayed = self.changes.get_mut(&key).expect(PROOF_DIRTY_OVERLAY_VALUE);
+	fn close_transaction(&mut self, close_type: CloseType) -> Result<(), NoOpenTransaction> {
+		// runtime is not allowed to close transactions started by the client
+		if let ExecutionMode::Runtime = self.execution_mode {
+			if self.num_client_transactions == self.transaction_depth() {
+				return Err(NoOpenTransaction)
+			}
+		}
 
-			if rollback {
+		for key in self.dirty_keys.pop().ok_or(NoOpenTransaction)? {
+			let overlayed = self.changes.get_mut(&key).expect("\
+				A write to an OverlayedValue is recorded in the dirty key set. Before an
+				OverlayedValue is removed, its containing dirty set is removed. This
+				function is only called for keys that are in the dirty set. qed\
+			");
+
+			if let CloseType::Rollback = close_type {
 				overlayed.pop_transaction();
 
 				// We need to remove the key as an `OverlayValue` with no transactions
@@ -298,6 +362,8 @@ impl OverlayedChangeSet {
 				}
 			}
 		}
+
+		Ok(())
 	}
 }
 
@@ -389,14 +455,14 @@ mod test {
 		assert_eq!(changeset.transaction_depth(), 3);
 		changeset.start_transaction();
 		assert_eq!(changeset.transaction_depth(), 4);
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 3);
-		changeset.commit_transaction();
+		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 2);
 		assert_changes(&changeset, &all_changes);
 
 		// roll back our first transactions that actually contains something
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 
 		let rolled_back: Changes = vec![
@@ -407,7 +473,7 @@ mod test {
 		];
 		assert_changes(&changeset, &rolled_back);
 
-		changeset.commit_transaction();
+		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 		assert_changes(&changeset, &rolled_back);
 
@@ -452,18 +518,18 @@ mod test {
 		assert_eq!(changeset.transaction_depth(), 3);
 		changeset.start_transaction();
 		assert_eq!(changeset.transaction_depth(), 4);
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 3);
-		changeset.commit_transaction();
+		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 2);
 		assert_changes(&changeset, &all_changes);
 
-		changeset.commit_transaction();
+		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 
 		assert_changes(&changeset, &all_changes);
 
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 
 		let rolled_back: Changes = vec![
@@ -515,11 +581,11 @@ mod test {
 			(b"key3", (Some(b"valinit-modified"), vec![3])),
 		];
 		assert_changes(&changeset, &all_changes);
-		changeset.commit_transaction();
+		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 1);
 		assert_changes(&changeset, &all_changes);
 
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 		let rolled_back: Changes = vec![
 			(b"key0", (Some(b"val0"), vec![0])),
@@ -550,7 +616,7 @@ mod test {
 			(b"key1", (Some(b"val1"), vec![2])),
 		]);
 
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 
 		assert_changes(&changeset, &vec![
 			(b"del1", (Some(b"delval1"), vec![3])),
@@ -586,7 +652,7 @@ mod test {
 		assert_eq!(changeset.next_change(b"key3").unwrap().1.value(), Some(&b"val4".to_vec()));
 		assert_eq!(changeset.next_change(b"key4"), None);
 
-		changeset.rollback_transaction();
+		changeset.rollback_transaction().unwrap();
 
 		assert_eq!(changeset.next_change(b"key0").unwrap().0, b"key1");
 		assert_eq!(changeset.next_change(b"key0").unwrap().1.value(), Some(&b"val1".to_vec()));
@@ -601,28 +667,25 @@ mod test {
 	}
 
 	#[test]
-	#[should_panic]
-	fn no_open_tx_commit_panics() {
+	fn no_open_tx_commit_errors() {
 		let mut changeset = OverlayedChangeSet::default();
 		assert_eq!(changeset.transaction_depth(), 0);
-		changeset.commit_transaction();
+		assert_eq!(changeset.commit_transaction(), Err(NoOpenTransaction));
 	}
 
 	#[test]
-	#[should_panic]
-	fn no_open_tx_rollback_panics() {
+	fn no_open_tx_rollback_errors() {
 		let mut changeset = OverlayedChangeSet::default();
 		assert_eq!(changeset.transaction_depth(), 0);
-		changeset.rollback_transaction();
+		assert_eq!(changeset.rollback_transaction(), Err(NoOpenTransaction));
 	}
 
 	#[test]
-	#[should_panic]
-	fn unbalanced_transactions_panics() {
+	fn unbalanced_transactions_errors() {
 		let mut changeset = OverlayedChangeSet::default();
 		changeset.start_transaction();
-		changeset.commit_transaction();
-		changeset.commit_transaction();
+		changeset.commit_transaction().unwrap();
+		assert_eq!(changeset.commit_transaction(), Err(NoOpenTransaction));
 	}
 
 	#[test]
@@ -631,5 +694,38 @@ mod test {
 		let mut changeset = OverlayedChangeSet::default();
 		changeset.start_transaction();
 		let _ = changeset.drain_commited();
+	}
+
+	#[test]
+	fn runtime_cannot_close_client_tx() {
+		let mut changeset = OverlayedChangeSet::default();
+		changeset.start_transaction();
+		changeset.enter_runtime();
+		changeset.start_transaction();
+		changeset.commit_transaction().unwrap();
+		assert_eq!(changeset.commit_transaction(), Err(NoOpenTransaction));
+		assert_eq!(changeset.rollback_transaction(), Err(NoOpenTransaction));
+	}
+
+	#[test]
+	fn exit_runtime_closes_runtime_tx() {
+		let mut changeset = OverlayedChangeSet::default();
+
+		changeset.start_transaction();
+
+		changeset.set(b"key0".to_vec(), Some(b"val0".to_vec()), Some(1));
+
+		changeset.enter_runtime();
+		changeset.start_transaction();
+		changeset.set(b"key1".to_vec(), Some(b"val1".to_vec()), Some(2));
+		changeset.exit_runtime();
+
+		changeset.commit_transaction().unwrap();
+		assert_eq!(changeset.transaction_depth(), 0);
+
+		assert_drained(changeset, vec![
+			(b"key0", Some(b"val0")),
+			(b"key1", Some(b"val1")),
+		]);
 	}
 }
