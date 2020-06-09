@@ -265,8 +265,11 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - Up to one slash operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 30.86 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 35 * WEIGHT_PER_MICROS]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
 		fn freeze(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
