@@ -34,7 +34,7 @@ use sp_transaction_pool::error;
 use crate::{
 	base_pool::Transaction,
 	future::WaitingTransaction,
-	tracked_map::{ReadOnlyTrackedMap, TrackedMap, TrackedSize},
+	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
 };
 
 /// An in-pool transaction reference.
@@ -120,8 +120,8 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
 
-impl<Hash, Ex> TrackedSize for ReadyTx<Hash, Ex> {
-	fn tracked_size(&self) -> usize {
+impl<Hash, Ex> tracked_map::Size for ReadyTx<Hash, Ex> {
+	fn size(&self) -> usize {
 		self.transaction.transaction.bytes
 	}
 }

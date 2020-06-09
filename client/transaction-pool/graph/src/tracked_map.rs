@@ -23,8 +23,8 @@ use std::{
 use parking_lot::{RwLock, RwLockWriteGuard, RwLockReadGuard};
 
 /// Something that can report it's size.
-pub trait TrackedSize {
-	fn tracked_size(&self) -> usize;
+pub trait Size {
+	fn size(&self) -> usize;
 }
 
 /// Map with size tracking.
@@ -129,15 +129,15 @@ pub struct TrackedMapWriteAccess<'a, K, V> {
 
 impl<'a, K, V> TrackedMapWriteAccess<'a, K, V>
 where
-	K: Eq + std::hash::Hash, V: TrackedSize
+	K: Eq + std::hash::Hash, V: Size
 {
 	/// Insert value and return previous (if any).
 	pub fn insert(&mut self, key: K, val: V) -> Option<V> {
-		let new_bytes = val.tracked_size();
+		let new_bytes = val.size();
 		self.bytes.fetch_add(new_bytes as isize, AtomicOrdering::Relaxed);
 		self.length.fetch_add(1, AtomicOrdering::Relaxed);
 		self.inner_guard.insert(key, val).and_then(|old_val| {
-			self.bytes.fetch_sub(old_val.tracked_size() as isize, AtomicOrdering::Relaxed);
+			self.bytes.fetch_sub(old_val.size() as isize, AtomicOrdering::Relaxed);
 			self.length.fetch_sub(1, AtomicOrdering::Relaxed);
 			Some(old_val)
 		})
@@ -146,7 +146,7 @@ where
 	/// Remove value by key.
 	pub fn remove(&mut self, key: &K) -> Option<V> {
 		let val = self.inner_guard.remove(key);
-		if let Some(size) = val.as_ref().map(TrackedSize::tracked_size) {
+		if let Some(size) = val.as_ref().map(Size::size) {
 			self.bytes.fetch_sub(size as isize, AtomicOrdering::Relaxed);
 			self.length.fetch_sub(1, AtomicOrdering::Relaxed);
 		}
@@ -164,8 +164,8 @@ mod tests {
 
 	use super::*;
 
-	impl TrackedSize for i32 {
-		fn tracked_size(&self) -> usize { *self as usize / 10 }
+	impl Size for i32 {
+		fn size(&self) -> usize { *self as usize / 10 }
 	}
 
 	#[test]
