@@ -81,6 +81,8 @@ members = [
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
+  "frame/im-online/rpc",
+  "frame/im-online/rpc/runtime-api",
 	"frame/indices",
 	"frame/membership",
 	"frame/metadata",
