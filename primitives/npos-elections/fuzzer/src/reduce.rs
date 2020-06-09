@@ -34,7 +34,7 @@ use honggfuzz::fuzz;
 
 mod common;
 use common::to_range;
-use sp_phragmen::{StakedAssignment, ExtendedBalance, build_support_map, reduce};
+use sp_npos_elections::{StakedAssignment, ExtendedBalance, build_support_map, reduce};
 use rand::{self, Rng, SeedableRng, RngCore};
 
 type Balance = u128;

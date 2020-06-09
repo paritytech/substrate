@@ -16,16 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle};
-use crate::status_sinks;
-use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig};
-use crate::metrics::MetricsService;
-use sc_client_api::{
-	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
+use crate::{
+	Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
+	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
+	status_sinks, metrics::MetricsService, client::{Client, ClientConfig},
+	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
-use crate::client::{Client, ClientConfig};
+use sc_client_api::{
+	BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain,
+	execution_extensions::ExtensionsFactory, ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks,
+	CloneableSpawn, UsageProvider,
+};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
 use sp_consensus::{
@@ -55,8 +56,7 @@ use std::{
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
-use sp_blockchain;
+use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
@@ -101,6 +101,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	informant_prefix: String,
 }
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -364,6 +365,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: None,
 			block_announce_validator_builder: None,
+			informant_prefix: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -447,14 +449,36 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
+			informant_prefix: Default::default(),
 			marker: PhantomData,
 		})
 	}
 }
 
 impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
-	ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-	 	TExPool, TRpc, Backend> {
+	ServiceBuilder<
+		TBl,
+		TRtApi,
+		TCl,
+		TFchr,
+		TSc,
+		TImpQu,
+		TFprb,
+		TFpp,
+		TExPool,
+		TRpc,
+		Backend
+	>
+{
+	/// Returns a reference to the configuration that was stored in this builder.
+	pub fn config(&self) -> &Configuration {
+		&self.config
+	}
+
+	/// Returns a reference to the optional prometheus registry that was stored in this builder.
+	pub fn prometheus_registry(&self) -> Option<&Registry> {
+		self.config.prometheus_config.as_ref().map(|config| &config.registry)
+	}
 
 	/// Returns a reference to the client that was stored in this builder.
 	pub fn client(&self) -> &Arc<TCl> {
@@ -520,6 +544,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -565,6 +590,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -603,6 +629,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -669,6 +696,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -699,20 +727,12 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	pub fn with_transaction_pool<UExPool>(
 		self,
 		transaction_pool_builder: impl FnOnce(
-			sc_transaction_pool::txpool::Options,
-			Arc<TCl>,
-			Option<TFchr>,
-			Option<&Registry>,
-		) -> Result<(UExPool, Option<BackgroundTask>), Error>
+			&Self,
+		) -> Result<(UExPool, Option<BackgroundTask>), Error>,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		UExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let (transaction_pool, background_task) = transaction_pool_builder(
-			self.config.transaction_pool.clone(),
-			self.client.clone(),
-			self.fetcher.clone(),
-			self.config.prometheus_config.as_ref().map(|config| &config.registry),
-		)?;
+		let (transaction_pool, background_task) = transaction_pool_builder(&self)?;
 
 		if let Some(background_task) = background_task{
 			self.task_manager.spawn_handle().spawn("txpool-background", background_task);
@@ -733,6 +753,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -770,6 +791,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -815,7 +837,41 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
+		})
+	}
+
+	/// Defines the informant's prefix for the logs. An empty string by default.
+	///
+	/// By default substrate will show logs without a prefix. Example:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	///
+	/// But you can define a prefix by using this function. Example:
+	///
+	/// ```rust,ignore
+	/// service.with_informant_prefix("[Prefix] ".to_string());
+	/// ```
+	///
+	/// This will output:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	pub fn with_informant_prefix(
+		self,
+		informant_prefix: String,
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TExPool, TRpc, Backend>, Error>
+	where TSc: Clone, TFchr: Clone {
+		Ok(ServiceBuilder {
+			informant_prefix: informant_prefix,
+			..self
 		})
 	}
 }
@@ -934,6 +990,7 @@ ServiceBuilder<
 			rpc_extensions_builder,
 			remote_backend,
 			block_announce_validator_builder,
+			informant_prefix,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -1030,14 +1087,9 @@ ServiceBuilder<
 		{
 			let txpool = Arc::downgrade(&transaction_pool);
 
-			let mut import_stream = client.import_notification_stream().map(|n| ChainEvent::NewBlock {
-				id: BlockId::Hash(n.hash),
-				header: n.header,
-				retracted: n.retracted,
-				is_new_best: n.is_new_best,
-			}).fuse();
+			let mut import_stream = client.import_notification_stream().map(Into::into).fuse();
 			let mut finality_stream = client.finality_notification_stream()
-				.map(|n| ChainEvent::Finalized::<TBl> { hash: n.hash })
+				.map(Into::into)
 				.fuse();
 
 			let events = async move {
@@ -1335,6 +1387,20 @@ ServiceBuilder<
 			}
 		}
 
+		// Spawn informant task
+		let network_status_sinks_1 = network_status_sinks.clone();
+		let informant_future = sc_informant::build(
+			client.clone(),
+			move |interval| {
+				let (sink, stream) = tracing_unbounded("mpsc_network_status");
+				network_status_sinks_1.lock().push(interval, sink);
+				stream
+			},
+			transaction_pool.clone(),
+			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
+		);
+		spawn_handle.spawn("informant", informant_future);
+
 		Ok(Service {
 			client,
 			task_manager,
@@ -1351,7 +1417,7 @@ ServiceBuilder<
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 			marker: PhantomData::<TBl>,
-			prometheus_registry: config.prometheus_config.map(|config| config.registry)
+			prometheus_registry: config.prometheus_config.map(|config| config.registry),
 		})
 	}
 }
