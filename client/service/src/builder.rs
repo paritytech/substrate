@@ -19,13 +19,14 @@
 use crate::{
 	Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
-	status_sinks, metrics::MetricsService, client::{Client, ClientConfig},
+	status_sinks, metrics::MetricsService,
+	client::{light, Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
 use sc_client_api::{
-	BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain,
-	execution_extensions::ExtensionsFactory, ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks,
-	CloneableSpawn, UsageProvider,
+	self, BlockchainEvents, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
+	backend::RemoteBackend,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
@@ -179,19 +180,19 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Light client backend type.
-pub type TLightBackend<TBl> = crate::client::light::backend::Backend<
+pub type TLightBackend<TBl> = sc_light::Backend<
 	sc_client_db::light::LightStorage<TBl>,
 	HashFor<TBl>,
 >;
 
 /// Light call executor type.
-pub type TLightCallExecutor<TBl, TExecDisp> = crate::client::light::call_executor::GenesisCallExecutor<
-	crate::client::light::backend::Backend<
+pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
+	sc_light::Backend<
 		sc_client_db::light::LightStorage<TBl>,
 		HashFor<TBl>
 	>,
 	crate::client::LocalCallExecutor<
-		crate::client::light::backend::Backend<
+		sc_light::Backend<
 			sc_client_db::light::LightStorage<TBl>,
 			HashFor<TBl>
 		>,
@@ -415,18 +416,18 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
-		let light_blockchain = crate::client::light::new_light_blockchain(db_storage);
+		let light_blockchain = sc_light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(
-			crate::client::light::new_fetch_checker::<_, TBl, _>(
+			sc_light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
 				executor.clone(),
 				Box::new(task_manager.spawn_handle()),
 			),
 		);
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-		let backend = crate::client::light::new_light_backend(light_blockchain);
+		let backend = sc_light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
-		let client = Arc::new(crate::client::light::new_light(
+		let client = Arc::new(light::new_light(
 			backend.clone(),
 			config.chain_spec.as_storage_builder(),
 			executor,
