@@ -157,12 +157,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				Role::Sentry { validators } => {
 					for validator in validators {
 						sentries_and_validators.insert(validator.peer_id.clone());
+						reserved_nodes.insert(validator.peer_id.clone());
 						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
 					}
 				}
 				Role::Authority { sentry_nodes } => {
 					for sentry_node in sentry_nodes {
 						sentries_and_validators.insert(sentry_node.peer_id.clone());
+						reserved_nodes.insert(sentry_node.peer_id.clone());
 						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
 					}
 				}
@@ -390,9 +392,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol().num_queued_blocks()
 	}
 
-	/// Returns the number of processed blocks.
-	pub fn num_processed_blocks(&self) -> usize {
-		self.network_service.user_protocol().num_processed_blocks()
+	/// Returns the number of downloaded blocks.
+	pub fn num_downloaded_blocks(&self) -> usize {
+		self.network_service.user_protocol().num_downloaded_blocks()
 	}
 
 	/// Number of active sync requests.
