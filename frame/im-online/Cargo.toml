@@ -24,6 +24,7 @@ sp-runtime = { version = "2.0.0-rc2", default-features = false, path = "../../pr
 sp-staking = { version = "2.0.0-rc2", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0-rc2", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc2", default-features = false, path = "../system" }
+pallet-im-online-rpc-runtime-api = { version = "2.0.0-rc2", default-features = false, path = "./rpc/runtime-api" }
 
 frame-benchmarking = { version = "2.0.0-rc2", default-features = false, path = "../benchmarking", optional = true }
 
@@ -42,5 +43,6 @@ std = [
 	"sp-staking/std",
 	"frame-support/std",
 	"frame-system/std",
+  "pallet-im-online-rpc-runtime-api/std"
 ]
 runtime-benchmarks = ["frame-benchmarking"]
