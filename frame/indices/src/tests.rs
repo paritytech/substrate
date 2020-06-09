@@ -49,6 +49,20 @@ fn freeing_should_work() {
 }
 
 #[test]
+fn freezing_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Indices::claim(Some(1).into(), 0));
+		assert_noop!(Indices::freeze(Some(1).into(), 1), Error::<Test>::NotAssigned);
+		assert_noop!(Indices::freeze(Some(2).into(), 0), Error::<Test>::NotOwner);
+		assert_ok!(Indices::freeze(Some(1).into(), 0));
+		assert_noop!(Indices::freeze(Some(1).into(), 0), Error::<Test>::Permanent);
+
+		assert_noop!(Indices::free(Some(1).into(), 0), Error::<Test>::Permanent);
+		assert_noop!(Indices::transfer(Some(1).into(), 2, 0), Error::<Test>::Permanent);
+	});
+}
+
+#[test]
 fn indexing_lookup_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Indices::claim(Some(1).into(), 0));
@@ -87,7 +101,7 @@ fn transfer_index_on_accounts_should_work() {
 fn force_transfer_index_on_preowned_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Indices::claim(Some(1).into(), 0));
-		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0));
+		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0, false));
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(3), 0);
 		assert_eq!(Indices::lookup_index(0), Some(3));
@@ -97,7 +111,7 @@ fn force_transfer_index_on_preowned_should_work() {
 #[test]
 fn force_transfer_index_on_free_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0));
+		assert_ok!(Indices::force_transfer(Origin::ROOT, 3, 0, false));
 		assert_eq!(Balances::reserved_balance(3), 0);
 		assert_eq!(Indices::lookup_index(0), Some(3));
 	});
