@@ -22,8 +22,6 @@
 use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::Saturating;
-use crate::Module as Utility;
 
 const SEED: u32 = 0;
 

@@ -113,6 +113,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 		background_tasks,
 		None,
 		Box::new(|_| ()),
+		String::new()
 	)?;
 
 	if role.is_authority() {
@@ -150,7 +151,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() {
-		Some(service.keystore())
+		Some(service.keystore() as sp_core::traits::BareCryptoStorePtr)
 	} else {
 		None
 	};
@@ -260,5 +261,6 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 		background_tasks,
 		None,
 		Box::new(|_| ()),
+		String::new()
 	)
 }

@@ -37,6 +37,7 @@ use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
 };
+use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
@@ -381,6 +382,7 @@ pub fn build<
 	background_tasks: Vec<(&'static str, BackgroundTask)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>,>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send + 'static>>,
 	rpc_extensions_builder: URpcBuilder,
+	informant_prefix: String,
 ) -> Result<Service<
 	TBl,
 	Client<TBackend, TExec, TBl, TRtApi>,
@@ -646,7 +648,7 @@ where
 		chain_type: chain_spec.chain_type().clone(),
 	};
 
-	let subscriptions = sc_rpc::Subscriptions::new(Arc::new(task_manager.spawn_handle()));
+	let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
 
 	let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 		(remote_backend.as_ref(), on_demand.as_ref()) {
@@ -782,6 +784,20 @@ where
 			Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
 		}
 	}
+
+	// Spawn informant task
+	let network_status_sinks_1 = network_status_sinks.clone();
+	let informant_future = sc_informant::build(
+		client.clone(),
+		move |interval| {
+			let (sink, stream) = tracing_unbounded("mpsc_network_status");
+			network_status_sinks_1.lock().push(interval, sink);
+			stream
+		},
+		transaction_pool.clone(),
+		sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
+	);
+	spawn_handle.spawn("informant", informant_future);
 
 	Ok(Service {
 		client,

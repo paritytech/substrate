@@ -147,7 +147,7 @@ impl<C: SubstrateCli> Runner<C> {
 	///
 	/// ```text
 	/// 2020-06-03 16:14:21 Substrate Node
-	/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc2-f4940588c-x86_64-linux-gnu
+	/// 2020-06-03 16:14:21 ✌️  version 2.0.0-rc3-f4940588c-x86_64-linux-gnu
 	/// 2020-06-03 16:14:21 ❤️  by Parity Technologies <admin@parity.io>, 2017-2020
 	/// 2020-06-03 16:14:21 📋 Chain specification: Flaming Fir
 	/// 2020-06-03 16:14:21 🏷  Node name: jolly-rod-7462
@@ -273,9 +273,6 @@ impl<C: SubstrateCli> Runner<C> {
 		T: AbstractService + Unpin,
 	{
 		let service = service_builder(self.config)?;
-
-		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
-		let _informant_handle = self.tokio_runtime.spawn(informant_future);
 
 		// we eagerly drop the service so that the internal exit future is fired,
 		// but we need to keep holding a reference to the global telemetry guard
