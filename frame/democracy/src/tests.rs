@@ -38,7 +38,6 @@ mod external_proposing;
 mod fast_tracking;
 mod lock_voting;
 mod preimage;
-mod proxying;
 mod public_proposals;
 mod scheduling;
 mod voting;
