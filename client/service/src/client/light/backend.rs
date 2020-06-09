@@ -231,6 +231,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
+		_blacklist_finalized: bool,
 	) -> ClientResult<NumberFor<Block>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}

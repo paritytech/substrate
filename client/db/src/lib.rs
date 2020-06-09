@@ -50,8 +50,7 @@ mod subdb;
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
-use std::collections::HashMap;
-
+use std::collections::{HashMap, HashSet};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -779,6 +778,7 @@ pub struct Backend<Block: BlockT> {
 	is_archive: bool,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
+	finalize_blacklist: Arc<RwLock<HashSet<Block::Hash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -857,6 +857,7 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
+			finalize_blacklist: Arc::new(RwLock::new(HashSet::new())),
 		})
 	}
 
@@ -957,6 +958,11 @@ impl<Block: BlockT> Backend<Block> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
+
+		if self.finalize_blacklist.read().contains(hash) {
+			return Ok((*hash, number, false, false))
+		}
+
 		self.note_finalized(
 			transaction,
 			false,
@@ -1144,7 +1150,8 @@ impl<Block: BlockT> Backend<Block> {
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
-				let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
+				let finalized = !self.finalize_blacklist.read().contains(&hash) &&
+					(number_u64 == 0 || pending_block.leaf_state.is_final());
 				finalized
 			} else {
 				false
@@ -1483,7 +1490,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		})
 	}
 
-	fn revert(&self, n: NumberFor<Block>, revert_finalized: bool) -> ClientResult<NumberFor<Block>> {
+	fn revert(
+		&self,
+		n: NumberFor<Block>,
+		revert_finalized: bool,
+		blacklist_finalized: bool,
+	) -> ClientResult<NumberFor<Block>> {
 		let mut best_number = self.blockchain.info().best_number;
 		let mut best_hash = self.blockchain.info().best_hash;
 
@@ -1497,6 +1509,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		};
 
 		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
+			let mut finalize_blacklist = self.finalize_blacklist.write();
+
 			for c in 0 .. n.saturated_into::<u64>() {
 				if best_number.is_zero() {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
@@ -1509,6 +1523,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
 							|| sp_blockchain::Error::UnknownBlock(
 								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+						let removed_hash = removed.hash();
 
 						best_number -= One::one();	// prev block
 						best_hash = self.blockchain.hash(best_number)?.ok_or_else(
@@ -1526,7 +1541,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							),
 						)?;
 						if update_finalized {
-							transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, key.clone());
+							transaction.set_from_vec(
+								columns::META,
+								meta_keys::FINALIZED_BLOCK,
+								key.clone()
+							);
+							if blacklist_finalized {
+								finalize_blacklist.insert(removed_hash);
+							}
 						}
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());

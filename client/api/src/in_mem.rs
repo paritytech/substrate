@@ -716,6 +716,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
+		_blacklist_finalized: bool,
 	) -> sp_blockchain::Result<NumberFor<Block>> {
 		Ok(Zero::zero())
 	}

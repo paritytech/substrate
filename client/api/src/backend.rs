@@ -449,15 +449,18 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
-	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set
-	/// it will attempt to revert past any finalized block, this is unsafe and
-	/// can potentially leave the node in an inconsistent state.
+	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
+	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
+	/// inconsistent state. If `blacklist_finalized` is set, re-importing will not mark the reverted
+	/// blocks as finalized, even if the consensus engine described it. The blacklist is reset upon
+	/// client restart.
 	///
 	/// Returns the number of blocks that were successfully reverted.
 	fn revert(
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
+		blacklist_finalized: bool,
 	) -> sp_blockchain::Result<NumberFor<Block>>;
 
 	/// Insert auxiliary data into key-value store.

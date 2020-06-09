@@ -976,7 +976,7 @@ mod tests {
 		);
 
 		// after truncating block2_3 - there are 2 unfinalized forks - block2_1+block2_2
-		backend.revert(1, false).unwrap();
+		backend.revert(1, false, false).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
@@ -990,7 +990,7 @@ mod tests {
 
 		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
 		// the 1st one points to the block #3 because it isn't truncated
-		backend.revert(1, false).unwrap();
+		backend.revert(1, false, false).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
@@ -1003,7 +1003,7 @@ mod tests {
 		);
 
 		// after truncating block2 - there are no unfinalized forks
-		backend.revert(1, false).unwrap();
+		backend.revert(1, false, false).unwrap();
 		assert!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)

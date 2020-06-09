@@ -1060,20 +1060,24 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, false)?)
+		Ok(self.backend.revert(n, false, false)?)
 	}
 
-	/// Attempts to revert the chain by `n` blocks disregarding finality. This
-	/// method will revert any finalized blocks as requested and can potentially
-	/// leave the node in an inconsistent state. Other modules in the system that
-	/// persist data and that rely on finality (e.g. consensus parts) will be
-	/// unaffected by the revert. Use this method with caution and making sure
-	/// that no other data needs to be reverted for consistency aside from the
-	/// block data.
+	/// Attempts to revert the chain by `n` blocks disregarding finality. This method will revert
+	/// any finalized blocks as requested and can potentially leave the node in an inconsistent
+	/// state. Other modules in the system that persist data and that rely on finality
+	/// (e.g. consensus parts) will be unaffected by the revert. Use this method with caution and
+	/// making sure that no other data needs to be reverted for consistency aside from the block
+	/// data. If `blacklist` is set to true, will also blacklist reverted blocks from finalizing
+	/// again. The blacklist is reset upon client restart.
 	///
 	/// Returns the number of blocks that were successfully reverted.
-	pub fn unsafe_revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, true)?)
+	pub fn unsafe_revert(
+		&self,
+		n: NumberFor<Block>,
+		blacklist: bool
+	) -> sp_blockchain::Result<NumberFor<Block>> {
+		Ok(self.backend.revert(n, true, blacklist)?)
 	}
 
 	/// Get blockchain info.
