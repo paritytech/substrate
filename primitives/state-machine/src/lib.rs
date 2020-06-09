@@ -625,6 +625,32 @@ where
 	prove_read_on_proof_backend(&proof_backend, keys)
 }
 
+/// Generate storage read proof for query plan verification.
+pub fn prove_read_for_query_plan_check<B, H, I>(
+	backend: B,
+	keys: I,
+) -> Result<(sp_trie::RecordBackendFor<B::StorageProof, H>, ProofInput), Box<dyn Error>>
+where
+	B: Backend<H>,
+	H: Hasher,
+	H::Out: Ord + Codec,
+	I: IntoIterator,
+	I::Item: AsRef<[u8]>,
+{
+	let proof_backend = backend.as_proof_backend()
+		.ok_or_else(
+			|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>
+		)?;
+	for key in keys.into_iter() {
+		proof_backend
+			.storage(key.as_ref())
+			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+	}
+
+	Ok(proof_backend.extract_recorder())
+}
+
+
 /// Generate child storage read proof.
 pub fn prove_child_read<B, H, I>(
 	backend: B,
@@ -774,6 +800,7 @@ mod tests {
 
 	type CompactProof = sp_trie::CompactProof<Layout<BlakeTwo256>>;
 	type CompactFullProof = sp_trie::CompactFullProof<Layout<BlakeTwo256>>;
+	type QueryPlanProof = sp_trie::QueryPlanProof<Layout<BlakeTwo256>>;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1240,12 +1267,74 @@ mod tests {
 	}
 
 	#[test]
+	fn prove_read_and_proof_check_works_query_plan() {
+		use sp_trie::{CheckableStorageProof, ProofInput};
+
+		let child_info = ChildInfo::new_default(b"sub1");
+		let child_info = &child_info;
+		// fetch read proof from 'remote' full node.
+		// Using compact proof to get record backend and proofs.
+		let remote_backend = trie_backend::tests::test_trie_proof::<CompactProof>();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let (recorder, root_input) = prove_read_for_query_plan_check(remote_backend, &[b"value2"]).unwrap();
+		let mut root_map = ChildrenProofMap::default();
+		root_map.insert(ChildInfo::top_trie().proof_info(), remote_root.encode());
+		assert!(ProofInput::ChildTrieRoots(root_map) == root_input); 
+
+		// TODO EMCH could do a primitive function to avoid building the input manually.
+		let mut query_plan = ChildrenProofMap::default();
+		query_plan.insert(
+			ChildInfo::top_trie().proof_info(),
+			(remote_root.encode(), vec![(b"value2".to_vec(), Some(vec![24u8]))]),
+		);
+		let input_check = ProofInput::QueryPlanWithValues(query_plan);
+		let mut query_plan = ChildrenProofMap::default();
+		query_plan.insert(
+			ChildInfo::top_trie().proof_info(),
+			(remote_root.encode(), vec![b"value2".to_vec()]),
+		);
+		let input = ProofInput::QueryPlan(query_plan);
+		let remote_proof = <QueryPlanProof as sp_trie::RegStorageProof<_>>::extract_proof(&recorder, input).unwrap();
+		remote_proof.verify(&input_check);
+	/*	
+		// on child trie
+		let remote_backend = trie_backend::tests::test_trie_proof::<QueryPlanProof>();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_proof = prove_child_read(
+			remote_backend,
+			child_info,
+			&[b"value3"],
+		).unwrap();
+		let local_result1 = read_child_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone().into(),
+			child_info,
+			&[b"value3"],
+		).unwrap();
+		let local_result2 = read_child_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone().into(),
+			child_info,
+			&[b"value2"],
+		).unwrap();
+		assert_eq!(
+			local_result1.into_iter().collect::<Vec<_>>(),
+			vec![(b"value3".to_vec(), Some(vec![142]))],
+		);
+		assert_eq!(
+			local_result2.into_iter().collect::<Vec<_>>(),
+			vec![(b"value2".to_vec(), None)],
+		);
+*/
+		// TODO test with no child trie ref
+	}
+
+	#[test]
 	fn prove_read_and_proof_check_works() {
 		prove_read_and_proof_check_works_inner::<SimpleProof>();
-		prove_read_and_proof_check_works_inner::<CompactProof>;
+		prove_read_and_proof_check_works_inner::<CompactProof>();
 		prove_read_and_proof_check_works_inner::<SimpleFullProof>();
-		prove_read_and_proof_check_works_inner::<CompactFullProof>;
-		/* TODO EMCH consider full storage test and value skip test */
+		prove_read_and_proof_check_works_inner::<CompactFullProof>();
 	}
 	fn prove_read_and_proof_check_works_inner<P>()
 		where
@@ -1258,7 +1347,8 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie_proof::<P>();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
- 		// check proof locally
+
+		// check proof locally
 		let local_result1 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
@@ -1269,12 +1359,13 @@ mod tests {
 			remote_proof.clone().into(),
 			&[&[0xff]],
 		).is_ok();
- 		// check that results are correct
+		// check that results are correct
 		assert_eq!(
 			local_result1.into_iter().collect::<Vec<_>>(),
 			vec![(b"value2".to_vec(), Some(vec![24]))],
 		);
 		assert_eq!(local_result2, false);
+
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie_proof::<P>();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
@@ -1304,9 +1395,13 @@ mod tests {
 			vec![(b"value2".to_vec(), None)],
 		);
 	}
+
 	fn prove_read_and_proof_on_fullbackend_works<P>() {
+		// more proof could be tested, but at this point the full backend
+		// is just here to assert that we are able to test child trie content
+		// and are able to switch backend for checking proof.
 		prove_read_and_proof_on_fullbackend_works_inner::<SimpleFullProof>();
-		prove_read_and_proof_on_fullbackend_works_inner::<CompactFullProof>;
+		prove_read_and_proof_on_fullbackend_works_inner::<CompactFullProof>();
 	}
 	fn prove_read_and_proof_on_fullbackend_works_inner<P>()
 		where

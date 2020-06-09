@@ -216,15 +216,6 @@ impl<S, H, P> ProvingBackend<S, H, P>
 		}
 	}
 
- 	/// Extract current recording state.
-	/// This is sharing a rc over a sync reference.
-	/// TODO EMCH seems unused
-	pub fn extract_recorder(&self) -> (SyncRecordBackendFor<P, H>, ProofInput) {
-		(
-			self.trie_backend.backend_storage().proof_recorder.clone(),
-			self.trie_backend.extract_registered_roots(),
-		)
-	}
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> TrieBackendStorage<H>
@@ -265,6 +256,15 @@ impl<S, H, P> ProofRegBackend<H> for ProvingBackend<S, H, P>
 			&self.trie_backend.essence().backend_storage().proof_recorder.read(),
 			input,
 		).map_err(|e| Box::new(e) as Box<dyn Error>)
+	}
+
+	fn extract_recorder(self) -> (RecordBackendFor<Self::StorageProof, H>, ProofInput) {
+		let input = self.trie_backend.extract_registered_roots();
+		let recorder = match Arc::try_unwrap(self.trie_backend.into_storage().proof_recorder) {
+			Ok(r) => r.into_inner(),
+			Err(arc) => arc.read().clone(),
+		};
+		(recorder, input)
 	}
 }
 

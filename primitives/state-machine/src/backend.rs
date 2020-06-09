@@ -24,7 +24,7 @@ use crate::{
 	trie_backend_essence::TrieBackendStorage,
 	UsageInfo, StorageKey, StorageValue, StorageCollection,
 };
-use sp_trie::{ProofInput, BackendStorageProof};
+use sp_trie::{ProofInput, BackendStorageProof, RecordBackendFor};
 
 /// Access the state of the proof backend of a backend.
 pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
@@ -236,6 +236,7 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 }
 
 /// Backend that can be instantiated from its state.
+/// TODO EMCH does not seem use at this point
 pub trait InstantiableStateBackend<H>: Backend<H>
 	where
 		H: Hasher,
@@ -269,6 +270,9 @@ pub trait ProofRegBackend<H>: crate::backend::Backend<H>
 
 	/// Extract proof after running operation to prove.
 	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>>;
+
+	/// Get current recording state.
+	fn extract_recorder(self) -> (RecordBackendFor<Self::StorageProof, H>, ProofInput);
 }
 
 /// Backend used to produce proof.

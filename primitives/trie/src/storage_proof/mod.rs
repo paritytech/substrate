@@ -115,7 +115,7 @@ const fn incompatible_type() -> Error {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 /// Additional information needed for packing or unpacking storage proof.
 /// These do not need to be part of the proof but are required
 /// when processing the proof.
@@ -126,8 +126,8 @@ pub enum Input {
 	/// Contains trie roots used during proof processing.
 	ChildTrieRoots(ChildrenProofMap<Vec<u8>>),
 
-	/// Contains trie roots used during proof processing.
-	/// Contains key and values queried during the proof processing.
+	/// For each children, contains encoded trie roots used during proof processing.
+	/// Also contains key and values queried during the proof processing.
 	QueryPlanWithValues(ChildrenProofMap<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>),
 
 	/// Contains trie roots used during proof processing.
