@@ -238,7 +238,7 @@ decl_module! {
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(2, 2) + 25 * WEIGHT_PER_MICROS]
-		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
+		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex, freeze: bool) {
 			ensure_root(origin)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
