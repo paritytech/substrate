@@ -34,7 +34,7 @@ const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
 #[cfg(test)]
 pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
-const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
+const MIN_BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
 /// Payload from queue to worker.
 struct WorkerPayload<Api: ChainApi> {
@@ -68,13 +68,20 @@ async fn batch_revalidate<Api: ChainApi>(
 	let mut invalid_hashes = Vec::new();
 	let mut revalidated = HashMap::new();
 
-	for ext_hash in batch {
-		let ext = match pool.validated_pool().ready_by_hash(&ext_hash) {
-			Some(ext) => ext,
-			None => continue,
-		};
+	let validation_results = futures::future::join_all(
+		batch.into_iter().filter_map(|ext_hash| {
+			pool.validated_pool().ready_by_hash(&ext_hash).map(|ext| {
+				let api = api.clone();
+				async move {
+					api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
+						.map(|validation_result| (validation_result, ext_hash.clone(), ext)).await
+				}
+			})
+		})
+	).await;
 
-		match api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone()).await {
+	for (validation_result, ext_hash, ext) in validation_results {
+		match validation_result {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
 				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
 				invalid_hashes.push(ext_hash);
@@ -131,7 +138,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 	fn prepare_batch(&mut self) -> Vec<ExtrinsicHash<Api>> {
 		let mut queued_exts = Vec::new();
-		let mut left = BACKGROUND_REVALIDATION_BATCH_SIZE;
+		let mut left = std::cmp::max(MIN_BACKGROUND_REVALIDATION_BATCH_SIZE, self.members.len() / 4);
 
 		// Take maximum of count transaction by order
 		// which they got into the pool

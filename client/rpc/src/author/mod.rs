@@ -32,8 +32,8 @@ use rpc::futures::{
 };
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
-use sc_rpc_api::{DenyUnsafe, Subscriptions};
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use sc_rpc_api::DenyUnsafe;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use codec::{Encode, Decode};
 use sp_core::{Bytes, traits::BareCryptoStorePtr};
 use sp_api::ProvideRuntimeApi;
@@ -55,7 +55,7 @@ pub struct Author<P, Client> {
 	/// Transactions pool
 	pool: Arc<P>,
 	/// Subscriptions manager
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	/// The key store.
 	keystore: BareCryptoStorePtr,
 	/// Whether to deny unsafe calls
@@ -67,7 +67,7 @@ impl<P, Client> Author<P, Client> {
 	pub fn new(
 		client: Arc<Client>,
 		pool: Arc<P>,
-		subscriptions: Subscriptions,
+		subscriptions: SubscriptionManager,
 		keystore: BareCryptoStorePtr,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
@@ -80,7 +80,6 @@ impl<P, Client> Author<P, Client> {
 		}
 	}
 }
-
 
 /// Currently we treat all RPC transactions as externals.
 ///

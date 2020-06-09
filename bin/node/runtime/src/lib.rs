@@ -1081,6 +1081,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"elections", Elections);
 			add_benchmark!(params, batches, b"identity", Identity);
 			add_benchmark!(params, batches, b"im-online", ImOnline);
+			add_benchmark!(params, batches, b"indices", Indices);
 			add_benchmark!(params, batches, b"multisig", Multisig);
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
 			add_benchmark!(params, batches, b"proxy", Proxy);

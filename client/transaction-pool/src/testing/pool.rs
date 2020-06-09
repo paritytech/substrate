@@ -281,6 +281,25 @@ fn should_resubmit_from_retracted_during_maintenance() {
 	assert_eq!(pool.status().ready, 1);
 }
 
+
+#[test]
+fn should_not_resubmit_from_retracted_during_maintenance_if_tx_is_also_in_enacted() {
+	let xt = uxt(Alice, 209);
+
+	let (pool, _guard, _notifier) = maintained_pool();
+
+	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	let header = pool.api.push_block(1, vec![xt.clone()]);
+	let fork_header = pool.api.push_block(1, vec![xt]);
+
+	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api);
+
+	block_on(pool.maintain(event));
+	assert_eq!(pool.status().ready, 0);
+}
+
 #[test]
 fn should_not_retain_invalid_hashes_from_retracted() {
 	let xt = uxt(Alice, 209);
