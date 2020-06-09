@@ -30,7 +30,6 @@ use sp_runtime::traits::{Bounded, One};
 use crate::Module as Democracy;
 
 const SEED: u32 = 0;
-const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
 const MAX_SECONDERS: u32 = 100;
@@ -95,16 +94,6 @@ fn account_vote<T: Trait>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 		vote: v,
 		balance: b,
 	}
-}
-
-fn open_activate_proxy<T: Trait>(u: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let caller = funded_account::<T>("caller", u);
-	let voter = funded_account::<T>("voter", u);
-
-	Democracy::<T>::open_proxy(RawOrigin::Signed(caller.clone()).into(), voter.clone())?;
-	Democracy::<T>::activate_proxy(RawOrigin::Signed(voter.clone()).into(), caller.clone())?;
-
-	Ok((caller, voter))
 }
 
 benchmarks! {
@@ -202,70 +191,6 @@ benchmarks! {
 	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, new_vote)
 	verify {
 		let votes = match VotingOf::<T>::get(&caller) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Vote was incorrectly added");
-		let referendum_info = Democracy::<T>::referendum_info(referendum_index)
-			.ok_or("referendum doesn't exist")?;
-		let tally =  match referendum_info {
-			ReferendumInfo::Ongoing(r) => r.tally,
-			_ => return Err("referendum not ongoing"),
-		};
-		assert_eq!(tally.nays, 1000.into(), "changed vote was not recorded");
-	}
-
-	// Basically copy paste of `vote_new`
-	proxy_vote_new {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let (caller, voter) = open_activate_proxy::<T>(0)?;
-		let account_vote = account_vote::<T>(100.into());
-
-		// Populate existing direct votes for the voter, they can vote on their own behalf
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(voter.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-
-		let referendum_index = add_referendum::<T>(r)?;
-
-	}: proxy_vote(RawOrigin::Signed(caller), referendum_index, account_vote)
-	verify {
-		let votes = match VotingOf::<T>::get(&voter) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
-	}
-
-	// Basically copy paste of `vote_existing`
-	proxy_vote_existing {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let (caller, voter) = open_activate_proxy::<T>(0)?;
-		let account_vote = account_vote::<T>(100.into());
-
-		// We need to create existing direct votes
-		for i in 0 ..=r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(voter.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-		let votes = match VotingOf::<T>::get(&voter) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
-
-		// Change vote from aye to nay
-		let nay = Vote { aye: false, conviction: Conviction::Locked1x };
-		let new_vote = AccountVote::Standard { vote: nay, balance: 1000.into() };
-		let referendum_index = Democracy::<T>::referendum_count() - 1;
-
-		// This tests when a user changes a vote
-	}: proxy_vote(RawOrigin::Signed(caller.clone()), referendum_index, new_vote)
-	verify {
-		let votes = match VotingOf::<T>::get(&voter) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct"),
 		};
@@ -505,33 +430,6 @@ benchmarks! {
 		}
 	}
 
-	activate_proxy {
-		let u in 1 .. MAX_USERS;
-
-		let caller: T::AccountId = funded_account::<T>("caller", u);
-		let proxy: T::AccountId = funded_account::<T>("proxy", u);
-		Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
-	}: _(RawOrigin::Signed(caller.clone()), proxy.clone())
-	verify {
-		assert_eq!(Democracy::<T>::proxy(proxy), Some(ProxyState::Active(caller)));
-	}
-
-	close_proxy {
-		let u in 1 .. MAX_USERS;
-		let (caller, _) = open_activate_proxy::<T>(u)?;
-	}: _(RawOrigin::Signed(caller.clone()))
-	verify {
-		assert_eq!(Democracy::<T>::proxy(caller), None);
-	}
-
-	deactivate_proxy {
-		let u in 1 .. MAX_USERS;
-		let (caller, voter) = open_activate_proxy::<T>(u)?;
-	}: _(RawOrigin::Signed(voter.clone()), caller.clone())
-	verify {
-		assert_eq!(Democracy::<T>::proxy(caller), Some(ProxyState::Open(voter)));
-	}
-
 	delegate {
 		let r in 1 .. MAX_REFERENDUMS;
 
@@ -760,14 +658,6 @@ benchmarks! {
 		assert_eq!(voting.locked_balance(), base_balance);
 	}
 
-	open_proxy {
-		let u in 1 .. MAX_USERS;
-
-		let caller: T::AccountId = funded_account::<T>("caller", u);
-		let proxy: T::AccountId = funded_account::<T>("proxy", u);
-
-	}: _(RawOrigin::Signed(proxy), caller)
-
 	remove_vote {
 		let r in 1 .. MAX_REFERENDUMS;
 
@@ -831,131 +721,6 @@ benchmarks! {
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
 
-	// This is a copy of delegate benchmark, but with `open_activate_proxy`
-	proxy_delegate {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let initial_balance: BalanceOf<T> = 100.into();
-		let delegated_balance: BalanceOf<T> = 1000.into();
-
-		let (caller, voter) = open_activate_proxy::<T>(0)?;
-
-		// Voter will initially delegate to `old_delegate`
-		let old_delegate: T::AccountId = funded_account::<T>("old_delegate", r);
-		Democracy::<T>::delegate(
-			RawOrigin::Signed(voter.clone()).into(),
-			old_delegate.clone(),
-			Conviction::Locked1x,
-			delegated_balance,
-		)?;
-		let (target, balance) = match VotingOf::<T>::get(&voter) {
-			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(target, old_delegate, "delegation target didn't work");
-		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
-		// Voter will now switch to `new_delegate`
-		let new_delegate: T::AccountId = funded_account::<T>("new_delegate", r);
-		let account_vote = account_vote::<T>(initial_balance);
-		// We need to create existing direct votes for the `new_delegate`
-		for i in 0..r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(new_delegate.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-		let votes = match VotingOf::<T>::get(&new_delegate) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
-	}: _(RawOrigin::Signed(caller.clone()), new_delegate.clone(), Conviction::Locked1x, delegated_balance)
-	verify {
-		let (target, balance) = match VotingOf::<T>::get(&voter) {
-			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(target, new_delegate, "delegation target didn't work");
-		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
-		let delegations = match VotingOf::<T>::get(&new_delegate) {
-			Voting::Direct { delegations, .. } => delegations,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(delegations.capital, delegated_balance, "delegation was not recorded.");
-	}
-
-	// This is a copy of undelegate benchmark, but with `open_activate_proxy`
-	proxy_undelegate {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let initial_balance: BalanceOf<T> = 100.into();
-		let delegated_balance: BalanceOf<T> = 1000.into();
-
-		let (caller, voter) = open_activate_proxy::<T>(0)?;
-		// Caller will delegate
-		let the_delegate: T::AccountId = funded_account::<T>("delegate", r);
-		Democracy::<T>::delegate(
-			RawOrigin::Signed(voter.clone()).into(),
-			the_delegate.clone(),
-			Conviction::Locked1x,
-			delegated_balance,
-		)?;
-		let (target, balance) = match VotingOf::<T>::get(&voter) {
-			Voting::Delegating { target, balance, .. } => (target, balance),
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(target, the_delegate, "delegation target didn't work");
-		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
-		// We need to create votes direct votes for the `delegate`
-		let account_vote = account_vote::<T>(initial_balance);
-		for i in 0..r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(
-				RawOrigin::Signed(the_delegate.clone()).into(),
-				ref_idx,
-				account_vote.clone()
-			)?;
-		}
-		let votes = match VotingOf::<T>::get(&the_delegate) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
-	}: _(RawOrigin::Signed(caller.clone()))
-	verify {
-		// Voting should now be direct
-		match VotingOf::<T>::get(&voter) {
-			Voting::Direct { .. } => (),
-			_ => return Err("undelegation failed"),
-		}
-	}
-
-	proxy_remove_vote {
-		let r in 1 .. MAX_REFERENDUMS;
-
-		let (caller, voter) = open_activate_proxy::<T>(0)?;
-		let account_vote = account_vote::<T>(100.into());
-
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(voter.clone()).into(), ref_idx, account_vote.clone())?;
-		}
-
-		let votes = match VotingOf::<T>::get(&voter) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), r as usize, "Votes not created");
-
-		let referendum_index = r - 1;
-
-	}: _(RawOrigin::Signed(caller.clone()), referendum_index)
-	verify {
-		let votes = match VotingOf::<T>::get(&voter) {
-			Voting::Direct { votes, .. } => votes,
-			_ => return Err("Votes are not direct"),
-		};
-		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
-	}
-
 	enact_proposal_execute {
 		// Num of bytes in encoded proposal
 		let b in 0 .. MAX_BYTES;
@@ -1012,8 +777,6 @@ mod tests {
 			assert_ok!(test_benchmark_second::<Test>());
 			assert_ok!(test_benchmark_vote_new::<Test>());
 			assert_ok!(test_benchmark_vote_existing::<Test>());
-			assert_ok!(test_benchmark_proxy_vote_new::<Test>());
-			assert_ok!(test_benchmark_proxy_vote_existing::<Test>());
 			assert_ok!(test_benchmark_emergency_cancel::<Test>());
 			assert_ok!(test_benchmark_external_propose::<Test>());
 			assert_ok!(test_benchmark_external_propose_majority::<Test>());
@@ -1025,10 +788,6 @@ mod tests {
 			assert_ok!(test_benchmark_on_initialize_external::<Test>());
 			assert_ok!(test_benchmark_on_initialize_public::<Test>());
 			assert_ok!(test_benchmark_on_initialize_no_launch_no_maturing::<Test>());
-			assert_ok!(test_benchmark_open_proxy::<Test>());
-			assert_ok!(test_benchmark_activate_proxy::<Test>());
-			assert_ok!(test_benchmark_close_proxy::<Test>());
-			assert_ok!(test_benchmark_deactivate_proxy::<Test>());
 			assert_ok!(test_benchmark_delegate::<Test>());
 			assert_ok!(test_benchmark_undelegate::<Test>());
 			assert_ok!(test_benchmark_clear_public_proposals::<Test>());
@@ -1039,9 +798,6 @@ mod tests {
 			assert_ok!(test_benchmark_unlock_set::<Test>());
 			assert_ok!(test_benchmark_remove_vote::<Test>());
 			assert_ok!(test_benchmark_remove_other_vote::<Test>());
-			assert_ok!(test_benchmark_proxy_delegate::<Test>());
-			assert_ok!(test_benchmark_proxy_undelegate::<Test>());
-			assert_ok!(test_benchmark_proxy_remove_vote::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_execute::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_slash::<Test>());
 		});

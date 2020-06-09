@@ -673,12 +673,12 @@ fn imports_stale_once() {
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
 	import_with_announce(&mut net, new_hash);
-	assert_eq!(net.peer(1).num_processed_blocks(), 1);
+	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
 	import_with_announce(&mut net, known_stale_hash);
-	assert_eq!(net.peer(1).num_processed_blocks(), 2);
+	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
 }
 
 #[test]

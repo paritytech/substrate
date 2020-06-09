@@ -137,7 +137,8 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 		from = backend.header_metadata(from.parent)?;
 	}
 
-	// add the pivot block. and append the reversed to-branch (note that it's reverse order originals)
+	// add the pivot block. and append the reversed to-branch
+	// (note that it's reverse order originals)
 	let pivot = from_branch.len();
 	from_branch.push(HashAndNumber {
 		number: to.number,
@@ -182,16 +183,22 @@ pub struct HashAndNumber<Block: BlockT> {
 /// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TreeRoute<Block: BlockT> {
 	route: Vec<HashAndNumber<Block>>,
 	pivot: usize,
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
-	/// Get a slice of all retracted blocks in reverse order (towards common ancestor)
+	/// Get a slice of all retracted blocks in reverse order (towards common ancestor).
 	pub fn retracted(&self) -> &[HashAndNumber<Block>] {
 		&self.route[..self.pivot]
+	}
+
+	/// Convert into all retracted blocks in reverse order (towards common ancestor).
+	pub fn into_retracted(mut self) -> Vec<HashAndNumber<Block>> {
+		self.route.truncate(self.pivot);
+		self.route
 	}
 
 	/// Get the common ancestor block. This might be one of the two blocks of the
@@ -213,8 +220,15 @@ pub trait HeaderMetadata<Block: BlockT> {
 	/// Error used in case the header metadata is not found.
 	type Error;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
-	fn insert_header_metadata(&self, hash: Block::Hash, header_metadata: CachedHeaderMetadata<Block>);
+	fn header_metadata(
+		&self,
+		hash: Block::Hash,
+	) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
+	fn insert_header_metadata(
+		&self,
+		hash: Block::Hash,
+		header_metadata: CachedHeaderMetadata<Block>,
+	);
 	fn remove_header_metadata(&self, hash: Block::Hash);
 }
 
