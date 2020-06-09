@@ -51,7 +51,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 ///
 ///   diff = (previous_block_weight - target_weight)/max_weight
 ///   v = 0.00004
-///   next_weight = weight * (1 + (v * diff) + (v * diff)^2 / 2)
+///   next_weight = weight + (1 + (v * diff) + (v * diff)^2 / 2)
 ///
 /// Where `target_weight` must be given as the `Get` implementation of the `T` generic type.
 /// https://research.web3.foundation/en/latest/polkadot/Token%20Economics/#relay-chain-transaction-fees
