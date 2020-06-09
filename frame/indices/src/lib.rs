@@ -105,7 +105,6 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			// Utility.Multisigs -> Multisig.Multisigs
 			use frame_support::migration::{StorageIterator, put_storage_value};
 			for (key, value) in StorageIterator::<
 				(T::AccountId, BalanceOf<T>)
