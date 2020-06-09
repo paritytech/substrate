@@ -72,6 +72,7 @@
 //! As of the writing of this documentation, the following base-layer protocols are supported by
 //! Substrate:
 //!
+//! - QUIC for addresses of the form `/ip4/1.2.3.4/udp/5/quic`.
 //! - TCP/IP for addresses of the form `/ip4/1.2.3.4/tcp/5`. Once the TCP connection is open, an
 //! encryption and a multiplexing layer are negotiated on top.
 //! - WebSockets for addresses of the form `/ip4/1.2.3.4/tcp/5/ws`. A TCP/IP connection is open and
@@ -81,10 +82,10 @@
 //! node's address can contain a domain name.
 //! - (All of the above using IPv6 instead of IPv4.)
 //!
-//! On top of the base-layer protocol, the [Noise](https://noiseprotocol.org/) protocol is
-//! negotiated and applied. The exact handshake protocol is experimental and is subject to change.
+//! With the exception of QUIC, the libp2p-compliant [Noise](https://noiseprotocol.org/) protocol
+//! is negotiated and applied on top of the base-layer protocol.
 //!
-//! The following multiplexing protocols are supported:
+//! On top of the Noise protocol, the following multiplexing protocols are supported:
 //!
 //! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
 //! be deprecated in the future.

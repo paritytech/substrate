@@ -56,6 +56,10 @@ pub struct NetworkParams {
 	#[structopt(long = "port", value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
 	pub port: Option<u16>,
 
+	/// UDP port to use for QUIC connections.
+	#[structopt(long = "quic-port", value_name = "PORT", conflicts_with_all = &["disable-quic"])]
+	pub quic_port: Option<u16>,
+
 	/// Forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`.
@@ -107,6 +111,13 @@ pub struct NetworkParams {
 	/// This option will be removed in the future.
 	#[structopt(long)]
 	pub legacy_network_protocol: bool,
+
+	/// Disable experimental support for the QUIC protocol. This option is provided in case a
+	/// critical bug is found in the QUIC implementation and we need to urgently shut down the
+	/// UDP socket.
+	/// This option will be removed in the future.
+	#[structopt(long)]
+	pub disable_quic: bool,
 }
 
 impl NetworkParams {
@@ -121,6 +132,7 @@ impl NetworkParams {
 		node_key: NodeKeyConfig,
 	) -> NetworkConfiguration {
 		let port = self.port.unwrap_or(30333);
+		let quic_port = self.quic_port.unwrap_or(30333);
 
 		let listen_addresses = if self.listen_addr.is_empty() {
 			vec![
@@ -166,6 +178,11 @@ impl NetworkParams {
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht: self.discover_local || is_dev,
 			use_new_block_requests_protocol: !self.legacy_network_protocol,
+			quic_socket: if self.disable_quic {
+				None
+			} else {
+				Some(From::from(([0, 0, 0, 0], quic_port)))
+			},
 		}
 	}
 }

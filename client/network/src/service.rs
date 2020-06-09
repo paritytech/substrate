@@ -294,7 +294,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					TransportConfig::Normal { wasm_external_transport, use_yamux_flow_control, .. } =>
 						(false, wasm_external_transport, use_yamux_flow_control)
 				};
-				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
+				transport::build_transport(
+					local_identity,
+					config_mem,
+					config_wasm,
+					flowctrl,
+					params.network_config.quic_socket
+				)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)

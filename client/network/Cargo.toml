@@ -18,6 +18,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 prost-build = "0.6.1"
 
 [dependencies]
+async-std = "1.5" # TODO: remove, quick hack
 bitflags = "1.2.0"
 bs58 = "0.3.1"
 bytes = "0.5.0"
@@ -63,15 +64,16 @@ wasm-timer = "0.2"
 zeroize = "1.0.0"
 
 [dependencies.libp2p]
-version = "0.19.1"
+git = "https://github.com/tomaka/libp2p-rs"
+branch = "quiccc-again"
 default-features = false
-features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "tcp-async-std", "websocket", "yamux"]
+features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "quic", "tcp-async-std", "websocket", "yamux"]
 
 [dev-dependencies]
 async-std = "1.5"
 assert_matches = "1.3"
 env_logger = "0.7.0"
-libp2p = { version = "0.19.1", default-features = false, features = ["secio"] }
+libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "quiccc-again", default-features = false, features = ["secio"] }
 quickcheck = "0.9.0"
 rand = "0.7.2"
 sp-keyring = { version = "2.0.0-rc3", path = "../../primitives/keyring" }

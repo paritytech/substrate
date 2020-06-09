@@ -46,7 +46,7 @@ use std::{
 	error::Error,
 	fs,
 	io::{self, Write},
-	net::Ipv4Addr,
+	net::{Ipv4Addr, SocketAddr},
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -428,6 +428,11 @@ pub struct NetworkConfiguration {
 	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
 	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
 	pub use_new_block_requests_protocol: bool,
+	/// If `Some`, open a UDP socket dedicated to QUIC connections using the given address. This
+	/// UDP socket is necessary for both incoming and outgoing QUIC connections. Incoming
+	/// connections won't be accepted unless a QUIC `Multiaddr` is passed as part of
+	/// `listen_addresses`.
+	pub quic_socket: Option<SocketAddr>,
 }
 
 impl NetworkConfiguration {
@@ -460,6 +465,7 @@ impl NetworkConfiguration {
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
 			use_new_block_requests_protocol: true,
+			quic_socket: Some(From::from(([0, 0, 0, 0], 30333))),
 		}
 	}
 }

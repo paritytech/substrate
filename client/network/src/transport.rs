@@ -26,8 +26,8 @@ use libp2p::{
 	mplex, identity, bandwidth, wasm_ext, noise
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket};
-use std::{io, sync::Arc, time::Duration, usize};
+use libp2p::{tcp, quic, dns, websocket};
+use std::{io, net::SocketAddr, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
 
@@ -42,7 +42,8 @@ pub fn build_transport(
 	keypair: identity::Keypair,
 	memory_only: bool,
 	wasm_external_transport: Option<wasm_ext::ExtTransport>,
-	use_yamux_flow_control: bool
+	use_yamux_flow_control: bool,
+	quic_socket: Option<SocketAddr>,
 ) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	// Build configuration objects for encryption mechanisms.
 	let noise_config = {
@@ -106,6 +107,24 @@ pub fn build_transport(
 
 	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
+	let quic = if let Some(quic_socket) = quic_socket {
+		let addr = libp2p::Multiaddr::empty()
+			.with(quic_socket.ip().into())
+			.with(libp2p::multiaddr::Protocol::Udp(quic_socket.port()))
+			.with(libp2p::multiaddr::Protocol::Quic);
+
+		match quic::Endpoint::new(quic::Config::new(&keypair, addr).unwrap()) {
+			Ok(q) => OptionalTransport::some(quic::QuicTransport(q)),
+			Err(err) => {
+				log::error!("Failed to start QUIC endpoint: {}", err);
+				OptionalTransport::none()
+			}
+		}
+
+	} else {
+		OptionalTransport::none()
+	};
+
 	// Encryption
 	let transport = transport.and_then(move |stream, endpoint| {
 		core::upgrade::apply(stream, noise_config, endpoint, upgrade::Version::V1)
@@ -137,13 +156,21 @@ pub fn build_transport(
 				.map_outbound(move |muxer| (peer_id2, muxer));
 
 			core::upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
-				.map_ok(|(id, muxer)| (id, core::muxing::StreamMuxerBox::new(muxer)))
 		});
 
+
+	// TODO: add bandwidth measurement to QUIC as well
+	let transport = transport.or_transport(quic).map(move |out, _| {
+		match out {
+			libp2p::core::either::EitherOutput::First((peer_id, muxer)) => (peer_id, core::muxing::StreamMuxerBox::new(muxer)),
+			libp2p::core::either::EitherOutput::Second((peer_id, muxer)) => (peer_id, core::muxing::StreamMuxerBox::new(muxer)),
+		}
+	});
+
 	let transport = transport
-			.timeout(Duration::from_secs(20))
-			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-			.boxed();
+		.timeout(Duration::from_secs(20))
+		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+		.boxed();
 
 	(transport, sinks)
 }

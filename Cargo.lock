@@ -1179,6 +1179,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "err-derive"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22deed3a8124cff5fa835713fa105621e43bbdc46690c3a6b68328a012d350d4"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote 1.0.6",
+ "rustversion",
+ "syn 1.0.17",
+ "synstructure",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2573,8 +2587,7 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 [[package]]
 name = "libp2p"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "057eba5432d3e740e313c6e13c9153d0cb76b4f71bfc2e5242ae5bdb7d41af67"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -2588,6 +2601,7 @@ dependencies = [
  "libp2p-mplex",
  "libp2p-noise",
  "libp2p-ping",
+ "libp2p-quic",
  "libp2p-secio",
  "libp2p-swarm",
  "libp2p-tcp",
@@ -2604,9 +2618,8 @@ dependencies = [
 
 [[package]]
 name = "libp2p-core"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80a6000296bdbff540b6c00ef82108ef23aa68d195b9333823ea491562c338d7"
+version = "0.19.1"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "asn1_der",
  "bs58",
@@ -2639,8 +2652,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core-derive"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f09548626b737ed64080fde595e06ce1117795b8b9fc4d2629fa36561c583171"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "quote 1.0.6",
  "syn 1.0.17",
@@ -2649,8 +2661,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cc186d9a941fd0207cf8f08ef225a735e2d7296258f570155e525f6ee732f87"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2660,8 +2671,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identify"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6438ed8ca240c7635c9caa3be6c5258bc0058553ae97ba81737f04e5d33804f5"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2676,8 +2686,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d6c1d5100973527ae70d82687465b17049c1b717a7964de38b8e65000878ff"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
@@ -2703,8 +2712,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b00163d13f705aae67c427bea0575f8aaf63da6524f9bd4a5a093b8bda0b38"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "async-std",
  "data-encoding",
@@ -2725,8 +2733,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ce63313ad4bce2d76e54c292a1293ea47a0ebbe16708f1513fa62184992f53"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -2741,8 +2748,7 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84fd504e27b0eadd451e06b67694ef714bd8374044e7db339bb0cdb83755ddf4"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "curve25519-dalek",
  "futures 0.3.4",
@@ -2762,8 +2768,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c189cf1dfe4b3f01e2c0fe5e97a6f5df8aeb6f3569e26981015eb7c08015ce5f"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2775,10 +2780,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "libp2p-quic"
+version = "0.19.0"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
+dependencies = [
+ "async-std",
+ "either",
+ "env_logger 0.7.1",
+ "futures 0.3.4",
+ "futures-timer 3.0.2",
+ "ipnet",
+ "libp2p-core",
+ "log",
+ "parking_lot 0.10.2",
+ "quinn-proto",
+ "rcgen",
+ "ring",
+ "rustls",
+ "thiserror",
+ "untrusted",
+ "webpki",
+ "x509-signature",
+ "yasna",
+]
+
+[[package]]
 name = "libp2p-secio"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b73f0cc119c83a5b619d6d11074a319fdb4aa4daf8088ade00d511418566e28"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "aes-ctr",
  "ctr",
@@ -2807,8 +2836,7 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4a8101a0e0d5f04562137a476bf5f5423cd5bdab2f7e43a75909668e63cb102"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -2822,8 +2850,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "309f95fce9bec755eff5406f8b822fd3969990830c2b54f752e1fc181d5ace3e"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "async-std",
  "futures 0.3.4",
@@ -2838,8 +2865,7 @@ dependencies = [
 [[package]]
 name = "libp2p-wasm-ext"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f59fdbb5706f2723ca108c088b1c7a37f735a8c328021f0508007162627e9885"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -2852,8 +2878,7 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "085fbe4c05c4116c2164ab4d5a521eb6e00516c444f61b3ee9f68c7b1e53580b"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "async-tls",
  "bytes 0.5.4",
@@ -2873,8 +2898,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b305d3a8981e68f11c0e17f2d11d5c52fae95e0d7c283f9e462b5b2dab413b2"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -3162,9 +3186,8 @@ checksum = "d8883adfde9756c1d30b0f519c9b8c502a94b41ac62f696453c37c7fc0a958ce"
 
 [[package]]
 name = "multistream-select"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74cdcf7cfb3402881e15a1f95116cb033d69b33c83d481e1234777f5ef0c3d2c"
+version = "0.8.1"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
@@ -4673,13 +4696,14 @@ dependencies = [
 [[package]]
 name = "parity-multiaddr"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12ca96399f4a01aa89c59220c4f52ac371940eb4e53e3ce990da796f364bdf69"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=quiccc-again#9eb64789c7aeb2da3bc31ed68fb08135c8e14533"
 dependencies = [
  "arrayref",
  "bs58",
  "byteorder",
  "data-encoding",
+ "get_if_addrs",
+ "ipnet",
  "multihash",
  "percent-encoding 2.1.0",
  "serde",
@@ -5193,6 +5217,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "quinn-proto"
+version = "0.6.1"
+source = "git+https://github.com/djc/quinn?rev=6e9f7e8063926f8bdab56bbc1615277ff0bdece5#6e9f7e8063926f8bdab56bbc1615277ff0bdece5"
+dependencies = [
+ "bytes 0.5.4",
+ "err-derive",
+ "rand 0.7.3",
+ "ring",
+ "rustls",
+ "slab",
+ "tracing",
+ "webpki",
+]
+
+[[package]]
 name = "quote"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5459,6 +5498,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcgen"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caaf214336e8af62987464e9d57f72689822ebf96e913e733a5e32cf7fb7efbd"
+dependencies = [
+ "chrono",
+ "ring",
+ "yasna",
+]
+
+[[package]]
 name = "rdrand"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5655,10 +5705,9 @@ dependencies = [
 [[package]]
 name = "rustls"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0d4a31f5d68413404705d6982529b0e11a9aacd4839d1d6222ee3b8cb4015e1"
+source = "git+https://github.com/ctz/rustls?rev=cac66a8c184f3ef8510bb62b390f241c2760f51d#cac66a8c184f3ef8510bb62b390f241c2760f51d"
 dependencies = [
- "base64 0.11.0",
+ "base64 0.12.0",
  "log",
  "ring",
  "sct",
@@ -8933,7 +8982,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]
@@ -9487,6 +9536,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "x509-signature"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2859657e49c2b42f5e024e45a0f92e7d5a05555ffa7a62f2629073599e7482f"
+dependencies = [
+ "ring",
+ "rustls",
+ "untrusted",
+ "webpki",
+]
+
+[[package]]
 name = "yamux"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9498,6 +9559,15 @@ dependencies = [
  "parking_lot 0.10.2",
  "rand 0.7.3",
  "static_assertions",
+]
+
+[[package]]
+name = "yasna"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0de7bff972b4f2a06c85f6d8454b09df153af7e3a4ec2aac81db1b105b684ddb"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]

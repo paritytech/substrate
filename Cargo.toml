@@ -253,3 +253,7 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[patch.crates-io]
+rustls = { git = "https://github.com/ctz/rustls", rev = "cac66a8c184f3ef8510bb62b390f241c2760f51d" }
+quinn-proto = { git = "https://github.com/djc/quinn", rev = "6e9f7e8063926f8bdab56bbc1615277ff0bdece5" }
