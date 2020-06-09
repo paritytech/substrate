@@ -289,8 +289,8 @@ impl OverlayedChangeSet {
 					overlayed.transactions.len() != 1
 				};
 
-				// We only need to merge if in the previous tx (or committed set) there is
-				// already an existing value.
+				// We only need to merge if there is an pre-existing value. It may be avalue from
+				// the previous transaction or a value committed without any open transaction.
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
 					*overlayed.value_mut() = dropped_tx.value;
