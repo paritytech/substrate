@@ -37,6 +37,7 @@ use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
 };
+use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
@@ -55,7 +56,7 @@ use std::{
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
+use sp_transaction_pool::MaintainedTransactionPool;
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
@@ -1042,14 +1043,9 @@ ServiceBuilder<
 		{
 			let txpool = Arc::downgrade(&transaction_pool);
 
-			let mut import_stream = client.import_notification_stream().map(|n| ChainEvent::NewBlock {
-				id: BlockId::Hash(n.hash),
-				header: n.header,
-				tree_route: n.tree_route,
-				is_new_best: n.is_new_best,
-			}).fuse();
+			let mut import_stream = client.import_notification_stream().map(Into::into).fuse();
 			let mut finality_stream = client.finality_notification_stream()
-				.map(|n| ChainEvent::Finalized::<TBl> { hash: n.hash })
+				.map(Into::into)
 				.fuse();
 
 			let events = async move {
@@ -1209,7 +1205,7 @@ ServiceBuilder<
 				chain_type: chain_spec.chain_type().clone(),
 			};
 
-			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(task_manager.spawn_handle()));
+			let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
 
 			let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {

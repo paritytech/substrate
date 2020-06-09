@@ -84,6 +84,7 @@ members = [
 	"frame/indices",
 	"frame/membership",
 	"frame/metadata",
+	"frame/multisig",
 	"frame/nicks",
 	"frame/offences",
 	"frame/proxy",

@@ -40,9 +40,10 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
 use sp_runtime::traits::Member;
 use frame_support::{
-	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure,
-	traits::{Get, ReservableCurrency, Currency, Filter, InstanceFilter},
-	weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, traits::{
+		Get, ReservableCurrency, Currency, Filter, FilterStack, FilterStackGuard,
+		ClearFilterGuard, InstanceFilter
+	}, weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
 use frame_system::{self as system, ensure_signed};
@@ -65,7 +66,7 @@ pub trait Trait: frame_system::Trait {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: Filter<<Self as Trait>::Call>;
+	type IsCallable: FilterStack<<Self as Trait>::Call>;
 
 	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
 	/// The instance filter determines whether a given call may be proxied under this type.
@@ -166,16 +167,22 @@ decl_module! {
 			call: Box<<T as Trait>::Call>
 		) {
 			let who = ensure_signed(origin)?;
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 			let (_, proxy_type) = Proxies::<T>::get(&real).0.into_iter()
 				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
 				.ok_or(Error::<T>::NotProxy)?;
-			match call.is_sub_type() {
-				Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt)) =>
-					ensure!(pt.is_no_more_permissive(&proxy_type), Error::<T>::NoPermission),
-				_ => (),
-			}
-			ensure!(proxy_type.filter(&call), Error::<T>::Unproxyable);
+
+			// We're now executing as a freshly authenticated new account, so the previous call
+			// restrictions no longer apply.
+			let _clear_guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
+			let _filter_guard = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(
+				move |c| match c.is_sub_type() {
+					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
+						if !proxy_type.is_superset(&pt) => false,
+					_ => proxy_type.filter(&c)
+				}
+			);
+			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
+
 			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
 			Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 		}

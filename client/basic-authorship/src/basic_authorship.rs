@@ -234,7 +234,8 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool to be ready. Proceeding to block production anyway.",
+					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					self.parent_number,
 				);
 				self.transaction_pool.ready()
 			}
@@ -351,11 +352,11 @@ mod tests {
 		}.into_signed_tx()
 	}
 
-	fn chain_event<B: BlockT>(block_number: u64, header: B::Header) -> ChainEvent<B>
+	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 		where NumberFor<B>: From<u64>
 	{
 		ChainEvent::NewBlock {
-			id: BlockId::Number(block_number.into()),
+			hash: header.hash(),
 			tree_route: None,
 			is_new_best: true,
 			header,
@@ -380,8 +381,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
@@ -470,7 +472,6 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
 				client.header(&BlockId::Number(0u64))
 					.expect("header get error")
 					.expect("there should be header"),
@@ -574,8 +575,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
@@ -585,8 +587,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				1,
-				client.header(&BlockId::Number(1)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(1))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
