@@ -26,6 +26,7 @@ frame-system-rpc-runtime-api = { version = "2.0.0-rc3", path = "../../../../fram
 sp-core = { version = "2.0.0-rc3", path = "../../../../primitives/core" }
 sp-blockchain = { version = "2.0.0-rc3", path = "../../../../primitives/blockchain" }
 sp-transaction-pool = { version = "2.0.0-rc3", path = "../../../../primitives/transaction-pool" }
+sp-block-builder = { version = "2.0.0-rc3", path = "../../../../primitives/block-builder" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-rc3", path = "../../../../test-utils/runtime/client" }

@@ -22,7 +22,7 @@ use std::sync::Arc;
 use codec::{self, Codec, Decode, Encode};
 use sc_client_api::light::{future_header, RemoteBlockchain, Fetcher, RemoteCallRequest};
 use jsonrpc_core::{
-	Error, ErrorCode,
+	Error as RpcError, ErrorCode,
 	futures::future::{result, Future},
 };
 use jsonrpc_derive::rpc;
@@ -35,18 +35,19 @@ use sp_runtime::{
 	generic::BlockId,
 	traits,
 };
-use sp_core::hexdisplay::HexDisplay;
+use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+use sp_block_builder::BlockBuilder;
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
 
 /// Future that resolves to account nonce.
-pub type FutureResult<T> = Box<dyn Future<Item = T, Error = Error> + Send>;
+pub type FutureResult<T> = Box<dyn Future<Item = T, Error = RpcError> + Send>;
 
 /// System RPC methods.
 #[rpc]
-pub trait SystemApi<AccountId, Index> {
+pub trait SystemApi<BlockHash, AccountId, Index> {
 	/// Returns the next valid index (aka nonce) for given account.
 	///
 	/// This method takes into consideration all pending transactions
@@ -54,9 +55,28 @@ pub trait SystemApi<AccountId, Index> {
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
 	#[rpc(name = "system_accountNextIndex", alias("account_nextIndex"))]
 	fn nonce(&self, account: AccountId) -> FutureResult<Index>;
+
+	/// Dry run an extrinsic at a given block. Return all encoded events emitted during execution.
+	#[rpc(name = "system_dryRun", alias("system_dryRunAt"))]
+	fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> FutureResult<Bytes>;
 }
 
-const RUNTIME_ERROR: i64 = 1;
+/// Error type of this RPC api.
+pub enum Error {
+	/// The transaction was not decodable.
+	DecodeError,
+	/// The call to runtime failed.
+	RuntimeError,
+}
+
+impl From<Error> for i64 {
+	fn from(e: Error) -> i64 {
+		match e {
+			Error::RuntimeError => 1,
+			Error::DecodeError => 2,
+		}
+	}
+}
 
 /// An implementation of System-specific RPC methods on full client.
 pub struct FullSystem<P: TransactionPool, C, B> {
@@ -76,12 +96,14 @@ impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
 	}
 }
 
-impl<P, C, Block, AccountId, Index> SystemApi<AccountId, Index> for FullSystem<P, C, Block>
+impl<P, C, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index> for FullSystem<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
+	C::Api: BlockBuilder<Block>,
+	<C::Api as sp_api::ApiErrorExt>::Error: Encode,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
@@ -93,8 +115,8 @@ where
 			let best = self.client.info().best_hash;
 			let at = BlockId::hash(best);
 
-			let nonce = api.account_nonce(&at, account.clone()).map_err(|e| Error {
-				code: ErrorCode::ServerError(RUNTIME_ERROR),
+			let nonce = api.account_nonce(&at, account.clone()).map_err(|e| RpcError {
+				code: ErrorCode::ServerError(Error::RuntimeError.into()),
 				message: "Unable to query nonce.".into(),
 				data: Some(format!("{:?}", e).into()),
 			})?;
@@ -103,6 +125,29 @@ where
 		};
 
 		Box::new(result(get_nonce()))
+	}
+
+	fn dry_run(&self, extrinsic: Bytes, at: Option<<Block as traits::Block>::Hash>) -> FutureResult<Bytes> {
+		let dry_run = || {
+			let api = self.client.runtime_api();
+			let at = BlockId::<Block>::hash(at.unwrap_or_else(||
+				// If the block hash is not supplied assume the best block.
+				self.client.info().best_hash
+			));
+
+			let uxt: <Block as traits::Block>::Extrinsic = Decode::decode(&mut &*extrinsic).map_err(|e| RpcError {
+				code: ErrorCode::ServerError(Error::DecodeError.into()),
+				message: "Unable to dry run extrinsic.".into(),
+				data: Some(format!("{:?}", e).into()),
+			})?;
+
+			let result = api.apply_extrinsic(&at, uxt).map(|outcome| outcome.map(|_| true)); // TODO read system events
+
+			Ok(Encode::encode(&result).into())
+		};
+
+
+		Box::new(result(dry_run()))
 	}
 }
 
@@ -131,7 +176,7 @@ impl<P: TransactionPool, C, F, Block> LightSystem<P, C, F, Block> {
 	}
 }
 
-impl<P, C, F, Block, AccountId, Index> SystemApi<AccountId, Index> for LightSystem<P, C, F, Block>
+impl<P, C, F, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index> for LightSystem<P, C, F, Block>
 where
 	P: TransactionPool + 'static,
 	C: HeaderBackend<Block>,
@@ -165,8 +210,8 @@ where
 		).compat();
 		let future_nonce = future_nonce.and_then(|nonce| Decode::decode(&mut &nonce[..])
 			.map_err(|e| ClientError::CallResultDecode("Cannot decode account nonce", e)));
-		let future_nonce = future_nonce.map_err(|e| Error {
-			code: ErrorCode::ServerError(RUNTIME_ERROR),
+		let future_nonce = future_nonce.map_err(|e| RpcError {
+			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query nonce.".into(),
 			data: Some(format!("{:?}", e).into()),
 		});
@@ -175,6 +220,14 @@ where
 		let future_nonce = future_nonce.map(move |nonce| adjust_nonce(&*pool, account, nonce));
 
 		Box::new(future_nonce)
+	}
+
+	fn dry_run(&self, _extrinsic: Bytes, _at: Option<<Block as traits::Block>::Hash>) -> FutureResult<Bytes> {
+		Box::new(result(Err(RpcError {
+			code: ErrorCode::MethodNotFound,
+			message: "Unable to dry run extrinsic.".into(),
+			data: None,
+		})))
 	}
 }
 
