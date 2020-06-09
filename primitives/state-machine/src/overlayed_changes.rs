@@ -194,11 +194,7 @@ impl OverlayedChanges {
 		let value = self.top.modify(key.to_owned(), init, self.extrinsic_index());
 
 		// if the value was deleted initialise it back with an empty vec
-		if value.is_none() {
-			*value = Some(Default::default());
-		}
-
-		value.as_mut().expect("Initialized above; qed")
+		value.get_or_insert_with(StorageValue::default)
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
