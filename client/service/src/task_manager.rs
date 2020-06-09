@@ -196,14 +196,19 @@ impl TaskManager {
 	pub(super) fn on_exit(&self) -> exit_future::Exit {
 		self.on_exit.clone()
 	}
+
+	/// Signal to terminate all the running tasks.
+	pub(super) fn terminate(&mut self) {
+		if let Some(signal) = self.signal.take() {
+			let _ = signal.fire();
+		}
+	}
 }
 
 impl Drop for TaskManager {
 	fn drop(&mut self) {
 		debug!(target: "service", "Tasks manager shutdown");
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-		}
+		self.terminate();
 	}
 }
 

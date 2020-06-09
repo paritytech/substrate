@@ -269,22 +269,13 @@ impl<C: SubstrateCli> Runner<C> {
 		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
 		let _informant_handle = self.tokio_runtime.spawn(informant_future);
 
-		// we eagerly drop the service so that the internal exit future is fired,
-		// but we need to keep holding a reference to the global telemetry guard
-		// and drop the runtime first.
-		let _telemetry = service.telemetry();
+		let f = service.future().fuse();
+		self.tokio_runtime
+			.block_on(main(f))
+			.map_err(|e| e.to_string())?;
 
-		{
-			let f = service.future().fuse();
-			self.tokio_runtime
-				.block_on(main(f))
-				.map_err(|e| e.to_string())?;
-		}
-
-		drop(service);
-		// The `service` **must** have been destroyed here for the shutdown signal to propagate
-		// to all the tasks. Dropping `tokio_runtime` will block the thread until all tasks have
-		// shut down.
+		service.terminate();
+		// Dropping `tokio_runtime` will block the thread until all tasks have shut down.
 		drop(self.tokio_runtime);
 
 		Ok(())

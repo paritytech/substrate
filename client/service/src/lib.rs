@@ -211,8 +211,11 @@ pub trait AbstractService: Send + Unpin + Spawn + 'static {
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
 
-	/// Return a future that will end if an essential task fails
+	/// Return a future that will end if an essential task fails.
 	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'a>>;
+
+	/// Signal to terminate all the running tasks.
+	fn terminate(&mut self);
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -320,6 +323,10 @@ where
 
 			Err(Error::Other("Essential task failed.".into()))
 		})
+	}
+
+	fn terminate(&mut self) {
+		self.task_manager.terminate()
 	}
 }
 
