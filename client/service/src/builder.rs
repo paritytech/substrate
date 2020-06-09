@@ -18,13 +18,13 @@
 
 use crate::{
 	Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
-	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
+	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager,
 	status_sinks, metrics::MetricsService, client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
 use sc_client_api::{
 	BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain,
-	execution_extensions::ExtensionsFactory, ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks,
 	CloneableSpawn, UsageProvider,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -45,13 +45,12 @@ use sc_network::{NetworkService, NetworkStateInfo};
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HashFor,
+	Block as BlockT, SaturatedConversion, HashFor,
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::{
 	collections::HashMap,
-	io::{Read, Write, Seek},
 	marker::PhantomData, sync::Arc, pin::Pin
 };
 use wasm_timer::SystemTime;
@@ -62,7 +61,6 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
-use sp_core::storage::Storage;
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -353,7 +351,7 @@ pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch +
 	Ok(((client, backend, keystore, task_manager), fetcher, remote_blockchain))
 }
 
-pub struct ServiceDescriptor<TBl: BlockT, TRtApi, TSc, TImpQu, TExPool, TRpc, TBackend, TExec, URpcBuilder> {
+pub struct ServiceDescriptor<TBl: BlockT, TRtApi, TSc, TImpQu, TExPool, TBackend, TExec, TRpcBuilder> {
 	pub config: Configuration,
 	pub client: Arc<Client<TBackend, TExec, TBl, TRtApi>,>,
 	pub backend: Arc<TBackend>,
@@ -365,11 +363,10 @@ pub struct ServiceDescriptor<TBl: BlockT, TRtApi, TSc, TImpQu, TExPool, TRpc, TB
 	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 	pub transaction_pool: Arc<TExPool>,
-	pub rpc_extensions: TRpc,
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	pub background_tasks: Vec<(&'static str, BackgroundTask)>,
 	pub block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>,>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send + 'static>>,
-	pub rpc_extensions_builder: URpcBuilder,
+	pub rpc_extensions_builder: TRpcBuilder,
 	pub informant_prefix: String,
 }
 
@@ -380,13 +377,12 @@ pub fn build<
 	TSc,
 	TImpQu,
 	TExPool,
-	TRpc,
 	TBackend,
 	TExec,
-	URpcBuilder,
+	TRpcBuilder,
 	URpc,
 >(
-	service_descriptor: ServiceDescriptor<TBl, TRtApi, TSc, TImpQu, TExPool, TRpc, TBackend, TExec, URpcBuilder>,
+	service_descriptor: ServiceDescriptor<TBl, TRtApi, TSc, TImpQu, TExPool, TBackend, TExec, TRpcBuilder>,
 ) -> Result<Service<
 	TBl,
 	Client<TBackend, TExec, TBl, TRtApi>,
@@ -416,14 +412,13 @@ where
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
-	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 	TExec: CallExecutor<TBl, Backend = TBackend>,
-	URpcBuilder: RpcExtensionBuilder<Output = URpc> + Send + 'static,
+	TRpcBuilder: RpcExtensionBuilder<Output = URpc> + Send + 'static,
 	URpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	let ServiceDescriptor {
 		mut config,
-		client, backend, task_manager, keystore, on_demand, select_chain, import_queue, finality_proof_request_builder, finality_proof_provider, transaction_pool, rpc_extensions, 
+		client, backend, task_manager, keystore, on_demand, select_chain, import_queue, finality_proof_request_builder, finality_proof_provider, transaction_pool, 
 		remote_blockchain, background_tasks, block_announce_validator_builder, rpc_extensions_builder, informant_prefix
 	} = service_descriptor;
 

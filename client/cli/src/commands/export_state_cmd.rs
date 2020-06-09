@@ -20,8 +20,7 @@ use crate::{
 	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
 };
 use log::info;
-use sc_service::Configuration;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, str::FromStr, io::Write};
 use structopt::StructOpt;
 
@@ -54,9 +53,9 @@ impl ExportStateCmd {
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
-		<B as sp_runtime::traits::Block>::Hash: FromStr,
-		<<B as sp_runtime::traits::Block>::Hash as FromStr>::Err: Debug,
-		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<B as BlockT>::Hash: FromStr,
+		<<B as BlockT>::Hash as FromStr>::Err: Debug,
+		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		info!("Exporting raw state...");
 		let mut input_spec = chain_spec;

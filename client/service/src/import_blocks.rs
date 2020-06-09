@@ -25,27 +25,23 @@ use sc_chain_spec::ChainSpec;
 use log::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion, MaybeSerializeDeserialize,
+	Block as BlockT, NumberFor, Zero, Header, MaybeSerializeDeserialize,
 };
-use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader as CodecIoReader};
-use crate::client::{Client, LocalCallExecutor};
+use sp_runtime::generic::SignedBlock;
+use codec::{Decode, IoReader as CodecIoReader};
+use crate::client::Client;
 use sp_consensus::{
 	BlockOrigin,
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
 };
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
-use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
-use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
+use std::{io::{Read, Seek}, pin::Pin};
 use std::time::{Duration, Instant};
 use futures_timer::Delay;
 use std::task::Poll;
 use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
 use std::convert::{TryFrom, TryInto};
 use sp_runtime::traits::{CheckedDiv, Saturating};
-use crate::config::RpcMethods;
 
 /// Number of blocks we will add to the queue before waiting for the queue to catch up.
 const MAX_PENDING_BLOCKS: u64 = 1_024;

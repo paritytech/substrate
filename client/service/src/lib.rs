@@ -47,7 +47,7 @@ pub use export_raw_state::*;
 use crate::config::RpcMethods;
 pub use sp_consensus::import_queue::ImportQueue;
 pub use builder::*;
-use std::{borrow::Cow, io, pin::Pin};
+use std::{io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;

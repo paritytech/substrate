@@ -21,7 +21,6 @@ use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::params::BlockNumberOrHash;
 use crate::CliConfiguration;
-use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -62,9 +61,9 @@ impl CheckBlockCmd {
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
 		RA: Send + Sync + 'static,
-		<B as sp_runtime::traits::Block>::Hash: FromStr,
-		<<B as sp_runtime::traits::Block>::Hash as FromStr>::Err: Debug,
-		<<<B as sp_runtime::traits::Block>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		<B as BlockT>::Hash: FromStr,
+		<<B as BlockT>::Hash as FromStr>::Err: Debug,
+		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let start = std::time::Instant::now();
 		let block_id = self.input.parse()?;

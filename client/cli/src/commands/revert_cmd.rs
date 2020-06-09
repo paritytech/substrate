@@ -22,6 +22,7 @@ use crate::CliConfiguration;
 use sc_service::revert_chain;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
+use std::str::FromStr;
 use structopt::StructOpt;
 
 /// The `revert` command used revert the chain to a previous state.
@@ -48,7 +49,7 @@ impl RevertCmd {
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
-		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let blocks = self.num.parse()?;
 		revert_chain(client, blocks)?;

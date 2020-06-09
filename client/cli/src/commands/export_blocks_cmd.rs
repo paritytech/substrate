@@ -19,13 +19,12 @@
 use crate::error;
 use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
-use log::info;
-use sc_service::config::DatabaseConfig;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
 use structopt::StructOpt;
 use sc_service::export_blocks;
 
@@ -76,7 +75,7 @@ impl ExportBlocksCmd {
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
-		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());

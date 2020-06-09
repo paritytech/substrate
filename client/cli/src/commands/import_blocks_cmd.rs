@@ -21,7 +21,7 @@ use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
 use sc_service::import_blocks;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::Block as BlockT;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Read, Seek};

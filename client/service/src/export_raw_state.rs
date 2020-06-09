@@ -14,32 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::error;
 use crate::error::Error;
-use sc_chain_spec::ChainSpec;
-use log::{warn, info};
-use futures::{future, prelude::*};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion, MaybeSerializeDeserialize,
-};
-use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader as CodecIoReader};
-use crate::client::{Client, LocalCallExecutor};
-use sp_consensus::{
-	BlockOrigin,
-	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
-};
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sp_runtime::traits::Block as BlockT;
+use sp_runtime::generic::BlockId;
+use crate::client::Client;
 use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
-use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
+use sc_client_api::{StorageProvider, UsageProvider};
 
-use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap, sync::Arc};
-use std::time::{Duration, Instant};
-use futures_timer::Delay;
-use std::task::Poll;
-use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
-use std::convert::{TryFrom, TryInto};
-use sp_runtime::traits::{CheckedDiv, Saturating};
+use std::{collections::HashMap, sync::Arc};
 
 pub fn export_raw_state<B, BA, CE, RA>(
 	client: Arc<Client<BA, CE, B, RA>>,

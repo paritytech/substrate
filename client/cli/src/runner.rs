@@ -26,7 +26,7 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{AbstractService, Configuration, Role, config::TaskType};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
