@@ -309,27 +309,27 @@ mod test {
 	type Changes<'a> = Vec<(&'a [u8], (Option<&'a [u8]>, Vec<u32>))>;
 	type Drained<'a> = Vec<(&'a [u8], Option<&'a [u8]>)>;
 
-	fn assert_changes(is: &OverlayedChangeSet, should: &Changes) {
+	fn assert_changes(is: &OverlayedChangeSet, expected: &Changes) {
 		let is: Changes = is.changes().map(|(k, v)| {
 			(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().cloned().collect()))
 		}).collect();
-		assert_eq!(&is, should);
+		assert_eq!(&is, expected);
 	}
 
-	fn assert_drained_changes(is: OverlayedChangeSet, should: Changes) {
+	fn assert_drained_changes(is: OverlayedChangeSet, expected: Changes) {
 		let is = is.drain_commited().collect::<Vec<_>>();
-		let should = should
+		let expected = expected
 			.iter()
 			.map(|(k, v)| (k.to_vec(), v.0.map(From::from))).collect::<Vec<_>>();
-		assert_eq!(is, should);
+		assert_eq!(is, expected);
 	}
 
-	fn assert_drained(is: OverlayedChangeSet, should: Drained) {
+	fn assert_drained(is: OverlayedChangeSet, expected: Drained) {
 		let is = is.drain_commited().collect::<Vec<_>>();
-		let should = should
+		let expected = expected
 			.iter()
 			.map(|(k, v)| (k.to_vec(), v.map(From::from))).collect::<Vec<_>>();
-		assert_eq!(is, should);
+		assert_eq!(is, expected);
 	}
 
 	#[test]
