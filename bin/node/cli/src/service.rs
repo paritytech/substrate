@@ -134,7 +134,7 @@ macro_rules! new_full_start {
 			node_rpc::create_full::<_, _, sc_rpc::Metadata, _>(deps)
 		});
 
-		let import_setup = (grandpa_block_import, grandpa_link, babe_link);
+		let import_setup = (block_import, grandpa_link, babe_link);
 
 		(
 			client, import_setup, inherent_data_providers, backend, task_manager, keystore,
