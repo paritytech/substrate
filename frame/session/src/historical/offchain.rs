@@ -15,8 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Validator Set Extracting an iterator from an off-chain worker stored list containing historical validatorsets.
+//! Off-chain logic for creating a proof based data provided by on-chain logic.
 //!
+//! Validator-set extracting an iterator from an off-chain worker stored list containing
+//! historical validator-sets.
+//! Based on the logic of historical slashing, but the validation is done off-chain.
+//! Use [`fn store_current_session_validator_set_to_offchain()`](super::onchain) to store the
+//! required data to the offchain validator set.
 //! This is used in conjunction with [`ProvingTrie`](super::ProvingTrie) and
 //! the off-chain indexing API.
 
@@ -37,7 +42,7 @@ pub struct ValidatorSet<T: Trait> {
 }
 
 impl<T: Trait> ValidatorSet<T> {
-	/// Load the set of validators for a paritcular session index from the off-chain storage.
+	/// Load the set of validators for a particular session index from the off-chain storage.
 	///
 	/// If none is found or decodable given `prefix` and `session`, it will return `None`.
 	/// Empty validator sets should only ever exist for genesis blocks.
@@ -63,7 +68,7 @@ impl<T: Trait> ValidatorSet<T> {
 
 	/// Attempt to prune anything that is older than `first_to_keep` session index.
 	///
-	/// Due to re-ogranisation it could be that the `first_to_keep` might be less
+	/// Due to re-organisation it could be that the `first_to_keep` might be less
 	/// than the stored one, in which case the conservative choice is made to keep records
 	/// up to the one that is the lesser.
 	pub fn prune_older_than(first_to_keep: SessionIndex) {
@@ -95,7 +100,7 @@ impl<T: Trait> ValidatorSet<T> {
 		}
 	}
 
-	/// Keep the newest `n` items, and prune all items odler than that.
+	/// Keep the newest `n` items, and prune all items older than that.
 	pub fn keep_newest(n_to_keep: usize) {
 		let session_index = <SessionModule<T>>::current_index();
 		let n_to_keep = n_to_keep as SessionIndex;
@@ -226,7 +231,9 @@ mod tests {
 
 		ext.execute_with(|| {
 			let data =
-			b"alphaomega"[..].using_encoded(|key| sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, key));
+			b"alphaomega"[..].using_encoded(|key| {
+				sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, key)
+			});
 			assert_eq!(data, Some(DATA.to_vec()));
 		});
 	}
