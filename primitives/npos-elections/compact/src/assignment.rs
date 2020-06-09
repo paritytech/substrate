@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Code generation for the staked assignment type.
+//! Code generation for the ratio assignment type.
 
 use crate::field_name_for;
 use proc_macro2::{TokenStream as TokenStream2};
@@ -57,7 +57,13 @@ fn from_impl(count: usize) -> TokenStream2 {
 		let last = quote!(index_of_target(&distribution[#last_index].0).ok_or(_phragmen::Error::CompactInvalidIndex)?);
 
 		quote!(
-			#c => compact.#field_name.push((index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?, [#inner], #last)),
+			#c => compact.#field_name.push(
+				(
+					index_of_voter(&who).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					[#inner],
+					#last,
+				)
+			),
 		)
 	}).collect::<TokenStream2>();
 
@@ -73,11 +79,11 @@ fn into_impl(count: usize) -> TokenStream2 {
 		let name = field_name_for(1);
 		quote!(
 			for (voter_index, target_index) in self.#name {
-				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
-				let all_stake: u128 = max_of(&who).into();
-				assignments.push(_phragmen::StakedAssignment {
-					who,
-					distribution: vec![(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, all_stake)],
+				assignments.push(_phragmen::Assignment {
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
+					distribution: vec![
+						(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, Accuracy::one())
+					],
 				})
 			}
 		)
@@ -86,21 +92,22 @@ fn into_impl(count: usize) -> TokenStream2 {
 	let into_impl_double = {
 		let name = field_name_for(2);
 		quote!(
-			for (voter_index, (t1_idx, w1), t2_idx) in self.#name {
-				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
-				let all_stake: u128 = max_of(&who).into();
-
-				if w1 >= all_stake {
+			for (voter_index, (t1_idx, p1), t2_idx) in self.#name {
+				if p1 >= Accuracy::one() {
 					return Err(_phragmen::Error::CompactStakeOverflow);
 				}
 
-				// w2 is ensured to be positive.
-				let w2 = all_stake - w1;
-				assignments.push( _phragmen::StakedAssignment {
-					who,
+				// defensive only. Since Percent doesn't have `Sub`.
+				let p2 = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
+					Accuracy::one(),
+					p1,
+				);
+
+				assignments.push( _phragmen::Assignment {
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
 					distribution: vec![
-						(target_at(t1_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, w1),
-						(target_at(t2_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, w2),
+						(target_at(t1_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p1),
+						(target_at(t2_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p2),
 					]
 				});
 			}
@@ -111,28 +118,30 @@ fn into_impl(count: usize) -> TokenStream2 {
 		let name = field_name_for(c);
 		quote!(
 			for (voter_index, inners, t_last_idx) in self.#name {
-				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
-				let mut sum = u128::min_value();
-				let all_stake: u128 = max_of(&who).into();
-
+				let mut sum = Accuracy::zero();
 				let mut inners_parsed = inners
 					.iter()
-					.map(|(ref t_idx, w)| {
-						sum = sum.saturating_add(*w);
+					.map(|(ref t_idx, p)| {
+						sum = _phragmen::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
 						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
-						Ok((target, *w))
-					}).collect::<Result<Vec<(A, u128)>, _phragmen::Error>>()?;
+						Ok((target, *p))
+					})
+					.collect::<Result<Vec<(A, Accuracy)>, _phragmen::Error>>()?;
 
-				if sum >= all_stake {
+				if sum >= Accuracy::one() {
 					return Err(_phragmen::Error::CompactStakeOverflow);
 				}
-				// w_last is proved to be positive.
-				let w_last = all_stake - sum;
 
-				inners_parsed.push((target_at(t_last_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, w_last));
+				// defensive only. Since Percent doesn't have `Sub`.
+				let p_last = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
+					Accuracy::one(),
+					sum,
+				);
 
-				assignments.push(_phragmen::StakedAssignment {
-					who,
+				inners_parsed.push((target_at(t_last_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?, p_last));
+
+				assignments.push(_phragmen::Assignment {
+					who: voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?,
 					distribution: inners_parsed,
 				});
 			}
@@ -146,7 +155,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 	)
 }
 
-pub(crate) fn staked(
+pub(crate) fn assignment(
 	ident: syn::Ident,
 	voter_type: GenericArgument,
 	target_type: GenericArgument,
@@ -160,22 +169,29 @@ pub(crate) fn staked(
 		impl<
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
 			#target_type: _phragmen::codec::Codec + Default + Copy,
+			Accuracy:
+				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_arithmetic::PerThing +
+				PartialOrd,
 		>
-		#ident<#voter_type, #target_type, u128>
+		#ident<#voter_type, #target_type, Accuracy>
 		{
-			/// Generate self from a vector of `StakedAssignment`.
-			pub fn from_staked<FV, FT, A>(
-				assignments: Vec<_phragmen::StakedAssignment<A>>,
+			pub fn from_assignment<FV, FT, A>(
+				assignments: Vec<_phragmen::Assignment<A, Accuracy>>,
 				index_of_voter: FV,
 				index_of_target: FT,
 			) -> Result<Self, _phragmen::Error>
 				where
 					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
 					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
-					A: _phragmen::IdentifierT
+					A: _phragmen::IdentifierT,
 			{
-				let mut compact: #ident<#voter_type, #target_type, u128> = Default::default();
-				for _phragmen::StakedAssignment { who, distribution }  in assignments {
+				let mut compact: #ident<
+					#voter_type,
+					#target_type,
+					Accuracy,
+				> = Default::default();
+
+				for _phragmen::Assignment { who, distribution } in assignments {
 					match distribution.len() {
 						0 => continue,
 						#from_impl
@@ -187,21 +203,12 @@ pub(crate) fn staked(
 				Ok(compact)
 			}
 
-			/// Convert self into `StakedAssignment`. The given function should return the total
-			/// weight of a voter. It is used to subtract the sum of all the encoded weights to
-			/// infer the last one.
-			pub fn into_staked<FM, A>(
+			pub fn into_assignment<A: _phragmen::IdentifierT>(
 				self,
-				max_of: FM,
 				voter_at: impl Fn(#voter_type) -> Option<A>,
 				target_at: impl Fn(#target_type) -> Option<A>,
-			)
-				-> Result<Vec<_phragmen::StakedAssignment<A>>, _phragmen::Error>
-			where
-				for<'r> FM: Fn(&'r A) -> u64,
-				A: _phragmen::IdentifierT,
-			{
-				let mut assignments: Vec<_phragmen::StakedAssignment<A>> = Default::default();
+			) -> Result<Vec<_phragmen::Assignment<A, Accuracy>>, _phragmen::Error> {
+				let mut assignments: Vec<_phragmen::Assignment<A, Accuracy>> = Default::default();
 				#into_impl
 				Ok(assignments)
 			}

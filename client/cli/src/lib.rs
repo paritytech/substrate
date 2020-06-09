@@ -253,7 +253,7 @@ pub fn init_logger(pattern: &str) {
 					format!("{}", Colour::Blue.bold().paint(x))
 				});
 			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-			let timestamp = format!("{}.{}", timestamp, millis);
+			let timestamp = format!("{}.{:03}", timestamp, millis);
 			format!(
 				"{} {} {} {}  {}",
 				Colour::Black.bold().paint(timestamp),

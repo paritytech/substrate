@@ -28,12 +28,14 @@ use sp_runtime::traits::{
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
+use frame_support::weights::constants::WEIGHT_PER_MICROS;
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
 mod mock;
 pub mod address;
 mod tests;
+mod benchmarking;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -113,8 +115,11 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - One reserve operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 28.69 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -141,8 +146,13 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - One transfer operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 33.74 µs
+		/// - DB Weight:
+		///    - Reads: Indices Accounts, System Account (recipient)
+		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 35 * WEIGHT_PER_MICROS]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -172,8 +182,11 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - One reserve operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 25.53 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 25 * WEIGHT_PER_MICROS]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -201,8 +214,13 @@ decl_module! {
 		/// - One storage mutation (codec `O(1)`).
 		/// - Up to one reserve operation.
 		/// - One event.
+		/// -------------------
+		/// - Base Weight: 26.83 µs
+		/// - DB Weight:
+		///    - Reads: Indices Accounts, System Account (original owner)
+		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 25 * WEIGHT_PER_MICROS]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			ensure_root(origin)?;
 
