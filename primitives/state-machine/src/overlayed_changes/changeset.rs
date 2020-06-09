@@ -124,7 +124,7 @@ impl OverlayedValue {
 /// Inserts a key into the dirty set.
 ///
 /// Returns true iff we are currently have at least one open transaction and if this
-/// is the first write to that transaction.
+/// is the first write to the given key that transaction.
 fn insert_dirty(set: &mut DirtyKeys, key: StorageKey) -> bool {
 	if let Some(dirty_keys) = set.last_mut() {
 		dirty_keys.insert(key)
