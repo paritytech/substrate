@@ -33,9 +33,6 @@ use super::{IdentificationTuple, ProvingTrie, Trait};
 
 use super::shared::*;
 use sp_std::prelude::*;
-use codec::Decode;
-
-use sp_core::offchain::StorageKind;
 
 pub struct ValidatorSet<T: Trait> {
 	validator_set: Vec<IdentificationTuple<T>>,
@@ -160,7 +157,9 @@ mod tests {
 	use sp_core::offchain::{
 		testing::TestOffchainExt,
 		OffchainExt,
+		StorageKind,
 	};
+
 	use sp_runtime::testing::UintAuthorityId;
 
 	type Historical = Module<Test>;
@@ -196,10 +195,9 @@ mod tests {
 		ext
 	}
 
-
-
 	#[test]
 	fn encode_decode_roundtrip() {
+		use codec::{Decode, Encode};
 		use super::super::super::Trait as SessionTrait;
 		use super::super::Trait as HistoricalTrait;
 
@@ -214,12 +212,6 @@ mod tests {
 
 	#[test]
 	fn onchain_to_offchain() {
-		let _ = env_logger::Builder::new()
-			.filter_level(log::LevelFilter::Trace)
-			.filter(None, log::LevelFilter::Warn)
-			.is_test(true)
-			.try_init();
-
 		let mut ext = new_test_ext();
 
 		const DATA: &[u8] = &[7,8,9,10,11];
@@ -241,12 +233,6 @@ mod tests {
 
 	#[test]
 	fn historical_proof_offchain() {
-		let _ = env_logger::Builder::new()
-			.filter_level(log::LevelFilter::Trace)
-			.filter(None, log::LevelFilter::Warn)
-			.is_test(true)
-			.try_init();
-
 		let mut ext = new_test_ext();
 		let encoded_key_1 = UintAuthorityId(1).encode();
 
