@@ -13,6 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-client-api = { version = "2.0.0-rc3", path = "../../client/api" }
+sc-light = { version = "2.0.0-rc3", path = "../../client/light" }
 sc-client-db = { version = "0.8.0-rc3", features = ["test-helpers"], path = "../../client/db" }
 sp-consensus = { version = "0.8.0-rc3", path = "../../primitives/consensus/common" }
 sc-executor = { version = "0.8.0-rc3", path = "../../client/executor" }
