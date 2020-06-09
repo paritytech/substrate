@@ -118,7 +118,7 @@ impl From<Error> for rpc::Error {
 			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
-				data: Some(format!("Custom error: {}", e)),
+				data: Some(format!("Custom error: {}", e).into()),
 			},
 			Error::Pool(PoolError::InvalidTransaction(e)) => {
 				let msg: &str = e.into();
