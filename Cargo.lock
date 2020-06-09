@@ -6315,9 +6315,10 @@ dependencies = [
  "parity-util-mem",
  "sc-client-api",
  "sc-network",
- "sc-service",
  "sp-blockchain",
  "sp-runtime",
+ "sp-transaction-pool",
+ "sp-utils",
  "wasm-timer",
 ]
 
@@ -6610,6 +6611,7 @@ dependencies = [
  "sc-client-db",
  "sc-executor",
  "sc-finality-grandpa",
+ "sc-informant",
  "sc-keystore",
  "sc-network",
  "sc-offchain",
