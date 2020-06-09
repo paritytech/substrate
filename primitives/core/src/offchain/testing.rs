@@ -79,7 +79,7 @@ impl TestPersistentOffchainDB {
 	/// Apply a set of off-chain changes directly to the test backend
 	pub fn apply_offchain_changes(&mut self, changes: &mut OffchainOverlayedChanges) {
 		let mut me = self.persistent.write();
-		for ((prefix, key), value_operation) in changes.drain() {
+		for ((_prefix, key), value_operation) in changes.drain() {
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()),
 				OffchainOverlayedChange::Remove => me.remove(b"", key.as_slice()),
@@ -90,7 +90,7 @@ impl TestPersistentOffchainDB {
 
 impl OffchainStorage for TestPersistentOffchainDB {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		self.persistent.write().set(&b""[..], key, value);
+		self.persistent.write().set(prefix, key, value);
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {

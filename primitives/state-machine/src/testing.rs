@@ -31,8 +31,10 @@ use crate::{
 	},
 };
 use sp_core::{
-	offchain::{OffchainStorage, testing::TestPersistentOffchainDB},
-	offchain::storage::{InMemOffchainStorage, OffchainOverlayedChanges, OffchainOverlayedChange},
+	offchain::{
+		testing::TestPersistentOffchainDB,
+		storage::OffchainOverlayedChanges
+	},
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,

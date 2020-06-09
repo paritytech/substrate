@@ -28,6 +28,9 @@ use super::{IdentificationTuple, ProvingTrie, Trait};
 
 use super::shared::*;
 use sp_std::prelude::*;
+use codec::Decode;
+
+use sp_core::offchain::StorageKind;
 
 pub struct ValidatorSet<T: Trait> {
 	validator_set: Vec<IdentificationTuple<T>>,
@@ -40,9 +43,11 @@ impl<T: Trait> ValidatorSet<T> {
 	/// Empty validator sets should only ever exist for genesis blocks.
 	pub fn load_from_offchain_db(session_index: SessionIndex) -> Option<Self> {
 		let derived_key = derive_key(PREFIX, session_index);
-		let validator_set = StorageValueRef::persistent(derived_key.as_ref())
-			.get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
-			.flatten();
+		let validator_set = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, derived_key.as_ref())
+			.map(|bytes| {
+				<Vec<(T::ValidatorId, T::FullIdentification)> as Decode>::decode(&mut bytes.as_slice()).ok()
+			});
+		let validator_set = dbg!(validator_set)?;
 		validator_set.map(|validator_set| Self { validator_set })
 	}
 
@@ -139,23 +144,19 @@ pub fn prove_session_membership<T: Trait, D: AsRef<[u8]>>(
 
 #[cfg(test)]
 mod tests {
-	use super::super::tests;
-	use super::super::{onchain,Module};
+	use super::super::{onchain, Module};
 	use super::*;
-	use codec::Encode;
-	use sp_core::crypto::key_types::DUMMY;
-	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
-		NEXT_VALIDATORS, force_new_session,
-		set_next_validators, Test, System, Session,
+		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
 	};
+	use codec::Encode;
 	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
+	use sp_core::crypto::key_types::DUMMY;
 	use sp_core::offchain::{
-		OpaquePeerId,
+		testing::TestOffchainExt,
 		OffchainExt,
-		TransactionPoolExt,
-		testing::{TestOffchainExt, TestTransactionPoolExt},
 	};
+	use sp_runtime::testing::UintAuthorityId;
 
 	type Historical = Module<Test>;
 
@@ -165,30 +166,84 @@ mod tests {
 			.expect("Failed to create test externalities.");
 
 		crate::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-			),
-		}.assimilate_storage(&mut ext).unwrap();
+			keys: NEXT_VALIDATORS.with(|l| {
+				l.borrow()
+					.iter()
+					.cloned()
+					.map(|i| (i, i, UintAuthorityId(i).into()))
+					.collect()
+			}),
+		}
+		.assimilate_storage(&mut ext)
+		.unwrap();
 
 
-		let (offchain, offchain_state) = TestOffchainExt::new();
+		let mut ext = sp_io::TestExternalities::new(ext);
+
+		let (offchain, offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
 
 		const ITERATIONS: u32 = 5u32;
 		let mut seed = [0u8; 32];
 		seed[0..4].copy_from_slice(&ITERATIONS.to_le_bytes());
 		offchain_state.write().seed = seed;
 
-		let mut ext = sp_io::TestExternalities::new(ext);
 		ext.register_extension(OffchainExt::new(offchain));
 		ext
 	}
 
+
+
+	#[test]
+	fn encode_decode_roundtrip() {
+		use super::super::super::Trait as SessionTrait;
+		use super::super::Trait as HistoricalTrait;
+
+		let sample = (
+				22u32 as <Test as SessionTrait>::ValidatorId,
+				7_777_777 as <Test as HistoricalTrait>::FullIdentification);
+
+		let encoded = sample.encode();
+		let decoded = Decode::decode(&mut encoded.as_slice()).expect("Must decode");
+		assert_eq!(sample, decoded);
+	}
+
+	#[test]
+	fn onchain_to_offchain() {
+		let _ = env_logger::Builder::new()
+			.filter_level(log::LevelFilter::Trace)
+			.filter(None, log::LevelFilter::Warn)
+			.is_test(true)
+			.try_init();
+
+		let mut ext = new_test_ext();
+
+		const DATA: &[u8] = &[7,8,9,10,11];
+		ext.execute_with(|| {
+			b"alphaomega"[..].using_encoded(|key| sp_io::offchain_index::set(key, DATA));
+		});
+
+		ext.sync_offchain_index_changes();
+
+		ext.execute_with(|| {
+			let data =
+			b"alphaomega"[..].using_encoded(|key| sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, key));
+			assert_eq!(data, Some(DATA.to_vec()));
+		});
+	}
+
+
 	#[test]
 	fn historical_proof_offchain() {
-		let mut x = new_test_ext();
+		let _ = env_logger::Builder::new()
+			.filter_level(log::LevelFilter::Trace)
+			.filter(None, log::LevelFilter::Warn)
+			.is_test(true)
+			.try_init();
+
+		let mut ext = new_test_ext();
 		let encoded_key_1 = UintAuthorityId(1).encode();
 
-		x.execute_with(|| {
+		ext.execute_with(|| {
 			set_next_validators(vec![1, 2]);
 			force_new_session();
 
@@ -197,19 +252,27 @@ mod tests {
 
 			// "on-chain"
 			onchain::store_current_session_validator_set_to_offchain::<Test>();
+			assert_eq!(<SessionModule<Test>>::current_index(), 1);
 
 			set_next_validators(vec![7, 8]);
 
 			force_new_session();
+		});
+
+		ext.sync_offchain_index_changes();
+
+
+		ext.execute_with(|| {
+
 
 			System::set_block_number(2);
 			Session::on_initialize(2);
+			assert_eq!(<SessionModule<Test>>::current_index(), 2);
 
 			// "off-chain"
 			let proof = prove_session_membership::<Test, _>(1, (DUMMY, &encoded_key_1));
 			assert!(proof.is_some());
 			let proof = proof.expect("Must be Some(Proof)");
-
 
 			assert!(Historical::check_proof((DUMMY, &encoded_key_1[..]), proof.clone()).is_some());
 		});
