@@ -35,12 +35,12 @@ use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
+use sp_core::traits::BareCryptoStorePtr;
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
 use finality_grandpa::{voter, voter_set::VoterSet};
 use sc_network::{NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use parity_scale_codec::{Encode, Decode};
-use sp_core::Pair;
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
@@ -58,7 +58,7 @@ use gossip::{
 	VoteMessage,
 };
 use sp_finality_grandpa::{
-	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
+	AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
 use sp_utils::mpsc::TracingUnboundedReceiver;
 
@@ -272,10 +272,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// network all within the current set.
 	pub(crate) fn round_communication(
 		&self,
+		keystore: Option<BareCryptoStorePtr>,
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		local_key: Option<AuthorityPair>,
+		local_key: Option<AuthorityId>,
 		has_voted: HasVoted<B>,
 	) -> (
 		impl Stream<Item = SignedMessage<B>> + Unpin,
@@ -287,10 +288,9 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 			&*voters,
 		);
 
-		let locals = local_key.and_then(|pair| {
-			let id = pair.public();
+		let local_id = local_key.and_then(|id| {
 			if voters.contains(&id) {
-				Some((pair, id))
+				Some(id)
 			} else {
 				None
 			}
@@ -350,10 +350,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let (tx, out_rx) = mpsc::channel(0);
 		let outgoing = OutgoingMessages::<B> {
+			keystore: keystore.clone(),
 			round: round.0,
 			set_id: set_id.0,
 			network: self.gossip_engine.clone(),
-			locals,
+			local_id,
 			sender: tx,
 			has_voted,
 		};
@@ -628,10 +629,11 @@ pub struct SetId(pub SetIdNumber);
 pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
-	locals: Option<(AuthorityPair, AuthorityId)>,
+	local_id: Option<AuthorityId>,
 	sender: mpsc::Sender<SignedMessage<Block>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
+	keystore: Option<BareCryptoStorePtr>,
 }
 
 impl<B: BlockT> Unpin for OutgoingMessages<B> {}
@@ -665,14 +667,26 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 		}
 
 		// when locals exist, sign messages on import
-		if let Some((ref pair, _)) = self.locals {
+		if let Some(ref public) = self.local_id {
+			let keystore = match &self.keystore {
+				Some(keystore) => keystore.clone(),
+				None => {
+					return Err(Error::Signing("Cannot sign without a keystore".to_string()))
+				}
+			};
+
 			let target_hash = *(msg.target().0);
 			let signed = sp_finality_grandpa::sign_message(
+				keystore,
 				msg,
-				pair,
+				public.clone(),
 				self.round,
 				self.set_id,
-			);
+			).ok_or(
+				Error::Signing(format!(
+					"Failed to sign GRANDPA vote for round {} targetting {:?}", self.round, target_hash
+				))
+			)?;
 
 			let message = GossipMessage::Vote(VoteMessage::<Block> {
 				message: signed.clone(),
