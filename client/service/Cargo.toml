@@ -66,7 +66,7 @@ sc-rpc-server = { version = "2.0.0-rc3", path = "../rpc-servers" }
 sc-rpc = { version = "2.0.0-rc3", path = "../rpc" }
 sc-block-builder = { version = "0.8.0-rc3", path = "../block-builder" }
 sp-block-builder = { version = "2.0.0-rc3", path = "../../primitives/block-builder" }
-
+sc-informant = { version = "0.8.0-rc2", path = "../informant" }
 sc-telemetry = { version = "2.0.0-rc3", path = "../telemetry" }
 sc-offchain = { version = "2.0.0-rc3", path = "../offchain" }
 parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
