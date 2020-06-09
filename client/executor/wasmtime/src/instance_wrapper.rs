@@ -77,15 +77,24 @@ impl ModuleWrapper {
 /// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
 /// routines.
 pub struct InstanceWrapper {
+	/// Instantiated WebAssembly module
 	instance: Instance,
+
+	/// Number of globals declared by WebAssembly module
 	globals_count: u32,
+
+	/// Number of globals imported by a WebAssembly module
 	imported_globals_count: u32,
+
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
 	// See `memory_as_slice` and `memory_as_slice_mut`.
 	memory: Memory,
+
+	/// Indirect functions table of the module
 	table: Option<Table>,
+
 	// Make this struct explicitly !Send & !Sync.
 	_not_send_nor_sync: marker::PhantomData<*const ()>,
 }
@@ -134,7 +143,7 @@ impl InstanceWrapper {
 			None => {
 				let memory = get_linear_memory(&instance)?;
 				if !memory.grow(heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into());
+					return Err("failed to increase the linear memory size".into());
 				}
 				memory
 			},
@@ -250,13 +259,13 @@ impl InstanceWrapper {
 	/// Read data from a slice of memory into a destination buffer.
 	///
 	/// Returns an error if the read would go out of the memory bounds.
-	pub fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
+	pub fn read_memory_into(&self, source_addr: Pointer<u8>, dest: &mut [u8]) -> Result<()> {
 		unsafe {
 			// This should be safe since we don't grow up memory while caching this reference and
 			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice();
 
-			let range = util::checked_range(address.into(), dest.len(), memory.len())
+			let range = util::checked_range(source_addr.into(), dest.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
 			dest.copy_from_slice(&memory[range]);
 			Ok(())
@@ -266,15 +275,15 @@ impl InstanceWrapper {
 	/// Write data to a slice of memory.
 	///
 	/// Returns an error if the write would go out of the memory bounds.
-	pub fn write_memory_from(&self, address: Pointer<u8>, data: &[u8]) -> Result<()> {
+	pub fn write_memory_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
 		unsafe {
 			// This should be safe since we don't grow up memory while caching this reference and
 			// we give up the reference before returning from this function.
 			let memory = self.memory_as_slice_mut();
 
-			let range = util::checked_range(address.into(), data.len(), memory.len())
+			let range = util::checked_range(dest_addr.into(), source.len(), memory.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
-			&mut memory[range].copy_from_slice(data);
+			&mut memory[range].copy_from_slice(source);
 			Ok(())
 		}
 	}

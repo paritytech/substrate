@@ -6302,6 +6302,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-serializer",
  "sp-wasm-interface",
+ "substrate-wasmtime",
  "wasmi",
 ]
 

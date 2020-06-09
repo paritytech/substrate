@@ -23,6 +23,7 @@ sp-allocator = { version = "2.0.0-rc3", path = "../../../primitives/allocator" }
 sp-wasm-interface = { version = "2.0.0-rc3", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0-rc3", path = "../../../primitives/runtime-interface" }
 sp-serializer = { version = "2.0.0-rc3", path = "../../../primitives/serializer" }
+wasmtime = { package = "substrate-wasmtime", version = "0.16.0-threadsafe.4" }
 
 [features]
 default = []

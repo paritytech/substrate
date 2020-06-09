@@ -25,10 +25,19 @@ use crate::error::{Result, Error};
 use std::{collections::HashMap, rc::Rc};
 use codec::{Decode, Encode};
 use sp_core::sandbox as sandbox_primitives;
+
 use wasmi::{
 	Externals, ImportResolver, MemoryInstance, MemoryRef, Module, ModuleInstance,
 	ModuleRef, RuntimeArgs, RuntimeValue, Trap, TrapKind, memory_units::Pages,
 };
+
+use sp_wasm_interface::Value;
+use wasmtime::Val;
+
+// use crate::sandbox:: wasmtime::instance_wrapper::InstanceWrapper;
+
+// use wasmtime::{Store, Instance, Module, Memory, Table, Val, Func, Extern, Global};
+
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 
 /// Index of a function inside the supervisor.
@@ -339,7 +348,8 @@ where
 ///
 /// [`invoke`]: #method.invoke
 pub struct SandboxInstance<FR> {
-	instance: ModuleRef,
+	wasmi_instance: ModuleRef,
+	wasmtime_instance: wasmtime::Instance,
 	dispatch_thunk: FR,
 	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
@@ -355,16 +365,16 @@ impl<FR> SandboxInstance<FR> {
 	pub fn invoke<FE: SandboxCapabilities<SupervisorFuncRef=FR>>(
 		&self,
 
-		/// function to call that is exported from the module
+		// function to call that is exported from the module
 		export_name: &str,
 
-		/// arguments passed to the function
+		// arguments passed to the function
 		args: &[RuntimeValue],
 
-		/// supervisor environment provided to the module
+		// supervisor environment provided to the module
 		supervisor_externals: &mut FE,
 
-		/// arbitraty context data of the call
+		// arbitraty context data of the call
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
 		with_guest_externals(
@@ -373,9 +383,42 @@ impl<FR> SandboxInstance<FR> {
 			state,
 			|guest_externals| {
 
-				// This is in Wasmi already!
-				self.instance
-					.invoke_export(export_name, args, guest_externals)
+				let wasmi_result = self.wasmi_instance
+					.invoke_export(export_name, args, guest_externals)?;
+
+				let wasmtime_function = self
+					.wasmtime_instance
+					.get_func(export_name)
+					.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
+
+				let args: Vec<Val> = args
+					.iter()
+					.map(|v| match *v {
+						RuntimeValue::I32(val) => Val::I32(val),
+						RuntimeValue::I64(val) => Val::I64(val),
+						RuntimeValue::F32(val) => Val::F32(val.into()),
+						RuntimeValue::F64(val) => Val::F64(val.into()),
+					})
+					.collect();
+
+				let wasmtime_result = wasmtime_function
+					.call(&args)
+					.map_err(|e| wasmi::Error::Function(e.to_string()))?;
+
+				assert_eq!(wasmtime_result.len(), 1, "multiple return types are not supported yet");
+				if let Some(wasmi_value) = wasmi_result {
+					let wasmtime_value = match *wasmtime_result.first().unwrap() {
+						Val::I32(val) => RuntimeValue::I32(val),
+						Val::I64(val) => RuntimeValue::I64(val),
+						Val::F32(val) => RuntimeValue::F32(val.into()),
+						Val::F64(val) => RuntimeValue::F64(val.into()),
+						_ => unreachable!(),
+					};
+
+					assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
+				}
+
+				Ok(wasmi_result)
 			},
 		)
 	}
@@ -384,12 +427,24 @@ impl<FR> SandboxInstance<FR> {
 	///
 	/// Returns `Some(_)` if the global could be found.
 	pub fn get_global_val(&self, name: &str) -> Option<sp_wasm_interface::Value> {
-		let global = self.instance
+		let wasmi_global = self.wasmi_instance
 			.export_by_name(name)?
 			.as_global()?
 			.get();
+		let wasmi_value = wasmi_global.into();
 
-		Some(global.into())
+		let wasmtime_global = self.wasmtime_instance.get_global(name)?.get();
+		let wasmtime_value = match wasmtime_global {
+			Val::I32(val) => Value::I32(val),
+			Val::I64(val) => Value::I64(val),
+			Val::F32(val) => Value::F32(val),
+			Val::F64(val) => Value::F64(val),
+			_ => None?,
+		};
+
+		assert_eq!(wasmi_value, wasmtime_value);
+
+		Some(wasmi_value)
 	}
 }
 
@@ -507,15 +562,28 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 	guest_env: GuestEnvironment,
 	state: u32,
 ) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> {
-	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &guest_env.imports)
+	let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
 		.map_err(|_| InstantiationError::Instantiation)?;
+
+	let mut config = wasmtime::Config::new();
+	config.cranelift_opt_level(wasmtime::OptLevel::Speed);
+	config.strategy(wasmtime::Strategy::Lightbeam).map_err(|_| InstantiationError::ModuleDecoding)?;
+
+	let wasmtime_engine = wasmtime::Engine::new(&config);
+	let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
+
+	let wasmtime_module = wasmtime::Module::new(&wasmtime_store, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+
+	// TODO &guest_env.imports);
+	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_module, &[]).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
 		// but for extracting memory and tables. But in this particular case, we are extracting
 		// for the purpose of running `start` function which should be ok.
-		instance: instance.not_started_instance().clone(),
+		wasmi_instance: wasmi_instance.not_started_instance().clone(),
+		wasmtime_instance,
 		dispatch_thunk,
 		guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 	});
@@ -525,7 +593,7 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 		&sandbox_instance,
 		state,
 		|guest_externals| {
-			instance
+			wasmi_instance
 				.run_start(guest_externals)
 				.map_err(|_| InstantiationError::StartTrapped)
 		},
