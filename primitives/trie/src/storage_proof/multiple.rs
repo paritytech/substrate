@@ -295,6 +295,15 @@ impl<H, D> BackendStorageProof<H> for MultipleStorageProof<H, D>
 		D: DefaultKind,
 {
 	type StorageProofReg = super::compact::FullForMerge;
+
+	fn into_partial_db(self) -> Result<MemoryDB<H>> {
+		match self {
+			MultipleStorageProof::Flat(p) => p.into_partial_db(),
+			MultipleStorageProof::TrieSkipHashes(p, _) => p.into_partial_db(),
+			_ => panic!("misused multiproof"), // TODO EMCH this is a tradeoff for producing proof without checking but the corresponding variant should be removed.
+		}
+	}
+
 }
 
 impl<H, D> TryInto<super::simple::Flat> for MultipleStorageProof<H, D> {
@@ -374,56 +383,6 @@ impl<H: Hasher, D: DefaultKind> Into<MultipleStorageProof<H, D>> for super::comp
 
 
 /*
-	/// Can also fail on invalid compact proof.
-	pub fn into_partial_db<H>(self) -> Result<ChildrenProofMap<MemoryDB<H>>>
-	where
-		H: Hasher,
-		H::Out: Decode,
-	{
-		let mut result = ChildrenProofMap::default();
-		match self {
-			s@MultipleStorageProof::Flat(..) => {
-				let db = s.into_partial_flat_db::<H>()?;
-				result.insert(ChildInfoProof::top_trie(), db);
-			},
-			MultipleStorageProof::Full(children) => {
-				for (child_info, proof) in children.into_iter() {
-					let mut db = MemoryDB::default();
-					for item in proof.into_iter() {
-						db.insert(EMPTY_PREFIX, &item);
-					}
-					result.insert(child_info, db);
-				}
-			},
-			MultipleStorageProof::TrieSkipHashesForMerge(children) => {
-				for (child_info, (proof, _root)) in children.into_iter() {
-					let mut db = MemoryDB::default();
-					for (key, value) in proof.0.into_iter() {
-						let key = Decode::decode(&mut &key[..])?;
-						db.emplace(key, EMPTY_PREFIX, value);
-					}
-					result.insert(child_info, db);
-				}
-			},
-			MultipleStorageProof::TrieSkipHashesFull(children) => {
-				for (child_info, proof) in children.into_iter() {
-					// Note that this does check all hashes so using a trie backend
-					// for further check is not really good (could use a direct value backend).
-					let (_root, db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
-					result.insert(child_info, db);
-				}
-			},
-			s@MultipleStorageProof::TrieSkipHashes(..) => {
-				let db = s.into_partial_flat_db::<H>()?;
-				result.insert(ChildInfoProof::top_trie(), db);
-			},
-			MultipleStorageProof::KnownQueryPlanAndValues(_children) => {
-				return Err(no_partial_db_support());
-			},
-		}
-		Ok(result)
-	}
-
 	/// Create in-memory storage of proof check backend.
 	///
 	/// Behave similarily to `into_partial_db`.

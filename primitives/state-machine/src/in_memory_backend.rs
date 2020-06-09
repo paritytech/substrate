@@ -59,7 +59,15 @@ where
 }
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H: Hasher, P>() -> TrieBackend<MemoryDB<H>, H, P>
+pub fn new_in_mem<H: Hasher>() -> TrieBackend<MemoryDB<H>, H, sp_trie::SimpleProof>
+where
+	H::Out: Codec + Ord,
+{
+	new_in_mem_proof::<H, sp_trie::SimpleProof>()
+}
+
+/// Create a new empty instance of in-memory backend, specifying proof type.
+pub fn new_in_mem_proof<H: Hasher, P>() -> TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,
 {
@@ -147,7 +155,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
-		new_in_mem()
+		new_in_mem_proof()
 	}
 }
 
@@ -157,7 +165,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
-		let mut backend = new_in_mem();
+		let mut backend = new_in_mem_proof();
 		backend.insert(inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())));
 		backend
 	}
@@ -226,7 +234,7 @@ mod tests {
 				vec![(b"2".to_vec(), Some(b"3".to_vec()))]
 			)]
 		);
-		let trie_backend = storage.as_trie_backend().unwrap();
+		let trie_backend = storage.as_proof_backend().unwrap();
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(),
 			Some(b"3".to_vec()));
 		let storage_key = child_info.prefixed_storage_key();

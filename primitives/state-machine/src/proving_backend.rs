@@ -26,6 +26,7 @@ use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with, RecordBackendFor,
 	record_all_keys, StorageProofKind, TrieNodesStorageProof as StorageProof, ProofInputKind,
 	ProofInput, RecordMapTrieNodes, RecordBackend, RegStorageProof, ProofFlatDefault, BackendStorageProof,
+	FullBackendStorageProof,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
@@ -34,6 +35,9 @@ use crate::{Error, ExecutionError, DBValue};
 use crate::backend::{Backend, ProofRegStateFor, ProofRegBackend};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildrenMap};
 use std::marker::PhantomData;
+
+/// Clonable recorder backend with inner mutability.
+type SyncRecordBackendFor<P, H> = Arc<RwLock<RecordBackendFor<P, H>>>;
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -121,10 +125,10 @@ pub struct ProvingBackend<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
 	P: BackendStorageProof<H>,
-	> (
-	pub TrieBackend<ProofRecorderBackend<S, H, RecordBackendFor<P, H>>, H, P>,
-	PhantomData<P>,
-);
+> {
+	trie_backend: TrieBackend<ProofRecorderBackend<S, H, RecordBackendFor<P, H>>, H, P>,
+	_ph: PhantomData<P>,
+}
 
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> {
@@ -148,15 +152,31 @@ impl<'a, S, H, P> ProvingBackend<&'a S, H, P>
 
 	fn new_with_recorder(
 		backend: &'a TrieBackend<S, H, P>,
-		proof_recorder: RecordBackendFor<P, H>,
+		proof_recorder: SyncRecordBackendFor<P, H>,
 	) -> Self {
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
 			proof_recorder,
+			_ph: PhantomData,
 		};
-		ProvingBackend(TrieBackend::new(recorder, root), PhantomData)
+		match P::StorageProofReg::INPUT_KIND {
+			ProofInputKind::ChildTrieRoots => {
+				ProvingBackend {
+					trie_backend: TrieBackend::new_with_roots(recorder, root),
+					_ph: PhantomData
+				}
+			},
+			ProofInputKind::None
+			| ProofInputKind::QueryPlan
+			| ProofInputKind::QueryPlanWithValues => {
+				ProvingBackend {
+					trie_backend: TrieBackend::new(recorder, root),
+					_ph: PhantomData,
+				}
+			},
+		}
 	}
 }
 
@@ -171,19 +191,39 @@ impl<S, H, P> ProvingBackend<S, H, P>
 	pub fn from_backend_with_recorder(
 		backend: S,
 		root: H::Out,
-		proof_recorder: RecordBackendFor<P, H>,
+		proof_recorder: SyncRecordBackendFor<P, H>,
 	) -> Self {
 		let recorder = ProofRecorderBackend {
 			backend,
 			proof_recorder,
+			_ph: PhantomData,
 		};
-		ProvingBackend(TrieBackend::new(recorder, root))
+		match P::StorageProofReg::INPUT_KIND {
+			ProofInputKind::ChildTrieRoots => {
+				ProvingBackend {
+					trie_backend: TrieBackend::new_with_roots(recorder, root),
+					_ph: PhantomData
+				}
+			},
+			ProofInputKind::None
+			| ProofInputKind::QueryPlan
+			| ProofInputKind::QueryPlanWithValues => {
+				ProvingBackend {
+					trie_backend: TrieBackend::new(recorder, root),
+					_ph: PhantomData,
+				}
+			},
+		}
 	}
 
-	/// Extract current recording state.
+ 	/// Extract current recording state.
 	/// This is sharing a rc over a sync reference.
-	pub fn extract_recorder(&self) -> RecordBackendFor<P, H> {
-		self.0.backend_storage().proof_recorder.clone()
+	/// TODO EMCH seems unused
+	pub fn extract_recorder(&self) -> (SyncRecordBackendFor<P, H>, ProofInput) {
+		(
+			self.trie_backend.backend_storage().proof_recorder.clone(),
+			self.trie_backend.extract_registered_roots(),
+		)
 	}
 }
 
@@ -193,11 +233,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> TrieBackendStorag
 	type Overlay = S::Overlay;
 
 	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		if let Some(v) = self.proof_recorder.get(child_info, key) {
+		if let Some(v) = self.proof_recorder.read().get(child_info, key) {
 			return Ok(v.clone());
 		}
 		let backend_value = self.backend.get(child_info, key, prefix)?;
-		self.proof_recorder.record(child_info, key, backend_value.clone());
+		self.proof_recorder.write().record(child_info.clone(), key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
 }
@@ -217,13 +257,14 @@ impl<S, H, P> ProofRegBackend<H> for ProvingBackend<S, H, P>
 		H::Out: Ord + Codec,
 		P: BackendStorageProof<H>,
 {
-	type State = <StorageProof::<H, ProofFlatDefault> as RegStorageProof<H>>::RecordBackend;
+	type State = SyncRecordBackendFor<P, H>;
 
-	fn extract_proof(&self, input: ProofInput) -> <Self::StorageProof as BackendStorageProof<H>>::StorageProofReg {
-		<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg::<H>::extract_proof(
-			&self.0.essence().backend_storage().proof_recorder,
+	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn Error>> {
+		let input = self.trie_backend.extract_registered_roots();
+		<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg::extract_proof(
+			&self.trie_backend.essence().backend_storage().proof_recorder.read(),
 			input,
-		)
+		).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}
 }
 
@@ -326,33 +367,38 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		self.trie_backend.usage_info()
 	}
 
-	fn as_proof_backend(self) -> Option<Self::ProofRegBackend> {
-		Some(self)
-	}
-
 	fn from_reg_state(self, previous_recorder: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
-		let root = self.0.essence().root().clone();
-		let storage = self.0.into_storage();
+		let root = self.trie_backend.essence().root().clone();
+		let storage = self.trie_backend.into_storage();
 		let current_recorder = storage.proof_recorder;
 		let backend = storage.backend;
-		if current_recorder.merge(previous_recorder) {
-			ProvingBackend::<S, H>::from_backend_with_recorder(backend, root, current_recorder)
+		if std::sync::Arc::ptr_eq(&current_recorder, &previous_recorder) {
+			Some(ProvingBackend::<S, H, P>::from_backend_with_recorder(backend, root, current_recorder))
 		} else {
-			None
+			let previous_recorder = match Arc::try_unwrap(previous_recorder) {
+				Ok(r) => r.into_inner(),
+				Err(arc) => arc.read().clone(),
+			};
+			if current_recorder.write().merge(previous_recorder) {
+				Some(ProvingBackend::<S, H, P>::from_backend_with_recorder(backend, root, current_recorder))
+			} else {
+				None
+			}
 		}
 	}
 }
 
 /// Create flat proof check backend.
-pub fn create_flat_proof_check_backend<H, P>(
+pub fn create_proof_check_backend<H, P>(
 	root: H::Out,
 	proof: P,
 ) -> Result<TrieBackend<MemoryDB<H>, H, P>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
+	P: BackendStorageProof<H>,
 {
-	let db = proof.into_partial_flat_db()
+	let db = proof.into_partial_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.contains(&root, EMPTY_PREFIX) {
 		Ok(TrieBackend::new(db, root))
@@ -362,16 +408,17 @@ where
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend<H, P>(
+pub fn create_full_proof_check_backend<H, P>(
 	root: H::Out,
 	proof: P,
 ) -> Result<TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
+	P: FullBackendStorageProof<H>,
 {
 	use std::ops::Deref;
-	let db = proof.into_partial_db()
+	let db = proof.into_partial_full_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.deref().get(&ChildInfoProof::top_trie())
 		.map(|db| db.contains(&root, EMPTY_PREFIX))
@@ -384,42 +431,40 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::InMemoryBackend;
-	use crate::trie_backend::tests::test_trie;
+	use crate::InMemoryBackendWithProof;
+	use crate::trie_backend::tests::test_trie_proof;
 	use super::*;
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
+	use sp_trie::{SimpleProof, StorageProof as _};
 	use sp_runtime::traits::BlakeTwo256;
 
-	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>,
-		kind: StorageProofKind,
-	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
-		ProvingBackend::new(trie_backend, kind)
+	type CompactProof = sp_trie::CompactProof<Layout<BlakeTwo256>>;
+
+	fn test_proving<P: sp_trie::BackendStorageProof<BlakeTwo256>>(
+		trie_backend: &TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, P>,
+	) -> ProvingBackend<&PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, P> {
+		ProvingBackend::new(trie_backend)
 	}
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
-		let trie_backend = test_trie();
-		let kind = StorageProofKind::Flat;
-		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
-		let kind = StorageProofKind::Full;
-		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
-		let kind = StorageProofKind::TrieSkipHashesFull;
-		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
-		let kind = StorageProofKind::TrieSkipHashes;
-		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
+		proof_is_empty_until_value_is_read_inner::<SimpleProof>();
+		proof_is_empty_until_value_is_read_inner::<CompactProof>();
+	}
+	fn proof_is_empty_until_value_is_read_inner<P: BackendStorageProof<BlakeTwo256>>() {
+		let trie_backend = test_trie_proof::<P>();
+		assert!(test_proving(&trie_backend).extract_proof().unwrap().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
-		let trie_backend = test_trie();
-		let kind = StorageProofKind::Flat;
-		let mut backend = test_proving(&trie_backend, kind);
-		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof().unwrap().is_empty());
-		let kind = StorageProofKind::Full;
-		let mut backend = test_proving(&trie_backend, kind);
+		proof_is_non_empty_after_value_is_read_inner::<SimpleProof>();
+		proof_is_non_empty_after_value_is_read_inner::<CompactProof>();
+	}
+	fn proof_is_non_empty_after_value_is_read_inner<P: BackendStorageProof<BlakeTwo256>>() {
+		let trie_backend = test_trie_proof::<P>();
+		let mut backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().unwrap().is_empty());
 	}
@@ -427,60 +472,67 @@ mod tests {
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
 		use sp_core::H256;
-		let result = create_proof_check_backend::<BlakeTwo256>(
+		let result = create_proof_check_backend::<BlakeTwo256, SimpleProof>(
 			H256::from_low_u64_be(1),
-			StorageProof::empty()
+			SimpleProof::empty()
+		);
+		assert!(result.is_err());
+		let result = create_proof_check_backend::<BlakeTwo256, CompactProof>(
+			H256::from_low_u64_be(1),
+			CompactProof::empty()
 		);
 		assert!(result.is_err());
 	}
 
 	#[test]
 	fn passes_through_backend_calls() {
-		let test = |proof_kind| {
-			let trie_backend = test_trie();
-			let proving_backend = test_proving(&trie_backend, proof_kind);
-			assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
-			assert_eq!(trie_backend.pairs(), proving_backend.pairs());
+		passes_through_backend_calls_inner::<SimpleProof>();
+		passes_through_backend_calls_inner::<CompactProof>();
+	}
+	fn passes_through_backend_calls_inner<P: BackendStorageProof<BlakeTwo256>>() {
+		let trie_backend = test_trie_proof::<P>();
+		let proving_backend = test_proving(&trie_backend);
+		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
+		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-			let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
-			let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
-			assert_eq!(trie_root, proving_root);
-			assert_eq!(trie_mdb.drain(), proving_mdb.drain());
-		};
-		test(StorageProofKind::Flat);
-		test(StorageProofKind::Full);
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
+		assert_eq!(trie_root, proving_root);
+		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
 
 	#[test]
 	fn proof_recorded_and_checked() {
+		proof_recorded_and_checked_inner::<SimpleProof>();
+		proof_recorded_and_checked_inner::<CompactProof>();
+	}
+	fn proof_recorded_and_checked_inner<P: BackendStorageProof<BlakeTwo256>>() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = InMemoryBackendWithProof::<BlakeTwo256, P>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let trie = in_memory.as_trie_backend().unwrap();
+		let trie = &in_memory;
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let test = |kind: StorageProofKind| {
-			let mut proving = ProvingBackend::new(trie, kind);
-			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
+		let mut proving = in_memory.as_proof_backend().unwrap();
+		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof().unwrap();
+		let proof = proving.extract_proof().unwrap();
 
-			let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
-			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
-		};
-		test(StorageProofKind::Flat);
-		test(StorageProofKind::Full);
-		test(StorageProofKind::TrieSkipHashesFull);
-		test(StorageProofKind::TrieSkipHashes);
+		let proof_check = create_proof_check_backend::<BlakeTwo256, P>(in_memory_root.into(), proof.into()).unwrap();
+		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
+		proof_recorded_and_checked_with_child_inner::<SimpleProof>();
+		proof_recorded_and_checked_with_child_inner::<CompactProof>();
+	}
+	fn proof_recorded_and_checked_with_child_inner<P: BackendStorageProof<BlakeTwo256>>() {
 		let child_info_1 = ChildInfo::new_default(b"sub1");
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;
@@ -492,7 +544,7 @@ mod tests {
 			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
+		let in_memory = InMemoryBackendWithProof::<BlakeTwo256, P>::default();
 		let mut in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
@@ -512,7 +564,7 @@ mod tests {
 			vec![i]
 		));
 
-		let trie = in_memory.as_trie_backend().unwrap();
+		let trie = &in_memory;
 		let trie_root = trie.storage_root(::std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
@@ -520,51 +572,33 @@ mod tests {
 			vec![i]
 		));
 
-		let test = |kind: StorageProofKind| {
-			let mut proving = ProvingBackend::new(trie, kind);
-			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
+		let mut proving = in_memory.clone().as_proof_backend().unwrap();
+		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof().unwrap();
+		let proof = proving.extract_proof().unwrap();
 
-			let proof_check = create_proof_check_backend::<BlakeTwo256>(
-				in_memory_root.into(),
-				proof
-			).unwrap();
-			assert!(proof_check.storage(&[0]).is_err());
-			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
-			// note that it is include in root because proof close
-			assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
-			assert_eq!(proof_check.storage(&[64]).unwrap(), None);
+		let proof_check = create_proof_check_backend::<BlakeTwo256, P>(
+			in_memory_root.into(),
+			proof.into(),
+		).unwrap();
+		assert!(proof_check.storage(&[0]).is_err());
+		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
+		// note that it is include in root because proof close
+		assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
+		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-			let mut proving = ProvingBackend::new(trie, kind);
-			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
+		let mut proving = in_memory.as_proof_backend().unwrap();
+		assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
-			let proof = proving.extract_proof().unwrap();
-			if kind.use_full_partial_db().unwrap() {
-				let proof_check = create_proof_check_backend::<BlakeTwo256>(
-					in_memory_root.into(),
-					proof
-				).unwrap();
+		let proof = proving.extract_proof().unwrap();
+		let proof_check = create_proof_check_backend::<BlakeTwo256, P>(
+			in_memory_root.into(),
+			proof.into(),
+		).unwrap();
 
-				assert_eq!(
-					proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
-					vec![64]
-				);
-			} else {
-				let proof_check = create_flat_proof_check_backend::<BlakeTwo256>(
-					in_memory_root.into(),
-					proof
-				).unwrap();
-
-				assert_eq!(
-					proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
-					vec![64]
-				);
-			}
-		};
-		test(StorageProofKind::Flat);
-		test(StorageProofKind::Full);
-		test(StorageProofKind::TrieSkipHashesFull);
-		test(StorageProofKind::TrieSkipHashes);
+		assert_eq!(
+			proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
+			vec![64]
+		);
 	}
 }

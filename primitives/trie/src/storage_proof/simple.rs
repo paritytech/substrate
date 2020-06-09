@@ -106,10 +106,46 @@ impl<H: Hasher> RegStorageProof<H> for Full {
 
 impl<H: Hasher> BackendStorageProof<H> for Flat {
 	type StorageProofReg = Self;
+
+	fn into_partial_db(self) -> Result<MemoryDB<H>> {
+		use hash_db::HashDB;
+		let mut db = MemoryDB::default();
+		for item in self.0.into_iter() {
+			db.insert(hash_db::EMPTY_PREFIX, &item[..]);
+		}
+		Ok(db)
+	}
 }
 
 impl<H: Hasher> BackendStorageProof<H> for Full {
 	type StorageProofReg = Self;
+
+	fn into_partial_db(self) -> Result<MemoryDB<H>> {
+		use hash_db::HashDB;
+		let mut db = MemoryDB::default();
+		for (_child_info, proof) in self.0.into_iter() {
+			for item in proof.into_iter() {
+				db.insert(hash_db::EMPTY_PREFIX, &item);
+			}
+		}
+
+		Ok(db)
+	}
+}
+
+impl<H: Hasher> FullBackendStorageProof<H> for Full {
+	fn into_partial_full_db(self) -> Result<ChildrenProofMap<MemoryDB<H>>> {
+		use hash_db::HashDB;
+		let mut result = ChildrenProofMap::default();
+		for (child_info, proof) in self.0.into_iter() {
+			let mut db = MemoryDB::default();
+			for item in proof.into_iter() {
+				db.insert(hash_db::EMPTY_PREFIX, &item);
+			}
+			result.insert(child_info, db);
+		}
+		Ok(result)
+	}
 }
 
 // Note that this implementation is only possible

@@ -212,12 +212,27 @@ impl<H> RegStorageProof<H> for FullForMerge
 	}
 }
 
-impl<T> BackendStorageProof<T::Hash>  for Flat<T>
+impl<T> BackendStorageProof<T::Hash> for Flat<T>
 	where
 		T: TrieLayout,
 		TrieHash<T>: Codec,
 {
 	type StorageProofReg = FullForMerge;
+
+	fn into_partial_db(self) -> Result<MemoryDB<T::Hash>> {
+		let mut db = MemoryDB::default();
+		let mut db_empty = true;
+		for proof in self.0.into_iter() {
+			let (_root, child_db) = crate::unpack_proof_to_memdb::<T>(proof.as_slice())?;
+			if db_empty {
+				db_empty = false;
+				db = child_db;
+			} else {
+				db.consolidate(child_db);
+			}
+		}
+		Ok(db)
+	}
 }
 
 impl<T> BackendStorageProof<T::Hash> for Full<T>
@@ -226,6 +241,37 @@ impl<T> BackendStorageProof<T::Hash> for Full<T>
 		TrieHash<T>: Codec,
 {
 	type StorageProofReg = FullForMerge;
+
+	fn into_partial_db(self) -> Result<MemoryDB<T::Hash>> {
+		let mut db = MemoryDB::default();
+		let mut db_empty = true;
+		for (_child_info, proof) in self.0.into_iter() {
+			let (_root, child_db) = crate::unpack_proof_to_memdb::<T>(proof.as_slice())?;
+			if db_empty {
+				db_empty = false;
+				db = child_db;
+			} else {
+				db.consolidate(child_db);
+			}
+		}
+		Ok(db)
+	}
+}
+
+impl<T> FullBackendStorageProof<T::Hash> for Full<T>
+	where
+		T: TrieLayout,
+		TrieHash<T>: Codec,
+{
+	fn into_partial_full_db(self) -> Result<ChildrenProofMap<MemoryDB<T::Hash>>> {
+		let mut result = ChildrenProofMap::default();
+		for (child_info, proof) in self.0 {
+			// Note that this does check all hashes by using a trie backend
+			let (_root, db) = crate::unpack_proof_to_memdb::<T>(proof.as_slice())?;
+			result.insert(child_info, db);
+		}
+		Ok(result)
+	}
 }
 
 // Note that this implementation is only possible

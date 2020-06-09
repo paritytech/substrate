@@ -16,6 +16,7 @@ use hash_db::{Hasher, HashDBRef};
 use crate::Layout;
 use sp_storage::{ChildInfo, ChildInfoProof, ChildrenMap};
 use trie_db::DBValue;
+use crate::MemoryDB;
 
 pub mod simple;
 pub mod compact;
@@ -43,6 +44,9 @@ pub enum Error {
 	/// Error produce by trie manipulation.
 	Trie(String),
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error { }
 
 #[cfg(not(feature = "std"))]
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -247,8 +251,15 @@ pub trait BackendStorageProof<H: Hasher>: Codec + StorageProof {
 		+ MergeableStorageProof
 		+ Into<Self>; // TODO EMCH consider removing this conv or make it a try into??
 
-	/// To check proof over a trie backend.
-	fn trie_backend_nodes(self) -> Result<impl Iterator<Vec<u8>>>;
+	/// Extract a flat trie db from the proof.
+	/// Fail on invalid proof content.
+	fn into_partial_db(self) -> Result<MemoryDB<H>>;
+}
+
+pub trait FullBackendStorageProof<H: Hasher>: BackendStorageProof<H> {
+	/// Extract a trie db with children info from the proof.
+	/// Fail on invalid proof content.
+	fn into_partial_full_db(self) -> Result<ChildrenProofMap<MemoryDB<H>>>;
 }
 
 /// Trait for proofs that can use to create a partial trie backend.

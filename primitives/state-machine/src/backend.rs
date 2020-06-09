@@ -29,11 +29,14 @@ use sp_trie::{ProofInput, BackendStorageProof};
 /// Access the state of the proof backend of a backend.
 pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
 
+/// Access the state of the proof backend of a backend.
+pub type ProofRegFor<B, H> = <<B as Backend<H>>::StorageProof as BackendStorageProof<H>>::StorageProofReg;
+
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher>: std::fmt::Debug {
+pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
@@ -164,8 +167,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Try convert into a proof backend.
-	/// If one do not want to consume the backend, calling on '&self' is fine
-	/// since '&Backend' implement 'Backend'.
 	fn as_proof_backend(self) -> Option<Self::ProofRegBackend> {
 		self.from_reg_state(Default::default())
 	}
@@ -266,8 +267,8 @@ pub trait ProofRegBackend<H>: crate::backend::Backend<H>
 	/// State of a backend.
 	type State: Default + Send + Sync + Clone;
 
-	/// Extract proof when run.
-	fn extract_proof(&self, input: ProofInput) -> <Self::StorageProof as BackendStorageProof<H>>::StorageProofReg;
+	/// Extract proof after running operation to prove.
+	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>>;
 }
 
 /// Backend used to produce proof.
@@ -368,8 +369,7 @@ impl<'a, T, H> Backend<H> for &'a T
 	}
 
 	fn from_reg_state(self, _previous: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
-		// cannot move out of reference, consider cloning or
-		// if needed.
+		// cannot move out of reference, consider cloning when needed.
 		None
 	}
 }

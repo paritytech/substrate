@@ -310,15 +310,8 @@ impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H, P>
 		root: H::Out,
 		proof: Self::StorageProof,
 	) -> Result<Self, Box<dyn crate::Error>> {
-		use hash_db::HashDB;
-		let mut mem_db = MemoryDB::new();
-		for node in proof.trie_backend_nodes()? {
-			let hash = H::hash(node.as_ref();
-			mem_db.emplace(key, hash_db::EMPTY_PREFIX, node);
-		}
-		if !mem_db.contains(key, hash_db::EMPTY_PREFIX) {
-			return Err("No matching root for proof".into());
-		}
+		let mem_db = proof.into_partial_db()
+			.map_err(|e| Box::new(e) as Box<dyn crate::Error>)?;
 		Ok(TrieBackend::new(mem_db, root))
 	}
 }
@@ -328,7 +321,7 @@ pub mod tests {
 	use std::{collections::HashSet, iter};
 	use sp_core::H256;
 	use codec::Encode;
-	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
+	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut, SimpleProof};
 	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
@@ -362,7 +355,13 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+	pub(crate) fn test_trie_proof<P: sp_trie::BackendStorageProof<BlakeTwo256>>()
+		-> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, P> {
+		let (mdb, root) = test_db();
+		TrieBackend::new(mdb, root)
+	}
+
+	pub(crate) fn test_trie() -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, SimpleProof> {
 		let (mdb, root) = test_db();
 		TrieBackend::new(mdb, root)
 	}
@@ -393,7 +392,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
+		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, SimpleProof>::new(
 			PrefixedMemoryDB::default(),
 			Default::default(),
 		).pairs().is_empty());

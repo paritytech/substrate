@@ -35,7 +35,8 @@ pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 pub use storage_proof::{StorageProof, ChildrenProofMap, simple::ProofNodes, compact::FullForMerge,
-	Input as ProofInput, InputKind as ProofInputKind, RecordMapTrieNodes, RegStorageProof,
+	compact::Flat as CompactProof,
+	Input as ProofInput, InputKind as ProofInputKind, RecordMapTrieNodes, RegStorageProof, FullBackendStorageProof,
 	BackendStorageProof, MergeableStorageProof, RecordBackend, multiple::FlatDefault as ProofFlatDefault,
 	multiple::StorageProofKind, multiple::MultipleStorageProof as TrieNodesStorageProof, simple::Flat as SimpleProof};
 /// Various re-exports from the `trie-db` crate.
@@ -52,7 +53,6 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 /// Access record backend for a given backend storage proof.
 /// TODO EMCH check if can be use at other place (rg 'as BackendS')
 pub type RecordBackendFor<P, H> = <<P as BackendStorageProof<H>>::StorageProofReg as RegStorageProof<H>>::RecordBackend;
-
 
 #[derive(Default)]
 /// substrate trie layout
@@ -339,17 +339,16 @@ fn unpack_proof<L: TrieLayout>(input: &[Vec<u8>])
 	Ok((root.0, memory_db.drain().into_iter().map(|(_k, (v, _rc))| v).collect()))
 }
 
-/* TODO remove ??
 /// Unpack packed proof.
 /// This is faster than `unpack_proof`, and should be prefered is encoded node
 /// will be use in a new memory db.
-fn unpack_proof_to_memdb<L: TrieConfiguration>(input: &[Vec<u8>])
+fn unpack_proof_to_memdb<L: TrieLayout>(input: &[Vec<u8>])
 	-> Result<(TrieHash<L>, MemoryDB::<<L as TrieLayout>::Hash>), Box<TrieError<L>>> {
 	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
 	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;
 	Ok((root.0, memory_db))
 }
-*/
+
 /// Read a value from the child trie.
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	keyspace: &[u8],
