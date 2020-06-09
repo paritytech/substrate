@@ -282,7 +282,7 @@ pub enum GenericProtoOut {
 		/// Id of the peer we are connected to.
 		peer_id: PeerId,
 		/// Handshake that was sent to us.
-		/// This is normally a "Status" message, but this out of the concern of this code.
+		/// This is normally a "Status" message, but this is out of the concern of this code.
 		received_handshake: Vec<u8>,
 	},
 
