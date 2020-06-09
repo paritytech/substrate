@@ -212,7 +212,7 @@ pub trait AbstractService: Send + Unpin + Spawn + 'static {
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
 
 	/// Return a future that will end if an essential task fails.
-	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'a>>;
+	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>>;
 
 	/// Signal to terminate all the running tasks.
 	fn terminate(&mut self);
@@ -317,7 +317,7 @@ where
 		self.prometheus_registry.clone()
 	}
 
-	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'a>> {
+	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
 		Box::pin(async move {
 			self.essential_failed_rx.next().await;
 

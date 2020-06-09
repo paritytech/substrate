@@ -273,7 +273,6 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let (service, user_data) = authority(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
-			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
@@ -289,7 +288,6 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
-			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
@@ -304,7 +302,6 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
-			executor.spawn(service.clone().map_err(|_| ()));
 			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;

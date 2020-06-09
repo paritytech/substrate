@@ -141,7 +141,7 @@ pub fn start_client(mut service: impl AbstractService) -> Client {
 			}
 		}
 
-		Pin::new(&mut service)
+		Pin::new(&mut service.future())
 			.poll(cx)
 			.map(drop)
 	}));
