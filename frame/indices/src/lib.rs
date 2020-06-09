@@ -223,6 +223,7 @@ decl_module! {
 		///
 		/// - `index`: the index to be (re-)assigned.
 		/// - `new`: the new owner of the index. This function is a no-op if it is equal to sender.
+		/// - `freeze`: if set to `true`, will freeze the index so it cannot be transferred.
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
@@ -250,7 +251,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
 		}
 
-		/// Freeze an index so it will alays point to the sender account. This consumes the deposit.
+		/// Freeze an index so it will always point to the sender account. This consumes the deposit.
 		///
 		/// The dispatch origin for this call must be _Signed_ and the signing account must have a
 		/// non-frozen account `index`.
