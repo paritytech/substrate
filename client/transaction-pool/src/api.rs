@@ -105,7 +105,7 @@ where
 				#[allow(deprecated)] // old validate_transaction
 				runtime_api.validate_transaction_before_version_2(&at, uxt)
 			};
-			let res = res.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
+			let res = res.map_err(|e| Error::RuntimeApi(format!("{}", e)));
 			if let Err(e) = tx.send(res) {
 				log::warn!("Unable to send a validate transaction result: {:?}", e);
 			}

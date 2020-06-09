@@ -344,7 +344,7 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 #[cfg(feature = "std")]
 pub trait ApiErrorExt {
 	/// Error type used by the runtime apis.
-	type Error: std::fmt::Debug + From<String>;
+	type Error: std::fmt::Debug + std::fmt::Display + From<String>;
 }
 
 /// Extends the runtime api implementation with some common functionality.
@@ -453,7 +453,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
 	/// Error type used by the implementation.
-	type Error: std::fmt::Debug + From<String>;
+	type Error: std::fmt::Debug + std::fmt::Display + From<String>;
 
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
