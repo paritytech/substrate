@@ -19,29 +19,35 @@
 //! Facilitated by `sp_io::wasm_tracing`
 
 // static mut has potential for data race conditions.
-// For current use-case this is not an issue
+// For current use-case this is not an issue, must only be used in wasmß
+#[cfg(not(feature = "std"))]
 static mut WASM_TRACING_ENABLED: bool = true;
 
 /// Indicates whether to run traces in wasm
+#[cfg(not(feature = "std"))]
 pub fn wasm_tracing_enabled() -> bool {
 	unsafe { WASM_TRACING_ENABLED }
 }
 
 /// Disable wasm traces
+#[cfg(not(feature = "std"))]
 pub fn disable_wasm_tracing() {
 	unsafe { WASM_TRACING_ENABLED = false }
 }
 
 /// This holds a tracing span id and is to signal on drop that a tracing span has exited.
 /// It must be bound to a named variable eg. `_span_guard`.
+#[cfg(not(feature = "std"))]
 pub struct TracingSpanGuard(Option<u64>);
 
+#[cfg(not(feature = "std"))]
 impl TracingSpanGuard {
 	pub fn new(span: Option<u64>) -> Self {
 		Self(span)
 	}
 }
 
+#[cfg(not(feature = "std"))]
 impl Drop for TracingSpanGuard {
 	fn drop(&mut self) {
 		if let Some(id) = self.0.take() {
