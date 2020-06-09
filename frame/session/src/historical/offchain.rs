@@ -45,12 +45,10 @@ impl<T: Trait> ValidatorSet<T> {
 	/// Empty validator sets should only ever exist for genesis blocks.
 	pub fn load_from_offchain_db(session_index: SessionIndex) -> Option<Self> {
 		let derived_key = derive_key(PREFIX, session_index);
-		let validator_set = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, derived_key.as_ref())
-			.map(|bytes| {
-				<Vec<(T::ValidatorId, T::FullIdentification)> as Decode>::decode(&mut bytes.as_slice()).ok()
-			});
-		let validator_set = dbg!(validator_set)?;
-		validator_set.map(|validator_set| Self { validator_set })
+		StorageValueRef::persistent(derived_key.as_ref())
+			.get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
+			.flatten()
+			.map(|validator_set| Self { validator_set })
 	}
 
 	/// Access the underlying `ValidatorId` and `FullIdentification` tuples as slice.
