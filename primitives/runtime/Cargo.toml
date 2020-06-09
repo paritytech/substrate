@@ -52,4 +52,5 @@ std = [
 	"sp-inherents/std",
 	"parity-util-mem/std",
 	"hash256-std-hasher/std",
+	"either/use_std",
 ]
