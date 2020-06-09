@@ -43,11 +43,11 @@ pub struct OutputFormat {
 	pub prefix: String,
 }
 
-/// An empty trait that implements `TransactionPool`
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
 #[cfg(target_os = "unknown")]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
 
-/// An empty trait that implements `TransactionPool` and `MallocSizeOf`
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
 #[cfg(not(target_os = "unknown"))]
 pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
 
@@ -57,7 +57,7 @@ impl<T: TransactionPool> TransactionPoolAndMaybeMallogSizeOf for T {}
 #[cfg(not(target_os = "unknown"))]
 impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for T {}
 
-/// Creates an informant in the form of a `Future` that must be polled regularly.
+/// Builds the informant and returns a `Future` that drives the informant.
 pub fn build<B: BlockT, C>(
 	client: Arc<C>,
 	network_status_stream_builder: impl FnOnce(
@@ -131,8 +131,11 @@ where
 		}
 
 		info!(
-			target: "substrate", "✨ {}Imported #{} ({})",
-			format.prefix, Colour::White.bold().paint(format!("{}", n.header.number())), n.hash,
+			target: "substrate",
+			"✨ {}Imported #{} ({})",
+			format.prefix,
+			Colour::White.bold().paint(format!("{}", n.header.number())), 
+			n.hash,
 		);
 		future::ready(())
 	});
