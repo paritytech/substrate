@@ -551,6 +551,7 @@ where
 	}
 
 	fn storage_rollback_transaction(&mut self) {
+		self.mark_dirty();
 		self.overlay.rollback_transaction();
 	}
 
@@ -568,7 +569,7 @@ where
 			Default::default(),
 			self.storage_transaction_cache,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.storage_transaction_cache.reset();
+		self.mark_dirty();
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
