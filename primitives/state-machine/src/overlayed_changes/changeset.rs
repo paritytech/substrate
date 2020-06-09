@@ -54,8 +54,8 @@ struct InnerValue {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedValue {
-	// The individual versions of that value.
-	// One entry per transactions during that the value was actually written.
+	/// The individual versions of that value.
+	/// One entry per transactions during that the value was actually written.
 	transactions: Transactions,
 }
 
@@ -81,25 +81,25 @@ impl OverlayedValue {
 		self.transactions.iter().flat_map(|t| t.extrinsics.iter()).unique()
 	}
 
-	// Mutable reference to the most recent version.
+	/// Mutable reference to the most recent version.
 	fn value_mut(&mut self) -> &mut Option<StorageValue> {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
-	// Remove the last version and return it.
+	/// Remove the last version and return it.
 	fn pop_transaction(&mut self) -> InnerValue {
 		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY)
 	}
 
-	// Mutable reference to the set which holds the indices for the **current transaction only**.
+	/// Mutable reference to the set which holds the indices for the **current transaction only**.
 	fn transaction_extrinsics_mut(&mut self) -> &mut BTreeSet<u32> {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).extrinsics
 	}
 
-	// Writes a new version of a value.
-	//
-	// This makes sure that the old version is not overwritten and can be properly
-	// rolled back when required.
+	/// Writes a new version of a value.
+	///
+	/// This makes sure that the old version is not overwritten and can be properly
+	/// rolled back when required.
 	fn set(
 		&mut self,
 		value: Option<StorageValue>,
@@ -121,10 +121,10 @@ impl OverlayedValue {
 	}
 }
 
-// Inserts a key into the dirty set.
-//
-// Returns true iff we are currently have at least one open transaction and if this
-// is the first write to that transaction.
+/// Inserts a key into the dirty set.
+///
+/// Returns true iff we are currently have at least one open transaction and if this
+/// is the first write to that transaction.
 fn insert_dirty(set: &mut DirtyKeys, key: StorageKey) -> bool {
 	if let Some(dirty_keys) = set.last_mut() {
 		dirty_keys.insert(key)
@@ -261,7 +261,7 @@ impl OverlayedChangeSet {
 	/// Any changes made during that transaction are committed.
 	///
 	/// Panics:
-	/// Will panic if there is no open transaction
+	/// Will panic if there is no open transaction.
 	pub fn commit_transaction(&mut self) {
 		self.close_transaction(false);
 	}
