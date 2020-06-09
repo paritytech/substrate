@@ -847,8 +847,9 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 }
 
-/// The "OR gate" implementation of `EnsureOrigin`. Origin check would pass if any of `L`'s or
-/// `R`'s origin check passes.
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
 pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
 impl<
 	AccountId,
