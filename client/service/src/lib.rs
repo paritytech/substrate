@@ -42,7 +42,7 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use wasm_timer::Instant;
-use std::task::{Poll, Context};
+use std::task::Poll;
 use parking_lot::Mutex;
 
 use client::Client;
@@ -132,7 +132,7 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
 /// Abstraction over a Substrate service.
-pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + Spawn + 'static {
+pub trait AbstractService: Send + Unpin + Spawn + 'static {
 	/// Type of block of this chain.
 	type Block: BlockT;
 	/// Backend storage for the client.
@@ -210,6 +210,9 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
+
+	/// Return a future that will end if an essential task fails
+	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'a>>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -310,27 +313,13 @@ where
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
 	}
-}
 
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
-	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
-{
-	type Output = Result<(), Error>;
+	fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + 'a>> {
+		Box::pin(async move {
+			self.essential_failed_rx.next().await;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		match Pin::new(&mut this.essential_failed_rx).poll_next(cx) {
-			Poll::Pending => {},
-			Poll::Ready(_) => {
-				// Ready(None) should not be possible since we hold a live
-				// sender.
-				return Poll::Ready(Err(Error::Other("Essential task failed.".into())));
-			}
-		}
-
-		// The service future never ends.
-		Poll::Pending
+			Err(Error::Other("Essential task failed.".into()))
+		})
 	}
 }
 

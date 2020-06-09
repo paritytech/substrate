@@ -264,7 +264,7 @@ impl<C: SubstrateCli> Runner<C> {
 		F: FnOnce(Configuration) -> std::result::Result<T, sc_service::error::Error>,
 		T: AbstractService + Unpin,
 	{
-		let service = service_builder(self.config)?;
+		let mut service = service_builder(self.config)?;
 
 		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
 		let _informant_handle = self.tokio_runtime.spawn(informant_future);
@@ -275,12 +275,13 @@ impl<C: SubstrateCli> Runner<C> {
 		let _telemetry = service.telemetry();
 
 		{
-			let f = service.fuse();
+			let f = service.future().fuse();
 			self.tokio_runtime
 				.block_on(main(f))
 				.map_err(|e| e.to_string())?;
 		}
 
+		drop(service);
 		// The `service` **must** have been destroyed here for the shutdown signal to propagate
 		// to all the tasks. Dropping `tokio_runtime` will block the thread until all tasks have
 		// shut down.
