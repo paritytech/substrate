@@ -58,7 +58,7 @@ pub struct OverlayedChanges {
 	/// Top level storage changes.
 	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.
-	children: HashMap<StorageKey, (OverlayedChangeSet, ChildInfo)>, 
+	children: HashMap<StorageKey, (OverlayedChangeSet, ChildInfo)>,
 	/// True if extrinsics stats must be collected.
 	collect_extrinsics: bool,
 	/// Collect statistic on this execution.
