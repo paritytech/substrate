@@ -237,9 +237,9 @@ impl OverlayedChangeSet {
 
 	/// Start a new nested transaction.
 	///
-	/// This allows to either commit or roll back all changes that where made while this
-	/// transaction was open. Any transaction must be closed by one of the aforementioned
-	/// functions before this overlay can be converted into storage changes.
+	/// This allows to either commit or roll back all changes that were made while this
+	/// transaction was open. Any transaction must be closed by either `commit_transaction`
+	/// or `rollback_transaction` before this overlay can be converted into storage changes.
 	///
 	/// Changes made without any open transaction are committed immediatly.
 	pub fn start_transaction(&mut self) {
