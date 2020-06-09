@@ -209,6 +209,7 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) = sc_service::new_light_parts::<
 		Block, RuntimeApi, Executor
 	>(&config)?;
+	let client = Arc::new(client);
 	let select_chain = LongestChain::new(backend.clone());
 	let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 	let registry = config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());

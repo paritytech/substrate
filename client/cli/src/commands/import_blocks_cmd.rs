@@ -20,14 +20,13 @@ use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
-//use sc_service::{Configuration, ServiceBuilderCommand};
+use sc_service::import_blocks;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Read, Seek};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sc_service::import_blocks;
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]

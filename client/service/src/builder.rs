@@ -140,12 +140,12 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 );
 
 /// Light client type.
-pub type TLightClient<TBl, TRtApi, TExecDisp> = Arc<Client<
+pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 	TLightBackend<TBl>,
 	TLightCallExecutor<TBl, TExecDisp>,
 	TBl,
 	TRtApi,
->>;
+>;
 
 /// Light client backend type.
 pub type TLightBackend<TBl> = crate::client::light::backend::Backend<
@@ -342,13 +342,13 @@ pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch +
 	let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 	let backend = crate::client::light::new_light_backend(light_blockchain);
 	let remote_blockchain = backend.remote_blockchain();
-	let client = Arc::new(crate::client::light::new_light(
+	let client = crate::client::light::new_light(
 		backend.clone(),
 		config.chain_spec.as_storage_builder(),
 		executor,
 		Box::new(task_manager.spawn_handle()),
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-	)?);
+	)?;
 
 	Ok(((client, backend, keystore, task_manager), fetcher, remote_blockchain))
 }
@@ -435,12 +435,6 @@ where
 
 	// A side-channel for essential tasks to communicate shutdown.
 	let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
-
-	sp_session::generate_initial_session_keys(
-		client.clone(),
-		&BlockId::Hash(client.chain_info().best_hash),
-		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
-	)?;
 
 	let import_queue = Box::new(import_queue);
 	let chain_info = client.chain_info();
@@ -559,6 +553,43 @@ where
 		);
 	}
 
+	// Inform the offchain worker about new imported blocks
+	{
+		let offchain = offchain_workers.as_ref().map(Arc::downgrade);
+		let notifications_spawn_handle = task_manager.spawn_handle();
+		let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
+		let is_validator = config.role.is_authority();
+
+		let events = client.import_notification_stream().for_each(move |n| {
+			let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+			match offchain {
+				Some(offchain) if n.is_new_best => {
+					notifications_spawn_handle.spawn(
+						"offchain-on-block",
+						offchain.on_block_imported(
+							&n.header,
+							network_state_info.clone(),
+							is_validator,
+						),
+					);
+				},
+				Some(_) => log::debug!(
+						target: "sc_offchain",
+						"Skipping offchain workers for non-canon block: {:?}",
+						n.header,
+					),
+				_ => {},
+			}
+
+			ready(())
+		});
+
+		spawn_handle.spawn(
+			"offchain-notifications",
+			events,
+		);
+	}
+
 	{
 		// extrinsic notifications
 		let network = Arc::downgrade(&network);
@@ -577,7 +608,7 @@ where
 			});
 
 		spawn_handle.spawn(
-			"telemetry-on-block",
+			"on-transaction-imported",
 			events,
 		);
 	}

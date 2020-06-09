@@ -22,7 +22,7 @@ use crate::params::SharedParams;
 use crate::CliConfiguration;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{config::MultiaddrWithPeerId, Configuration, ChainSpec, config::NetworkConfiguration};
+use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, Configuration, ChainSpec};
 use structopt::StructOpt;
 use std::io::Write;
 

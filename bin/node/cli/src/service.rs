@@ -337,6 +337,7 @@ pub fn new_light(config: Configuration)
 	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) = sc_service::new_light_parts::<
 		Block, RuntimeApi, node_executor::Executor
 	>(&config)?; 
+	let client = Arc::new(client);
 
 	let registry = config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());
 	let mut background_tasks = Vec::new();

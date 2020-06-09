@@ -34,11 +34,10 @@ use sc_service::{
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
-	config::{DatabaseConfig, KeystoreConfig},
+	config::{DatabaseConfig, KeystoreConfig, TaskType},
 	RuntimeGenesis,
 	Role,
 	Error,
-	config::TaskType,
 };
 use sp_blockchain::HeaderBackend;
 use sc_network::{multiaddr, Multiaddr};

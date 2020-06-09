@@ -78,13 +78,6 @@ impl ExportBlocksCmd {
 		RA: Send + Sync + 'static,
 		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
-		// TODO: should probably not be here
-		/*
-		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
-			info!("DB path: {}", path.display());
-		}
-		*/
-
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
