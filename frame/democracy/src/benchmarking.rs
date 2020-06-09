@@ -30,7 +30,6 @@ use sp_runtime::traits::{Bounded, One};
 use crate::Module as Democracy;
 
 const SEED: u32 = 0;
-const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
 const MAX_SECONDERS: u32 = 100;
