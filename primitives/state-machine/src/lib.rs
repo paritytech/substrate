@@ -99,6 +99,11 @@ pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H, sp_trie::SimpleProof>;
 /// TODO EMCH consider renaming to ProofCheckBackend
 pub type InMemoryBackendWithProof<H, P> = TrieBackend<MemoryDB<H>, H, P>;
 
+/// Trie backend with in-memory storage and choice of proof running over
+/// separate child backends.
+/// TODO EMCH consider renaming to ProofCheckBackend
+pub type InMemoryBackendWithFullProof<H, P> = TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>;
+
 /// Strategy for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ExecutionStrategy {
@@ -765,9 +770,10 @@ mod tests {
 	use super::changes_trie::Configuration as ChangesTrieConfig;
 	use sp_core::{map, traits::{Externalities, RuntimeCode}};
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::{Layout, SimpleProof, BackendStorageProof};
+	use sp_trie::{Layout, SimpleProof, SimpleFullProof, BackendStorageProof, FullBackendStorageProof};
 
 	type CompactProof = sp_trie::CompactProof<Layout<BlakeTwo256>>;
+	type CompactFullProof = sp_trie::CompactFullProof<Layout<BlakeTwo256>>;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -940,10 +946,8 @@ mod tests {
 	fn prove_execution_and_proof_check_works() {
 		prove_execution_and_proof_check_works_inner::<SimpleProof>();
 		prove_execution_and_proof_check_works_inner::<CompactProof>();
-		/* TODO EMCH consider testing oven full backend to.
-		prove_execution_and_proof_check_works_inner(StorageProofKind::TrieSkipHashesFull);
-		prove_execution_and_proof_check_works_inner(StorageProofKind::TrieSkipHashes);
-		*/
+		prove_execution_and_proof_check_works_inner::<SimpleFullProof>();
+		prove_execution_and_proof_check_works_inner::<CompactFullProof>();
 	}
 	fn prove_execution_and_proof_check_works_inner<P: BackendStorageProof<BlakeTwo256>>() {
 		let executor = DummyCodeExecutor {
@@ -1239,6 +1243,8 @@ mod tests {
 	fn prove_read_and_proof_check_works() {
 		prove_read_and_proof_check_works_inner::<SimpleProof>();
 		prove_read_and_proof_check_works_inner::<CompactProof>;
+		prove_read_and_proof_check_works_inner::<SimpleFullProof>();
+		prove_read_and_proof_check_works_inner::<CompactFullProof>;
 		/* TODO EMCH consider full storage test and value skip test */
 	}
 	fn prove_read_and_proof_check_works_inner<P>()
@@ -1298,6 +1304,40 @@ mod tests {
 			vec![(b"value2".to_vec(), None)],
 		);
 	}
+	fn prove_read_and_proof_on_fullbackend_works<P>() {
+		prove_read_and_proof_on_fullbackend_works_inner::<SimpleFullProof>();
+		prove_read_and_proof_on_fullbackend_works_inner::<CompactFullProof>;
+	}
+	fn prove_read_and_proof_on_fullbackend_works_inner<P>()
+		where
+			P: FullBackendStorageProof<BlakeTwo256>, 
+			P::StorageProofReg: Clone,
+	{
+		let child_info = ChildInfo::new_default(b"sub1");
+		let child_info = &child_info;
+		// fetch read proof from 'remote' full node
+		let remote_backend = trie_backend::tests::test_trie_proof::<P>();
+		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
+		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
+ 		// check proof locally
+		let local_result1 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone().into(),
+			&[b"value2"],
+		).unwrap();
+		let local_result2 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+			remote_root,
+			remote_proof.clone().into(),
+			&[&[0xff]],
+		).is_ok();
+ 		// check that results are correct
+		assert_eq!(
+			local_result1.into_iter().collect::<Vec<_>>(),
+			vec![(b"value2".to_vec(), Some(vec![24]))],
+		);
+		assert_eq!(local_result2, false);
+	}
+
 
 	#[test]
 	fn child_storage_uuid() {

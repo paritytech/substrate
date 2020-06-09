@@ -20,7 +20,7 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
-	ChildrenProofMap, ProofInput, BackendStorageProof};
+	ChildrenProofMap, ProofInput, BackendStorageProof, FullBackendStorageProof};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_trie::RegStorageProof;
 use crate::backend::{ProofRegStateFor};
@@ -311,6 +311,21 @@ impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H, P>
 		proof: Self::StorageProof,
 	) -> Result<Self, Box<dyn crate::Error>> {
 		let mem_db = proof.into_partial_db()
+			.map_err(|e| Box::new(e) as Box<dyn crate::Error>)?;
+		Ok(TrieBackend::new(mem_db, root))
+	}
+}
+
+impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>
+	where
+		H::Out: Ord + Codec,
+		P: FullBackendStorageProof<H>,
+{
+	fn create_proof_check_backend(
+		root: H::Out,
+		proof: Self::StorageProof,
+	) -> Result<Self, Box<dyn crate::Error>> {
+		let mem_db = proof.into_partial_full_db()
 			.map_err(|e| Box::new(e) as Box<dyn crate::Error>)?;
 		Ok(TrieBackend::new(mem_db, root))
 	}
