@@ -268,14 +268,14 @@ impl OverlayedChangeSet {
 
 	fn close_transaction(&mut self, rollback: bool) {
 		for key in self.dirty_keys.pop().expect(PROOF_DIRTY_KEYS) {
-			let value = self.changes.get_mut(&key).expect(PROOF_DIRTY_OVERLAY_VALUE);
+			let overlayed = self.changes.get_mut(&key).expect(PROOF_DIRTY_OVERLAY_VALUE);
 
 			if rollback {
-				value.pop_transaction();
+				overlayed.pop_transaction();
 
 				// We need to remove the key as an `OverlayValue` with no transactions
 				// violates its invariant of always having at least one transaction.
-				if value.transactions.is_empty() {
+				if overlayed.transactions.is_empty() {
 					self.changes.remove(&key);
 				}
 			} else {
@@ -286,15 +286,15 @@ impl OverlayedChangeSet {
 					// Last tx: Is there already a value in the committed set?
 					// Check against one rather than empty because the current tx is still
 					// in the list as it is popped later in this function.
-					value.transactions.len() == 1
+					overlayed.transactions.len() == 1
 				};
 
 				// We only need to merge if in the previous tx (or committed set) there is
 				// already an existing value.
 				if has_predecessor {
-					let dropped_tx = value.pop_transaction();
-					*value.value_mut() = dropped_tx.value;
-					value.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
+					let dropped_tx = overlayed.pop_transaction();
+					*overlayed.value_mut() = dropped_tx.value;
+					overlayed.transaction_extrinsics_mut().extend(dropped_tx.extrinsics);
 				}
 			}
 		}
