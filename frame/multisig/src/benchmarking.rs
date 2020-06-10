@@ -179,7 +179,7 @@ benchmarks! {
 		// Create the multi
 		let o = RawOrigin::Signed(caller.clone()).into();
 		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), true)?;
-	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
+	}: cancel_as_multi(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 }
 
 #[cfg(test)]
