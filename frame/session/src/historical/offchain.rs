@@ -31,7 +31,7 @@ use sp_session::MembershipProof;
 use super::super::{Module as SessionModule, SessionIndex};
 use super::{IdentificationTuple, ProvingTrie, Trait};
 
-use super::shared::*;
+use super::shared;
 use sp_std::prelude::*;
 
 
@@ -46,7 +46,7 @@ impl<T: Trait> ValidatorSet<T> {
 	/// If none is found or decodable given `prefix` and `session`, it will return `None`.
 	/// Empty validator sets should only ever exist for genesis blocks.
 	pub fn load_from_offchain_db(session_index: SessionIndex) -> Option<Self> {
-		let derived_key = derive_key(PREFIX, session_index);
+		let derived_key = shared::derive_key(PREFIX, session_index);
 		StorageValueRef::persistent(derived_key.as_ref())
 			.get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
 			.flatten()
@@ -87,7 +87,7 @@ impl<T: Trait> ValidatorSet<T> {
 				// on a re-org this is not necessarily true, with the above they might be equal
 				if new_value < first_to_keep {
 					for session_index in new_value..first_to_keep {
-						let derived_key = derive_key(PREFIX, session_index);
+						let derived_key = shared::derive_key(PREFIX, session_index);
 						let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
 					}
 				}
