@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// Parameters used to create the network configuration.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
 	#[structopt(long = "bootnodes", value_name = "ADDR")]
