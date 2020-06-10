@@ -69,7 +69,7 @@ impl BuildSpecCmd {
 			spec.add_boot_node(addr)
 		}
 
-		let json = sc_service::build_spec(&*spec, raw_output)?;
+		let json = sc_service::chain_ops::build_spec(&*spec, raw_output)?;
 		if std::io::stdout().write_all(json.as_bytes()).is_err() {
 			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
 		}

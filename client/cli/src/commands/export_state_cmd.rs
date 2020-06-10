@@ -60,11 +60,11 @@ impl ExportStateCmd {
 		info!("Exporting raw state...");
 		let mut input_spec = chain_spec;
 		let block_id = self.input.clone().map(|b| b.parse()).transpose()?;
-		let raw_state = sc_service::export_raw_state(client, block_id)?;
+		let raw_state = sc_service::chain_ops::export_raw_state(client, block_id)?;
 		input_spec.set_storage(raw_state);
 
 		info!("Generating new chain spec...");
-		let json = sc_service::build_spec(&*input_spec, true)?;
+		let json = sc_service::chain_ops::build_spec(&*input_spec, true)?;
 		if std::io::stdout().write_all(json.as_bytes()).is_err() {
 			let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
 		}

@@ -23,6 +23,7 @@
 #![recursion_limit="128"]
 
 pub mod config;
+pub mod chain_ops;
 pub mod error;
 
 mod metrics;
@@ -33,9 +34,7 @@ pub mod client;
 mod client;
 mod status_sinks;
 mod task_manager;
-mod chain_ops;
 
-pub use chain_ops::*;
 use crate::config::RpcMethods;
 pub use sp_consensus::import_queue::ImportQueue;
 pub use builder::*;

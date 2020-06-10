@@ -19,7 +19,7 @@
 use crate::error;
 use crate::params::{BlockNumber, PruningParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::revert_chain;
+use sc_service::chain_ops::revert_chain;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;

@@ -20,7 +20,7 @@ use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
-use sc_service::import_blocks;
+use sc_service::chain_ops::import_blocks;
 use sp_runtime::traits::Block as BlockT;
 use std::fmt::Debug;
 use std::fs;

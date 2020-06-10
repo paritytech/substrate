@@ -67,7 +67,7 @@ impl CheckBlockCmd {
 	{
 		let start = std::time::Instant::now();
 		let block_id = self.input.parse()?;
-		sc_service::check_block(client, import_queue, block_id).await?;
+		sc_service::chain_ops::check_block(client, import_queue, block_id).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

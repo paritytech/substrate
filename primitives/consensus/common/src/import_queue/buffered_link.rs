@@ -39,6 +39,7 @@
 //!
 
 use futures::prelude::*;
+use futures::stream::FusedStream;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 use std::{pin::Pin, task::Context, task::Poll};
@@ -139,6 +140,10 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	/// it is as if this method always returned `Poll::Pending`.
 	pub fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
 		loop {
+			if self.rx.is_terminated() {
+				break;
+			}
+
 			let msg = if let Poll::Ready(Some(msg)) = Stream::poll_next(Pin::new(&mut self.rx), cx) {
 				msg
 			} else {

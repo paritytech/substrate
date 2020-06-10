@@ -250,22 +250,30 @@ impl<C: SubstrateCli> Runner<C> {
 		let chain_spec = self.config.chain_spec.cloned_box();
 		let network_config = self.config.network.clone();
 		let db_config = self.config.database.clone();
-		let (client, import_queue) = builder(self.config)?;
 
 		match subcommand {
 			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
 			Subcommand::ExportBlocks(cmd) => {
+				let (client, _) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client))
 			}
 			Subcommand::ImportBlocks(cmd) => {
+				let (client, import_queue) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue))
 			}
 			Subcommand::CheckBlock(cmd) => {
+				let (client, import_queue) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue))
 			}
-			Subcommand::Revert(cmd) => cmd.run(client),
+			Subcommand::Revert(cmd) => {
+				let (client, _) = builder(self.config)?;
+				cmd.run(client)
+			},
 			Subcommand::PurgeChain(cmd) => cmd.run(db_config),
-			Subcommand::ExportState(cmd) => cmd.run(client, chain_spec),
+			Subcommand::ExportState(cmd) => {
+				let (client, _) = builder(self.config)?;
+				cmd.run(client, chain_spec)
+			},
 		}
 	}
 

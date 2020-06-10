@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Chain utilities.
+
 mod check_block;
 mod export_blocks;
 mod export_raw_state;

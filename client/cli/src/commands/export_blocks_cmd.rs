@@ -26,7 +26,7 @@ use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
 use structopt::StructOpt;
-use sc_service::export_blocks;
+use sc_service::chain_ops::export_blocks;
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
