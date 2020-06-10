@@ -27,11 +27,11 @@ mod run_cmd;
 pub use self::build_spec_cmd::BuildSpecCmd;
 pub use self::check_block_cmd::CheckBlockCmd;
 pub use self::export_blocks_cmd::ExportBlocksCmd;
+pub use self::export_state_cmd::ExportStateCmd;
 pub use self::import_blocks_cmd::ImportBlocksCmd;
 pub use self::purge_chain_cmd::PurgeChainCmd;
 pub use self::revert_cmd::RevertCmd;
 pub use self::run_cmd::RunCmd;
-pub use self::export_state_cmd::ExportStateCmd;
 use std::fmt::Debug;
 use structopt::StructOpt;
 
@@ -40,7 +40,7 @@ use structopt::StructOpt;
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum Subcommand {
 	/// Build a spec.json file, outputs to stdout.
 	BuildSpec(BuildSpecCmd),
@@ -162,7 +162,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
+			fn base_path(&self) -> $crate::Result<::std::option::Option<sc_service::config::BasePath>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
 				}
@@ -409,4 +409,3 @@ macro_rules! substrate_cli_subcommands {
 substrate_cli_subcommands!(
 	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain, ExportState
 );
-
