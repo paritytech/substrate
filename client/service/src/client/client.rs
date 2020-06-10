@@ -45,7 +45,7 @@ use sp_state_machine::{
 	DBValue, backend::Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof, SimpleProof as StorageProof,
-	StorageProofKind, StorageProof as StorageProofT,
+	StorageProofKind, StorageProof as StorageProofT, MergeableStorageProof,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -526,8 +526,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(StorageProof::merge::<HashFor<Block>, _>(proofs, false, false)
-			.map_err(|e| format!("{}", e))?)
+		Ok(StorageProof::merge(proofs).into())
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -1186,7 +1185,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B::State, HashFor<Block>>> f
 		&self,
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-	) -> sp_blockchain::Result<ProofFor<B::State, HashFor<Block>>> {
+	) -> sp_blockchain::Result<ProofRegFor<B::State, HashFor<Block>>> {
 		self.state_at(id)
 			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
@@ -1197,7 +1196,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B::State, HashFor<Block>>> f
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-	) -> sp_blockchain::Result<ProofFor<B::State, HashFor<Block>>> {
+	) -> sp_blockchain::Result<ProofRegFor<B::State, HashFor<Block>>> {
 		self.state_at(id)
 			.and_then(|state| prove_child_read(state, child_info, keys)
 				.map_err(Into::into))
@@ -1208,7 +1207,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B::State, HashFor<Block>>> f
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-	) -> sp_blockchain::Result<(Vec<u8>, ProofFor<B::State, HashFor<Block>>)> {
+	) -> sp_blockchain::Result<(Vec<u8>, ProofRegFor<B::State, HashFor<Block>>)> {
 		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
 		//
@@ -1227,9 +1226,9 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B::State, HashFor<Block>>> f
 			method,
 			call_data,
 		).and_then(|(r, p)| {
-			Ok((r, StorageProof::merge::<HashFor<Block>, _>(
+			Ok((r, ProofRegFor::<B::State, HashFor<Block>>::merge(
 				vec![p, code_proof],
-			).map_err(|e| format!("{}", e))?))
+			)))
 		})
 	}
 

@@ -53,6 +53,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
 /// Access record backend for a given backend storage proof.
 /// TODO EMCH check if can be use at other place (rg 'as BackendS')
+/// TODO seems rather useless we use the reg one moste of the time, not exposing it ?
 pub type RecordBackendFor<P, H> = <<P as BackendStorageProof<H>>::StorageProofReg as RegStorageProof<H>>::RecordBackend;
 
 #[derive(Default)]

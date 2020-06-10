@@ -257,12 +257,9 @@ impl<S, H, P> ProofRegBackend<H> for ProvingBackend<S, H, P>
 		).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}
 
-	fn extract_recorder(self) -> (RecordBackendFor<Self::StorageProof, H>, ProofInput) {
+	fn extract_recorder(self) -> (ProofRegStateFor<Self, H>, ProofInput) {
 		let input = self.trie_backend.extract_registered_roots();
-		let recorder = match Arc::try_unwrap(self.trie_backend.into_storage().proof_recorder) {
-			Ok(r) => r.into_inner(),
-			Err(arc) => arc.read().clone(),
-		};
+		let recorder = self.trie_backend.into_storage().proof_recorder;
 		(recorder, input)
 	}
 }

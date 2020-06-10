@@ -21,7 +21,7 @@ use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use crate::{UsageInfo, StorageKey, StorageValue, StorageCollection};
-use sp_trie::{ProofInput, BackendStorageProof, RecordBackendFor};
+use sp_trie::{ProofInput, BackendStorageProof};
 
 /// Access the state of the proof backend of a backend.
 pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
@@ -267,13 +267,15 @@ pub trait ProofRegBackend<H>: crate::backend::Backend<H>
 		H: Hasher,
 {
 	/// State of a backend.
+	/// TODO try to merge with RecordBackendFor (aka remove the arc rwlock in code)
 	type State: Default + Send + Sync + Clone;
-
+		// + Into<RecordBackendFor<Self::StorageProof, H>>
+		// + From<RecordBackendFor<Self::StorageProof, H>>
 	/// Extract proof after running operation to prove.
 	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>>;
 
 	/// Get current recording state.
-	fn extract_recorder(self) -> (RecordBackendFor<Self::StorageProof, H>, ProofInput);
+	fn extract_recorder(self) -> (Self::State, ProofInput);
 }
 
 /// Backend used to produce proof.

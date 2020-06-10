@@ -93,7 +93,7 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: Option<ProofRegStateFor<<Self::Backend as crate::backend::Backend<B>>::State, HashFor<B>>>,
+		proof_recorder: Option<&RefCell<ProofRecorder<<Self::Backend as crate::backend::Backend<B>>::State, B>>>,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 

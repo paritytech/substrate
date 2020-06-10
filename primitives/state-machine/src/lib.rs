@@ -47,7 +47,7 @@ mod read_only;
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
 	TrieNodesStorageProof, StorageProof,  StorageProofKind, ChildrenProofMap,
 	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RegStorageProof,
-	SimpleProof, BackendStorageProof};
+	SimpleProof, BackendStorageProof, MergeableStorageProof};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use read_only::{ReadOnlyExternalities, InspectState};
@@ -630,7 +630,7 @@ where
 pub fn prove_read_for_query_plan_check<B, H, I>(
 	backend: B,
 	keys: I,
-) -> Result<(sp_trie::RecordBackendFor<B::StorageProof, H>, ProofInput), Box<dyn Error>>
+) -> Result<(crate::backend::ProofRegStateFor<B, H>, ProofInput), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -647,8 +647,7 @@ where
 			.storage(key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-
-	Ok(proof_backend.extract_recorder())
+  Ok(proof_backend.extract_recorder())
 }
 
 
@@ -1278,6 +1277,11 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie_proof::<CompactProof>();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (recorder, root_input) = prove_read_for_query_plan_check(remote_backend, &[b"value2"]).unwrap();
+		let recorder = match std::sync::Arc::try_unwrap(recorder) {
+			Ok(r) => r.into_inner(),
+			Err(arc) => arc.read().clone(),
+		};
+
 		let mut root_map = ChildrenProofMap::default();
 		root_map.insert(ChildInfo::top_trie().proof_info(), remote_root.encode());
 		assert!(ProofInput::ChildTrieRoots(root_map) == root_input); 

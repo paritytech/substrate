@@ -163,35 +163,41 @@ where
 		match recorder {
 			Some(recorder) => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+
+				let ProofRecorder{ recorder, input } = &mut *recorder.borrow_mut();
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
 				let runtime_code = state_runtime_code.runtime_code()?;
 
 				let state = self.backend.state_at(*at)?;
 
-				// TODO EMCH we need to check if previously recording root are still in recorder,
-				// previous code did some input merging (if it is not we can remove the ProofRecorder
-				// struct).
-				let backend = state.from_reg_state(recorder)
+				let backend = state.from_reg_state(std::mem::replace(recorder, Default::default()))
 					.ok_or_else(||
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
 					)?;
 
-				let mut state_machine = StateMachine::new(
-					&backend,
-					changes_trie_state,
-					changes,
-					offchain_changes,
-					&self.executor,
-					method,
-					call_data,
-					extensions.unwrap_or_default(),
-					&runtime_code,
-					self.spawn_handle.clone(),
-				);
-				// TODO: https://github.com/paritytech/substrate/issues/4455
-				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
+				let result = {
+					let mut state_machine = StateMachine::new(
+						&backend,
+						changes_trie_state,
+						changes,
+						offchain_changes,
+						&self.executor,
+						method,
+						call_data,
+						extensions.unwrap_or_default(),
+						&runtime_code,
+						self.spawn_handle.clone(),
+					);
+					// TODO: https://github.com/paritytech/substrate/issues/4455
+					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+					state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
+				};
+				use sp_state_machine::backend::ProofRegBackend;
+				let (recorder_state, input_state) = backend.extract_recorder();
+				*recorder = recorder_state;
+				input.consolidate(input_state).map_err(|e| format!("{:?}", e))?;
+				result
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
