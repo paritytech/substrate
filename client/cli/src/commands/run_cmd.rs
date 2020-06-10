@@ -21,13 +21,13 @@ use crate::error::{Error, Result};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
 use crate::params::NetworkParams;
+use crate::params::OffchainWorkerParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
-use crate::params::OffchainWorkerParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -35,7 +35,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use structopt::StructOpt;
 
 /// The `run` command used to run a node.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct RunCmd {
 	/// Enable validator mode.
 	///
@@ -250,6 +250,16 @@ pub struct RunCmd {
 		conflicts_with_all = &[ "sentry", "public-addr" ]
 	)]
 	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
+
+	/// Run a temporary node.
+	///
+	/// A temporary directory will be created to store the configuration and will be deleted
+	/// at the end of the process.
+	///
+	/// Note: the directory is random per process execution. This directory is used as base path
+	/// which includes: database, node key and keystore.
+	#[structopt(long, conflicts_with = "base-path")]
+	pub tmp: bool,
 }
 
 impl RunCmd {
@@ -445,6 +455,14 @@ impl CliConfiguration for RunCmd {
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
+	}
+
+	fn base_path(&self) -> Result<Option<BasePath>> {
+		Ok(if self.tmp {
+			Some(BasePath::new_temp_dir()?)
+		} else {
+			self.shared_params().base_path()
+		})
 	}
 }
 
