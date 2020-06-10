@@ -26,6 +26,8 @@ stages:
   - test
   - build
   - post-build-test
+  - build-pr
+  - chaos
   - publish
   - kubernetes
   - flaming-fir
@@ -85,6 +87,12 @@ default:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
+
+.chaos-only:                       &chaos-only
+  only:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
+
 
 #### stage:                       .pre
 
@@ -399,6 +407,7 @@ build-linux-substrate:             &build-binary
   <<:                              *collect-artifacts
   <<:                              *docker-env
   <<:                              *build-only
+  <<:                              *chaos-only
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
@@ -427,6 +436,7 @@ build-linux-substrate:             &build-binary
 
 build-linux-subkey:                &build-subkey
   <<:                              *build-binary
+  <<:                              *build-only
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
@@ -473,6 +483,75 @@ build-rust-doc-release:
     - sccache -s
 
 #### stage:                        post-build-test
+check-polkadot-companion-status:
+  stage:                           post-build-test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
+#### stage:                        build-pr
+pr-docker-build:            &pr-docker-build
+  <<:                              *chaos-only
+  stage:                           build-pr
+  tags: 
+    - kubernetes-parity-build
+  variables:
+    DOCKER_HOST:                   tcp://localhost:2375
+    DOCKER_DRIVER:                 overlay2
+    PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               paritypr/$PRODUCT
+  environment:
+    name:                          parity-chaosnet
+  image:                           docker:stable
+  services:
+    - docker:dind
+  before_script:
+    - test "$DOCKER_CHAOS_USER" -a "$DOCKER_CHAOS_TOKEN"
+        || ( echo "no docker credentials provided"; exit 1 )
+    - docker login -u "$DOCKER_CHAOS_USER" -p "$DOCKER_CHAOS_TOKEN"
+    - docker info
+  script:
+    - cd ./artifacts/$PRODUCT/
+    - VERSION="ci-${CI_COMMIT_SHORT_SHA}"
+    - echo "${PRODUCT} version = ${VERSION}"
+    - test -z "${VERSION}" && exit 1
+    - docker build
+      --build-arg VCS_REF="${CI_COMMIT_SHA}"
+      --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      --tag $CONTAINER_IMAGE:$VERSION
+      --file $DOCKERFILE .
+    - docker push $CONTAINER_IMAGE:$VERSION
+  after_script:
+    - docker logout
+
+#### stage:                        chaos
+chaos-test-singlenodeheight:
+  <<:                              *chaos-only
+  stage:                           chaos
+  tags: 
+    - parity-chaos
+  variables:
+    PRODUCT:                       substrate
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    CONTAINER_IMAGE:               paritypr/$PRODUCT
+    KEEP_NAMESPACE:                0
+    NAMESPACE:                     "substrate-ci-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
+    VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
+  interruptible: true
+  environment:
+    name:                          parity-chaosnet
+  image:                           parity/chaostools:latest
+  script:
+    - cd ./.maintain/chaostest
+    - npm link
+    - chaostest spawn dev -i $CONTAINER_IMAGE:$VERSION
+    - chaostest singlenodeheight -h 30
+  after_script:
+    - chaostest clean
 
 trigger-contracts-ci:
   stage:                           post-build-test
@@ -721,3 +800,4 @@ validator 4 4:
   <<:                              *validator-deploy
   script:
     - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
+    
