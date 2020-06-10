@@ -122,6 +122,8 @@ decl_storage! {
 		pub Multisigs: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
+
+		pub Calls: map hasher(identity) [u8; 32] => Option<(Vec<u8>, T::AccountId, BalanceOf<T>)>;
 	}
 }
 
@@ -278,6 +280,7 @@ decl_module! {
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
 			call: Box<<T as Trait>::Call>,
+			store_call: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			// We're now executing as a freshly authenticated new account, so the previous call
@@ -292,7 +295,12 @@ decl_module! {
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
-			let call_hash = call.using_encoded(blake2_256);
+
+			let encoded_call = call.encode();
+			let call_hash = blake2_256(&encoded_call);
+			if store_call {
+				Self::store_call(who.clone(), &call_hash, encoded_call)?;
+			}
 
 			if let Some(mut m) = <Multisigs<T>>::get(&id, call_hash) {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
@@ -315,6 +323,7 @@ decl_module! {
 				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
+				Self::take_call(&call_hash);
 				Self::deposit_event(RawEvent::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
@@ -425,6 +434,17 @@ decl_module! {
 				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 				ensure!(m.approvals.len() < threshold as usize, Error::<T>::NoApprovalsNeeded);
 				if let Err(pos) = m.approvals.binary_search(&who) {
+					if m.approvals.len() + 1 == threshold as usize {
+						if let Some(call) = Self::take_call(&call_hash) {
+							let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
+							let _ = T::Currency::unreserve(&m.depositor, m.deposit);
+							<Multisigs<T>>::remove(&id, call_hash);
+							Self::deposit_event(RawEvent::MultisigExecuted(
+								who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
+							));
+							return Ok(());
+						}
+					}
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
 					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
@@ -506,7 +526,8 @@ decl_module! {
 			ensure!(m.depositor == who, Error::<T>::NotOwner);
 
 			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
-			<Multisigs<T>>::remove(&id, call_hash);
+			<Multisigs<T>>::remove(&id, &call_hash);
+			Self::take_call(&call_hash);
 
 			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id, call_hash));
 			Ok(())
@@ -522,6 +543,27 @@ impl<T: Trait> Module<T> {
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	/// Please a call in storage, reserving funds as appropriate.
+	fn store_call(who: T::AccountId, hash: &[u8; 32], data: Vec<u8>) -> DispatchResult {
+		if !Calls::<T>::contains_key(hash) {
+			let deposit = T::DepositBase::get()
+				+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
+			T::Currency::reserve(&who, deposit)?;
+			// we store `data` here because storing `call` would result in needing another `.encode`.
+			Calls::<T>::insert(&hash, (data, who, deposit));
+		}
+		Ok(())
+	}
+
+	fn take_call(hash: &[u8; 32]) -> Option<<T as Trait>::Call> {
+		if let Some((data, who, deposit)) = Calls::<T>::take(hash) {
+			T::Currency::unreserve(&who, deposit);
+			Decode::decode(&mut &data[..]).ok()
+		} else {
+			None
+		}
 	}
 
 	/// The current `Timepoint`.
