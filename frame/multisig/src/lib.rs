@@ -545,7 +545,7 @@ impl<T: Trait> Module<T> {
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
-	/// Please a call in storage, reserving funds as appropriate.
+	/// Place a call's encoded data in storage, reserving funds as appropriate.
 	fn store_call(who: T::AccountId, hash: &[u8; 32], data: Vec<u8>) -> DispatchResult {
 		if !Calls::<T>::contains_key(hash) {
 			let deposit = T::DepositBase::get()
@@ -557,6 +557,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	/// Attempt to remove a call from storage, returning it and any deposit on it to the owner.
 	fn take_call(hash: &[u8; 32]) -> Option<<T as Trait>::Call> {
 		if let Some((data, who, deposit)) = Calls::<T>::take(hash) {
 			T::Currency::unreserve(&who, deposit);
