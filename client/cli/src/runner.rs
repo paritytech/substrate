@@ -266,9 +266,6 @@ impl<C: SubstrateCli> Runner<C> {
 	{
 		let mut service = service_builder(self.config)?;
 
-		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
-		let _informant_handle = self.tokio_runtime.spawn(informant_future);
-
 		let f = service.future().fuse();
 		self.tokio_runtime
 			.block_on(main(f))
