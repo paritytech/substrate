@@ -284,7 +284,10 @@ mod test {
 
 		ooc.set(STORAGE_PREFIX, b"ppp", b"rrr");
 		let mut iter = ooc.into_iter();
-		assert_eq!(iter.next(), Some((STORAGE_PREFIX.to_vec(), b"ppp".to_vec()), OffchainOverlayedChange::SetValue(b"rrr".to_vec())));
+		assert_eq!(
+			iter.next(), Some((STORAGE_PREFIX.to_vec(), b"ppp".to_vec()),
+			OffchainOverlayedChange::SetValue(b"rrr".to_vec()))
+		);
 		assert_eq!(iter.next(), None);
 	}
 }
