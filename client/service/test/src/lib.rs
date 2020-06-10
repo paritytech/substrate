@@ -34,7 +34,7 @@ use sc_service::{
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
-	config::{DatabaseConfig, KeystoreConfig},
+	config::{BasePath, DatabaseConfig, KeystoreConfig},
 	RuntimeGenesis,
 	Role,
 	Error,
@@ -210,6 +210,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		base_path: Some(BasePath::new(root)),
 	}
 }
 
