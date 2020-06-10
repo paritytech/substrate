@@ -45,6 +45,9 @@ pub enum Error {
 	/// Tasks executor is missing.
 	#[display(fmt="Tasks executor hasn't been provided.")]
 	TaskExecutorRequired,
+	/// the backend doesn't provide an implementation of `Cache`
+	#[display(fmt="The backend doesn't provide an implementation of `Cache`.")]
+	CacheRequired,
 	/// Other error.
 	Other(String),
 }

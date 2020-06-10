@@ -64,6 +64,7 @@ use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
 use sp_core::storage::Storage;
+use sp_blockchain::ProvideCache;
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -414,9 +415,9 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				pruning: config.pruning.clone(),
 				source: config.database.clone(),
 			};
-			sc_client_db::light::LightStorage::new(db_settings)?
+			Arc::new(sc_client_db::light::LightStorage::new(db_settings)?)
 		};
-		let light_blockchain = sc_light::new_light_blockchain(db_storage);
+		let light_blockchain = sc_light::new_light_blockchain(db_storage.clone());
 		let fetch_checker = Arc::new(
 			sc_light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
@@ -424,7 +425,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				Box::new(task_manager.spawn_handle()),
 			),
 		);
-		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
 		let backend = sc_light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(light::new_light(
@@ -434,6 +434,14 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		)?);
+		let fetcher = Arc::new(
+			sc_network::config::OnDemand::new(
+				fetch_checker,
+				client.cache().ok_or_else(|| Error::CacheRequired)?,
+				db_storage,
+				Box::new(task_manager.spawn_handle()))
+		);
+
 
 		Ok(ServiceBuilder {
 			config,

@@ -43,7 +43,7 @@ pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 }
 
 /// Create an instance of light client blockchain backend.
-pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> Arc<Blockchain<S>> {
+pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: Arc<S>) -> Arc<Blockchain<S>> {
 	Arc::new(Blockchain::new(storage))
 }
 

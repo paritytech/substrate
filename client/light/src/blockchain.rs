@@ -45,12 +45,12 @@ use crate::fetcher::RemoteHeaderRequest;
 
 /// Light client blockchain.
 pub struct Blockchain<S> {
-	storage: S,
+	storage: Arc<S>,
 }
 
 impl<S> Blockchain<S> {
 	/// Create new light blockchain backed with given storage.
-	pub fn new(storage: S) -> Self {
+	pub fn new(storage: Arc<S>) -> Self {
 		Self {
 			storage,
 		}

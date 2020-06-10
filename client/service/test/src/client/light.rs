@@ -67,11 +67,11 @@ pub struct DummyStorage {
 }
 
 impl DummyStorage {
-	pub fn new() -> Self {
-		DummyStorage {
+	pub fn new() -> Arc<Self> {
+		Arc::new(DummyStorage {
 			changes_tries_cht_roots: HashMap::new(),
 			aux_store: Mutex::new(HashMap::new()),
-		}
+		})
 	}
 }
 
@@ -707,7 +707,7 @@ fn changes_proof_is_generated_and_checked_when_headers_are_pruned() {
 	// prepare local checker, having a root of changes trie CHT#0
 	let local_cht_root = cht::compute_root::<Header, BlakeTwo256, _>(4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 	let mut local_storage = DummyStorage::new();
-	local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
+	Arc::get_mut(&mut local_storage).unwrap().changes_tries_cht_roots.insert(0, local_cht_root);
 	let local_checker = TestChecker::new(
 		Arc::new(DummyBlockchain::new(local_storage)),
 		local_executor(),
@@ -841,7 +841,7 @@ fn check_changes_tries_proof_fails_if_proof_is_wrong() {
 
 	// fails when proof is broken
 	let mut local_storage = DummyStorage::new();
-	local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
+	Arc::get_mut(&mut local_storage).unwrap().changes_tries_cht_roots.insert(0, local_cht_root);
 	let local_checker = TestChecker::new(
 		Arc::new(DummyBlockchain::new(local_storage)),
 		local_executor(),

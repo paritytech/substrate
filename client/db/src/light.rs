@@ -493,7 +493,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 		match digest {
 			Some(DigestItem::RuntimeCodeChanged(hash)) => {
 				// insert hash into cache
-				cache_at.insert(well_known_cache_keys::CODE, hash.encode());
+				cache_at.insert(well_known_cache_keys::CODE_HASH, hash.encode());
 			},
 			Some(DigestItem::HeapPagesChanged(heap_pages)) => {
 				// insert heap_pages into cache

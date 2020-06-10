@@ -23,12 +23,19 @@ use crate::light_client_handler;
 use futures::{channel::oneshot, prelude::*};
 use parking_lot::Mutex;
 use sc_client_api::{
-	FetchChecker, Fetcher, RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest,
-	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, StorageProof, ChangesProof,
+	FetchChecker, Fetcher, AuxStore, CloneableSpawn,
+	RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
+	RemoteReadChildRequest, RemoteReadRequest, StorageProof, ChangesProof,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::Error as ClientError;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_blockchain::{Error as ClientError, Cache, well_known_cache_keys};
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	generic::BlockId
+};
+use futures::task::SpawnExt;
+use sp_core::storage::well_known_keys;
+use sc_client_db::light::LightStorage;
 use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
 
 /// Implements the `Fetcher` trait of the client. Makes it possible for the light client to perform
@@ -39,6 +46,15 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
 pub struct OnDemand<B: BlockT> {
 	/// Objects that checks whether what has been retrieved is correct.
 	checker: Arc<dyn FetchChecker<B>>,
+
+	/// reference to backend.
+	backend: Arc<LightStorage<B>>,
+
+	/// reference to cache
+	cache: Arc<dyn Cache<B>>,
+
+	/// spawn handle for async task that fetches runtime code.
+	spawn_handle: Box<dyn CloneableSpawn>,
 
 	/// Queue of requests. Set to `Some` at initialization, then extracted by the network.
 	///
@@ -114,14 +130,22 @@ where
 	B::Header: HeaderT,
 {
 	/// Creates new on-demand service.
-	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
+	pub fn new(
+		checker: Arc<dyn FetchChecker<B>>,
+		cache: Arc<dyn Cache<B>>,
+		backend: Arc<LightStorage<B>>,
+		spawn_handle: Box<dyn CloneableSpawn>,
+	) -> Self {
 		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemand");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
 		OnDemand {
+			cache,
+			backend,
 			checker,
 			requests_queue,
 			requests_send,
+			spawn_handle,
 		}
 	}
 
@@ -184,10 +208,27 @@ where
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
+
+		let (header, cache, backend, req_sender) = (
+			request.header.clone(),
+			self.cache.clone(),
+			self.backend.clone(),
+			self.requests_send.clone(),
+		);
+
+		let (tx, rx) = oneshot::channel();
+		// this is the hackiest thing i've ever written
+		let _ = self.spawn_handle.spawn(
+			fetch_and_store_code(header, cache, backend, req_sender, receiver)
+				.map(|result| {
+					let _ = tx.send(result);
+				})
+		);
+
 		let _ = self
 			.requests_send
 			.unbounded_send(light_client_handler::Request::Call { request, sender });
-		RemoteResponse { receiver }
+		RemoteResponse { receiver: rx }
 	}
 
 	fn remote_changes(
@@ -225,4 +266,57 @@ impl<T> Future for RemoteResponse<T> {
 			Poll::Pending => Poll::Pending,
 		}
 	}
+}
+
+/// called exclusively on every RemoteCallRequest, checks that we have the runtime code available
+/// to verify the `RemoteCallResponse` and if not, issues a fetch to
+async fn fetch_and_store_code<B>(
+	header: B::Header,
+	cache: Arc<dyn Cache<B>>,
+	backend: Arc<LightStorage<B>>,
+	req_sender: TracingUnboundedSender<light_client_handler::Request<B>>,
+	receiver: oneshot::Receiver<Result<Vec<u8>, ClientError>>,
+) -> Result<Vec<u8>, ClientError>
+	where
+		B: BlockT,
+{
+	if let Ok(Some((_from, _to, hash))) = cache.get_at(
+		&well_known_cache_keys::CODE_HASH,
+		&BlockId::Hash(header.hash())
+	) {
+		// alas! we don't have the runtime code locally.
+		if let Ok(None) = backend.get_aux(&hash) {
+			let (sender, receiver) = oneshot::channel();
+			// just checking we have the runtime code for this block.
+			let _ = req_sender.unbounded_send(
+				light_client_handler::Request::Read {
+					sender,
+					request: RemoteReadRequest {
+						keys: vec![well_known_keys::CODE.to_vec()],
+						block: header.hash(),
+						header,
+						// todo: shouldn't we retry?
+						retry_count: None
+					}
+				}
+			);
+			let mut data = receiver.await
+				.map_err(|_| ClientError::RemoteFetchCancelled)??;
+			// todo: i assume it's possible that full nodes send us an empty response, how should this be handled?
+			if let Some(Some(runtime_code)) = data.remove(&well_known_keys::CODE.to_vec()) {
+				// i'd like to believe there's no need to hash runtime code here and compare it with hash.
+				backend.insert_aux(&[(hash.as_ref(), runtime_code.as_ref())], &[])?;
+			} else {
+				// for lack of a better error
+				return Err(ClientError::RemoteFetchFailed)
+			}
+		}
+	};
+
+	// i have a feeling i'm wrong, but the idea here is to fetch and store the code before returning the call response
+	// so that we have runtime code locally before the FetchChecker can check_execution_proof.
+	let call_response = receiver.await
+		.map_err(|_| ClientError::RemoteFetchCancelled)??;
+
+	Ok(call_response)
 }
