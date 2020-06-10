@@ -47,6 +47,8 @@ use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustifica
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
 
+use jsonrpc_core::IoHandlerExtension;
+
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
 	/// The client instance to use.
@@ -98,7 +100,7 @@ pub struct FullDeps<C, P, SC> {
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, M, SC>(
 	deps: FullDeps<C, P, SC>,
-) -> jsonrpc_core::IoHandler<M> where
+) -> jsonrpc_core::MetaIoHandler<M> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
@@ -108,14 +110,14 @@ pub fn create_full<C, P, M, SC>(
 	C::Api: BabeApi<Block>,
 	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 	P: TransactionPool + 'static,
-	M: jsonrpc_core::Metadata + Default,
+	M: jsonrpc_pubsub::PubSubMetadata + Default,
 	SC: SelectChain<Block> +'static,
 {
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
-	let mut io = jsonrpc_core::IoHandler::default();
+	let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
 	let FullDeps {
 		client,
 		pool,
@@ -166,7 +168,7 @@ pub fn create_full<C, P, M, SC>(
 		)
 	);
 
-	io
+	io.into()
 }
 
 /// Instantiate all Light RPC extensions.
