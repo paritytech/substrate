@@ -675,8 +675,9 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	let traces = Arc::new(Mutex::new(Vec::new()));
 	let handler = TestTraceHandler(traces.clone());
 
+	// Create subscriber with wasm_tracing disabled
 	let test_subscriber = sc_tracing::ProfilingSubscriber::new_with_handler(
-		Box::new(handler), "integration_test_span_target");
+		Box::new(handler), "integration_test_span_target", false);
 
 	let _guard = tracing::subscriber::set_default(test_subscriber);
 
