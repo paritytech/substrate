@@ -24,7 +24,7 @@ use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::Saturating;
 
-use crate::Module as Utility;
+use crate::Module as Multisig;
 
 const SEED: u32 = 0;
 
@@ -66,9 +66,9 @@ benchmarks! {
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		// before the call, get the timepoint
-		let timepoint = Utility::<T>::timepoint();
+		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Utility::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
 		let caller2 = signatories2.remove(0);
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call)
 
@@ -81,15 +81,15 @@ benchmarks! {
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		// before the call, get the timepoint
-		let timepoint = Utility::<T>::timepoint();
+		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Utility::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
 		// Everyone except the first person approves
 		for i in 1 .. s - 1 {
 			let mut signatories_loop = signatories2.clone();
 			let caller_loop = signatories_loop.remove(i as usize);
 			let o = RawOrigin::Signed(caller_loop).into();
-			Utility::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone())?;
+			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone())?;
 		}
 		let caller2 = signatories2.remove(0);
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call)
@@ -115,9 +115,9 @@ benchmarks! {
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		let call_hash = call.using_encoded(blake2_256);
 		// before the call, get the timepoint
-		let timepoint = Utility::<T>::timepoint();
+		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Utility::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
 		let caller2 = signatories2.remove(0);
 	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash)
 
@@ -129,10 +129,10 @@ benchmarks! {
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		let call_hash = call.using_encoded(blake2_256);
-		let timepoint = Utility::<T>::timepoint();
+		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
 		let o = RawOrigin::Signed(caller.clone()).into();
-		Utility::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone())?;
+		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone())?;
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 }
 
