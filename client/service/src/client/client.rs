@@ -18,6 +18,7 @@
 
 //! Substrate Client
 
+use sc_client_api::backend::{ProofFor, ProofRegFor};
 use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
@@ -25,7 +26,7 @@ use std::{
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
-use codec::{Encode, Decode};
+use codec::{Codec, Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
 	ChangesTrieConfiguration, convert_hash, NativeOrEncoded,
@@ -41,10 +42,10 @@ use sp_runtime::{
 	},
 };
 use sp_state_machine::{
-	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
+	DBValue, backend::Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	StorageProofKind,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof, SimpleProof as StorageProof,
+	StorageProofKind, StorageProof as StorageProofT,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -1175,8 +1176,9 @@ impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B::State, HashFor<Block>>> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
+//	HashFor<Block>: Ord + Codec,
 	E: CallExecutor<Block>,
 	Block: BlockT,
 {
@@ -1184,10 +1186,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-		kind: StorageProofKind,
-	) -> sp_blockchain::Result<StorageProof> {
+	) -> sp_blockchain::Result<ProofFor<B::State, HashFor<Block>>> {
 		self.state_at(id)
-			.and_then(|state| prove_read(state, keys, kind)
+			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
 	}
 
@@ -1196,10 +1197,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-		kind: StorageProofKind,
-	) -> sp_blockchain::Result<StorageProof> {
+	) -> sp_blockchain::Result<ProofFor<B::State, HashFor<Block>>> {
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, child_info, keys, kind)
+			.and_then(|state| prove_child_read(state, child_info, keys)
 				.map_err(Into::into))
 	}
 
@@ -1208,9 +1208,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		kind: StorageProofKind,
-	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let (merge_kind, prefer_full) = kind.mergeable_kind();
+	) -> sp_blockchain::Result<(Vec<u8>, ProofFor<B::State, HashFor<Block>>)> {
 		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
 		//
@@ -1218,7 +1216,6 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		let code_proof = self.read_proof(
 			id,
 			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
-			merge_kind,
 		)?;
 
 		let state = self.state_at(id)?;
@@ -1229,13 +1226,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			&self.executor,
 			method,
 			call_data,
-			merge_kind,
-			true,
 		).and_then(|(r, p)| {
 			Ok((r, StorageProof::merge::<HashFor<Block>, _>(
 				vec![p, code_proof],
-				prefer_full,
-				false,
 			).map_err(|e| format!("{}", e))?))
 		})
 	}

@@ -33,9 +33,9 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
-	read_child_proof_check, CloneableSpawn,
+	read_child_proof_check, CloneableSpawn, BackendStorageProof, InMemoryBackend,
 };
-pub use sp_state_machine::StorageProof;
+pub use sp_state_machine::{SimpleProof as StorageProof, StorageProof as StorageProofT};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 pub use sc_client_api::{
@@ -159,7 +159,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
-		let storage = remote_roots_proof.into_partial_flat_db::<H>()
+		let storage = remote_roots_proof.into_partial_db()
 			.map_err(|e| format!("{}", e))?;
 
 		// remote_roots.keys() are sorted => we can use this to group changes tries roots
@@ -204,7 +204,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	}
 }
 
-impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
+impl<E, Block, H, S> FetchChecker<Block, StorageProof> for LightDataChecker<E, H, Block, S>
 	where
 		Block: BlockT,
 		E: CodeExecutor + Clone + 'static,
@@ -234,7 +234,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		read_proof_check::<H, _>(
+		read_proof_check::<InMemoryBackend<H>, H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			request.keys.iter(),
@@ -250,7 +250,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 			None => return Err("Invalid child type".into()),
 		};
-		read_child_proof_check::<H, _>(
+		read_child_proof_check::<InMemoryBackend<H>, H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
 			&child_info,

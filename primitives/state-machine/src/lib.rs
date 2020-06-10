@@ -47,7 +47,7 @@ mod read_only;
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
 	TrieNodesStorageProof, StorageProof,  StorageProofKind, ChildrenProofMap,
 	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RegStorageProof,
-	SimpleProof};
+	SimpleProof, BackendStorageProof};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use read_only::{ReadOnlyExternalities, InspectState};

@@ -28,6 +28,7 @@ use sp_trie::StorageProof;
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT, Proof: StorageProof> {
 	/// Reads storage value at a given block + key, returning read proof.
+	/// TODO EMCH consider returning Proof::ProofReg instead!!! : more flexible
 	fn read_proof(
 		&self,
 		id: &BlockId<Block>,

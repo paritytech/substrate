@@ -526,6 +526,7 @@ pub trait RuntimeApiInfo {
 pub struct ProofRecorder<Backend: StateBackend<HashFor<Block>>, Block: BlockT> {
 	/// The recorder to use over the db use by trie db.
 	/// TODO EMCH is this the sync recorder, should not (there is something fishy with this sync rec)
+	/// in master-state-trait we use proofregrecorder so the sync one and no refcell on call executor
 	pub recorder: sp_state_machine::RecordBackendFor<Backend::StorageProof, HashFor<Block>>,
 	/// The additional input needed for the proof.
 	pub input: ProofInput,

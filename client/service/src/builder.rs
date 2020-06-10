@@ -23,7 +23,8 @@ use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWor
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider, ProofFor, SimpleProof,
+	StateBackend,
 };
 use crate::client::{Client, ClientConfig};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -893,6 +894,8 @@ ServiceBuilder<
 	TImpQu: 'static + ImportQueue<TBl>,
 	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
+	// TODO EMCH this constraint should be lifted when client get generic over StateBackend and Proof
+	TBackend::State: StateBackend<HashFor<TBl>, StorageProof = SimpleProof>,
 {
 
 	/// Set an ExecutionExtensionsFactory
@@ -916,6 +919,7 @@ ServiceBuilder<
 		>,
 	>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
+			TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		let ServiceBuilder {
 			marker: _,

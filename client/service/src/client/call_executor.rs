@@ -23,7 +23,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof, StorageProofKind, ProofInput,
+	backend::{Backend as _, ProofRegFor}, StorageProof, StorageProofKind, ProofInput,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
@@ -140,7 +140,7 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: Option<&RefCell<ProofRecorder<Block>>>,
+		recorder: Option<&RefCell<ProofRecorder<<Self::Backend as backend::Backend<Block>>::State, Block>>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -162,47 +162,36 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let ProofRecorder{ recorder, kind, input} = &mut *recorder.borrow_mut();
-				let trie_state = state.as_trie_backend()
-					.ok_or_else(||
-						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
-					)?;
-
-				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
+				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
 				let runtime_code = state_runtime_code.runtime_code()?;
 
-				let input_backend = std::mem::replace(input, ProofInput::None);
-				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone(),
-					*kind,
-					input_backend,
+				let state = self.backend.state_at(*at)?;
+
+				// TODO EMCH we need to check if previously recording root are still in recorder,
+				// previous code did some input merging (if it is not we can remove the ProofRecorder
+				// struct).
+				let backend = state.from_reg_state(recorder)
+					.ok_or_else(||
+						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
+					)?;
+
+				let mut state_machine = StateMachine::new(
+					&backend,
+					changes_trie_state,
+					changes,
+					offchain_changes,
+					&self.executor,
+					method,
+					call_data,
+					extensions.unwrap_or_default(),
+					&runtime_code,
+					self.spawn_handle.clone(),
 				);
-				let result = {
-					use std::borrow::BorrowMut;
-					let changes = &mut *changes.borrow_mut();
-					let mut state_machine = StateMachine::new(
-						&backend,
-						changes_trie_state,
-						changes,
-						offchain_changes,
-						&self.executor,
-						method,
-						call_data,
-						extensions.unwrap_or_default(),
-						&runtime_code,
-						self.spawn_handle.clone(),
-					);
-					// TODO: https://github.com/paritytech/substrate/issues/4455
-					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-					state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
-				};
-				let (recorder_state, input_state) = backend.recording_state()?;
-				*recorder = recorder_state;
-				*input = input_state;
-				result
+				// TODO: https://github.com/paritytech/substrate/issues/4455
+				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -254,14 +243,13 @@ where
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, ProofRegFor<P, HashFor<Block>>), sp_blockchain::Error> {
 		sp_state_machine::prove_execution_on_proof_backend::<_, _, NumberFor<Block>, _>(
-			backend,
+			proof_backend,
 			overlay,
 			&self.executor,
 			self.spawn_handle.clone(),
 			method,
 			call_data,
-			kind,
-			&sp_state_machine::backend::BackendRuntimeCode::new(trie_state).runtime_code()?,
+			&sp_state_machine::backend::BackendRuntimeCode::new(proof_backend).runtime_code()?,
 		)
 		.map_err(Into::into)
 	}

@@ -27,12 +27,12 @@ use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
-use sp_state_machine::{DBValue, backend::Backend as StateBackend};
+use sp_state_machine::{DBValue, backend::{Backend as StateBackend, ProofRegStateFor}, SimpleProof};
 use kvdb::{KeyValueDB, DBTransaction};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 
 type DbState<B> = sp_state_machine::TrieBackend<
-	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
+	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>, SimpleProof,
 >;
 
 type State<B> = CachingState<DbState<B>, B>;
@@ -118,7 +118,9 @@ fn state_err() -> String {
 impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+	type StorageProof = <DbState<B> as StateBackend<HashFor<B>>>::StorageProof;
+	type ProofRegBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofRegBackend;
+	type ProofCheckBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
@@ -205,7 +207,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
+		self.state.borrow().as_ref()
+			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -222,12 +225,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
 		self.state.borrow().as_ref().map_or(Default::default(), |s| s.child_keys(child_info, prefix))
-	}
-
-	fn as_trie_backend(&mut self)
-		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>>
-	{
-		None
 	}
 
 	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
@@ -281,6 +278,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
+	}
+
+	fn from_reg_state(self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+		self.state.borrow_mut().take().and_then(|s| s.from_reg_state(previous))
 	}
 }
 

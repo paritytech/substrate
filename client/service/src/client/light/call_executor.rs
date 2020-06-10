@@ -29,11 +29,12 @@ use sp_runtime::{
 };
 use sp_externalities::Extensions;
 use sp_state_machine::{
-	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
-	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof, CloneableSpawn,
-	StorageProofKind,
+	self, OverlayedChanges, ExecutionStrategy, execution_proof_check_on_proof_backend,
+	ExecutionManager, CloneableSpawn, create_proof_check_backend, InMemoryBackend,
 };
+use sp_state_machine::backend::{Backend as StateBackend, ProofRegStateFor, ProofRegFor};
 use hash_db::Hasher;
+use sp_trie::{SimpleProof as StorageProof, StorageProof as StorageProofT, MergeableStorageProof};
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
@@ -116,7 +117,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: Option<&RefCell<ProofRecorder<Block>>>,
+		_recorder: Option<&RefCell<ProofRecorder<<Self::Backend as sc_client_api::backend::Backend<Block>>::State, Block>>>,
 		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
@@ -143,7 +144,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
-				recorder,
+				None,
 				extensions,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),
 			false => Err(ClientError::NotAvailableOnLightClient),
@@ -157,14 +158,13 @@ impl<Block, B, Local> CallExecutor<Block> for
 		}
 	}
 
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<Block>>>(
 		&self,
-		_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
-		_changes: &mut OverlayedChanges,
+		_proof_backend: &P,
+		_overlay: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_kind: StorageProofKind,
-	) -> ClientResult<(Vec<u8>, StorageProof)> {
+	) -> ClientResult<(Vec<u8>, ProofRegFor<P, HashFor<Block>>)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
@@ -183,44 +183,37 @@ pub fn prove_execution<Block, S, E>(
 	executor: &E,
 	method: &str,
 	call_data: &[u8],
-	kind: StorageProofKind,
-	proof_used_in_other: bool,
-) -> ClientResult<(Vec<u8>, StorageProof)>
+) -> ClientResult<(Vec<u8>, ProofRegFor<S, HashFor<Block>>)>
 	where
 		Block: BlockT,
 		S: StateBackend<HashFor<Block>>,
 		E: CallExecutor<Block>,
 {
-	let trie_state = state.as_trie_backend()
+	let proof_state = state.as_proof_backend()
 		.ok_or_else(||
 			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as
 				Box<dyn sp_state_machine::Error>
 		)?;
 
-	let (merge_kind, prefer_full) = kind.mergeable_kind();
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
-	let (_, init_proof) = executor.prove_at_trie_state(
-		trie_state,
+	let (_, init_proof) = executor.prove_at_proof_backend_state(
+		&proof_state,
 		&mut changes,
 		"Core_initialize_block",
 		&header.encode(),
-		merge_kind,
 	)?;
 
 	// execute method + record execution proof
-	let (result, exec_proof) = executor.prove_at_trie_state(
-		trie_state,
+	let (result, exec_proof) = executor.prove_at_proof_backend_state(
+		&proof_state,
 		&mut changes,
 		method,
 		call_data,
-		merge_kind,
 	)?;
-	let total_proof = StorageProof::merge::<HashFor<Block>, _>(
+	let total_proof = <ProofRegFor<S, HashFor<Block>>>::merge(
 		vec![init_proof, exec_proof],
-		prefer_full,
-		proof_used_in_other,
-	).map_err(|e| format!("{}", e))?;
+	);
 
 	Ok((result, total_proof))
 }
@@ -241,7 +234,8 @@ pub fn check_execution_proof<Header, E, H>(
 		H: Hasher,
 		H::Out: Ord + codec::Codec + 'static,
 {
-	check_execution_proof_with_make_header::<Header, E, H, _>(
+
+	check_execution_proof_with_make_header::<InMemoryBackend<H>, Header, E, H, _>(
 		executor,
 		spawn_handle,
 		request,
@@ -260,14 +254,15 @@ pub fn check_execution_proof<Header, E, H>(
 ///
 /// Method is executed using passed header as environment' current block.
 /// Proof should include both environment preparation proof and method execution proof.
-pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
+pub fn check_execution_proof_with_make_header<P, Header, E, H, MakeNextHeader>(
 	executor: &E,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
-	remote_proof: StorageProof,
+	remote_proof: P::StorageProof,
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
 	where
+		P: sp_state_machine::backend::ProofCheckBackend<H>,
 		E: CodeExecutor + Clone + 'static,
 		H: Hasher,
 		Header: HeaderT,
@@ -279,14 +274,14 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 
 	// prepare execution environment + check preparation proof
 	let mut changes = OverlayedChanges::default();
-	let trie_backend = create_proof_check_backend(root, remote_proof)?;
+	let trie_backend = P::create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
 
 	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
 	let runtime_code = backend_runtime_code.runtime_code()?;
 
-	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
+	execution_proof_check_on_proof_backend::<P, H, Header::Number, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
@@ -297,7 +292,7 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 	)?;
 
 	// execute method
-	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
+	execution_proof_check_on_proof_backend::<P, H, Header::Number, _>(
 		&trie_backend,
 		&mut changes,
 		executor,
