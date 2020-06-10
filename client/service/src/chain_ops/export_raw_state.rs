@@ -23,6 +23,8 @@ use sc_client_api::{StorageProvider, UsageProvider};
 
 use std::{collections::HashMap, sync::Arc};
 
+/// Export the raw state at the given `block`. If `block` is `None`, the
+/// best block will be used.
 pub fn export_raw_state<B, BA, CE, RA>(
 	client: Arc<Client<BA, CE, B, RA>>,
     block: Option<BlockId<B>>,

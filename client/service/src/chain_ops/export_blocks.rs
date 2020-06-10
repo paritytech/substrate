@@ -14,30 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![allow(unused_imports)]
-
-use crate::error;
 use crate::error::Error;
-use sc_chain_spec::ChainSpec;
-use log::{warn, info};
+use log::info;
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+	Block as BlockT, NumberFor, One, Zero, SaturatedConversion
 };
-use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader};
-use crate::client::{Client, LocalCallExecutor};
-use sp_consensus::{
-	BlockOrigin,
-	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
-};
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sp_runtime::generic::BlockId;
+use codec::Encode;
+use crate::client::Client;
 
-use std::{io::{Read, Write, Seek}, pin::Pin};
+use std::{io::Write, pin::Pin};
 use sc_client_api::BlockBackend;
 use std::sync::Arc;
 use std::task::Poll;
 
+/// Performs the blocks export.
 pub fn export_blocks<B, BA, CE, RA>(
 	client: Arc<Client<BA, CE, B, RA>>,
 	mut output: impl Write + 'static,

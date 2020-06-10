@@ -183,6 +183,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	new_full_parts(config).map(|parts| parts.0)
 }
 
+/// Create some of the basic parts of a service from a configuration.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
@@ -296,7 +297,7 @@ pub fn new_client<E, Block, RA>(
 	))
 }
 
-/// Start the service builder with a configuration.
+/// Create some of the basic parts of a service from a configuration.
 pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 	config: &Configuration,
 ) -> Result<(TLightParts<TBl, TRtApi, TExecDisp>, Arc<OnDemand<TBl>>, Arc<dyn RemoteBlockchain<TBl>>), Error> {
@@ -351,22 +352,62 @@ pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch +
 	Ok(((client, backend, keystore, task_manager), fetcher, remote_blockchain))
 }
 
-pub struct ServiceDescriptor<TBl: BlockT, TRtApi, TSc, TImpQu, TExPool, TBackend, TExec, TRpcBuilder> {
+/// Parameters that are passed to `build`.
+pub struct ServiceParams<TBl: BlockT, TRtApi, TSc, TImpQu, TExPool, TBackend, TExec, TRpcBuilder> {
+	/// The node configuration.
 	pub config: Configuration,
+	/// A client, created in `new_full_parts`/`new_light_parts`.
 	pub client: Arc<Client<TBackend, TExec, TBl, TRtApi>,>,
+	/// A backend, created in `new_full_parts`/`new_light_parts`.
 	pub backend: Arc<TBackend>,
+	/// A task manager, created in `new_full_parts`/`new_light_parts`.
 	pub task_manager: TaskManager,
+	/// A keystore, created in `new_full_parts`/`new_light_parts`.
 	pub keystore: Arc<RwLock<Keystore>>,
+	/// An on-demand `Fetcher`. Used by light clients to fetch state via network requests.
 	pub on_demand: Option<Arc<OnDemand<TBl>>>,
+	/// Which head-of-chain strategy to use.
 	pub select_chain: Option<TSc>,
+	/// Which import queue to use.
 	pub import_queue: TImpQu,
+	/// FPRB.
 	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
+	/// Which strategy to use for providing finality proofs.
 	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
+	/// Which transaction pool to use.
 	pub transaction_pool: Arc<TExPool>,
+	/// .....
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
+	/// A list pf background tasks to spawn.
 	pub background_tasks: Vec<(&'static str, BackgroundTask)>,
-	pub block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>,>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send + 'static>>,
+	// Defines the `BlockAnnounceValidator` to use. `DefaultBlockAnnounceValidator` will be used by
+	/// default.
+	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<TBl> + Send>>,
+	/// Defines the RPC extension builder to use.
+	/// This method is in situations where the RPC extensions need to
+	/// access to a `DenyUnsafe` instance to avoid exposing sensitive methods.
 	pub rpc_extensions_builder: TRpcBuilder,
+	/// Defines the informant's prefix for the logs. An empty string by default.
+	///
+	/// By default substrate will show logs without a prefix. Example:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	///
+	/// But you can define a prefix by using this function. Example:
+	///
+	/// ```rust,ignore
+	/// service.with_informant_prefix("[Prefix] ".to_string());
+	/// ```
+	///
+	/// This will output:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// `
 	pub informant_prefix: String,
 }
 
@@ -382,7 +423,7 @@ pub fn build<
 	TRpcBuilder,
 	URpc,
 >(
-	service_descriptor: ServiceDescriptor<TBl, TRtApi, TSc, TImpQu, TExPool, TBackend, TExec, TRpcBuilder>,
+	service_descriptor: ServiceParams<TBl, TRtApi, TSc, TImpQu, TExPool, TBackend, TExec, TRpcBuilder>,
 ) -> Result<Service<
 	TBl,
 	Client<TBackend, TExec, TBl, TRtApi>,
@@ -416,10 +457,10 @@ where
 	TRpcBuilder: RpcExtensionBuilder<Output = URpc> + Send + 'static,
 	URpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
-	let ServiceDescriptor {
+	let ServiceParams {
 		mut config,
 		client, backend, task_manager, keystore, on_demand, select_chain, import_queue, finality_proof_request_builder, finality_proof_provider, transaction_pool, 
-		remote_blockchain, background_tasks, block_announce_validator_builder, rpc_extensions_builder, informant_prefix
+		remote_blockchain, background_tasks, block_announce_validator, rpc_extensions_builder, informant_prefix
 	} = service_descriptor;
 
 	sp_session::generate_initial_session_keys(
@@ -467,8 +508,8 @@ where
 		sc_network::config::ProtocolId::from(protocol_id_full)
 	};
 
-	let block_announce_validator = if let Some(f) = block_announce_validator_builder {
-		f(client.clone())
+	let block_announce_validator = if let Some(validator) = block_announce_validator {
+		validator
 	} else {
 		Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
 	};
@@ -674,70 +715,70 @@ where
 	// RPC
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| {
-	use sc_rpc::{chain, state, author, system, offchain};
+		use sc_rpc::{chain, state, author, system, offchain};
 
-	let system_info = sc_rpc::system::SystemInfo {
-		chain_name: chain_spec.name().into(),
-		impl_name: config.impl_name.into(),
-		impl_version: config.impl_version.into(),
-		properties: chain_spec.properties().clone(),
-		chain_type: chain_spec.chain_type().clone(),
-	};
+		let system_info = sc_rpc::system::SystemInfo {
+			chain_name: chain_spec.name().into(),
+			impl_name: config.impl_name.into(),
+			impl_version: config.impl_version.into(),
+			properties: chain_spec.properties().clone(),
+			chain_type: chain_spec.chain_type().clone(),
+		};
 
-	let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
+		let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
 
-	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
-		(remote_blockchain.as_ref(), on_demand.as_ref()) {
-		// Light clients
-		let chain = sc_rpc::chain::new_light(
+		let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+			(remote_blockchain.as_ref(), on_demand.as_ref()) {
+			// Light clients
+			let chain = sc_rpc::chain::new_light(
+				client.clone(),
+				subscriptions.clone(),
+				remote_blockchain.clone(),
+				on_demand.clone()
+			);
+			let (state, child_state) = sc_rpc::state::new_light(
+				client.clone(),
+				subscriptions.clone(),
+				remote_blockchain.clone(),
+				on_demand.clone()
+			);
+			(chain, state, child_state)
+
+		} else {
+			// Full nodes
+			let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
+			let (state, child_state) = sc_rpc::state::new_full(client.clone(), subscriptions.clone());
+			(chain, state, child_state)
+		};
+
+		let author = sc_rpc::author::Author::new(
 			client.clone(),
-			subscriptions.clone(),
-			remote_blockchain.clone(),
-			on_demand.clone()
+			transaction_pool.clone(),
+			subscriptions,
+			keystore.clone(),
+			deny_unsafe,
 		);
-		let (state, child_state) = sc_rpc::state::new_light(
-			client.clone(),
-			subscriptions.clone(),
-			remote_blockchain.clone(),
-			on_demand.clone()
-		);
-		(chain, state, child_state)
+		let system = system::System::new(system_info, system_rpc_tx.clone(), deny_unsafe);
 
-	} else {
-		// Full nodes
-		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-		let (state, child_state) = sc_rpc::state::new_full(client.clone(), subscriptions.clone());
-		(chain, state, child_state)
+		let maybe_offchain_rpc = offchain_storage.clone()
+			.map(|storage| {
+				let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
+				// FIXME: Use plain Option (don't collect into HashMap) when we upgrade to jsonrpc 14.1
+				// https://github.com/paritytech/jsonrpc/commit/20485387ed06a48f1a70bf4d609a7cde6cf0accf
+				let delegate = offchain::OffchainApi::to_delegate(offchain);
+					delegate.into_iter().collect::<HashMap<_, _>>()
+			}).unwrap_or_default();
+
+		sc_rpc_server::rpc_handler((
+			state::StateApi::to_delegate(state),
+			state::ChildStateApi::to_delegate(child_state),
+			chain::ChainApi::to_delegate(chain),
+			maybe_offchain_rpc,
+			author::AuthorApi::to_delegate(author),
+			system::SystemApi::to_delegate(system),
+			rpc_extensions_builder.build(deny_unsafe),
+		))
 	};
-
-	let author = sc_rpc::author::Author::new(
-		client.clone(),
-		transaction_pool.clone(),
-		subscriptions,
-		keystore.clone(),
-		deny_unsafe,
-	);
-	let system = system::System::new(system_info, system_rpc_tx.clone(), deny_unsafe);
-
-	let maybe_offchain_rpc = offchain_storage.clone()
-	.map(|storage| {
-		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
-		// FIXME: Use plain Option (don't collect into HashMap) when we upgrade to jsonrpc 14.1
-		// https://github.com/paritytech/jsonrpc/commit/20485387ed06a48f1a70bf4d609a7cde6cf0accf
-		let delegate = offchain::OffchainApi::to_delegate(offchain);
-			delegate.into_iter().collect::<HashMap<_, _>>()
-	}).unwrap_or_default();
-
-	sc_rpc_server::rpc_handler((
-		state::StateApi::to_delegate(state),
-		state::ChildStateApi::to_delegate(child_state),
-		chain::ChainApi::to_delegate(chain),
-		maybe_offchain_rpc,
-		author::AuthorApi::to_delegate(author),
-		system::SystemApi::to_delegate(system),
-		rpc_extensions_builder.build(deny_unsafe),
-	))
-};
 	let rpc = start_rpc_servers(&config, gen_handler)?;
 	// This is used internally, so don't restrict access to unsafe RPC
 	let rpc_handlers = gen_handler(sc_rpc::DenyUnsafe::No);

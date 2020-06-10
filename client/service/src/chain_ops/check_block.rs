@@ -14,31 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![allow(unused_imports)]
-
-use crate::error;
 use crate::error::Error;
-use sc_chain_spec::ChainSpec;
-use log::{warn, info};
 use futures::{future, prelude::*};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
-};
-use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader};
-use crate::client::{Client, LocalCallExecutor};
-use sp_consensus::{
-	BlockOrigin,
-	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
-};
-use crate::config::RpcMethods;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sp_runtime::traits::Block as BlockT;
+use sp_runtime::generic::BlockId;
+use codec::Encode;
+use crate::client::Client;
+use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::client::BlockBackend;
 
-use std::{io::{Read, Write, Seek}, pin::Pin};
+use std::pin::Pin;
 use std::sync::Arc;
-use crate::import_blocks::import_blocks;
+use crate::chain_ops::import_blocks;
 
+/// Re-validate known block.
 pub fn check_block<B, BA, CE, RA, IQ>(
 	client: Arc<Client<BA, CE, B, RA>>,
 	import_queue: IQ,

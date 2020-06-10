@@ -14,29 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![allow(unused_imports)]
-
-use crate::error;
 use crate::error::Error;
-use sc_chain_spec::ChainSpec;
-use log::{warn, info};
-use futures::{future, prelude::*};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
-};
-use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader};
-use crate::client::{Client, LocalCallExecutor};
-use sp_consensus::{
-	BlockOrigin,
-	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
-};
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use log::info;
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
+use crate::client::Client;
 
-use std::{io::{Read, Write, Seek}, pin::Pin};
-use sc_client_api::BlockBackend;
 use std::sync::Arc;
 
+/// Performs a revert of `blocks` blocks.
 pub fn revert_chain<B, BA, CE, RA>(
 	client: Arc<Client<BA, CE, B, RA>>,
 	blocks: NumberFor<B>

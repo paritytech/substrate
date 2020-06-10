@@ -174,7 +174,7 @@ macro_rules! new_full {
 		let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
 		let finality_proof_provider = Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider)) as _;
 		
-		let service = sc_service::build(sc_service::ServiceDescriptor {
+		let service = sc_service::build(sc_service::ServiceParams {
 			config: $config,
 			client,
 			backend,
@@ -188,7 +188,7 @@ macro_rules! new_full {
 			transaction_pool,
 			remote_blockchain: None,
 			background_tasks,
-			block_announce_validator_builder: None,
+			block_announce_validator: None,
 			rpc_extensions_builder,
 			informant_prefix: String::new()
 		})?;
@@ -409,7 +409,7 @@ pub fn new_light(config: Configuration)
 		node_rpc::create_light::<_, _, sc_rpc::Metadata, _>(light_deps)
 	};
 
-	sc_service::build(sc_service::ServiceDescriptor {
+	sc_service::build(sc_service::ServiceParams {
 		config,
 		client,
 		backend,
@@ -423,7 +423,7 @@ pub fn new_light(config: Configuration)
 		transaction_pool,
 		remote_blockchain: Some(remote_blockchain),
 		background_tasks,
-		block_announce_validator_builder: None,
+		block_announce_validator: None,
 		rpc_extensions_builder,
 		informant_prefix: String::new()
 	})

@@ -281,6 +281,7 @@ enum ImportState<R, B> where
 	},
 }
 
+/// Starts the process of importing blocks.
 pub fn import_blocks<B, BA, CE, RA, IQ>(
 	client: Arc<Client<BA, CE, B, RA>>,
 	mut import_queue: IQ,

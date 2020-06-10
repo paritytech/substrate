@@ -96,7 +96,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
 	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
-	let service = sc_service::build(sc_service::ServiceDescriptor {
+	let service = sc_service::build(sc_service::ServiceParams {
 		config,
 		client,
 		backend,
@@ -110,7 +110,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 		transaction_pool,
 		remote_blockchain: None,
 		background_tasks,
-		block_announce_validator_builder: None,
+		block_announce_validator: None,
 		rpc_extensions_builder: Box::new(|_| ()),
 		informant_prefix: String::new()
 	})?;
@@ -244,7 +244,7 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
 	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
-	sc_service::build(sc_service::ServiceDescriptor {
+	sc_service::build(sc_service::ServiceParams {
 		config,
 		client,
 		backend,
@@ -258,7 +258,7 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 		transaction_pool,
 		remote_blockchain: Some(remote_blockchain),
 		background_tasks,
-		block_announce_validator_builder: None,
+		block_announce_validator: None,
 		rpc_extensions_builder: Box::new(|_| ()),
 		informant_prefix: String::new()
 	})
