@@ -103,7 +103,6 @@ where
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
 	C::Api: BlockBuilder<Block>,
-	<C::Api as sp_api::ApiErrorExt>::Error: std::fmt::Debug,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,

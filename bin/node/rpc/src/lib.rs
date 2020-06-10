@@ -30,7 +30,7 @@
 
 #![warn(missing_docs)]
 
-use std::{sync::Arc, fmt};
+use std::sync::Arc;
 
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use node_runtime::UncheckedExtrinsic;
@@ -106,7 +106,6 @@ pub fn create_full<C, P, M, SC>(
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
-	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 	SC: SelectChain<Block> +'static,
