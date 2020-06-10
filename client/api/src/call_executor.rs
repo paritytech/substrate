@@ -24,8 +24,7 @@ use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, HashFor},
 };
 use sp_state_machine::{
-	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
-	StorageProofKind,
+	OverlayedChanges, ExecutionManager, ExecutionStrategy,
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
@@ -94,7 +93,7 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		proof_recorder: Option<&RefCell<ProofRecorder<B>>>,
+		proof_recorder: Option<&RefCell<ProofRecorder<<Self::Backend as crate::backend::Backend<B>>::State, B>>>,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -106,33 +105,31 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
+	fn prove_at_state<S: sp_state_machine::backend::Backend<HashFor<B>>>(
 		&self,
-		mut state: S,
+		state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8],
-		kind: StorageProofKind,
-	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		let trie_state = state.as_trie_backend()
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRegFor<S, HashFor<B>>), sp_blockchain::Error> {
+		let proof_state = state.as_proof_backend()
 			.ok_or_else(||
 				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
 					as Box<dyn sp_state_machine::Error>
 			)?;
-		self.prove_at_trie_state(trie_state, overlay, method, call_data, kind)
+		self.prove_at_proof_backend_state(&proof_state, overlay, method, call_data)
 	}
 
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<B>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
+		proof_backend: &P,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
-		kind: StorageProofKind,
-	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
+	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRegFor<P, HashFor<B>>), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;

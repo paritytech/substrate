@@ -24,7 +24,8 @@ use futures::{channel::oneshot, prelude::*};
 use parking_lot::Mutex;
 use sc_client_api::{
 	FetchChecker, Fetcher, RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest,
-	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, StorageProof, ChangesProof,
+	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, SimpleProof as StorageProof,
+	ChangesProof,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::Error as ClientError;
@@ -38,7 +39,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
 /// responsible for pulling elements out of that queue and fulfilling them.
 pub struct OnDemand<B: BlockT> {
 	/// Objects that checks whether what has been retrieved is correct.
-	checker: Arc<dyn FetchChecker<B>>,
+	checker: Arc<dyn FetchChecker<B, StorageProof>>,
 
 	/// Queue of requests. Set to `Some` at initialization, then extracted by the network.
 	///
@@ -58,7 +59,7 @@ pub struct OnDemand<B: BlockT> {
 #[derive(Default, Clone)]
 pub struct AlwaysBadChecker;
 
-impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
+impl<Block: BlockT> FetchChecker<Block, StorageProof> for AlwaysBadChecker {
 	fn check_header_proof(
 		&self,
 		_request: &RemoteHeaderRequest<Block::Header>,
@@ -114,7 +115,7 @@ where
 	B::Header: HeaderT,
 {
 	/// Creates new on-demand service.
-	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
+	pub fn new(checker: Arc<dyn FetchChecker<B, StorageProof>>) -> Self {
 		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemand");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
@@ -126,7 +127,7 @@ where
 	}
 
 	/// Get checker reference.
-	pub fn checker(&self) -> &Arc<dyn FetchChecker<B>> {
+	pub fn checker(&self) -> &Arc<dyn FetchChecker<B, StorageProof>> {
 		&self.checker
 	}
 

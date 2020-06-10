@@ -29,6 +29,10 @@ pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRe
 /// Access the state of the proof backend of a backend.
 pub type ProofRegFor<B, H> = <<B as Backend<H>>::StorageProof as BackendStorageProof<H>>::StorageProofReg;
 
+/// Access the state of the proof backend of a backend.
+/// TODO should not be an alias
+pub type ProofFor<B, H> = <B as Backend<H>>::StorageProof;
+
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///

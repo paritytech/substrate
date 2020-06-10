@@ -40,7 +40,7 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 pub use sc_rpc_api::child_state::*;
-use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider};
+use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider, SimpleProof};
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
@@ -175,7 +175,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block, SimpleProof> + HeaderBackend<Block>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 			+ CallApiAt<Block, Error = sp_blockchain::Error>
 			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,

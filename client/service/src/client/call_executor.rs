@@ -246,16 +246,15 @@ where
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<Block>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
+		proof_backend: &P,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8],
-		kind: StorageProofKind,
-	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _>(
-			trie_state,
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, ProofRegFor<P, HashFor<Block>>), sp_blockchain::Error> {
+		sp_state_machine::prove_execution_on_proof_backend::<_, _, NumberFor<Block>, _>(
+			backend,
 			overlay,
 			&self.executor,
 			self.spawn_handle.clone(),

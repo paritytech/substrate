@@ -26,7 +26,7 @@ use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::ChildInfo;
 use sp_state_machine::{
-	backend::Backend as StateBackend, TrieBackend, StorageKey, StorageValue,
+	backend::{Backend as StateBackend, ProofRegStateFor}, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 };
 use log::trace;
@@ -495,7 +495,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for CachingState<S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
-	type TrieBackendStorage = S::TrieBackendStorage;
+	type StorageProof = S::StorageProof;
+	type ProofRegBackend = S::ProofRegBackend;
+	type ProofCheckBackend = S::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let local_cache = self.cache.local_cache.upgradable_read();
@@ -652,8 +654,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
-		self.state.as_trie_backend()
+	fn from_reg_state(self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+		self.state.from_reg_state(previous)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
@@ -736,7 +738,9 @@ impl<S, B: BlockT> std::fmt::Debug for SyncingCachingState<S, B> {
 impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for SyncingCachingState<S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
-	type TrieBackendStorage = S::TrieBackendStorage;
+	type StorageProof = S::StorageProof;
+	type ProofRegBackend = S::ProofRegBackend;
+	type ProofCheckBackend = S::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.caching_state().storage(key)
@@ -834,13 +838,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
-		self.caching_state
-			.as_mut()
-			.expect("`caching_state` is valid for the lifetime of the object; qed")
-			.as_trie_backend()
-	}
-
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
 		self.caching_state().register_overlay_stats(stats);
 	}
@@ -848,12 +845,22 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
 	}
+
+	fn from_reg_state(mut self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+		self.sync().and_then(|s| s.from_reg_state(previous))
+	}
 }
 
 impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
 	fn drop(&mut self) {
+		let _ = self.sync();
+	}
+}
+
+impl<S, B: BlockT> SyncingCachingState<S, B> {
+	fn sync(&mut self) -> Option<CachingState<S, B>> {
 		if self.disable_syncing {
-			return;
+			return None;
 		}
 
 		if let Some(mut caching_state) = self.caching_state.take() {
@@ -864,6 +871,9 @@ impl<S, B: BlockT> Drop for SyncingCachingState<S, B> {
 				let is_best = self.meta.read().best_hash == hash;
 				caching_state.cache.sync_cache(&[], &[], vec![], vec![], None, None, is_best);
 			}
+			Some(caching_state)
+		} else {
+			None
 		}
 	}
 }

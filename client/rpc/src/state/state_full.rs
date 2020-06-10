@@ -36,12 +36,11 @@ use sp_version::RuntimeVersion;
 use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
 };
-
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
-use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err, SimpleProof};
 use std::marker::PhantomData;
-use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider, StorageProofKind};
+use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -219,7 +218,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block, SimpleProof> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
@@ -363,10 +362,9 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 						.read_proof(
 							&BlockId::Hash(block),
 							&mut keys.iter().map(|key| key.0.as_ref()),
-							StorageProofKind::Flat,
 						)
 						// A new version of this rpc could return a proof with skiped hashes.
-						.map(|proof| proof.iter_nodes_flatten().map(|node| node.into()).collect())
+						.map(|proof| proof.into_nodes().into_iter().map(|node| node.into()).collect())
 						.map(|proof| ReadProof { at: block, proof })
 				})
 				.map_err(client_err),

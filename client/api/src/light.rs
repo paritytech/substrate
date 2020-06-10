@@ -27,7 +27,7 @@ use sp_runtime::{
 	generic::BlockId
 };
 use sp_core::{ChangesTrieConfigurationRange, storage::PrefixedStorageKey};
-use sp_state_machine::StorageProof;
+use sp_state_machine::{SimpleProof, StorageProof};
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
@@ -124,7 +124,7 @@ pub struct ChangesProof<Header: HeaderT> {
 	pub roots: BTreeMap<Header::Number, Header::Hash>,
 	/// The proofs for all changes tries roots that have been touched AND are
 	/// missing from the requester' node. It is a map of CHT number => proof.
-	pub roots_proof: StorageProof,
+	pub roots_proof: SimpleProof,
 }
 
 /// Remote block body request
@@ -190,31 +190,31 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 ///
 /// Implementations of this trait should not use any prunable blockchain data
 /// except that is passed to its methods.
-pub trait FetchChecker<Block: BlockT>: Send + Sync {
+pub trait FetchChecker<Block: BlockT, P: StorageProof>: Send + Sync {
 	/// Check remote header proof.
 	fn check_header_proof(
 		&self,
 		request: &RemoteHeaderRequest<Block::Header>,
 		header: Option<Block::Header>,
-		remote_proof: StorageProof,
+		remote_proof: SimpleProof,
 	) -> ClientResult<Block::Header>;
 	/// Check remote storage read proof.
 	fn check_read_proof(
 		&self,
 		request: &RemoteReadRequest<Block::Header>,
-		remote_proof: StorageProof,
+		remote_proof: P,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote storage read proof.
 	fn check_read_child_proof(
 		&self,
 		request: &RemoteReadChildRequest<Block::Header>,
-		remote_proof: StorageProof,
+		remote_proof: P,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>>;
 	/// Check remote method execution proof.
 	fn check_execution_proof(
 		&self,
 		request: &RemoteCallRequest<Block::Header>,
-		remote_proof: StorageProof,
+		remote_proof: P,
 	) -> ClientResult<Vec<u8>>;
 	/// Check remote changes query proof.
 	fn check_changes_proof(

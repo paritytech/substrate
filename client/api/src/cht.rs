@@ -32,12 +32,13 @@ use sp_trie;
 use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, AtLeast32Bit, Zero, One};
 use sp_state_machine::{
-	MemoryDB, TrieBackend, Backend as StateBackend, StorageProof, InMemoryBackend,
-	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_flat_proving_backend,
-	StorageProofKind,
+	MemoryDB, backend::Backend as StateBackend, SimpleProof as StorageProof,
+	prove_read_on_proof_backend, read_proof_check, read_proof_check_on_proving_backend,
+	SimpleProof, InMemoryBackend,
 };
-
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
+
+type ProofCheckBackend<H> = sp_state_machine::TrieBackend<MemoryDB<H>, H, SimpleProof>;
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.
@@ -117,13 +118,12 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let mut storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
-	let trie_storage = storage.as_trie_backend()
-		.expect("InMemoryState::as_trie_backend always returns Some; qed");
-	prove_read_on_trie_backend(
-		trie_storage,
+	let storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
+	let proof_backend = storage.as_proof_backend()
+		.expect("InMemoryState::as_proof_backend always returns Some; qed");
+	prove_read_on_proof_backend(
+		&proof_backend,
 		blocks.into_iter().map(|number| encode_cht_key(number)),
-		StorageProofKind::Flat,
 	).map_err(ClientError::Execution)
 }
 
@@ -144,7 +144,7 @@ pub fn check_proof<Header, Hasher>(
 		local_number,
 		remote_hash,
 		move |local_root, local_cht_key|
-			read_proof_check::<Hasher, _>(
+			read_proof_check::<ProofCheckBackend<Hasher>, Hasher, _>(
 				local_root,
 				remote_proof,
 				::std::iter::once(local_cht_key),
@@ -161,7 +161,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 	local_root: Header::Hash,
 	local_number: Header::Number,
 	remote_hash: Header::Hash,
-	proving_backend: &TrieBackend<MemoryDB<Hasher>, Hasher>,
+	proving_backend: &ProofCheckBackend<Hasher>,
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
@@ -173,7 +173,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 		local_number,
 		remote_hash,
 		|_, local_cht_key|
-			read_proof_check_on_flat_proving_backend::<Hasher>(
+			read_proof_check_on_proving_backend::<ProofCheckBackend<Hasher>, Hasher>(
 				proving_backend,
 				local_cht_key,
 			).map_err(|e| ClientError::from(e)),

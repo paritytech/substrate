@@ -28,7 +28,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
 use sp_runtime::{Justification, Storage};
 use sp_state_machine::{
-	ChangesTrieTransaction, InMemoryBackend, Backend as StateBackend, StorageCollection,
+	ChangesTrieTransaction, InMemoryBackend, backend::Backend as StateBackend, StorageCollection,
 	ChildStorageCollection,
 };
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};

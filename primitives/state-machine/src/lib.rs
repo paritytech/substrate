@@ -46,7 +46,8 @@ mod read_only;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
 	TrieNodesStorageProof, StorageProof,  StorageProofKind, ChildrenProofMap,
-	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RegStorageProof};
+	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RegStorageProof,
+	SimpleProof};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use read_only::{ReadOnlyExternalities, InspectState};
@@ -93,7 +94,7 @@ pub type ChangesTrieTransaction<H, N> = (
 );
 
 /// Trie backend with in-memory storage.
-pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H, sp_trie::SimpleProof>;
+pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H, SimpleProof>;
 
 /// Trie backend with in-memory storage and choice of proof.
 /// TODO EMCH consider renaming to ProofCheckBackend

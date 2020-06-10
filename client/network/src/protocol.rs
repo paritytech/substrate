@@ -56,7 +56,7 @@ use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use sc_client_api::{ChangesProof, StorageProof, StorageProofKind};
+use sc_client_api::{ChangesProof, StorageProof};
 use util::LruHashSet;
 use wasm_timer::Instant;
 
@@ -1460,7 +1460,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
-			StorageProofKind::Flat,
 		) {
 			Ok((_, proof)) => proof,
 			Err(error) => {
@@ -1481,7 +1480,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
 				id: request.id,
-				proof: proof.expect_flatten_content(),
+				proof: proof.into_nodes(),
 			}),
 		);
 	}
@@ -1607,8 +1606,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id, who, keys_str(), request.block);
 		let proof = match self.context_data.chain.read_proof(
 			&BlockId::Hash(request.block),
-			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flat,
+			&mut request.keys.iter().map(AsRef::as_ref)
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1627,7 +1625,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof: proof.expect_flatten_content(),
+				proof: proof.into_nodes(),
 			}),
 		);
 	}
@@ -1664,7 +1662,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flat,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1684,7 +1681,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof: proof.expect_flatten_content(),
+				proof: proof.into_nodes(),
 			}),
 		);
 	}
@@ -1714,7 +1711,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::RemoteHeaderResponse(message::RemoteHeaderResponse {
 				id: request.id,
 				header,
-				proof: proof.expect_flatten_content(),
+				proof: proof.into_nodes(),
 			}),
 		);
 	}
@@ -1777,7 +1774,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				max: proof.max_block,
 				proof: proof.proof,
 				roots: proof.roots.into_iter().collect(),
-				roots_proof: proof.roots_proof.expect_flatten_content(),
+				roots_proof: proof.roots_proof.into_nodes(),
 			}),
 		);
 	}

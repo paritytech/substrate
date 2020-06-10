@@ -26,6 +26,15 @@ pub struct Flat(pub(crate) ProofNodes);
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Full(pub(crate) ChildrenProofMap<ProofNodes>);
 
+impl Flat {
+	/// Access to inner proof node,
+	/// mainly needed for part of the
+	/// code that is not generic.
+	pub fn into_nodes(self) -> ProofNodes {
+		self.0
+	}
+}
+	
 impl StorageProof for Flat {
 	fn empty() -> Self {
 		Flat(Default::default())

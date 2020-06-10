@@ -56,8 +56,8 @@ use libp2p::{
 use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client_api::{
-	StorageProof, StorageProofKind, LegacyDecodeAdapter,
-	FlatEncodeAdapter as LegacyEncodeAdapter,
+	SimpleProof as StorageProof,
+	StorageProof as StorageProofT,
 	light::{
 		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
 		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
@@ -290,7 +290,7 @@ pub struct LightClientHandler<B: Block> {
 	/// Blockchain client.
 	chain: Arc<dyn Client<B>>,
 	/// Verifies that received responses are correct.
-	checker: Arc<dyn light::FetchChecker<B>>,
+	checker: Arc<dyn light::FetchChecker<B, StorageProof>>,
 	/// Peer information (addresses, their best block, etc.)
 	peers: HashMap<PeerId, PeerInfo<B>>,
 	/// Futures sending back response to remote clients.
@@ -313,7 +313,7 @@ where
 	pub fn new(
 		cfg: Config,
 		chain: Arc<dyn Client<B>>,
-		checker: Arc<dyn light::FetchChecker<B>>,
+		checker: Arc<dyn light::FetchChecker<B, StorageProof>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
 		LightClientHandler {
@@ -445,7 +445,7 @@ where
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
 				if let Request::Call { request , .. } = request {
-					let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+					let proof = Decode::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_execution_proof(request, proof)?;
 					Ok(Reply::VecU8(reply))
 				} else {
@@ -454,12 +454,12 @@ where
 			Some(Response::RemoteReadResponse(response)) =>
 				match request {
 					Request::Read { request, .. } => {
-						let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+						let proof = Decode::decode(&mut response.proof.as_ref())?;
 						let reply = self.checker.check_read_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
 					Request::ReadChild { request, .. } => {
-						let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+						let proof = Decode::decode(&mut response.proof.as_ref())?;
 						let reply = self.checker.check_read_child_proof(&request, proof)?;
 						Ok(Reply::MapVecU8OptVecU8(reply))
 					}
@@ -468,7 +468,7 @@ where
 			Some(Response::RemoteChangesResponse(response)) =>
 				if let Request::Changes { request, .. } = request {
 					let max_block = Decode::decode(&mut response.max.as_ref())?;
-					let roots_proof = LegacyDecodeAdapter::decode(&mut response.roots_proof.as_ref())?.0;
+					let roots_proof = Decode::decode(&mut response.roots_proof.as_ref())?;
 					let roots = {
 						let mut r = BTreeMap::new();
 						for pair in response.roots {
@@ -496,7 +496,7 @@ where
 						} else {
 							Some(Decode::decode(&mut response.header.as_ref())?)
 						};
-					let proof = LegacyDecodeAdapter::decode(&mut response.proof.as_ref())?.0;
+					let proof = Decode::decode(&mut response.proof.as_ref())?;
 					let reply = self.checker.check_header_proof(&request, header, proof)?;
 					Ok(Reply::Header(reply))
 				} else {
@@ -550,7 +550,6 @@ where
 			&BlockId::Hash(block),
 			&request.method,
 			&request.data,
-			StorageProofKind::Flat,
 		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
@@ -565,7 +564,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteCallResponse { proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteCallResponse(r)
 		};
 
@@ -593,7 +592,6 @@ where
 		let proof = match self.chain.read_proof(
 			&BlockId::Hash(block),
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flat,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -607,7 +605,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteReadResponse { proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteReadResponse(r)
 		};
 
@@ -641,8 +639,7 @@ where
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
 			&child_info,
-			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flat,
+			&mut request.keys.iter().map(AsRef::as_ref)
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -657,7 +654,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteReadResponse { proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteReadResponse(r)
 		};
 
@@ -685,7 +682,7 @@ where
 		};
 
 		let response = {
-			let r = schema::v1::light::RemoteHeaderResponse { header, proof: LegacyEncodeAdapter(&proof).encode() };
+			let r = schema::v1::light::RemoteHeaderResponse { header, proof: proof.encode() };
 			schema::v1::light::response::Response::RemoteHeaderResponse(r)
 		};
 
@@ -745,7 +742,7 @@ where
 				roots: proof.roots.into_iter()
 					.map(|(k, v)| schema::v1::light::Pair { fst: k.encode(), snd: v.encode() })
 					.collect(),
-				roots_proof: LegacyEncodeAdapter(&proof.roots_proof).encode(),
+				roots_proof: proof.roots_proof.encode(),
 			};
 			schema::v1::light::response::Response::RemoteChangesResponse(r)
 		};
@@ -1333,7 +1330,7 @@ mod tests {
 		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
 		yamux
 	};
-	use sc_client_api::{StorageProof, RemoteReadChildRequest, FetchChecker};
+	use sc_client_api::{StorageProof as StorageProofT, RemoteReadChildRequest, FetchChecker, SimpleProof as StorageProof};
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{
@@ -1353,7 +1350,7 @@ mod tests {
 	type Swarm = libp2p::swarm::Swarm<Handler>;
 
 	fn empty_proof() -> Vec<u8> {
-		LegacyEncodeAdapter(&StorageProof::empty()).encode()
+		StorageProof::empty().encode()
 	}
 
 	fn make_swarm(ok: bool, ps: sc_peerset::PeersetHandle, cf: super::Config) -> Swarm {
@@ -1377,7 +1374,7 @@ mod tests {
 		_mark: std::marker::PhantomData<B>
 	}
 
-	impl<B: BlockT> light::FetchChecker<B> for DummyFetchChecker<B> {
+	impl<B: BlockT> light::FetchChecker<B, StorageProof> for DummyFetchChecker<B> {
 		fn check_header_proof(
 			&self,
 			_request: &RemoteHeaderRequest<B::Header>,

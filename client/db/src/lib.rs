@@ -76,8 +76,8 @@ use sp_runtime::traits::{
 };
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
-	StorageCollection, ChildStorageCollection,
-	backend::Backend as StateBackend, StateMachineStats,
+	StorageCollection, ChildStorageCollection, SimpleProof,
+	backend::{Backend as StateBackend, ProofRegStateFor}, StateMachineStats,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
@@ -101,7 +101,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> = sp_state_machine::TrieBackend<
-	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
+	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>, SimpleProof,
 >;
 
 const DB_HASH_LEN: usize = 32;
@@ -113,7 +113,7 @@ pub type DbHash = [u8; DB_HASH_LEN];
 /// It makes sure that the hash we are using stays pinned in storage
 /// until this structure is dropped.
 pub struct RefTrackingState<Block: BlockT> {
-	state: DbState<Block>,
+	state: Option<DbState<Block>>,
 	storage: Arc<StorageDb<Block>>,
 	parent_hash: Option<Block::Hash>,
 }
@@ -121,7 +121,7 @@ pub struct RefTrackingState<Block: BlockT> {
 impl<B: BlockT> RefTrackingState<B> {
 	fn new(state: DbState<B>, storage: Arc<StorageDb<B>>, parent_hash: Option<B::Hash>) -> Self {
 		RefTrackingState {
-			state,
+			state: Some(state),
 			parent_hash,
 			storage,
 		}
@@ -142,17 +142,27 @@ impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
 	}
 }
 
+impl<B: BlockT> RefTrackingState<B> {
+	#[inline]
+	fn state(&self) -> &DbState<B> {
+		self.state.as_ref().expect("Non dropped state")
+	}
+}
+
+
 impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
-	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
+	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+	type StorageProof = <DbState<B> as StateBackend<HashFor<B>>>::StorageProof;
+	type ProofRegBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofRegBackend;
+	type ProofCheckBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.storage(key)
+		self.state().storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
-		self.state.storage_hash(key)
+		self.state().storage_hash(key)
 	}
 
 	fn child_storage(
@@ -160,11 +170,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.child_storage(child_info, key)
+		self.state().child_storage(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		self.state.exists_storage(key)
+		self.state().exists_storage(key)
 	}
 
 	fn exists_child_storage(
@@ -172,11 +182,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(child_info, key)
+		self.state().exists_child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_storage_key(key)
+		self.state().next_storage_key(key)
 	}
 
 	fn next_child_storage_key(
@@ -184,15 +194,15 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(child_info, key)
+		self.state().next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_keys_with_prefix(prefix, f)
+		self.state().for_keys_with_prefix(prefix, f)
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.state.for_key_values_with_prefix(prefix, f)
+		self.state().for_key_values_with_prefix(prefix, f)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
@@ -200,7 +210,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(child_info, f)
+		self.state().for_keys_in_child_storage(child_info, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -209,14 +219,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		prefix: &[u8],
 		f: F,
 	) {
-		self.state.for_child_keys_with_prefix(child_info, prefix, f)
+		self.state().for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
 	fn storage_root<'a>(
 		&self,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
-		self.state.storage_root(delta)
+		self.state().storage_root(delta)
 	}
 
 	fn child_storage_root<'a>(
@@ -224,15 +234,15 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
 	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
-		self.state.child_storage_root(child_info, delta)
+		self.state().child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.state.pairs()
+		self.state().pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.state.keys(prefix)
+		self.state().keys(prefix)
 	}
 
 	fn child_keys(
@@ -240,21 +250,20 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.child_keys(child_info, prefix)
+		self.state().child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self)
-		-> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>>
-	{
-		self.state.as_trie_backend()
+	fn from_reg_state(mut self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+		let state = std::mem::replace(&mut self.state, Default::default()).expect("Non dropped state");
+		state.from_reg_state(previous)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {
-		self.state.register_overlay_stats(stats);
+		self.state().register_overlay_stats(stats);
 	}
 
 	fn usage_info(&self) -> StateUsageInfo {
-		self.state.usage_info()
+		self.state().usage_info()
 	}
 }
 
