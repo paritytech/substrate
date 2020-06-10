@@ -291,7 +291,7 @@ fn lots_of_incoming_peers_works() {
 	// this test ends.
 	let mut background_tasks_to_wait = Vec::new();
 
-	for _ in 0..256 {
+	for _ in 0..32 {
 		let main_node_peer_id = main_node_peer_id.clone();
 
 		let (_dialing_node, event_stream) = build_test_full_node(config::NetworkConfiguration {
