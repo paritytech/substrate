@@ -26,6 +26,7 @@ Client
 * Use Subscription Manager from `jsonrpc-pubsub` (#6208)
 * Add a Substrate networking Grafana dashboard template (#6171)
 * Add subkey inspect-node-key (#6153)
+* Add new methods to set defaults ports for RPC, RPC WebSocket and Prometheus (#6250)
 
 ## 2.0.0-rc1 -> 2.0.0-rc2
 
