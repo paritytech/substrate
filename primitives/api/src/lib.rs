@@ -39,8 +39,8 @@ extern crate self as sp_api;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	OverlayedChanges, StorageProof, StorageProofKind, Backend as StateBackend, ChangesTrieState, InMemoryBackend,
-	ProofInput,
+	OverlayedChanges, StorageProof, StorageProofKind, backend::Backend as StateBackend, ChangesTrieState, InMemoryBackend,
+	ProofInput, backend::ProofRegFor, RegStorageProof,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -374,14 +374,14 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	) -> Result<bool, Self::Error> where Self: Sized;
 
 	/// Start recording all accessed trie nodes for generating proofs.
-	fn record_proof(&mut self, kind: StorageProofKind);
+	fn record_proof(&mut self);
 
 	/// Extract the recorded proof.
 	///
 	/// This stops the proof recording.
 	///
 	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(&mut self) -> Option<StorageProof>;
+	fn extract_proof(&mut self) -> Option<ProofRegFor<Self::StateBackend, HashFor<Block>>>;
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
@@ -443,7 +443,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 	/// The context this function is executed in.
 	pub context: ExecutionContext,
 	/// The optional proof recorder for recording storage accesses.
-	pub recorder: Option<&'a RefCell<ProofRecorder<Block>>>,
+	pub recorder: Option<&'a RefCell<ProofRecorder<Backend, Block>>>,
 }
 
 /// Something that can call into the an api at a given block.
@@ -523,27 +523,19 @@ pub trait RuntimeApiInfo {
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
-pub struct ProofRecorder<Block: BlockT> {
+pub struct ProofRecorder<Backend: StateBackend<HashFor<Block>>, Block: BlockT> {
 	/// The recorder to use over the db use by trie db.
-	pub recorder: sp_state_machine::ProofRecorder<HashFor<Block>>,
-	/// The kind of proof to produce.
-	pub kind: StorageProofKind,
+	/// TODO EMCH is this the sync recorder, should not (there is something fishy with this sync rec)
+	pub recorder: sp_state_machine::RecordBackendFor<Backend::StorageProof, HashFor<Block>>,
 	/// The additional input needed for the proof.
 	pub input: ProofInput,
 }
 
 #[cfg(feature = "std")]
-impl<B: BlockT> From<StorageProofKind> for ProofRecorder<B> {
-	fn from(kind: StorageProofKind) -> Self {
-		let recorder = if kind.is_full_proof_recorder_needed() {
-			sp_state_machine::ProofRecorder::<HashFor<B>>::Full(Default::default())
-		} else {
-			sp_state_machine::ProofRecorder::<HashFor<B>>::Flat(Default::default())
-		};
-
+impl<Backend: StateBackend<HashFor<Block>>, Block: BlockT> Default for ProofRecorder<Backend, Block> {
+	fn default() -> Self {
 		ProofRecorder {
-			recorder,
-			kind,
+			recorder: Default::default(),
 			input: ProofInput::None,
 		}
 	}

@@ -212,7 +212,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
-			recorder: Option<std::cell::RefCell<#crate_::ProofRecorder<Block>>>,
+			recorder: Option<std::cell::RefCell<#crate_::ProofRecorder<C::StateBackend, Block>>>,
 		}
 
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
@@ -281,17 +281,18 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				self.call.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
 			}
 
-			fn record_proof(&mut self, kind: #crate_::StorageProofKind) {
-				self.recorder = Some(std::cell::RefCell::new(kind.into()));
+			fn record_proof(&mut self) {
+				self.recorder = Some(std::cell::RefCell::new(Default::default()));
 			}
 
-			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
+			fn extract_proof(&mut self) -> Option<#crate_::ProofRegFor<Self::StateBackend, #crate_::HashFor<Block>>> {
+				use #crate_::RegStorageProof;
 				self.recorder
 					.take()
 					.and_then(|recorder| {
-						let #crate_::ProofRecorder{ recorder, kind, input } = &mut *recorder.borrow_mut();
+						let #crate_::ProofRecorder{ recorder, input } = &mut *recorder.borrow_mut();
 						let input = std::mem::replace(input, #crate_::ProofInput::None);
-						recorder.extract_proof(*kind, input).ok()
+						<#crate_::ProofRegFor<Self::StateBackend, #crate_::HashFor<Block>>>::extract_proof(recorder, input).ok()
 					})
 			}
 
@@ -357,7 +358,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
-					Option<&std::cell::RefCell<#crate_::ProofRecorder<Block>>>,
+					Option<&std::cell::RefCell<#crate_::ProofRecorder<C::StateBackend, Block>>>,
 				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
 				E,
 			>(

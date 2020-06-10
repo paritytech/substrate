@@ -45,8 +45,8 @@ mod stats;
 mod read_only;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
-	TrieNodesStorageProof as StorageProof, StorageProof as StorageProofT,  StorageProofKind, ChildrenProofMap,
-	ProofInput, ProofInputKind, ProofNodes};
+	TrieNodesStorageProof, StorageProof,  StorageProofKind, ChildrenProofMap,
+	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RegStorageProof};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use read_only::{ReadOnlyExternalities, InspectState};
