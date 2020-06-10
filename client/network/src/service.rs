@@ -675,8 +675,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		// Make sure the local peer ID is never added to the PSM.
+		// We don't treat this as an error, because the caller may
+		// not know the peer ID beforehand.
 		if peer == &self.local_peer_id {
-			return Ok(()) // no-op
+			return Ok(())
 		}
 		self.peerset.add_reserved_peer(peer_id.clone());
 		let _ = self
@@ -704,6 +706,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.filter(|r|
 				// Make sure the local peer ID is never added to the PSM
 				// or added as a "known address", even if given.
+				// We don't treat this as an error, because the caller may
+				// not know the peer ID beforehand.
 				if let Ok((peer, _)) = r {
 					peer != &self.local_peer_id
 				} else {
