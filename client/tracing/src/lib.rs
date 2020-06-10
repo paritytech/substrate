@@ -305,7 +305,7 @@ pub struct LogTraceHandler;
 impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
-			log::info!("TRACING: {} {}: {}, line: {}, time: {}",
+			log::info!("{} {}: {}, line: {}, time: {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
@@ -313,7 +313,7 @@ impl TraceHandler for LogTraceHandler {
 			span_datum.overall_time.as_nanos(),
 		);
 		} else {
-			log::info!("TRACING: {} {}: {}, line: {}, time: {}, {}",
+			log::info!("{} {}: {}, line: {}, time: {}, {}",
 			span_datum.level,
 			span_datum.target,
 			span_datum.name,
