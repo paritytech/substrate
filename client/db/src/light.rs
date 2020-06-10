@@ -482,6 +482,26 @@ impl<Block> Storage<Block> for LightStorage<Block>
 			}
 		}
 
+		let digest = header.digest()
+			.log(|d| {
+				if matches!(d, DigestItem::RuntimeCodeChanged(_) | DigestItem::HeapPagesChanged(_)) {
+					Some(d)
+				} else {
+					None
+				}
+			});
+		match digest {
+			Some(DigestItem::RuntimeCodeChanged(hash)) => {
+				// insert hash into cache
+				cache_at.insert(well_known_cache_keys::CODE, hash.encode());
+			},
+			Some(DigestItem::HeapPagesChanged(heap_pages)) => {
+				// insert heap_pages into cache
+				cache_at.insert(well_known_cache_keys::HEAP_PAGES, heap_pages.encode());
+			},
+			_ => {}
+		};
+
 		{
 			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)

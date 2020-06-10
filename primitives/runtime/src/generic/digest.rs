@@ -86,9 +86,12 @@ pub enum DigestItem<Hash> {
 	/// trie creation.
 	ChangesTrieRoot(Hash),
 
-	/// Digest item that signals to light clients that :code or :heappages
-	/// has changed enabling them request the new code/heappages from full nodes.
-	RuntimeCodeChanged(Hash, u64),
+	/// Digest item that signals to light clients that :code
+	/// has changed enabling them request the new code from full nodes.
+	RuntimeCodeChanged(Hash),
+
+	/// Digest item that signals to light clients that :heappages
+	HeapPagesChanged(u64),
 
 	/// A pre-runtime digest.
 	///
@@ -166,7 +169,9 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
 	/// Reference to `DigestItem::RuntimeCodeChanged`
-	RuntimeCodeChanged(&'a Hash, u64),
+	RuntimeCodeChanged(&'a Hash),
+	/// Reference to `DigestItem::HeapPagesChanged`
+	HeapPagesChanged(u64),
 	/// A pre-runtime digest.
 	///
 	/// These are messages from the consensus engine to the runtime, although
@@ -202,6 +207,7 @@ pub enum DigestItemType {
 	PreRuntime = 6,
 	ChangesTrieSignal = 7,
 	RuntimeCodeChanged = 8,
+	HeapPagesChanged = 9,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -223,7 +229,8 @@ impl<Hash> DigestItem<Hash> {
 	pub fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash> {
 		match *self {
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
-			DigestItem::RuntimeCodeChanged(ref code_hash, hp) => DigestItemRef::RuntimeCodeChanged(code_hash, hp),
+			DigestItem::RuntimeCodeChanged(ref code_hash) => DigestItemRef::RuntimeCodeChanged(code_hash),
+			DigestItem::HeapPagesChanged(heap_pages) => DigestItemRef::HeapPagesChanged(heap_pages),
 			DigestItem::PreRuntime(ref v, ref s) => DigestItemRef::PreRuntime(v, s),
 			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
 			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
@@ -294,8 +301,10 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 				Decode::decode(input)?,
 			)),
 			DigestItemType::RuntimeCodeChanged => {
-				let (code_hash, heap_pages) = Decode::decode(input)?;
-				Ok(DigestItem::RuntimeCodeChanged(code_hash, heap_pages))
+				Ok(DigestItem::RuntimeCodeChanged(Decode::decode(input)?))
+			},
+			DigestItemType::HeapPagesChanged => {
+				Ok(DigestItem::HeapPagesChanged(Decode::decode(input)?))
 			},
 			DigestItemType::PreRuntime => {
 				let vals: (ConsensusEngineId, Vec<u8>) = Decode::decode(input)?;
@@ -397,9 +406,13 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
 			},
-			DigestItemRef::RuntimeCodeChanged(hash, heap_pages) => {
+			DigestItemRef::RuntimeCodeChanged(hash) => {
 				DigestItemType::RuntimeCodeChanged.encode_to(&mut v);
-				(hash, heap_pages).encode_to(&mut v);
+				hash.encode_to(&mut v);
+			},
+			DigestItemRef::HeapPagesChanged(hash) => {
+				DigestItemType::HeapPagesChanged.encode_to(&mut v);
+				hash.encode_to(&mut v);
 			},
 			DigestItemRef::Consensus(val, data) => {
 				DigestItemType::Consensus.encode_to(&mut v);

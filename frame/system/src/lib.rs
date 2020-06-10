@@ -599,10 +599,7 @@ decl_module! {
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
-			// is this unwrap legal?
-			let code: Vec<u8> = storage::unhashed::get(well_known_keys::CODE).unwrap();
-			let code_hash = <T::Hashing as Hash>::hash(&code);
-			let log = generic::DigestItem::RuntimeCodeChanged(code_hash, pages);
+			let log = generic::DigestItem::HeapPagesChanged(pages);
 			Self::deposit_log(log.into())
 		}
 
@@ -622,11 +619,9 @@ decl_module! {
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
-			// is this unwrap legal?
-			let pages: u64 = storage::unhashed::get(well_known_keys::HEAP_PAGES).unwrap();
 			let code_hash = <T::Hashing as Hash>::hash(&code);
-			let log = generic::DigestItem::RuntimeCodeChanged(code_hash, pages);
-			Self::deposit_log(log.into())
+			let log = generic::DigestItem::RuntimeCodeChanged(code_hash);
+			Self::deposit_log(log.into());
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
@@ -642,6 +637,9 @@ decl_module! {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
+			let code_hash = <T::Hashing as Hash>::hash(&code);
+			let log = generic::DigestItem::RuntimeCodeChanged(code_hash);
+			Self::deposit_log(log.into());
 		}
 
 		/// Set the new changes trie configuration.
