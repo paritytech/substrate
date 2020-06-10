@@ -103,7 +103,7 @@ where
 	C: Send + Sync + 'static,
 	C::Api: AccountNonceApi<Block, AccountId, Index>,
 	C::Api: BlockBuilder<Block>,
-	<C::Api as sp_api::ApiErrorExt>::Error: Encode,
+	<C::Api as sp_api::ApiErrorExt>::Error: std::fmt::Debug,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
@@ -141,7 +141,13 @@ where
 				data: Some(format!("{:?}", e).into()),
 			})?;
 
-			let result = api.apply_extrinsic(&at, uxt).map(|outcome| outcome.map(|_| true)); // TODO read system events
+			let result = api.apply_extrinsic(&at, uxt)
+				.map(|outcome| outcome.map(|_| true)) // TODO read system events
+				.map_err(|e| RpcError {
+					code: ErrorCode::ServerError(Error::RuntimeError.into()),
+					message: "Unable to dry run extrinsic.".into(),
+					data: Some(format!("{:?}", e).into()),
+				})?;
 
 			Ok(Encode::encode(&result).into())
 		};
