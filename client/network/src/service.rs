@@ -674,6 +674,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// and peer ID of the remote node.
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+		// Make sure the local peer ID is never added to the PSM.
+		if peer == &self.local_peer_id {
+			return Ok(()) // no-op
+		}
 		self.peerset.add_reserved_peer(peer_id.clone());
 		let _ = self
 			.to_worker
@@ -695,11 +699,20 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 	/// Modify a peerset priority group.
 	pub fn set_priority_group(&self, group_id: String, peers: HashSet<Multiaddr>) -> Result<(), String> {
-		let peers = peers.into_iter().map(|p| {
-			parse_addr(p).map_err(|e| format!("{:?}", e))
-		}).collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
+		let peers = peers.into_iter()
+			.map(|p| parse_addr(p).map_err(|e| format!("{:?}", e)))
+			.filter(|r|
+				// Make sure the local peer ID is never added to the PSM
+				// or added as a "known address", even if given.
+				if let Ok((peer, _)) = r {
+					peer != &self.local_peer_id
+				} else {
+					true // keep all errors
+				})
+			.collect::<Result<Vec<(PeerId, Multiaddr)>, String>>()?;
 
 		let peer_ids = peers.iter().map(|(peer_id, _addr)| peer_id.clone()).collect();
+
 		self.peerset.set_priority_group(group_id, peer_ids);
 
 		for (peer_id, addr) in peers.into_iter() {
