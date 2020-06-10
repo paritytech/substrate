@@ -498,6 +498,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
 				let ready_poll = self.ready_poll.clone();
+				let metrics = self.metrics.clone();
 
 				async move {
 					// We keep track of everything we prune so that later we won't add
@@ -528,6 +529,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
 					}
 
+					metrics.report(
+						|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
+					);
+
 					if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
 						let mut resubmit_transactions = Vec::new();
 
@@ -551,6 +556,12 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 								block_transactions.into_iter().filter(|tx| {
 									let tx_hash = pool.hash_of(&tx);
 									let contains = pruned_log.contains(&tx_hash);
+
+									// need to count all transactions, not just filtered, here
+									metrics.report(
+										|metrics| metrics.block_transactions_resubmitted.inc()
+									);
+
 									if !contains {
 										log::debug!(
 											target: "txpool",
