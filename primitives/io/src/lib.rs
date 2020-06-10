@@ -166,7 +166,8 @@ pub trait Storage {
 	/// # Warning
 	///
 	/// This is a low level API that is potentially dangerous as it can easily result
-	/// in unbalanced transactions. FRAME users should use high level storage abstractions.
+	/// in unbalanced transactions. For example, FRAME users should use high level storage
+	/// abstractions.
 	fn start_transaction(&mut self) {
 		self.storage_start_transaction();
 	}

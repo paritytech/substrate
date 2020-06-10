@@ -198,21 +198,23 @@ pub trait Externalities: ExtensionStore {
 	/// Start a new nested transaction.
 	///
 	/// This allows to either commit or roll back all changes made after this call to the
-	/// top changes or the default child changes. For every transaction there must be a
+	/// top changes or the default child changes. For every transaction there cam be a
 	/// matching call to either `storage_rollback_transaction` or `storage_commit_transaction`.
+	/// Any transactions that are still open after returning from runtime are committed
+	/// automatically.
 	///
-	/// Changes made without any open transaction are committed immediatly
+	/// Changes made without any open transaction are committed immediately.
 	fn storage_start_transaction(&mut self);
 
-	/// Rollback the last transaction started by `start_transaction`.
+	/// Rollback the last transaction started by `storage_start_transaction`.
 	///
-	/// Any changes made during that transaction are discarded. Returns an error when
+	/// Any changes made during that storage transaction are discarded. Returns an error when
 	/// no transaction is open that can be closed.
 	fn storage_rollback_transaction(&mut self) -> Result<(), ()>;
 
-	/// Commit the last transaction started by `start_transaction`.
+	/// Commit the last transaction started by `storage_start_transaction`.
 	///
-	/// Any changes made during that transaction are committed. Returns an error when
+	/// Any changes made during that storage transaction are committed. Returns an error when
 	/// no transaction is open that can be closed.
 	fn storage_commit_transaction(&mut self) -> Result<(), ()>;
 

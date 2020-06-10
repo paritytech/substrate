@@ -347,6 +347,7 @@ impl OverlayedChanges {
 	/// Call this before transfering control to the runtime.
 	///
 	/// This protects all existing transactions from being removed by the runtime.
+	/// Calling this while already inside the runtime is a no-op.
 	pub fn enter_runtime(&mut self) {
 		self.top.enter_runtime();
 		for (_, (changeset, _)) in self.children.iter_mut() {
@@ -356,7 +357,8 @@ impl OverlayedChanges {
 
 	/// Call this when control returns from the runtime.
 	///
-	/// This commits all dangeling transaction left open by the runtime.
+	/// This commits all dangling transaction left open by the runtime.
+	/// Calling this while already outside the runtime is a no-op.
 	pub fn exit_runtime(&mut self) {
 		self.top.exit_runtime();
 		for (_, (changeset, _)) in self.children.iter_mut() {

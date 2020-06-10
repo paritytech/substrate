@@ -27,10 +27,11 @@ const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
 
-type DirtyKeys = SmallVec<[HashSet<StorageKey>; 5]>;
+type DirtyKeysSets = SmallVec<[HashSet<StorageKey>; 5]>;
 type Transactions = SmallVec<[InnerValue; 5]>;
 
-/// Error returned when trying to commit or rollback while no transaction is open.
+/// Error returned when trying to commit or rollback while no transaction is open or
+/// when the runtime is trying to close a transaction started by the client.
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct NoOpenTransaction;
@@ -80,7 +81,7 @@ pub struct OverlayedChangeSet {
 	/// Stores which keys are dirty per transaction. Needed in order to determine which
 	/// values to merge into the parent transaction on commit. The length of this vector
 	/// therefore determines how many nested transactions are currently open (depth).
-	dirty_keys: DirtyKeys,
+	dirty_keys: DirtyKeysSets,
 	/// The number of how many transactions beginning from the first transactions are started
 	/// by the client. Those transactions are protected against close (commit, rollback)
 	/// when in runtime mode.
@@ -150,7 +151,7 @@ impl OverlayedValue {
 ///
 /// Returns true iff we are currently have at least one open transaction and if this
 /// is the first write to the given key that transaction.
-fn insert_dirty(set: &mut DirtyKeys, key: StorageKey) -> bool {
+fn insert_dirty(set: &mut DirtyKeysSets, key: StorageKey) -> bool {
 	if let Some(dirty_keys) = set.last_mut() {
 		dirty_keys.insert(key)
 	} else {
@@ -264,7 +265,7 @@ impl OverlayedChangeSet {
 
 	/// Returns how many of the open transactions are opened by the client.
 	///
-	/// These are alwyays the first transaction to open and the last to close.
+	/// These are always the first transaction to open and the last to close.
 	pub fn num_client_transactions(&self) -> usize {
 		self.num_client_transactions
 	}
@@ -274,7 +275,10 @@ impl OverlayedChangeSet {
 		self.execution_mode
 	}
 
-	/// Call this before entering runtime.
+	/// Call this before transfering control to the runtime.
+	///
+	/// This protects all existing transactions from being removed by the runtime.
+	/// Calling this while already inside the runtime is a no-op.
 	pub fn enter_runtime(&mut self) {
 		if let ExecutionMode::Runtime = self.execution_mode {
 			return;
@@ -283,7 +287,10 @@ impl OverlayedChangeSet {
 		self.num_client_transactions = self.transaction_depth();
 	}
 
-	/// Call this when returning from runtime.
+	/// Call this when control returns from the runtime.
+	///
+	/// This commits all dangling transaction left open by the runtime.
+	/// Calling this while already outside the runtime is a no-op.
 	pub fn exit_runtime(&mut self) {
 		self.execution_mode = ExecutionMode::Client;
 		while self.transaction_depth() > self.num_client_transactions {
@@ -298,7 +305,7 @@ impl OverlayedChangeSet {
 	/// transaction was open. Any transaction must be closed by either `commit_transaction`
 	/// or `rollback_transaction` before this overlay can be converted into storage changes.
 	///
-	/// Changes made without any open transaction are committed immediatly.
+	/// Changes made without any open transaction are committed immediately.
 	pub fn start_transaction(&mut self) {
 		self.dirty_keys.push(Default::default());
 	}
