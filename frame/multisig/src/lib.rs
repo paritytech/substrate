@@ -147,14 +147,14 @@ decl_error! {
 		NotFound,
 		/// Only the account that originally created the multisig is able to cancel it.
 		NotOwner,
-		/// No timepoint was given, yet the multisig operation is already underway.
-		NoTimepoint,
 		/// A different timepoint was given to the multisig operation that is underway.
 		WrongTimepoint,
-		/// A timepoint was given, yet no multisig operation is underway.
-		UnexpectedTimepoint,
 		/// A call with a `false` `IsCallable` filter was attempted.
 		Uncallable,
+		/// Call needs more approvals.
+		NotApproved,
+		/// Call information is missing.
+		MissingCall,
 	}
 }
 
@@ -270,23 +270,13 @@ decl_module! {
 		///     - Writes: Multisig Storage, [Caller Account]
 		/// - Plus Call Weight
 		/// # </weight>
-		#[weight = (
-			weight_of::as_multi::<T>(other_signatories.len(), call.get_dispatch_info().weight),
-			call.get_dispatch_info().class,
-			Pays::Yes,
-		)]
-		fn as_multi(origin,
+		#[weight = 0]
+		fn create(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: Box<<T as Trait>::Call>,
-			store_call: bool,
+			call_hash: [u8; 32],
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
@@ -296,76 +286,32 @@ decl_module! {
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
+			let deposit = T::DepositBase::get()
+				+ T::DepositFactor::get() * threshold.into();
+			T::Currency::reserve(&who, deposit)?;
+			<Multisigs<T>>::insert(&id, call_hash, Multisig {
+				when: Self::timepoint(),
+				deposit,
+				depositor: who.clone(),
+				approvals: vec![who.clone()],
+			});
+			Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
+			// Call is not made, so we can return that weight
+			return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
+		}
+
+		#[weight = 0]
+		fn note_preimage(origin,
+			call: Box<<T as Trait>::Call>,
+		) {
+			let who = ensure_signed(origin)?;
+			// We're now executing as a freshly authenticated new account, so the previous call
+			// restrictions no longer apply.
+			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
+			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			let encoded_call = call.encode();
 			let call_hash = blake2_256(&encoded_call);
-			if store_call {
-				Self::store_call(who.clone(), &call_hash, encoded_call)?;
-			}
-
-			if let Some(mut m) = <Multisigs<T>>::get(&id, call_hash) {
-				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
-				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
-				if let Err(pos) = m.approvals.binary_search(&who) {
-					// we know threshold is greater than zero from the above ensure.
-					if (m.approvals.len() as u16) < threshold - 1 {
-						m.approvals.insert(pos, who.clone());
-						<Multisigs<T>>::insert(&id, call_hash, m);
-						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
-						// Call is not made, so the actual weight does not include call
-						return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
-					}
-				} else {
-					if (m.approvals.len() as u16) < threshold {
-						Err(Error::<T>::AlreadyApproved)?
-					}
-				}
-
-				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
-				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
-				<Multisigs<T>>::remove(&id, call_hash);
-				Self::take_call(&call_hash);
-				Self::deposit_event(RawEvent::MultisigExecuted(
-					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
-				));
-				return Ok(None.into())
-			} else {
-				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
-				if threshold > 1 {
-					let deposit = T::DepositBase::get()
-						+ T::DepositFactor::get() * threshold.into();
-					T::Currency::reserve(&who, deposit)?;
-					<Multisigs<T>>::insert(&id, call_hash, Multisig {
-						when: Self::timepoint(),
-						deposit,
-						depositor: who.clone(),
-						approvals: vec![who.clone()],
-					});
-					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
-					// Call is not made, so we can return that weight
-					return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
-				} else {
-					let result = call.dispatch(frame_system::RawOrigin::Signed(id).into());
-					match result {
-						Ok(post_dispatch_info) => {
-							match post_dispatch_info.actual_weight {
-								Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
-								None => return Ok(None.into()),
-							}
-						},
-						Err(err) => {
-							match err.post_info.actual_weight {
-								Some(actual_weight) => {
-									let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
-									return Err(DispatchErrorWithPostInfo { post_info: Some(weight_used).into(), error: err.error.into() })
-								},
-								None => {
-									return Err(err)
-								}
-							}
-						}
-					}
-				}
-			}
+			Self::store_call(who.clone(), &call_hash, encoded_call)?;
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -414,10 +360,10 @@ decl_module! {
 			DispatchClass::Normal,
 			Pays::Yes,
 		)]
-		fn approve_as_multi(origin,
+		fn approve(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
+			timepoint: Timepoint<T::BlockNumber>,
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -429,46 +375,51 @@ decl_module! {
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
-			if let Some(mut m) = <Multisigs<T>>::get(&id, call_hash) {
-				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
-				ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
-				ensure!(m.approvals.len() < threshold as usize, Error::<T>::NoApprovalsNeeded);
-				if let Err(pos) = m.approvals.binary_search(&who) {
-					if m.approvals.len() + 1 == threshold as usize {
-						if let Some(call) = Self::take_call(&call_hash) {
-							let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
-							let _ = T::Currency::unreserve(&m.depositor, m.deposit);
-							<Multisigs<T>>::remove(&id, call_hash);
-							Self::deposit_event(RawEvent::MultisigExecuted(
-								who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
-							));
-							return Ok(());
-						}
-					}
-					m.approvals.insert(pos, who.clone());
-					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
-				} else {
-					Err(Error::<T>::AlreadyApproved)?
-				}
+			let mut m = <Multisigs<T>>::get(&id, call_hash).ok_or(Error::<T>::NotFound)?;
+			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			ensure!(m.approvals.len() < threshold as usize, Error::<T>::NoApprovalsNeeded);
+
+			if let Err(pos) = m.approvals.binary_search(&who) {
+				m.approvals.insert(pos, who.clone());
+				<Multisigs<T>>::insert(&id, call_hash, m);
+				Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
 			} else {
-				if threshold > 1 {
-					ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
-					let deposit = T::DepositBase::get()
-						+ T::DepositFactor::get() * threshold.into();
-					T::Currency::reserve(&who, deposit)?;
-					<Multisigs<T>>::insert(&id, call_hash, Multisig {
-						when: Self::timepoint(),
-						deposit,
-						depositor: who.clone(),
-						approvals: vec![who.clone()],
-					});
-					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
-				} else {
-					Err(Error::<T>::NoApprovalsNeeded)?
-				}
+				Err(Error::<T>::AlreadyApproved)?
 			}
 			Ok(())
+		}
+
+		#[weight = 0]
+		fn complete(origin,
+			threshold: u16,
+			other_signatories: Vec<T::AccountId>,
+			timepoint: Timepoint<T::BlockNumber>,
+			call_hash: [u8; 32],
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
+			let max_sigs = T::MaxSignatories::get() as usize;
+			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
+			let other_signatories_len = other_signatories.len();
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
+			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
+
+			let id = Self::multi_account_id(&signatories, threshold);
+
+			let m = <Multisigs<T>>::get(&id, call_hash).ok_or(Error::<T>::NotFound)?;
+			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			ensure!(m.approvals.len() as u16 >= threshold, Error::<T>::NotApproved);
+
+			// TODO: Do we need to revalidate call is callable?
+			let call = Self::take_call(&call_hash).ok_or(Error::<T>::MissingCall)?;
+
+			let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
+			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
+			<Multisigs<T>>::remove(&id, call_hash);
+			Self::deposit_event(RawEvent::MultisigExecuted(
+				who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
+			));
+			return Ok(None.into())
 		}
 
 		/// Cancel a pre-existing, on-going multisig transaction. Any deposit reserved previously
@@ -505,7 +456,7 @@ decl_module! {
 			DispatchClass::Normal,
 			Pays::Yes,
 		)]
-		fn cancel_as_multi(origin,
+		fn cancel(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			timepoint: Timepoint<T::BlockNumber>,
