@@ -316,7 +316,7 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use sp_core::crypto::key_types::DUMMY;
+	use sp_runtime::key_types::DUMMY;
 	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,

@@ -25,6 +25,7 @@ use super::super::{Module as SessionModule, SessionIndex};
 use super::Trait as HistoricalTrait;
 
 use super::shared;
+use sp_std::prelude::*;
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///
