@@ -552,15 +552,15 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 								.into_iter()
 								.filter(|tx| tx.is_signed().unwrap_or(true));
 
+							let mut resubmitted_to_report = 0;
+
 							resubmit_transactions.extend(
 								block_transactions.into_iter().filter(|tx| {
 									let tx_hash = pool.hash_of(&tx);
 									let contains = pruned_log.contains(&tx_hash);
 
 									// need to count all transactions, not just filtered, here
-									metrics.report(
-										|metrics| metrics.block_transactions_resubmitted.inc()
-									);
+									resubmitted_to_report += 1;
 
 									if !contains {
 										log::debug!(
@@ -572,6 +572,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 									}
 									!contains
 								})
+							);
+
+							metrics.report(
+								|metrics| metrics.block_transactions_resubmitted.inc_by(resubmitted_to_report)
 							);
 						}
 
