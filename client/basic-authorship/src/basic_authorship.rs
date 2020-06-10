@@ -234,7 +234,8 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool to be ready. Proceeding to block production anyway.",
+					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					self.parent_number,
 				);
 				self.transaction_pool.ready()
 			}
@@ -331,15 +332,14 @@ mod tests {
 	use parking_lot::Mutex;
 	use sp_consensus::{BlockOrigin, Proposer};
 	use substrate_test_runtime_client::{
-		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, TestClientBuilderExt,
 	};
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
-	use backend::Backend;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
+	use sc_client_api::Backend;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -352,12 +352,12 @@ mod tests {
 		}.into_signed_tx()
 	}
 
-	fn chain_event<B: BlockT>(block_number: u64, header: B::Header) -> ChainEvent<B>
+	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 		where NumberFor<B>: From<u64>
 	{
 		ChainEvent::NewBlock {
-			id: BlockId::Number(block_number.into()),
-			retracted: vec![],
+			hash: header.hash(),
+			tree_route: None,
 			is_new_best: true,
 			header,
 		}
@@ -381,8 +381,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
@@ -452,8 +453,7 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
-			.build_with_backend();
+		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
 			BasicPool::new(
@@ -472,8 +472,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
 			))
 		);
 
@@ -500,8 +501,11 @@ mod tests {
 			backend.changes_trie_storage(),
 		).unwrap();
 
-		let storage_changes = api.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(
+			&state,
+			changes_trie_state.as_ref(),
+			genesis_hash,
+		).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,
@@ -571,8 +575,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
@@ -582,8 +587,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				1,
-				client.header(&BlockId::Number(1)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(1))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
