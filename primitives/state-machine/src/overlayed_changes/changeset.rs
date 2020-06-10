@@ -36,6 +36,16 @@ type Transactions = SmallVec<[InnerValue; 5]>;
 #[cfg_attr(test, derive(PartialEq))]
 pub struct NoOpenTransaction;
 
+/// Error when calling `enter_runtime` when already being in runtime execution mode.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct AlreadyInRuntime;
+
+/// Error when calling `exit_runtime` when not being in runtime exection mdde.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct NotInRuntime;
+
 /// Describes in which mode the node is currently executing.
 #[derive(Debug, Clone, Copy)]
 pub enum ExecutionMode {
@@ -278,25 +288,30 @@ impl OverlayedChangeSet {
 	/// Call this before transfering control to the runtime.
 	///
 	/// This protects all existing transactions from being removed by the runtime.
-	/// Calling this while already inside the runtime is a no-op.
-	pub fn enter_runtime(&mut self) {
+	/// Calling this while already inside the runtime will return an error.
+	pub fn enter_runtime(&mut self) -> Result<(), AlreadyInRuntime> {
 		if let ExecutionMode::Runtime = self.execution_mode {
-			return;
+			return Err(AlreadyInRuntime);
 		}
 		self.execution_mode = ExecutionMode::Runtime;
 		self.num_client_transactions = self.transaction_depth();
+		Ok(())
 	}
 
 	/// Call this when control returns from the runtime.
 	///
 	/// This commits all dangling transaction left open by the runtime.
-	/// Calling this while already outside the runtime is a no-op.
-	pub fn exit_runtime(&mut self) {
+	/// Calling this while already outside the runtime will return an error.
+	pub fn exit_runtime(&mut self) -> Result<(), NotInRuntime> {
+		if let ExecutionMode::Client = self.execution_mode {
+			return Err(NotInRuntime);
+		}
 		self.execution_mode = ExecutionMode::Client;
 		while self.transaction_depth() > self.num_client_transactions {
 			self.commit_transaction()
 				.expect("The loop condition checks that the transaction depth is > 0; qed");
 		}
+		Ok(())
 	}
 
 	/// Start a new nested transaction.
@@ -707,7 +722,7 @@ mod test {
 	fn runtime_cannot_close_client_tx() {
 		let mut changeset = OverlayedChangeSet::default();
 		changeset.start_transaction();
-		changeset.enter_runtime();
+		changeset.enter_runtime().unwrap();
 		changeset.start_transaction();
 		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.commit_transaction(), Err(NoOpenTransaction));
@@ -722,10 +737,10 @@ mod test {
 
 		changeset.set(b"key0".to_vec(), Some(b"val0".to_vec()), Some(1));
 
-		changeset.enter_runtime();
+		changeset.enter_runtime().unwrap();
 		changeset.start_transaction();
 		changeset.set(b"key1".to_vec(), Some(b"val1".to_vec()), Some(2));
-		changeset.exit_runtime();
+		changeset.exit_runtime().unwrap();
 
 		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
@@ -734,5 +749,16 @@ mod test {
 			(b"key0", Some(b"val0")),
 			(b"key1", Some(b"val1")),
 		]);
+	}
+
+	#[test]
+	fn enter_exit_runtime_fails_when_already_in_requested_mode() {
+		let mut changeset = OverlayedChangeSet::default();
+
+		assert_eq!(changeset.exit_runtime(), Err(NotInRuntime));
+		assert_eq!(changeset.enter_runtime(), Ok(()));
+		assert_eq!(changeset.enter_runtime(), Err(AlreadyInRuntime));
+		assert_eq!(changeset.exit_runtime(), Ok(()));
+		assert_eq!(changeset.exit_runtime(), Err(NotInRuntime));
 	}
 }

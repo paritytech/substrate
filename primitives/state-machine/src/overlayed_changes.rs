@@ -41,6 +41,12 @@ pub use self::changeset::OverlayedValue;
 /// Re-export of `changeset::NoOpenTransaction`.
 pub use self::changeset::NoOpenTransaction;
 
+/// Re-export of `changeset::AlreadyInRutnime`.
+pub use self::changeset::AlreadyInRuntime;
+
+/// Re-export of `changeset::NotInruntime`.
+pub use self::changeset::NotInRuntime;
+
 /// Storage key.
 pub type StorageKey = Vec<u8>;
 
@@ -348,22 +354,26 @@ impl OverlayedChanges {
 	///
 	/// This protects all existing transactions from being removed by the runtime.
 	/// Calling this while already inside the runtime is a no-op.
-	pub fn enter_runtime(&mut self) {
-		self.top.enter_runtime();
+	pub fn enter_runtime(&mut self) -> Result<(), AlreadyInRuntime> {
+		self.top.enter_runtime()?;
 		for (_, (changeset, _)) in self.children.iter_mut() {
-			changeset.enter_runtime();
+			changeset.enter_runtime()
+				.expect("Top and children changesets are entering runtime in lockstep; qed")
 		}
+		Ok(())
 	}
 
 	/// Call this when control returns from the runtime.
 	///
 	/// This commits all dangling transaction left open by the runtime.
 	/// Calling this while already outside the runtime is a no-op.
-	pub fn exit_runtime(&mut self) {
-		self.top.exit_runtime();
+	pub fn exit_runtime(&mut self) -> Result<(), NotInRuntime> {
+		self.top.exit_runtime()?;
 		for (_, (changeset, _)) in self.children.iter_mut() {
-			changeset.exit_runtime();
+			changeset.exit_runtime()
+				.expect("Top and children changesets are entering runtime in lockstep; qed");
 		}
+		Ok(())
 	}
 
 	/// Consume all changes (top + children) and return them.
