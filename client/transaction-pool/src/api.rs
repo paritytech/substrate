@@ -64,7 +64,7 @@ where
 	Client: ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
-	sp_api::ApiErrorFor<Client, Block>: Send,
+	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -105,7 +105,7 @@ where
 				#[allow(deprecated)] // old validate_transaction
 				runtime_api.validate_transaction_before_version_2(&at, uxt)
 			};
-			let res = res.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
+			let res = res.map_err(|e| Error::RuntimeApi(e.to_string()));
 			if let Err(e) = tx.send(res) {
 				log::warn!("Unable to send a validate transaction result: {:?}", e);
 			}

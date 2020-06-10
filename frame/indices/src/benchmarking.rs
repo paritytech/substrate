@@ -83,9 +83,23 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&recipient, BalanceOf::<T>::max_value());
 		// Claim the index
 		Indices::<T>::claim(RawOrigin::Signed(original).into(), account_index)?;
-	}: _(RawOrigin::Root, recipient.clone(), account_index)
+	}: _(RawOrigin::Root, recipient.clone(), account_index, false)
 	verify {
 		assert_eq!(Accounts::<T>::get(account_index).unwrap().0, recipient);
+	}
+
+	freeze {
+		// Index being claimed
+		let i in 0 .. 1000;
+		let account_index = T::AccountIndex::from(i);
+		// Setup accounts
+		let caller: T::AccountId = account("caller", 0, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		// Claim the index
+		Indices::<T>::claim(RawOrigin::Signed(caller.clone()).into(), account_index)?;
+	}: _(RawOrigin::Signed(caller.clone()), account_index)
+	verify {
+		assert_eq!(Accounts::<T>::get(account_index).unwrap().2, true);
 	}
 
 	// TODO in another PR: lookup and unlookup trait weights (not critical)
@@ -104,6 +118,7 @@ mod tests {
 			assert_ok!(test_benchmark_transfer::<Test>());
 			assert_ok!(test_benchmark_free::<Test>());
 			assert_ok!(test_benchmark_force_transfer::<Test>());
+			assert_ok!(test_benchmark_freeze::<Test>());
 		});
 	}
 }
