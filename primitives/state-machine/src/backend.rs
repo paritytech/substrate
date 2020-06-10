@@ -20,10 +20,7 @@
 use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
-use crate::{
-	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
-};
+use crate::{UsageInfo, StorageKey, StorageValue, StorageCollection};
 use sp_trie::{ProofInput, BackendStorageProof, RecordBackendFor};
 
 /// Access the state of the proof backend of a backend.

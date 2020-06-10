@@ -24,16 +24,15 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with, RecordBackendFor,
-	record_all_keys, StorageProofKind, TrieNodesStorageProof as StorageProof, ProofInputKind,
-	ProofInput, RecordMapTrieNodes, RecordBackend, RegStorageProof, ProofFlatDefault, BackendStorageProof,
-	FullBackendStorageProof,
+	ProofInput, RecordBackend, RegStorageProof, BackendStorageProof,
+	record_all_keys, ProofInputKind, FullBackendStorageProof,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, DBValue};
 use crate::backend::{Backend, ProofRegStateFor, ProofRegBackend};
-use sp_core::storage::{ChildInfo, ChildInfoProof, ChildrenMap};
+use sp_core::storage::{ChildInfo, ChildInfoProof};
 use std::marker::PhantomData;
 
 /// Clonable recorder backend with inner mutability.
@@ -464,7 +463,7 @@ mod tests {
 	}
 	fn proof_is_non_empty_after_value_is_read_inner<P: BackendStorageProof<BlakeTwo256>>() {
 		let trie_backend = test_trie_proof::<P>();
-		let mut backend = test_proving(&trie_backend);
+		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().unwrap().is_empty());
 	}
@@ -509,7 +508,7 @@ mod tests {
 	fn proof_recorded_and_checked_inner<P: BackendStorageProof<BlakeTwo256>>() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryBackendWithProof::<BlakeTwo256, P>::default();
-		let mut in_memory = in_memory.update(vec![(None, contents)]);
+		let in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -518,7 +517,7 @@ mod tests {
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let mut proving = in_memory.as_proof_backend().unwrap();
+		let proving = in_memory.as_proof_backend().unwrap();
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof().unwrap();
@@ -545,7 +544,7 @@ mod tests {
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackendWithProof::<BlakeTwo256, P>::default();
-		let mut in_memory = in_memory.update(contents);
+		let in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(
 			std::iter::empty(),
@@ -572,7 +571,7 @@ mod tests {
 			vec![i]
 		));
 
-		let mut proving = in_memory.clone().as_proof_backend().unwrap();
+		let proving = in_memory.clone().as_proof_backend().unwrap();
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof().unwrap();
@@ -587,7 +586,7 @@ mod tests {
 		assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 		assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-		let mut proving = in_memory.as_proof_backend().unwrap();
+		let proving = in_memory.as_proof_backend().unwrap();
 		assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 		let proof = proving.extract_proof().unwrap();

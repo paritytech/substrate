@@ -430,6 +430,7 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 }
 
 /// Container recording trie nodes.
+/// TODO EMCH looks unused
 pub struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
 
 impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {

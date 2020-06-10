@@ -22,7 +22,6 @@ use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
 	ChildrenProofMap, ProofInput, BackendStorageProof, FullBackendStorageProof};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_trie::RegStorageProof;
 use crate::backend::{ProofRegStateFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};

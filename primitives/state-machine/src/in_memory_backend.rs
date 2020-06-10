@@ -228,7 +228,7 @@ mod tests {
 		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
-		let mut storage = storage.update(
+		let storage = storage.update(
 			vec![(
 				Some(child_info.clone()),
 				vec![(b"2".to_vec(), Some(b"3".to_vec()))]

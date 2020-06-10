@@ -464,7 +464,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
 pub fn prove_execution<B, H, N, Exec>(
-	mut backend: B,
+	backend: B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	spawn_handle: Box<dyn CloneableSpawn>,
@@ -1022,7 +1022,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_proof_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1066,7 +1066,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_proof_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut offchain_overlay = OffchainOverlayedChanges::default();
@@ -1113,7 +1113,7 @@ mod tests {
 			b"d4".to_vec(),
 		];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_proof_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut offchain_overlay = OffchainOverlayedChanges::default();
@@ -1178,7 +1178,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_proof_backend().unwrap();
 		let mut offchain_overlay = OffchainOverlayedChanges::default();
 		let mut overlay = OverlayedChanges::default();
@@ -1295,7 +1295,7 @@ mod tests {
 		);
 		let input = ProofInput::QueryPlan(query_plan);
 		let remote_proof = <QueryPlanProof as sp_trie::RegStorageProof<_>>::extract_proof(&recorder, input).unwrap();
-		remote_proof.verify(&input_check);
+		assert!(remote_proof.verify(&input_check).unwrap());
 	/*	
 		// on child trie
 		let remote_backend = trie_backend::tests::test_trie_proof::<QueryPlanProof>();
@@ -1396,7 +1396,8 @@ mod tests {
 		);
 	}
 
-	fn prove_read_and_proof_on_fullbackend_works<P>() {
+	#[test]
+	fn prove_read_and_proof_on_fullbackend_works() {
 		// more proof could be tested, but at this point the full backend
 		// is just here to assert that we are able to test child trie content
 		// and are able to switch backend for checking proof.
