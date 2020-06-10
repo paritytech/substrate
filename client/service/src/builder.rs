@@ -460,8 +460,10 @@ where
 {
 	let ServiceParams {
 		mut config,
-		client, backend, task_manager, keystore, on_demand, select_chain, import_queue, finality_proof_request_builder, finality_proof_provider, transaction_pool, 
-		remote_blockchain, background_tasks, block_announce_validator, rpc_extensions_builder, informant_prefix
+		client, backend, task_manager, keystore, on_demand, select_chain, import_queue,
+		finality_proof_request_builder, finality_proof_provider, transaction_pool,
+		remote_blockchain, background_tasks, block_announce_validator, rpc_extensions_builder,
+		informant_prefix
 	} = service_descriptor;
 
 	sp_session::generate_initial_session_keys(

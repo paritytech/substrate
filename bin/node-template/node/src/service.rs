@@ -38,7 +38,9 @@ macro_rules! new_full_start {
 		let select_chain = sc_consensus::LongestChain::new(backend.clone());
 		let pool_api = sc_transaction_pool::FullChainApi::new(Arc::clone(&client));
 		let registry = $config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());
-		let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new($config.transaction_pool.clone(), std::sync::Arc::new(pool_api), registry.as_ref());
+		let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new(
+			$config.transaction_pool.clone(), std::sync::Arc::new(pool_api), registry.as_ref()
+		);
 		let transaction_pool = Arc::new(transaction_pool);
 		let mut background_tasks = Vec::new();
 
@@ -47,8 +49,9 @@ macro_rules! new_full_start {
 		}
 
 		let (import_queue, import_setup) = {
-			let (grandpa_block_import, grandpa_link) =
-				sc_finality_grandpa::block_import(Arc::clone(&client), &(Arc::clone(&client) as Arc<_>), select_chain.clone())?;
+			let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+				Arc::clone(&client), &(Arc::clone(&client) as Arc<_>), select_chain.clone()
+			)?;
 
 			let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 				grandpa_block_import.clone(), Arc::clone(&client),
@@ -95,7 +98,9 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+	let finality_proof_provider = Arc::new(
+		GrandpaFinalityProofProvider::new(backend.clone(), provider)
+	);
 	let service = sc_service::build(sc_service::ServiceParams {
 		config,
 		client,
@@ -205,14 +210,15 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) = sc_service::new_light_parts::<
-		Block, RuntimeApi, Executor
-	>(&config)?;
+	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) =
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 	let select_chain = LongestChain::new(backend.clone());
 	let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 	let registry = config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());
-	let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new(config.transaction_pool.clone(), std::sync::Arc::new(pool_api), registry.as_ref());
+	let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new(
+		config.transaction_pool.clone(), std::sync::Arc::new(pool_api), registry.as_ref()
+	);
 	let transaction_pool = Arc::new(transaction_pool);
 	let mut background_tasks = Vec::new();
 
@@ -243,7 +249,9 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 	)?;
 	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+	let finality_proof_provider = Arc::new(
+		GrandpaFinalityProofProvider::new(backend.clone(), provider)
+	);
 	sc_service::build(sc_service::ServiceParams {
 		config,
 		client,

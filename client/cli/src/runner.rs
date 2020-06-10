@@ -233,9 +233,11 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<BU, B, BA, CE, RA, IQ>(self, subcommand: &Subcommand, builder: BU) -> Result<()>
+	pub fn run_subcommand<BU, B, BA, CE, RA, IQ>(self, subcommand: &Subcommand, builder: BU)
+		-> Result<()>
 	where
-		BU: FnOnce(Configuration) -> sc_service::error::Result<(std::sync::Arc<sc_service::Client<BA, CE, B, RA>>, IQ)>,
+		BU: FnOnce(Configuration)
+			-> sc_service::error::Result<(Arc<sc_service::Client<BA, CE, B, RA>>, IQ)>,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
