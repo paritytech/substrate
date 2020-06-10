@@ -33,8 +33,16 @@ impl Flat {
 	pub fn into_nodes(self) -> ProofNodes {
 		self.0
 	}
+	/// Instantiate from inner proof node,
+	/// mainly needed for part of the
+	/// code that is not generic.
+	pub fn from_nodes(nodes: ProofNodes) -> Self {
+		Flat(nodes)
+	}
 }
-	
+
+// TODO EMCH tets that proof nodes encode to the same as flat (to validate change in grandpa)
+
 impl StorageProof for Flat {
 	fn empty() -> Self {
 		Flat(Default::default())

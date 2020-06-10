@@ -23,7 +23,8 @@ use kvdb::KeyValueDB;
 use lazy_static::lazy_static;
 use rand::Rng;
 use hash_db::Prefix;
-use sp_state_machine::Backend as _;
+use sp_state_machine::backend::Backend as _;
+use sp_state_machine::SimpleProof;
 use sp_trie::{trie_types::TrieDBMut, TrieMut as _};
 
 use node_primitives::Hash;
@@ -181,7 +182,7 @@ impl core::Benchmark for TrieReadBenchmark {
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 
-		let trie_backend = sp_state_machine::TrieBackend::new(
+		let trie_backend = sp_state_machine::TrieBackend::<_, _, SimpleProof>::new(
 			storage,
 			self.root,
 		);

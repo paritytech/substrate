@@ -40,7 +40,7 @@ extern crate self as sp_api;
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
 	OverlayedChanges, StorageProof, StorageProofKind, backend::Backend as StateBackend, ChangesTrieState, InMemoryBackend,
-	ProofInput, backend::ProofRegFor, RegStorageProof,
+	ProofInput, backend::{ProofRegFor, ProofRegBackend}, RegStorageProof,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]

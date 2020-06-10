@@ -42,11 +42,17 @@ use parking_lot::RwLock;
 
 pub use sp_state_machine::backend::Backend as StateBackend;
 pub use sp_state_machine::backend::ProofRegFor;
-pub use sp_state_machine::backend::ProofFor;
 use std::marker::PhantomData;
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
+
+/// Extracts the proof for the given backend.
+pub type ProofFor<B, Block> = <ProofRegForB<B, Block> as StateBackend<HashFor<Block>>>::StorageProof;
+
+type ProofRegForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::ProofRegBackend;
+
+type ProofRegForB<B, Block> = ProofRegForSB<StateBackendFor<B, Block>, Block>;
 
 /// Extracts the transaction for the given state backend.
 pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Transaction;

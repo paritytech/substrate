@@ -46,6 +46,7 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 
 	/// The actual proof produced.
 	type StorageProof: BackendStorageProof<H>;
+
 //		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
 
 	/// Type of proof backend.
@@ -276,6 +277,10 @@ pub trait ProofRegBackend<H>: crate::backend::Backend<H>
 
 	/// Get current recording state.
 	fn extract_recorder(self) -> (Self::State, ProofInput);
+
+	/// Extract from the state and input.
+	/// TODO EMCH fusing state and record could avoid this
+	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>>;
 }
 
 /// Backend used to produce proof.

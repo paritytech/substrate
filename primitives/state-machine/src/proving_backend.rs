@@ -262,6 +262,13 @@ impl<S, H, P> ProofRegBackend<H> for ProvingBackend<S, H, P>
 		let recorder = self.trie_backend.into_storage().proof_recorder;
 		(recorder, input)
 	}
+
+	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>> {
+		<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg>::extract_proof(
+			& recorder_state.read(),
+			input,
+		).map_err(|e| Box::new(e) as Box<dyn Error>)
+	}
 }
 
 impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>

@@ -219,7 +219,8 @@ mod tests {
 	use super::*;
 	use sp_blockchain::HeaderBackend;
 	use sp_core::Blake2Hasher;
-	use sp_state_machine::Backend;
+	use sp_state_machine::backend::Backend;
+	use sp_state_machine::SimpleProof;
 	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
 
 	#[test]
@@ -232,14 +233,14 @@ mod tests {
 			&client,
 			client.info().best_hash,
 			client.info().best_number,
-			RecordProof::Yes(sp_api::StorageProofKind::Flat),
+			RecordProof::Yes,
 			Default::default(),
 			&*backend,
 		).unwrap().build().unwrap();
 
 		let proof = block.proof.expect("Proof is build on request");
 
-		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher, SimpleProof>(
 			block.storage_changes.transaction_storage_root,
 			proof,
 		).unwrap();

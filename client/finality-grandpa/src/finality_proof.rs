@@ -41,9 +41,9 @@ use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
-	backend::Backend, StorageProof, StorageProofKind,
+	backend::Backend, SimpleProof as StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
-	StorageProvider, ProofProvider, ProofNodes,
+	StorageProvider, ProofProvider,
 };
 use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::BlockNumberOps;
@@ -70,7 +70,7 @@ pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 }
 
 /// Trait that combines `StorageProvider` and `ProofProvider`
-pub trait StorageAndProofProvider<Block, BE>: StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync
+pub trait StorageAndProofProvider<Block, BE>: StorageProvider<Block, BE> + ProofProvider<Block, StorageProof> + Send + Sync
 	where
 		Block: BlockT,
 		BE: Backend<Block> + Send + Sync,
@@ -81,7 +81,7 @@ impl<Block, BE, P> StorageAndProofProvider<Block, BE> for P
 	where
 		Block: BlockT,
 		BE: Backend<Block> + Send + Sync,
-		P: StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync,
+		P: StorageProvider<Block, BE> + ProofProvider<Block, StorageProof> + Send + Sync,
 {}
 
 /// Implementation of AuthoritySetForFinalityProver.
@@ -98,7 +98,7 @@ impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn Storage
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
-		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY), StorageProofKind::Flat)
+		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY))
 	}
 }
 
@@ -114,7 +114,7 @@ pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
 }
 
 /// FetchChecker-based implementation of AuthoritySetForFinalityChecker.
-impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchChecker<Block>> {
+impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchChecker<Block, StorageProof>> {
 	fn check_authorities_proof(
 		&self,
 		hash: Block::Hash,
@@ -229,7 +229,7 @@ pub(crate) struct FinalityProofFragment<Header: HeaderT> {
 	/// The set of headers in the range (U; F] that we believe are unknown to the caller. Ordered.
 	pub unknown_headers: Vec<Header>,
 	/// Optional proof of execution of GRANDPA::authorities() at the `block`.
-	pub authorities_proof: Option<ProofNodes>,
+	pub authorities_proof: Option<StorageProof>,
 }
 
 /// Proof of finality is the ordered set of finality fragments, where:
@@ -345,7 +345,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 				block: current,
 				justification,
 				unknown_headers: ::std::mem::take(&mut unknown_headers),
-				authorities_proof: new_authorities_proof.map(StorageProof::expect_flatten_content),
+				authorities_proof: new_authorities_proof,
 			};
 
 			// append justification to finality proof if required
@@ -512,7 +512,7 @@ fn check_finality_proof_fragment<Block: BlockT, B, J>(
 		current_authorities = authorities_provider.check_authorities_proof(
 			proof_fragment.block,
 			header,
-			StorageProof::Flat(new_authorities_proof),
+			new_authorities_proof,
 		)?;
 
 		current_set_id += 1;

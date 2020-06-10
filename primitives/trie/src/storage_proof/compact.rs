@@ -12,11 +12,11 @@ use super::*;
 use super::simple::ProofNodes;
 use codec::{Codec, Encode, Decode};
 use crate::TrieLayout;
-#[cfg(feature = "std")]
 use crate::TrieHash;
 use sp_storage::ChildType;
 use sp_std::marker::PhantomData;
 use sp_std::convert::TryInto;
+use sp_std::{vec, vec::Vec};
 
 /// A collection on encoded and compacted trie nodes.
 /// Nodes are sorted by trie node iteration order, and some hash

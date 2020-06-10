@@ -1175,7 +1175,7 @@ impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B::State, HashFor<Block>>> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B, Block>> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 //	HashFor<Block>: Ord + Codec,
 	E: CallExecutor<Block>,

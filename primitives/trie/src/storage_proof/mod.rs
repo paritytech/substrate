@@ -8,8 +8,6 @@
 
 use sp_std::collections::{btree_map::BTreeMap, btree_map, btree_map::Entry};
 use sp_std::collections::btree_set::BTreeSet;
-#[cfg(feature = "std")]
-use std::collections::hash_map::Entry as HEntry;
 use sp_std::vec::Vec;
 use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput, Error as CodecError};
 use hash_db::{Hasher, HashDBRef};
@@ -27,10 +25,10 @@ pub mod multiple;
 // usage is restricted here to proof.
 // In practice it is already use internally by no_std trie_db.
 #[cfg(not(feature = "std"))]
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry as HEntry, HashMap};
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry as HEntry, HashMap};
 
 type Result<T> = sp_std::result::Result<T, Error>;
 type CodecResult<T> = sp_std::result::Result<T, codec::Error>;
@@ -330,7 +328,7 @@ impl<H: Hasher> RecordBackend<H> for FullRecorder<H> {
 	}
 
 	fn merge(&mut self, mut other: Self) -> bool {
-		for (child_info, other) in std::mem::replace(&mut other.0, Default::default()) {
+		for (child_info, other) in sp_std::mem::replace(&mut other.0, Default::default()) {
 			match self.0.entry(child_info) {
 				Entry::Occupied(mut entry) => {
 					for (key, value) in other.0 { 
@@ -365,7 +363,7 @@ impl<H: Hasher> RecordBackend<H> for FlatRecorder<H> {
 	}
 
 	fn merge(&mut self, mut other: Self) -> bool {
-		for (key, value) in std::mem::replace(&mut other.0, Default::default()).0 {
+		for (key, value) in sp_std::mem::replace(&mut other.0, Default::default()).0 {
 			match self.0.entry(key) {
 				HEntry::Occupied(entry) => {
 					if entry.get() != &value {
