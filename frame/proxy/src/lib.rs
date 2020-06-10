@@ -41,7 +41,7 @@ use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
 use sp_runtime::traits::Member;
 use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, traits::{
-		Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard, InstanceFilter,
+		Get, ReservableCurrency, Currency, InstanceFilter,
 		OriginTrait, IsType,
 	}, weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
@@ -65,9 +65,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
-
-	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: FilterStack<<Self as Trait>::Call>;
 
 	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
 	/// The instance filter determines whether a given call may be proxied under this type.
@@ -106,8 +103,6 @@ decl_error! {
 		NotFound,
 		/// Sender is not a proxy of the account to be proxied.
 		NotProxy,
-		/// A call with a `false` `IsCallable` filter was attempted.
-		Uncallable,
 		/// A call which is incompatible with the proxy type's filter was attempted.
 		Unproxyable,
 		/// Account is already a proxy.
@@ -172,11 +167,7 @@ decl_module! {
 				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
 				.ok_or(Error::<T>::NotProxy)?;
 
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _clear_guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-
+			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
 			let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
 			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
 				let c = <T as Trait>::Call::from_ref(c);
