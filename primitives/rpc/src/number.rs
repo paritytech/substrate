@@ -18,8 +18,7 @@
 //! A number type that can be serialized both as a number or a string that encodes a number in a
 //! string.
 
-use std::fmt::Debug;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Debug};
 use serde::{Serialize, Deserialize};
 use sp_core::U256;
 
