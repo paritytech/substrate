@@ -32,10 +32,12 @@ use sp_std::prelude::*;
 /// Further processing is then done [`off-chain side`](super::offchain).
 ///
 /// **Must** be called from on-chain, i.e. `on_initialize(..)` or `on_finalization(..)`.
+/// **Must** be called within the given session, otherwise the full identification
+/// information is not available anymore. Storing validator sets can thus not be
+/// done retrospectively.
 pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait>(
 	session_index: SessionIndex,
 ) {
-	//let value = SessionModule::historical_root(session_index);
 	let encoded_validator_list = <SessionModule<T>>::validators()
 		.into_iter()
 		.filter_map(|validator_id: <T as SessionTrait>::ValidatorId| {

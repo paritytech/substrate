@@ -101,7 +101,8 @@ pub enum OffchainOverlayedChange {
 pub enum OffchainOverlayedChanges {
 	/// Writing overlay changes to the offchain worker database is disabled by configuration.
 	Disabled,
-	/// Overlay changes can be recorded using the inner collection of this variant.
+	/// Overlay changes can be recorded using the inner collection of this variant,
+	/// where the identifier is the tuple of `(prefix, key)`.
 	Enabled(HashMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>),
 }
 

@@ -19,7 +19,10 @@
 //! worker.
 
 
-use super::*;
+use super::SessionIndex;
+use sp_std::prelude::Vec;
+use core::convert::AsRef;
+use codec::Encode;
 
 pub(super) const PREFIX: &[u8] = b"session_historical";
 pub(super) const LAST_PRUNE: &[u8] = b"session_historical_last_prune";
