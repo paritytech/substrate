@@ -5850,7 +5850,6 @@ dependencies = [
  "atty",
  "chrono",
  "derive_more",
- "directories",
  "env_logger 0.7.1",
  "fdlimit",
  "futures 0.3.4",
@@ -6631,6 +6630,7 @@ name = "sc-service"
 version = "0.8.0-rc3"
 dependencies = [
  "derive_more",
+ "directories",
  "exit-future",
  "futures 0.1.29",
  "futures 0.3.4",
@@ -6686,6 +6686,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "sysinfo",
+ "tempfile",
  "tracing",
  "wasm-timer",
 ]
@@ -7613,6 +7614,7 @@ dependencies = [
 name = "sp-runtime"
 version = "2.0.0-rc3"
 dependencies = [
+ "either",
  "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log",

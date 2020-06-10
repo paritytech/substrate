@@ -47,7 +47,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed};
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -197,9 +197,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 70_000_000]
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
@@ -225,9 +223,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 70_000_000]
 		fn force_name(origin, target: <T::Lookup as StaticLookup>::Source, name: Vec<u8>) {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ForceOrigin::ensure_origin(origin)?;
 
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);

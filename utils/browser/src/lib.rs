@@ -98,6 +98,7 @@ where
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		base_path: None,
 	};
 
 	Ok(config)
