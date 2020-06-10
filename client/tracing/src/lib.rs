@@ -63,7 +63,7 @@ impl Default for TracingReceiver {
 }
 
 /// A handler for tracing `SpanDatum`
-pub trait TraceHandler {
+pub trait TraceHandler: Send + Sync {
 	/// Process a `SpanDatum`
 	fn process_span(&self, span: SpanDatum);
 }
@@ -151,7 +151,7 @@ impl Value for Visitor {
 pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler + Send + Sync>,
+	trace_handler: Box<dyn TraceHandler>,
 	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
 }
 
@@ -163,7 +163,10 @@ impl ProfilingSubscriber {
 	pub fn new(receiver: TracingReceiver, targets: &str, wasm_tracing: bool) -> ProfilingSubscriber {
 		match receiver {
 			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets, wasm_tracing),
-			TracingReceiver::Telemetry => Self::new_with_handler(Box::new(TelemetryTraceHandler), targets, wasm_tracing),
+			TracingReceiver::Telemetry => Self::new_with_handler(
+				Box::new(TelemetryTraceHandler),
+				targets,
+				wasm_tracing),
 		}
 	}
 
@@ -172,7 +175,9 @@ impl ProfilingSubscriber {
 	/// either with a level, eg: "pallet=trace"
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler + Send + Sync>, targets: &str, wasm_tracing: bool) -> ProfilingSubscriber {
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str, wasm_tracing: bool)
+		-> ProfilingSubscriber
+	{
 		sp_tracing::set_wasm_tracing(wasm_tracing);
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
