@@ -5997,6 +5997,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "pdqselect",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus-epochs",

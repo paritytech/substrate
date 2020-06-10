@@ -69,8 +69,10 @@ mod tests {
 	use super::*;
 	use crate::vrf::VRFTranscriptValue;
 	use rand::RngCore;
-	use rand_chacha::rand_core::SeedableRng;
-	use rand_chacha::ChaChaRng;
+	use rand_chacha::{
+		rand_core::SeedableRng,
+		ChaChaRng,
+	};
 
 	#[test]
 	fn transcript_creation_matches() {
