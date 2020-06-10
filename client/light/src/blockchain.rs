@@ -25,8 +25,7 @@ use sp_runtime::{Justification, generic::BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use sp_blockchain::{
-	HeaderMetadata, CachedHeaderMetadata,
-	Error as ClientError, Result as ClientResult,
+	HeaderMetadata, CachedHeaderMetadata, Error as ClientError, Result as ClientResult,
 };
 pub use sc_client_api::{
 	backend::{
@@ -42,7 +41,7 @@ pub use sc_client_api::{
 	},
 	cht,
 };
-use super::fetcher::RemoteHeaderRequest;
+use crate::fetcher::RemoteHeaderRequest;
 
 /// Light client blockchain.
 pub struct Blockchain<S> {

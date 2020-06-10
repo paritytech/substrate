@@ -20,6 +20,7 @@ log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.4"
 parking_lot = "0.10.0"
+sc-light = { version = "2.0.0-rc3", path = "../../light" }
 sp-blockchain = { version = "2.0.0-rc3", path = "../../../primitives/blockchain" }
 sp-api = { version = "2.0.0-rc3", path = "../../../primitives/api" }
 sp-state-machine = { version = "0.8.0-rc3", path = "../../../primitives/state-machine" }
