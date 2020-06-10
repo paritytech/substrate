@@ -24,7 +24,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 impl system::Trait for Test {
-	type BasicCallFilter = ();
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
 	type Index = u64;

@@ -21,7 +21,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
-	type BasicCallFilter: frame_support::traits::Filter<Self::Call>;
+	type BaseCallFilter: frame_support::traits::Filter<Self::Call>;
 	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default;
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode;

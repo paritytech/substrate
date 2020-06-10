@@ -104,7 +104,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Runtime {
-	type BasicCallFilter = ();
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;

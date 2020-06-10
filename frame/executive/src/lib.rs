@@ -545,7 +545,7 @@ mod tests {
 		};
 	}
 	impl frame_system::Trait for Runtime {
-		type BasicCallFilter = ();
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type Call = Call;

@@ -150,7 +150,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin.
-	type BasicCallFilter: Filter<Self::Call>;
+	type BaseCallFilter: Filter<Self::Call>;
 
 	/// The `Origin` type used by dispatchable calls.
 	type Origin:
@@ -1965,7 +1965,7 @@ pub(crate) mod tests {
 	}
 
 	impl Trait for Test {
-		type BasicCallFilter = ();
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;

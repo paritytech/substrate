@@ -487,7 +487,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type BasicCallFilter = ();
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;

@@ -146,7 +146,7 @@ parameter_types! {
 const_assert!(AvailableBlockRatio::get().deconstruct() >= AVERAGE_ON_INITIALIZE_WEIGHT.deconstruct());
 
 impl frame_system::Trait for Runtime {
-	type BasicCallFilter = ();
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = Index;

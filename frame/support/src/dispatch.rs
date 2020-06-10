@@ -2050,7 +2050,7 @@ mod tests {
 		pub trait Trait {
 			type AccountId;
 			type Call;
-			type BasicCallFilter;
+			type BaseCallFilter;
 			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 		}
 
@@ -2195,7 +2195,7 @@ mod tests {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
 		type Call = OuterCall;
-		type BasicCallFilter = ();
+		type BaseCallFilter = ();
 	}
 
 	#[test]

@@ -209,7 +209,7 @@ macro_rules! impl_outer_origin {
 
 			fn reset_filter(&mut self) {
 				let filter = <
-					<$runtime as $system::Trait>::BasicCallFilter
+					<$runtime as $system::Trait>::BaseCallFilter
 					as $crate::traits::Filter<<$runtime as $system::Trait>::Call>
 				>::filter;
 
@@ -333,7 +333,7 @@ mod tests {
 		pub trait Trait {
 			type AccountId;
 			type Call;
-			type BasicCallFilter;
+			type BaseCallFilter;
 		}
 
 		#[derive(Clone, PartialEq, Eq, Debug)]
@@ -370,8 +370,8 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct TestRuntime;
 
-	pub struct BasicCallFilter;
-	impl Filter<u32> for BasicCallFilter {
+	pub struct BaseCallFilter;
+	impl Filter<u32> for BaseCallFilter {
 		fn filter(c: &u32) -> bool {
 			*c % 2 == 0
 		}
@@ -380,7 +380,7 @@ mod tests {
 	impl system::Trait for TestRuntime {
 		type AccountId = u32;
 		type Call = u32;
-		type BasicCallFilter = BasicCallFilter;
+		type BaseCallFilter = BaseCallFilter;
 	}
 
 	impl_outer_origin!(

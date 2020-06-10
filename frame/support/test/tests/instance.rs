@@ -233,7 +233,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Trait for Runtime {
-	type BasicCallFilter= ();
+	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;

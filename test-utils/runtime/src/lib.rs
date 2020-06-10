@@ -401,7 +401,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Runtime {
-	type BasicCallFilter = ();
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;

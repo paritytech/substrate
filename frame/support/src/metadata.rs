@@ -290,7 +290,7 @@ mod tests {
 		use super::*;
 
 		pub trait Trait: 'static {
-			type BasicCallFilter;
+			type BaseCallFilter;
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 				+ From<RawOrigin<Self::AccountId>>;
@@ -438,7 +438,7 @@ mod tests {
 	}
 
 	impl system::Trait for TestRuntime {
-		type BasicCallFilter = ();
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type AccountId = u32;
 		type BlockNumber = u32;
