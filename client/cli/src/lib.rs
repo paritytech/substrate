@@ -210,27 +210,6 @@ pub trait SubstrateCli: Sized {
 		command.init::<Self>()?;
 		Runner::new(self, command)
 	}
-
-	/// Default RPC HTTP port.
-	///
-	/// By default this is 9933.
-	fn default_rpc_http_port() -> u16 {
-		9933
-	}
-
-	/// Default RPC websocket port.
-	///
-	/// By default this is 9944.
-	fn default_rpc_ws_port() -> u16 {
-		9944
-	}
-
-	/// Default prometheus port.
-	///
-	/// By default this 9615.
-	fn default_prometheus_port() -> u16 {
-		9615
-	}
 }
 
 /// Initialize the logger
