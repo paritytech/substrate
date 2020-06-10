@@ -63,6 +63,7 @@ use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
 
+/// A background task that is passed into `build` in `background_tasks`.
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.

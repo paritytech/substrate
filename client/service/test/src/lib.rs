@@ -257,7 +257,9 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		for (key, authority) in authorities {
 			let task_executor = {
 				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _: TaskType| executor.spawn(fut.unit_error().compat()))
+				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
+					executor.spawn(fut.unit_error().compat())
+				})
 			};
 			let node_config = node_config(
 				self.nodes,

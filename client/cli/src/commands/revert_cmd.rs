@@ -43,7 +43,9 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BA, CE, RA>(&self, client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>) -> error::Result<()>
+	pub fn run<B, BA, CE, RA>(
+		&self, client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>
+	) -> error::Result<()>
 	where
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,

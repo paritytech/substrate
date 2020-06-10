@@ -57,8 +57,9 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 }
 
 
-/// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
-/// Implements the Iterator Trait, calling `next()` will decode the next SignedBlock and return it.
+/// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder
+/// (from serde_json). Implements the Iterator Trait, calling `next()` will decode the next
+/// SignedBlock and return it.
 enum BlockIter<R, B> where
 	R: std::io::Read + std::io::Seek,
 {
@@ -132,7 +133,7 @@ impl<R, B> Iterator for BlockIter<R, B> where
 		match self {
 			BlockIter::Binary { num_expected_blocks, read_block_count, reader } => {
 				if read_block_count < num_expected_blocks {
-					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader)
+					let block_result: Result<SignedBlock::<B>, _> = SignedBlock::<B>::decode(reader)
 						.map_err(|e| e.to_string());
 					*read_block_count += 1;
 					Some(block_result)
@@ -267,7 +268,8 @@ enum ImportState<R, B> where
 {
 	/// We are reading from the BlockIter structure, adding those blocks to the queue if possible.
 	Reading{block_iter: BlockIter<R, B>},
-	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it to catch up.
+	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it to
+	/// catch up.
 	WaitingForImportQueueToCatchUp{
 		block_iter: BlockIter<R, B>,
 		delay: Delay,
@@ -362,17 +364,21 @@ where
 						let num_expected_blocks = block_iter.num_expected_blocks();
 						let read_block_count = block_iter.read_block_count();
 						let delay = Delay::new(Duration::from_millis(DELAY_TIME));
-						state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
+						state = Some(ImportState::WaitingForImportQueueToFinish {
+							num_expected_blocks, read_block_count, delay
+						});
 					},
 					Some(block_result) => {
 						let read_block_count = block_iter.read_block_count();
 						match block_result {
 							Ok(block) => {
 								if read_block_count - link.imported_blocks >= MAX_PENDING_BLOCKS {
-									// The queue is full, so do not add this block and simply wait until
-									// the queue has made some progress.
+									// The queue is full, so do not add this block and simply wait
+									// until the queue has made some progress.
 									let delay = Delay::new(Duration::from_millis(DELAY_TIME));
-									state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+									state = Some(ImportState::WaitingForImportQueueToCatchUp {
+										block_iter, delay, block
+									});
 								} else {
 									// Queue is not full, we can keep on adding blocks to the queue.
 									import_block_to_queue(block, queue, force);
@@ -381,7 +387,9 @@ where
 							}
 							Err(e) => {
 								return Poll::Ready(
-									Err(Error::Other(format!("Error reading block #{}: {}", read_block_count, e))))
+									Err(Error::Other(
+										format!("Error reading block #{}: {}", read_block_count, e)
+									)))
 							}
 						}
 					}
@@ -393,14 +401,18 @@ where
 					// Queue is still full, so wait until there is room to insert our block.
 					match Pin::new(&mut delay).poll(cx) {
 						Poll::Pending => {
-							state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+							state = Some(ImportState::WaitingForImportQueueToCatchUp {
+								block_iter, delay, block
+							});
 							return Poll::Pending
 						},
 						Poll::Ready(_) => {
 							delay.reset(Duration::from_millis(DELAY_TIME));
 						},
 					}
-					state = Some(ImportState::WaitingForImportQueueToCatchUp{block_iter, delay, block});
+					state = Some(ImportState::WaitingForImportQueueToCatchUp {
+						block_iter, delay, block
+					});
 				} else {
 					// Queue is no longer full, so we can add our block to the queue.
 					import_block_to_queue(block, queue, force);
@@ -408,7 +420,9 @@ where
 					state = Some(ImportState::Reading{block_iter});
 				}
 			},
-			ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, mut delay} => {
+			ImportState::WaitingForImportQueueToFinish {
+				num_expected_blocks, read_block_count, mut delay
+			} => {
 				// All the blocks have been added to the queue, which doesn't mean they 
 				// have all been properly imported.
 				if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
@@ -423,7 +437,9 @@ where
 					// Wait for the delay, because we know the queue is lagging behind.
 					match Pin::new(&mut delay).poll(cx) {
 						Poll::Pending => {
-							state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
+							state = Some(ImportState::WaitingForImportQueueToFinish {
+								num_expected_blocks, read_block_count, delay
+							});
 							return Poll::Pending
 						},
 						Poll::Ready(_) => {
@@ -431,7 +447,9 @@ where
 						},
 					}
 
-					state = Some(ImportState::WaitingForImportQueueToFinish{num_expected_blocks, read_block_count, delay});
+					state = Some(ImportState::WaitingForImportQueueToFinish {
+						num_expected_blocks, read_block_count, delay
+					});
 				}
 			}
 		}

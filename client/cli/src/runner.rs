@@ -26,7 +26,7 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{AbstractService, Configuration, Role, config::TaskType};
-use sp_runtime::traits::{Block as BlockT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
@@ -241,9 +241,9 @@ impl<C: SubstrateCli> Runner<C> {
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
 		RA: Send + Sync + 'static,
-		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
-		<<B as sp_runtime::traits::Block>::Hash as FromStr>::Err: Debug,
-		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<B as BlockT>::Hash: FromStr,
+		<<B as BlockT>::Hash as FromStr>::Err: Debug,
+		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let chain_spec = self.config.chain_spec.cloned_box();
 		let network_config = self.config.network.clone();

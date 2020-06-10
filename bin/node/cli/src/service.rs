@@ -172,7 +172,8 @@ macro_rules! new_full {
 
 		// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 		let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
-		let finality_proof_provider = Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider)) as _;
+		let finality_proof_provider =
+			Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider));
 		
 		let service = sc_service::build(sc_service::ServiceParams {
 			config: $config,
@@ -333,9 +334,8 @@ pub fn new_light(config: Configuration)
 -> Result<impl AbstractService, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) = sc_service::new_light_parts::<
-		Block, RuntimeApi, node_executor::Executor
-	>(&config)?; 
+	let ((client, backend, keystore, task_manager), fetcher, remote_blockchain) =
+		sc_service::new_light_parts::<Block, RuntimeApi, node_executor::Executor>(&config)?; 
 	let client = Arc::new(client);
 
 	let registry = config.prometheus_config.as_ref().map(|cfg| cfg.registry.clone());
@@ -348,12 +348,13 @@ pub fn new_light(config: Configuration)
 	let pool_api = sc_transaction_pool::FullChainApi::new(
 		client.clone(),
 	);
-	let (transaction_pool, transaction_pool_task) = sc_transaction_pool::BasicPool::with_revalidation_type(
-		config.transaction_pool.clone(),
-		std::sync::Arc::new(pool_api),
-		registry.as_ref(),
-		sc_transaction_pool::RevalidationType::Light,
-	);
+	let (transaction_pool, transaction_pool_task) =
+		sc_transaction_pool::BasicPool::with_revalidation_type(
+			config.transaction_pool.clone(),
+			std::sync::Arc::new(pool_api),
+			registry.as_ref(),
+			sc_transaction_pool::RevalidationType::Light,
+		);
 	let transaction_pool = Arc::new(transaction_pool);
 
 	if let Some(task) = transaction_pool_task {
@@ -392,7 +393,8 @@ pub fn new_light(config: Configuration)
 
 	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider)) as _;
+	let finality_proof_provider =
+		Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
 
 	let rpc_client = client.clone();
 	let rpc_transaction_pool = transaction_pool.clone();

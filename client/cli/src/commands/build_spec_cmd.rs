@@ -51,7 +51,11 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run(&self, mut spec: Box<dyn ChainSpec>, network_config: NetworkConfiguration) -> error::Result<()> {
+	pub fn run(
+		&self,
+		mut spec: Box<dyn ChainSpec>,
+		network_config: NetworkConfiguration
+	) -> error::Result<()> {
 		info!("Building chain spec");
 		let raw_output = self.raw;
 
