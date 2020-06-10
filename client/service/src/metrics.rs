@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::convert::TryFrom;
+use std::{convert::TryFrom, time::SystemTime};
 
 use crate::NetworkStatus;
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
@@ -78,6 +78,13 @@ impl PrometheusMetrics {
 		)?, &registry)?.set(roles);
 
 		register_globals(registry)?;
+
+		let start_time_since_epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap_or_default();
+		register(Gauge::<U64>::new(
+			"process_start_time_seconds",
+			"Number of seconds between the UNIX epoch and the moment the process started",
+		)?, registry)?.set(start_time_since_epoch.as_secs());
 
 		Ok(Self {
 			// system
