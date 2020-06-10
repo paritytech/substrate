@@ -262,8 +262,8 @@ pub trait CliConfiguration: Sized {
 	/// Get the default RPC HTTP port.
 	///
 	/// By default this is 9933.
-	fn default_rpc_http_port() -> u16 {
-		9933
+	fn default_rpc_http_port(&self) -> Result<u16> {
+		Ok(9933)
 	}
 
 	/// Get the RPC websocket address (`None` if disabled).
@@ -276,8 +276,8 @@ pub trait CliConfiguration: Sized {
 	/// Get the default RPC websocket port.
 	///
 	/// By default this is 9944.
-	fn default_rpc_ws_port() -> u16 {
-		9944
+	fn default_rpc_ws_port(&self) -> Result<u16> {
+		Ok(9944)
 	}
 
 	/// Returns the RPC method set to expose.
@@ -312,8 +312,8 @@ pub trait CliConfiguration: Sized {
 	/// Get the default prometheus port
 	///
 	/// By default this 9615.
-	fn default_prometheus_port() -> u16 {
-		9615
+	fn default_prometheus_port(&self) -> Result<u16> {
+		Ok(9615)
 	}
 
 	/// Get the telemetry endpoints (if any)
@@ -466,12 +466,12 @@ pub trait CliConfiguration: Sized {
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
-			rpc_http: self.rpc_http(Self::default_rpc_http_port())?,
-			rpc_ws: self.rpc_ws(Self::default_rpc_ws_port())?,
+			rpc_http: self.rpc_http(self.default_rpc_http_port()?)?,
+			rpc_ws: self.rpc_ws(self.default_rpc_ws_port()?)?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
-			prometheus_config: self.prometheus_config(Self::default_prometheus_port())?,
+			prometheus_config: self.prometheus_config(self.default_prometheus_port()?)?,
 			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
