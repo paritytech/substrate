@@ -253,8 +253,8 @@ impl crate::traits::BareCryptoStore for KeyStore {
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 		Ok(VRFSignature {
-			output: inout.to_output().to_bytes().to_vec(),
-			proof: proof.to_bytes().to_vec(),
+			output: inout.to_output(),
+			proof,
 		})
 	}
 }

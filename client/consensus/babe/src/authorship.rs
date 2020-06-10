@@ -160,13 +160,10 @@ fn claim_secondary_slot(
 					transcript_data,
 				);
 				if let Ok(signature)  = result {
-					let proof = schnorrkel::vrf::VRFProof::from_bytes(&signature.proof).ok()?;
-					let output = schnorrkel::vrf::VRFOutput::from_bytes(&signature.output).ok()?;
-
 					Some(PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
 						slot_number,
-						vrf_output: VRFOutput(output),
-						vrf_proof: VRFProof(proof),
+						vrf_output: VRFOutput(signature.output),
+						vrf_proof: VRFProof(signature.proof),
 						authority_index: *authority_index as u32,
 					}))
 				} else {
@@ -266,18 +263,16 @@ fn claim_primary_slot(
 			transcript_data,
 		);
 		if let Ok(signature)  = result {
-			let proof = schnorrkel::vrf::VRFProof::from_bytes(&signature.proof).ok()?;
-			let output = schnorrkel::vrf::VRFOutput::from_bytes(&signature.output).ok()?;
 			let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).ok()?;
-			let inout = match output.attach_input_hash(&public, transcript) {
+			let inout = match signature.output.attach_input_hash(&public, transcript) {
 				Ok(inout) => inout,
 				Err(_) => continue,
 			};
 			if super::authorship::check_primary_threshold(&inout, threshold) {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot_number,
-					vrf_output: VRFOutput(output),
-					vrf_proof: VRFProof(proof),
+					vrf_output: VRFOutput(signature.output),
+					vrf_proof: VRFProof(signature.proof),
 					authority_index: *authority_index as u32,
 				});
 
