@@ -55,7 +55,16 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call)
+	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, false)
+
+	as_multi_create_store {
+		// Signatories, need at least 2 total people
+		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, true)
 
 	as_multi_approve {
 		// Signatories, need at least 2 people
@@ -68,9 +77,9 @@ benchmarks! {
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false)?;
 		let caller2 = signatories2.remove(0);
-	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call)
+	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false)
 
 	as_multi_complete {
 		// Signatories, need at least 2 people
@@ -83,16 +92,16 @@ benchmarks! {
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false)?;
 		// Everyone except the first person approves
 		for i in 1 .. s - 1 {
 			let mut signatories_loop = signatories2.clone();
 			let caller_loop = signatories_loop.remove(i as usize);
 			let o = RawOrigin::Signed(caller_loop).into();
-			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone())?;
+			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone(), false)?;
 		}
 		let caller2 = signatories2.remove(0);
-	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call)
+	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false)
 
 	approve_as_multi_create {
 		// Signatories, need at least 2 people
@@ -117,7 +126,30 @@ benchmarks! {
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false)?;
+		let caller2 = signatories2.remove(0);
+	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash)
+
+	approve_as_multi_complete {
+		// Signatories, need at least 2 people
+		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let mut signatories2 = signatories.clone();
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		let call_hash = call.using_encoded(blake2_256);
+		// before the call, get the timepoint
+		let timepoint = Multisig::<T>::timepoint();
+		// Create the multi
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), true)?;
+		// Everyone except the first person approves
+		for i in 1 .. s - 1 {
+			let mut signatories_loop = signatories2.clone();
+			let caller_loop = signatories_loop.remove(i as usize);
+			let o = RawOrigin::Signed(caller_loop).into();
+			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone(), false)?;
+		}
 		let caller2 = signatories2.remove(0);
 	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash)
 
@@ -132,7 +164,21 @@ benchmarks! {
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
 		let o = RawOrigin::Signed(caller.clone()).into();
-		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone())?;
+		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), false)?;
+	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
+
+	cancel_as_multi_store {
+		// Signatories, need at least 2 people
+		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		let call_hash = call.using_encoded(blake2_256);
+		let timepoint = Multisig::<T>::timepoint();
+		// Create the multi
+		let o = RawOrigin::Signed(caller.clone()).into();
+		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), true)?;
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 }
 
