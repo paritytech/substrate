@@ -544,7 +544,8 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
-		for (key, value_operation) in self.offchain_storage_updates.drain() {
+		for (prefix, key, value_operation) in self.offchain_storage_updates.drain() {
+			let key: Vec<u8> = prefix.chain(b"/".into_iter()).chain(key).collect();
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
 				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),

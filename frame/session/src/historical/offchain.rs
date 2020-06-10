@@ -252,7 +252,6 @@ mod tests {
 
 		ext.sync_offchain_index_changes();
 
-
 		ext.execute_with(|| {
 
 
