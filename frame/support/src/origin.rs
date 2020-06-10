@@ -163,6 +163,8 @@ macro_rules! impl_outer_origin {
 		Modules { };
 		$( $module:ident $( < $generic:ident > )? $( { $generic_instance:ident } )? ,)*
 	) => {
+		// WARNING: All instance must hold the filter `frame_system::Trait::BaseCallFilter`.
+		// One can use `OriginTrait::reset_filter` to do so.
 		#[derive(Clone)]
 		pub struct $name {
 			caller: $caller_name,
@@ -243,28 +245,13 @@ macro_rules! impl_outer_origin {
 		#[allow(dead_code)]
 		impl $name {
 			pub fn none() -> Self {
-				let mut o = $name {
-					caller: $caller_name::system($system::RawOrigin::None),
-					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
-				};
-				$crate::traits::OriginTrait::reset_filter(&mut o);
-				o
+				$system::RawOrigin::None.into()
 			}
 			pub fn root() -> Self {
-				let mut o = $name {
-					caller: $caller_name::system($system::RawOrigin::Root),
-					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
-				};
-				$crate::traits::OriginTrait::reset_filter(&mut o);
-				o
+				$system::RawOrigin::Root.into()
 			}
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
-				let mut o = $name {
-					caller: $caller_name::system($system::RawOrigin::Signed(by)),
-					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
-				};
-				$crate::traits::OriginTrait::reset_filter(&mut o);
-				o
+				$system::RawOrigin::Signed(by).into()
 			}
 		}
 
