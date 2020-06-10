@@ -27,7 +27,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use structopt::StructOpt;
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ImportParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -130,7 +130,7 @@ impl ImportParams {
 }
 
 /// Execution strategies parameters.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime while syncing blocks.
 	#[structopt(
