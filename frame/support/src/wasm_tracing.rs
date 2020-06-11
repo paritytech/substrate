@@ -19,7 +19,7 @@
 //! Facilitated by `sp_io::wasm_tracing`
 
 // static mut has potential for data race conditions.
-// For current use-case this is not an issue, must only be used in wasmß
+// For current use-case this is not an issue, must only be used in wasm
 #[cfg(not(feature = "std"))]
 static mut WASM_TRACING_ENABLED: bool = true;
 

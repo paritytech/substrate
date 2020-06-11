@@ -302,25 +302,29 @@ impl Subscriber for ProfilingSubscriber {
 /// TraceHandler for sending span data to the logger
 pub struct LogTraceHandler;
 
+fn log_level(level: Level) -> log::Level {
+	match level {
+		Level::TRACE => log::Level::Trace,
+		Level::DEBUG => log::Level::Debug,
+		Level::INFO => log::Level::Info,
+		Level::WARN => log::Level::Warn,
+		Level::ERROR => log::Level::Error,
+	}
+}
+
 impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
-			log::info!("{} {}: {}, line: {}, time: {}",
-			span_datum.level,
-			span_datum.target,
-			span_datum.name,
-			span_datum.line,
-			span_datum.overall_time.as_nanos(),
-		);
+			log::log!(log_level(span_datum.level), "{}: {}, time: {}",
+				span_datum.target,
+				span_datum.name,
+				span_datum.overall_time.as_nanos());
 		} else {
-			log::info!("{} {}: {}, line: {}, time: {}, {}",
-			span_datum.level,
-			span_datum.target,
-			span_datum.name,
-			span_datum.line,
-			span_datum.overall_time.as_nanos(),
-			span_datum.values
-		);
+			log::log!(log_level(span_datum.level), "{}: {}, time: {}, {}",
+				span_datum.target,
+				span_datum.name,
+				span_datum.overall_time.as_nanos(),
+				span_datum.values);
 		}
 	}
 }
