@@ -271,6 +271,10 @@ impl<C: SubstrateCli> Runner<C> {
 		// and drop the runtime first.
 		let _telemetry = service.telemetry();
 
+		// we hold a reference to the base path so if the base path is a temporary directory it will
+		// not be deleted before the tokio runtime finish to clean up
+		let _base_path = service.base_path();
+
 		{
 			let f = service.fuse();
 			self.tokio_runtime
