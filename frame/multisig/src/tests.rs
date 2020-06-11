@@ -470,7 +470,7 @@ fn duplicate_approvals_are_ignored() {
 		assert_ok!(Multisig::approve_as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), hash.clone()));
 		assert_noop!(
 			Multisig::approve_as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), hash.clone()),
-			Error::<Test>::NoApprovalsNeeded,
+			Error::<Test>::AlreadyApproved,
 		);
 	});
 }
@@ -504,7 +504,7 @@ fn multisig_filters() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::System(frame_system::Call::set_code(vec![])));
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 1, vec![], None, call.clone(), false),
+			Multisig::as_multi(Origin::signed(1), 1, vec![2], None, call.clone(), false),
 			Error::<Test>::Uncallable,
 		);
 	});
