@@ -2178,7 +2178,6 @@ mod tests {
 		type BlockNumber = u32;
 	}
 
-	/// HREHREHREHRE
 	type Test = Module<TraitImpl>;
 
 	impl_outer_origin!{

@@ -140,7 +140,6 @@ decl_module! {
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			for (index, call) in calls.into_iter().enumerate() {
-				// TODO TODO: root no longer bypass IsCallable filter.
 				let result = call.dispatch(origin.clone());
 				if let Err(e) = result {
 					Self::deposit_event(Event::BatchInterrupted(index as u32, e.error));
