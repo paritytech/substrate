@@ -52,7 +52,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
 	weights::{Weight, GetDispatchInfo, DispatchClass, Pays},
-	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -182,25 +182,6 @@ decl_event! {
 	}
 }
 
-mod weight_of {
-	use super::*;
-
-	/// - Base Weight:
-	///     - Create: 46.55 + 0.089 * S µs
-	///     - Approve: 34.03 + .112 * S µs
-	///     - Complete: 40.36 + .225 * S µs
-	/// - DB Weight:
-	///     - Reads: Multisig Storage, [Caller Account]
-	///     - Writes: Multisig Storage, [Caller Account]
-	/// - Plus Call Weight
-	pub fn as_multi<T: Trait>(other_sig_len: usize, call_weight: Weight) -> Weight {
-		call_weight
-			.saturating_add(45_000_000)
-			.saturating_add((other_sig_len as Weight).saturating_mul(250_000))
-			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -275,13 +256,9 @@ decl_module! {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			call_hash: [u8; 32],
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
-			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			let other_signatories_len = other_signatories.len();
-			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
+			Self::ensure_valid_input(threshold, &other_signatories)?;
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -296,8 +273,7 @@ decl_module! {
 				approvals: vec![who.clone()],
 			});
 			Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
-			// Call is not made, so we can return that weight
-			return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
+			Ok(())
 		}
 
 		#[weight = 0]
@@ -367,10 +343,7 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
-			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			Self::ensure_valid_input(threshold, &other_signatories)?;
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -397,11 +370,7 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
-			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			let other_signatories_len = other_signatories.len();
-			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
+			Self::ensure_valid_input(threshold, &other_signatories)?;
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -463,10 +432,7 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
-			let max_sigs = T::MaxSignatories::get() as usize;
-			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			Self::ensure_valid_input(threshold, &other_signatories)?;
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -524,6 +490,15 @@ impl<T: Trait> Module<T> {
 			height: <system::Module<T>>::block_number(),
 			index: <system::Module<T>>::extrinsic_index().unwrap_or_default(),
 		}
+	}
+
+	/// Validate the user's input is sane before doing heavy runtime operations.
+	fn ensure_valid_input(threshold: u16, other_signatories: &[T::AccountId]) -> DispatchResult {
+		ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
+		let max_sigs = T::MaxSignatories::get() as usize;
+		ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
+		ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+		Ok(())
 	}
 
 	/// Check that signatories is sorted and doesn't contain sender, then insert sender.
