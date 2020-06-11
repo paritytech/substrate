@@ -1907,7 +1907,7 @@ pub(crate) mod tests {
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
 	use frame_support::{
-		impl_outer_origin, parameter_types, assert_ok, assert_noop, assert_err,
+		impl_outer_origin, parameter_types, assert_ok, assert_noop,
 		weights::WithPostDispatchInfo,
 	};
 
@@ -2737,8 +2737,8 @@ pub(crate) mod tests {
 			EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
 		}
 
-		assert_ok!(ensure_root_or_signed(RawOrigin::Root), Either::Left(()));
-		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)), Either::Right(0));
-		assert_err!(ensure_root_or_signed(RawOrigin::None), Origin::from(RawOrigin::None));
+		assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
+		assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
+		assert!(ensure_root_or_signed(RawOrigin::None).is_err())
 	}
 }
