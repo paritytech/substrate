@@ -357,10 +357,18 @@ macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
 		#[derive(Copy, Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.
 			Custom(u8),
+		}
+
+		#[cfg(feature = "std")]
+		impl std::fmt::Display for Ss58AddressFormat {
+			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(f, "{:?}", self)
+			}
 		}
 
 		static ALL_SS58_ADDRESS_FORMATS: [Ss58AddressFormat; 0 $(+ { let _ = $number; 1})*] = [
