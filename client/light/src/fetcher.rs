@@ -36,7 +36,8 @@ use sp_state_machine::{
 	read_child_proof_check, CloneableSpawn,
 };
 pub use sp_state_machine::StorageProof;
-use sp_blockchain::{Error as ClientError, Result as ClientResult};
+use sp_blockchain::{Error as ClientError, Result as ClientResult, well_known_cache_keys};
+use sp_core::traits::{RuntimeCode, WrappedRuntimeCode};
 
 pub use sc_client_api::{
 	light::{
@@ -44,10 +45,12 @@ pub use sc_client_api::{
 		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
 		Storage as BlockchainStorage,
 	},
-	cht,
+	cht, 
 };
-use crate::blockchain::Blockchain;
+use crate::blockchain::{Blockchain, ProvideCache};
 use crate::call_executor::check_execution_proof;
+use sp_runtime::generic::BlockId;
+use std::borrow::Cow;
 
 /// Remote data checker.
 pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
@@ -201,6 +204,35 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			Ok(storage)
 		}, storage)
 	}
+
+	fn code_and_heap_pages_from_cache(&self, block: &BlockId<B>) -> ClientResult<(Vec<u8>, u64)> {
+		let cache = self.blockchain.cache().unwrap();
+		let result = cache.get_at(&well_known_cache_keys::HEAP_PAGES, block)
+			.and_then(|heap_pages| {
+				let code_hash = cache.get_at(&well_known_cache_keys::CODE_HASH, block)?;
+				match (code_hash, heap_pages) {
+					(Some((_, _, code_hash)), Some((_, _, heap_pages))) => {
+						let heap_pages: u64 = Decode::decode(&mut &heap_pages[..])
+							.expect("heap pages is properly encoded when stored in cache; qed");
+						Ok((code_hash, heap_pages))
+					}
+					_ => Err(sp_blockchain::Error::Msg("couldn't fetch code_hash and heap_pages".into()))
+				}
+			})
+			.and_then(|(code_hash, heap_pages)| {
+				let mut key = Vec::new();
+				key.extend_from_slice(b"runtime-code");
+				key.extend_from_slice(&code_hash);
+				if let Some(runtime_code) = self.blockchain.storage().get_aux(&key)? {
+					return Ok(Some((runtime_code, heap_pages)))
+				}
+				Ok(None)
+			})?
+			.ok_or_else(|| {
+				sp_blockchain::Error::Msg(format!("couldn't fetch code_hash and heap_pages"))
+			})?;
+		Ok(result)
+	}
 }
 
 impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
@@ -262,11 +294,21 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<Vec<u8>> {
+		let block = BlockId::Hash(request.header.hash());
+		let (runtime_code, heap_pages) = self.code_and_heap_pages_from_cache(&block)?;
+		let hash = H::hash(&runtime_code).encode();
+		let runtime_code = RuntimeCode {
+			code_fetcher: &WrappedRuntimeCode(Cow::Owned(runtime_code)),
+			heap_pages: Some(heap_pages),
+			hash,
+		};
+
 		check_execution_proof::<_, _, H>(
 			&self.executor,
 			self.spawn_handle.clone(),
 			request,
 			remote_proof,
+			&runtime_code
 		)
 	}
 

@@ -44,6 +44,7 @@ use sc_client_api::{
 	call_executor::CallExecutor,
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
+use sp_core::traits::RuntimeCode;
 
 /// Call executor that is able to execute calls only on genesis state.
 ///
@@ -223,6 +224,7 @@ pub fn check_execution_proof<Header, E, H>(
 	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
+	runtime_code: &RuntimeCode
 ) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
@@ -235,6 +237,7 @@ pub fn check_execution_proof<Header, E, H>(
 		spawn_handle,
 		request,
 		remote_proof,
+		runtime_code,
 		|header| <Header as HeaderT>::new(
 			*header.number() + One::one(),
 			Default::default(),
@@ -254,6 +257,7 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: StorageProof,
+	runtime_code: &RuntimeCode,
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
 	where
@@ -270,10 +274,6 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 	let mut changes = OverlayedChanges::default();
 	let trie_backend = create_proof_check_backend(root, remote_proof)?;
 	let next_header = make_next_header(&request.header);
-
-	// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
-	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_backend);
-	let runtime_code = backend_runtime_code.runtime_code()?;
 
 	execution_proof_check_on_trie_backend::<H, Header::Number, _>(
 		&trie_backend,
