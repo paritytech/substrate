@@ -234,7 +234,8 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool to be ready. Proceeding to block production anyway.",
+					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					self.parent_number,
 				);
 				self.transaction_pool.ready()
 			}

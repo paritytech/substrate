@@ -331,6 +331,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready_at(&self, at: NumberFor<Self::Block>) -> PolledIterator<PoolApi> {
 		if self.ready_poll.lock().updated_at() >= at {
+			log::trace!(target: "txpool", "Transaction pool already processed block  #{}", at);
 			let iterator: ReadyIteratorFor<PoolApi> = Box::new(self.pool.validated_pool().ready());
 			return Box::pin(futures::future::ready(iterator));
 		}
@@ -348,6 +349,59 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready(&self) -> ReadyIteratorFor<PoolApi> {
 		Box::new(self.pool.validated_pool().ready())
+	}
+}
+
+impl<Block, Client> sp_transaction_pool::LocalTransactionPool
+	for BasicPool<FullChainApi<Client, Block>, Block>
+where
+	Block: BlockT,
+	Client: sp_api::ProvideRuntimeApi<Block>
+		+ sc_client_api::BlockBackend<Block>
+		+ sp_runtime::traits::BlockIdTo<Block>,
+	Client: Send + Sync + 'static,
+	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
+{
+	type Block = Block;
+	type Hash = sc_transaction_graph::ExtrinsicHash<FullChainApi<Client, Block>>;
+	type Error = <FullChainApi<Client, Block> as ChainApi>::Error;
+
+	fn submit_local(
+		&self,
+		at: &BlockId<Self::Block>,
+		xt: sp_transaction_pool::LocalTransactionFor<Self>,
+	) -> Result<Self::Hash, Self::Error> {
+		use sc_transaction_graph::ValidatedTransaction;
+		use sp_runtime::traits::SaturatedConversion;
+		use sp_runtime::transaction_validity::TransactionValidityError;
+
+		let validity = self
+			.api
+			.validate_transaction_blocking(at, TransactionSource::Local, xt.clone())?
+			.map_err(|e| {
+				Self::Error::Pool(match e {
+					TransactionValidityError::Invalid(i) => i.into(),
+					TransactionValidityError::Unknown(u) => u.into(),
+				})
+			})?;
+
+		let (hash, bytes) = self.pool.validated_pool().api().hash_and_length(&xt);
+		let block_number = self
+			.api
+			.block_id_to_number(at)?
+			.ok_or_else(|| error::Error::BlockIdConversion(format!("{:?}", at)))?;
+
+		let validated = ValidatedTransaction::valid_at(
+			block_number.saturated_into::<u64>(),
+			hash.clone(),
+			TransactionSource::Local,
+			xt,
+			bytes,
+			validity,
+		);
+
+		self.pool.validated_pool().submit(vec![validated]).remove(0)
 	}
 }
 
@@ -456,6 +510,8 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 		.map(|tx| pool.hash_of(&tx))
 		.collect::<Vec<_>>();
 
+	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
+
 	if let Err(e) = pool.prune_known(&block_id, &hashes) {
 		log::error!("Cannot prune known in the pool {:?}!", e);
 	}
@@ -495,6 +551,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let revalidation_strategy = self.revalidation_strategy.clone();
 				let revalidation_queue = self.revalidation_queue.clone();
 				let ready_poll = self.ready_poll.clone();
+				let metrics = self.metrics.clone();
 
 				async move {
 					// We keep track of everything we prune so that later we won't add
@@ -525,6 +582,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 						pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
 					}
 
+					metrics.report(
+						|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
+					);
+
 					if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
 						let mut resubmit_transactions = Vec::new();
 
@@ -544,10 +605,16 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 								.into_iter()
 								.filter(|tx| tx.is_signed().unwrap_or(true));
 
+							let mut resubmitted_to_report = 0;
+
 							resubmit_transactions.extend(
 								block_transactions.into_iter().filter(|tx| {
 									let tx_hash = pool.hash_of(&tx);
 									let contains = pruned_log.contains(&tx_hash);
+
+									// need to count all transactions, not just filtered, here
+									resubmitted_to_report += 1;
+
 									if !contains {
 										log::debug!(
 											target: "txpool",
@@ -558,6 +625,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 									}
 									!contains
 								})
+							);
+
+							metrics.report(
+								|metrics| metrics.block_transactions_resubmitted.inc_by(resubmitted_to_report)
 							);
 						}
 

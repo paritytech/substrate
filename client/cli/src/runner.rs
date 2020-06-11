@@ -266,13 +266,14 @@ impl<C: SubstrateCli> Runner<C> {
 	{
 		let service = service_builder(self.config)?;
 
-		let informant_future = sc_informant::build(&service, sc_informant::OutputFormat::Coloured);
-		let _informant_handle = self.tokio_runtime.spawn(informant_future);
-
 		// we eagerly drop the service so that the internal exit future is fired,
 		// but we need to keep holding a reference to the global telemetry guard
 		// and drop the runtime first.
 		let _telemetry = service.telemetry();
+
+		// we hold a reference to the base path so if the base path is a temporary directory it will
+		// not be deleted before the tokio runtime finish to clean up
+		let _base_path = service.base_path();
 
 		{
 			let f = service.fuse();

@@ -21,7 +21,7 @@ use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
-#[derive(Debug, structopt::StructOpt, Clone)]
+#[derive(Debug, structopt::StructOpt)]
 pub struct BenchmarkCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
 	#[structopt(short, long)]

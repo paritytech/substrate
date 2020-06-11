@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_service::client::light::{
+use sc_light::{
 	call_executor::{
 		GenesisCallExecutor,
 		check_execution_proof,

@@ -97,6 +97,7 @@ where
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		base_path: None,
 	};
 
 	Ok(config)
@@ -116,11 +117,6 @@ struct RpcMessage {
 
 /// Create a Client object that connects to a service.
 pub fn start_client(mut service: impl AbstractService) -> Client {
-	// Spawn informant
-	wasm_bindgen_futures::spawn_local(
-		sc_informant::build(&service, sc_informant::OutputFormat::Plain).map(drop)
-	);
-
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with
