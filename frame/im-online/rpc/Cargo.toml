@@ -14,12 +14,12 @@ jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 serde = { version = "1.0.101", features = ["derive"], optional = true }
 
-sp-rpc = { version = '2.0.0-rc2', default-features = false}
-sp-runtime = { version = '2.0.0-rc2', default-features = false}
-sp-blockchain = { version = '2.0.0-rc2', default-features = false}
-sp-api = { version = '2.0.0-rc2', default-features = false }
-pallet-im-online-rpc-runtime-api = { version = "2.0.0-rc2", path = "./runtime-api" }
-pallet-im-online= { version = "2.0.0-rc2", path = "../../im-online" }
+sp-rpc = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/rpc" }
+sp-runtime = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/runtime" }
+sp-blockchain = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/blockchain" }
+sp-api = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/api" }
+pallet-im-online-rpc-runtime-api = { version = "2.0.0-rc2", default-features = false, path = "./runtime-api" }
+pallet-im-online= { version = "2.0.0-rc2", default-features = false, path = "../../im-online" }
 
 [features]
 default = ["std"]
