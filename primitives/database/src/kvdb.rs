@@ -19,7 +19,7 @@
 
 use ::kvdb::{DBTransaction, KeyValueDB};
 
-use crate::{Database, Change, ColumnId, Result, Transaction};
+use crate::{Database, Change, ColumnId, DatabaseError, Result, Transaction};
 
 struct DbAdapter<D: KeyValueDB + 'static>(D);
 
@@ -47,9 +47,7 @@ impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
 				_ => unimplemented!(),
 			}
 		}
-		handle_err(self.0.write(tx));
-
-		Ok(())
+		self.0.write(tx).map_err(|e| DatabaseError(Box::new(e)))
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {

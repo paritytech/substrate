@@ -17,9 +17,11 @@
 
 //! The main database trait, allowing Substrate to store data persistently.
 
+mod error;
 mod mem;
 mod kvdb;
 
+pub use error::*;
 pub use mem::MemDb;
 pub use crate::kvdb::as_database;
 
@@ -188,14 +190,3 @@ pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMu
 	db.with_lookup(hash, &mut adapter);
 	result
 }
-
-#[derive(Debug)]
-pub struct DatabaseError(Box<dyn std::error::Error>);
-
-impl std::fmt::Display for DatabaseError {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "{:?}", self)
-	}
-}
-
-pub type Result<T> = std::result::Result<T, DatabaseError>;

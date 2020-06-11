@@ -290,7 +290,7 @@ pub fn check_database_type(db: &dyn Database<DbHash>, db_type: DatabaseType) -> 
 	match db.get(COLUMN_META, meta_keys::TYPE) {
 		Some(stored_type) => {
 			if db_type.as_str().as_bytes() != &*stored_type {
-				Err(sp_blockchain::Error::Backend(
+				return Err(sp_blockchain::Error::Backend(
 					format!("Unexpected database type. Expected: {}", db_type.as_str())).into());
 			}
 
