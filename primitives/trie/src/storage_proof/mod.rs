@@ -182,6 +182,62 @@ impl Input {
 		}
 		Ok(())
 	}
+
+	/// Build a query plan with values.
+	/// All tuples are key and optional value.
+	/// Children iterator also contains children encoded root.
+	/// If `include_child_root` is set to true, we add the child trie query to the top
+	/// trie, that is usually what we want (unless we only want to prove something
+	/// local to a child trie.
+	pub fn query_plan_with_values(
+		top_encoded_root: Vec<u8>,
+		top: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
+		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>)>, 
+		include_child_root: bool,
+	) -> Input {
+		let mut result = ChildrenProofMap::default();
+		let mut additional_roots = Vec::new();
+		for (child_info, encoded_root, key_values) in children {
+			if include_child_root {
+				additional_roots.push((child_info.prefixed_storage_key().into_inner(), Some(encoded_root.clone())));
+			}
+			result.insert(child_info.proof_info(), (encoded_root, key_values.collect()));
+		}
+		let mut top_values: Vec<_> = top.collect();
+		top_values.extend(additional_roots);
+		result.insert(ChildInfo::top_trie().proof_info(), (top_encoded_root, top_values));
+		
+		Input::QueryPlanWithValues(result)
+	}
+
+	/// Build a query plan.
+	/// Iterator contains key.
+	/// Children iterator also contains children encoded root.
+	/// If `include_child_root` is set to true, we add the child trie query to the top
+	/// trie, that is usually what we want (unless we only want to prove something
+	/// local to a child trie.
+	pub fn query_plan(
+		top_encoded_root: Vec<u8>,
+		top: impl Iterator<Item = Vec<u8>>,
+		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = Vec<u8>>)>, 
+		include_child_root: bool,
+	) -> Input {
+		let mut result = ChildrenProofMap::default();
+		let mut additional_roots = Vec::new();
+		for (child_info, encoded_root, keys) in children {
+			if include_child_root {
+				additional_roots.push(child_info.prefixed_storage_key().into_inner());
+			}
+			result.insert(child_info.proof_info(), (encoded_root, keys.collect()));
+		}
+		let mut top_keys: Vec<_> = top.collect();
+		top_keys.extend(additional_roots);
+		result.insert(ChildInfo::top_trie().proof_info(), (top_encoded_root, top_keys));
+		
+		Input::QueryPlan(result)
+	}
+
+
 }
 
 /// Kind for a `Input` variant.
