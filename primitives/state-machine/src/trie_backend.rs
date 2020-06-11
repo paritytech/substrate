@@ -29,7 +29,6 @@ use crate::{
 	StorageKey, StorageValue, Backend, backend::ProofCheckBackend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
-use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use std::marker::PhantomData;
 

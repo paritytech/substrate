@@ -23,7 +23,7 @@ use codec::{Decode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
-	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with, RecordBackendFor,
+	empty_child_trie_root, read_trie_value_with, read_child_trie_value_with, RecordBackendFor,
 	ProofInput, RecordBackend, RegStorageProof, BackendStorageProof,
 	record_all_keys, ProofInputKind, FullBackendStorageProof,
 };
