@@ -367,7 +367,7 @@ macro_rules! ss58_address_format {
 		#[cfg(feature = "std")]
 		impl std::fmt::Display for Ss58AddressFormat {
 			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				writeln!(f, "{:?}", self)
+				write!(f, "{:?}", self)
 			}
 		}
 
