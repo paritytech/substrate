@@ -32,7 +32,7 @@ use sp_trie;
 use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, AtLeast32Bit, Zero, One};
 use sp_state_machine::{
-	MemoryDB, backend::Backend as StateBackend, SimpleProof as StorageProof,
+	backend::Backend as StateBackend, SimpleProof as StorageProof,
 	prove_read_on_proof_backend, read_proof_check, read_proof_check_on_proving_backend,
 	SimpleProof, InMemoryBackend,
 };
