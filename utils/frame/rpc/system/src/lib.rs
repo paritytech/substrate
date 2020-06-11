@@ -96,7 +96,8 @@ impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
 	}
 }
 
-impl<P, C, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index> for FullSystem<P, C, Block>
+impl<P, C, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index>
+	for FullSystem<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
