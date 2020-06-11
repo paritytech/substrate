@@ -74,10 +74,12 @@ pub trait Trait: frame_system::Trait {
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
-	/// The base amount of currency needed to reserve for creating a multisig execution.
+	/// The base amount of currency needed to reserve for creating a multisig execution or to store
+	/// a dispatch call for later.
 	///
 	/// This is held for an additional storage item whose value size is
-	/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes.
+	/// `4 + sizeof((BlockNumber, Balance, AccountId))` bytes and whose key size is
+	/// `32 + sizeof(AccountId)` bytes.
 	type DepositBase: Get<BalanceOf<Self>>;
 
 	/// The amount of currency needed per unit threshold when creating a multisig execution.
@@ -320,9 +322,6 @@ decl_module! {
 			let encoded_call = call.encode();
 			let call_len = encoded_call.len();
 			let call_hash = blake2_256(&encoded_call);
-			if store_call {
-				Self::store_call(who.clone(), &call_hash, encoded_call)?;
-			}
 
 			if let Some(mut m) = <Multisigs<T>>::get(&id, call_hash) {
 				let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
@@ -332,6 +331,9 @@ decl_module! {
 					if (m.approvals.len() as u16) < threshold - 1 {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
+						if store_call {
+							Self::store_call(who.clone(), &call_hash, encoded_call)?;
+						}
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
 						// Call is not made, so the actual weight does not include call weight
 						return Ok(Some(weight_of::as_multi::<T>(
@@ -367,6 +369,9 @@ decl_module! {
 						depositor: who.clone(),
 						approvals: vec![who.clone()],
 					});
+					if store_call {
+						Self::store_call(who.clone(), &call_hash, encoded_call)?;
+					}
 					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
 					// Call is not made, so we can return that weight
 					return Ok(Some(weight_of::as_multi::<T>(
