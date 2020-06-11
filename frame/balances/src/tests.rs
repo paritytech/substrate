@@ -170,7 +170,7 @@ macro_rules! decl_tests {
 					);
 					assert_err!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions
+						Error::<$test, _>::LiquidityRestrictions,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
