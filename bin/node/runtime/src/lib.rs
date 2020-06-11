@@ -629,15 +629,15 @@ parameter_types! {
 }
 
 #[derive(Default)]
-pub struct ExtrasParams<T: frame_system::Trait> {
+pub struct ExtrasParams {
 	era: Option<Era>,
-	index: Option<T::Index>,
+	index: Option<Index>,
 	tip: u128,
-	prior_block_hash: Option<T::Hash>,
+	prior_block_hash: Option<Hash>,
 }
 
-impl SystemExtraParams<Runtime> for ExtrasParams<Runtime> {
-	fn set_nonce(&mut self, index: <Runtime as frame_system::Trait>::Index) {
+impl SystemExtraParams<Runtime> for ExtrasParams {
+	fn set_nonce(&mut self, index: Index) {
 		self.index = Some(index);
 	}
 
@@ -645,7 +645,7 @@ impl SystemExtraParams<Runtime> for ExtrasParams<Runtime> {
 		self.era = Some(era);
 	}
 
-	fn set_prior_block_hash(&mut self, hash: <Runtime as frame_system::Trait>::Hash) {
+	fn set_prior_block_hash(&mut self, hash: Hash) {
 		self.prior_block_hash = Some(hash);
 	}
 }
@@ -653,9 +653,9 @@ impl SystemExtraParams<Runtime> for ExtrasParams<Runtime> {
 
 impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
-	type Params = ExtrasParams<Runtime>;
+	type Params = ExtrasParams;
 
-	fn extension_params() -> ExtrasParams<Runtime> {
+	fn extension_params() -> ExtrasParams {
 		ExtrasParams {
 			prior_block_hash: None,
 			index: None,
@@ -664,7 +664,7 @@ impl SignedExtensionProvider for Runtime {
 		}
 	}
 
-	fn construct_extras(params: ExtrasParams<Runtime>) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
+	fn construct_extras(params: ExtrasParams) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
 		let ExtrasParams {
 			tip,
 			era,
