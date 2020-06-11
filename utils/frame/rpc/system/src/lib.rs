@@ -141,7 +141,6 @@ where
 			})?;
 
 			let result = api.apply_extrinsic(&at, uxt)
-				.map(|outcome| outcome.map(|_| true)) // TODO read system events
 				.map_err(|e| RpcError {
 					code: ErrorCode::ServerError(Error::RuntimeError.into()),
 					message: "Unable to dry run extrinsic.".into(),
