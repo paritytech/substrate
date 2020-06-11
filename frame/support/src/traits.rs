@@ -450,9 +450,11 @@ impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: Ex
 	}
 }
 
-/// A trait for querying a single fixed value from a type.
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
 pub trait Get<T> {
-	/// Return a constant value.
+	/// Return the current value.
 	fn get() -> T;
 }
 
