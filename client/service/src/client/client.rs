@@ -26,7 +26,7 @@ use std::{
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
-use codec::{Codec, Encode, Decode};
+use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
 	ChangesTrieConfiguration, convert_hash, NativeOrEncoded,
@@ -45,7 +45,7 @@ use sp_state_machine::{
 	DBValue, backend::Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof, SimpleProof as StorageProof,
-	StorageProofKind, StorageProof as StorageProofT, MergeableStorageProof,
+	MergeableStorageProof,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{

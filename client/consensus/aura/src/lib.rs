@@ -914,7 +914,7 @@ mod tests {
 
 			future::ready(r.map(|b| Proposal {
 				block: b.block,
-				proof: b.proof,
+				encoded_proof: b.proof.as_ref().map(Encode::encode),
 				storage_changes: b.storage_changes,
 			}))
 		}

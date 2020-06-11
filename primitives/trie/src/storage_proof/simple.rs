@@ -29,13 +29,13 @@ pub struct Full(pub(crate) ChildrenProofMap<ProofNodes>);
 impl Flat {
 	/// Access to inner proof node,
 	/// mainly needed for part of the
-	/// code that is not generic.
+	/// code that is not generic or test.
 	pub fn into_nodes(self) -> ProofNodes {
 		self.0
 	}
 	/// Instantiate from inner proof node,
 	/// mainly needed for part of the
-	/// code that is not generic.
+	/// code that is not generic or test.
 	pub fn from_nodes(nodes: ProofNodes) -> Self {
 		Flat(nodes)
 	}

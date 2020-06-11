@@ -30,11 +30,11 @@ use sp_runtime::{
 use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, OverlayedChanges, ExecutionStrategy, execution_proof_check_on_proof_backend,
-	ExecutionManager, CloneableSpawn, create_proof_check_backend, InMemoryBackend,
+	ExecutionManager, CloneableSpawn, InMemoryBackend,
 };
-use sp_state_machine::backend::{Backend as StateBackend, ProofRegStateFor, ProofRegFor};
+use sp_state_machine::backend::{Backend as StateBackend, ProofRegFor};
 use hash_db::Hasher;
-use sp_trie::{SimpleProof as StorageProof, StorageProof as StorageProofT, MergeableStorageProof};
+use sp_trie::{SimpleProof as StorageProof, MergeableStorageProof};
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
@@ -178,7 +178,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 /// Method is executed using passed header as environment' current block.
 /// Proof includes both environment preparation proof and method execution proof.
 pub fn prove_execution<Block, S, E>(
-	mut state: S,
+	state: S,
 	header: Block::Header,
 	executor: &E,
 	method: &str,

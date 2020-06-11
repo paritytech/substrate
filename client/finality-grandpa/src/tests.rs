@@ -31,7 +31,7 @@ use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, StorageProof, StorageProofKind, ProvideRuntimeApi};
+use sp_api::{ApiRef, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
@@ -43,7 +43,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
-use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
+use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check, MemoryDB};
 
 use authorities::AuthoritySet;
 use finality_proof::{
@@ -52,6 +52,9 @@ use finality_proof::{
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
+use sp_state_machine::SimpleProof as StorageProof;
+
+type ProvingBackend<H> = sp_state_machine::TrieBackend<MemoryDB<H>, H, StorageProof>;
 
 type PeerData =
 	Mutex<
@@ -249,7 +252,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
-		let proof = prove_read(backend, vec![b"authorities"], StorageProofKind::Flat)
+		let proof = prove_read(backend, vec![b"authorities"])
 			.expect("failure proving read from in-memory storage backend");
 		Ok(proof)
 	}
@@ -262,7 +265,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		header: <Block as BlockT>::Header,
 		proof: StorageProof,
 	) -> Result<AuthorityList> {
-		let results = read_proof_check::<HashFor<Block>, _>(
+		let results = read_proof_check::<ProvingBackend<HashFor<Block>>, HashFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]
 		)
 			.expect("failure checking read proof for authorities");

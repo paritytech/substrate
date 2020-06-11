@@ -23,7 +23,7 @@ use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWor
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider, ProofFor, SimpleProof,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider, SimpleProof,
 	StateBackend,
 };
 use crate::client::{Client, ClientConfig};

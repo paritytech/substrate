@@ -36,8 +36,6 @@ use sp_runtime::{
 };
 use futures::prelude::*;
 pub use sp_inherents::InherentData;
-use sp_state_machine::SimpleProof as StorageProof;
-pub use sp_state_machine::StorageProofKind;
 pub mod block_validation;
 pub mod offline_tracker;
 pub mod error;
