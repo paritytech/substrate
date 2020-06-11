@@ -1403,7 +1403,7 @@ macro_rules! decl_module {
 					$from;
 					$(#[doc = $doc_attr])*
 					///
-					/// NOTE: Calling this function bypass origin filters
+					/// NOTE: Calling this function will bypass origin filters.
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
 					) $( -> $result )* { $( $impl )* }

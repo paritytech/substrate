@@ -198,14 +198,14 @@ macro_rules! impl_outer_origin {
 			type Call = <$runtime as $system::Trait>::Call;
 			type PalletsOrigin = $caller_name;
 
-			fn add_filter(&mut self, add_filter: impl Fn(&Self::Call) -> bool + 'static) {
+			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let no_op = $crate::sp_std::rc::Rc::new(Box::new(|_: &Self::Call| true)
 					as Box<dyn Fn(&Self::Call) -> bool>);
 
 				let f = $crate::sp_std::mem::replace(&mut self.filter, no_op);
 
 				self.filter = $crate::sp_std::rc::Rc::new(Box::new(move |call| {
-					f(call) && add_filter(call)
+					f(call) && filter(call)
 				}));
 			}
 
