@@ -8058,6 +8058,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-client-api",
+ "sc-rpc-api",
  "sc-transaction-pool",
  "serde",
  "sp-api",

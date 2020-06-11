@@ -23,7 +23,7 @@ use codec::{self, Codec, Decode, Encode};
 use sc_client_api::light::{future_header, RemoteBlockchain, Fetcher, RemoteCallRequest};
 use jsonrpc_core::{
 	Error as RpcError, ErrorCode,
-	futures::future::{result, Future},
+	futures::future::{self as rpc_future,result, Future},
 };
 use jsonrpc_derive::rpc;
 use futures::future::{ready, TryFutureExt};
@@ -38,6 +38,7 @@ use sp_runtime::{
 use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sp_block_builder::BlockBuilder;
+use sc_rpc_api::DenyUnsafe;
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 pub use self::gen_client::Client as SystemClient;
@@ -82,15 +83,17 @@ impl From<Error> for i64 {
 pub struct FullSystem<P: TransactionPool, C, B> {
 	client: Arc<C>,
 	pool: Arc<P>,
+	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<B>,
 }
 
 impl<P: TransactionPool, C, B> FullSystem<P, C, B> {
 	/// Create new `FullSystem` given client and transaction pool.
-	pub fn new(client: Arc<C>, pool: Arc<P>) -> Self {
+	pub fn new(client: Arc<C>, pool: Arc<P>, deny_unsafe: DenyUnsafe,) -> Self {
 		FullSystem {
 			client,
 			pool,
+			deny_unsafe,
 			_marker: Default::default(),
 		}
 	}
@@ -128,6 +131,10 @@ where
 	}
 
 	fn dry_run(&self, extrinsic: Bytes, at: Option<<Block as traits::Block>::Hash>) -> FutureResult<Bytes> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(rpc_future::err(err.into()));
+		}
+
 		let dry_run = || {
 			let api = self.client.runtime_api();
 			let at = BlockId::<Block>::hash(at.unwrap_or_else(||
