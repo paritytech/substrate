@@ -1086,7 +1086,9 @@ impl NetworkBehaviour for GenericProto {
 			// In the incoming state, we don't report "Dropped". Instead we will just ignore the
 			// corresponding Accept/Reject.
 			Some(PeerState::Incoming { }) => {
-				if let Some(state) = self.incoming.iter_mut().find(|i| i.peer_id == *peer_id) {
+				if let Some(state) = self.incoming.iter_mut()
+					.find(|i| i.alive && i.peer_id == *peer_id)
+				{
 					debug!(target: "sub-libp2p",
 						"Libp2p => Disconnected({}): Was in incoming mode with id {:?}.",
 						peer_id, state.incoming_id);
