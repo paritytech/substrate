@@ -88,7 +88,7 @@ impl TracingProxy {
 			// 2. Not correctly exiting spans due to misconfiguration / misuse
 			log::warn!(
 				target: "tracing",
-				"TracingProxy MAX_SPANS_LEN exceeded, removing oldest span, recording `is_valid_trace = false`"
+				"TracingProxy MAX_SPANS_LEN exceeded, removing oldest span."
 			);
 			let mut sg = self.spans.remove(0).1;
 			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
@@ -106,7 +106,9 @@ impl TracingProxy {
 		while id < last_span.0 {
 			log::warn!(
 				target: "tracing",
-				"TracingProxy Span ids not equal! id parameter given: {}, last span: {}", id, last_span.0
+				"TracingProxy Span ids not equal! id parameter given: {}, last span: {}",
+				id,
+				last_span.0,
 			);
 			last_span.1.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 			if let Some(s) = self.spans.pop() {
