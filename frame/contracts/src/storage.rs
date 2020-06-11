@@ -31,39 +31,74 @@ pub fn write_contract_storage<T: Trait>(
 	account: &AccountIdOf<T>,
 	trie_id: &TrieId,
 	key: &StorageKey,
-	value: Option<Vec<u8>>,
+	opt_new_value: Option<Vec<u8>>,
 ) {
-	let hashed_key = blake2_256(key);
-
-	let child_trie_info = &crate::child_trie_info(&trie_id);
-
-	// We need to accurately track the size of the storage of the contract.
-	//
-	// For that we query the previous value and get its size.
-	let existing_size = child::get_raw(&child_trie_info, &hashed_key)
-		.map(|v| v.len())
-		.unwrap_or(0);
-	let new_size = match value {
-		Some(v) => {
-			child::put_raw(&child_trie_info, &hashed_key, &v);
-			v.len()
-		}
-		None => {
-			child::kill(&child_trie_info, &hashed_key);
-			0
-		}
+	let mut new_info = match <ContractInfoOf<T>>::get(account) {
+		Some(ContractInfo::Alive(alive)) => alive,
+		None | Some(ContractInfo::Tombstone(_)) => panic!(), // TODO: Justify this
 	};
 
-	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
-		match maybe_contract_info {
-			Some(ContractInfo::Alive(ref mut alive_info)) => {
-				alive_info.storage_size -= existing_size as u32;
-				alive_info.storage_size += new_size as u32;
-				alive_info.last_write = Some(<frame_system::Module<T>>::block_number());
+	let hashed_key = blake2_256(key);
+	let child_trie_info = &crate::child_trie_info(&trie_id);
+
+	// In order to correctly update the book keeping we need to fetch the previous
+	// value of the key-value pair.
+	//
+	// It might be a bit more clean if we had an API that supported getting the size
+	// of the value without going through the loading of it. But at the moment of
+	// writing, there is no such API.
+	//
+	// That's not a show stopper in any case, since the performance cost is
+	// dominated by the trie traversal anyway.
+	let opt_prev_value = child::get_raw(&child_trie_info, &hashed_key);
+
+	// Update the total number of KV pairs and the number of empty pairs.
+	match (&opt_prev_value, &opt_new_value) {
+		(Some(prev_value), None) => {
+			new_info.total_pair_count -= 1;
+			if prev_value.is_empty() {
+				new_info.empty_pair_count -= 1;
 			}
-			_ => panic!(), // TODO: Justify this.
+		},
+		(None, Some(new_value)) => {
+			new_info.total_pair_count += 1;
+			if new_value.is_empty() {
+				new_info.empty_pair_count += 1;
+			}
+		},
+		(Some(prev_value), Some(new_value)) => {
+			if prev_value.is_empty() {
+				new_info.empty_pair_count -= 1;
+			}
+			if new_value.is_empty() {
+				new_info.empty_pair_count += 1;
+			}
 		}
-	});
+		(None, None) => {}
+	}
+
+	// Update the total storage size.
+	let prev_value_len = opt_prev_value
+		.as_ref()
+		.map(|old_value| old_value.len() as u32)
+		.unwrap_or(0);
+	let new_value_len = opt_new_value
+		.as_ref()
+		.map(|new_value| new_value.len() as u32)
+		.unwrap_or(0);
+	new_info.storage_size = new_info
+		.storage_size
+		.saturating_add(new_value_len)
+		.saturating_sub(prev_value_len);
+
+	new_info.last_write = Some(<frame_system::Module<T>>::block_number());
+	<ContractInfoOf<T>>::insert(&account, ContractInfo::Alive(new_info));
+
+	// Finally, perform the change on the storage.
+	match opt_new_value {
+		Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, &new_value[..]),
+		None => child::kill(&child_trie_info, &hashed_key),
+	}
 }
 
 pub fn rent_allowance<T: Trait>(account: &AccountIdOf<T>) -> Option<BalanceOf<T>> {
