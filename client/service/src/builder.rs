@@ -959,8 +959,7 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	/// Builds the service.
-	pub fn build_light(self) -> Result<Service<
+	fn build_common(self) -> Result<Service<
 		TBl,
 		Client<TBackend, TExec, TBl, TRtApi>,
 		TSc,
@@ -1417,6 +1416,25 @@ ServiceBuilder<
 			_base_path: config.base_path.map(Arc::new),
 		})
 	}
+
+	/// Builds the light service.
+	pub fn build_light(self) -> Result<Service<
+		TBl,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TSc,
+		NetworkStatus<TBl>,
+		NetworkService<TBl, <TBl as BlockT>::Hash>,
+		TExPool,
+		sc_offchain::OffchainWorkers<
+			Client<TBackend, TExec, TBl, TRtApi>,
+			TBackend::OffchainStorage,
+			TBl
+		>,
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
+		self.build_common()
+	}
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
@@ -1454,7 +1472,7 @@ ServiceBuilder<
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 
-	/// Builds the service.
+	/// Builds the full service.
 	pub fn build_full(self) -> Result<Service<
 		TBl,
 		Client<TBackend, TExec, TBl, TRtApi>,
@@ -1474,6 +1492,6 @@ ServiceBuilder<
 		self.client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&self.transaction_pool) as _);
 
-		self.build_light()
+		self.build_common()
 	}
 }
