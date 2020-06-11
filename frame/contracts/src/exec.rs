@@ -891,13 +891,12 @@ mod tests {
 		RawEvent, TransferFeeKind, TransferFeeToken, Vm,
 	};
 	use crate::{
-		gas::GasMeter, tests::{ExtBuilder, Test, set_balance, get_balance, place_contract},
+		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
 		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
 		gas::Gas,
 		storage,
-		tests::{get_balance, place_contract, set_balance, ExtBuilder, MetaEvent, Test},
-		CodeHash, Config,
 	};
+	use crate::tests::test_utils::{place_contract, set_balance, get_balance};
 	use sp_runtime::DispatchError;
 	use assert_matches::assert_matches;
 	use std::{cell::RefCell, collections::HashMap, marker::PhantomData, rc::Rc};
@@ -906,11 +905,13 @@ mod tests {
 	const BOB: u64 = 2;
 	const CHARLIE: u64 = 3;
 
+	const GAS_LIMIT: Gas = 10_000_000_000;
+
 	fn events() -> Vec<Event<Test>> {
 		<frame_system::Module<Test>>::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
-				MetaEvent::contract(contract_event) => Some(contract_event),
+				MetaEvent::contracts(contract_event) => Some(contract_event),
 				_ => None,
 			})
 			.collect()
@@ -1718,7 +1719,7 @@ mod tests {
 				);
 
 				assert_eq!(
-					&ctx.events(),
+					&events(),
 					&[]
 				);
 			});
