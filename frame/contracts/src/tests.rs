@@ -16,9 +16,7 @@
 
 use crate::{
 	BalanceOf, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
-	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator,
-	account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
-	gas::Gas,
+	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator, gas::Gas,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;

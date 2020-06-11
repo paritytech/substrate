@@ -16,7 +16,6 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator};
-use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{Gas, GasMeter, Token};
 use crate::rent;
 use crate::storage;
@@ -316,7 +315,7 @@ where
 	{
 		ExecutionContext {
 			caller: Some(self),
-			self_trie_id: Some(trie_id),
+			self_trie_id: trie_id,
 			self_account: dest,
 			depth: self.depth + 1,
 			deferred: Vec::new(),
@@ -422,11 +421,11 @@ where
 
 					// Destroy contract if insufficient remaining balance.
 					if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
-						let parent = nested.parent
+						let caller = nested.caller
 							.expect("a nested execution context must have a parent; qed");
-						if parent.is_live(&dest) {
+						if caller.is_live(&dest) {
 							return Err(ExecError {
-								reason: "contract cannot be destroyed during recursive execution",
+								reason: "contract cannot be destroyed during recursive execution".into(),
 								buffer: output.data,
 							});
 						}
@@ -545,7 +544,7 @@ where
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<(), DispatchError> {
 		let self_id = self.self_account.clone();
-		let value = self.overlay.get_balance(&self_id);
+		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller) = self.caller {
 			if caller.is_live(&self_id) {
 				return Err(DispatchError::Other(
@@ -561,7 +560,7 @@ where
 			value,
 			self,
 		)?;
-		self.overlay.destroy_contract(&self_id);
+		storage::destroy_contract::<T>(&self_id, self.self_trie_id.as_ref().expect("")); // TODO: Proof
 		Ok(())
 	}
 
@@ -841,10 +840,10 @@ where
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
-		self.ctx.deferred.push(DeferredAction::DepositEvent {
+		deposit_event::<Self::T>(
 			topics,
-			event: RawEvent::ContractExecution(self.ctx.self_account.clone(), data),
-		});
+			RawEvent::ContractExecution(self.ctx.self_account.clone(), data)
+		);
 	}
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
@@ -878,7 +877,7 @@ fn deposit_event<T: Trait>(
 	topics: Vec<T::Hash>,
 	event: Event<T>,
 ) {
-	<system::Module<T>>::deposit_event_indexed(
+	<frame_system::Module<T>>::deposit_event_indexed(
 		&*topics,
 		<T as Trait>::Event::from(event).into(),
 	)
@@ -917,7 +916,7 @@ mod tests {
 	const CHARLIE: u64 = 3;
 
 	fn events() -> Vec<Event<Test>> {
-		<system::Module<Test>>::events()
+		<frame_system::Module<Test>>::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
 				MetaEvent::contract(contract_event) => Some(contract_event),
@@ -1369,7 +1368,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			ctx.overlay.set_balance(&ALICE, 100);
+			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
 				1,
@@ -1712,7 +1711,7 @@ mod tests {
 			.execute_with(|| {
 				let cfg = Config::preload();
 				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-				ctx.overlay.set_balance(&ALICE, 1000);
+				set_balance(&ALICE, 1000);
 
 				assert_matches!(
 					ctx.instantiate(
@@ -1748,8 +1747,7 @@ mod tests {
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-
-			ctx.overlay.set_balance(&ALICE, 100);
+			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
 				1,

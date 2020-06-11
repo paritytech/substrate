@@ -21,10 +21,10 @@ use crate::{
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
-use support::{storage::child, traits::Get, StorageMap};
+use frame_support::{storage::child, traits::Get, StorageMap};
 
 pub fn read_contract_storage(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-	child::get_raw(trie_id, &blake2_256(key))
+	child::get_raw(&crate::child_trie_info(&trie_id), &blake2_256(key))
 }
 
 pub fn write_contract_storage<T: Trait>(
@@ -35,19 +35,21 @@ pub fn write_contract_storage<T: Trait>(
 ) {
 	let hashed_key = blake2_256(key);
 
+	let child_trie_info = &crate::child_trie_info(&trie_id);
+
 	// We need to accurately track the size of the storage of the contract.
 	//
 	// For that we query the previous value and get its size.
-	let existing_size = child::get_raw(trie_id, &hashed_key)
+	let existing_size = child::get_raw(&child_trie_info, &hashed_key)
 		.map(|v| v.len())
 		.unwrap_or(0);
 	let new_size = match value {
 		Some(v) => {
-			child::put_raw(trie_id, &hashed_key, &v);
+			child::put_raw(&child_trie_info, &hashed_key, &v);
 			v.len()
 		}
 		None => {
-			child::kill(trie_id, &hashed_key);
+			child::kill(&child_trie_info, &hashed_key);
 			0
 		}
 	};
@@ -57,7 +59,7 @@ pub fn write_contract_storage<T: Trait>(
 			Some(ContractInfo::Alive(ref mut alive_info)) => {
 				alive_info.storage_size -= existing_size as u32;
 				alive_info.storage_size += new_size as u32;
-				alive_info.last_write = Some(<system::Module<T>>::block_number());
+				alive_info.last_write = Some(<frame_system::Module<T>>::block_number());
 			}
 			_ => panic!(), // TODO: Justify this.
 		}
@@ -99,10 +101,12 @@ pub fn place_contract<T: Trait>(
 		*maybe_contract_info = Some(
 			AliveContractInfo::<T> {
 				code_hash: ch,
-				storage_size: T::StorageSizeOffset::get(),
+				storage_size: 0,
 				trie_id,
-				deduct_block: <system::Module<T>>::block_number(),
+				deduct_block: <frame_system::Module<T>>::block_number(),
 				rent_allowance: <BalanceOf<T>>::max_value(),
+				empty_pair_count: 0,
+				total_pair_count: 0,
 				last_write: None,
 			}
 			.into(),
@@ -114,5 +118,5 @@ pub fn place_contract<T: Trait>(
 
 pub fn destroy_contract<T: Trait>(address: &AccountIdOf<T>, trie_id: &TrieId) {
 	<ContractInfoOf<T>>::remove(address);
-	child::kill_storage(trie_id);
+	child::kill_storage(&crate::child_trie_info(&trie_id));
 }

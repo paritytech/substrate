@@ -18,7 +18,7 @@
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
-	TombstoneContractInfo, Trait,
+	TombstoneContractInfo, Trait, CodeHash,
 };
 use frame_support::storage::child;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReason};
@@ -413,13 +413,17 @@ pub fn restore_to<T: Trait>(
 	dest: T::AccountId,
 	code_hash: CodeHash<T>,
 	rent_allowance: BalanceOf<T>,
-	delta: Vec<exec::StorageKey>,
+	delta: Vec<crate::exec::StorageKey>,
 ) -> Result<(), &'static str> {
+	use sp_core::blake2_256;
+
 	let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 		.and_then(|c| c.get_alive())
 		.ok_or("Cannot restore from inexisting or tombstone contract")?;
 
-	let current_block = <system::Module<T>>::block_number();
+	let child_trie_info = origin_contract.child_trie_info();
+
+	let current_block = <frame_system::Module<T>>::block_number();
 
 	if origin_contract.last_write == Some(current_block) {
 		return Err("Origin TrieId written in the current block");
@@ -437,8 +441,8 @@ pub fn restore_to<T: Trait>(
 
 	let key_values_taken = delta.iter()
 		.filter_map(|key| {
-			child::get_raw(&origin_contract.trie_id, &blake2_256(key)).map(|value| {
-				child::kill(&origin_contract.trie_id, &blake2_256(key));
+			child::get_raw(&child_trie_info, &blake2_256(key)).map(|value| {
+				child::kill(&child_trie_info, &blake2_256(key));
 				(key, value)
 			})
 		})
@@ -447,13 +451,13 @@ pub fn restore_to<T: Trait>(
 	let tombstone = <TombstoneContractInfo<T>>::new(
 		// This operation is cheap enough because last_write (delta not included)
 		// is not this block as it has been checked earlier.
-		&sp_io::storage::child_root(&origin_contract.trie_id)[..],
+		&child::root(&child_trie_info)[..],
 		code_hash,
 	);
 
 	if tombstone != dest_tombstone {
 		for (key, value) in key_values_taken {
-			child::put_raw(&origin_contract.trie_id, &blake2_256(key), &value);
+			child::put_raw(&child_trie_info, &blake2_256(key), &value);
 		}
 
 		return Err("Tombstones don't match");
@@ -464,9 +468,11 @@ pub fn restore_to<T: Trait>(
 		.sum::<u32>();
 
 	<ContractInfoOf<T>>::remove(&origin);
-	<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
+	<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(AliveContractInfo::<T> {
 		trie_id: origin_contract.trie_id,
 		storage_size: origin_contract.storage_size,
+		empty_pair_count: origin_contract.empty_pair_count,
+		total_pair_count: origin_contract.total_pair_count,
 		code_hash,
 		rent_allowance,
 		deduct_block: current_block,
