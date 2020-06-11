@@ -22,7 +22,7 @@
 use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::Saturating;
+use sp_runtime::traits::{Bounded, Saturating};
 
 use crate::Module as Multisig;
 
@@ -64,6 +64,7 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, true)
 
 	as_multi_approve {
@@ -138,6 +139,7 @@ benchmarks! {
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let call_hash = call.using_encoded(blake2_256);
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
@@ -174,6 +176,7 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let call_hash = call.using_encoded(blake2_256);
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
@@ -192,11 +195,14 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_as_multi_create::<Test>());
+			assert_ok!(test_benchmark_as_multi_create_store::<Test>());
 			assert_ok!(test_benchmark_as_multi_approve::<Test>());
 			assert_ok!(test_benchmark_as_multi_complete::<Test>());
 			assert_ok!(test_benchmark_approve_as_multi_create::<Test>());
 			assert_ok!(test_benchmark_approve_as_multi_approve::<Test>());
+			assert_ok!(test_benchmark_approve_as_multi_complete::<Test>());
 			assert_ok!(test_benchmark_cancel_as_multi::<Test>());
+			assert_ok!(test_benchmark_cancel_as_multi_store::<Test>());
 		});
 	}
 }
