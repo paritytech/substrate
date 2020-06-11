@@ -23,7 +23,7 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	impl_filter_stack, weights::Weight, impl_outer_event, RuntimeDebug, dispatch::DispatchError
+	weights::Weight, impl_outer_event, RuntimeDebug, dispatch::DispatchError, traits::Filter,
 };
 use codec::{Encode, Decode};
 use sp_core::H256;
@@ -62,7 +62,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = BaseFilter;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -100,15 +100,12 @@ impl pallet_balances::Trait for Test {
 impl pallet_utility::Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
-	type IsCallable = IsCallable;
 }
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;
 	pub const ProxyDepositFactor: u64 = 1;
 	pub const MaxProxies: u16 = 4;
 }
-pub struct IsCallable;
-impl_filter_stack!(crate::tests::IsCallable, crate::tests::BaseFilter, crate::tests::Call, is_callable);
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug)]
 pub enum ProxyType {
 	Any,
@@ -143,7 +140,6 @@ impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type Currency = Balances;
-	type IsCallable = IsCallable;
 	type ProxyType = ProxyType;
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
@@ -303,7 +299,8 @@ fn proxying_works() {
 		assert_eq!(Balances::free_balance(6), 1);
 
 		let call = Box::new(Call::System(SystemCall::set_code(vec![])));
-		assert_noop!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()), Error::<Test>::Uncallable);
+		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
+		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
 
 		let call = Box::new(Call::Balances(BalancesCall::transfer_keep_alive(6, 1)));
 		assert_ok!(Call::Proxy(super::Call::proxy(1, None, call.clone())).dispatch(Origin::signed(2)));

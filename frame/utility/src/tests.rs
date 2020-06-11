@@ -23,7 +23,7 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event
+	weights::Weight, impl_outer_event, dispatch::DispatchError, traits::Filter,
 };
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -59,7 +59,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = TestBaseCallFilter;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -99,8 +99,8 @@ parameter_types! {
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 }
-pub struct TestIsCallable;
-impl Filter<Call> for TestIsCallable {
+pub struct TestBaseCallFilter;
+impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
@@ -108,17 +108,9 @@ impl Filter<Call> for TestIsCallable {
 		}
 	}
 }
-impl FilterStack<Call> for TestIsCallable {
-	type Stack = ();
-	fn push(_: impl Fn(&Call) -> bool + 'static) {}
-	fn pop() {}
-	fn take() -> Self::Stack { () }
-	fn restore(_: Self::Stack) {}
-}
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
-	type IsCallable = TestIsCallable;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -172,7 +164,7 @@ fn as_sub_filters() {
 			Origin::signed(1),
 			1,
 			Box::new(Call::System(frame_system::Call::remark(vec![]))),
-		), Error::<Test>::Uncallable);
+		), DispatchError::BadOrigin);
 	});
 }
 
@@ -214,7 +206,7 @@ fn batch_with_signed_filters() {
 				Call::System(frame_system::Call::remark(vec![]))
 			]),
 		);
-		expect_event(Event::Uncallable(0));
+		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));
 	});
 }
 
