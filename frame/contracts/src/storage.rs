@@ -21,7 +21,7 @@ use crate::{
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
-use frame_support::{storage::child, traits::Get, StorageMap};
+use frame_support::{storage::child, StorageMap};
 
 pub fn read_contract_storage(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
 	child::get_raw(&crate::child_trie_info(&trie_id), &blake2_256(key))

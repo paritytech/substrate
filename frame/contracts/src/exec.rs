@@ -21,10 +21,10 @@ use crate::rent;
 use crate::storage;
 
 use sp_std::prelude::*;
-use sp_runtime::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
+use sp_runtime::traits::{Bounded, Zero};
 use frame_support::{
 	storage::unhashed, dispatch::DispatchError,
-	traits::{ExistenceRequirement, WithdrawReason, Currency, Time, Randomness},
+	traits::{ExistenceRequirement, Currency, Time, Randomness},
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
@@ -587,11 +587,11 @@ where
 	{
 		let (output, deferred) = {
 			let mut nested = self.nested(dest, trie_id);
-			let output = crate::util::with_transaction(|| {
+			let output = frame_support::storage::with_transaction(|| {
 				let output = func(&mut nested);
 				match output {
-					Ok(ref rv) if rv.is_success() => (output, crate::util::TxOutcome::Commit),
-					_ => (output, crate::util::TxOutcome::Discard),
+					Ok(ref rv) if rv.is_success() => (output, frame_support::storage::TransactionOutcome::Commit),
+					_ => (output, frame_support::storage::TransactionOutcome::Rollback),
 				}
 			})?;
 			(output, nested.deferred)
@@ -669,15 +669,6 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 ) -> Result<(), DispatchError> {
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
-
-	let to_balance = T::Currency::free_balance(dest);
-
-	// `would_create` indicates whether the account will be created if this transfer gets executed.
-	// This flag is orthogonal to `cause.
-	// For example, we can instantiate a contract at the address which already has some funds. In this
-	// `would_create` will be `false`. Another example would be when this function is called from `call`,
-	// and account with the address `dest` doesn't exist yet `would_create` will be `true`.
-	let would_create = to_balance.is_zero();
 
 	let token = {
 		let kind: TransferFeeKind = match cause {

@@ -85,7 +85,6 @@ mod storage;
 mod exec;
 mod wasm;
 mod rent;
-mod util;
 
 #[cfg(test)]
 mod tests;
@@ -112,7 +111,7 @@ use frame_support::dispatch::{
 };
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error,
-	parameter_types, IsSubType, storage::child::{self, ChildInfo},
+	parameter_types, IsSubType, storage::child::ChildInfo,
 };
 use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_support::weights::GetDispatchInfo;
