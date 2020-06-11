@@ -45,7 +45,7 @@ use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
 	Permill, Perbill, Perquintill, Percent, PerThing, ApplyExtrinsicResult,
-	impl_opaque_keys, generic, create_runtime_str, ModuleId,
+	impl_opaque_keys, generic, create_runtime_str, ModuleId, FixedPointNumber,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
@@ -61,6 +61,7 @@ use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use pallet_transaction_payment::Multiplier;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
@@ -306,23 +307,15 @@ impl pallet_balances::Trait for Runtime {
 parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
+	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(1, 100_000);
 }
-
-// for a sane configuration, this should always be less than `AvailableBlockRatio`.
-const_assert!(
-	TargetBlockFullness::get().deconstruct() <
-	(AvailableBlockRatio::get().deconstruct() as <Perquintill as PerThing>::Inner)
-		* (<Perquintill as PerThing>::ACCURACY / <Perbill as PerThing>::ACCURACY as <Perquintill as PerThing>::Inner)
-);
 
 impl pallet_transaction_payment::Trait for Runtime {
 	type Currency = Balances;
 	type OnTransactionPayment = DealWithFees;
 	type TransactionByteFee = TransactionByteFee;
-	// In the Substrate node, a weight of 10_000_000 (smallest non-zero weight)
-	// is mapped to 10_000_000 units of fees, hence:
 	type WeightToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = TargetedFeeAdjustment<TargetBlockFullness>;
+	type FeeMultiplierUpdate = TargetedFeeAdjustment<TargetBlockFullness, AdjustmentVariable>;
 }
 
 parameter_types! {

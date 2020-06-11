@@ -85,7 +85,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TransactionPayment {
-		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_inner(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::saturating_from_integer(1);
 	}
 }
 
@@ -199,8 +199,8 @@ impl<T: Trait> Module<T> where
 
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
-			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturating_mul_acc_int(adjustable_fee);
+			let targeted_fee_adjustment = Self::next_fee_multiplier();
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_int(adjustable_fee);
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
@@ -213,12 +213,12 @@ impl<T: Trait> Module<T> where
 impl<T: Trait> Module<T> {
 	/// Compute the fee for the specified weight.
 	///
-	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
-	/// the share that the weight contributes to the overall fee of a transaction.
+	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
+	/// share that the weight contributes to the overall fee of a transaction.
 	///
-	/// This function is generic in order to supply the contracts module with a way
-	/// to calculate the gas price. The contracts module is not able to put the necessary
-	/// `BalanceOf<T>` contraints on its trait. This function is not to be used by this module.
+	/// This function is generic in order to supply the contracts module with a way to calculate the
+	/// gas price. The contracts module is not able to put the necessary `BalanceOf<T>` constraints
+	/// on its trait. This function is not to be used by this module.
 	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
 		Balance: UniqueSaturatedFrom<u128>
 	{
@@ -619,7 +619,7 @@ mod tests {
 			.execute_with(||
 		{
 			let len = 10;
-			NextFeeMultiplier::put(Multiplier::saturating_from_rational(1, 2));
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(3, 2));
 
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
@@ -632,7 +632,7 @@ mod tests {
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
 					.is_ok()
 			);
-			// 75 (3/2 of the returned 50 units of weight ) is refunded
+			// 75 (3/2 of the returned 50 units of weight) is refunded
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 75 - 5);
 		});
 	}
@@ -707,7 +707,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Multiplier::saturating_from_rational(1, 2));
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(3, 2));
 			let len = 10;
 
 			assert!(
@@ -715,7 +715,13 @@ mod tests {
 					.pre_dispatch(&1, CALL, &info_from_weight(3), len)
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
+			assert_eq!(
+				Balances::free_balance(1),
+				100 // original
+				- 10 // tip
+				- 5 // base
+				- (10 + 3) * 3 / 2 // adjusted len + weight
+			);
 		})
 	}
 
@@ -735,7 +741,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Multiplier::saturating_from_rational(1, 2));
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(3, 2));
 
 			assert_eq!(
 				TransactionPayment::query_info(xt, len),
@@ -764,7 +770,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Next fee multiplier is zero
-			assert_eq!(NextFeeMultiplier::get(), Multiplier::saturating_from_integer(0));
+			assert_eq!(NextFeeMultiplier::get(), Multiplier::one());
 
 			// Tip only, no fees works
 			let dispatch_info = DispatchInfo {
@@ -803,8 +809,8 @@ mod tests {
 			.build()
 			.execute_with(||
 		{
-			// Add a next fee multiplier
-			NextFeeMultiplier::put(Multiplier::saturating_from_rational(1, 2)); // = 1/2 = .5
+			// Add a next fee multiplier. Fees will be x3/2.
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(3, 2));
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
 				weight: 0,
@@ -836,9 +842,10 @@ mod tests {
 			.build()
 			.execute_with(||
 		{
-			// Add a next fee multiplier
-			NextFeeMultiplier::put(Multiplier::saturating_from_rational(-1, 2)); // = -1/2 = -.5
-			// Base fee is unaffected by multiplier
+			// Add a next fee multiplier. All fees will be x1/2.
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(1, 2));
+
+			// Base fee is unaffected by multiplier.
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
@@ -846,7 +853,7 @@ mod tests {
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
-			// Everything works together :)
+			// Everything works together.
 			let dispatch_info = DispatchInfo {
 				weight: 123,
 				class: DispatchClass::Operational,
@@ -854,9 +861,9 @@ mod tests {
 			};
 			// 123 weight, 456 length, 100 base
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
-			// adjusted fee = 4683 - (4683 * -.5)  = 4683 - 2341.5 = 4683 - 2341 = 2342
-			// final fee = 100 + 2342 + 789 tip = 3231
-			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 3231);
+			// adjusted fee = 4683 * 0.5 = 4683 - 2341.5 = 4683 - 2342 = 2341
+			// final fee = 100 + 2341 + 789 tip = 3230
+			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 3230);
 		});
 	}
 
@@ -992,7 +999,7 @@ mod tests {
 			let len = 10;
 			let tip = 5;
 
-			NextFeeMultiplier::put(Multiplier::saturating_from_rational(1, 4));
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(5, 4));
 
 			let pre = ChargeTransactionPayment::<Runtime>::from(tip)
 				.pre_dispatch(&2, CALL, &info, len)

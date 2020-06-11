@@ -372,6 +372,23 @@ macro_rules! implement_fixed {
 			}
 		}
 
+		impl $name {
+			/// const version of `FixedPointNumber::from_inner`.
+			pub const fn from_inner(inner: $inner_type) -> Self {
+				Self(inner)
+			}
+
+			#[cfg(any(feature = "std", test))]
+			pub fn from_fraction(x: f64) -> Self {
+				Self((x * (<Self as FixedPointNumber>::DIV as f64)) as $inner_type)
+			}
+
+			#[cfg(any(feature = "std", test))]
+			pub fn to_fraction(self) -> f64 {
+				self.0 as f64 / <Self as FixedPointNumber>::DIV as f64
+			}
+		}
+
 		impl Saturating for $name {
 			fn saturating_add(self, rhs: Self) -> Self {
 				Self(self.0.saturating_add(rhs.0))
