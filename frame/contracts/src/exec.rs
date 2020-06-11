@@ -415,28 +415,6 @@ where
 							input_data,
 							gas_meter,
 						)?;
-
-					// TODO: Handle the case when after returning from the nested call the balance
-					// is below existential deposit.
-
-					// Destroy contract if insufficient remaining balance.
-					if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
-						let caller = nested.caller
-							.expect("a nested execution context must have a parent; qed");
-						if caller.is_live(&dest) {
-							return Err(ExecError {
-								reason: "contract cannot be destroyed during recursive execution".into(),
-								buffer: output.data,
-							});
-						}
-						storage::destroy_contract::<T>(
-							&dest,
-							nested.self_trie_id.as_ref().expect(
-								"a nested exexcution context must have trie id assgined; qed"
-							)
-						);
-					}
-
 					Ok(output)
 				}
 				None => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
@@ -688,8 +666,12 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		Err("not enough gas to pay transfer fee")?
 	}
 
-	// Make the transfer.
-	T::Currency::transfer(transactor, dest, value, ExistenceRequirement::AllowDeath)?;
+	// Only ext_terminate is allowed to bring the sender below the existential deposit
+	let existence_requirement = match cause {
+		Terminate => ExistenceRequirement::AllowDeath,
+		_ => ExistenceRequirement::KeepAlive,
+	};
+	T::Currency::transfer(transactor, dest, value, existence_requirement)?;
 
 	Ok(())
 }
@@ -789,13 +771,25 @@ where
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
 	) -> Result<(), &'static str> {
-		crate::rent::restore_to::<T>(
+		let result = crate::rent::restore_to::<T>(
 			self.ctx.self_account.clone(),
-			dest,
-			code_hash,
+			dest.clone(),
+			code_hash.clone(),
 			rent_allowance,
 			delta,
-		)
+		);
+		// Deposit an event accordingly regardless if it succeeded.
+		deposit_event::<Self::T>(
+			vec![],
+			RawEvent::Restored(
+				self.ctx.self_account.clone(),
+				dest,
+				code_hash,
+				rent_allowance,
+				result.is_ok(),
+			),
+		);
+		result
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -1250,7 +1244,7 @@ mod tests {
 			assert_matches!(
 				result,
 				Err(ExecError {
-					reason: DispatchError::Other("balance too low to send value"),
+					reason: DispatchError::Module { message: Some("InsufficientBalance"), .. },
 					buffer: _,
 				})
 			);

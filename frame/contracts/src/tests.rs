@@ -82,7 +82,8 @@ pub mod test_utils {
 		crate::storage::place_contract::<Test>(&address, trie_id, code_hash).unwrap()
 	}
 	pub fn set_balance(who: &u64, amount: u64) {
-		Balances::deposit_creating(who, amount);
+		let imbalance = Balances::deposit_creating(who, amount);
+		drop(imbalance);
 	}
 	pub fn get_balance(who: &u64) -> u64 {
 		Balances::free_balance(who)
@@ -399,7 +400,7 @@ fn instantiate_and_call_and_deposit_event() {
 				vec![],
 			);
 
-			assert_eq!(System::events(), vec![
+			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -424,6 +425,13 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
 						pallet_balances::RawEvent::Endowed(BOB, 100)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
 					),
 					topics: vec![],
 				},
@@ -497,7 +505,7 @@ fn dispatch_call() {
 				vec![],
 			));
 
-			assert_eq!(System::events(), vec![
+			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -522,6 +530,13 @@ fn dispatch_call() {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
 						pallet_balances::RawEvent::Endowed(BOB, 100)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
 					),
 					topics: vec![],
 				},
@@ -619,7 +634,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				),
 				"contract trapped during execution"
 			);
-			assert_eq!(System::events(), vec![
+			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -644,6 +659,13 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
 						pallet_balances::RawEvent::Endowed(BOB, 100)
+					),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
 					),
 					topics: vec![],
 				},
@@ -1405,7 +1427,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 						]);
 					}
 					(_, true) => {
-						assert_eq!(System::events(), vec![
+						pretty_assertions::assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
 								event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
@@ -1429,6 +1451,13 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 							EventRecord {
 								phase: Phase::Initialization,
 								event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(DJANGO, 30_000)),
+								topics: vec![],
+							},
+							EventRecord {
+								phase: Phase::Initialization,
+								event: MetaEvent::balances(
+									pallet_balances::RawEvent::Transfer(CHARLIE, DJANGO, 30_000)
+								),
 								topics: vec![],
 							},
 							EventRecord {
