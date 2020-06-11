@@ -188,7 +188,8 @@ impl<P: TransactionPool, C, F, Block> LightSystem<P, C, F, Block> {
 	}
 }
 
-impl<P, C, F, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index> for LightSystem<P, C, F, Block>
+impl<P, C, F, Block, AccountId, Index> SystemApi<<Block as traits::Block>::Hash, AccountId, Index>
+	for LightSystem<P, C, F, Block>
 where
 	P: TransactionPool + 'static,
 	C: HeaderBackend<Block>,
