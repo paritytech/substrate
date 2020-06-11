@@ -113,8 +113,6 @@ where
 		changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
 		extensions: Option<&'a mut Extensions>,
 	) -> Self {
-		overlay.enter_runtime()
-			.expect("Instances of this tpye must be created outside of the runtime.");
 		Self {
 			overlay,
 			offchain_overlay,
@@ -158,21 +156,6 @@ where
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
 			.collect()
-	}
-}
-
-impl<'a, H, B, N> Drop for Ext<'a, H, N, B>
-where
-	H: Hasher,
-	B: 'a + Backend<H>,
-	N: crate::changes_trie::BlockNumber
-{
-	fn drop(&mut self) {
-		self.overlay.exit_runtime().expect("\
-			This instance holds an exclusive borrow of the overlay and calls enter_runtime on
-			creation. We do not call exit_runtime in any other place of this type.
-			Drop is only called once. qed
-		");
 	}
 }
 

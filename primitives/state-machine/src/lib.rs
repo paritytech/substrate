@@ -301,6 +301,9 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			None => &mut cache,
 		};
 
+		self.overlay.enter_runtime()
+			.expect("This function is supposed to be called from the client only.");
+
 		let mut ext = Ext::new(
 			self.overlay,
 			self.offchain_overlay,
@@ -327,6 +330,9 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			use_native,
 			native_call,
 		);
+
+		self.overlay.exit_runtime()
+			.expect("Runtime is not able to call this function in the overlay; qed");
 
 		trace!(
 			target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
@@ -1300,7 +1306,6 @@ mod tests {
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
 			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
 			ext.storage_root();
-			drop(ext);
 			cache.transaction.unwrap()
 		};
 		let mut duplicate = false;
