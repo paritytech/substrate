@@ -217,6 +217,7 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 decl_event!(
 	pub enum Event<T, I: Instance = DefaultInstance> where
 		<T as frame_system::Trait>::AccountId,
+		<T as frame_support::traits>::Status,
 		<T as Trait<I>>::Balance
 	{
 		/// An account was created with some free balance.
@@ -230,6 +231,11 @@ decl_event!(
 		BalanceSet(AccountId, Balance, Balance),
 		/// Some amount was deposited (e.g. for transaction fees).
 		Deposit(AccountId, Balance),
+		/// Some balance was unreserved (moved from reserved to free).
+		Unreserved(AccountId, Balance),
+		/// Some balance was moved from the reserve of the first account to the second account.
+		/// Final argument indicates the destination balance type.
+		ReserveRepatriated(AccountId, AccountId, Balance, Status),
 	}
 );
 
@@ -1166,6 +1172,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			// defensive only: this can never fail since total issuance which is at least free+reserved
 			// fits into the same data type.
 			account.free = account.free.saturating_add(actual);
+			Self::deposit_event(RawEvent::Unreserved(who.clone(), actual.clone()));
 			value - actual
 		})
 	}
@@ -1217,6 +1224,9 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
 				}
 				from_account.reserved -= actual;
+				Self::deposit_event(RawEvent::ReserveRepatriated(
+					slashed.clone(), beneficiary.clone(), actual.clone(), status
+				));
 				Ok(value - actual)
 			})
 		})
