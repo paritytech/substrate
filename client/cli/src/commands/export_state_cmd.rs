@@ -27,7 +27,7 @@ use structopt::StructOpt;
 
 /// The `export-state` command used to export the state of a given block into
 /// a chain spec.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ExportStateCmd {
 	/// Block hash or number.
 	#[structopt(value_name = "HASH or NUMBER")]
@@ -59,7 +59,7 @@ impl ExportStateCmd {
 	{
 		info!("Exporting raw state...");
 		let mut input_spec = config.chain_spec.cloned_box();
-		let block_id = self.input.clone().map(|b| b.parse()).transpose()?;
+		let block_id = self.input.as_ref().map(|b| b.parse()).transpose()?;
 		let raw_state = builder(config)?.export_raw_state(block_id)?;
 		input_spec.set_storage(raw_state);
 

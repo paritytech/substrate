@@ -37,7 +37,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{FixedPointNumber, Fixed128, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{FixedPointNumber, FixedI128, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -162,7 +162,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Fixed128::saturating_from_integer(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(FixedI128::saturating_from_integer(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),

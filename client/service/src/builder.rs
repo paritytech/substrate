@@ -16,17 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle};
-use crate::status_sinks;
-use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig};
-use crate::metrics::MetricsService;
-use sc_client_api::{
-	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider, SimpleProof,
-	StateBackend,
+use crate::{
+	Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
+	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
+	status_sinks, metrics::MetricsService,
+	client::{light, Client, ClientConfig},
+	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
-use crate::client::{Client, ClientConfig};
+use sc_client_api::{
+	self, BlockchainEvents, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
+	backend::RemoteBackend, SimpleProof, StateBackend,
+};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
 use sp_consensus::{
@@ -37,6 +38,7 @@ use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
 };
+use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
@@ -55,8 +57,7 @@ use std::{
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
-use sp_blockchain;
+use sp_transaction_pool::{LocalTransactionPool, MaintainedTransactionPool};
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
@@ -101,6 +102,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	informant_prefix: String,
 }
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -178,19 +180,19 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Light client backend type.
-pub type TLightBackend<TBl> = crate::client::light::backend::Backend<
+pub type TLightBackend<TBl> = sc_light::Backend<
 	sc_client_db::light::LightStorage<TBl>,
 	HashFor<TBl>,
 >;
 
 /// Light call executor type.
-pub type TLightCallExecutor<TBl, TExecDisp> = crate::client::light::call_executor::GenesisCallExecutor<
-	crate::client::light::backend::Backend<
+pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
+	sc_light::Backend<
 		sc_client_db::light::LightStorage<TBl>,
 		HashFor<TBl>
 	>,
 	crate::client::LocalCallExecutor<
-		crate::client::light::backend::Backend<
+		sc_light::Backend<
 			sc_client_db::light::LightStorage<TBl>,
 			HashFor<TBl>
 		>,
@@ -364,6 +366,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: None,
 			block_announce_validator_builder: None,
+			informant_prefix: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -413,18 +416,18 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
-		let light_blockchain = crate::client::light::new_light_blockchain(db_storage);
+		let light_blockchain = sc_light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(
-			crate::client::light::new_fetch_checker::<_, TBl, _>(
+			sc_light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
 				executor.clone(),
 				Box::new(task_manager.spawn_handle()),
 			),
 		);
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-		let backend = crate::client::light::new_light_backend(light_blockchain);
+		let backend = sc_light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
-		let client = Arc::new(crate::client::light::new_light(
+		let client = Arc::new(light::new_light(
 			backend.clone(),
 			config.chain_spec.as_storage_builder(),
 			executor,
@@ -447,14 +450,36 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
+			informant_prefix: Default::default(),
 			marker: PhantomData,
 		})
 	}
 }
 
 impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
-	ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-	 	TExPool, TRpc, Backend> {
+	ServiceBuilder<
+		TBl,
+		TRtApi,
+		TCl,
+		TFchr,
+		TSc,
+		TImpQu,
+		TFprb,
+		TFpp,
+		TExPool,
+		TRpc,
+		Backend
+	>
+{
+	/// Returns a reference to the configuration that was stored in this builder.
+	pub fn config(&self) -> &Configuration {
+		&self.config
+	}
+
+	/// Returns a reference to the optional prometheus registry that was stored in this builder.
+	pub fn prometheus_registry(&self) -> Option<&Registry> {
+		self.config.prometheus_config.as_ref().map(|config| &config.registry)
+	}
 
 	/// Returns a reference to the client that was stored in this builder.
 	pub fn client(&self) -> &Arc<TCl> {
@@ -520,6 +545,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -565,6 +591,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -603,6 +630,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -669,6 +697,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -699,20 +728,12 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	pub fn with_transaction_pool<UExPool>(
 		self,
 		transaction_pool_builder: impl FnOnce(
-			sc_transaction_pool::txpool::Options,
-			Arc<TCl>,
-			Option<TFchr>,
-			Option<&Registry>,
-		) -> Result<(UExPool, Option<BackgroundTask>), Error>
+			&Self,
+		) -> Result<(UExPool, Option<BackgroundTask>), Error>,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		UExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let (transaction_pool, background_task) = transaction_pool_builder(
-			self.config.transaction_pool.clone(),
-			self.client.clone(),
-			self.fetcher.clone(),
-			self.config.prometheus_config.as_ref().map(|config| &config.registry),
-		)?;
+		let (transaction_pool, background_task) = transaction_pool_builder(&self)?;
 
 		if let Some(background_task) = background_task{
 			self.task_manager.spawn_handle().spawn("txpool-background", background_task);
@@ -733,6 +754,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -770,6 +792,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -815,7 +838,41 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
+			informant_prefix: self.informant_prefix,
 			marker: self.marker,
+		})
+	}
+
+	/// Defines the informant's prefix for the logs. An empty string by default.
+	///
+	/// By default substrate will show logs without a prefix. Example:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	///
+	/// But you can define a prefix by using this function. Example:
+	///
+	/// ```rust,ignore
+	/// service.with_informant_prefix("[Prefix] ".to_string());
+	/// ```
+	///
+	/// This will output:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	pub fn with_informant_prefix(
+		self,
+		informant_prefix: String,
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TExPool, TRpc, Backend>, Error>
+	where TSc: Clone, TFchr: Clone {
+		Ok(ServiceBuilder {
+			informant_prefix: informant_prefix,
+			..self
 		})
 	}
 }
@@ -904,8 +961,7 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	/// Builds the service.
-	pub fn build(self) -> Result<Service<
+	fn build_common(self) -> Result<Service<
 		TBl,
 		Client<TBackend, TExec, TBl, TRtApi>,
 		TSc,
@@ -937,6 +993,7 @@ ServiceBuilder<
 			rpc_extensions_builder,
 			remote_backend,
 			block_announce_validator_builder,
+			informant_prefix,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -960,10 +1017,6 @@ ServiceBuilder<
 			"height" => chain_info.best_number.saturated_into::<u64>(),
 			"best" => ?chain_info.best_hash
 		);
-
-		// make transaction pool available for off-chain runtime calls.
-		client.execution_extensions()
-			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
 
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !matches!(config.role, Role::Light),
@@ -1029,63 +1082,69 @@ ServiceBuilder<
 
 		let spawn_handle = task_manager.spawn_handle();
 
+		// Inform the tx pool about imported and finalized blocks.
 		{
-			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
+
+			let mut import_stream = client.import_notification_stream().map(Into::into).fuse();
+			let mut finality_stream = client.finality_notification_stream()
+				.map(Into::into)
+				.fuse();
+
+			let events = async move {
+				loop {
+					let evt = futures::select! {
+						evt = import_stream.next() => evt,
+						evt = finality_stream.next() => evt,
+						complete => return,
+					};
+
+					let txpool = txpool.upgrade();
+					if let Some((txpool, evt)) = txpool.and_then(|tp| evt.map(|evt| (tp, evt))) {
+						txpool.maintain(evt).await;
+					}
+				}
+			};
+
+			spawn_handle.spawn(
+				"txpool-notifications",
+				events,
+			);
+		}
+
+		// Inform the offchain worker about new imported blocks
+		{
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let notifications_spawn_handle = task_manager.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.role.is_authority();
 
-			let (import_stream, finality_stream) = (
-				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
-					id: BlockId::Hash(n.hash),
-					header: n.header,
-					retracted: n.retracted,
-					is_new_best: n.is_new_best,
-				}),
-				client.finality_notification_stream().map(|n| ChainEvent::Finalized {
-					hash: n.hash
-				})
-			);
-			let events = futures::stream::select(import_stream, finality_stream)
-				.for_each(move |event| {
-					// offchain worker is only interested in block import events
-					if let ChainEvent::NewBlock { ref header, is_new_best, .. } = event {
-						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
-						match offchain {
-							Some(offchain) if is_new_best => {
-								notifications_spawn_handle.spawn(
-									"offchain-on-block",
-									offchain.on_block_imported(
-										&header,
-										network_state_info.clone(),
-										is_validator,
-									),
-								);
-							},
-							Some(_) => log::debug!(
-									target: "sc_offchain",
-									"Skipping offchain workers for non-canon block: {:?}",
-									header,
-								),
-							_ => {},
-						}
-					};
-
-					let txpool = txpool.upgrade();
-					if let Some(txpool) = txpool.as_ref() {
+			let events = client.import_notification_stream().for_each(move |n| {
+				let offchain = offchain.as_ref().and_then(|o| o.upgrade());
+				match offchain {
+					Some(offchain) if n.is_new_best => {
 						notifications_spawn_handle.spawn(
-							"txpool-maintain",
-							txpool.maintain(event),
+							"offchain-on-block",
+							offchain.on_block_imported(
+								&n.header,
+								network_state_info.clone(),
+								is_validator,
+							),
 						);
-					}
+					},
+					Some(_) => log::debug!(
+							target: "sc_offchain",
+							"Skipping offchain workers for non-canon block: {:?}",
+							n.header,
+						),
+					_ => {},
+				}
 
-					ready(())
-				});
+				ready(())
+			});
 
 			spawn_handle.spawn(
-				"txpool-and-offchain-notif",
+				"offchain-notifications",
 				events,
 			);
 		}
@@ -1189,7 +1248,7 @@ ServiceBuilder<
 				chain_type: chain_spec.chain_type().clone(),
 			};
 
-			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(task_manager.spawn_handle()));
+			let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
 
 			let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {
@@ -1326,6 +1385,20 @@ ServiceBuilder<
 			}
 		}
 
+		// Spawn informant task
+		let network_status_sinks_1 = network_status_sinks.clone();
+		let informant_future = sc_informant::build(
+			client.clone(),
+			move |interval| {
+				let (sink, stream) = tracing_unbounded("mpsc_network_status");
+				network_status_sinks_1.lock().push(interval, sink);
+				stream
+			},
+			transaction_pool.clone(),
+			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
+		);
+		spawn_handle.spawn("informant", informant_future);
+
 		Ok(Service {
 			client,
 			task_manager,
@@ -1342,7 +1415,88 @@ ServiceBuilder<
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
 			marker: PhantomData::<TBl>,
-			prometheus_registry: config.prometheus_config.map(|config| config.registry)
+			prometheus_registry: config.prometheus_config.map(|config| config.registry),
+			_base_path: config.base_path.map(Arc::new),
 		})
+	}
+
+	/// Builds the light service.
+	pub fn build_light(self) -> Result<Service<
+		TBl,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TSc,
+		NetworkStatus<TBl>,
+		NetworkService<TBl, <TBl as BlockT>::Hash>,
+		TExPool,
+		sc_offchain::OffchainWorkers<
+			Client<TBackend, TExec, TBl, TRtApi>,
+			TBackend::OffchainStorage,
+			TBl
+		>,
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
+		self.build_common()
+	}
+}
+
+impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
+ServiceBuilder<
+	TBl,
+	TRtApi,
+	Client<TBackend, TExec, TBl, TRtApi>,
+	Arc<OnDemand<TBl>>,
+	TSc,
+	TImpQu,
+	BoxFinalityProofRequestBuilder<TBl>,
+	Arc<dyn FinalityProofProvider<TBl>>,
+	TExPool,
+	TRpc,
+	TBackend,
+> where
+	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+		sp_api::Metadata<TBl> +
+		sc_offchain::OffchainWorkerApi<TBl> +
+		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
+		sp_session::SessionKeys<TBl> +
+		sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+		sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+	TBl: BlockT,
+	TRtApi: 'static + Send + Sync,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExec: 'static + CallExecutor<TBl> + Send + Sync + Clone,
+	TSc: Clone,
+	TImpQu: 'static + ImportQueue<TBl>,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> +
+		LocalTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> +
+		MallocSizeOfWasm +
+		'static,
+	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
+	// TODO EMCH removable bound when generic
+	TBackend::State: StateBackend<HashFor<TBl>, StorageProof = SimpleProof>,
+{
+
+	/// Builds the full service.
+	pub fn build_full(self) -> Result<Service<
+		TBl,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TSc,
+		NetworkStatus<TBl>,
+		NetworkService<TBl, <TBl as BlockT>::Hash>,
+		TExPool,
+		sc_offchain::OffchainWorkers<
+			Client<TBackend, TExec, TBl, TRtApi>,
+			TBackend::OffchainStorage,
+			TBl
+		>,
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
+		// make transaction pool available for off-chain runtime calls.
+		self.client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&self.transaction_pool) as _);
+
+		self.build_common()
 	}
 }

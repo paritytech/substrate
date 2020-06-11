@@ -17,7 +17,7 @@
 
 //! Test utilities
 
-use std::{collections::{HashSet, HashMap}, cell::RefCell};
+use std::{collections::HashSet, cell::RefCell};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
@@ -31,8 +31,8 @@ use frame_support::{
 	weights::{Weight, constants::RocksDbWeight},
 };
 use sp_io;
-use sp_phragmen::{
-	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
+use sp_npos_elections::{
+	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 	VoteWeight,
 };
 use crate::*;
@@ -783,7 +783,7 @@ pub(crate) fn add_slash(who: &AccountId) {
 // distributed evenly.
 pub(crate) fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
-) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
+) -> (CompactAssignments, Vec<ValidatorIndex>, ElectionScore) {
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
 	// self stake
@@ -855,7 +855,7 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
 
-		assert!(sp_phragmen::is_score_better::<Perbill>(
+		assert!(sp_npos_elections::is_score_better::<Perbill>(
 			better_score,
 			score,
 			MinSolutionScoreBump::get(),
@@ -879,7 +879,7 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 
 	// convert back to ratio assignment. This takes less space.
 	let assignments_reduced =
-		sp_phragmen::assignment_staked_to_ratio::<AccountId, OffchainAccuracy>(staked_assignment);
+		sp_npos_elections::assignment_staked_to_ratio::<AccountId, OffchainAccuracy>(staked_assignment);
 
 	let compact =
 		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
@@ -897,13 +897,13 @@ pub(crate) fn prepare_submission_with(
 	do_reduce: bool,
 	iterations: usize,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
-) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
-	// run phragmen on the default stuff.
-	let sp_phragmen::PhragmenResult {
+) -> (CompactAssignments, Vec<ValidatorIndex>, ElectionScore) {
+	// run election on the default stuff.
+	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
-	let winners = sp_phragmen::to_without_backing(winners);
+	let winners = sp_npos_elections::to_without_backing(winners);
 
 	let stake_of = |who: &AccountId| -> VoteWeight {
 		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
@@ -911,11 +911,11 @@ pub(crate) fn prepare_submission_with(
 		)
 	};
 
-	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
+	let mut staked = sp_npos_elections::assignment_ratio_to_staked(assignments, stake_of);
 	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
 
 	if iterations > 0 {
-		sp_phragmen::equalize(
+		sp_npos_elections::balance_solution(
 			&mut staked,
 			&mut support_map,
 			Zero::zero(),
@@ -952,11 +952,11 @@ pub(crate) fn prepare_submission_with(
 			)
 	};
 
-	let assignments_reduced = sp_phragmen::assignment_staked_to_ratio(staked);
+	let assignments_reduced = sp_npos_elections::assignment_staked_to_ratio(staked);
 
 	// re-compute score by converting, yet again, into staked type
 	let score = {
-		let staked = sp_phragmen::assignment_ratio_to_staked(
+		let staked = sp_npos_elections::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
 			Staking::slashable_balance_of_vote_weight,
 		);
@@ -978,38 +978,6 @@ pub(crate) fn prepare_submission_with(
 	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
 
 	(compact, winners, score)
-}
-
-/// Make all validator and nominator request their payment
-pub(crate) fn make_all_reward_payment_before_migration(era: EraIndex) {
-	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
-		.cloned()
-		.collect::<Vec<_>>();
-
-	// reward nominators
-	let mut nominator_controllers = HashMap::new();
-	for validator in Staking::eras_reward_points(era).individual.keys() {
-		let validator_exposure = Staking::eras_stakers_clipped(era, validator);
-		for (nom_index, nom) in validator_exposure.others.iter().enumerate() {
-			if let Some(nom_ctrl) = Staking::bonded(nom.who) {
-				nominator_controllers.entry(nom_ctrl)
-					.or_insert(vec![])
-					.push((validator.clone(), nom_index as u32));
-			}
-		}
-	}
-	for (nominator_controller, validators_with_nom_index) in nominator_controllers {
-		assert_ok!(Staking::payout_nominator(
-			Origin::signed(nominator_controller),
-			era,
-			validators_with_nom_index,
-		));
-	}
-
-	// reward validators
-	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
-		assert_ok!(Staking::payout_validator(Origin::signed(validator_controller), era));
-	}
 }
 
 /// Make all validator and nominator request their payment
