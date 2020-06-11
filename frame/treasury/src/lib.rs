@@ -102,7 +102,7 @@ use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed};
 
 mod tests;
 mod benchmarking;
@@ -362,9 +362,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (130_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::RejectOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::RejectOrigin::ensure_origin(origin)?;
 
 			let proposal = <Proposals<T>>::take(&proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 			let value = proposal.bond;
@@ -384,9 +382,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (34_000_000 + T::DbWeight::get().reads_writes(2, 1), DispatchClass::Operational)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
-			T::ApproveOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ApproveOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
 			Approvals::mutate(|v| v.push(proposal_id));

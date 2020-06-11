@@ -104,6 +104,8 @@ impl Filter<Call> for TestIsCallable {
 	fn filter(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
+			// Needed for benchmarking
+			Call::System(frame_system::Call::remark(_)) => true,
 			_ => false,
 		}
 	}
@@ -399,7 +401,7 @@ fn multisig_1_of_3_works() {
 #[test]
 fn multisig_filters() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::System(frame_system::Call::remark(vec![])));
+		let call = Box::new(Call::System(frame_system::Call::set_code(vec![])));
 		assert_noop!(
 			Multisig::as_multi(Origin::signed(1), 1, vec![], None, call.clone()),
 			Error::<Test>::Uncallable,

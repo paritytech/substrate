@@ -29,6 +29,9 @@ use codec::{Encode, Decode, Input, Codec};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
 use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
+#[cfg(feature = "std")]
+use sp_core::traits::BareCryptoStorePtr;
+use sp_std::convert::TryInto;
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -370,25 +373,31 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
+	keystore: BareCryptoStorePtr,
 	message: grandpa::Message<H, N>,
-	pair: &AuthorityPair,
+	public: AuthorityId,
 	round: RoundNumber,
 	set_id: SetId,
-) -> grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>
+) -> Option<grandpa::SignedMessage<H, N, AuthoritySignature, AuthorityId>>
 where
 	H: Encode,
 	N: Encode,
 {
-	use sp_core::Pair;
+	use sp_core::crypto::Public;
+	use sp_application_crypto::AppKey;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = pair.sign(&encoded[..]);
+	let signature = keystore.read()
+		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
+		.ok()?
+		.try_into()
+		.ok()?;
 
-	grandpa::SignedMessage {
+	Some(grandpa::SignedMessage {
 		message,
 		signature,
-		id: pair.public(),
-	}
+		id: public,
+	})
 }
 
 /// WASM function call to check for pending changes.

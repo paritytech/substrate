@@ -28,7 +28,7 @@ use futures::{
 	StreamExt as _, TryStreamExt as _,
 };
 use hash_db::Hasher;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 use log::warn;
 use parking_lot::Mutex;
 use rpc::{
@@ -38,7 +38,7 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use sc_rpc_api::{Subscriptions, state::ReadProof};
+use sc_rpc_api::state::ReadProof;
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client_api::{
 	BlockchainEvents,
@@ -63,7 +63,7 @@ type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 #[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
-	subscriptions: Subscriptions,
+	subscriptions: SubscriptionManager,
 	version_subscriptions: SimpleSubscriptions<Block::Hash, RuntimeVersion>,
 	storage_subscriptions: Arc<Mutex<StorageSubscriptions<Block>>>,
 	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
@@ -143,7 +143,7 @@ impl<Block: BlockT, F: Fetcher<Block> + 'static, Client> LightState<Block, F, Cl
 	/// Create new state API backend for light nodes.
 	pub fn new(
 		client: Arc<Client>,
-		subscriptions: Subscriptions,
+		subscriptions: SubscriptionManager,
 		remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
 		fetcher: Arc<F>,
 	) -> Self {
