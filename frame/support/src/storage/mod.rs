@@ -40,7 +40,7 @@ pub enum TransactionOutcome {
 /// Execute the supplied function in a new storage transaction.
 ///
 /// All changes to storage performed by the supplied function are discarded if the returned
-/// outcome is `TransactionOutcome::Discard`.
+/// outcome is `TransactionOutcome::Rollback`.
 ///
 /// Transactions can be nested to any depth. Commits happen to the parent transaction.
 pub fn with_transaction<R>(f: impl FnOnce() -> (R, TransactionOutcome)) -> R {
