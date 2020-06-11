@@ -1346,9 +1346,9 @@ mod tests {
 		assert!(remote_proof.verify(&input_check).unwrap());
 
 		// on child trie
-		let remote_backend = trie_backend::tests::test_trie_proof::<CompactProof>();
+		let remote_backend = trie_backend::tests::test_trie_proof::<SimpleFullProof>();
 	
-		let (recorder, root_input) = prove_child_read_for_query_plan_check(
+		let (recorder, _root_input) = prove_child_read_for_query_plan_check(
 			remote_backend,
 			&[b"value2"],
 			vec![(child_info.clone(), &[b"value3"])],
@@ -1467,8 +1467,6 @@ mod tests {
 			P: FullBackendStorageProof<BlakeTwo256>, 
 			P::StorageProofReg: Clone,
 	{
-		let child_info = ChildInfo::new_default(b"sub1");
-		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie_proof::<P>();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
