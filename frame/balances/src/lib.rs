@@ -217,7 +217,6 @@ impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 decl_event!(
 	pub enum Event<T, I: Instance = DefaultInstance> where
 		<T as frame_system::Trait>::AccountId,
-		<T as frame_support::traits>::Status,
 		<T as Trait<I>>::Balance
 	{
 		/// An account was created with some free balance.
@@ -1224,9 +1223,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
 				}
 				from_account.reserved -= actual;
-				Self::deposit_event(RawEvent::ReserveRepatriated(
-					slashed.clone(), beneficiary.clone(), actual.clone(), status
-				));
+				Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual.clone(), status));
 				Ok(value - actual)
 			})
 		})
