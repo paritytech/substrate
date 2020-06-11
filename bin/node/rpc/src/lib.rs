@@ -103,6 +103,7 @@ pub fn create_full<C, P, M, SC>(
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
+	C::Api: pallet_im_online_rpc::ImOnlineRuntimeApi<Block>,
 	C::Api: BabeApi<Block>,
 	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 	P: TransactionPool + 'static,
@@ -112,6 +113,7 @@ pub fn create_full<C, P, M, SC>(
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
+	use pallet_im_online_rpc::{ImOnline, ImOnlineApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
@@ -144,6 +146,9 @@ pub fn create_full<C, P, M, SC>(
 	io.extend_with(
 		TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone()))
 	);
+        io.extend_with(
+                ImOnlineApi::to_delegate(ImOnline::new(client.clone()))
+        );
 	io.extend_with(
 		sc_consensus_babe_rpc::BabeApi::to_delegate(
 			BabeRpcHandler::new(

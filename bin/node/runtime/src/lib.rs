@@ -1015,6 +1015,12 @@ impl_runtime_apis! {
 		}
 	}
 
+        impl pallet_im_online_rpc_runtime_api::ImOnlineApi<Block> for Runtime {
+                fn is_online(authority_index: u32) -> bool {
+                        ImOnline::is_online(authority_index)
+                }
+        }
+
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)

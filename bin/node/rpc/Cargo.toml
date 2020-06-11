@@ -19,6 +19,7 @@ sp-runtime = { version = "2.0.0-rc2", path = "../../../primitives/runtime" }
 sp-api = { version = "2.0.0-rc2", path = "../../../primitives/api" }
 pallet-contracts-rpc = { version = "0.8.0-rc2", path = "../../../frame/contracts/rpc/" }
 pallet-transaction-payment-rpc = { version = "2.0.0-rc2", path = "../../../frame/transaction-payment/rpc/" }
+pallet-im-online-rpc = { version = "2.0.0-rc2", path = "../../../frame/im-online/rpc/" }
 substrate-frame-rpc-system = { version = "2.0.0-rc2", path = "../../../utils/frame/rpc/system" }
 sp-transaction-pool = { version = "2.0.0-rc2", path = "../../../primitives/transaction-pool" }
 sc-consensus-babe = { version = "0.8.0-rc2", path = "../../../client/consensus/babe" }

@@ -18,7 +18,6 @@
 //! RPC interface for the im-online module.
 
 use std::sync::Arc;
-use codec::{Codec, Decode};
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use sp_api::ProvideRuntimeApi;
