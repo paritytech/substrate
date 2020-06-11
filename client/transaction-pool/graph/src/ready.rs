@@ -25,15 +25,17 @@ use std::{
 
 use serde::Serialize;
 use log::trace;
-use parking_lot::RwLock;
 use sp_runtime::traits::Member;
 use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 };
 use sp_transaction_pool::error;
 
-use crate::future::WaitingTransaction;
-use crate::base_pool::Transaction;
+use crate::{
+	base_pool::Transaction,
+	future::WaitingTransaction,
+	tracked_map::{self, ReadOnlyTrackedMap, TrackedMap},
+};
 
 /// An in-pool transaction reference.
 ///
@@ -113,9 +115,15 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	ready: TrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
+}
+
+impl<Hash, Ex> tracked_map::Size for ReadyTx<Hash, Ex> {
+	fn size(&self) -> usize {
+		self.transaction.transaction.bytes
+	}
 }
 
 impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
@@ -468,18 +476,18 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Returns number of transactions in this queue.
 	pub fn len(&self) -> usize {
-		self.ready.read().len()
+		self.ready.len()
 	}
 
 	/// Returns sum of encoding lengths of all transactions in this queue.
 	pub fn bytes(&self) -> usize {
-		self.ready.read().values().fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
+		self.ready.bytes()
 	}
 }
 
 /// Iterator of ready transactions ordered by priority.
 pub struct BestIterator<Hash, Ex> {
-	all: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
+	all: ReadOnlyTrackedMap<Hash, ReadyTx<Hash, Ex>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
