@@ -19,7 +19,7 @@
 //! Substrate Client data backend
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use sp_core::ChangesTrieConfigurationRange;
 use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
@@ -418,15 +418,28 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
-	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> sp_blockchain::Result<()>;
+	///
+	/// The `finalization_check` closure checks that if an imported block is able to be
+	/// finalized. If the check returns false, the import succeeds, but with the imported block
+	/// unfinalized.
+	fn commit_operation<F: Fn(&Block::Hash) -> bool>(
+		&self,
+		transaction: Self::BlockImportOperation,
+		finalization_check: &F,
+	) -> sp_blockchain::Result<()>;
 
 	/// Finalize block with given Id.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
-	fn finalize_block(
+	///
+	/// The `finalization_check` closure checks that if an imported block is able to be
+	/// finalized. If the check returns false, the import succeeds, but with the imported block
+	/// unfinalized.
+	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
 		&self,
 		block: BlockId<Block>,
 		justification: Option<Justification>,
+		finalization_check: &F,
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns reference to blockchain backend.
@@ -451,17 +464,15 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
-	/// inconsistent state. If `blacklist_finalized` is set, re-importing will not mark the reverted
-	/// blocks as finalized, even if the consensus engine described it. The blacklist is reset upon
-	/// client restart.
+	/// inconsistent state.
 	///
-	/// Returns the number of blocks that were successfully reverted.
+	/// Returns the number of blocks that were successfully reverted and the list of finalized
+	/// blocks that has been reverted.
 	fn revert(
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
-		blacklist_finalized: bool,
-	) -> sp_blockchain::Result<NumberFor<Block>>;
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<

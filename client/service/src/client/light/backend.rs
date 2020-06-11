@@ -19,7 +19,7 @@
 //! Light client backend. Only stores headers and justifications of blocks.
 //! Everything else is requested from full nodes on demand.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use parking_lot::RwLock;
 
@@ -146,7 +146,11 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(())
 	}
 
-	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation<F: Fn(&Block::Hash) -> bool>(
+		&self,
+		mut operation: Self::BlockImportOperation,
+		_finalization_check: &F,
+	) -> ClientResult<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for block in operation.finalized_blocks {
 				self.blockchain.storage().finalize_header(block)?;
@@ -188,10 +192,11 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(())
 	}
 
-	fn finalize_block(
+	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
 		&self,
 		block: BlockId<Block>,
 		_justification: Option<Justification>,
+		_finalization_check: &F,
 	) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}
@@ -231,8 +236,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
-		_blacklist_finalized: bool,
-	) -> ClientResult<NumberFor<Block>> {
+	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 

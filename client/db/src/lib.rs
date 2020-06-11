@@ -69,6 +69,7 @@ use parking_lot::RwLock;
 use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
@@ -778,7 +779,6 @@ pub struct Backend<Block: BlockT> {
 	is_archive: bool,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
-	finalize_blacklist: Arc<RwLock<HashSet<Block::Hash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -857,7 +857,6 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
-			finalize_blacklist: Arc::new(RwLock::new(HashSet::new())),
 		})
 	}
 
@@ -945,7 +944,7 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn finalize_block_with_transaction(
+	fn finalize_block_with_transaction<F: Fn(&Block::Hash) -> bool>(
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		hash: &Block::Hash,
@@ -954,12 +953,13 @@ impl<Block: BlockT> Backend<Block> {
 		justification: Option<Justification>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
+		finalization_check: &F
 	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
 
-		if self.finalize_blacklist.read().contains(hash) {
+		if !finalization_check(hash) {
 			return Ok((*hash, number, false, false))
 		}
 
@@ -1016,9 +1016,11 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn try_commit_operation(&self, mut operation: BlockImportOperation<Block>)
-		-> ClientResult<()>
-	{
+	fn try_commit_operation<F: Fn(&Block::Hash) -> bool>(
+		&self,
+		mut operation: BlockImportOperation<Block>,
+		finalization_check: &F,
+	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let mut finalization_displaced_leaves = None;
 
@@ -1041,6 +1043,7 @@ impl<Block: BlockT> Backend<Block> {
 				justification,
 				&mut changes_trie_cache_ops,
 				&mut finalization_displaced_leaves,
+				finalization_check,
 			)?);
 			last_finalized_hash = block_hash;
 		}
@@ -1150,7 +1153,7 @@ impl<Block: BlockT> Backend<Block> {
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
-				let finalized = !self.finalize_blacklist.read().contains(&hash) &&
+				let finalized = finalization_check(&hash) &&
 					(number_u64 == 0 || pending_block.leaf_state.is_final());
 				finalized
 			} else {
@@ -1406,11 +1409,15 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation<F: Fn(&Block::Hash) -> bool>(
+		&self,
+		operation: Self::BlockImportOperation,
+		finalization_check: &F,
+	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
-		match self.try_commit_operation(operation) {
+		match self.try_commit_operation(operation, finalization_check) {
 			Ok(_) => {
 				self.storage.state_db.apply_pending();
 				Ok(())
@@ -1422,9 +1429,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>)
-		-> ClientResult<()>
-	{
+	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
+		&self,
+		block: BlockId<Block>,
+		justification: Option<Justification>,
+		finalization_check: &F,
+	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
@@ -1439,6 +1449,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			justification,
 			&mut changes_trie_cache_ops,
 			&mut displaced,
+			finalization_check,
 		)?;
 		self.storage.db.commit(transaction);
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
@@ -1494,8 +1505,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
-		blacklist_finalized: bool,
-	) -> ClientResult<NumberFor<Block>> {
+	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
+		let mut reverted_finalized = HashSet::new();
+
 		let mut best_number = self.blockchain.info().best_number;
 		let mut best_hash = self.blockchain.info().best_hash;
 
@@ -1509,26 +1521,33 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		};
 
 		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
-			let mut finalize_blacklist = self.finalize_blacklist.write();
-
 			for c in 0 .. n.saturated_into::<u64>() {
 				if best_number.is_zero() {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
+				let removed_number = best_number;
+				let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
+					|| sp_blockchain::Error::UnknownBlock(
+						format!("Error reverting to {}. Block hash not found.", best_number)))?;
+				let removed_hash = removed.hash();
+
+				let prev_number = best_number.saturating_sub(One::one());
+				let prev_hash = self.blockchain.hash(prev_number)?.ok_or_else(
+					|| sp_blockchain::Error::UnknownBlock(
+						format!("Error reverting to {}. Block hash not found.", best_number))
+				)?;
+
+				if !self.have_state_at(&prev_hash, prev_number) {
+					return Ok(c.saturated_into::<NumberFor<Block>>())
+				}
+
 				match self.storage.state_db.revert_one() {
 					Some(commit) => {
 						apply_state_commit(&mut transaction, commit);
-						let removed_number = best_number;
-						let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
-							|| sp_blockchain::Error::UnknownBlock(
-								format!("Error reverting to {}. Block hash not found.", best_number)))?;
-						let removed_hash = removed.hash();
 
-						best_number -= One::one();	// prev block
-						best_hash = self.blockchain.hash(best_number)?.ok_or_else(
-							|| sp_blockchain::Error::UnknownBlock(
-								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+						best_number = prev_number;
+						best_hash = prev_hash;
 
 						let update_finalized = best_number < finalized;
 
@@ -1546,9 +1565,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 								meta_keys::FINALIZED_BLOCK,
 								key.clone()
 							);
-							if blacklist_finalized {
-								finalize_blacklist.insert(removed_hash);
-							}
+							reverted_finalized.insert(removed_hash);
 						}
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
@@ -1579,7 +1596,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		revert_leaves()?;
 
-		Ok(reverted)
+		Ok((reverted, reverted_finalized))
 	}
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {
@@ -1748,7 +1765,7 @@ pub(crate) mod tests {
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, Some(Vec::new()), None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
-		backend.commit_operation(op).unwrap();
+		backend.commit_operation(op, &|_| true).unwrap();
 
 		header_hash
 	}
@@ -1787,7 +1804,7 @@ pub(crate) mod tests {
 						None,
 						NewBlockState::Best,
 					).unwrap();
-					db.commit_operation(op).unwrap();
+					db.commit_operation(op, &|_| true).unwrap();
 				}
 
 				assert!(db.blockchain().hash(i).unwrap().is_some())
@@ -1843,7 +1860,7 @@ pub(crate) mod tests {
 				NewBlockState::Best,
 			).unwrap();
 
-			db.commit_operation(op).unwrap();
+			db.commit_operation(op, &|_| true).unwrap();
 
 			let state = db.state_at(BlockId::Number(0)).unwrap();
 
@@ -1885,7 +1902,7 @@ pub(crate) mod tests {
 				NewBlockState::Best,
 			).unwrap();
 
-			db.commit_operation(op).unwrap();
+			db.commit_operation(op, &|_| true).unwrap();
 
 			let state = db.state_at(BlockId::Number(1)).unwrap();
 
@@ -1928,7 +1945,7 @@ pub(crate) mod tests {
 				NewBlockState::Best,
 			).unwrap();
 
-			backend.commit_operation(op).unwrap();
+			backend.commit_operation(op, &|_| true).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
@@ -1965,7 +1982,7 @@ pub(crate) mod tests {
 				NewBlockState::Best,
 			).unwrap();
 
-			backend.commit_operation(op).unwrap();
+			backend.commit_operation(op, &|_| true).unwrap();
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
@@ -2001,8 +2018,7 @@ pub(crate) mod tests {
 				NewBlockState::Best,
 			).unwrap();
 
-			backend.commit_operation(op).unwrap();
-
+			backend.commit_operation(op, &|_| true).unwrap();
 
 			assert!(backend.storage.db.get(
 				columns::STATE,
@@ -2037,16 +2053,16 @@ pub(crate) mod tests {
 				NewBlockState::Best,
 			).unwrap();
 
-			backend.commit_operation(op).unwrap();
+			backend.commit_operation(op, &|_| true).unwrap();
 			assert!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
 			).is_none());
 		}
 
-		backend.finalize_block(BlockId::Number(1), None).unwrap();
-		backend.finalize_block(BlockId::Number(2), None).unwrap();
-		backend.finalize_block(BlockId::Number(3), None).unwrap();
+		backend.finalize_block(BlockId::Number(1), None, &|_| true).unwrap();
+		backend.finalize_block(BlockId::Number(2), None, &|_| true).unwrap();
+		backend.finalize_block(BlockId::Number(3), None, &|_| true).unwrap();
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
@@ -2245,8 +2261,8 @@ pub(crate) mod tests {
 
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c, block1_c]);
 
-		backend.finalize_block(BlockId::hash(block1_a), None).unwrap();
-		backend.finalize_block(BlockId::hash(block2_a), None).unwrap();
+		backend.finalize_block(BlockId::hash(block1_a), None, &|_| true).unwrap();
+		backend.finalize_block(BlockId::hash(block2_a), None, &|_| true).unwrap();
 
 		// leaves at same height stay. Leaves at lower heights pruned.
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c]);
@@ -2272,7 +2288,7 @@ pub(crate) mod tests {
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
 		let justification = Some(vec![1, 2, 3]);
-		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
+		backend.finalize_block(BlockId::Number(1), justification.clone(), &|_| true).unwrap();
 
 		assert_eq!(
 			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
@@ -2294,14 +2310,14 @@ pub(crate) mod tests {
 			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
 			op.mark_finalized(BlockId::Hash(block1), None).unwrap();
 			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
-			backend.commit_operation(op).unwrap();
+			backend.commit_operation(op, &|_| true).unwrap();
 		}
 		{
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
 			op.mark_finalized(BlockId::Hash(block3), None).unwrap();
 			op.mark_finalized(BlockId::Hash(block4), None).unwrap();
-			backend.commit_operation(op).unwrap();
+			backend.commit_operation(op, &|_| true).unwrap();
 		}
 	}
 
@@ -2316,7 +2332,7 @@ pub(crate) mod tests {
 			let mut op = backend.begin_operation().unwrap();
 			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
 			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
-			backend.commit_operation(op).unwrap_err();
+			backend.commit_operation(op, &|_| true).unwrap_err();
 		}
 	}
 }

@@ -574,7 +574,7 @@ mod tests {
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
-		backend.commit_operation(op).unwrap();
+		backend.commit_operation(op, &|_| true).unwrap();
 
 		header_hash
 	}
@@ -917,7 +917,7 @@ mod tests {
 		op.mark_finalized(BlockId::Hash(block1), None).unwrap();
 		op.mark_finalized(BlockId::Hash(block2), None).unwrap();
 		op.set_block_data(header3, None, None, NewBlockState::Final).unwrap();
-		backend.commit_operation(op).unwrap();
+		backend.commit_operation(op, &|_| true).unwrap();
 
 		// insert more unfinalized headers
 		let block4 = insert_header_with_configuration_change(&backend, 4, block3, changes(4), configs[4].clone());
@@ -942,7 +942,7 @@ mod tests {
 		op.mark_finalized(BlockId::Hash(block5), None).unwrap();
 		op.mark_finalized(BlockId::Hash(block6), None).unwrap();
 		op.set_block_data(header7, None, None, NewBlockState::Final).unwrap();
-		backend.commit_operation(op).unwrap();
+		backend.commit_operation(op, &|_| true).unwrap();
 	}
 
 	#[test]
@@ -953,7 +953,7 @@ mod tests {
 		let block0 = insert_header_with_configuration_change(&backend, 0, Default::default(), None, config0);
 		let config1 = Some(ChangesTrieConfiguration::new(2, 6));
 		let block1 = insert_header_with_configuration_change(&backend, 1, block0, changes(0), config1);
-		backend.finalize_block(BlockId::Number(1), Some(vec![42])).unwrap();
+		backend.finalize_block(BlockId::Number(1), Some(vec![42]), &|_| true).unwrap();
 		let config2 = Some(ChangesTrieConfiguration::new(2, 7));
 		let block2 = insert_header_with_configuration_change(&backend, 2, block1, changes(1), config2);
 		let config2_1 = Some(ChangesTrieConfiguration::new(2, 8));
@@ -976,7 +976,7 @@ mod tests {
 		);
 
 		// after truncating block2_3 - there are 2 unfinalized forks - block2_1+block2_2
-		backend.revert(1, false, false).unwrap();
+		backend.revert(1, false).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
@@ -990,7 +990,7 @@ mod tests {
 
 		// after truncating block2_1 && block2_2 - there are still two unfinalized forks (cache impl specifics),
 		// the 1st one points to the block #3 because it isn't truncated
-		backend.revert(1, false, false).unwrap();
+		backend.revert(1, false).unwrap();
 		assert_eq!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)
@@ -1003,7 +1003,7 @@ mod tests {
 		);
 
 		// after truncating block2 - there are no unfinalized forks
-		backend.revert(1, false, false).unwrap();
+		backend.revert(1, false).unwrap();
 		assert!(
 			backend.changes_tries_storage.cache.0.write()
 				.get_cache(well_known_cache_keys::CHANGES_TRIE_CONFIG)

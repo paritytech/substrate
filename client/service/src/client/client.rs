@@ -244,7 +244,10 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 			let r = f(&mut op)?;
 
 			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
-			self.backend.commit_operation(op)?;
+			self.backend.commit_operation(
+				op,
+				&|hash| !self.block_rules.lookup_hash(hash).is_unfinalized(),
+			)?;
 
 			self.notify_finalized(notify_finalized)?;
 			self.notify_imported(notify_imported)?;
@@ -307,7 +310,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				None,
 				NewBlockState::Final
 			)?;
-			backend.commit_operation(op)?;
+			backend.commit_operation(
+				op,
+				&|_| true,
+			)?;
 		}
 
 		Ok(Client {
@@ -1060,7 +1066,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// reverted past the last finalized block. Returns the number of blocks
 	/// that were successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, false, false)?)
+		let (number, _) = self.backend.revert(n, false)?;
+		Ok(number)
 	}
 
 	/// Attempts to revert the chain by `n` blocks disregarding finality. This method will revert
@@ -1073,11 +1080,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	///
 	/// Returns the number of blocks that were successfully reverted.
 	pub fn unsafe_revert(
-		&self,
+		&mut self,
 		n: NumberFor<Block>,
-		blacklist: bool
+		blacklist: bool,
 	) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(self.backend.revert(n, true, blacklist)?)
+		let (number, reverted) = self.backend.revert(n, true)?;
+		if blacklist {
+			for b in reverted {
+				self.block_rules.mark_unfinalized(b);
+			}
+		}
+		Ok(number)
 	}
 
 	/// Get blockchain info.
@@ -1734,6 +1747,13 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 				);
 				return Ok(ImportResult::KnownBad);
 			},
+			BlockLookupResult::KnownUnfinalized => {
+				trace!(
+					"Encountered block that is marked as not to be finalized: #{} {:?}, keep importing.",
+					number,
+					hash,
+				);
+			}
 			BlockLookupResult::NotSpecial => {}
 		}
 

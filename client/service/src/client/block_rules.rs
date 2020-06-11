@@ -30,10 +30,22 @@ use sc_client_api::{ForkBlocks, BadBlocks};
 pub enum LookupResult<B: BlockT> {
 	/// Specification rules do not contain any special rules about this block
 	NotSpecial,
-	/// The bock is known to be bad and should not be imported
+	/// The block is known to be bad and should not be imported
 	KnownBad,
+	/// The block is known not to be finalized
+	KnownUnfinalized,
 	/// There is a specified canonical block hash for the given height
 	Expected(B::Hash)
+}
+
+impl<B: BlockT> LookupResult<B> {
+	/// Whether the result indicates a block that should not be finalized.
+	pub fn is_unfinalized(&self) -> bool {
+		match self {
+			Self::KnownUnfinalized => true,
+			_ => false,
+		}
+	}
 }
 
 /// Chain-specific block filtering rules.
@@ -42,6 +54,7 @@ pub enum LookupResult<B: BlockT> {
 /// is usually part of the chain spec.
 pub struct BlockRules<B: BlockT> {
 	bad: HashSet<B::Hash>,
+	unfinalized: HashSet<B::Hash>,
 	forks: HashMap<NumberFor<B>, B::Hash>,
 }
 
@@ -54,7 +67,13 @@ impl<B: BlockT> BlockRules<B> {
 		Self {
 			bad: bad_blocks.unwrap_or(HashSet::new()),
 			forks: fork_blocks.unwrap_or(vec![]).into_iter().collect(),
+			unfinalized: HashSet::new(),
 		}
+	}
+
+	/// Mark a block as not possible to be finalized.
+	pub fn mark_unfinalized(&mut self, hash: B::Hash) {
+		self.unfinalized.insert(hash);
 	}
 
 	/// Check if there's any rule affecting the given block.
@@ -66,7 +85,24 @@ impl<B: BlockT> BlockRules<B> {
 		}
 
 		if self.bad.contains(hash) {
-			return LookupResult::KnownBad;
+			return LookupResult::KnownBad
+		}
+
+		if self.unfinalized.contains(hash) {
+			return LookupResult::KnownUnfinalized
+		}
+
+		LookupResult::NotSpecial
+	}
+
+	/// Check if there's any rule affecting the given block hash.
+	pub fn lookup_hash(&self, hash: &B::Hash) -> LookupResult<B> {
+		if self.bad.contains(hash) {
+			return LookupResult::KnownBad
+		}
+
+		if self.unfinalized.contains(hash) {
+			return LookupResult::KnownUnfinalized
 		}
 
 		LookupResult::NotSpecial

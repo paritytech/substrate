@@ -265,7 +265,7 @@ fn local_state_is_created_when_genesis_state_is_available() {
 	let mut op = backend.begin_operation().unwrap();
 	op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
 	op.reset_storage(Default::default()).unwrap();
-	backend.commit_operation(op).unwrap();
+	backend.commit_operation(op, &|_| true).unwrap();
 
 	match backend.state_at(BlockId::Number(0)).unwrap() {
 		GenesisOrUnavailableState::Genesis(_) => (),
@@ -290,7 +290,7 @@ fn light_aux_store_is_updated_via_non_importing_op() {
 	let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 	let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
 	BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
-	ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
+	ClientBackend::<Block>::commit_operation(&backend, op, &|_| true).unwrap();
 
 	assert_eq!(AuxStore::get_aux(&backend, &[1]).unwrap(), Some(vec![2]));
 }
