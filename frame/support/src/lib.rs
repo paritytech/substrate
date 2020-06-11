@@ -97,7 +97,7 @@ pub enum Never {}
 ///   load the value from the storage under a fixed key. If the value could not be found in the
 ///   storage, the given default value will be returned. It is required that the value implements
 ///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value
-///   in the storage is build using the following formular:
+///   in the storage is built using the following formular:
 ///
 ///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
 ///
