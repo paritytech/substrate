@@ -230,6 +230,8 @@ decl_event!(
 		BalanceSet(AccountId, Balance, Balance),
 		/// Some amount was deposited (e.g. for transaction fees).
 		Deposit(AccountId, Balance),
+		/// Some balance was reserved (moved from free to reserved).
+		Reserved(AccountId, Balance),
 		/// Some balance was unreserved (moved from reserved to free).
 		Unreserved(AccountId, Balance),
 		/// Some balance was moved from the reserve of the first account to the second account.
@@ -1155,6 +1157,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
+			Self::deposit_event(RawEvent::Reserved(who.clone(), value.clone()));
 			Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), account.free)
 		})
 	}
