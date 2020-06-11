@@ -55,15 +55,6 @@ pub enum ExecutionMode {
 	Runtime,
 }
 
-/// Describes which kind of transaction close should be performed.
-#[derive(Debug, Clone, Copy)]
-enum CloseType {
-	/// Commit the transaction.
-	Commit,
-	/// Rollback the transaction.
-	Rollback,
-}
-
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 struct InnerValue {
@@ -330,7 +321,7 @@ impl OverlayedChangeSet {
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
 	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
-		self.close_transaction(CloseType::Rollback)
+		self.close_transaction(true)
 	}
 
 	/// Commit the last transaction started by `start_transaction`.
@@ -338,10 +329,10 @@ impl OverlayedChangeSet {
 	/// Any changes made during that transaction are committed. Returns an error if
 	/// there is no open transaction that can be committed.
 	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
-		self.close_transaction(CloseType::Commit)
+		self.close_transaction(false)
 	}
 
-	fn close_transaction(&mut self, close_type: CloseType) -> Result<(), NoOpenTransaction> {
+	fn close_transaction(&mut self, rollback: bool) -> Result<(), NoOpenTransaction> {
 		// runtime is not allowed to close transactions started by the client
 		if let ExecutionMode::Runtime = self.execution_mode {
 			if self.num_client_transactions == self.transaction_depth() {
@@ -356,7 +347,7 @@ impl OverlayedChangeSet {
 				function is only called for keys that are in the dirty set. qed\
 			");
 
-			if let CloseType::Rollback = close_type {
+			if rollback {
 				overlayed.pop_transaction();
 
 				// We need to remove the key as an `OverlayValue` with no transactions
