@@ -29,7 +29,6 @@ mod report;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
 use sc_finality_grandpa::GrandpaJustificationReceiver;
-use sc_rpc::Metadata;
 use sp_runtime::traits::Block as BlockT;
 
 /// Returned when Grandpa RPC endpoint is not ready.
@@ -92,7 +91,7 @@ where
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
 	Block: BlockT,
 {
-	type Metadata = Metadata;
+	type Metadata = sc_rpc::Metadata;
 
 	fn round_state(&self) -> FutureResult<ReportedRoundStates> {
 		let round_states = ReportedRoundStates::from(&self.authority_set, &self.voter_state);

@@ -3439,6 +3439,7 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-finality-grandpa-rpc",
  "sc-keystore",
+ "sc-rpc",
  "sc-rpc-api",
  "sp-api",
  "sp-blockchain",

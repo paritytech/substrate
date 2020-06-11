@@ -98,9 +98,9 @@ pub struct FullDeps<C, P, SC> {
 }
 
 /// Instantiate all Full RPC extensions.
-pub fn create_full<C, P, M, SC>(
+pub fn create_full<C, P, SC>(
 	deps: FullDeps<C, P, SC>,
-) -> jsonrpc_core::MetaIoHandler<M> where
+) -> jsonrpc_core::MetaIoHandler<sc_rpc::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
@@ -110,7 +110,6 @@ pub fn create_full<C, P, M, SC>(
 	C::Api: BabeApi<Block>,
 	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 	P: TransactionPool + 'static,
-	M: jsonrpc_pubsub::PubSubMetadata + Default,
 	SC: SelectChain<Block> +'static,
 {
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
