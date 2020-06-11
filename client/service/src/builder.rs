@@ -114,17 +114,17 @@ pub trait RpcExtensionBuilder {
 
 	/// Returns an instance of the RPC extension for a particular `DenyUnsafe`
 	/// value, e.g. the RPC extension might not expose some unsafe methods.
-	fn build(&self, deny: sc_rpc::DenyUnsafe) -> Self::Output;
+	fn build(&self, deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output;
 }
 
 impl<F, R> RpcExtensionBuilder for F where
-	F: Fn(sc_rpc::DenyUnsafe) -> R,
+	F: Fn(sc_rpc::DenyUnsafe, SubscriptionManager) -> R,
 	R: sc_rpc::RpcExtension<sc_rpc::Metadata>,
 {
 	type Output = R;
 
-	fn build(&self, deny: sc_rpc::DenyUnsafe) -> Self::Output {
-		(*self)(deny)
+	fn build(&self, deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output {
+		(*self)(deny, subscriptions)
 	}
 }
 
@@ -138,7 +138,7 @@ impl<R> RpcExtensionBuilder for NoopRpcExtensionBuilder<R> where
 {
 	type Output = R;
 
-	fn build(&self, _deny: sc_rpc::DenyUnsafe) -> Self::Output {
+	fn build(&self, _deny: sc_rpc::DenyUnsafe, subscriptions: SubscriptionManager) -> Self::Output {
 		self.0.clone()
 	}
 }
@@ -361,7 +361,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			finality_proof_request_builder: None,
 			finality_proof_provider: None,
 			transaction_pool: Arc::new(()),
-			rpc_extensions_builder: Box::new(|_| ()),
+			rpc_extensions_builder: Box::new(|_,_| ()),
 			remote_backend: None,
 			block_announce_validator_builder: None,
 			marker: PhantomData,
@@ -444,7 +444,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			finality_proof_request_builder: None,
 			finality_proof_provider: None,
 			transaction_pool: Arc::new(()),
-			rpc_extensions_builder: Box::new(|_| ()),
+			rpc_extensions_builder: Box::new(|_,_| ()),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
 			marker: PhantomData,
@@ -1234,7 +1234,7 @@ ServiceBuilder<
 			let author = sc_rpc::author::Author::new(
 				client.clone(),
 				transaction_pool.clone(),
-				subscriptions,
+				subscriptions.clone(),
 				keystore.clone(),
 				deny_unsafe,
 			);
@@ -1256,7 +1256,7 @@ ServiceBuilder<
 				maybe_offchain_rpc,
 				author::AuthorApi::to_delegate(author),
 				system::SystemApi::to_delegate(system),
-				rpc_extensions_builder.build(deny_unsafe),
+				rpc_extensions_builder.build(deny_unsafe, subscriptions),
 			))
 		};
 		let rpc = start_rpc_servers(&config, gen_handler)?;

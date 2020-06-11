@@ -21,7 +21,7 @@
 
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId /*, manager::SubscriptionManager*/};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 
 mod error;
 mod report;
@@ -63,7 +63,7 @@ pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
 	justification_receiver: GrandpaJustificationReceiver<Block>,
-	// manager: SubscriptionManager,
+	manager: SubscriptionManager,
 }
 
 impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
@@ -72,17 +72,19 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
 		justification_receiver: GrandpaJustificationReceiver<Block>,
+		manager: SubscriptionManager,
 	) -> Self {
 		Self {
 			authority_set,
 			voter_state,
 			justification_receiver,
+			manager,
 		}
 	}
 
-	// fn manager(&self) -> &SubscriptionManager {
-	// 	&self.manager
-	// }
+	fn manager(&self) -> &SubscriptionManager {
+		&self.manager
+	}
 }
 
 impl<AuthoritySet, VoterState, Block> GrandpaApi for GrandpaRpcHandler<AuthoritySet, VoterState, Block>

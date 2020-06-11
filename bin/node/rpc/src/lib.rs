@@ -46,6 +46,7 @@ use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustificationReceiver};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
+use jsonrpc_pubsub::manager::SubscriptionManager;
 
 use jsonrpc_core::IoHandlerExtension;
 
@@ -79,6 +80,8 @@ pub struct GrandpaDeps {
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 	/// Receives notifications about justification events from Grandpa.
 	pub justification_receiver: GrandpaJustificationReceiver<Block>,
+	/// WIP
+	pub subscriptions: SubscriptionManager,
 }
 
 /// Full client dependencies.
@@ -135,6 +138,7 @@ pub fn create_full<C, P, SC>(
 		shared_voter_state,
 		shared_authority_set,
 		justification_receiver,
+		subscriptions,
 	} = grandpa;
 
 	io.extend_with(
@@ -163,7 +167,7 @@ pub fn create_full<C, P, SC>(
 	);
 	io.extend_with(
 		sc_finality_grandpa_rpc::GrandpaApi::to_delegate(
-			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state, justification_receiver)
+			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state, justification_receiver, subscriptions)
 		)
 	);
 

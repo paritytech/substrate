@@ -129,7 +129,7 @@ macro_rules! new_full_start {
 					.expect("SelectChain is present for full services or set up failed; qed.");
 				let keystore = builder.keystore().clone();
 
-				Ok(move |deny_unsafe| {
+				Ok(move |deny_unsafe, subscriptions| {
 					let deps = node_rpc::FullDeps {
 						client: client.clone(),
 						pool: pool.clone(),
@@ -144,6 +144,7 @@ macro_rules! new_full_start {
 							shared_voter_state: shared_voter_state.clone(),
 							shared_authority_set: shared_authority_set.clone(),
 							justification_receiver: justification_receiver.clone(),
+							subscriptions,
 						},
 					};
 
