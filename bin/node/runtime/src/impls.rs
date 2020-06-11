@@ -73,7 +73,7 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 /// - `v ≤ p / k * (s − s')`
 /// - or, solving for `p`: `p >= v * k * (s - s')`
 ///
-/// where `p` is the amount of change of `k` blocks.
+/// where `p` is the amount of change over `k` blocks.
 ///
 /// Hence:
 /// - in an fully congested chain: `p >= v * k * (1 - s')`.
@@ -85,14 +85,12 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 /// p >= 0.00001 * 28800 * 3 / 4
 /// p >= 0.216
 ///
-/// Meaning that fees can change at most by ~20% per day, given extreme congestion.
+/// Meaning that fees can change by around ~21% per day, given extreme congestion.
 ///
 /// More info can be found at:
 /// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
 pub struct TargetedFeeAdjustment<S, V>(sp_std::marker::PhantomData<(S, V)>);
 
-// TODO: migrate FixedI128 to FixedU128.
-// TODO: think about how this value + how to store/configure it.
 const PARTS: i128 = 1_000_000_000;
 pub const MIN_MULTIPLIER: Multiplier = Multiplier::from_inner(PARTS);
 
