@@ -76,7 +76,7 @@ pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
 pub trait SignedExtensionProvider: frame_system::Trait {
     /// Concrete SignedExtension type.
 	type Extra: SignedExtension;
-	/// Concrete type for params
+	/// Concrete type for params used to construct the `SignedExtension`-Data
 	type Params: SystemExtraParams<Self>;
 
 	/// retrieve an instance of the input object.

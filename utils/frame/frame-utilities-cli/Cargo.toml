@@ -1,5 +1,5 @@
 [package]
-name = "frame-utilities-cli"
+name = "substrate-frame-utilities-cli"
 version = "2.0.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -36,4 +36,6 @@ sp-io = { version = "2.0.0-rc3", path = "../../../primitives/io" }
 frame-system = { version = "2.0.0-rc3", path = "../../../frame/system" }
 
 [features]
-balances = []
+default = []
+balances = ["pallet-balances"]
+indices = ["pallet-indices"]

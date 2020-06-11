@@ -432,14 +432,14 @@ macro_rules! substrate_cli_subcommands {
 
 substrate_cli_subcommands!(
 	Subcommand =>
-	BuildSpec,
-	ExportBlocks,
-	ExportState,
-	ImportBlocks,
-	CheckBlock,
-	Revert,
-	PurgeChain,
-	Sign,
-	Verify,
-	Vanity
+		BuildSpec,
+		ExportBlocks,
+		ExportState,
+		ImportBlocks,
+		CheckBlock,
+		Revert,
+		PurgeChain,
+		Sign,
+		Verify,
+		Vanity
 );
