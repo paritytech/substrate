@@ -161,13 +161,16 @@ fn insert_dirty(set: &mut DirtyKeysSets, key: StorageKey) -> bool {
 }
 
 impl OverlayedChangeSet {
-	/// Create a new changeset.
-	pub fn new(depth: usize, num_client_transactions: usize, mode: ExecutionMode) -> Self {
+	/// Create a new changeset at the same transaction state but without any contents.
+	///
+	/// This changeset might be created when there are already open transactions.
+	/// We need to catch up here so that the child is at the same transaction depth.
+	pub fn spawn_child(&self) -> Self {
 		use std::iter::repeat;
 		Self {
-			dirty_keys: repeat(HashSet::new()).take(depth).collect(),
-			num_client_transactions,
-			execution_mode: mode,
+			dirty_keys: repeat(HashSet::new()).take(self.transaction_depth()).collect(),
+			num_client_transactions: self.num_client_transactions,
+			execution_mode: self.execution_mode,
 			.. Default::default()
 		}
 	}
@@ -262,18 +265,6 @@ impl OverlayedChangeSet {
 	/// A value of zero means that no transaction is open and changes are committed on write.
 	pub fn transaction_depth(&self) -> usize {
 		self.dirty_keys.len()
-	}
-
-	/// Returns how many of the open transactions are opened by the client.
-	///
-	/// These are always the first transaction to open and the last to close.
-	pub fn num_client_transactions(&self) -> usize {
-		self.num_client_transactions
-	}
-
-	/// Returns whether we are executing in client or runtime mode.
-	pub fn execution_mode(&self) -> ExecutionMode {
-		self.execution_mode
 	}
 
 	/// Call this before transfering control to the runtime.

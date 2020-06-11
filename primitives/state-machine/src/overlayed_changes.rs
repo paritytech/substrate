@@ -245,19 +245,16 @@ impl OverlayedChanges {
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		let storage_key = child_info.storage_key().to_vec();
-		let tx_depth = self.transaction_depth();
-		let num_client_tx = self.top.num_client_transactions();
-		let exec_mode = self.top.execution_mode();
-		let (overlay, info) = self.children.entry(storage_key)
-			.or_insert_with(|| (
-				// This changeset might be created when there are already open transactions.
-				// We need to catch up here so it is at the same transaction depth.
-				OverlayedChangeSet::new(tx_depth, num_client_tx, exec_mode),
+		let changeset = self.top.spawn_child();
+		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
+			(
+				changeset,
 				child_info.to_owned()
-			));
+			)
+		);
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
-		overlay.set(key, val, extrinsic_index);
+		changeset.set(key, val, extrinsic_index);
 	}
 
 	/// Clear child storage of given storage key.
@@ -268,9 +265,14 @@ impl OverlayedChanges {
 		child_info: &ChildInfo,
 	) {
 		let extrinsic_index = self.extrinsic_index();
-		let storage_key = child_info.storage_key();
-		let (changeset, info) = self.children.entry(storage_key.to_vec())
-			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+		let storage_key = child_info.storage_key().to_vec();
+		let changeset = self.top.spawn_child();
+		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
+			(
+				changeset,
+				child_info.to_owned()
+			)
+		);
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
 		changeset.clear_where(|_, _| true, extrinsic_index);
@@ -292,9 +294,14 @@ impl OverlayedChanges {
 		prefix: &[u8],
 	) {
 		let extrinsic_index = self.extrinsic_index();
-		let storage_key = child_info.storage_key();
-		let (changeset, info) = self.children.entry(storage_key.to_vec())
-			.or_insert_with(|| (Default::default(), child_info.to_owned()));
+		let storage_key = child_info.storage_key().to_vec();
+		let changeset = self.top.spawn_child();
+		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
+			(
+				changeset,
+				child_info.to_owned()
+			)
+		);
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
 		changeset.clear_where(|key, _| key.starts_with(prefix), extrinsic_index);
