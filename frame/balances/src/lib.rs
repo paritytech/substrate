@@ -166,7 +166,8 @@ use frame_support::{
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
-	}
+	},
+	weights::Weight,
 };
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
@@ -544,8 +545,9 @@ decl_module! {
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
 		}
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			migration::on_runtime_upgrade::<T, I>();
+			1000
 		}
 	}
 }

@@ -18,6 +18,11 @@
 
 use super::*;
 
+use frame_support::storage::migration::{
+	get_storage_value, have_storage_value, put_storage_value, take_storage_value, StorageIterator
+};
+use sp_io::hashing::twox_64;
+
 pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() {
 	match StorageVersion::<I>::get() {
 		Releases::V2_0_0 => return,
