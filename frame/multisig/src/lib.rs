@@ -51,7 +51,7 @@ use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
-	weights::{Weight, GetDispatchInfo, DispatchClass, Pays},
+	weights::{Weight, GetDispatchInfo, DispatchClass, Pays, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
@@ -186,18 +186,33 @@ mod weight_of {
 	use super::*;
 
 	/// - Base Weight:
-	///     - Create: 46.55 + 0.089 * S µs
-	///     - Approve: 34.03 + .112 * S µs
-	///     - Complete: 40.36 + .225 * S µs
+	///     - Create:          41.89 + 0.118 * S + .002 * Z µs
+	///     - Create w/ Store: 53.57 + 0.119 * S + .003 * Z µs
+	///     - Approve:         31.39 + 0.136 * S + .002 * Z µs
+	///     - Complete:        39.94 + 0.26  * S + .002 * Z µs
 	/// - DB Weight:
-	///     - Reads: Multisig Storage, [Caller Account]
-	///     - Writes: Multisig Storage, [Caller Account]
+	///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
+	///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 	/// - Plus Call Weight
-	pub fn as_multi<T: Trait>(other_sig_len: usize, call_weight: Weight) -> Weight {
-		call_weight
-			.saturating_add(45_000_000)
-			.saturating_add((other_sig_len as Weight).saturating_mul(250_000))
-			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+	pub fn as_multi<T: Trait>(
+		sig_len: usize,
+		call_len: usize,
+		call_weight: Weight,
+		store_call: bool,
+	 ) -> Weight {
+		 if store_call {
+			return call_weight
+				.saturating_add(53 * WEIGHT_PER_MICROS)
+				.saturating_add((250 * WEIGHT_PER_NANOS).saturating_mul(sig_len as Weight))
+				.saturating_add((3 * WEIGHT_PER_NANOS).saturating_mul(call_len as Weight))
+				.saturating_add(T::DbWeight::get().reads_writes(2, 2))
+		 } else {
+			return call_weight
+				.saturating_add(42 * WEIGHT_PER_MICROS)
+				.saturating_add((250 * WEIGHT_PER_NANOS).saturating_mul(sig_len as Weight))
+				.saturating_add((2 * WEIGHT_PER_NANOS).saturating_mul(call_len as Weight))
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+		 }
 	}
 }
 
@@ -262,16 +277,22 @@ decl_module! {
 		///   `DepositBase + threshold * DepositFactor`.
 		/// -------------------------------
 		/// - Base Weight:
-		///     - Create: 46.55 + 0.089 * S µs
-		///     - Approve: 34.03 + .112 * S µs
-		///     - Complete: 40.36 + .225 * S µs
+		///     - Create:          41.89 + 0.118 * S + .002 * Z µs
+		///     - Create w/ Store: 53.57 + 0.119 * S + .003 * Z µs
+		///     - Approve:         31.39 + 0.136 * S + .002 * Z µs
+		///     - Complete:        39.94 + 0.26  * S + .002 * Z µs
 		/// - DB Weight:
-		///     - Reads: Multisig Storage, [Caller Account]
-		///     - Writes: Multisig Storage, [Caller Account]
+		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
+		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = (
-			weight_of::as_multi::<T>(other_signatories.len(), call.get_dispatch_info().weight),
+			weight_of::as_multi::<T>(
+				other_signatories.len(),
+				call.using_encoded(|x| x.len()),
+				call.get_dispatch_info().weight,
+				*store_call
+			),
 			call.get_dispatch_info().class,
 			Pays::Yes,
 		)]
@@ -297,6 +318,7 @@ decl_module! {
 			let id = Self::multi_account_id(&signatories, threshold);
 
 			let encoded_call = call.encode();
+			let call_len = encoded_call.len();
 			let call_hash = blake2_256(&encoded_call);
 			if store_call {
 				Self::store_call(who.clone(), &call_hash, encoded_call)?;
@@ -311,8 +333,13 @@ decl_module! {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
-						// Call is not made, so the actual weight does not include call
-						return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
+						// Call is not made, so the actual weight does not include call weight
+						return Ok(Some(weight_of::as_multi::<T>(
+							other_signatories_len,
+							call_len,
+							0,
+							store_call,
+						)).into())
 					}
 				} else {
 					if (m.approvals.len() as u16) < threshold {
@@ -342,20 +369,35 @@ decl_module! {
 					});
 					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
 					// Call is not made, so we can return that weight
-					return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
+					return Ok(Some(weight_of::as_multi::<T>(
+						other_signatories_len,
+						call_len,
+						0,
+						store_call,
+					)).into())
 				} else {
 					let result = call.dispatch(frame_system::RawOrigin::Signed(id).into());
 					match result {
 						Ok(post_dispatch_info) => {
 							match post_dispatch_info.actual_weight {
-								Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
+								Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(
+									other_signatories_len,
+									call_len,
+									actual_weight,
+									store_call,
+								)).into()),
 								None => return Ok(None.into()),
 							}
 						},
 						Err(err) => {
 							match err.post_info.actual_weight {
 								Some(actual_weight) => {
-									let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
+									let weight_used = weight_of::as_multi::<T>(
+										other_signatories_len,
+										call_len,
+										actual_weight,
+										store_call,
+									);
 									return Err(DispatchErrorWithPostInfo { post_info: Some(weight_used).into(), error: err.error.into() })
 								},
 								None => {
