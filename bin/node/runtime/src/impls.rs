@@ -223,7 +223,7 @@ mod tests {
 	fn multiplier_can_grow_from_zero() {
 		// if the min is too small, then this will not change, and we are doomed forever.
 		// the weight is 1/10th bigger than target.
-		run_with_system_weight(target() * 11 / 10, || {
+		run_with_system_weight(target() * 101 / 100, || {
 			let next = runtime_multiplier_update(MIN_MULTIPLIER);
 			assert!(next > MIN_MULTIPLIER, "{:?} !>= {:?}", next, MIN_MULTIPLIER);
 		})
