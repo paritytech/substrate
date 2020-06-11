@@ -120,6 +120,9 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 	where I: SessionManager<T::ValidatorId, T::FullIdentification>
 {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		// the previous sessions validator set is the one we want to save for off-chain processing
+		onchain::store_session_validator_set_to_offchain::<T>(new_index - 1);
+
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (new_index, new_index)).1 = new_index + 1;
 		});
