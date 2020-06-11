@@ -218,8 +218,8 @@ mod weight_of {
 	}
 }
 
-enum CallOrHash<Call> {
-	Call(Call, bool),
+enum CallOrHash {
+	Call(Vec<u8>, bool),
 	Hash([u8; 32]),
 }
 
@@ -303,15 +303,109 @@ decl_module! {
 			call.get_dispatch_info().class,
 			Pays::Yes,
 		)]
+		fn as_multi_threshold_1(origin,
+			other_signatories: Vec<T::AccountId>,
+			call: T::Call,
+		) -> DispatchResultWithPostInfo {
+			let max_sigs = T::MaxSignatories::get() as usize;
+			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
+			let other_signatories_len = other_signatories.len();
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
+			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
+
+			let id = Self::multi_account_id(&signatories, 1);
+
+			// We're now executing as a freshly authenticated new account, so the previous call
+			// restrictions no longer apply.
+			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
+			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
+
+			call.dispatch(frame_system::RawOrigin::Signed(id).into())
+				.map(|post_dispatch_info| post_dispatch_info.actual_weight
+					.map(|actual_weight| weight_of::as_multi::<T>(other_signatories_len, actual_weight))
+					.into()
+				).map_err(|err| match err.post_info.actual_weight {
+					Some(actual_weight) => {
+						let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
+						let post_info = Some(weight_used).into();
+						let error = err.error.into();
+						DispatchErrorWithPostInfo { post_info, error }
+					},
+					None => err,
+				})
+		}
+
+		/// Register approval for a dispatch to be made from a deterministic composite account if
+		/// approved by a total of `threshold - 1` of `other_signatories`.
+		///
+		/// If there are enough, then dispatch the call. Calls must each fulfil the `IsCallable`
+		/// filter.
+		///
+		/// Payment: `DepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `DepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve this
+		/// dispatch. May not be empty.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call`: The call to be executed.
+		///
+		/// NOTE: Unless this is the final approval, you will generally want to use
+		/// `approve_as_multi` instead, since it only requires a hash of the call.
+		///
+		/// Result is equivalent to the dispatched result if `threshold` is exactly `1`. Otherwise
+		/// on success, result is `Ok` and the result from the interior call, if it was executed,
+		/// may be found in the deposited `MultisigExecuted` event.
+		///
+		/// # <weight>
+		/// - `O(S + Z + Call)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One call encode & hash, both of complexity `O(Z)` where `Z` is tx-len.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to one binary search and insert (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - The weight of the `call`.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
+		///   deposit taken for its lifetime of
+		///   `DepositBase + threshold * DepositFactor`.
+		/// -------------------------------
+		/// - Base Weight:
+		///     - Create:          41.89 + 0.118 * S + .002 * Z µs
+		///     - Create w/ Store: 53.57 + 0.119 * S + .003 * Z µs
+		///     - Approve:         31.39 + 0.136 * S + .002 * Z µs
+		///     - Complete:        39.94 + 0.26  * S + .002 * Z µs
+		/// - DB Weight:
+		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
+		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
+		/// - Plus Call Weight
+		/// # </weight>
+		#[weight = (
+			weight_of::as_multi::<T>(
+				other_signatories.len(),
+				call.using_encoded(|x| x.len()),
+				call.get_dispatch_info().weight,
+				*store_call
+			),
+			call.get_dispatch_info().class,
+			Pays::Yes,
+		)]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: Box<<T as Trait>::Call>,
+			call: Vec<u8>,
 			store_call: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::operate(who, threshold, other_signatories, maybe_timepoint, CallOrHash::Call(*call, store_call))
+			Self::operate(who, threshold, other_signatories, maybe_timepoint, CallOrHash::Call(call, store_call))
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -411,7 +505,7 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
+			ensure!(threshold >= 2, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
@@ -449,9 +543,9 @@ impl<T: Trait> Module<T> {
 		threshold: u16,
 		other_signatories: Vec<T::AccountId>,
 		maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-		call_or_hash: CallOrHash<<T as Trait>::Call>,
+		call_or_hash: CallOrHash,
 	) -> DispatchResultWithPostInfo {
-		ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
+		ensure!(threshold >= 2, Error::<T>::ZeroThreshold);
 		let max_sigs = T::MaxSignatories::get() as usize;
 		ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 		let other_signatories_len = other_signatories.len();
@@ -460,49 +554,13 @@ impl<T: Trait> Module<T> {
 
 		let id = Self::multi_account_id(&signatories, threshold);
 
-		if threshold == 1 {
-			// Special case for 1 of N; we can always execute it directly, so it's a single-step
-			// operation.
-			ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
-			let call = match call_or_hash {
-				CallOrHash::Call(c, _) => c,
-				_ => Err(Error::<T>::NoApprovalsNeeded)?,
-			};
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-
-			let result = call.dispatch(frame_system::RawOrigin::Signed(id).into());
-			match result {
-				Ok(post_dispatch_info) => {
-					match post_dispatch_info.actual_weight {
-						Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
-						None => return Ok(None.into()),
-					}
-				},
-				Err(err) => {
-					match err.post_info.actual_weight {
-						Some(actual_weight) => {
-							let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
-							return Err(DispatchErrorWithPostInfo { post_info: Some(weight_used).into(), error: err.error.into() })
-						},
-						None => {
-							return Err(err)
-						}
-					}
-				}
-			}
-		}
-
 		// Threshold > 1; this means it's a multi-step operation. We extract the `call_hash`.
-		let (call_hash, maybe_call, maybe_store) = match call_or_hash {
+		let (call_hash, maybe_call, store) = match call_or_hash {
 			CallOrHash::Call(call, should_store) => {
-				let encoded_call = call.encode();
-				let call_hash = blake2_256(&encoded_call);
-				(call_hash, Some(call), if should_store { Some(encoded_call) } else { None })
+				let call_hash = blake2_256(&call);
+				(call_hash, Some(call), should_store)
 			}
-			CallOrHash::Hash(h) => (h, None, None),
+			CallOrHash::Hash(h) => (h, None, false),
 		};
 
 		// Branch on whether the operation has already started or not.
@@ -520,7 +578,7 @@ impl<T: Trait> Module<T> {
 
 			// We only bother fetching/decoding call if we know that we're ready to execute.
 			let maybe_approved_call = if approvals >= threshold {
-				maybe_call.or_else(|| Self::get_call(&call_hash))
+				Self::get_call(&call_hash, maybe_call.as_ref().map(Into::into))
 			} else { None };
 
 			if let Some(call) = maybe_approved_call {
@@ -542,7 +600,8 @@ impl<T: Trait> Module<T> {
 				// don't have threshold approvals even with our signature.
 
 				// Store the call if desired.
-				let stored = maybe_store
+				let stored = maybe_call
+					.filter(|| store)
 					.map_or(false, |data| Self::store_call(who.clone(), &call_hash, data));
 
 				if let Some(pos) = maybe_pos {
@@ -564,10 +623,9 @@ impl<T: Trait> Module<T> {
 			ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 
 			// Just start the operation by recording it in storage.
-			let deposit = T::DepositBase::get()
-				+ T::DepositFactor::get() * threshold.into();
+			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
 			T::Currency::reserve(&who, deposit)?;
-			if let Some(data) = maybe_store { Self::store_call(who.clone(), &call_hash, data); };
+			call.filter(|| store).map(|d| Self::store_call(who.clone(), &call_hash, d));
 			<Multisigs<T>>::insert(&id, call_hash, Multisig {
 				when: Self::timepoint(),
 				deposit,
@@ -599,7 +657,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to read a call from storage, returning it.
-	fn get_call(hash: &[u8; 32]) -> Option<<T as Trait>::Call> {
+	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<<T as Trait>::Call> {
 		Calls::<T>::get(hash).and_then(|(data, ..)| {
 			Decode::decode(&mut &data[..]).ok()
 		})
