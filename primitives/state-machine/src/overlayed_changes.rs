@@ -245,10 +245,10 @@ impl OverlayedChanges {
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		let storage_key = child_info.storage_key().to_vec();
-		let changeset = self.top.spawn_child();
+		let top = &self.top;
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
-				changeset,
+				top.spawn_child(),
 				child_info.to_owned()
 			)
 		);
@@ -266,10 +266,10 @@ impl OverlayedChanges {
 	) {
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
-		let changeset = self.top.spawn_child();
+		let top = &self.top;
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
-				changeset,
+				top.spawn_child(),
 				child_info.to_owned()
 			)
 		);
@@ -295,10 +295,10 @@ impl OverlayedChanges {
 	) {
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
-		let changeset = self.top.spawn_child();
+		let top = &self.top;
 		let (changeset, info) = self.children.entry(storage_key).or_insert_with(||
 			(
-				changeset,
+				top.spawn_child(),
 				child_info.to_owned()
 			)
 		);
