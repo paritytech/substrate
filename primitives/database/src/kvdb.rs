@@ -19,7 +19,7 @@
 
 use ::kvdb::{DBTransaction, KeyValueDB};
 
-use crate::{Database, Change, Transaction, ColumnId};
+use crate::{Database, Change, ColumnId, Result, Transaction};
 
 struct DbAdapter<D: KeyValueDB + 'static>(D);
 
@@ -38,7 +38,7 @@ pub fn as_database<D: KeyValueDB + 'static, H: Clone>(db: D) -> std::sync::Arc<d
 }
 
 impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
-	fn commit(&self, transaction: Transaction<H>) {
+	fn commit(&self, transaction: Transaction<H>) -> Result<()> {
 		let mut tx = DBTransaction::new();
 		for change in transaction.0.into_iter() {
 			match change {
@@ -48,6 +48,8 @@ impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
 			}
 		}
 		handle_err(self.0.write(tx));
+
+		Ok(())
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
