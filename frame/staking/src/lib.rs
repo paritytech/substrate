@@ -1279,28 +1279,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			#[allow(dead_code)]
-			mod inner {
-				pub struct Module<T>(sp_std::marker::PhantomData<T>);
-				frame_support::decl_storage! {
-					trait Store for Module<T: super::Trait> as Staking {
-						pub MigrateEra: Option<super::EraIndex>;
-					}
-				}
-			}
-
-			if let Releases::V3_0_0 = StorageVersion::get() {
-				StorageVersion::put(Releases::V4_0_0);
-				inner::MigrateEra::kill();
-
-				T::DbWeight::get().reads_writes(1, 1)
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
-
 		/// sets `ElectionStatus` to `Open(now)` where `now` is the block number at which the
 		/// election window has opened, if we are at the last session and less blocks than
 		/// `T::ElectionLookahead` is remaining until the next new session schedule. The offchain

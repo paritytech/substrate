@@ -206,17 +206,6 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			// Utility.Multisigs -> Multisig.Multisigs
-			use frame_support::migration::{StorageIterator, put_storage_value};
-			for (key, value) in StorageIterator::<
-				Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>
-			>::new(b"Utility", b"Multisigs").drain() {
-				put_storage_value(b"Multisig", b"Multisigs", &key, value);
-			}
-			1_000_000_000
-		}
-
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///

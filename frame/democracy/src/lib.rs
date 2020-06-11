@@ -602,22 +602,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			if let None = StorageVersion::get() {
-				StorageVersion::put(Releases::V1);
-
-				DepositOf::<T>::translate::<
-					(BalanceOf<T>, Vec<T::AccountId>), _
-				>(|_, (balance, accounts)| {
-					Some((accounts, balance))
-				});
-
-				T::MaximumBlockWeight::get()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
 		/// Propose a sensitive action to be taken.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the sender must
