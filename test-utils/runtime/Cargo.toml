@@ -43,7 +43,6 @@ sp-transaction-pool = { version = "2.0.0-rc3", default-features = false, path = 
 trie-db = { version = "0.20.1", default-features = false }
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.8.0-rc3", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
-frame-utils = { version = "2.0.0-rc3", default-features = false, path = "../../utils/frame-utils" }
 
 # 3rd party
 cfg-if = "0.1.10"

@@ -17,12 +17,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use structopt::StructOpt;
-use frame_utilities_cli::{
-	InsertCmd, TransferCmd, SignTransactionCmd, ModuleIdCmd,
-	GenerateNodeKeyCmd, GenerateCmd, InspectCmd, InspectNodeKeyCmd,
+use sc_cli::{
+	Error, VanityCmd, SignCmd, VerifyCmd, ModuleIdCmd, InsertCmd,
+	GenerateNodeKeyCmd, GenerateCmd, InspectCmd, InspectNodeKeyCmd
 };
-use sc_cli::{Error, VanityCmd, SignCmd, VerifyCmd};
+use substrate_frame_cli::{TransferCmd, SignTransactionCmd};
 use node_runtime::Runtime;
+use frame_system::extras::HashFor;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -72,7 +73,7 @@ fn main() -> Result<(), Error> {
 		Subkey::Generate(cmd) => cmd.run()?,
 		Subkey::InspectKey(cmd) => cmd.run()?,
 		Subkey::InspectNodeKey(cmd) => cmd.run()?,
-		Subkey::Insert(cmd) => cmd.run::<Runtime>()?,
+		Subkey::Insert(cmd) => cmd.run::<HashFor<Runtime>>()?,
 		Subkey::ModuleId(cmd) => cmd.run()?,
 		Subkey::Transfer(cmd) => cmd.run::<Runtime>()?,
 		Subkey::Vanity(cmd) => cmd.run()?,

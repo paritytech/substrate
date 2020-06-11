@@ -17,7 +17,7 @@
 
 //! Implementation of the `generate-node-key` subcommand
 
-use sc_cli::{Error, SharedParams, CliConfiguration};
+use crate::{Error, SharedParams, CliConfiguration};
 use structopt::StructOpt;
 use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
@@ -64,13 +64,17 @@ impl CliConfiguration for GenerateNodeKeyCmd {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use tempfile::Builder;
+	use std::io::Read;
 
 	#[test]
-	fn inspect_node_key() {
-		let path = tempfile::tempdir().unwrap().into_path().join("node-id").into_os_string();
-		let path = path.to_str().unwrap();
-		let cmd = GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", path.clone()]);
-
-		assert!(cmd.run().is_ok());
+	fn generate_node_key() {
+		let mut file = Builder::new().prefix("keyfile").tempfile().unwrap();
+		let generate =
+			GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", "/tmp/keyfile"]);
+		assert!(generate.run().is_ok());
+		let mut buf = String::new();
+		assert!(file.read_to_string(&mut buf).is_ok());
+		assert!(hex::decode(buf).is_ok());
 	}
 }

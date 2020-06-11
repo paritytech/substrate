@@ -19,6 +19,7 @@
 use crate::{chain_spec, service, Cli, Subcommand};
 use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi, Runtime};
+use node_primitives::Hash;
 use sc_cli::{Result, SubstrateCli};
 
 impl SubstrateCli for Cli {
@@ -95,7 +96,7 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Key(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 
-			runner.sync_run(|_| cmd.run::<Runtime>())
+			runner.sync_run(|_| cmd.run::<Hash>())
 		},
 		Some(Subcommand::SignTransaction(cmd)) => {
 			let runner = cli.create_runner(cmd)?;

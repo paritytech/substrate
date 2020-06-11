@@ -175,7 +175,6 @@ members = [
 	"test-utils/runtime/transaction-pool",
 	"utils/browser",
 	"utils/build-script-utils",
-	"utils/frame-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
 	"utils/frame/frame-utilities-cli",

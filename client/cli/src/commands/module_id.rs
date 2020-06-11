@@ -17,7 +17,7 @@
 
 //! Implementation of the `moduleid` subcommand
 
-use sc_cli::{
+use crate::{
 	Error, SharedParams, print_from_uri, CryptoSchemeFlag,
 	OutputTypeFlag, KeystoreParams, CliConfiguration, with_crypto_scheme,
 };
@@ -66,6 +66,7 @@ pub struct ModuleIdCmd {
 }
 
 impl ModuleIdCmd {
+	/// runs the command
 	pub fn run(&self) -> Result<(), Error> {
 		if self.id.len() != 8 {
 			Err("a module id must be a string of 8 characters")?

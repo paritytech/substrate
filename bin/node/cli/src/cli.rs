@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_cli::RunCmd;
+use sc_cli::{RunCmd, KeySubcommand};
 use structopt::StructOpt;
-use frame_utilities_cli::{KeySubcommand, SignTransactionCmd, TransferCmd};
+use substrate_frame_cli::{SignTransactionCmd, TransferCmd};
 
 /// An overarching CLI command definition.
 #[derive(Debug, StructOpt)]

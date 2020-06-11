@@ -18,7 +18,7 @@
 //! Implementation of the `generate` subcommand
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
-use sc_cli::{
+use crate::{
 	print_from_uri, CliConfiguration, KeystoreParams, SharedParams, Error,
 	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
 };
@@ -89,5 +89,17 @@ impl CliConfiguration for GenerateCmd {
 
 	fn keystore_params(&self) -> Option<&KeystoreParams> {
 		Some(&self.keystore_params)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::GenerateCmd;
+	use structopt::StructOpt;
+
+	#[test]
+	fn generate() {
+		let generate = GenerateCmd::from_iter(&["generate", "--password", "12345"]);
+		assert!(generate.run().is_ok())
 	}
 }

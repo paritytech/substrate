@@ -17,7 +17,7 @@
 
 //! Implementation of the `inspect-node-key` subcommand
 
-use sc_cli::{Error, SharedParams, NetworkSchemeFlag, CliConfiguration};
+use crate::{Error, SharedParams, NetworkSchemeFlag, CliConfiguration};
 use std::fs;
 use libp2p::identity::{PublicKey, ed25519};
 use std::path::PathBuf;
@@ -44,6 +44,7 @@ pub struct InspectNodeKeyCmd {
 }
 
 impl InspectNodeKeyCmd {
+	/// runs the command
 	pub fn run(&self) -> Result<(), Error> {
 		let mut file_content = hex::decode(fs::read(&self.file)?)
 			.map_err(|_| "failed to decode secret as hex")?;
@@ -68,7 +69,7 @@ impl CliConfiguration for InspectNodeKeyCmd {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::generate_node_key::GenerateNodeKeyCmd;
+	use super::super::GenerateNodeKeyCmd;
 
 	#[test]
 	fn inspect_node_key() {

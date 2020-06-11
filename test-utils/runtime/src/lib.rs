@@ -55,9 +55,8 @@ use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
-use frame_utils::{SignedExtensionProvider, SystemExtraParams};
+use frame_system::extras::{SignedExtensionProvider, SystemExtraParams, SignedExtensionData};
 use sp_runtime::generic::Era;
-use sp_runtime::traits::SignedExtension;
 use frame_system::Trait;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
@@ -452,21 +451,15 @@ impl SignedExtensionProvider for Runtime {
 		ExtrasParams { era: Era::Immortal }
 	}
 
-	fn construct_extras(params: Self::Params) -> Result<
-		(
-			Self::Extra,
-			Option<<Self::Extra as SignedExtension>::AdditionalSigned>
-		),
-		&'static str
-	> {
-		let data = (
-			(
+	fn construct_extras(params: Self::Params) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
+		let data = SignedExtensionData {
+			extra: (
 				frame_system::CheckTxVersion::new(),
 				frame_system::CheckGenesis::new(),
 				frame_system::CheckEra::from(params.era)
 			),
-			None
-		);
+			additional: None
+		};
 		Ok(data)
 	}
 }

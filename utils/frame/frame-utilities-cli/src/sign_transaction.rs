@@ -25,7 +25,7 @@ use structopt::StructOpt;
 use codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Debug};
 use sp_runtime::{MultiSigner, MultiSignature, AccountId32};
-use frame_utils::{SignedExtensionProvider, IndexFor, CallFor, AccountIdFor, AddressFor};
+use frame_system::extras::{SignedExtensionProvider, IndexFor, CallFor, AccountIdFor, AddressFor};
 use crate::utils::create_extrinsic_for;
 use sp_core::hexdisplay::HexDisplay;
 

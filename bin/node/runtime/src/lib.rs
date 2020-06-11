@@ -32,7 +32,10 @@ use frame_support::{
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
-use frame_system::{EnsureRoot, EnsureOneOf};
+use frame_system::{
+	EnsureRoot, EnsureOneOf,
+	extras::{SignedExtensionProvider, SystemExtraParams, SignedExtensionData},
+};
 use frame_support::traits::{Filter, InstanceFilter};
 use codec::{Encode, Decode};
 use sp_core::{
@@ -51,9 +54,8 @@ use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
 use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
-	ConvertInto, OpaqueKeys, NumberFor, Saturating, SignedExtension,
+	ConvertInto, OpaqueKeys, NumberFor, Saturating,
 };
-use frame_utils::{SignedExtensionProvider, SystemExtraParams};
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
@@ -630,7 +632,7 @@ parameter_types! {
 pub struct ExtrasParams<T: frame_system::Trait> {
 	era: Option<Era>,
 	index: Option<T::Index>,
-	tip: Option<u128>,
+	tip: u128,
 	prior_block_hash: Option<T::Hash>,
 }
 
@@ -658,17 +660,11 @@ impl SignedExtensionProvider for Runtime {
 			prior_block_hash: None,
 			index: None,
 			era: None,
-			tip: Some(0),
+			tip: 0,
 		}
 	}
 
-	fn construct_extras(params: ExtrasParams<Runtime>) -> Result<
-		(
-			Self::Extra,
-			Option<<Self::Extra as SignedExtension>::AdditionalSigned>
-		),
-		&'static str
-	> {
+	fn construct_extras(params: ExtrasParams<Runtime>) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
 		let ExtrasParams {
 			tip,
 			era,
@@ -679,9 +675,8 @@ impl SignedExtensionProvider for Runtime {
 			era.ok_or("era is required")?,
 			index.ok_or("index is required")?,
 		);
-		let tip = tip.unwrap_or(0);
-		let data = (
-			(
+		let data = SignedExtensionData {
+			extra: (
 				frame_system::CheckSpecVersion::<Runtime>::new(),
 				frame_system::CheckTxVersion::<Runtime>::new(),
 				frame_system::CheckGenesis::<Runtime>::new(),
@@ -691,7 +686,7 @@ impl SignedExtensionProvider for Runtime {
 				pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 				pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
 			),
-			prior_block_hash.map(|hash| {
+			additional: prior_block_hash.map(|hash| {
 				(
 					VERSION.spec_version,
 					VERSION.transaction_version,
@@ -703,7 +698,7 @@ impl SignedExtensionProvider for Runtime {
 					(),
 				)
 			})
-		);
+		};
 
 		Ok(data)
 	}
@@ -733,7 +728,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		let mut input = Runtime::extension_params();
 		input.set_nonce(nonce);
 		input.set_era(era);
-		let (extra, additional) = match Runtime::construct_extras(input) {
+		let SignedExtensionData { extra, additional } = match Runtime::construct_extras(input) {
 			Ok(d) => d,
 			Err(_) => return None,
 		};

@@ -1591,45 +1591,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "frame-utilities-cli"
-version = "2.0.0-rc3"
-dependencies = [
- "bip39",
- "frame-system",
- "frame-utils",
- "futures 0.1.29",
- "futures 0.3.5",
- "hex",
- "hyper 0.12.35",
- "jsonrpc-core-client",
- "libp2p 0.18.1",
- "pallet-balances",
- "pallet-indices",
- "parity-scale-codec",
- "sc-cli",
- "sc-client-api",
- "sc-rpc",
- "sc-service",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "structopt",
- "tempfile",
-]
-
-[[package]]
-name = "frame-utils"
-version = "2.0.0-rc3"
-dependencies = [
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "sp-core",
- "sp-runtime",
-]
-
-[[package]]
 name = "fs-swap"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3837,7 +3798,6 @@ dependencies = [
  "frame-benchmarking-cli",
  "frame-support",
  "frame-system",
- "frame-utilities-cli",
  "futures 0.3.5",
  "hex-literal",
  "jsonrpc-core",
@@ -3898,6 +3858,7 @@ dependencies = [
  "structopt",
  "substrate-browser-utils",
  "substrate-build-script-utils",
+ "substrate-frame-cli",
  "tempfile",
  "tracing",
  "wasm-bindgen",
@@ -4016,7 +3977,6 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
- "frame-utils",
  "integer-sqrt",
  "node-primitives",
  "pallet-authority-discovery",
@@ -4111,7 +4071,6 @@ dependencies = [
  "frame-executive",
  "frame-support",
  "frame-system",
- "frame-utils",
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
@@ -6456,6 +6415,7 @@ dependencies = [
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
+ "futures 0.1.29",
  "futures 0.3.5",
  "hex",
  "hyper 0.12.35",
@@ -6473,6 +6433,7 @@ dependencies = [
  "sc-client-api",
  "sc-informant",
  "sc-network",
+ "sc-rpc",
  "sc-service",
  "sc-telemetry",
  "sc-tracing",
@@ -8597,11 +8558,12 @@ dependencies = [
 name = "subkey"
 version = "2.0.0-rc3"
 dependencies = [
- "frame-utilities-cli",
+ "frame-system",
  "node-primitives",
  "node-runtime",
  "sc-cli",
  "structopt",
+ "substrate-frame-cli",
 ]
 
 [[package]]
@@ -8647,6 +8609,33 @@ name = "substrate-build-script-utils"
 version = "2.0.0-rc3"
 dependencies = [
  "platforms",
+]
+
+[[package]]
+name = "substrate-frame-cli"
+version = "2.0.0-rc3"
+dependencies = [
+ "bip39",
+ "frame-system",
+ "futures 0.1.29",
+ "futures 0.3.5",
+ "hex",
+ "hyper 0.12.35",
+ "jsonrpc-core-client",
+ "libp2p 0.18.1",
+ "pallet-balances",
+ "pallet-indices",
+ "parity-scale-codec",
+ "sc-cli",
+ "sc-client-api",
+ "sc-rpc",
+ "sc-service",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "structopt",
+ "tempfile",
 ]
 
 [[package]]
@@ -8731,7 +8720,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
- "frame-utils",
  "log",
  "memory-db",
  "pallet-babe",

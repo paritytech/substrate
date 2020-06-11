@@ -17,12 +17,11 @@
 
 //! Key related CLI utilities
 
-use sc_cli::{Error, substrate_cli_subcommands};
+use crate::{Error, substrate_cli_subcommands};
 use structopt::StructOpt;
-use frame_utils::{HashFor, SignedExtensionProvider};
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
+use super::{
 	insert::InsertCmd,
 	inspect::InspectCmd,
 	generate::GenerateCmd,
@@ -51,16 +50,15 @@ pub enum KeySubcommand {
 
 impl KeySubcommand {
 	/// run the key subcommands
-	pub fn run<P>(&self) -> Result<(), Error>
+	pub fn run<Hash>(&self) -> Result<(), Error>
 		where
-			P: SignedExtensionProvider,
-			HashFor<P>: DeserializeOwned + Serialize + Send + Sync,
+			Hash: DeserializeOwned + Serialize + Send + Sync + 'static,
 	{
 		match self {
 			KeySubcommand::GenerateNodeKey(cmd) => cmd.run(),
 			KeySubcommand::Generate(cmd) => cmd.run(),
 			KeySubcommand::InspectKey(cmd) => cmd.run(),
-			KeySubcommand::Insert(cmd) => cmd.run::<P>(),
+			KeySubcommand::Insert(cmd) => cmd.run::<Hash>(),
 			KeySubcommand::InspectNodeKey(cmd) => cmd.run(),
 		}
 	}

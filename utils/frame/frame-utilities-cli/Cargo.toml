@@ -1,13 +1,13 @@
 [package]
-name = "substrate-frame-utilities-cli"
+name = "substrate-frame-cli"
 version = "2.0.0-rc3"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
-license = "GPL-3.0"
+license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "CLI utils"
-documentation = "https://docs.rs/frame-utils"
+description = "cli interface for FRAME"
+documentation = "https://docs.rs/substrate-frame-cli"
 
 [dependencies]
 sp-core = { version = "2.0.0-rc3", path = "../../../primitives/core" }
@@ -15,9 +15,6 @@ sc-cli = { version = "0.8.0-rc3", path = "../../../client/cli" }
 sp-runtime = { version = "2.0.0-rc3", path = "../../../primitives/runtime" }
 structopt = "0.3.8"
 codec = { version = "1.3.0", package = "parity-scale-codec" }
-pallet-balances = { version = "2.0.0-rc3", path = "../../../frame/balances" }
-pallet-indices = { version = "2.0.0-rc3", path = "../../../frame/indices" }
-frame-utils = { path = "../../frame-utils", version = "2.0.0-rc3" }
 hex = "0.4.2"
 serde = "1.0.106"
 hyper = "0.12.35"
@@ -29,6 +26,11 @@ sc-service = { version = "0.8.0-rc3", default-features = false, path = "../../..
 sc-client-api = { version = "2.0.0-rc3", default-features = false, path = "../../../client/api" }
 futures01 = { package = "futures", version = "0.1.29" }
 futures = "0.3"
+frame-system = { version = "2.0.0-rc3", path = "../../../frame/system" }
+
+# optional deps
+pallet-balances = { version = "2.0.0-rc3", optional = true, path = "../../../frame/balances" }
+pallet-indices = { version = "2.0.0-rc3", optional = true, path = "../../../frame/indices" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
@@ -37,5 +39,4 @@ frame-system = { version = "2.0.0-rc3", path = "../../../frame/system" }
 
 [features]
 default = []
-balances = ["pallet-balances"]
-indices = ["pallet-indices"]
+balances = ["pallet-balances", "pallet-indices"]

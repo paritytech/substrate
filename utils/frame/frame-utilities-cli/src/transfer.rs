@@ -28,13 +28,17 @@ use codec::{Encode, Decode};
 use sp_runtime::{MultiSigner, MultiSignature, AccountId32};
 use std::convert::TryFrom;
 use sp_core::{crypto::Ss58Codec, hexdisplay::HexDisplay};
-use frame_utils::{
-    AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor,
+use frame_system::extras::{
+    AddressFor, IndexFor, AccountIdFor,
     SignedExtensionProvider, CallFor,
 };
+use pallet_balances::Call as BalancesCall;
 use crate::utils::create_extrinsic_for;
 
 type Bytes = Vec<u8>;
+
+/// Balance type
+type BalanceFor<R> = <R as pallet_balances::Trait>::Balance;
 
 /// The `transfer` command
 #[derive(Debug, StructOpt)]
@@ -100,7 +104,6 @@ impl TransferCmd {
         };
         let amount = self.amount.parse::<BalanceFor<R>>()?;
         let prior_block_hash = <R::Hash as Decode>::decode(&mut &self.prior_block_hash[..])?;
-        println!("Scheme {}", self.crypto_scheme.scheme);
 
         with_crypto_scheme!(
 			self.crypto_scheme.scheme,
@@ -147,6 +150,6 @@ fn print_ext<Pair, P>(
     let signer = pair_from_suri::<Pair>(uri, pass);
     let call: CallFor<P> = BalancesCall::transfer(to, amount).into();
     let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, prior_block_hash)?;
-    println!("0x{}", HexDisplay::from(&extrinsic.encode()));
+    println!("extrinsic: 0x{}", HexDisplay::from(&extrinsic.encode()));
     Ok(())
 }

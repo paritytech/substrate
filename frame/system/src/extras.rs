@@ -1,40 +1,32 @@
+// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
 
-//! FRAME utilities
+//! Strongly typed interface for SignedExtensions
 //!
-#![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_runtime::traits::{StaticLookup, SignedExtension};
-pub use pallet_balances::Call as BalancesCall;
 use sp_runtime::generic::Era;
 
 /// AccountIndex type for Runtime
-pub type IndexFor<R> = <R as frame_system::Trait>::Index;
-/// Balance type
-pub type BalanceFor<R> = <R as pallet_balances::Trait>::Balance;
+pub type IndexFor<R> = <R as crate::Trait>::Index;
 /// Call type for Runtime
-pub type CallFor<R> = <R as frame_system::Trait>::Call;
+pub type CallFor<R> = <R as crate::Trait>::Call;
 /// Address type for runtime.
-pub type AddressFor<R> = <<R as frame_system::Trait>::Lookup as StaticLookup>::Source;
+pub type AddressFor<R> = <<R as crate::Trait>::Lookup as StaticLookup>::Source;
 /// Hash for runtime.
-pub type HashFor<R> = <R as frame_system::Trait>::Hash;
+pub type HashFor<R> = <R as crate::Trait>::Hash;
 /// AccountId type for runtime.
-pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
+pub type AccountIdFor<R> = <R as crate::Trait>::AccountId;
 
 ///
 /// Strongly typed interface for the `SignedExtensions` that should be included in extrinsics
@@ -42,13 +34,23 @@ pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
 ///
 /// ```rust,ignore
 /// use runtime::{Runtime, SignedExtra};
-/// use frame_utils::IndexFor;
-/// use sp_runtime::generic;
+/// use frame_system::extras::IndexFor;
+///
+/// #[derive(Default)]
+/// struct ExtraParams {
+///		
+/// }
 ///
 /// impl RuntimeAdapter for Runtime {
 ///     type Extra = SignedExtra;
 ///
-///     fn construct_extras(index: IndexFor<Self>) -> Self::Extra {
+///		type Params = ExtraParams;
+///	
+///		fn extension_params() -> Self::Params {
+///			Default::default()
+/// 	}
+///		
+///     fn construct_extras(params: ExtraParams) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
 ///         // take the biggest period possible.
 ///         let period = BlockHashCount::get()
 ///             .checked_next_power_of_two()
@@ -73,7 +75,7 @@ pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
 ///
 /// ```
 ///
-pub trait SignedExtensionProvider: frame_system::Trait {
+pub trait SignedExtensionProvider: crate::Trait {
     /// Concrete SignedExtension type.
 	type Extra: SignedExtension;
 	/// Concrete type for params used to construct the `SignedExtension`-Data
@@ -83,18 +85,21 @@ pub trait SignedExtensionProvider: frame_system::Trait {
 	fn extension_params() -> Self::Params;
 
     /// construct extras and optionally additional_signed data for inclusion in extrinsics.
-    fn construct_extras(input: Self::Params) -> Result<
-	    (
-		    Self::Extra,
-		    Option<<Self::Extra as SignedExtension>::AdditionalSigned>
-	    ),
-	    &'static str
-    >;
+    fn construct_extras(input: Self::Params) -> Result<SignedExtensionData<Self::Extra>, &'static str>;
+}
+
+/// extras that should be included in extrinsics,
+/// additional data is provided for call sites that don't have access to storage.
+pub struct SignedExtensionData<S: SignedExtension> {
+	/// signed extras
+	pub extra: S,
+	/// additional data for the signed extras.
+	pub additional: Option<S::AdditionalSigned>,
 }
 
 /// used internally by substrate to set extras for inclusion in 
 /// `SignedExtensionProvider`
-pub trait SystemExtraParams<T: frame_system::Trait> {
+pub trait SystemExtraParams<T: crate::Trait> {
 	/// sets the nonce
 	fn set_nonce(&mut self, index: T::Index);
 	/// sets the nonce

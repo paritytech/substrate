@@ -17,7 +17,7 @@
 
 //! Implementation of the `insert` subcommand
 
-use sc_cli::{
+use crate::{
 	Error, pair_from_suri, CliConfiguration,
 	KeystoreParams, with_crypto_scheme,
 	CryptoSchemeFlag, SharedParams, read_uri,
@@ -30,7 +30,6 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
-use frame_utils::{HashFor, SignedExtensionProvider};
 
 /// The `insert` command
 #[derive(Debug, StructOpt)]
@@ -68,10 +67,9 @@ pub struct InsertCmd {
 
 impl InsertCmd {
 	/// Run the command
-	pub fn run<P>(&self) -> Result<(), Error>
+	pub fn run<H>(&self) -> Result<(), Error>
 		where
-			P: SignedExtensionProvider,
-			HashFor<P>: DeserializeOwned + Serialize + Send + Sync,
+			H: DeserializeOwned + Serialize + Send + Sync + 'static,
 	{
 		let suri = read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
@@ -93,7 +91,7 @@ impl InsertCmd {
 			})?;
 
 
-		insert_key::<HashFor<P>>(
+		insert_key::<H>(
 			&node_url,
 			key_type.to_string(),
 			suri,
@@ -133,3 +131,4 @@ fn insert_key<H>(url: &str, key_type: String, suri: String, public: Bytes)
 			})
 	);
 }
+
