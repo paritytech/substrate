@@ -22,6 +22,7 @@ sp-session = { version = "2.0.0-rc3", default-features = false, path = "../../pr
 sp-staking = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0-rc3", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc3", default-features = false, path = "../system" }
+pallet-authorship = { version = "2.0.0-rc3", default-features = false, path = "../authorship" }
 pallet-timestamp = { version = "2.0.0-rc3", default-features = false, path = "../timestamp" }
 sp-timestamp = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/timestamp" }
 pallet-session = { version = "2.0.0-rc3", default-features = false, path = "../session" }
@@ -44,6 +45,7 @@ std = [
 	"sp-session/std",
 	"sp-staking/std",
 	"frame-system/std",
+	"pallet-authorship/std",
 	"pallet-timestamp/std",
 	"sp-timestamp/std",
 	"sp-inherents/std",

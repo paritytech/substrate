@@ -88,6 +88,8 @@ pub trait Trait: pallet_timestamp::Trait {
 		Proof = Self::KeyOwnerProof,
 		IdentificationTuple = Self::KeyOwnerIdentification,
 	>;
+
+	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -227,15 +229,7 @@ decl_module! {
 			Lateness::<T>::kill();
 		}
 
-		#[weight = 100000]
-		fn report_equivocation(
-			origin,
-			equivocation_proof: EquivocationProof<T::Header>,
-			key_owner_proof: T::KeyOwnerProof,
-		) {
-			let _who = ensure_signed(origin)?;
-		}
-
+		// FIXME: deal with weight
 		#[weight = 0]
 		fn report_equivocation_unsigned(
 			origin,
@@ -268,7 +262,7 @@ decl_module! {
 				T::KeyOwnerProofSystem::check_proof(
 					(sp_consensus_babe::KEY_TYPE, offender),
 					key_owner_proof,
-				);
+				).ok_or("")?;
 
 			let offence = BabeEquivocationOffence {
 				slot: slot_number,
@@ -276,11 +270,17 @@ decl_module! {
 				offender,
 				session_index,
 			};
+
+			let mut reporters = Vec::new();
+			if let Some(id) = T::HandleEquivocation::block_author() {
+				reporters.push(id);
+			}
+
+			T::HandleEquivocation::report_offence(reporters, offence)
+				.map_err(|_| "")?;
 		}
 	}
 }
-
-// TODO: Create ValidateUnsigned to restrict only to block author
 
 impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
 	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
@@ -359,9 +359,11 @@ pub struct BabeEquivocationOffence<FullIdentification> {
 	pub offender: FullIdentification,
 }
 
-impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {
+impl<FullIdentification: Clone> Offence<FullIdentification>
+	for BabeEquivocationOffence<FullIdentification>
+{
 	const ID: Kind = *b"babe:equivocatio";
-	type TimeSlot = u64;
+	type TimeSlot = SlotNumber;
 
 	fn offenders(&self) -> Vec<FullIdentification> {
 		vec![self.offender.clone()]
@@ -632,6 +634,17 @@ impl<T: Trait> Module<T> {
 			Authorities::put(authorities);
 		}
 	}
+
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Option<()> {
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
+	}
 }
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
@@ -768,5 +781,159 @@ impl GetSessionNumber for sp_session::MembershipProof {
 impl GetValidatorCount for sp_session::MembershipProof {
 	fn validator_count(&self) -> sp_session::ValidatorCount {
 		self.validator_count
+	}
+}
+
+use sp_runtime::transaction_validity::{
+	InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+	TransactionValidityError, ValidTransaction,
+};
+
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+	type Call = Call<T>;
+	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+		if let Call::report_equivocation_unsigned(equivocation_proof, _) = call {
+			// discard equivocation report not coming from the local node
+			match source {
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+				_ => {
+					frame_support::debug::warn!(
+						target: "babe",
+						"rejecting unsigned report equivocation transaction because it is not local/in-block."
+					);
+
+					return InvalidTransaction::Call.into();
+				}
+			}
+
+			ValidTransaction::with_tag_prefix("BabeEquivocation")
+				// We assign the maximum priority for any equivocation report.
+				.priority(TransactionPriority::max_value())
+				// FIXME: tag with slot and offender
+				.and_provides(equivocation_proof.offender.clone())
+				// We don't propagate this. This can never be included on a remote node.
+				.propagate(false)
+				.build()
+		} else {
+			InvalidTransaction::Call.into()
+		}
+	}
+
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
+		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
+			let slot_number =
+				match sp_consensus_babe::check_equivocation_proof(equivocation_proof.clone()) {
+					Some(slot_number) => slot_number,
+					None => return Err(InvalidTransaction::Call.into()),
+				};
+
+			// check the membership and extract the offender's id
+			let offender = T::KeyOwnerProofSystem::check_proof(
+				(
+					sp_consensus_babe::KEY_TYPE,
+					equivocation_proof.offender.clone(),
+				),
+				key_owner_proof.clone(),
+			)
+			.ok_or(InvalidTransaction::Call)?;
+
+			if T::HandleEquivocation::is_known_offence(&[offender], &slot_number) {
+				Err(InvalidTransaction::Stale.into())
+			} else {
+				Ok(())
+			}
+		} else {
+			Err(InvalidTransaction::Call.into())
+		}
+	}
+}
+
+use sp_runtime::DispatchResult;
+use sp_staking::offence::OffenceError;
+
+/// A trait with utility methods for handling equivocation reports in GRANDPA.
+/// The offence type is generic, and the trait provides , reporting an offence
+/// triggered by a valid equivocation report, and also for creating and
+/// submitting equivocation report extrinsics (useful only in offchain context).
+pub trait HandleEquivocation<T: Trait> {
+	/// The offence type used for reporting offences on valid equivocation reports.
+	// type Offence: GrandpaOffence<T::KeyOwnerIdentification>;
+
+	/// Report an offence proved by the given reporters.
+	fn report_offence(
+		reporters: Vec<T::AccountId>,
+		// offence: Self::Offence,
+		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
+	) -> Result<(), OffenceError>;
+
+	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &SlotNumber) -> bool;
+
+	/// Create and dispatch an equivocation report extrinsic.
+	fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> DispatchResult;
+
+	fn block_author() -> Option<T::AccountId>;
+}
+
+/// Generic equivocation handler. This type implements `HandleEquivocation`
+/// using existing subsystems that are part of frame (type bounds described
+/// below) and will dispatch to them directly, it's only purpose is to wire all
+/// subsystems together.
+pub struct EquivocationHandler<I, R> {
+	_phantom: sp_std::marker::PhantomData<(I, R)>,
+}
+
+impl<I, R> Default for EquivocationHandler<I, R> {
+	fn default() -> Self {
+		Self {
+			_phantom: Default::default(),
+		}
+	}
+}
+
+use sp_staking::offence::ReportOffence;
+
+impl<T, R> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdentification, R>
+where
+	T: Trait + pallet_authorship::Trait + frame_system::offchain::SendTransactionTypes<Call<T>>,
+	// A system for reporting offences after valid equivocation reports are
+	// processed.
+	R: ReportOffence<
+		T::AccountId,
+		T::KeyOwnerIdentification,
+		BabeEquivocationOffence<T::KeyOwnerIdentification>,
+	>,
+{
+	fn report_offence(
+		reporters: Vec<T::AccountId>,
+		// offence: Self::Offence,
+		offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
+	) -> Result<(), OffenceError> {
+		R::report_offence(reporters, offence)
+	}
+
+	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &SlotNumber) -> bool {
+		R::is_known_offence(offenders, time_slot)
+	}
+
+	/// Create and dispatch an equivocation report extrinsic.
+	fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> DispatchResult {
+		use frame_system::offchain::SubmitTransaction;
+
+		let call = Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof);
+
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|_| "")?;
+
+		Ok(())
+	}
+
+	fn block_author() -> Option<T::AccountId> {
+		Some(<pallet_authorship::Module<T>>::author())
 	}
 }

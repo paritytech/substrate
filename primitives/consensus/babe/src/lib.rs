@@ -250,7 +250,7 @@ where
 	H: Header,
 {
 	use digests::*;
-	use sp_core::Pair;
+	use sp_application_crypto::RuntimeAppPublic;
 
 	// we must have different headers for the equivocation to be valid
 	if proof.first_header.hash() == proof.second_header.hash() {
@@ -283,7 +283,7 @@ where
 		let seal = header.digest_mut().pop()?.as_babe_seal()?;
 		let pre_hash = header.hash();
 
-		if !AuthorityPair::verify(&seal, pre_hash.as_ref(), &offender) {
+		if !offender.verify(&pre_hash.as_ref(), &seal) {
 			return None;
 		}
 
@@ -311,5 +311,16 @@ sp_api::decl_runtime_apis! {
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;
+
+		/// FIXME
+		fn generate_key_ownership_proof(
+			authority_id: AuthorityId,
+		) -> Option<Vec<u8>>;
+
+		/// FIXME
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: EquivocationProof<Block::Header>,
+			key_owner_proof: Vec<u8>,
+		) -> Option<()>;
 	}
 }

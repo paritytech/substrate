@@ -845,6 +845,29 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 						equivocation_proof.first_header.hash(),
 						equivocation_proof.second_header.hash(),
 					);
+
+					// let best_id = self.select_chain
+					// 	.best_chain()
+					// 	.map(|h| BlockId::Hash(h.hash()))
+					// 	.unwrap();
+
+					// FIXME: don't report during major sync
+					// only report if authority
+
+					let best_id = BlockId::Hash(self.client.info().best_hash);
+					
+					let key_owner_proof = self.client.runtime_api()
+						.generate_key_ownership_proof(&best_id, equivocation_proof.offender.clone())
+						.unwrap()
+						.unwrap();
+
+					let client = self.client.clone();
+					client.runtime_api()
+						.submit_report_equivocation_unsigned_extrinsic(
+							&best_id,
+							equivocation_proof,
+							key_owner_proof,
+						).unwrap();
 				}
 
 				// if the body is passed through, we need to use the runtime

@@ -3869,6 +3869,7 @@ version = "2.0.0-rc3"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-authorship",
  "pallet-session",
  "pallet-timestamp",
  "parity-scale-codec",
