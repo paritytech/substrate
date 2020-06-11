@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// The `inspect-node-key` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "inspect-node-key",
 	about = "Print the peer ID corresponding to the node key in the given file."

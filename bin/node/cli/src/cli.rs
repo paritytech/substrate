@@ -21,7 +21,7 @@ use structopt::StructOpt;
 use frame_utilities_cli::{KeySubcommand, SignTransactionCmd, TransferCmd};
 
 /// An overarching CLI command definition.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub struct Cli {
 	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
@@ -32,7 +32,7 @@ pub struct Cli {
 }
 
 /// Possible subcommands of the main binary.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum Subcommand {
 	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]

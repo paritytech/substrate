@@ -25,7 +25,7 @@ use std::fmt::Debug;
 use structopt::StructOpt;
 
 /// The `revert` command used revert the chain to a previous state.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
 	#[structopt(default_value = "256")]

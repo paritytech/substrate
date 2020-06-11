@@ -28,7 +28,7 @@ use rand::{rngs::OsRng, RngCore};
 use sp_runtime::traits::IdentifyAccount;
 
 /// The `vanity` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "vanity",
 	about = "Generate a seed that provides a vanity address"

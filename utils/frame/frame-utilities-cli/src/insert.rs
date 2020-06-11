@@ -33,7 +33,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use frame_utils::{HashFor, SignedExtensionProvider};
 
 /// The `insert` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "insert",
 	about = "Insert a key to the keystore of a node."

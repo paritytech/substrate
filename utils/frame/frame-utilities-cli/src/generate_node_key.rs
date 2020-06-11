@@ -23,7 +23,7 @@ use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 
 /// The `generate-node-key` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "generate-node-key",
 	about = "Generate a random node libp2p key, save it to file and print its peer ID"

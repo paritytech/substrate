@@ -31,7 +31,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
 	#[structopt(parse(from_os_str))]

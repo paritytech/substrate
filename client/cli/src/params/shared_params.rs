@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use sc_service::config::BasePath;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use sp_core::crypto::Ss58AddressFormat;
@@ -23,7 +24,7 @@ use crate::arg_enums::{OutputType, CryptoScheme};
 use std::convert::TryFrom;
 
 /// Shared parameters used by all `CoreParams`.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
 	#[structopt(long, value_name = "CHAIN_SPEC")]
@@ -34,12 +35,7 @@ pub struct SharedParams {
 	pub dev: bool,
 
 	/// Specify custom base path.
-	#[structopt(
-		long,
-		short = "d",
-		value_name = "PATH",
-		parse(from_os_str)
-	)]
+	#[structopt(long, short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
 	/// Sets a custom logging filter. Syntax is <target>=<level>, e.g. -lsync=debug.
@@ -51,7 +47,7 @@ pub struct SharedParams {
 }
 
 /// Optional flag for specifying crypto algorithm
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct CryptoSchemeFlag {
 	/// cryptography scheme
 	#[structopt(
@@ -65,7 +61,7 @@ pub struct CryptoSchemeFlag {
 }
 
 /// Optional flag for specifying output type
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct OutputTypeFlag {
 	/// output format
 	#[structopt(
@@ -79,7 +75,7 @@ pub struct OutputTypeFlag {
 }
 
 /// Optional flag for specifying network scheme
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct NetworkSchemeFlag {
 	/// network address format
 	#[structopt(
@@ -95,8 +91,8 @@ pub struct NetworkSchemeFlag {
 
 impl SharedParams {
 	/// Specify custom base path.
-	pub fn base_path(&self) -> Option<PathBuf> {
-		self.base_path.clone()
+	pub fn base_path(&self) -> Option<BasePath> {
+		self.base_path.clone().map(Into::into)
 	}
 
 	/// Specify the development chain.

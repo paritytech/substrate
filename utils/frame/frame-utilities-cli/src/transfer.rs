@@ -37,7 +37,7 @@ use crate::utils::create_extrinsic_for;
 type Bytes = Vec<u8>;
 
 /// The `transfer` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
     name = "transfer",
     about = "Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key"

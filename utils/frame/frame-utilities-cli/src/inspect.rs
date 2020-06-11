@@ -24,7 +24,7 @@ use sc_cli::{
 use structopt::StructOpt;
 
 /// The `inspect` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "inspect-key",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"

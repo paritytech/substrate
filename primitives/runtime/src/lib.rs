@@ -81,6 +81,8 @@ pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
 
+pub use either::Either;
+
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
 /// Essentially a finality proof. The exact formulation will vary between consensus

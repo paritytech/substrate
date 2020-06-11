@@ -31,7 +31,7 @@ use crate::{
 };
 
 /// key utilities for the cli.
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum KeySubcommand {
 	/// Generate a random node libp2p key, save it to file and print its peer ID
 	GenerateNodeKey(GenerateNodeKeyCmd),

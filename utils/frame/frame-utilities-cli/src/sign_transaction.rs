@@ -32,7 +32,7 @@ use sp_core::hexdisplay::HexDisplay;
 type Bytes = Vec<u8>;
 
 /// The `sign-transaction` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "sign-transaction",
 	about = "Sign transaction from encoded Call.\

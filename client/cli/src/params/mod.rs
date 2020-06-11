@@ -72,7 +72,7 @@ impl GenericNumber {
 }
 
 /// Wrapper type that is either a `Hash` or the number of a `Block`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockNumberOrHash(String);
 
 impl FromStr for BlockNumberOrHash {

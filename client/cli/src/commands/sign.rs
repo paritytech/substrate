@@ -22,7 +22,7 @@ use super::{SharedParams, read_message, read_uri};
 use structopt::StructOpt;
 
 /// The `sign` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "sign",
 	about = "Sign a message, with a given (secret) key"

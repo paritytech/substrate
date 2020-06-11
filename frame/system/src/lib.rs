@@ -102,7 +102,7 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchError, DispatchResult,
+	RuntimeDebug, Perbill, DispatchError, DispatchResult, Either,
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -844,6 +844,30 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		unimplemented!()
+	}
+}
+
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
+impl<
+	AccountId,
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	L: EnsureOrigin<O>,
+	R: EnsureOrigin<O>,
+> EnsureOrigin<O> for EnsureOneOf<AccountId, L, R> {
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		L::try_origin(o).map_or_else(
+			|o| R::try_origin(o).map(|o| Either::Right(o)),
+			|o| Ok(Either::Left(o)),
+		)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		L::successful_origin()
 	}
 }
 
@@ -1879,7 +1903,7 @@ pub(crate) mod tests {
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
 	use frame_support::{
-		impl_outer_origin, parameter_types, assert_ok, assert_noop,
+		impl_outer_origin, parameter_types, assert_ok, assert_noop, assert_err,
 		weights::WithPostDispatchInfo,
 	};
 
@@ -2700,5 +2724,16 @@ pub(crate) mod tests {
 			System::on_created_account(Default::default());
 			assert!(System::events().len() == 1);
 		});
+	}
+
+	#[test]
+	fn ensure_one_of_works() {
+		fn ensure_root_or_signed(o: RawOrigin<u64>) -> Result<Either<(), u64>, Origin> {
+			EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
+		}
+
+		assert_ok!(ensure_root_or_signed(RawOrigin::Root), Either::Left(()));
+		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)), Either::Right(0));
+		assert_err!(ensure_root_or_signed(RawOrigin::None), Origin::from(RawOrigin::None));
 	}
 }

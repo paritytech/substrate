@@ -28,7 +28,7 @@ use std::convert::{TryInto, TryFrom};
 use structopt::StructOpt;
 
 /// The `moduleid` command
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 #[structopt(
 	name = "moduleid",
 	about = "Inspect a module ID address"
