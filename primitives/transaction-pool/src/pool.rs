@@ -287,6 +287,9 @@ pub trait LocalTransactionPool: Send + Sync {
 
 	/// Submits the given local unverified transaction to the pool blocking the
 	/// current thread for any necessary pre-verification.
+	/// NOTE: It MUST NOT be used for transactions that originate from the
+	/// network or RPC, since the validation is performed with
+	/// `TransactionSource::Local`.
 	fn submit_local(
 		&self,
 		at: &BlockId<Self::Block>,
