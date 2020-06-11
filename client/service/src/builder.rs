@@ -1090,10 +1090,9 @@ ServiceBuilder<
 		};
 
 		// Periodically notify the telemetry.
-		spawn_handle.spawn(
-			"telemetry-periodic-send",
-			telemetry_periodic_send(client.clone(), transaction_pool.clone(), metrics_service, network_status_sinks.clone()),
-		);
+		spawn_handle.spawn("telemetry-periodic-send", telemetry_periodic_send(
+			client.clone(), transaction_pool.clone(), metrics_service, network_status_sinks.clone()
+		));
 
 		// Periodically send the network state to the telemetry.
 		spawn_handle.spawn(
@@ -1102,12 +1101,11 @@ ServiceBuilder<
 		);
 
 		// RPC
-		let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| {
-			gen_handler(
-				deny_unsafe, &config, &task_manager, client.clone(), transaction_pool.clone(), keystore.clone(),
-				on_demand.clone(), remote_backend.clone(), &*rpc_extensions_builder, offchain_storage.clone(), system_rpc_tx.clone()
-			)
-		};
+		let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| gen_handler(
+			deny_unsafe, &config, &task_manager, client.clone(), transaction_pool.clone(),
+			keystore.clone(), on_demand.clone(), remote_backend.clone(), &*rpc_extensions_builder,
+			offchain_storage.clone(), system_rpc_tx.clone()
+		);
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 		// This is used internally, so don't restrict access to unsafe RPC
 		let rpc_handlers = gen_handler(sc_rpc::DenyUnsafe::No);
@@ -1140,7 +1138,9 @@ ServiceBuilder<
 		}
 
 		// Spawn informant task
-		spawn_handle.spawn("informant", informant(client.clone(), transaction_pool.clone(), network_status_sinks.clone(), informant_prefix));
+		spawn_handle.spawn("informant", informant(
+			client.clone(), transaction_pool.clone(), network_status_sinks.clone(), informant_prefix
+		));
 
 		Ok(Service {
 			client,
@@ -1266,7 +1266,10 @@ async fn txpool_notifications<TBl, TBackend, TExec, TRtApi, TExPool>(
 async fn offchain_notifications<TBl, TBackend, TExec, TRtApi>(
 	is_validator: bool,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-	offchain: Arc<sc_offchain::OffchainWorkers<Client<TBackend, TExec, TBl, TRtApi>, TBackend::OffchainStorage, TBl>>,
+	offchain: Arc<sc_offchain::OffchainWorkers<
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TBackend::OffchainStorage, TBl>
+	>,
 	notifications_spawn_handle: SpawnTaskHandle,
 	network_state_info: Arc<dyn NetworkStateInfo + Send + Sync>
 )
@@ -1276,7 +1279,8 @@ async fn offchain_notifications<TBl, TBackend, TExec, TRtApi>(
 		TRtApi: 'static,
 		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl> + Send + Sync,
-		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>
+		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+			sc_offchain::OffchainWorkerApi<TBl>
 {
 	client.import_notification_stream().for_each(move |n| {		
 		if n.is_new_best {
@@ -1457,7 +1461,9 @@ fn gen_handler<TBl, TBackend, TExec, TRtApi, TExPool, TRpc>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl> + sp_api::Metadata<TBl, Error = sp_blockchain::Error>,
+		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+			sp_session::SessionKeys<TBl> +
+			sp_api::Metadata<TBl, Error = sp_blockchain::Error>,
 {
 	use sc_rpc::{chain, state, author, system, offchain};
 
@@ -1530,7 +1536,10 @@ fn build_network<TBl, TBackend, TExec, TRtApi, TExPool, TImpQu>(
 	transaction_pool: Arc<TExPool>,
 	spawn_handle: SpawnTaskHandle,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
-	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	block_announce_validator_builder: Option<Box<
+		dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>>) ->
+			Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
+	>>,
 	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
 	system_rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<TBl>>,
