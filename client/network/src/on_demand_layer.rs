@@ -269,7 +269,7 @@ impl<T> Future for RemoteResponse<T> {
 }
 
 /// called exclusively on every RemoteCallRequest, checks that we have the runtime code available
-/// to verify the `RemoteCallResponse` and if not, issues a fetch to
+/// to verify the `RemoteCallResponse` and if not, issues a RemoteReadRequest to fetch code.
 async fn fetch_and_store_code<B>(
 	header: B::Header,
 	cache: Arc<dyn Cache<B>>,
@@ -284,8 +284,11 @@ async fn fetch_and_store_code<B>(
 		&well_known_cache_keys::CODE_HASH,
 		&BlockId::Hash(header.hash())
 	) {
+		let mut key = Vec::new();
+		key.extend_from_slice(b"runtime-code");
+		key.extend_from_slice(&hash);
 		// alas! we don't have the runtime code locally.
-		if let Ok(None) = backend.get_aux(&hash) {
+		if let Ok(None) = backend.get_aux(&key) {
 			let (sender, receiver) = oneshot::channel();
 			// just checking we have the runtime code for this block.
 			let _ = req_sender.unbounded_send(
