@@ -168,7 +168,7 @@ macro_rules! decl_tests {
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
 						Error::<$test, _>::LiquidityRestrictions
 					);
-					assert_noop!(
+					assert_err!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
 						Error::<$test, _>::LiquidityRestrictions
 					);
