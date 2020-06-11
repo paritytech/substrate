@@ -564,12 +564,10 @@ impl<T: Trait> Module<T> {
 
 	/// Attempt to remove a call from storage, returning it and any deposit on it to the owner.
 	fn take_call(hash: &[u8; 32]) -> Option<<T as Trait>::Call> {
-		if let Some((data, who, deposit)) = Calls::<T>::take(hash) {
+		Calls::<T>::take(hash).and_then(|(data, who, deposit)| {
 			T::Currency::unreserve(&who, deposit);
 			Decode::decode(&mut &data[..]).ok()
-		} else {
-			None
-		}
+		})
 	}
 
 	/// The current `Timepoint`.
