@@ -97,13 +97,11 @@ pub type ChangesTrieTransaction<H, N> = (
 pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H, SimpleProof>;
 
 /// Trie backend with in-memory storage and choice of proof.
-/// TODO EMCH consider renaming to ProofCheckBackend
-pub type InMemoryBackendWithProof<H, P> = TrieBackend<MemoryDB<H>, H, P>;
+pub type InMemoryProofCheckBackend<H, P> = TrieBackend<MemoryDB<H>, H, P>;
 
 /// Trie backend with in-memory storage and choice of proof running over
 /// separate child backends.
-/// TODO EMCH consider renaming to ProofCheckBackend
-pub type InMemoryBackendWithFullProof<H, P> = TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>;
+pub type InMemoryFullProofCheckBackend<H, P> = TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>;
 
 /// Strategy for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -1036,7 +1034,7 @@ mod tests {
 		).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, u64, _>(
+		let local_result = execution_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, u64, _>(
 			remote_root,
 			remote_proof.into(),
 			&mut Default::default(),
@@ -1407,12 +1405,12 @@ mod tests {
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 
 		// check proof locally
-		let local_result1 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
-		let local_result2 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[&[0xff]],
@@ -1432,13 +1430,13 @@ mod tests {
 			child_info,
 			&[b"value3"],
 		).unwrap();
-		let local_result1 = read_child_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_child_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			child_info,
 			&[b"value3"],
 		).unwrap();
-		let local_result2 = read_child_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_child_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			child_info,
@@ -1472,12 +1470,12 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
-		let local_result1 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
-		let local_result2 = read_proof_check::<InMemoryBackendWithProof<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[&[0xff]],

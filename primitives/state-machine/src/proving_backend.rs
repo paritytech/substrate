@@ -282,7 +282,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 	type Transaction = S::Overlay;
 	type StorageProof = P;
 	type ProofRegBackend = Self;
-	type ProofCheckBackend = TrieBackend<MemoryDB<H>, H, P>;
+	type ProofCheckBackend = crate::InMemoryProofCheckBackend<H, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.trie_backend.storage(key)
@@ -395,7 +395,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 pub fn create_proof_check_backend<H, P>(
 	root: H::Out,
 	proof: P,
-) -> Result<TrieBackend<MemoryDB<H>, H, P>, Box<dyn Error>>
+) -> Result<crate::InMemoryProofCheckBackend<H, P>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
@@ -414,7 +414,7 @@ where
 pub fn create_full_proof_check_backend<H, P>(
 	root: H::Out,
 	proof: P,
-) -> Result<TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>, Box<dyn Error>>
+) -> Result<crate::InMemoryFullProofCheckBackend<H, P>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
@@ -434,7 +434,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use crate::InMemoryBackendWithProof;
+	use crate::InMemoryProofCheckBackend;
 	use crate::trie_backend::tests::test_trie_proof;
 	use super::*;
 	use crate::proving_backend::create_proof_check_backend;
@@ -511,7 +511,7 @@ mod tests {
 	}
 	fn proof_recorded_and_checked_inner<P: BackendStorageProof<BlakeTwo256>>() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemoryBackendWithProof::<BlakeTwo256, P>::default();
+		let in_memory = InMemoryProofCheckBackend::<BlakeTwo256, P>::default();
 		let in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -547,7 +547,7 @@ mod tests {
 			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemoryBackendWithProof::<BlakeTwo256, P>::default();
+		let in_memory = InMemoryProofCheckBackend::<BlakeTwo256, P>::default();
 		let in_memory = in_memory.update(contents);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory.full_storage_root(

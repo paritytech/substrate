@@ -65,11 +65,7 @@ use sp_core::{blake2_256, ChangesTrieConfiguration};
 use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 use sp_state_machine::backend::{ProofRegFor, Backend as _};
 
-type ProvingBackend = sp_state_machine::TrieBackend<
-	sp_trie::MemoryDB<BlakeTwo256>,
-	BlakeTwo256,
-	StorageProof,
->;
+type InMemoryProofCheckBackend = sp_state_machine::InMemoryProofCheckBackend<BlakeTwo256, StorageProof>;
 
 pub type DummyBlockchain = Blockchain<DummyStorage>;
 
@@ -349,7 +345,7 @@ fn execution_proof_is_generated_and_checked() {
 		).unwrap();
 
 		// check remote execution proof locally
-		let execution_result = check_execution_proof_with_make_header::<ProvingBackend, _, _, BlakeTwo256, _>(
+		let execution_result = check_execution_proof_with_make_header::<InMemoryProofCheckBackend, _, _, BlakeTwo256, _>(
 			&local_executor(),
 			tasks_executor(),
 			&RemoteCallRequest {

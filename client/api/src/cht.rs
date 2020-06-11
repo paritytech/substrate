@@ -38,7 +38,7 @@ use sp_state_machine::{
 };
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
-type ProofCheckBackend<H> = sp_state_machine::TrieBackend<MemoryDB<H>, H, SimpleProof>;
+type ProofCheckBackend<H> = sp_state_machine::InMemoryProofCheckBackend<H, SimpleProof>;
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.

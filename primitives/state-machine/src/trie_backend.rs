@@ -124,7 +124,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 		H,
 		Self::StorageProof,
 	>;
-	type ProofCheckBackend = TrieBackend<crate::MemoryDB<H>, H, P>;
+	type ProofCheckBackend = crate::InMemoryProofCheckBackend<H, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)
@@ -300,7 +300,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 	}
 }
 
-impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H, P>
+impl<H: Hasher, P> ProofCheckBackend<H> for crate::InMemoryProofCheckBackend<H, P>
 	where
 		H::Out: Ord + Codec,
 		P: BackendStorageProof<H>,
@@ -315,7 +315,7 @@ impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<MemoryDB<H>, H, P>
 	}
 }
 
-impl<H: Hasher, P> ProofCheckBackend<H> for TrieBackend<ChildrenProofMap<MemoryDB<H>>, H, P>
+impl<H: Hasher, P> ProofCheckBackend<H> for crate::InMemoryFullProofCheckBackend<H, P>
 	where
 		H::Out: Ord + Codec,
 		P: FullBackendStorageProof<H>,

@@ -54,18 +54,18 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sp_state_machine::SimpleProof as StorageProof;
 
-type ProvingBackend<H> = sp_state_machine::TrieBackend<MemoryDB<H>, H, StorageProof>;
+type ProofCheckBackend<H> = sp_state_machine::InMemoryProofCheckBackend<H, StorageProof>;
 
 type PeerData =
-	Mutex<
-		Option<
-			LinkHalf<
-				Block,
-				PeersFullClient,
-				LongestChain<substrate_test_runtime_client::Backend, Block>
-			>
-		>
-	>;
+Mutex<
+Option<
+LinkHalf<
+Block,
+PeersFullClient,
+LongestChain<substrate_test_runtime_client::Backend, Block>
+>
+>
+>;
 type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
@@ -254,7 +254,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
 			.expect("failure proving read from in-memory storage backend");
-		Ok(proof)
+			Ok(proof)
 	}
 }
 
@@ -265,7 +265,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		header: <Block as BlockT>::Header,
 		proof: StorageProof,
 	) -> Result<AuthorityList> {
-		let results = read_proof_check::<ProvingBackend<HashFor<Block>>, HashFor<Block>, _>(
+		let results = read_proof_check::<ProofCheckBackend<HashFor<Block>>, HashFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]
 		)
 			.expect("failure checking read proof for authorities");
