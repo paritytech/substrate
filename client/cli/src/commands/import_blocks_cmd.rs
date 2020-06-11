@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// The `import-blocks` command used to import blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
 	#[structopt(parse(from_os_str))]

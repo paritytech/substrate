@@ -21,7 +21,7 @@ use sc_service::{PruningMode, Role};
 use structopt::StructOpt;
 
 /// Parameters to define the pruning mode
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct PruningParams {
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
