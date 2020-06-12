@@ -41,8 +41,6 @@ impl Flat {
 	}
 }
 
-// TODO EMCH tets that proof nodes encode to the same as flat (to validate change in grandpa)
-
 impl Common for Flat {
 	fn empty() -> Self {
 		Flat(Default::default())
@@ -185,4 +183,11 @@ impl Into<Full> for Flat {
 		result.insert(ChildInfoProof::top_trie(), self.0);
 		Full(result)
 	}
+}
+
+#[test]
+fn flat_encoding_compatible() {
+	let nodes = ProofNodes::from([vec![1u8], vec![2u8, 3u8]]);
+	let flat = Flat::from_nodes(nodes.clone());
+	assert_eq!(nodes.encode(), flat.encode());
 }

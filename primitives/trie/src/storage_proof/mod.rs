@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use sp_std::collections::{btree_map::BTreeMap, btree_map, btree_map::Entry};
+use sp_std::collections::{btree_map::BTreeMap, btree_map::Entry};
 use sp_std::collections::btree_set::BTreeSet;
 use sp_std::vec::Vec;
 use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput, Error as CodecError};
@@ -149,46 +149,6 @@ impl Input {
 		}
 	}
 
-	/// Updates input with new content.
-	/// Return false on failure.
-	/// Fails when the input type differs, except for `None` input
-	/// that is always reassignable.
-	///
-	/// Merging query plan inputs is not allowed (unimplemented),
-	/// but could be.
-	/// TODO EMCH Unused??
-	#[must_use]
-	pub fn consolidate(&mut self, other: Self) -> Result<()> {
-		let incompatible_types = || Err(error("Incompatible types for consolidating proofs"));
-		match self {
-			Input::None => {
-				*self = other;
-			},
-			Input::ChildTrieRoots(children) => {
-				match other {
-					Input::None => (),
-					Input::ChildTrieRoots(children_other) => {
-						for (child_info, root) in children_other {
-							match children.entry(child_info) {
-								btree_map::Entry::Occupied(v) => if v.get() != &root {
-									return Err(error("Incompatible children root when consolidating proofs"));
-								},
-								btree_map::Entry::Vacant(v) => {
-									v.insert(root);
-								},
-							}
-						}
-					},
-					Input::QueryPlan(..) => return incompatible_types(),
-					Input::QueryPlanWithValues(..) => return incompatible_types(),
-				}
-			},
-			Input::QueryPlan(..) => return incompatible_types(),
-			Input::QueryPlanWithValues(..) => return incompatible_types(),
-		}
-		Ok(())
-	}
-
 	/// Build a query plan with values.
 	/// All tuples are key and optional value.
 	/// Children iterator also contains children encoded root.
@@ -198,7 +158,7 @@ impl Input {
 	pub fn query_plan_with_values(
 		top_encoded_root: Vec<u8>,
 		top: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
-		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>)>, 
+		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>)>,
 		include_child_root: bool,
 	) -> Input {
 		let mut result = ChildrenProofMap::default();
@@ -225,7 +185,7 @@ impl Input {
 	pub fn query_plan(
 		top_encoded_root: Vec<u8>,
 		top: impl Iterator<Item = Vec<u8>>,
-		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = Vec<u8>>)>, 
+		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = Vec<u8>>)>,
 		include_child_root: bool,
 	) -> Input {
 		let mut result = ChildrenProofMap::default();
@@ -320,16 +280,14 @@ pub trait Verifiable: Codec + Common {
 }
 
 /// Trie encoded node recorder.
-/// TODO EMCH consider using &mut and change reg storage (consume) proof
-/// to implement without rc & sync, and encapsulate from calling
-/// code.
-/// TODO EMCH here we pass Hasher as parameter for convenience, but we only really need H::Out
+/// Note that this trait and other could use H::Out as generic parameter,
+/// but currently use Hasher for code readability.
 pub trait RecordBackend<H: Hasher>: Send + Sync + Clone + Default {
 	/// Access recorded value, allow using the backend as a cache.
 	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>>;
 	/// Record the actual value.
 	fn record(&mut self, child_info: ChildInfo, key: H::Out, value: Option<DBValue>);
-	/// Merge two record, can fail.
+	/// Merge two records, returns false on failure.
 	fn merge(&mut self, other: Self) -> bool;
 }
 
@@ -383,7 +341,7 @@ impl<H: Hasher> RecordBackend<H> for FullRecorder<H> {
 		for (child_info, other) in sp_std::mem::replace(&mut other.0, Default::default()) {
 			match self.0.entry(child_info) {
 				Entry::Occupied(mut entry) => {
-					for (key, value) in other.0 { 
+					for (key, value) in other.0 {
 						match entry.get_mut().entry(key) {
 							HEntry::Occupied(entry) => {
 								if entry.get() != &value {

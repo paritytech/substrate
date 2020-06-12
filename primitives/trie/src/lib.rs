@@ -52,9 +52,9 @@ pub use memory_db::prefixed_key;
 pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 
 /// Access record backend for a given backend storage proof.
-/// TODO EMCH check if can be use at other place (rg 'as BackendS')
-/// TODO seems rather useless we use the reg one moste of the time, not exposing it ?
-pub type RecordBackendFor<P, H> = <<P as BackendProof<H>>::ProofRaw as RecordableProof<H>>::RecordBackend;
+pub type RecordBackendFor<P, H> = <
+	<P as BackendProof<H>>::ProofRaw as RecordableProof<H>
+>::RecordBackend;
 
 #[derive(Default)]
 /// substrate trie layout

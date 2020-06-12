@@ -75,11 +75,8 @@ impl<T> sp_std::fmt::Debug for Full<T> {
 /// This is needed mainly for technical reasons (merge then compact proofs).
 /// (though if possible user should rather use a flat record
 /// backend in the different context and avoid merge).
-/// TODO EMCH try no backend in this case.
-/// TODO could move to simple
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct FullForMerge(ChildrenProofMap<(ProofMapTrieNodes, Vec<u8>)>);
-
 
 impl<T> Common for Flat<T> {
 	fn empty() -> Self {
