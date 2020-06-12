@@ -46,10 +46,10 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	/// The actual proof produced.
 	type StorageProof: BackendProof<H>;
 
-	/// Type of proof backend.
+	/// Type of backend for recording proof.
 	type RegProofBackend: RegProofBackend<H, StorageProof = Self::StorageProof>;
 
-	/// Type of proof backend.
+	/// Type of backend for using a proof.
 	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Get keyed storage or None if there is nothing associated.
@@ -167,14 +167,17 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 
 	/// Try convert into a proof backend.
 	fn as_proof_backend(self) -> Option<Self::RegProofBackend> {
-		self.from_reg_state(Default::default())
+		self.from_reg_state(Default::default(), Default::default())
 	}
 
 	/// Try convert into a proof backend.
 	/// We can optionally use a previous proof backend to avoid having to merge
 	/// proof later.
-	/// TODO EMCH consider adding previous input.
-	fn from_reg_state(self, previous: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend>;
+	fn from_reg_state(
+		self,
+		previous: RegProofStateFor<Self, H>,
+		previous_input: ProofInput,
+	) -> Option<Self::RegProofBackend>;
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
@@ -251,16 +254,16 @@ pub trait RegProofBackend<H>: crate::backend::Backend<H>
 {
 	/// State of a backend.
 	/// TODO try to merge with RecordBackendFor (aka remove the arc rwlock in code)
-	type State: Default + Send + Sync + Clone;
+	type State: Default;
 
 	/// Extract proof after running operation to prove.
-	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn crate::Error>>;
+	fn extract_proof(&self) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
 
 	/// Get current recording state.
 	fn extract_recorder(self) -> (Self::State, ProofInput);
 
 	/// Extract from the state and input.
-	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn crate::Error>>;
+	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
 }
 
 /// Backend used to produce proof.
@@ -360,7 +363,7 @@ impl<'a, T, H> Backend<H> for &'a T
 		(*self).usage_info()
 	}
 
-	fn from_reg_state(self, _previous: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
+	fn from_reg_state(self, _previous: RegProofStateFor<Self, H>, _input: ProofInput) -> Option<Self::RegProofBackend> {
 		// cannot move out of reference, consider cloning when needed.
 		None
 	}

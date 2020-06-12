@@ -654,8 +654,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn from_reg_state(self, previous: RegProofStateFor<Self, HashFor<B>>) -> Option<Self::RegProofBackend> {
-		self.state.from_reg_state(previous)
+	fn from_reg_state(
+		self,
+		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous_input: sp_state_machine::ProofInput,
+	) -> Option<Self::RegProofBackend> {
+		self.state.from_reg_state(previous, previous_input)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
@@ -846,8 +850,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().usage_info()
 	}
 
-	fn from_reg_state(mut self, previous: RegProofStateFor<Self, HashFor<B>>) -> Option<Self::RegProofBackend> {
-		self.sync().and_then(|s| s.from_reg_state(previous))
+	fn from_reg_state(
+		mut self,
+		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous_input: sp_state_machine::ProofInput,
+	) -> Option<Self::RegProofBackend> {
+		self.sync().and_then(|s| s.from_reg_state(previous, previous_input))
 	}
 }
 

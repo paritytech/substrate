@@ -253,9 +253,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state().child_keys(child_info, prefix)
 	}
 
-	fn from_reg_state(mut self, previous: RegProofStateFor<Self, HashFor<B>>) -> Option<Self::RegProofBackend> {
+	fn from_reg_state(
+		mut self,
+		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous_input: sp_state_machine::ProofInput,
+	) -> Option<Self::RegProofBackend> {
 		let state = std::mem::replace(&mut self.state, Default::default()).expect("Non dropped state");
-		state.from_reg_state(previous)
+		state.from_reg_state(previous, previous_input)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {

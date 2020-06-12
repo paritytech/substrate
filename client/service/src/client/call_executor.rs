@@ -171,10 +171,12 @@ where
 
 				let state = self.backend.state_at(*at)?;
 
-				let backend = state.from_reg_state(std::mem::replace(recorder, Default::default()))
-					.ok_or_else(||
-						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
-					)?;
+				let backend = state.from_reg_state(
+					std::mem::replace(recorder, Default::default()),
+					std::mem::replace(input, Default::default()),
+				).ok_or_else(||
+					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
+				)?;
 
 				let result = {
 					let mut state_machine = StateMachine::new(
@@ -196,7 +198,7 @@ where
 				use sp_state_machine::backend::RegProofBackend;
 				let (recorder_state, input_state) = backend.extract_recorder();
 				*recorder = recorder_state;
-				input.consolidate(input_state).map_err(|e| format!("{:?}", e))?;
+				*input = input_state;
 				result
 			},
 			None => {

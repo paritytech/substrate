@@ -133,6 +133,11 @@ pub enum Input {
 	QueryPlan(ChildrenProofMap<(Vec<u8>, Vec<Vec<u8>>)>),
 }
 
+impl Default for Input {
+	fn default() -> Self {
+		Input::None
+	}
+}
 impl Input {
 	/// Get input kind for a given input.
 	pub fn kind(&self) -> InputKind {
@@ -151,6 +156,7 @@ impl Input {
 	///
 	/// Merging query plan inputs is not allowed (unimplemented),
 	/// but could be.
+	/// TODO EMCH Unused??
 	#[must_use]
 	pub fn consolidate(&mut self, other: Self) -> Result<()> {
 		let incompatible_types = || Err(error("Incompatible types for consolidating proofs"));

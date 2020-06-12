@@ -76,7 +76,29 @@ impl<S: TrieBackendStorage<H>, H: Hasher, P> TrieBackend<S, H, P> where H::Out: 
 			ProofInput::None
 		}
 	}
-
+	/// Set previously registered roots.
+	/// Return false if conflict.
+	pub fn push_registered_roots(&self, previous: ChildrenProofMap<Vec<u8>>) -> bool {
+		if let Some(register_roots) = self.essence.register_roots() {
+			let mut roots = register_roots.write();
+			for (child_info_proof, encoded_root) in previous {
+				if let Some(child_info) = child_info_proof.as_child_info() {
+					if let Some(existing_root) = roots.get(&child_info) {
+						if Some(&encoded_root) != existing_root.as_ref() {
+							return false;
+						}
+					}
+					roots.insert(child_info, Some(encoded_root));
+				} else {
+					return false;
+				}
+			}
+			true
+		} else {
+			false
+		}
+	}
+	
 	/// Get backend essence reference.
 	pub fn essence(&self) -> &TrieBackendEssence<S, H> {
 		&self.essence
@@ -279,13 +301,27 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 		(root, is_default, write_overlay)
 	}
 
-	fn from_reg_state(self, recorder: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
+	fn from_reg_state(
+		self,
+		recorder: RegProofStateFor<Self, H>,
+		previous_input: ProofInput,
+	) -> Option<Self::RegProofBackend> {
 		let root = self.essence.root().clone();
-		Some(crate::proving_backend::ProvingBackend::from_backend_with_recorder(
+		let backend = crate::proving_backend::ProvingBackend::from_backend_with_recorder(
 			self.essence.into_storage(),
 			root,
 			recorder,
-		))
+		);
+		match previous_input {
+			ProofInput::ChildTrieRoots(roots) => {
+				if !backend.trie_backend.push_registered_roots(roots) {
+					return None;
+				}
+			},
+			ProofInput::None => (),
+			_ => return None,
+		}
+		Some(backend)
 	}
 
 	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }

@@ -31,7 +31,7 @@ pub use sp_trie::{Recorder, ChildrenProofMap, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, DBValue};
-use crate::backend::{Backend, RegProofStateFor, RegProofBackend};
+use crate::backend::{Backend, RegProofStateFor, RegProofBackend, ProofRawFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof};
 use std::marker::PhantomData;
 
@@ -125,7 +125,7 @@ pub struct ProvingBackend<
 	H: Hasher,
 	P: BackendProof<H>,
 > {
-	trie_backend: TrieBackend<ProofRecorderBackend<S, H, RecordBackendFor<P, H>>, H, P>,
+	pub(crate) trie_backend: TrieBackend<ProofRecorderBackend<S, H, RecordBackendFor<P, H>>, H, P>,
 	_ph: PhantomData<P>,
 }
 
@@ -249,7 +249,7 @@ impl<S, H, P> RegProofBackend<H> for ProvingBackend<S, H, P>
 {
 	type State = SyncRecordBackendFor<P, H>;
 
-	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn Error>> {
+	fn extract_proof(&self) -> Result<ProofRawFor<Self, H>, Box<dyn Error>> {
 		let input = self.trie_backend.extract_registered_roots();
 		<Self::StorageProof as BackendProof<H>>::ProofRaw::extract_proof(
 			&self.trie_backend.essence().backend_storage().proof_recorder.read(),
@@ -263,7 +263,7 @@ impl<S, H, P> RegProofBackend<H> for ProvingBackend<S, H, P>
 		(recorder, input)
 	}
 
-	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn crate::Error>> {
+	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>> {
 		<<Self::StorageProof as BackendProof<H>>::ProofRaw>::extract_proof(
 			& recorder_state.read(),
 			input,
@@ -370,7 +370,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		self.trie_backend.usage_info()
 	}
 
-	fn from_reg_state(self, previous_recorder: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
+	fn from_reg_state(self, previous_recorder: RegProofStateFor<Self, H>, previous_input: ProofInput) -> Option<Self::RegProofBackend> {
 		let root = self.trie_backend.essence().root().clone();
 		let storage = self.trie_backend.into_storage();
 		let current_recorder = storage.proof_recorder;
@@ -387,7 +387,15 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 			} else {
 				None
 			}
-		}
+		}.filter(|backend| {
+			match previous_input {
+				ProofInput::ChildTrieRoots(roots) => {
+					backend.trie_backend.push_registered_roots(roots)
+				},
+				ProofInput::None => true,
+				_ => false,
+			}
+		})
 	}
 }
 

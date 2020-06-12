@@ -167,7 +167,7 @@ pub mod well_known_keys {
 
 /// Child information needed for proof construction.
 ///
-/// It contains `ChildInfo` strictly needed for proofs.
+/// It contains only `ChildInfo` content that is strictly needed for proofs.
 ///
 /// It could also be use for specific proof usage.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
@@ -300,6 +300,13 @@ impl ChildInfoProof {
 	pub fn child_type(&self) -> ChildType {
 		match self {
 			ChildInfoProof::Default(..) => ChildType::ParentKeyId,
+		}
+	}
+
+	/// Get child info if it can be resolve without additional context.
+	pub fn as_child_info(self) -> Option<ChildInfo> {
+		match self {
+			ChildInfoProof::Default(parent_key) => Some(ChildInfo::ParentKeyId(parent_key)),
 		}
 	}
 }

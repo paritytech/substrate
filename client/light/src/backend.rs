@@ -511,9 +511,13 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		sp_state_machine::UsageInfo::empty()
 	}
 
-	fn from_reg_state(self, previous: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
+	fn from_reg_state(
+		self,
+		previous: RegProofStateFor<Self, H>,
+		previous_input: sp_state_machine::ProofInput,
+	) -> Option<Self::RegProofBackend> {
 		match self {
-			GenesisOrUnavailableState::Genesis(state) => state.from_reg_state(previous),
+			GenesisOrUnavailableState::Genesis(state) => state.from_reg_state(previous, previous_input),
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}
