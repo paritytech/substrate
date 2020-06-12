@@ -35,17 +35,7 @@ use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
 use sp_core::offchain::storage::OffchainOverlayedChanges;
 use hash_db::Hasher;
 
-/// Re-export of `changeset::OverlayedValue`.
-pub use self::changeset::OverlayedValue;
-
-/// Re-export of `changeset::NoOpenTransaction`.
-pub use self::changeset::NoOpenTransaction;
-
-/// Re-export of `changeset::AlreadyInRutnime`.
-pub use self::changeset::AlreadyInRuntime;
-
-/// Re-export of `changeset::NotInruntime`.
-pub use self::changeset::NotInRuntime;
+pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
