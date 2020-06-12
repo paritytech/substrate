@@ -1460,15 +1460,13 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie_proof::<P>();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
-// TODO EMCH use InMemoryFullProofCheckBackend
  		// check proof locally
-		let local_result1 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_proof_check::<InMemoryFullProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
-// TODO EMCH use InMemoryFullProofCheckBackend
-		let local_result2 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_proof_check::<InMemoryFullProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[&[0xff]],
