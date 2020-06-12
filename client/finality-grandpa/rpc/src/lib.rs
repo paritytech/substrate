@@ -19,9 +19,13 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{FutureExt, TryFutureExt};
+use futures::{FutureExt, TryFutureExt, stream, TryStreamExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
+
+use jsonrpc_core::futures::sink::Sink as Sink01;
+use jsonrpc_core::futures::stream::Stream as Stream01;
+use jsonrpc_core::futures::future::Future as Future01;
 
 mod error;
 mod report;
@@ -101,8 +105,8 @@ where
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
 	}
 
-	// NOTE: Should be changed to Subscriber<JustificationNotification>
-	fn justification_subscription(&self, _metadata: Self::Metadata, _subscriber: Subscriber<bool>) {
+	// WIP: Should be changed to Subscriber<JustificationNotification>
+	fn justification_subscription(&self, _metadata: Self::Metadata, subscriber: Subscriber<bool>) {
 		// let stream = self.receiver.subscribe().compat();
 		//
 		// This will need to use the SubscriptionManager from `jsonrpc_pubsub`
@@ -113,10 +117,19 @@ where
 		//      // repo for examples
 		// });
 
+		let stream = stream::iter(vec![Ok::<_,()>(true)]).compat();
+
+		let id = self.manager.add(subscriber, |sink| {
+			let stream = stream.map(|res| Ok(res));
+			sink.sink_map_err(|e| ())
+				.send_all(stream)
+				.map(|_| ())
+		});
+
 		todo!()
 	}
 
-	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, _id: SubscriptionId) -> FutureResult<bool> {
+	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool> {
 		// Ok(self.manager().cancel(id))
 		todo!()
 	}
