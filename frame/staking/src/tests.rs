@@ -24,7 +24,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop, assert_err, StorageMap,
+	assert_ok, assert_noop, StorageMap,
 	traits::{Currency, ReservableCurrency, OnInitialize, OnFinalize},
 };
 use pallet_balances::Error as BalancesError;
@@ -338,7 +338,7 @@ fn staking_should_work() {
 				})
 			);
 			// e.g. it cannot reserve more than 500 that it has free from the total 2000
-			assert_err!(
+			assert_noop!(
 				Balances::reserve(&3, 501),
 				BalancesError::<Test, _>::LiquidityRestrictions
 			);
@@ -784,9 +784,10 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).own, 1000);
 		// Confirm account 11 cannot reserve as a result
-		assert_eq!(Balances::reserved_balance(11), 0);
-		let _ = Balances::reserve(&11, 1);
-		assert_eq!(Balances::reserved_balance(11), 0);
+		assert_noop!(
+			Balances::reserve(&11, 1),
+			BalancesError::<Test, _>::LiquidityRestrictions,
+		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);

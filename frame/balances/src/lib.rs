@@ -1157,9 +1157,11 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 		Self::try_mutate_account(who, |account, _| -> DispatchResult {
 			account.free = account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved = account.reserved.checked_add(&value).ok_or(Error::<T, I>::Overflow)?;
-			Self::deposit_event(RawEvent::Reserved(who.clone(), value.clone()));
-			Self::ensure_can_withdraw(who, value, WithdrawReason::Reserve.into(), account.free)
-		})
+			Self::ensure_can_withdraw(&who, value.clone(), WithdrawReason::Reserve.into(), account.free)
+		})?;
+
+		Self::deposit_event(RawEvent::Reserved(who.clone(), value));
+		Ok(())
 	}
 
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
@@ -1168,15 +1170,17 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() { return Zero::zero() }
 
-		Self::mutate_account(who, |account| {
+		let actual = Self::mutate_account(who, |account| {
 			let actual = cmp::min(account.reserved, value);
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least free+reserved
 			// fits into the same data type.
 			account.free = account.free.saturating_add(actual);
-			Self::deposit_event(RawEvent::Unreserved(who.clone(), actual.clone()));
-			value - actual
-		})
+			actual
+		});
+
+		Self::deposit_event(RawEvent::Unreserved(who.clone(), actual.clone()));
+		value - actual
 	}
 
 	/// Slash from reserved balance, returning the negative imbalance created,
