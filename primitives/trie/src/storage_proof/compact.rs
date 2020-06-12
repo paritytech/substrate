@@ -111,7 +111,6 @@ impl Common for FullForMerge {
 /// Note that this implementation assumes all proof are from a same state.
 impl Mergeable for FullForMerge {
 	fn merge<I>(proofs: I) -> Self where I: IntoIterator<Item=Self> {
-		// TODO EMCH optimize all merge to init to first element
 		let mut child_sets = ChildrenProofMap::<(ProofMapTrieNodes, Vec<u8>)>::default();
 		for children in proofs {
 			for (child_info, (mut proof, root)) in children.0.into_iter() {
@@ -358,7 +357,6 @@ impl Into<super::simple::Flat> for FullForMerge
 	fn into(self) -> super::simple::Flat {
 		let mut result = ProofNodes::default();
 		for (_child_info, (nodes, _root)) in self.0 {
-			// TODO EMCH do not extend on first
 			result.extend(nodes.0.into_iter().map(|(_k, v)| v));
 		}
 		super::simple::Flat(result)

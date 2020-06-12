@@ -27,12 +27,6 @@ pub enum StorageProofKind {
 
 	/// Kind for `MultipleStorageProof::TrieSkipHashes`.
 	TrieSkipHashes = 2,
-	
-	/// Kind for `MultipleStorageProof::FullForMerge`.
-	FullForMerge = 126,
-
-	/// Kind for `MultipleStorageProof::QueryPlan`.
-	KnownQueryPlanAndValues = 127,
 }
 
 impl StorageProofKind {
@@ -42,8 +36,6 @@ impl StorageProofKind {
 		Some(match encoded {
 			x if x == StorageProofKind::Flat as u8 => StorageProofKind::Flat,
 			x if x == StorageProofKind::TrieSkipHashes as u8 => StorageProofKind::TrieSkipHashes,
-			x if x == StorageProofKind::FullForMerge as u8 => StorageProofKind::FullForMerge,
-			x if x == StorageProofKind::KnownQueryPlanAndValues as u8 => StorageProofKind::KnownQueryPlanAndValues,
 			_ => return None,
 		})
 	}
@@ -60,24 +52,6 @@ pub enum MultipleStorageProof<H, D> {
 
 	/// See `crate::storage_proof::compact::Flat`.
 	TrieSkipHashes(super::compact::Flat<crate::Layout<H>>, PhantomData<D>),
-
-	/// See `crate::storage_proof::compact::FullForMerge`.
-	///
-	/// This variant is temporary to allow producing known query proof over
-	/// substrate state machine, until it can be configured over a specific
-	/// proving backend.
-	/// The fundamental flaw here is that this leads to a partial implementation
-	/// of the proof verification.
-	FullForMerge(super::compact::FullForMerge),
-
-	/// See `crate::storage_proof::query_plan::KnownQueryPlanAndValues`.
-	///
-	/// This variant is temporary to allow producing known query proof over
-	/// substrate state machine, until it can be configured over a specific
-	/// proving backend.
-	/// The fundamental flaw here is that this leads to a partial implementation
-	/// of the proof verification.
-	KnownQueryPlanAndValues(super::query_plan::KnownQueryPlanAndValues<crate::Layout<H>>),
 }
 
 impl<H, D> sp_std::fmt::Debug for MultipleStorageProof<H, D> {
@@ -85,8 +59,6 @@ impl<H, D> sp_std::fmt::Debug for MultipleStorageProof<H, D> {
 		match self {
 			MultipleStorageProof::Flat(v) => v.fmt(f),
 			MultipleStorageProof::TrieSkipHashes(v, _) => v.fmt(f),
-			MultipleStorageProof::FullForMerge(v) => v.fmt(f),
-			MultipleStorageProof::KnownQueryPlanAndValues(v) => v.fmt(f),
 		}
 	}
 }
@@ -114,10 +86,6 @@ impl<H, D> Decode for MultipleStorageProof<H, D> {
 					Decode::decode(value)?,
 					PhantomData,
 				),
-				StorageProofKind::FullForMerge => MultipleStorageProof::FullForMerge(Decode::decode(value)?),
-				StorageProofKind::KnownQueryPlanAndValues => MultipleStorageProof::KnownQueryPlanAndValues(
-					Decode::decode(value)?
-				),
 		})
 	}
 }
@@ -128,8 +96,6 @@ impl<H, D> Encode for MultipleStorageProof<H, D> {
 		match self {
 			MultipleStorageProof::Flat(p) => p.encode_to(dest),
 			MultipleStorageProof::TrieSkipHashes(p, _) => p.encode_to(dest),
-			MultipleStorageProof::FullForMerge(p) => p.encode_to(dest),
-			MultipleStorageProof::KnownQueryPlanAndValues(p) => p.encode_to(dest),
 		}
 	}
 }
@@ -141,21 +107,13 @@ impl<H, D: DefaultKind> Common for MultipleStorageProof<H, D> {
 				MultipleStorageProof::Flat(super::simple::Flat::empty()),
 			StorageProofKind::TrieSkipHashes =>
 				MultipleStorageProof::TrieSkipHashes(super::compact::Flat::empty(), PhantomData),
-			StorageProofKind::FullForMerge =>
-				MultipleStorageProof::FullForMerge(super::compact::FullForMerge::empty()),
-			StorageProofKind::KnownQueryPlanAndValues => MultipleStorageProof::KnownQueryPlanAndValues(
-				super::query_plan::KnownQueryPlanAndValues::empty()
-			),
 		}
 	}
-
 
 	fn is_empty(&self) -> bool {
 		match self {
 			MultipleStorageProof::Flat(data) => data.is_empty(),
 			MultipleStorageProof::TrieSkipHashes(data, _) => data.is_empty(),
-			MultipleStorageProof::FullForMerge(data) => data.is_empty(),
-			MultipleStorageProof::KnownQueryPlanAndValues(data) => data.is_empty(),
 		}
 	}
 }
@@ -171,8 +129,6 @@ impl<H: Hasher, D: DefaultKind> MultipleRecorder<H, D> {
 		match kind {
 			StorageProofKind::Flat => MultipleRecorder::Flat(Default::default(), D::KIND, PhantomData),
 			StorageProofKind::TrieSkipHashes => MultipleRecorder::Full(Default::default(), D::KIND),
-			StorageProofKind::FullForMerge => MultipleRecorder::Full(Default::default(), D::KIND),
-			StorageProofKind::KnownQueryPlanAndValues => MultipleRecorder::Full(Default::default(), D::KIND),
 		}
 	}
 
@@ -247,8 +203,6 @@ impl<H, D: DefaultKind> Recordable<H> for MultipleStorageProof<H, D>
 		D: DefaultKind,
 {
 	// Actually one could ignore this if he knows its type to be non compact.
-	// TODO EMCH try a const function over D, this have very little chance to work
-	// Maybe switch that to Option so we can put it to None here as it is variable
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 
 	type RecordBackend = MultipleRecorder<H, D>;
@@ -265,20 +219,6 @@ impl<H, D: DefaultKind> Recordable<H> for MultipleStorageProof<H, D>
 					return Ok(MultipleStorageProof::TrieSkipHashes(
 						super::compact::Flat::extract_proof(rec, input)?,
 						PhantomData,
-					))
-				}
-			},
-			StorageProofKind::FullForMerge => {
-				if let MultipleRecorder::Full(rec, _) = recorder {
-					return Ok(MultipleStorageProof::FullForMerge(
-						super::compact::FullForMerge::extract_proof(rec, input)?,
-					))
-				}
-			},
-			StorageProofKind::KnownQueryPlanAndValues => {
-				if let MultipleRecorder::Full(rec, _) = recorder {
-					return Ok(MultipleStorageProof::KnownQueryPlanAndValues(
-						super::query_plan::KnownQueryPlanAndValues::extract_proof(rec, input)?,
 					))
 				}
 			},
@@ -299,7 +239,6 @@ impl<H, D> BackendProof<H> for MultipleStorageProof<H, D>
 		match self {
 			MultipleStorageProof::Flat(p) => p.into_partial_db(),
 			MultipleStorageProof::TrieSkipHashes(p, _) => p.into_partial_db(),
-			_ => panic!("misused multiproof"), // TODO EMCH this is a tradeoff for producing proof without checking but the corresponding variant should be removed.
 		}
 	}
 
@@ -327,40 +266,15 @@ impl<H, D> TryInto<super::compact::Flat<Layout<H>>> for MultipleStorageProof<H, 
 	}
 }
 
-impl<H, D> TryInto<super::compact::FullForMerge> for MultipleStorageProof<H, D> {
-	type Error = super::Error;
-
-	fn try_into(self) -> Result<super::compact::FullForMerge> {
-		match self {
-			MultipleStorageProof::FullForMerge(p) => Ok(p),
-			_ => Err(incompatible_type()),
-		}
-	}
-}
-
-impl<H, D> TryInto<super::query_plan::KnownQueryPlanAndValues<Layout<H>>> for MultipleStorageProof<H, D> {
-	type Error = super::Error;
-
-	fn try_into(self) -> Result<super::query_plan::KnownQueryPlanAndValues<Layout<H>>> {
-		match self {
-			MultipleStorageProof::KnownQueryPlanAndValues(p) => Ok(p),
-			_ => Err(incompatible_type()),
-		}
-	}
-}
-
 impl<H, D> MultipleStorageProof<H, D> {
 	/// Get kind type for the storage proof variant.
 	pub fn kind(&self) -> StorageProofKind {
 		match self {
 			MultipleStorageProof::Flat(_) => StorageProofKind::Flat,
 			MultipleStorageProof::TrieSkipHashes(_, _) => StorageProofKind::TrieSkipHashes,
-			MultipleStorageProof::FullForMerge(_) => StorageProofKind::FullForMerge,
-			MultipleStorageProof::KnownQueryPlanAndValues(_) => StorageProofKind::KnownQueryPlanAndValues,
 		}
 	}
 }
-
 
 impl<H: Hasher, D: DefaultKind> Into<MultipleStorageProof<H, D>> for super::compact::FullForMerge
 	where
@@ -370,77 +284,6 @@ impl<H: Hasher, D: DefaultKind> Into<MultipleStorageProof<H, D>> for super::comp
 		match D::KIND {
 			StorageProofKind::Flat => MultipleStorageProof::Flat(self.into()),
 			StorageProofKind::TrieSkipHashes => MultipleStorageProof::TrieSkipHashes(self.into(), PhantomData),
-			StorageProofKind::FullForMerge => MultipleStorageProof::FullForMerge(self),
-			// we cannot convert, actually this should not be in storage proof kind TODO EMCH
-			// this was only here to be able to product query plan without using different backend.
-			// User shall therefore register and try into: but target is that user uses the query_plan
-			// backend.
-			StorageProofKind::KnownQueryPlanAndValues => MultipleStorageProof::FullForMerge(self),
 		}
 	}
 }
-
-
-/*
-	/// Create in-memory storage of proof check backend.
-	///
-	/// Behave similarily to `into_partial_db`.
-	pub fn into_partial_flat_db<H>(self) -> Result<MemoryDB<H>>
-	where
-		H: Hasher,
-		H::Out: Decode,
-	{
-		let mut db = MemoryDB::default();
-		let mut db_empty = true;
-		match self {
-			s@MultipleStorageProof::Flat(..) => {
-				for item in s.iter_nodes_flatten() {
-					db.insert(EMPTY_PREFIX, &item[..]);
-				}
-			},
-			MultipleStorageProof::Full(children) => {
-				for (_child_info, proof) in children.into_iter() {
-					for item in proof.into_iter() {
-						db.insert(EMPTY_PREFIX, &item);
-					}
-				}
-			},
-			MultipleStorageProof::TrieSkipHashesForMerge(children) => {
-				for (_child_info, (proof, _root)) in children.into_iter() {
-					for (key, value) in proof.0.into_iter() {
-						let key = Decode::decode(&mut &key[..])?;
-						db.emplace(key, EMPTY_PREFIX, value);
-					}
-				}
-			},
-			MultipleStorageProof::TrieSkipHashesFull(children) => {
-				for (_child_info, proof) in children.into_iter() {
-					// Note that this does check all hashes so using a trie backend
-					// for further check is not really good (could use a direct value backend).
-					let (_root, child_db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
-					if db_empty {
-						db_empty = false;
-						db = child_db;
-					} else {
-						db.consolidate(child_db);
-					}
-				}
-			},
-			MultipleStorageProof::TrieSkipHashes(children) => {
-				for proof in children.into_iter() {
-					let (_root, child_db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
-					if db_empty {
-						db_empty = false;
-						db = child_db;
-					} else {
-						db.consolidate(child_db);
-					}
-				}
-			},
-			MultipleStorageProof::KnownQueryPlanAndValues(_children) => {
-				return Err(no_partial_db_support());
-			},
-		}
-		Ok(db)
-	}
-*/
