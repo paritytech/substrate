@@ -265,7 +265,7 @@ pub trait RecProofBackend<H>: crate::backend::Backend<H>
 	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
 }
 
-/// Backend used to produce proof.
+/// Backend used to utilize a proof.
 pub trait ProofCheckBackend<H>: Sized + crate::backend::Backend<H>
 	where
 		H: Hasher,
