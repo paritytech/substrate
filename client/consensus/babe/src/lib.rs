@@ -1291,7 +1291,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client>,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnBlocking,
+	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 ) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>

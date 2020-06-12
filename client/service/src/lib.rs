@@ -33,7 +33,6 @@ mod builder;
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
-mod status_sinks;
 mod task_manager;
 
 use std::{io, pin::Pin};
@@ -58,7 +57,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::Block as BlockT;
 use parity_util_mem::MallocSizeOf;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
 pub use self::error::Error;
 pub use self::builder::{

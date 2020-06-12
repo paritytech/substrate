@@ -24,7 +24,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
 use sc_client_api::{
-	self, BlockchainEvents, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
+	self, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
 	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
 	backend::RemoteBackend,
 };
@@ -42,7 +42,7 @@ use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
-use sc_network::{NetworkService, NetworkStateInfo};
+use sc_network::NetworkService;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -1048,14 +1048,14 @@ ServiceBuilder<
 		// Inform the tx pool about imported and finalized blocks.
 		spawn_handle.spawn(
 			"txpool-notifications",
-			txpool_notifications(client.clone(), transaction_pool.clone()),
+			sc_transaction_pool::notification_future(client.clone(), transaction_pool.clone()),
 		);
 
 		// Inform the offchain worker about new imported blocks
 		if let Some(offchain) = offchain_workers.clone() {
 			spawn_handle.spawn(
 				"offchain-notifications",
-				offchain_notifications(
+				sc_offchain::notification_future(
 					config.role.is_authority(),
 					client.clone(),
 					offchain,
@@ -1138,8 +1138,11 @@ ServiceBuilder<
 		}
 
 		// Spawn informant task
-		spawn_handle.spawn("informant", informant(
-			client.clone(), transaction_pool.clone(), network_status_sinks.clone(), informant_prefix
+		spawn_handle.spawn("informant", sc_informant::build(
+			client.clone(),
+			network_status_sinks.clone(),
+			transaction_pool.clone(),
+			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
 		));
 
 		Ok(Service {
@@ -1242,68 +1245,6 @@ ServiceBuilder<
 	}
 }
 
-// Inform the tx pool about imported and finalized blocks.
-async fn txpool_notifications<TBl, TBackend, TExec, TRtApi, TExPool>(
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-	txpool: Arc<TExPool>
-)
-	where
-		TBl: BlockT,
-		TExec: CallExecutor<TBl>,
-		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
-		TExPool: MaintainedTransactionPool<Block=TBl>,
-{
-	let import_stream = client.import_notification_stream().map(Into::into).fuse();
-	let finality_stream = client.finality_notification_stream()
-		.map(Into::into)
-		.fuse();
-
-	futures::stream::select(import_stream, finality_stream)
-		.for_each(|evt| txpool.maintain(evt))
-		.await
-}
-
-async fn offchain_notifications<TBl, TBackend, TExec, TRtApi>(
-	is_validator: bool,
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-	offchain: Arc<sc_offchain::OffchainWorkers<
-		Client<TBackend, TExec, TBl, TRtApi>,
-		TBackend::OffchainStorage, TBl>
-	>,
-	notifications_spawn_handle: SpawnTaskHandle,
-	network_state_info: Arc<dyn NetworkStateInfo + Send + Sync>
-)
-	where
-		TBl: BlockT,
-		TExec: CallExecutor<TBl> + 'static,
-		TRtApi: 'static,
-		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
-		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl> + Send + Sync,
-		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
-			sc_offchain::OffchainWorkerApi<TBl>
-{
-	client.import_notification_stream().for_each(move |n| {		
-		if n.is_new_best {
-			notifications_spawn_handle.spawn(
-				"offchain-on-block",
-				offchain.on_block_imported(
-					&n.header,
-					network_state_info.clone(),
-					is_validator,
-				),
-			);
-		} else {
-			log::debug!(
-				target: "sc_offchain",
-				"Skipping offchain workers for non-canon block: {:?}",
-				n.header,
-			)
-		}
-
-		ready(())
-	}).await;
-}
-
 async fn extrinsic_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>
@@ -1367,32 +1308,6 @@ async fn telemetry_periodic_network_state<TBl: BlockT>(
 		);
 		ready(())
 	}).await;
-}
-
-async fn informant<TBl, TBackend, TExec, TRtApi, TExPool>(
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-	transaction_pool: Arc<TExPool>,
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>,
-	informant_prefix: String
-)
-	where
-		TBl: BlockT,
-		TExec: CallExecutor<TBl>,
-		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm,
-		TBackend: sc_client_api::backend::Backend<TBl>,
-{
-	// Spawn informant task
-	sc_informant::build(
-		client,
-		move |interval| {
-			let (sink, stream) = tracing_unbounded("mpsc_network_status");
-			network_status_sinks.lock().push(interval, sink);
-			stream
-		},
-		transaction_pool,
-		sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
-	).await;
 }
 
 fn build_telemetry<TBl: BlockT>(
