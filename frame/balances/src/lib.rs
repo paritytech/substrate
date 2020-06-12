@@ -1221,7 +1221,7 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 			};
 		}
 
-		Self::try_mutate_account(beneficiary, |to_account, is_new| -> Result<Self::Balance, DispatchError> {
+		let actual = Self::try_mutate_account(beneficiary, |to_account, is_new|-> Result<Self::Balance, DispatchError> {
 			ensure!(!is_new, Error::<T, I>::DeadAccount);
 			Self::try_mutate_account(slashed, |from_account, _| -> Result<Self::Balance, DispatchError> {
 				let actual = cmp::min(from_account.reserved, value);
@@ -1230,10 +1230,12 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 					Status::Reserved => to_account.reserved = to_account.reserved.checked_add(&actual).ok_or(Error::<T, I>::Overflow)?,
 				}
 				from_account.reserved -= actual;
-				Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual.clone(), status));
-				Ok(value - actual)
+				Ok(actual)
 			})
-		})
+		})?;
+
+		Self::deposit_event(RawEvent::ReserveRepatriated(slashed.clone(), beneficiary.clone(), actual, status));
+		Ok(value - actual)
 	}
 }
 
