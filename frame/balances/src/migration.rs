@@ -117,5 +117,5 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	StorageVersion::<I>::put(Releases::V2_0_0);
 
 	// TODO determine actual weight
-	T::DbWeight::get().reads_writes(1, 1)
+	T::MaximumBlockWeight::get()
 }
