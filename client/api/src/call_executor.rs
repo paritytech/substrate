@@ -123,7 +123,6 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	/// TODO EMCH try to remove P param and use the associated backend type?
 	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<B>>>(
 		&self,
 		proof_backend: &P,

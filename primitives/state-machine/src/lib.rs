@@ -1316,7 +1316,7 @@ mod tests {
 		let (recorder, root_input) = prove_read_for_query_plan_check(remote_backend, &[b"value2"]).unwrap();
 		let mut root_map = ChildrenProofMap::default();
 		root_map.insert(ChildInfo::top_trie().proof_info(), remote_root.encode());
-		assert!(ProofInput::ChildTrieRoots(root_map) == root_input); 
+		assert!(ProofInput::ChildTrieRoots(root_map) == root_input);
 
 		let input = ProofInput::query_plan(
 			remote_root.encode(),
@@ -1385,7 +1385,7 @@ mod tests {
 	}
 	fn prove_read_and_proof_check_works_inner<P>()
 		where
-			P: BackendProof<BlakeTwo256>, 
+			P: BackendProof<BlakeTwo256>,
 			P::ProofRaw: Clone,
 	{
 		let child_info = ChildInfo::new_default(b"sub1");
@@ -1453,7 +1453,7 @@ mod tests {
 	}
 	fn prove_read_and_proof_on_fullbackend_works_inner<P>()
 		where
-			P: FullBackendProof<BlakeTwo256>, 
+			P: FullBackendProof<BlakeTwo256>,
 			P::ProofRaw: Clone,
 	{
 		// fetch read proof from 'remote' full node

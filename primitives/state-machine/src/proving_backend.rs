@@ -128,6 +128,8 @@ pub struct ProvingBackend<
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> {
 	backend: S,
+	// Inner mutability require sync here due to sync constraint on TrieBackendStorage (itself
+	// related to HashDB).
 	proof_recorder: RwLock<R>,
 	_ph: PhantomData<H>,
 }

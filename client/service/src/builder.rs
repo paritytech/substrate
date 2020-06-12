@@ -951,7 +951,7 @@ ServiceBuilder<
 	TImpQu: 'static + ImportQueue<TBl>,
 	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-	// TODO EMCH this constraint should be lifted when client get generic over StateBackend and Proof
+	// This constraint should be lifted when client get generic over StateBackend and Proof
 	TBackend::State: StateBackend<HashFor<TBl>, StorageProof = SimpleProof>,
 {
 
@@ -1473,7 +1473,7 @@ ServiceBuilder<
 		MallocSizeOfWasm +
 		'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-	// TODO EMCH removable bound when generic
+	// This constraint should be lifted when client get generic over StateBackend and Proof
 	TBackend::State: StateBackend<HashFor<TBl>, StorageProof = SimpleProof>,
 {
 
