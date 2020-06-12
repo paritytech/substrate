@@ -17,7 +17,6 @@
 
 //! Proving state machine backend.
 
-use std::sync::Arc;
 use parking_lot::RwLock;
 use codec::{Decode, Codec};
 use log::debug;
@@ -129,7 +128,7 @@ pub struct ProvingBackend<
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> {
 	backend: S,
-	proof_recorder: Arc<RwLock<R>>,
+	proof_recorder: RwLock<R>,
 	_ph: PhantomData<H>,
 }
 
@@ -154,7 +153,7 @@ impl<'a, S, H, P> ProvingBackend<&'a S, H, P>
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
-			proof_recorder: Arc::new(RwLock::new(proof_recorder)),
+			proof_recorder: RwLock::new(proof_recorder),
 			_ph: PhantomData,
 		};
 		match P::ProofRaw::INPUT_KIND {
@@ -191,7 +190,7 @@ impl<S, H, P> ProvingBackend<S, H, P>
 	) -> Self {
 		let recorder = ProofRecorderBackend {
 			backend,
-			proof_recorder: Arc::new(RwLock::new(proof_recorder)),
+			proof_recorder: RwLock::new(proof_recorder),
 			_ph: PhantomData,
 		};
 		match P::ProofRaw::INPUT_KIND {
@@ -254,10 +253,7 @@ impl<S, H, P> RegProofBackend<H> for ProvingBackend<S, H, P>
 
 	fn extract_recorder(self) -> (RecordBackendFor<P, H>, ProofInput) {
 		let input = self.trie_backend.extract_registered_roots();
-		let recorder = match std::sync::Arc::try_unwrap(self.trie_backend.into_storage().proof_recorder) {
-			Ok(r) => r.into_inner(),
-			Err(arc) => arc.read().clone(), // TODO EMCH this should have only one handle (refcell should work in fact) -> try panic qed
-		};
+		let recorder = self.trie_backend.into_storage().proof_recorder.into_inner();
 		(recorder, input)
 	}
 
@@ -378,10 +374,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		let current_recorder = storage.proof_recorder;
 		let backend = storage.backend;
 		if current_recorder.write().merge(previous_recorder) {
-			let current_recorder = match Arc::try_unwrap(current_recorder) {
-				Ok(r) => r.into_inner(),
-				Err(arc) => arc.read().clone(), // TODO EMCH panic here
-			};
+			let current_recorder = current_recorder.into_inner();
 
 			Some(ProvingBackend::<S, H, P>::from_backend_with_recorder(backend, root, current_recorder))
 		} else {
