@@ -50,7 +50,7 @@ pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
 /// Extracts the proof for the given backend.
 pub type ProofFor<B, Block> = <RegProofForB<B, Block> as StateBackend<HashFor<Block>>>::StorageProof;
 
-type RegProofForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::RegProofBackend;
+type RegProofForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::RecProofBackend;
 
 type RegProofForB<B, Block> = RegProofForSB<StateBackendFor<B, Block>, Block>;
 

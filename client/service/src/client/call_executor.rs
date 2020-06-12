@@ -171,7 +171,7 @@ where
 
 				let state = self.backend.state_at(*at)?;
 
-				let backend = state.from_reg_state(
+				let backend = state.from_previous_rec_state(
 					std::mem::replace(recorder, Default::default()),
 					std::mem::replace(input, Default::default()),
 				).ok_or_else(||
@@ -195,7 +195,7 @@ where
 					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 					state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 				};
-				use sp_state_machine::backend::RegProofBackend;
+				use sp_state_machine::backend::RecProofBackend;
 				let (recorder_state, input_state) = backend.extract_recorder();
 				*recorder = recorder_state;
 				*input = input_state;
@@ -243,7 +243,7 @@ where
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RecProofBackend<HashFor<Block>>>(
 		&self,
 		proof_backend: &P,
 		overlay: &mut OverlayedChanges,

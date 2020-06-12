@@ -140,7 +140,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 	type Error = String;
 	type Transaction = S::Overlay;
 	type StorageProof = P;
-	type RegProofBackend = crate::proving_backend::ProvingBackend<
+	type RecProofBackend = crate::proving_backend::ProvingBackend<
 		S,
 		H,
 		Self::StorageProof,
@@ -301,11 +301,11 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 		(root, is_default, write_overlay)
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		self,
 		recorder: RecordBackendFor<Self, H>,
 		previous_input: ProofInput,
-	) -> Option<Self::RegProofBackend> {
+	) -> Option<Self::RecProofBackend> {
 		let root = self.essence.root().clone();
 		let backend = crate::proving_backend::ProvingBackend::from_backend_with_recorder(
 			self.essence.into_storage(),

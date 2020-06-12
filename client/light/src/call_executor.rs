@@ -158,7 +158,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		}
 	}
 
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RecProofBackend<HashFor<Block>>>(
 		&self,
 		_proof_backend: &P,
 		_overlay: &mut OverlayedChanges,

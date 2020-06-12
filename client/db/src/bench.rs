@@ -120,7 +120,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type Error =  <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type StorageProof = <DbState<B> as StateBackend<HashFor<B>>>::StorageProof;
-	type RegProofBackend = <DbState<B> as StateBackend<HashFor<B>>>::RegProofBackend;
+	type RecProofBackend = <DbState<B> as StateBackend<HashFor<B>>>::RecProofBackend;
 	type ProofCheckBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -281,12 +281,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		self,
 		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: ProofInput,
-	) -> Option<Self::RegProofBackend> {
-		self.state.borrow_mut().take().and_then(|s| s.from_reg_state(previous, previous_input))
+	) -> Option<Self::RecProofBackend> {
+		self.state.borrow_mut().take().and_then(|s| s.from_previous_rec_state(previous, previous_input))
 	}
 }
 

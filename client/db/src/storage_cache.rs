@@ -496,7 +496,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type StorageProof = S::StorageProof;
-	type RegProofBackend = S::RegProofBackend;
+	type RecProofBackend = S::RecProofBackend;
 	type ProofCheckBackend = S::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -654,12 +654,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		self,
 		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: sp_state_machine::ProofInput,
-	) -> Option<Self::RegProofBackend> {
-		self.state.from_reg_state(previous, previous_input)
+	) -> Option<Self::RecProofBackend> {
+		self.state.from_previous_rec_state(previous, previous_input)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
@@ -743,7 +743,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type StorageProof = S::StorageProof;
-	type RegProofBackend = S::RegProofBackend;
+	type RecProofBackend = S::RecProofBackend;
 	type ProofCheckBackend = S::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -850,12 +850,12 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().usage_info()
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		mut self,
 		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: sp_state_machine::ProofInput,
-	) -> Option<Self::RegProofBackend> {
-		self.sync().and_then(|s| s.from_reg_state(previous, previous_input))
+	) -> Option<Self::RecProofBackend> {
+		self.sync().and_then(|s| s.from_previous_rec_state(previous, previous_input))
 	}
 }
 

@@ -80,7 +80,7 @@ pub use in_memory_backend::new_in_mem;
 pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use sp_core::traits::CloneableSpawn;
 
-use backend::{Backend, RegProofBackend, ProofCheckBackend, ProofRawFor};
+use backend::{Backend, RecProofBackend, ProofCheckBackend, ProofRawFor};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -510,7 +510,7 @@ pub fn prove_execution_on_proof_backend<P, H, N, Exec>(
 	runtime_code: &RuntimeCode,
 ) -> Result<(Vec<u8>, ProofRawFor<P, H>), Box<dyn Error>>
 where
-	P: RegProofBackend<H>,
+	P: RecProofBackend<H>,
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor + 'static + Clone,
@@ -673,7 +673,7 @@ pub fn prove_read_on_proof_backend<P, H, I>(
 	keys: I,
 ) -> Result<ProofRawFor<P, H>, Box<dyn Error>>
 where
-	P: RegProofBackend<H>,
+	P: RecProofBackend<H>,
 	H: Hasher,
 	H::Out: Ord + Codec,
 	I: IntoIterator,
@@ -694,7 +694,7 @@ pub fn prove_child_read_on_proof_backend<P, H, I>(
 	keys: I,
 ) -> Result<ProofRawFor<P, H>, Box<dyn Error>>
 where
-	P: RegProofBackend<H>,
+	P: RecProofBackend<H>,
 	H: Hasher,
 	H::Out: Ord + Codec,
 	I: IntoIterator,

@@ -30,7 +30,7 @@ pub use sp_trie::{Recorder, ChildrenProofMap, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, DBValue};
-use crate::backend::{Backend, RegProofBackend, ProofRawFor};
+use crate::backend::{Backend, RecProofBackend, ProofRawFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof};
 use std::marker::PhantomData;
 
@@ -238,7 +238,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, P: BackendProof<H>> std::fmt::Debug
 	}
 }
 
-impl<S, H, P> RegProofBackend<H> for ProvingBackend<S, H, P>
+impl<S, H, P> RecProofBackend<H> for ProvingBackend<S, H, P>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
@@ -277,7 +277,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 	type Error = String;
 	type Transaction = S::Overlay;
 	type StorageProof = P;
-	type RegProofBackend = Self;
+	type RecProofBackend = Self;
 	type ProofCheckBackend = crate::InMemoryProofCheckBackend<H, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -366,11 +366,11 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		self.trie_backend.usage_info()
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		self,
 		previous_recorder: crate::backend::RecordBackendFor<Self, H>,
 		previous_input: ProofInput,
-	) -> Option<Self::RegProofBackend> {
+	) -> Option<Self::RecProofBackend> {
 		let root = self.trie_backend.essence().root().clone();
 		let storage = self.trie_backend.into_storage();
 		let current_recorder = storage.proof_recorder;

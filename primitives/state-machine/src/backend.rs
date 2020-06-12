@@ -47,7 +47,7 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	type StorageProof: BackendProof<H>;
 
 	/// Type of backend for recording proof.
-	type RegProofBackend: RegProofBackend<H, StorageProof = Self::StorageProof>;
+	type RecProofBackend: RecProofBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Type of backend for using a proof.
 	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
@@ -165,19 +165,19 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 		all
 	}
 
-	/// Try convert into a proof backend.
-	fn as_proof_backend(self) -> Option<Self::RegProofBackend> {
-		self.from_reg_state(Default::default(), Default::default())
+	/// Try convert into a recording proof backend.
+	fn as_proof_backend(self) -> Option<Self::RecProofBackend> {
+		self.from_previous_rec_state(Default::default(), Default::default())
 	}
 
-	/// Try convert into a proof backend.
+	/// Try convert into a recording proof backend from previous recording state.
 	/// We can optionally use a previous proof backend to avoid having to merge
 	/// proof later.
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		self,
 		previous: RecordBackendFor<Self, H>,
 		previous_input: ProofInput,
-	) -> Option<Self::RegProofBackend>;
+	) -> Option<Self::RecProofBackend>;
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
@@ -248,7 +248,7 @@ pub trait GenesisStateBackend<H>: Backend<H>
 }
 
 /// Backend used to register a proof record.
-pub trait RegProofBackend<H>: crate::backend::Backend<H>
+pub trait RecProofBackend<H>: crate::backend::Backend<H>
 	where
 		H: Hasher,
 {
@@ -285,7 +285,7 @@ impl<'a, T, H> Backend<H> for &'a T
 	type Error = T::Error;
 	type Transaction = T::Transaction;
 	type StorageProof = T::StorageProof;
-	type RegProofBackend = T::RegProofBackend;
+	type RecProofBackend = T::RecProofBackend;
 	type ProofCheckBackend = T::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -362,7 +362,7 @@ impl<'a, T, H> Backend<H> for &'a T
 		(*self).usage_info()
 	}
 
-	fn from_reg_state(self, _previous: RecordBackendFor<Self, H>, _input: ProofInput) -> Option<Self::RegProofBackend> {
+	fn from_previous_rec_state(self, _previous: RecordBackendFor<Self, H>, _input: ProofInput) -> Option<Self::RecProofBackend> {
 		// cannot move out of reference, consider cloning when needed.
 		None
 	}

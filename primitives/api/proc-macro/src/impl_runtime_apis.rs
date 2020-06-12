@@ -293,8 +293,8 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 						let #crate_::ProofRecorder{ recorder, input } = &mut *recorder.borrow_mut();
 						let input = std::mem::replace(input, #crate_::ProofInput::None);
 						<
-							<Self::StateBackend as #crate_::StateBackend<#crate_::HashFor<Block>>>::RegProofBackend
-								as #crate_::RegProofBackend<#crate_::HashFor<Block>>
+							<Self::StateBackend as #crate_::StateBackend<#crate_::HashFor<Block>>>::RecProofBackend
+								as #crate_::RecProofBackend<#crate_::HashFor<Block>>
 						>::extract_proof_reg(
 							&recorder,
 							input,

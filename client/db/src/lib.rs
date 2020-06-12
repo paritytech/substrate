@@ -154,7 +154,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type StorageProof = <DbState<B> as StateBackend<HashFor<B>>>::StorageProof;
-	type RegProofBackend = <DbState<B> as StateBackend<HashFor<B>>>::RegProofBackend;
+	type RecProofBackend = <DbState<B> as StateBackend<HashFor<B>>>::RecProofBackend;
 	type ProofCheckBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -253,13 +253,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state().child_keys(child_info, prefix)
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		mut self,
 		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: sp_state_machine::ProofInput,
-	) -> Option<Self::RegProofBackend> {
+	) -> Option<Self::RecProofBackend> {
 		let state = std::mem::replace(&mut self.state, Default::default()).expect("Non dropped state");
-		state.from_reg_state(previous, previous_input)
+		state.from_previous_rec_state(previous, previous_input)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {

@@ -123,7 +123,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<B>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RecProofBackend<HashFor<B>>>(
 		&self,
 		proof_backend: &P,
 		overlay: &mut OverlayedChanges,

@@ -381,7 +381,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = <InMemoryBackend<H> as StateBackend<H>>::Transaction;
 	type StorageProof = <InMemoryBackend<H> as StateBackend<H>>::StorageProof;
-	type RegProofBackend = <InMemoryBackend<H> as StateBackend<H>>::RegProofBackend;
+	type RecProofBackend = <InMemoryBackend<H> as StateBackend<H>>::RecProofBackend;
 	type ProofCheckBackend = <InMemoryBackend<H> as StateBackend<H>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
@@ -511,13 +511,13 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		sp_state_machine::UsageInfo::empty()
 	}
 
-	fn from_reg_state(
+	fn from_previous_rec_state(
 		self,
 		previous: RecordBackendFor<Self, H>,
 		previous_input: sp_state_machine::ProofInput,
-	) -> Option<Self::RegProofBackend> {
+	) -> Option<Self::RecProofBackend> {
 		match self {
-			GenesisOrUnavailableState::Genesis(state) => state.from_reg_state(previous, previous_input),
+			GenesisOrUnavailableState::Genesis(state) => state.from_previous_rec_state(previous, previous_input),
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}
