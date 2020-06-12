@@ -71,9 +71,9 @@ where
 	C::Api: ImOnlineRuntimeApi<Block>,
 {
 	fn is_online(
-                &self, 
+                &self,
                 at: Option<<Block as BlockT>::Hash>,
-                authority_index: AuthIndex, 
+                authority_index: AuthIndex,
         ) -> Result<bool> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
@@ -82,8 +82,8 @@ where
 
 		let runtime_api_result = api.is_online(&at, authority_index);
 		runtime_api_result.map_err(|e| RpcError {
-			code: ErrorCode::ServerError(9876), // No real reason for this value
-			message: "Something wrong".into(),
+			code: ErrorCode::ServerError(Error::RuntimeError.into()),
+			message: "Unable to get isOnline".into(),
 			data: Some(format!("{:?}", e).into()),
 		})
 	}
