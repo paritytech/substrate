@@ -31,10 +31,10 @@ use sp_std::prelude::*;
 ///
 /// Further processing is then done [`off-chain side`](super::offchain).
 ///
-/// **Must** be called from on-chain, i.e. `on_initialize(..)` or `on_finalization(..)`.
-/// **Must** be called within the given session, otherwise the full identification
-/// information is not available anymore. Storing validator sets can thus not be
-/// done retrospectively.
+/// **Must** be called from on-chain, i.e. a call that originates from
+/// `on_initialize(..)` or `on_finalization(..)`.
+/// **Must** be called during the session, which validator-set is to be stored for further
+/// off-chain processing. Otherwise the `FullIdentification` might not be available.
 pub fn store_session_validator_set_to_offchain<T: HistoricalTrait + SessionTrait>(
 	session_index: SessionIndex,
 ) {
