@@ -36,7 +36,8 @@ use sp_core::storage::{ChildInfo, ChildInfoProof};
 use std::marker::PhantomData;
 
 /// Clonable recorder backend with inner mutability.
-type SyncRecordBackendFor<P, H> = Arc<RwLock<RecordBackendFor<P, H>>>;
+type SyncRecordBackendFor<P, H> = RecordBackendFor<P, H>;
+//type SyncRecordBackendFor<P, H> = Arc<RwLock<RecordBackendFor<P, H>>>;
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -157,7 +158,7 @@ impl<'a, S, H, P> ProvingBackend<&'a S, H, P>
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
-			proof_recorder,
+			proof_recorder: Arc::new(RwLock::new(proof_recorder)),
 			_ph: PhantomData,
 		};
 		match P::ProofRaw::INPUT_KIND {
@@ -194,7 +195,7 @@ impl<S, H, P> ProvingBackend<S, H, P>
 	) -> Self {
 		let recorder = ProofRecorderBackend {
 			backend,
-			proof_recorder,
+			proof_recorder: Arc::new(RwLock::new(proof_recorder)),
 			_ph: PhantomData,
 		};
 		match P::ProofRaw::INPUT_KIND {
@@ -259,13 +260,16 @@ impl<S, H, P> RegProofBackend<H> for ProvingBackend<S, H, P>
 
 	fn extract_recorder(self) -> (RegProofStateFor<Self, H>, ProofInput) {
 		let input = self.trie_backend.extract_registered_roots();
-		let recorder = self.trie_backend.into_storage().proof_recorder;
+		let recorder = match std::sync::Arc::try_unwrap(self.trie_backend.into_storage().proof_recorder) {
+			Ok(r) => r.into_inner(),
+			Err(arc) => arc.read().clone(), // TODO EMCH this should have only one handle (refcell should work in fact) -> try panic qed
+		};
 		(recorder, input)
 	}
 
 	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>> {
 		<<Self::StorageProof as BackendProof<H>>::ProofRaw>::extract_proof(
-			& recorder_state.read(),
+			recorder_state,
 			input,
 		).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}
@@ -375,18 +379,24 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		let storage = self.trie_backend.into_storage();
 		let current_recorder = storage.proof_recorder;
 		let backend = storage.backend;
-		if std::sync::Arc::ptr_eq(&current_recorder, &previous_recorder) {
+		// TODO EMCH can also replace if current is empty
+/*		if std::sync::Arc::ptr_eq(&current_recorder, &previous_recorder) {
 			Some(ProvingBackend::<S, H, P>::from_backend_with_recorder(backend, root, current_recorder))
 		} else {
 			let previous_recorder = match Arc::try_unwrap(previous_recorder) {
 				Ok(r) => r.into_inner(),
 				Err(arc) => arc.read().clone(),
-			};
+			};*/
 			if current_recorder.write().merge(previous_recorder) {
+				let current_recorder = match Arc::try_unwrap(current_recorder) {
+					Ok(r) => r.into_inner(),
+					Err(arc) => arc.read().clone(), // TODO EMCH panic here
+				};
+
 				Some(ProvingBackend::<S, H, P>::from_backend_with_recorder(backend, root, current_recorder))
 			} else {
 				None
-			}
+//			}
 		}.filter(|backend| {
 			match previous_input {
 				ProofInput::ChildTrieRoots(roots) => {
