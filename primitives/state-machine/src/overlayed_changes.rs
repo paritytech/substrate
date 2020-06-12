@@ -190,7 +190,7 @@ impl OverlayedChanges {
 	}
 
 	/// Returns mutable reference to current value.
-	/// If there is no value in the overlay, the default callback is used to initiate the value.
+	/// If there is no value in the overlay, the given callback is used to initiate the value.
 	/// Warning this function registers a change, so the mutable reference MUST be modified.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
@@ -210,14 +210,12 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
-		if let Some(map) = self.children.get(child_info.storage_key()) {
-			if let Some(val) = map.0.get(key) {
+		let map = self.children.get(child_info.storage_key())?;
+			let val = map.0.get(key)?;
 				let value = val.value();
 				let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
 				self.stats.tally_read_modified(size_read);
-				return Some(value.map(AsRef::as_ref));
-			}
-		}
+		Some(value.map(AsRef::as_ref))
 		None
 	}
 

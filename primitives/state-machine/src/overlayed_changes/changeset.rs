@@ -131,7 +131,7 @@ impl OverlayedValue {
 		&mut self,
 		value: Option<StorageValue>,
 		first_write_in_tx: bool,
-		at_extrinsic: Option<u32>
+		at_extrinsic: Option<u32>,
 	) {
 		if first_write_in_tx || self.transactions.is_empty() {
 			self.transactions.push(InnerValue {
@@ -153,11 +153,7 @@ impl OverlayedValue {
 /// Returns true iff we are currently have at least one open transaction and if this
 /// is the first write to the given key that transaction.
 fn insert_dirty(set: &mut DirtyKeysSets, key: StorageKey) -> bool {
-	if let Some(dirty_keys) = set.last_mut() {
-		dirty_keys.insert(key)
-	} else {
-		false
-	}
+	set.last_mut().map(|dk| dk.insert(key)).unwrap_or_default()
 }
 
 impl OverlayedChangeSet {
@@ -192,9 +188,9 @@ impl OverlayedChangeSet {
 		&mut self,
 		key: StorageKey,
 		value: Option<StorageValue>,
-		at_extrinsic: Option<u32>
+		at_extrinsic: Option<u32>,
 	) {
-		let overlayed = self.changes.entry(key.clone()).or_insert_with(Default::default);
+		let overlayed = self.changes.entry(key.clone()).or_default();
 		overlayed.set(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
 	}
 
@@ -206,9 +202,9 @@ impl OverlayedChangeSet {
 		&mut self,
 		key: StorageKey,
 		init: impl Fn() -> StorageValue,
-		at_extrinsic: Option<u32>
+		at_extrinsic: Option<u32>,
 	) -> &mut Option<StorageValue> {
-		let overlayed = self.changes.entry(key.clone()).or_insert_with(Default::default);
+		let overlayed = self.changes.entry(key.clone()).or_default();
 		let first_write_in_tx = insert_dirty(&mut self.dirty_keys, key);
 		let clone_into_new_tx = if let Some(tx) = overlayed.transactions.last() {
 			if first_write_in_tx {
@@ -232,7 +228,7 @@ impl OverlayedChangeSet {
 	pub fn clear_where(
 		&mut self,
 		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
-		at_extrinsic: Option<u32>
+		at_extrinsic: Option<u32>,
 	) {
 		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
 			val.set(None, insert_dirty(&mut self.dirty_keys, key.to_owned()), at_extrinsic);
