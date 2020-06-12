@@ -52,8 +52,8 @@ async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Cl
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
-	let service = crate::service::new_light(config)
+	let (service, task_manager) = crate::service::new_light(config)
 		.map_err(|e| format!("{:?}", e))?;
 
-	Ok(browser_utils::start_client(service))
+	Ok(browser_utils::start_client(service, task_manager))
 }

@@ -381,7 +381,7 @@ pub fn local_testnet_config() -> ChainSpec {
 pub(crate) mod tests {
 	use super::*;
 	use crate::service::{new_full, new_light};
-	use sc_service_test;
+	//use sc_service_test;
 	use sp_runtime::BuildStorage;
 
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
@@ -428,11 +428,11 @@ pub(crate) mod tests {
 	#[test]
 	#[ignore]
 	fn test_connectivity() {
-		sc_service_test::connectivity(
+		/*sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
 			|config| new_full(config),
 			|config| new_light(config),
-		);
+		);*/
 	}
 
 	#[test]

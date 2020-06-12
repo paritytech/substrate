@@ -15,12 +15,13 @@
 
 use std::{panic, pin::Pin, result::Result, sync::Arc};
 use exit_future::Signal;
-use log::debug;
+use log::{debug, error};
 use futures::{
 	Future, FutureExt,
 	future::{select, Either, BoxFuture},
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
+	sink::SinkExt,
 };
 use prometheus_endpoint::{
 	exponential_buckets, register,
@@ -29,6 +30,7 @@ use prometheus_endpoint::{
 };
 use sc_client_api::CloneableSpawn;
 use crate::config::TaskType;
+use sp_utils::mpsc::TracingUnboundedSender;
 
 mod prometheus_future;
 
@@ -41,6 +43,7 @@ pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
 	executor: ServiceTaskExecutor,
 	metrics: Option<Metrics>,
+	essential_failed_tx: TracingUnboundedSender<()>,
 }
 
 impl SpawnTaskHandle {
@@ -59,6 +62,21 @@ impl SpawnTaskHandle {
 	/// Spawns the blocking task with the given name. See also `spawn`.
 	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.spawn_inner(name, task, TaskType::Blocking)
+	}
+
+	/// Spawns a task in the background that runs the future passed as
+	/// parameter. The given task is considered essential, i.e. if it errors we
+	/// trigger a service exit.
+	pub fn spawn_essential(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		let mut essential_failed = self.essential_failed_tx.clone();
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.map(move |_| {
+				error!("Essential task `{}` failed. Shutting down service.", name);
+				let _ = essential_failed.send(());
+			});
+
+		self.spawn(name, essential_task)
 	}
 
 	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
@@ -156,6 +174,9 @@ pub struct TaskManager {
 	executor: ServiceTaskExecutor,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
+	/// Send a signal when a spawned essential task has concluded. The next time
+	/// the service future is polled it should complete with an error.
+	essential_failed_tx: TracingUnboundedSender<()>,
 }
 
 impl TaskManager {
@@ -163,7 +184,8 @@ impl TaskManager {
  	/// service tasks.
 	pub(super) fn new(
 		executor: ServiceTaskExecutor,
-		prometheus_registry: Option<&Registry>
+		prometheus_registry: Option<&Registry>,
+		essential_failed_tx: TracingUnboundedSender<()>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
 
@@ -174,13 +196,21 @@ impl TaskManager {
 			signal: Some(signal),
 			executor,
 			metrics,
+			essential_failed_tx,
 		})
+	}
+
+	/// Spawns a task in the background that runs the future passed as
+	/// parameter. The given task is considered essential, i.e. if it errors we
+	/// trigger a service exit.
+	pub fn spawn_essential(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_handle().spawn_essential(name, task)
 	}
 
 	/// Spawn background/async task, which will be aware on exit signal.
 	///
 	/// See also the documentation of [`SpawnTaskHandler::spawn`].
-	pub(super) fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.spawn_handle().spawn(name, task)
 	}
 
@@ -189,12 +219,8 @@ impl TaskManager {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
+			essential_failed_tx: self.essential_failed_tx.clone(),
 		}
-	}
-
-	/// Clone on exit signal.
-	pub(super) fn on_exit(&self) -> exit_future::Exit {
-		self.on_exit.clone()
 	}
 }
 

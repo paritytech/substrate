@@ -51,7 +51,7 @@ members = [
 	"client/rpc",
 	"client/rpc-api",
 	"client/service",
-	"client/service/test",
+	#"client/service/test",
 	"client/state-db",
 	"client/telemetry",
 	"client/transaction-pool",

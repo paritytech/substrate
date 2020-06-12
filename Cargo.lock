@@ -3332,7 +3332,6 @@ dependencies = [
  "sc-offchain",
  "sc-rpc",
  "sc-service",
- "sc-service-test",
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
@@ -6665,42 +6664,6 @@ dependencies = [
  "tempfile",
  "tracing",
  "wasm-timer",
-]
-
-[[package]]
-name = "sc-service-test"
-version = "2.0.0-rc3"
-dependencies = [
- "env_logger 0.7.1",
- "fdlimit",
- "futures 0.1.29",
- "futures 0.3.4",
- "hex-literal",
- "log",
- "parity-scale-codec",
- "parking_lot 0.10.2",
- "sc-block-builder",
- "sc-client-api",
- "sc-client-db",
- "sc-executor",
- "sc-light",
- "sc-network",
- "sc-service",
- "sp-api",
- "sp-blockchain",
- "sp-consensus",
- "sp-core",
- "sp-externalities",
- "sp-panic-handler",
- "sp-runtime",
- "sp-state-machine",
- "sp-storage",
- "sp-transaction-pool",
- "sp-trie",
- "substrate-test-runtime",
- "substrate-test-runtime-client",
- "tempfile",
- "tokio 0.1.22",
 ]
 
 [[package]]

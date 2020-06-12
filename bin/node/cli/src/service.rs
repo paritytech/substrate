@@ -30,6 +30,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
+	TaskManager,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
@@ -173,7 +174,7 @@ macro_rules! new_full {
 		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
 			new_full_start!($config);
 
-		let service = builder
+		let (service, client, transaction_pool, task_manager, keystore) = builder
 			.with_finality_proof_provider(|client, backend| {
 				// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
@@ -191,12 +192,11 @@ macro_rules! new_full {
 
 		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
-				service.client(),
-				service.transaction_pool(),
+				client.clone(),
+				transaction_pool,
 				service.prometheus_registry().as_ref(),
 			);
 
-			let client = service.client();
 			let select_chain = service.select_chain()
 				.ok_or(sc_service::Error::SelectChainRequired)?;
 
@@ -204,8 +204,8 @@ macro_rules! new_full {
 				sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 			let babe_config = sc_consensus_babe::BabeParams {
-				keystore: service.keystore(),
-				client,
+				keystore: keystore.clone(),
+				client: client.clone(),
 				select_chain,
 				env: proposer,
 				block_import,
@@ -217,7 +217,7 @@ macro_rules! new_full {
 			};
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
-			service.spawn_essential_task("babe-proposer", babe);
+			task_manager.spawn_essential("babe-proposer", babe);
 		}
 
 		// Spawn authority discovery module.
@@ -226,7 +226,7 @@ macro_rules! new_full {
 				sc_service::config::Role::Authority { ref sentry_nodes } => (
 					sentry_nodes.clone(),
 					sc_authority_discovery::Role::Authority (
-						service.keystore(),
+						keystore.clone(),
 					),
 				),
 				sc_service::config::Role::Sentry {..} => (
@@ -242,7 +242,7 @@ macro_rules! new_full {
 				_ => None,
 			}}).boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
-				service.client(),
+				client.clone(),
 				network,
 				sentries,
 				dht_event_stream,
@@ -250,13 +250,13 @@ macro_rules! new_full {
 				service.prometheus_registry(),
 			);
 
-			service.spawn_task("authority-discovery", authority_discovery);
+			task_manager.spawn("authority-discovery", authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
 		// need a keystore, regardless of which protocol we use below.
 		let keystore = if role.is_authority() {
-			Some(service.keystore() as BareCryptoStorePtr)
+			Some(keystore.clone() as BareCryptoStorePtr)
 		} else {
 			None
 		};
@@ -292,19 +292,19 @@ macro_rules! new_full {
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(
+			task_manager.spawn_essential(
 				"grandpa-voter",
 				grandpa::run_grandpa_voter(grandpa_config)?
 			);
 		} else {
 			grandpa::setup_disabled_grandpa(
-				service.client(),
+				client,
 				&inherent_data_providers,
 				service.network(),
 			)?;
 		}
 
-		Ok((service, inherent_data_providers))
+		Ok((service, inherent_data_providers, task_manager))
 	}};
 	($config:expr) => {{
 		new_full!($config, |_, _| {})
@@ -313,17 +313,17 @@ macro_rules! new_full {
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<impl AbstractService, ServiceError>
+-> Result<(impl AbstractService, TaskManager), ServiceError>
 {
-	new_full!(config).map(|(service, _)| service)
+	new_full!(config).map(|(service, _, task_manager)| (service, task_manager))
 }
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration)
--> Result<impl AbstractService, ServiceError> {
+-> Result<(impl AbstractService, TaskManager), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	let service = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
+	let (service, _, _, task_manager, _) = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
@@ -407,7 +407,7 @@ pub fn new_light(config: Configuration)
 		})?
 		.build_light()?;
 
-	Ok(service)
+	Ok((service, task_manager))
 }
 
 #[cfg(test)]
@@ -442,7 +442,7 @@ mod tests {
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
-	#[test]
+	/*#[test]
 	// It is "ignored", but the node-cli ignored tests are running on the CI.
 	// This can be run locally with `cargo test --release -p node-cli test_sync -- --ignored`.
 	#[ignore]
@@ -631,5 +631,5 @@ mod tests {
 				"//Bob".into(),
 			],
 		)
-	}
+	}*/
 }

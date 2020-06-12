@@ -25,7 +25,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
+use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
@@ -179,8 +179,8 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the node's configuration.
 	pub fn run_node<SL, SF>(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<SL>,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<SF>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<(SL, TaskManager)>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<(SF, TaskManager)>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()>
 	where
@@ -198,7 +198,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the node's configuration uses a "light" role.
 	pub fn run_full_node<S>(
 		self,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<S>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<(S, TaskManager)>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()>
 	where
@@ -217,7 +217,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the node's configuration uses a "full" role.
 	pub fn run_light_node<S>(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<S>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<(S, TaskManager)>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()>
 	where
@@ -261,10 +261,10 @@ impl<C: SubstrateCli> Runner<C> {
 
 	fn run_service_until_exit<T, F>(mut self, service_builder: F) -> Result<()>
 	where
-		F: FnOnce(Configuration) -> std::result::Result<T, sc_service::error::Error>,
+		F: FnOnce(Configuration) -> std::result::Result<(T, TaskManager), sc_service::error::Error>,
 		T: AbstractService + Unpin,
 	{
-		let service = service_builder(self.config)?;
+		let (service, _task_manager) = service_builder(self.config)?;
 
 		// we eagerly drop the service so that the internal exit future is fired,
 		// but we need to keep holding a reference to the global telemetry guard

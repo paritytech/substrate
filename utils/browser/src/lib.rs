@@ -22,7 +22,7 @@ use sc_network::config::TransportConfig;
 use sc_service::{
 	AbstractService, RpcSession, Role, Configuration,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	GenericChainSpec, RuntimeGenesis
+	GenericChainSpec, RuntimeGenesis, TaskManager,
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
@@ -107,6 +107,7 @@ where
 #[wasm_bindgen]
 pub struct Client {
 	rpc_send_tx: mpsc::UnboundedSender<RpcMessage>,
+	_task_manager: TaskManager
 }
 
 struct RpcMessage {
@@ -116,14 +117,14 @@ struct RpcMessage {
 }
 
 /// Create a Client object that connects to a service.
-pub fn start_client(mut service: impl AbstractService) -> Client {
+pub fn start_client(mut service: impl AbstractService, task_manager: TaskManager) -> Client {
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with
 	// `service.poll()`.
 	// The rest consists in handling RPC requests.
 	let (rpc_send_tx, mut rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
-	wasm_bindgen_futures::spawn_local(poll_fn(move |cx| {
+	wasm_bindgen_futures::spawn_local(poll_fn(move |cx| {		
 		loop {
 			match Pin::new(&mut rpc_send_rx).poll_next(cx) {
 				Poll::Ready(Some(message)) => {
@@ -144,6 +145,7 @@ pub fn start_client(mut service: impl AbstractService) -> Client {
 
 	Client {
 		rpc_send_tx,
+		_task_manager: task_manager
 	}
 }
 

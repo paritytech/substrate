@@ -46,12 +46,7 @@ use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
 use client::Client;
-use futures::{
-	Future, FutureExt, Stream, StreamExt,
-	compat::*,
-	sink::SinkExt,
-	task::{Spawn, FutureObj, SpawnError},
-};
+use futures::{Future, FutureExt, Stream, StreamExt, stream::FusedStream, compat::*};
 use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
@@ -84,7 +79,7 @@ pub use sc_network::config::{
 };
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
-use task_manager::TaskManager;
+pub use task_manager::TaskManager;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_api::{ApiExt, ConstructRuntimeApi, ApiErrorExt};
 use sc_client_api::{
@@ -106,17 +101,11 @@ impl<T> MallocSizeOfWasm for T {}
 
 /// Substrate service.
 pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
-	client: Arc<TCl>,
-	task_manager: TaskManager,
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
 	// Sinks to propagate network status updates.
 	// For each element, every time the `Interval` fires we push an element on the sender.
 	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
-	transaction_pool: Arc<TTxPool>,
-	// Send a signal when a spawned essential task has concluded. The next time
-	// the service future is polled it should complete with an error.
-	essential_failed_tx: TracingUnboundedSender<()>,
 	// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
@@ -124,18 +113,18 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	_telemetry: Option<sc_telemetry::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
-	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
 	// The base path is kept here because it can be a temporary directory which will be deleted
 	// when dropped
 	_base_path: Option<Arc<BasePath>>,
+	_phantom: PhantomData<(TCl, TTxPool)>
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
 /// Abstraction over a Substrate service.
-pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + Spawn + 'static {
+pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + 'static {
 	/// Type of block of this chain.
 	type Block: BlockT;
 	/// Backend storage for the client.
@@ -160,26 +149,6 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	/// return a shared instance of Telemetry (if enabled)
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
-	/// Spawns a task in the background that runs the future passed as parameter.
-	///
-	/// Information about this task will be reported to Prometheus.
-	///
-	/// The task name is a `&'static str` as opposed to a `String`. The reason for that is that
-	/// in order to avoid memory consumption issues with the Prometheus metrics, the set of
-	/// possible task names has to be bounded.
-	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
-
-	/// Spawns a task in the background that runs the future passed as
-	/// parameter. The given task is considered essential, i.e. if it errors we
-	/// trigger a service exit.
-	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
-
-	/// Returns a handle for spawning tasks.
-	fn spawn_task_handle(&self) -> SpawnTaskHandle;
-
-	/// Returns the keystore that stores keys.
-	fn keystore(&self) -> sc_keystore::KeyStorePtr;
-
 	/// Starts an RPC query.
 	///
 	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
@@ -191,9 +160,6 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	/// send back spontaneous events.
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>;
 
-	/// Get shared client instance.
-	fn client(&self) -> Arc<Self::Client>;
-
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
 
@@ -203,13 +169,6 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Returns a receiver that periodically receives a status of the network.
 	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
-
-	/// Get shared transaction pool instance.
-	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
-
-	/// Get a handle to a future that will resolve on exit.
-	#[deprecated(note = "Use `spawn_task`/`spawn_essential_task` instead, those functions will attach on_exit signal.")]
-	fn on_exit(&self) -> ::exit_future::Exit;
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
@@ -253,40 +212,12 @@ where
 		self._telemetry.clone()
 	}
 
-	fn keystore(&self) -> sc_keystore::KeyStorePtr {
-		self.keystore.clone()
-	}
-
-	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.task_manager.spawn(name, task)
-	}
-
-	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		let mut essential_failed = self.essential_failed_tx.clone();
-		let essential_task = std::panic::AssertUnwindSafe(task)
-			.catch_unwind()
-			.map(move |_| {
-				error!("Essential task `{}` failed. Shutting down service.", name);
-				let _ = essential_failed.send(());
-			});
-
-		let _ = self.spawn_task(name, essential_task);
-	}
-
-	fn spawn_task_handle(&self) -> SpawnTaskHandle {
-		self.task_manager.spawn_handle()
-	}
-
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
 		Box::pin(
 			self.rpc_handlers.handle_request(request, mem.metadata.clone())
 				.compat()
 				.map(|res| res.expect("this should never fail"))
 		)
-	}
-
-	fn client(&self) -> Arc<Self::Client> {
-		self.client.clone()
 	}
 
 	fn select_chain(&self) -> Option<Self::SelectChain> {
@@ -303,14 +234,6 @@ where
 		let (sink, stream) = tracing_unbounded("mpsc_network_status");
 		self.network_status_sinks.lock().push(interval, sink);
 		stream
-	}
-
-	fn transaction_pool(&self) -> Arc<Self::TransactionPool> {
-		self.transaction_pool.clone()
-	}
-
-	fn on_exit(&self) -> exit_future::Exit {
-		self.task_manager.on_exit()
 	}
 
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
@@ -341,18 +264,6 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 
 		// The service future never ends.
 		Poll::Pending
-	}
-}
-
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
-	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
-{
-	fn spawn_obj(
-		&self,
-		future: FutureObj<'static, ()>
-	) -> Result<(), SpawnError> {
-		self.task_manager.spawn_handle().spawn("unnamed", future);
-		Ok(())
 	}
 }
 
@@ -395,71 +306,81 @@ fn build_network_future<
 		}
 
 		// Poll the RPC requests and answer them.
-		while let Poll::Ready(Some(request)) = Pin::new(&mut rpc_rx).poll_next(cx) {
-			match request {
-				sc_rpc::system::Request::Health(sender) => {
-					let _ = sender.send(sc_rpc::system::Health {
-						peers: network.peers_debug_info().len(),
-						is_syncing: network.service().is_major_syncing(),
-						should_have_peers,
-					});
-				},
-				sc_rpc::system::Request::LocalPeerId(sender) => {
-					let _ = sender.send(network.local_peer_id().to_base58());
-				},
-				sc_rpc::system::Request::LocalListenAddresses(sender) => {
-					let peer_id = network.local_peer_id().clone().into();
-					let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
-					let addresses = network.listen_addresses()
-						.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
-						.collect();
-					let _ = sender.send(addresses);
-				},
-				sc_rpc::system::Request::Peers(sender) => {
-					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						sc_rpc::system::PeerInfo {
-							peer_id: peer_id.to_base58(),
-							roles: format!("{:?}", p.roles),
-							protocol_version: p.protocol_version,
-							best_hash: p.best_hash,
-							best_number: p.best_number,
-						}
-					).collect());
-				}
-				sc_rpc::system::Request::NetworkState(sender) => {
-					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
-						let _ = sender.send(network_state);
-					}
-				}
-				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
-					let x = network.add_reserved_peer(peer_addr)
-						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
-					let _ = sender.send(x);
-				}
-				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
-					let _ = match peer_id.parse::<PeerId>() {
-						Ok(peer_id) => {
-							network.remove_reserved_peer(peer_id);
-							sender.send(Ok(()))
-						}
-						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
-							e.to_string(),
-						))),
-					};
-				}
-				sc_rpc::system::Request::NodeRoles(sender) => {
-					use sc_rpc::system::NodeRole;
+		loop {
+			if rpc_rx.is_terminated() {
+				return Poll::Ready(());
+			}
 
-					let node_role = match role {
-						Role::Authority { .. } => NodeRole::Authority,
-						Role::Light => NodeRole::LightClient,
-						Role::Full => NodeRole::Full,
-						Role::Sentry { .. } => NodeRole::Sentry,
+			match Pin::new(&mut rpc_rx).poll_next(cx) {
+				Poll::Ready(Some(request)) => {
+					match request {
+						sc_rpc::system::Request::Health(sender) => {
+							let _ = sender.send(sc_rpc::system::Health {
+								peers: network.peers_debug_info().len(),
+								is_syncing: network.service().is_major_syncing(),
+								should_have_peers,
+							});
+						},
+						sc_rpc::system::Request::LocalPeerId(sender) => {
+							let _ = sender.send(network.local_peer_id().to_base58());
+						},
+						sc_rpc::system::Request::LocalListenAddresses(sender) => {
+							let peer_id = network.local_peer_id().clone().into();
+							let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
+							let addresses = network.listen_addresses()
+								.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
+								.collect();
+							let _ = sender.send(addresses);
+						},
+						sc_rpc::system::Request::Peers(sender) => {
+							let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+								sc_rpc::system::PeerInfo {
+									peer_id: peer_id.to_base58(),
+									roles: format!("{:?}", p.roles),
+									protocol_version: p.protocol_version,
+									best_hash: p.best_hash,
+									best_number: p.best_number,
+								}
+							).collect());
+						}
+						sc_rpc::system::Request::NetworkState(sender) => {
+							if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+								let _ = sender.send(network_state);
+							}
+						}
+						sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+							let x = network.add_reserved_peer(peer_addr)
+								.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+							let _ = sender.send(x);
+						}
+						sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+							let _ = match peer_id.parse::<PeerId>() {
+								Ok(peer_id) => {
+									network.remove_reserved_peer(peer_id);
+									sender.send(Ok(()))
+								}
+								Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+									e.to_string(),
+								))),
+							};
+						}
+						sc_rpc::system::Request::NodeRoles(sender) => {
+							use sc_rpc::system::NodeRole;
+		
+							let node_role = match role {
+								Role::Authority { .. } => NodeRole::Authority,
+								Role::Light => NodeRole::LightClient,
+								Role::Full => NodeRole::Full,
+								Role::Sentry { .. } => NodeRole::Sentry,
+							};
+		
+							let _ = sender.send(vec![node_role]);
+						}
 					};
-
-					let _ = sender.send(vec![node_role]);
-				}
-			};
+				},
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Pending => break,
+			}
 		}
 
 		// Interval report for the external API.

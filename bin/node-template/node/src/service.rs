@@ -5,7 +5,7 @@ use std::time::Duration;
 use sc_client_api::ExecutorProvider;
 use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
-use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
+use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder, TaskManager};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
@@ -93,7 +93,7 @@ macro_rules! new_full_start {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceError> {
+pub fn new_full(config: Configuration) -> Result<(impl AbstractService, TaskManager), ServiceError> {
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
@@ -105,7 +105,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let service = builder
+	let (service, client, transaction_pool, task_manager, keystore) = builder
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
@@ -115,12 +115,11 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 
 	if role.is_authority() {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
-			service.client(),
-			service.transaction_pool(),
+			client.clone(),
+			transaction_pool,
 			service.prometheus_registry().as_ref(),
 		);
 
-		let client = service.client();
 		let select_chain = service.select_chain()
 			.ok_or(ServiceError::SelectChainRequired)?;
 
@@ -129,26 +128,26 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 
 		let aura = sc_consensus_aura::start_aura::<_, _, _, _, _, AuraPair, _, _, _>(
 			sc_consensus_aura::slot_duration(&*client)?,
-			client,
+			client.clone(),
 			select_chain,
 			block_import,
 			proposer,
 			service.network(),
 			inherent_data_providers.clone(),
 			force_authoring,
-			service.keystore(),
+			keystore.clone(),
 			can_author_with,
 		)?;
 
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
-		service.spawn_essential_task("aura", aura);
+		task_manager.spawn_essential("aura", aura);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() {
-		Some(service.keystore() as sp_core::traits::BareCryptoStorePtr)
+		Some(keystore.clone() as sp_core::traits::BareCryptoStorePtr)
 	} else {
 		None
 	};
@@ -184,23 +183,23 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 
 		// the GRANDPA voter task is considered infallible, i.e.
 		// if it fails we take down the service with it.
-		service.spawn_essential_task(
+		task_manager.spawn_essential(
 			"grandpa-voter",
 			sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
 		);
 	} else {
 		sc_finality_grandpa::setup_disabled_grandpa(
-			service.client(),
+			client,
 			&inherent_data_providers,
 			service.network(),
 		)?;
 	}
 
-	Ok(service)
+	Ok((service, task_manager))
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceError> {
+pub fn new_light(config: Configuration) -> Result<(impl AbstractService, TaskManager), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
@@ -265,4 +264,5 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
 		.build_light()
+		.map(|(service, _, _, task_manager, _)| (service, task_manager))
 }
