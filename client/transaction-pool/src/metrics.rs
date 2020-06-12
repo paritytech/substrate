@@ -48,6 +48,8 @@ pub struct Metrics {
 	pub validations_scheduled: Counter<U64>,
 	pub validations_finished: Counter<U64>,
 	pub validations_invalid: Counter<U64>,
+	pub block_transactions_pruned: Counter<U64>,
+	pub block_transactions_resubmitted: Counter<U64>,
 }
 
 impl Metrics {
@@ -71,6 +73,20 @@ impl Metrics {
 				Counter::new(
 					"sub_txpool_validations_invalid",
 					"Total number of transactions that were removed from the pool as invalid",
+				)?,
+				registry,
+			)?,
+			block_transactions_pruned: register(
+				Counter::new(
+					"sub_txpool_block_transactions_pruned",
+					"Total number of transactions that was requested to be pruned by block events",
+				)?,
+				registry,
+			)?,
+			block_transactions_resubmitted: register(
+				Counter::new(
+					"sub_txpool_block_transactions_resubmitted",
+					"Total number of transactions that was requested to be resubmitted by block events",
 				)?,
 				registry,
 			)?,

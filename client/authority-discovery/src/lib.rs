@@ -294,13 +294,26 @@ where
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?;
 
-		for authority_id in authorities.iter() {
-			if let Some(metrics) = &self.metrics {
-				metrics.request.inc();
-			}
+		let local_keys = match &self.role {
+			Role::Authority(key_store) => {
+				key_store.read()
+					.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+					.into_iter()
+					.collect::<HashSet<_>>()
+			},
+			Role::Sentry => HashSet::new(),
+		};
 
-			self.network
-				.get_value(&hash_authority_id(authority_id.as_ref()));
+		for authority_id in authorities.iter() {
+			// Make sure we don't look up our own keys.
+			if !local_keys.contains(authority_id.as_ref()) {
+				if let Some(metrics) = &self.metrics {
+					metrics.request.inc();
+				}
+
+				self.network
+					.get_value(&hash_authority_id(authority_id.as_ref()));
+			}
 		}
 
 		Ok(())

@@ -21,7 +21,6 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-
 use sc_consensus_babe;
 use grandpa::{
 	self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
@@ -53,12 +52,16 @@ macro_rules! new_full_start {
 			.with_select_chain(|_config, backend| {
 				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
-				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+			.with_transaction_pool(|builder| {
+				let pool_api = sc_transaction_pool::FullChainApi::new(
+					builder.client().clone(),
+				);
+				let config = builder.config();
+
 				Ok(sc_transaction_pool::BasicPool::new(
-					config,
+					config.transaction_pool.clone(),
 					std::sync::Arc::new(pool_api),
-					prometheus_registry,
+					builder.prometheus_registry(),
 				))
 			})?
 			.with_import_queue(|
@@ -153,6 +156,7 @@ macro_rules! new_full {
 		use futures::prelude::*;
 		use sc_network::Event;
 		use sc_client_api::ExecutorProvider;
+		use sp_core::traits::BareCryptoStorePtr;
 
 		let (
 			role,
@@ -175,7 +179,7 @@ macro_rules! new_full {
 				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
 				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
 			})?
-			.build()?;
+			.build_full()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
@@ -252,7 +256,7 @@ macro_rules! new_full {
 		// if the node isn't actively participating in consensus then it doesn't
 		// need a keystore, regardless of which protocol we use below.
 		let keystore = if role.is_authority() {
-			Some(service.keystore())
+			Some(service.keystore() as BareCryptoStorePtr)
 		} else {
 			None
 		};
@@ -323,12 +327,18 @@ pub fn new_light(config: Configuration)
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
-		.with_transaction_pool(|config, client, fetcher, prometheus_registry| {
-			let fetcher = fetcher
+		.with_transaction_pool(|builder| {
+			let fetcher = builder.fetcher()
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
-			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
+			let pool_api = sc_transaction_pool::LightChainApi::new(
+				builder.client().clone(),
+				fetcher,
+			);
 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				config, Arc::new(pool_api), prometheus_registry, sc_transaction_pool::RevalidationType::Light,
+				builder.config().transaction_pool.clone(),
+				Arc::new(pool_api),
+				builder.prometheus_registry(),
+				sc_transaction_pool::RevalidationType::Light,
 			);
 			Ok(pool)
 		})?
@@ -395,7 +405,7 @@ pub fn new_light(config: Configuration)
 
 			Ok(node_rpc::create_light(light_deps))
 		})?
-		.build()?;
+		.build_light()?;
 
 	Ok(service)
 }
@@ -480,8 +490,8 @@ mod tests {
 					service.transaction_pool().maintain(
 						ChainEvent::NewBlock {
 							is_new_best: true,
-							id: parent_id.clone(),
-							retracted: vec![],
+							hash: parent_header.hash(),
+							tree_route: None,
 							header: parent_header.clone(),
 						},
 					)

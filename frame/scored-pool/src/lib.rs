@@ -318,9 +318,7 @@ decl_module! {
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32
 		) {
-			T::KickOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::KickOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
@@ -344,9 +342,7 @@ decl_module! {
 			index: u32,
 			score: T::Score
 		) {
-			T::ScoreOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ScoreOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
