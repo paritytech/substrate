@@ -69,6 +69,10 @@ macro_rules! decl_tests {
 			evt
 		}
 
+		fn last_event() -> Event {
+			system::Module::<Test>::events().pop().expect("Event expected").event
+		}
+
 		#[test]
 		fn basic_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
@@ -486,15 +490,8 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				assert_eq!(
-					events(),
-					[
-						Event::system(system::RawEvent::NewAccount(1)),
-						Event::balances(RawEvent::Endowed(1, 110)),
-						Event::system(system::RawEvent::NewAccount(2)),
-						Event::balances(RawEvent::Endowed(2, 1)),
-						Event::balances(RawEvent::Reserved(1, 110)),
-						Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
-					]
+					last_event(),
+					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -705,22 +702,16 @@ macro_rules! decl_tests {
 					let _ = Balances::reserve(&1, 10);
 
 					assert_eq!(
-						events(),
-						[
-							Event::system(system::RawEvent::NewAccount(1)),
-							Event::balances(RawEvent::Endowed(1, 100)),
-							Event::balances(RawEvent::Reserved(1, 10)),
-						]
+						last_event(),
+						Event::balances(RawEvent::Reserved(1, 10)),
 					);
 
 					System::set_block_number(3);
 					let _ = Balances::unreserve(&1, 5);
 
 					assert_eq!(
-						events(),
-						[
-							Event::balances(RawEvent::Unreserved(1, 5)),
-						]
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
 					);
 
 					System::set_block_number(4);
@@ -728,10 +719,8 @@ macro_rules! decl_tests {
 
 					// should only unreserve 5
 					assert_eq!(
-						events(),
-						[
-							Event::balances(RawEvent::Unreserved(1, 5)),
-						]
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
 					);
 				});
 		}
