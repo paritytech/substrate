@@ -160,7 +160,7 @@ use codec::{Encode, Decode};
 
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	Parameter, RuntimeDebug, weights::{GetDispatchInfo, FunctionOf, Pays},
+	Parameter, RuntimeDebug, weights::GetDispatchInfo,
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 	dispatch::PostDispatchInfo,
 };
@@ -336,11 +336,7 @@ decl_module! {
 		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
-			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			Pays::Yes,
-		)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
 		fn as_recovered(origin,
 			account: T::AccountId,
 			call: Box<<T as Trait>::Call>

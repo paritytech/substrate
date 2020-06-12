@@ -56,7 +56,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
 use frame_support::{traits::{Filter, FilterStack, ClearFilterGuard},
-	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays}, dispatch::PostDispatchInfo,
+	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -136,14 +136,12 @@ decl_module! {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
-		#[weight = FunctionOf(
-			|args: (&Vec<<T as Trait>::Call>,)| {
-				args.0.iter()
-					.map(|call| call.get_dispatch_info().weight)
-					.fold(15_000_000, |a: Weight, n| a.saturating_add(n).saturating_add(1_000_000))
-			},
-			|args: (&Vec<<T as Trait>::Call>,)| {
-				let all_operational = args.0.iter()
+		#[weight = (
+			calls.iter()
+				.map(|call| call.get_dispatch_info().weight)
+				.fold(15_000_000, |a: Weight, n| a.saturating_add(n).saturating_add(1_000_000)),
+			{
+				let all_operational = calls.iter()
 					.map(|call| call.get_dispatch_info().class)
 					.all(|class| class == DispatchClass::Operational);
 				if all_operational {
@@ -152,7 +150,6 @@ decl_module! {
 					DispatchClass::Normal
 				}
 			},
-			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			let is_root = ensure_root(origin.clone()).is_ok();
@@ -185,12 +182,9 @@ decl_module! {
 		/// - Base weight: 2.861 µs
 		/// - Plus the weight of the `call`
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| {
-				args.1.get_dispatch_info().weight.saturating_add(3_000_000)
-			},
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			Pays::Yes,
+		#[weight = (
+			call.get_dispatch_info().weight.saturating_add(3_000_000),
+			call.get_dispatch_info().class,
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -217,12 +211,9 @@ decl_module! {
 		/// - Base weight: 2.861 µs
 		/// - Plus the weight of the `call`
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| {
-				args.1.get_dispatch_info().weight.saturating_add(3_000_000)
-			},
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			Pays::Yes,
+		#[weight = (
+			call.get_dispatch_info().weight.saturating_add(3_000_000),
+			call.get_dispatch_info().class,
 		)]
 		fn as_limited_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
