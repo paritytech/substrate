@@ -21,16 +21,15 @@ use hash_db::Hasher;
 use codec::{Decode, Encode};
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use crate::{UsageInfo, StorageKey, StorageValue, StorageCollection};
-use sp_trie::{ProofInput, BackendStorageProof};
+use sp_trie::{ProofInput, BackendProof};
 
 /// Access the state of the proof backend of a backend.
-pub type ProofRegStateFor<B, H> = <<B as Backend<H>>::ProofRegBackend as ProofRegBackend<H>>::State;
+pub type RegProofStateFor<B, H> = <<B as Backend<H>>::RegProofBackend as RegProofBackend<H>>::State;
+
+/// Access the raw proof of a backend.
+pub type ProofRawFor<B, H> = <<B as Backend<H>>::StorageProof as BackendProof<H>>::ProofRaw;
 
 /// Access the state of the proof backend of a backend.
-pub type ProofRegFor<B, H> = <<B as Backend<H>>::StorageProof as BackendStorageProof<H>>::StorageProofReg;
-
-/// Access the state of the proof backend of a backend.
-/// TODO should not be an alias
 pub type ProofFor<B, H> = <B as Backend<H>>::StorageProof;
 
 /// A state backend is used to read state data and can have changes committed
@@ -45,12 +44,10 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	type Transaction: Consolidate + Default + Send;
 
 	/// The actual proof produced.
-	type StorageProof: BackendStorageProof<H>;
-
-//		+ sp_trie::WithRegStorageProof<H::Out, RegStorageProof = Self::StorageProofReg>;
+	type StorageProof: BackendProof<H>;
 
 	/// Type of proof backend.
-	type ProofRegBackend: ProofRegBackend<H, StorageProof = Self::StorageProof>;
+	type RegProofBackend: RegProofBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Type of proof backend.
 	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
@@ -169,14 +166,15 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	}
 
 	/// Try convert into a proof backend.
-	fn as_proof_backend(self) -> Option<Self::ProofRegBackend> {
+	fn as_proof_backend(self) -> Option<Self::RegProofBackend> {
 		self.from_reg_state(Default::default())
 	}
 
 	/// Try convert into a proof backend.
 	/// We can optionally use a previous proof backend to avoid having to merge
 	/// proof later.
-	fn from_reg_state(self, previous: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend>;
+	/// TODO EMCH consider adding previous input.
+	fn from_reg_state(self, previous: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend>;
 
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
@@ -237,22 +235,6 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	}
 }
 
-/// Backend that can be instantiated from its state.
-/// TODO EMCH does not seem use at this point
-pub trait InstantiableStateBackend<H>: Backend<H>
-	where
-		H: Hasher,
-{
-	/// Storage to use to instantiate.
-	type Storage;
-
-	/// Instantiation method.
-	fn new(storage: Self::Storage, state: H::Out) -> Self;
-
-	/// Extract state out of the backend.
-	fn extract_state(self) -> (Self::Storage, H::Out);
-}
-
 /// Backend that can be instantiated from intital content.
 pub trait GenesisStateBackend<H>: Backend<H>
 	where
@@ -263,24 +245,22 @@ pub trait GenesisStateBackend<H>: Backend<H>
 }
 
 /// Backend used to register a proof record.
-pub trait ProofRegBackend<H>: crate::backend::Backend<H>
+pub trait RegProofBackend<H>: crate::backend::Backend<H>
 	where
 		H: Hasher,
 {
 	/// State of a backend.
 	/// TODO try to merge with RecordBackendFor (aka remove the arc rwlock in code)
 	type State: Default + Send + Sync + Clone;
-		// + Into<RecordBackendFor<Self::StorageProof, H>>
-		// + From<RecordBackendFor<Self::StorageProof, H>>
+
 	/// Extract proof after running operation to prove.
-	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>>;
+	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn crate::Error>>;
 
 	/// Get current recording state.
 	fn extract_recorder(self) -> (Self::State, ProofInput);
 
 	/// Extract from the state and input.
-	/// TODO EMCH fusing state and record could avoid this
-	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>>;
+	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn crate::Error>>;
 }
 
 /// Backend used to produce proof.
@@ -303,7 +283,7 @@ impl<'a, T, H> Backend<H> for &'a T
 	type Error = T::Error;
 	type Transaction = T::Transaction;
 	type StorageProof = T::StorageProof;
-	type ProofRegBackend = T::ProofRegBackend;
+	type RegProofBackend = T::RegProofBackend;
 	type ProofCheckBackend = T::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -380,7 +360,7 @@ impl<'a, T, H> Backend<H> for &'a T
 		(*self).usage_info()
 	}
 
-	fn from_reg_state(self, _previous: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(self, _previous: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
 		// cannot move out of reference, consider cloning when needed.
 		None
 	}

@@ -43,7 +43,7 @@ impl Flat {
 
 // TODO EMCH tets that proof nodes encode to the same as flat (to validate change in grandpa)
 
-impl StorageProof for Flat {
+impl Common for Flat {
 	fn empty() -> Self {
 		Flat(Default::default())
 	}
@@ -53,7 +53,7 @@ impl StorageProof for Flat {
 	}
 }
 
-impl StorageProof for Full {
+impl Common for Full {
 	fn empty() -> Self {
 		Full(Default::default())
 	}
@@ -63,7 +63,7 @@ impl StorageProof for Full {
 	}
 }
 
-impl MergeableStorageProof for Flat {
+impl Mergeable for Flat {
 	fn merge<I>(proofs: I) -> Self where I: IntoIterator<Item=Self> {
 		let mut unique_set = BTreeSet::<Vec<u8>>::default();
 		for proof in proofs {
@@ -73,7 +73,7 @@ impl MergeableStorageProof for Flat {
 	}
 }
 
-impl MergeableStorageProof for Full {
+impl Mergeable for Full {
 	fn merge<I>(proofs: I) -> Self where I: IntoIterator<Item=Self> {
 		let mut child_sets = ChildrenProofMap::<BTreeSet<Vec<u8>>>::default();
 		for children in proofs {
@@ -89,7 +89,7 @@ impl MergeableStorageProof for Full {
 	}
 }
 
-impl<H: Hasher> RegStorageProof<H> for Flat {
+impl<H: Hasher> Recordable<H> for Flat {
 	const INPUT_KIND: InputKind = InputKind::None;
 
 	type RecordBackend = super::FlatRecorder<H>;
@@ -103,7 +103,7 @@ impl<H: Hasher> RegStorageProof<H> for Flat {
 	}
 }
 
-impl<H: Hasher> RegStorageProof<H> for Full {
+impl<H: Hasher> Recordable<H> for Full {
 	const INPUT_KIND: InputKind = InputKind::None;
 
 	type RecordBackend = super::FullRecorder<H>;
@@ -121,8 +121,8 @@ impl<H: Hasher> RegStorageProof<H> for Full {
 	}
 }
 
-impl<H: Hasher> BackendStorageProof<H> for Flat {
-	type StorageProofReg = Self;
+impl<H: Hasher> BackendProof<H> for Flat {
+	type ProofRaw = Self;
 
 	fn into_partial_db(self) -> Result<MemoryDB<H>> {
 		use hash_db::HashDB;
@@ -134,8 +134,8 @@ impl<H: Hasher> BackendStorageProof<H> for Flat {
 	}
 }
 
-impl<H: Hasher> BackendStorageProof<H> for Full {
-	type StorageProofReg = Self;
+impl<H: Hasher> BackendProof<H> for Full {
+	type ProofRaw = Self;
 
 	fn into_partial_db(self) -> Result<MemoryDB<H>> {
 		use hash_db::HashDB;
@@ -150,7 +150,7 @@ impl<H: Hasher> BackendStorageProof<H> for Full {
 	}
 }
 
-impl<H: Hasher> FullBackendStorageProof<H> for Full {
+impl<H: Hasher> FullBackendProof<H> for Full {
 	fn into_partial_full_db(self) -> Result<ChildrenProofMap<MemoryDB<H>>> {
 		use hash_db::HashDB;
 		let mut result = ChildrenProofMap::default();

@@ -32,9 +32,9 @@ use sp_state_machine::{
 	self, OverlayedChanges, ExecutionStrategy, execution_proof_check_on_proof_backend,
 	ExecutionManager, CloneableSpawn, InMemoryBackend,
 };
-use sp_state_machine::backend::{Backend as StateBackend, ProofRegFor};
+use sp_state_machine::backend::{Backend as StateBackend, ProofRawFor};
 use hash_db::Hasher;
-use sp_state_machine::{SimpleProof as StorageProof, MergeableStorageProof};
+use sp_state_machine::{SimpleProof as StorageProof, MergeableProof};
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 
@@ -158,13 +158,13 @@ impl<Block, B, Local> CallExecutor<Block> for
 		}
 	}
 
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<Block>>>(
 		&self,
 		_proof_backend: &P,
 		_overlay: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-	) -> ClientResult<(Vec<u8>, ProofRegFor<P, HashFor<Block>>)> {
+	) -> ClientResult<(Vec<u8>, ProofRawFor<P, HashFor<Block>>)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
 
@@ -183,7 +183,7 @@ pub fn prove_execution<Block, S, E>(
 	executor: &E,
 	method: &str,
 	call_data: &[u8],
-) -> ClientResult<(Vec<u8>, ProofRegFor<S, HashFor<Block>>)>
+) -> ClientResult<(Vec<u8>, ProofRawFor<S, HashFor<Block>>)>
 	where
 		Block: BlockT,
 		S: StateBackend<HashFor<Block>>,
@@ -211,7 +211,7 @@ pub fn prove_execution<Block, S, E>(
 		method,
 		call_data,
 	)?;
-	let total_proof = <ProofRegFor<S, HashFor<Block>>>::merge(
+	let total_proof = <ProofRawFor<S, HashFor<Block>>>::merge(
 		vec![init_proof, exec_proof],
 	);
 

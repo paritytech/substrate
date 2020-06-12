@@ -26,7 +26,7 @@ use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::ChildInfo;
 use sp_state_machine::{
-	backend::{Backend as StateBackend, ProofRegStateFor}, StorageKey, StorageValue,
+	backend::{Backend as StateBackend, RegProofStateFor}, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 };
 use log::trace;
@@ -496,7 +496,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type StorageProof = S::StorageProof;
-	type ProofRegBackend = S::ProofRegBackend;
+	type RegProofBackend = S::RegProofBackend;
 	type ProofCheckBackend = S::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -654,7 +654,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn from_reg_state(self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(self, previous: RegProofStateFor<Self, HashFor<B>>) -> Option<Self::RegProofBackend> {
 		self.state.from_reg_state(previous)
 	}
 
@@ -739,7 +739,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type StorageProof = S::StorageProof;
-	type ProofRegBackend = S::ProofRegBackend;
+	type RegProofBackend = S::RegProofBackend;
 	type ProofCheckBackend = S::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -846,7 +846,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 		self.caching_state().usage_info()
 	}
 
-	fn from_reg_state(mut self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(mut self, previous: RegProofStateFor<Self, HashFor<B>>) -> Option<Self::RegProofBackend> {
 		self.sync().and_then(|s| s.from_reg_state(previous))
 	}
 }

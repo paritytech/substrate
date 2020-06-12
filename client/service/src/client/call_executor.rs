@@ -23,7 +23,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::{Backend as _, ProofRegFor},
+	backend::{Backend as _, ProofRawFor},
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
@@ -193,7 +193,7 @@ where
 					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
 					state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 				};
-				use sp_state_machine::backend::ProofRegBackend;
+				use sp_state_machine::backend::RegProofBackend;
 				let (recorder_state, input_state) = backend.extract_recorder();
 				*recorder = recorder_state;
 				input.consolidate(input_state).map_err(|e| format!("{:?}", e))?;
@@ -241,13 +241,13 @@ where
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<Block>>>(
 		&self,
 		proof_backend: &P,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, ProofRegFor<P, HashFor<Block>>), sp_blockchain::Error> {
+	) -> Result<(Vec<u8>, ProofRawFor<P, HashFor<Block>>), sp_blockchain::Error> {
 		sp_state_machine::prove_execution_on_proof_backend::<_, _, NumberFor<Block>, _>(
 			proof_backend,
 			overlay,

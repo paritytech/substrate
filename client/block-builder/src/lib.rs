@@ -53,12 +53,12 @@ pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor
 	/// The changes that need to be applied to the backend to get the state of the build block.
 	pub storage_changes: StorageChanges<StateBackend, Block>,
 	/// An optional proof that was recorded while building the block.
-	pub proof: Option<backend::ProofRegFor<StateBackend, HashFor<Block>>>,
+	pub proof: Option<backend::ProofRawFor<StateBackend, HashFor<Block>>>,
 }
 
 impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBlock<Block, StateBackend> {
 	/// Convert into the inner values.
-	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<backend::ProofRegFor<StateBackend, HashFor<Block>>>) {
+	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<backend::ProofRawFor<StateBackend, HashFor<Block>>>) {
 		(self.block, self.storage_changes, self.proof)
 	}
 }

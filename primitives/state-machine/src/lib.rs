@@ -45,9 +45,9 @@ mod stats;
 mod read_only;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
-	TrieNodesStorageProof, StorageProof,  StorageProofKind, ChildrenProofMap,
-	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RegStorageProof,
-	SimpleProof, CompactProof, BackendStorageProof, MergeableStorageProof};
+	TrieNodesStorageProof, ProofCommon,  StorageProofKind, ChildrenProofMap,
+	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RecordableProof,
+	SimpleProof, CompactProof, BackendProof, MergeableProof};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use read_only::{ReadOnlyExternalities, InspectState};
@@ -80,7 +80,7 @@ pub use in_memory_backend::new_in_mem;
 pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use sp_core::traits::CloneableSpawn;
 
-use backend::{Backend, ProofRegBackend, ProofCheckBackend, ProofRegFor};
+use backend::{Backend, RegProofBackend, ProofCheckBackend, ProofRawFor};
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -470,7 +470,7 @@ pub fn prove_execution<B, H, N, Exec>(
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
-) -> Result<(Vec<u8>, ProofRegFor<B, H>), Box<dyn Error>>
+) -> Result<(Vec<u8>, ProofRawFor<B, H>), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -508,9 +508,9 @@ pub fn prove_execution_on_proof_backend<P, H, N, Exec>(
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
-) -> Result<(Vec<u8>, ProofRegFor<P, H>), Box<dyn Error>>
+) -> Result<(Vec<u8>, ProofRawFor<P, H>), Box<dyn Error>>
 where
-	P: ProofRegBackend<H>,
+	P: RegProofBackend<H>,
 	H: Hasher,
 	H::Out: Ord + 'static + codec::Codec,
 	Exec: CodeExecutor + 'static + Clone,
@@ -609,7 +609,7 @@ where
 pub fn prove_read<B, H, I>(
 	backend: B,
 	keys: I,
-) -> Result<ProofRegFor<B, H>, Box<dyn Error>>
+) -> Result<ProofRawFor<B, H>, Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -628,7 +628,7 @@ where
 pub fn prove_read_for_query_plan_check<B, H, I>(
 	backend: B,
 	keys: I,
-) -> Result<(crate::backend::ProofRegStateFor<B, H>, ProofInput), Box<dyn Error>>
+) -> Result<(crate::backend::RegProofStateFor<B, H>, ProofInput), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -654,7 +654,7 @@ pub fn prove_child_read<B, H, I>(
 	backend: B,
 	child_info: &ChildInfo,
 	keys: I,
-) -> Result<ProofRegFor<B, H>, Box<dyn Error>>
+) -> Result<ProofRawFor<B, H>, Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -671,9 +671,9 @@ where
 pub fn prove_read_on_proof_backend<P, H, I>(
 	proving_backend: &P,
 	keys: I,
-) -> Result<ProofRegFor<P, H>, Box<dyn Error>>
+) -> Result<ProofRawFor<P, H>, Box<dyn Error>>
 where
-	P: ProofRegBackend<H>,
+	P: RegProofBackend<H>,
 	H: Hasher,
 	H::Out: Ord + Codec,
 	I: IntoIterator,
@@ -692,9 +692,9 @@ pub fn prove_child_read_on_proof_backend<P, H, I>(
 	proving_backend: &P,
 	child_info: &ChildInfo,
 	keys: I,
-) -> Result<ProofRegFor<P, H>, Box<dyn Error>>
+) -> Result<ProofRawFor<P, H>, Box<dyn Error>>
 where
-	P: ProofRegBackend<H>,
+	P: RegProofBackend<H>,
 	H: Hasher,
 	H::Out: Ord + Codec,
 	I: IntoIterator,
@@ -713,7 +713,7 @@ pub fn prove_child_read_for_query_plan_check<B, H, I, I2, I3>(
 	backend: B,
 	top_keys: I,
 	child_keys: I3,
-) -> Result<(crate::backend::ProofRegStateFor<B, H>, ProofInput), Box<dyn Error>>
+) -> Result<(crate::backend::RegProofStateFor<B, H>, ProofInput), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -832,7 +832,7 @@ mod tests {
 	use super::changes_trie::Configuration as ChangesTrieConfig;
 	use sp_core::{map, traits::{Externalities, RuntimeCode}};
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_trie::{Layout, SimpleProof, SimpleFullProof, BackendStorageProof, FullBackendStorageProof};
+	use sp_trie::{Layout, SimpleProof, SimpleFullProof, BackendProof, FullBackendProof};
 
 	type CompactProof = sp_trie::CompactProof<Layout<BlakeTwo256>>;
 	type CompactFullProof = sp_trie::CompactFullProof<Layout<BlakeTwo256>>;
@@ -1012,7 +1012,7 @@ mod tests {
 		prove_execution_and_proof_check_works_inner::<SimpleFullProof>();
 		prove_execution_and_proof_check_works_inner::<CompactFullProof>();
 	}
-	fn prove_execution_and_proof_check_works_inner<P: BackendStorageProof<BlakeTwo256>>() {
+	fn prove_execution_and_proof_check_works_inner<P: BackendProof<BlakeTwo256>>() {
 		let executor = DummyCodeExecutor {
 			change_changes_trie_config: false,
 			native_available: true,
@@ -1304,7 +1304,7 @@ mod tests {
 
 	#[test]
 	fn prove_read_and_proof_check_works_query_plan() {
-		use sp_trie::{CheckableStorageProof, ProofInput};
+		use sp_trie::{VerifiableProof, ProofInput};
 
 		fn extract_recorder<T: Clone>(recorder: std::sync::Arc<parking_lot::RwLock<T>>) -> T {
 			match std::sync::Arc::try_unwrap(recorder) {
@@ -1332,7 +1332,7 @@ mod tests {
 			std::iter::empty::<(_, _, std::iter::Empty<_>)>(),
 			true,
 		);
-		let remote_proof = <QueryPlanProof as sp_trie::RegStorageProof<_>>::extract_proof(&recorder, input).unwrap();
+		let remote_proof = <QueryPlanProof as sp_trie::RecordableProof<_>>::extract_proof(&recorder, input).unwrap();
 
 		let input_check = ProofInput::query_plan_with_values(
 			remote_root.encode(),
@@ -1360,7 +1360,7 @@ mod tests {
 				vec![(child_info.clone(), remote_root_child.encode(), vec![b"value3".to_vec()].into_iter())].into_iter(),
 				include_roots,
 			);
-			let remote_proof = <QueryPlanProof as sp_trie::RegStorageProof<_>>::extract_proof(&recorder, input).unwrap();
+			let remote_proof = <QueryPlanProof as sp_trie::RecordableProof<_>>::extract_proof(&recorder, input).unwrap();
 
 			let input_check = ProofInput::query_plan_with_values(
 				remote_root.encode(),
@@ -1394,8 +1394,8 @@ mod tests {
 	}
 	fn prove_read_and_proof_check_works_inner<P>()
 		where
-			P: BackendStorageProof<BlakeTwo256>, 
-			P::StorageProofReg: Clone,
+			P: BackendProof<BlakeTwo256>, 
+			P::ProofRaw: Clone,
 	{
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
@@ -1462,19 +1462,21 @@ mod tests {
 	}
 	fn prove_read_and_proof_on_fullbackend_works_inner<P>()
 		where
-			P: FullBackendStorageProof<BlakeTwo256>, 
-			P::StorageProofReg: Clone,
+			P: FullBackendProof<BlakeTwo256>, 
+			P::ProofRaw: Clone,
 	{
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie_proof::<P>();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
+// TODO EMCH use InMemoryFullProofCheckBackend
  		// check proof locally
 		let local_result1 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
+// TODO EMCH use InMemoryFullProofCheckBackend
 		let local_result2 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),

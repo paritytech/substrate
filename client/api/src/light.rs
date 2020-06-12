@@ -27,7 +27,7 @@ use sp_runtime::{
 	generic::BlockId
 };
 use sp_core::{ChangesTrieConfigurationRange, storage::PrefixedStorageKey};
-use sp_state_machine::{SimpleProof, StorageProof};
+use sp_state_machine::SimpleProof;
 use sp_blockchain::{
 	HeaderMetadata, well_known_cache_keys, HeaderBackend, Cache as BlockchainCache,
 	Error as ClientError, Result as ClientResult,
@@ -190,7 +190,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 ///
 /// Implementations of this trait should not use any prunable blockchain data
 /// except that is passed to its methods.
-pub trait FetchChecker<Block: BlockT, P: StorageProof>: Send + Sync {
+pub trait FetchChecker<Block: BlockT, P>: Send + Sync {
 	/// Check remote header proof.
 	fn check_header_proof(
 		&self,

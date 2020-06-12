@@ -23,16 +23,16 @@ use sp_runtime::{
 };
 use crate::{SimpleProof, ChangesProof};
 use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
-use sp_trie::BackendStorageProof;
+use sp_trie::BackendProof;
 
 /// Interface for providing block proving utilities.
-pub trait ProofProvider<Block: BlockT, Proof: BackendStorageProof<HashFor<Block>>> {
+pub trait ProofProvider<Block: BlockT, Proof: BackendProof<HashFor<Block>>> {
 	/// Reads storage value at a given block + key, returning read proof.
 	fn read_proof(
 		&self,
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-	) -> sp_blockchain::Result<Proof::StorageProofReg>;
+	) -> sp_blockchain::Result<Proof::ProofRaw>;
 
 	/// Reads child storage value at a given block + storage_key + key, returning
 	/// read proof.
@@ -41,7 +41,7 @@ pub trait ProofProvider<Block: BlockT, Proof: BackendStorageProof<HashFor<Block>
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-	) -> sp_blockchain::Result<Proof::StorageProofReg>;
+	) -> sp_blockchain::Result<Proof::ProofRaw>;
 
 	/// Execute a call to a contract on top of state in a block of given hash
 	/// AND returning execution proof.
@@ -52,7 +52,7 @@ pub trait ProofProvider<Block: BlockT, Proof: BackendStorageProof<HashFor<Block>
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-	) -> sp_blockchain::Result<(Vec<u8>, Proof::StorageProofReg)>;
+	) -> sp_blockchain::Result<(Vec<u8>, Proof::ProofRaw)>;
 
 	/// Reads given header and generates CHT-based header proof.
 	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, SimpleProof)>;

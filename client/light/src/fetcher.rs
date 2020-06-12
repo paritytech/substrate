@@ -33,9 +33,9 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
-	read_child_proof_check, CloneableSpawn, BackendStorageProof, InMemoryBackend,
+	read_child_proof_check, CloneableSpawn, BackendProof, InMemoryBackend,
 };
-pub use sp_state_machine::{SimpleProof as StorageProof, StorageProof as StorageProofT};
+pub use sp_state_machine::{SimpleProof as StorageProof, ProofCommon};
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
 pub use sc_client_api::{

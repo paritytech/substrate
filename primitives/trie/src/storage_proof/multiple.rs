@@ -134,7 +134,7 @@ impl<H, D> Encode for MultipleStorageProof<H, D> {
 	}
 }
 
-impl<H, D: DefaultKind> StorageProof for MultipleStorageProof<H, D> {
+impl<H, D: DefaultKind> Common for MultipleStorageProof<H, D> {
 	fn empty() -> Self {
 		match D::KIND {
 			StorageProofKind::Flat =>
@@ -240,8 +240,7 @@ impl<H: Hasher, D: DefaultKind> RecordBackend<H> for MultipleRecorder<H, D> {
 	}
 }
 
-// TODO EMCH can remove Default bound with manual impl on recorder
-impl<H, D: DefaultKind> RegStorageProof<H> for MultipleStorageProof<H, D>
+impl<H, D: DefaultKind> Recordable<H> for MultipleStorageProof<H, D>
 	where
 		H: Hasher,
 		H::Out: Codec,
@@ -288,13 +287,13 @@ impl<H, D: DefaultKind> RegStorageProof<H> for MultipleStorageProof<H, D>
 	}
 }
 
-impl<H, D> BackendStorageProof<H> for MultipleStorageProof<H, D>
+impl<H, D> BackendProof<H> for MultipleStorageProof<H, D>
 	where
 		H: Hasher,
 		H::Out: Codec,
 		D: DefaultKind,
 {
-	type StorageProofReg = super::compact::FullForMerge;
+	type ProofRaw = super::compact::FullForMerge;
 
 	fn into_partial_db(self) -> Result<MemoryDB<H>> {
 		match self {

@@ -24,14 +24,14 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	empty_child_trie_root, read_trie_value_with, read_child_trie_value_with, RecordBackendFor,
-	ProofInput, RecordBackend, RegStorageProof, BackendStorageProof,
-	record_all_keys, ProofInputKind, FullBackendStorageProof,
+	ProofInput, RecordBackend, RecordableProof, BackendProof,
+	record_all_keys, ProofInputKind, FullBackendProof,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap, trie_types::{Layout, TrieError}};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, DBValue};
-use crate::backend::{Backend, ProofRegStateFor, ProofRegBackend};
+use crate::backend::{Backend, RegProofStateFor, RegProofBackend};
 use sp_core::storage::{ChildInfo, ChildInfoProof};
 use std::marker::PhantomData;
 
@@ -123,7 +123,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 pub struct ProvingBackend<
 	S: TrieBackendStorage<H>,
 	H: Hasher,
-	P: BackendStorageProof<H>,
+	P: BackendProof<H>,
 > {
 	trie_backend: TrieBackend<ProofRecorderBackend<S, H, RecordBackendFor<P, H>>, H, P>,
 	_ph: PhantomData<P>,
@@ -141,7 +141,7 @@ impl<'a, S, H, P> ProvingBackend<&'a S, H, P>
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Codec,
-		P: BackendStorageProof<H>,
+		P: BackendProof<H>,
 {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H, P>) -> Self {
@@ -160,7 +160,7 @@ impl<'a, S, H, P> ProvingBackend<&'a S, H, P>
 			proof_recorder,
 			_ph: PhantomData,
 		};
-		match P::StorageProofReg::INPUT_KIND {
+		match P::ProofRaw::INPUT_KIND {
 			ProofInputKind::ChildTrieRoots => {
 				ProvingBackend {
 					trie_backend: TrieBackend::new_with_roots(recorder, root),
@@ -184,7 +184,7 @@ impl<S, H, P> ProvingBackend<S, H, P>
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Codec,
-		P: BackendStorageProof<H>,
+		P: BackendProof<H>,
 {
 	/// Create new proving backend with the given recorder.
 	pub fn from_backend_with_recorder(
@@ -197,7 +197,7 @@ impl<S, H, P> ProvingBackend<S, H, P>
 			proof_recorder,
 			_ph: PhantomData,
 		};
-		match P::StorageProofReg::INPUT_KIND {
+		match P::ProofRaw::INPUT_KIND {
 			ProofInputKind::ChildTrieRoots => {
 				ProvingBackend {
 					trie_backend: TrieBackend::new_with_roots(recorder, root),
@@ -232,7 +232,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> TrieBackendStorag
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, P: BackendStorageProof<H>> std::fmt::Debug
+impl<S: TrieBackendStorage<H>, H: Hasher, P: BackendProof<H>> std::fmt::Debug
 	for ProvingBackend<S, H, P>
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -240,31 +240,31 @@ impl<S: TrieBackendStorage<H>, H: Hasher, P: BackendStorageProof<H>> std::fmt::D
 	}
 }
 
-impl<S, H, P> ProofRegBackend<H> for ProvingBackend<S, H, P>
+impl<S, H, P> RegProofBackend<H> for ProvingBackend<S, H, P>
 	where
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
-		P: BackendStorageProof<H>,
+		P: BackendProof<H>,
 {
 	type State = SyncRecordBackendFor<P, H>;
 
-	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn Error>> {
+	fn extract_proof(&self) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn Error>> {
 		let input = self.trie_backend.extract_registered_roots();
-		<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg::extract_proof(
+		<Self::StorageProof as BackendProof<H>>::ProofRaw::extract_proof(
 			&self.trie_backend.essence().backend_storage().proof_recorder.read(),
 			input,
 		).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}
 
-	fn extract_recorder(self) -> (ProofRegStateFor<Self, H>, ProofInput) {
+	fn extract_recorder(self) -> (RegProofStateFor<Self, H>, ProofInput) {
 		let input = self.trie_backend.extract_registered_roots();
 		let recorder = self.trie_backend.into_storage().proof_recorder;
 		(recorder, input)
 	}
 
-	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg, Box<dyn crate::Error>> {
-		<<Self::StorageProof as BackendStorageProof<H>>::StorageProofReg>::extract_proof(
+	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<<Self::StorageProof as BackendProof<H>>::ProofRaw, Box<dyn crate::Error>> {
+		<<Self::StorageProof as BackendProof<H>>::ProofRaw>::extract_proof(
 			& recorder_state.read(),
 			input,
 		).map_err(|e| Box::new(e) as Box<dyn Error>)
@@ -276,12 +276,12 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
-		P: BackendStorageProof<H>,
+		P: BackendProof<H>,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
 	type StorageProof = P;
-	type ProofRegBackend = Self;
+	type RegProofBackend = Self;
 	type ProofCheckBackend = crate::InMemoryProofCheckBackend<H, P>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -370,7 +370,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 		self.trie_backend.usage_info()
 	}
 
-	fn from_reg_state(self, previous_recorder: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(self, previous_recorder: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
 		let root = self.trie_backend.essence().root().clone();
 		let storage = self.trie_backend.into_storage();
 		let current_recorder = storage.proof_recorder;
@@ -399,7 +399,7 @@ pub fn create_proof_check_backend<H, P>(
 where
 	H: Hasher,
 	H::Out: Codec,
-	P: BackendStorageProof<H>,
+	P: BackendProof<H>,
 {
 	let db = proof.into_partial_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
@@ -418,7 +418,7 @@ pub fn create_full_proof_check_backend<H, P>(
 where
 	H: Hasher,
 	H::Out: Codec,
-	P: FullBackendStorageProof<H>,
+	P: FullBackendProof<H>,
 {
 	use std::ops::Deref;
 	let db = proof.into_partial_full_db()
@@ -439,12 +439,12 @@ mod tests {
 	use super::*;
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
-	use sp_trie::{SimpleProof, StorageProof as _};
+	use sp_trie::{SimpleProof, ProofCommon};
 	use sp_runtime::traits::BlakeTwo256;
 
 	type CompactProof = sp_trie::CompactProof<Layout<BlakeTwo256>>;
 
-	fn test_proving<P: sp_trie::BackendStorageProof<BlakeTwo256>>(
+	fn test_proving<P: sp_trie::BackendProof<BlakeTwo256>>(
 		trie_backend: &TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, P>,
 	) -> ProvingBackend<&PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, P> {
 		ProvingBackend::new(trie_backend)
@@ -455,7 +455,7 @@ mod tests {
 		proof_is_empty_until_value_is_read_inner::<SimpleProof>();
 		proof_is_empty_until_value_is_read_inner::<CompactProof>();
 	}
-	fn proof_is_empty_until_value_is_read_inner<P: BackendStorageProof<BlakeTwo256>>() {
+	fn proof_is_empty_until_value_is_read_inner<P: BackendProof<BlakeTwo256>>() {
 		let trie_backend = test_trie_proof::<P>();
 		assert!(test_proving(&trie_backend).extract_proof().unwrap().is_empty());
 	}
@@ -465,7 +465,7 @@ mod tests {
 		proof_is_non_empty_after_value_is_read_inner::<SimpleProof>();
 		proof_is_non_empty_after_value_is_read_inner::<CompactProof>();
 	}
-	fn proof_is_non_empty_after_value_is_read_inner<P: BackendStorageProof<BlakeTwo256>>() {
+	fn proof_is_non_empty_after_value_is_read_inner<P: BackendProof<BlakeTwo256>>() {
 		let trie_backend = test_trie_proof::<P>();
 		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
@@ -492,7 +492,7 @@ mod tests {
 		passes_through_backend_calls_inner::<SimpleProof>();
 		passes_through_backend_calls_inner::<CompactProof>();
 	}
-	fn passes_through_backend_calls_inner<P: BackendStorageProof<BlakeTwo256>>() {
+	fn passes_through_backend_calls_inner<P: BackendProof<BlakeTwo256>>() {
 		let trie_backend = test_trie_proof::<P>();
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
@@ -509,7 +509,7 @@ mod tests {
 		proof_recorded_and_checked_inner::<SimpleProof>();
 		proof_recorded_and_checked_inner::<CompactProof>();
 	}
-	fn proof_recorded_and_checked_inner<P: BackendStorageProof<BlakeTwo256>>() {
+	fn proof_recorded_and_checked_inner<P: BackendProof<BlakeTwo256>>() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemoryProofCheckBackend::<BlakeTwo256, P>::default();
 		let in_memory = in_memory.update(vec![(None, contents)]);
@@ -535,7 +535,7 @@ mod tests {
 		proof_recorded_and_checked_with_child_inner::<SimpleProof>();
 		proof_recorded_and_checked_with_child_inner::<CompactProof>();
 	}
-	fn proof_recorded_and_checked_with_child_inner<P: BackendStorageProof<BlakeTwo256>>() {
+	fn proof_recorded_and_checked_with_child_inner<P: BackendProof<BlakeTwo256>>() {
 		let child_info_1 = ChildInfo::new_default(b"sub1");
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;

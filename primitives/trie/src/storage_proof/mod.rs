@@ -236,8 +236,6 @@ impl Input {
 		
 		Input::QueryPlan(result)
 	}
-
-
 }
 
 /// Kind for a `Input` variant.
@@ -253,8 +251,8 @@ pub enum InputKind {
 	QueryPlanWithValues,
 }
 
-/// Trait for proofs that can be use as a partial backend for verification.
-pub trait StorageProof: sp_std::fmt::Debug + Sized {
+/// Basic trait for proofs.
+pub trait Common: sp_std::fmt::Debug + Sized {
 	/// Returns a new empty proof.
 	///
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
@@ -266,7 +264,7 @@ pub trait StorageProof: sp_std::fmt::Debug + Sized {
 }
 
 /// Trait for proofs that can be merged.
-pub trait MergeableStorageProof: StorageProof {
+pub trait Mergeable: Common {
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
 	/// proofs due to deduplication of trie nodes.
@@ -274,7 +272,7 @@ pub trait MergeableStorageProof: StorageProof {
 }
 
 /// Trait for proofs that can be recorded against a trie backend.
-pub trait RegStorageProof<H: Hasher>: StorageProof {
+pub trait Recordable<H: Hasher>: Common {
 	/// Variant of enum input to use.
 	const INPUT_KIND: InputKind;
 
@@ -286,38 +284,30 @@ pub trait RegStorageProof<H: Hasher>: StorageProof {
 	/// (usually to compact the proof).
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self>;
 }
-/*
-/// Associate a different proof kind for recording proof.
-/// The recorded proof will need to be convertible to this type.
-///
-/// This trait is not strictly needed but ensure simple proof construction
-/// rules (a single possible registration proof).
-///
-/// TODO EMCH really consider removing.
-pub trait WithRegStorageProof<Hash>: Sized {
-	/// Associated proof to register.
-	type RegStorageProof: Into<Self> + RegStorageProof<Hash>;
-}
-*/
-pub trait BackendStorageProof<H: Hasher>: Codec + StorageProof {
-	/// The proof format use while registering proof.
-	type StorageProofReg: RegStorageProof<H>
-		+ MergeableStorageProof
-		+ Into<Self>; // TODO EMCH consider removing this conv or make it a try into??
+
+/// Proof that could be use as a backend to execute action
+/// other a `MemoryDB`.
+pub trait BackendProof<H: Hasher>: Codec + Common {
+	/// Intermediate proof format before getting finalize
+	type ProofRaw: Recordable<H>
+		+ Mergeable
+		+ Into<Self>;
 
 	/// Extract a flat trie db from the proof.
 	/// Fail on invalid proof content.
 	fn into_partial_db(self) -> Result<MemoryDB<H>>;
 }
 
-pub trait FullBackendStorageProof<H: Hasher>: BackendStorageProof<H> {
+/// Proof that could be use as a backend to execute action
+/// other one `MemoryDB` per child proofs.
+pub trait FullBackendProof<H: Hasher>: BackendProof<H> {
 	/// Extract a trie db with children info from the proof.
 	/// Fail on invalid proof content.
 	fn into_partial_full_db(self) -> Result<ChildrenProofMap<MemoryDB<H>>>;
 }
 
 /// Trait for proofs that can use to create a partial trie backend.
-pub trait CheckableStorageProof: Codec + StorageProof {
+pub trait Verifiable: Codec + Common {
 	/// Run proof validation when the proof allows immediate
 	/// verification.
 	fn verify(self, input: &Input) -> Result<bool>;
@@ -484,7 +474,6 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 }
 
 /// Container recording trie nodes.
-/// TODO EMCH looks unused
 pub struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
 
 impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {

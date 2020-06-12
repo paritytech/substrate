@@ -34,11 +34,11 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-pub use storage_proof::{StorageProof, ChildrenProofMap, simple::ProofNodes, compact::FullForMerge,
+pub use storage_proof::{Common as ProofCommon, ChildrenProofMap, simple::ProofNodes, compact::FullForMerge,
 	compact::Flat as CompactProof, simple::Full as SimpleFullProof, compact::Full as CompactFullProof,
-	query_plan::KnownQueryPlanAndValues as QueryPlanProof, CheckableStorageProof,
-	Input as ProofInput, InputKind as ProofInputKind, RecordMapTrieNodes, RegStorageProof, FullBackendStorageProof,
-	BackendStorageProof, MergeableStorageProof, RecordBackend, multiple::FlatDefault as ProofFlatDefault,
+	query_plan::KnownQueryPlanAndValues as QueryPlanProof, Verifiable as VerifiableProof,
+	Input as ProofInput, InputKind as ProofInputKind, RecordMapTrieNodes, Recordable as RecordableProof, FullBackendProof,
+	BackendProof, Mergeable as MergeableProof, RecordBackend, multiple::FlatDefault as ProofFlatDefault,
 	multiple::StorageProofKind, multiple::MultipleStorageProof as TrieNodesStorageProof, simple::Flat as SimpleProof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
@@ -54,7 +54,7 @@ pub use hash_db::{HashDB as HashDBT, EMPTY_PREFIX};
 /// Access record backend for a given backend storage proof.
 /// TODO EMCH check if can be use at other place (rg 'as BackendS')
 /// TODO seems rather useless we use the reg one moste of the time, not exposing it ?
-pub type RecordBackendFor<P, H> = <<P as BackendStorageProof<H>>::StorageProofReg as RegStorageProof<H>>::RecordBackend;
+pub type RecordBackendFor<P, H> = <<P as BackendProof<H>>::ProofRaw as RecordableProof<H>>::RecordBackend;
 
 #[derive(Default)]
 /// substrate trie layout

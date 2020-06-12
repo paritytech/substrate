@@ -45,7 +45,7 @@ use sc_client_api::{blockchain::Info, backend::NewBlockState, Backend as ClientB
 	AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, BlockImportOperation,
 	RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest,
 	RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest,
-	SimpleProof as StorageProof, StorageProof as _};
+	SimpleProof as StorageProof, ProofCommon};
 use sp_externalities::Extensions;
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::{
@@ -63,7 +63,7 @@ use substrate_test_runtime_client::{
 
 use sp_core::{blake2_256, ChangesTrieConfiguration};
 use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
-use sp_state_machine::backend::{ProofRegFor, Backend as _};
+use sp_state_machine::backend::{ProofRawFor, Backend as _};
 
 type InMemoryProofCheckBackend = sp_state_machine::InMemoryProofCheckBackend<BlakeTwo256, StorageProof>;
 
@@ -243,13 +243,13 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		unreachable!()
 	}
 
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<Block>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<Block>>>(
 		&self,
 		_proof_backend: &P,
 		_overlay: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-	) -> Result<(Vec<u8>, ProofRegFor<P, HashFor<Block>>), ClientError> {
+	) -> Result<(Vec<u8>, ProofRawFor<P, HashFor<Block>>), ClientError> {
 		unreachable!()
 	}
 

@@ -20,9 +20,9 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
-	ChildrenProofMap, ProofInput, BackendStorageProof, FullBackendStorageProof};
+	ChildrenProofMap, ProofInput, BackendProof, FullBackendProof};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use crate::backend::{ProofRegStateFor};
+use crate::backend::{RegProofStateFor};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
 use crate::{
@@ -113,12 +113,12 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 	H: Hasher,
 	S: TrieBackendStorage<H>,
 	H::Out: Ord + Codec,
-	P: BackendStorageProof<H>,
+	P: BackendProof<H>,
 {
 	type Error = String;
 	type Transaction = S::Overlay;
 	type StorageProof = P;
-	type ProofRegBackend = crate::proving_backend::ProvingBackend<
+	type RegProofBackend = crate::proving_backend::ProvingBackend<
 		S,
 		H,
 		Self::StorageProof,
@@ -279,7 +279,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 		(root, is_default, write_overlay)
 	}
 
-	fn from_reg_state(self, recorder: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(self, recorder: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
 		let root = self.essence.root().clone();
 		Some(crate::proving_backend::ProvingBackend::from_backend_with_recorder(
 			self.essence.into_storage(),
@@ -302,7 +302,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 impl<H: Hasher, P> ProofCheckBackend<H> for crate::InMemoryProofCheckBackend<H, P>
 	where
 		H::Out: Ord + Codec,
-		P: BackendStorageProof<H>,
+		P: BackendProof<H>,
 {
 	fn create_proof_check_backend(
 		root: H::Out,
@@ -317,7 +317,7 @@ impl<H: Hasher, P> ProofCheckBackend<H> for crate::InMemoryProofCheckBackend<H, 
 impl<H: Hasher, P> ProofCheckBackend<H> for crate::InMemoryFullProofCheckBackend<H, P>
 	where
 		H::Out: Ord + Codec,
-		P: FullBackendStorageProof<H>,
+		P: FullBackendProof<H>,
 {
 	fn create_proof_check_backend(
 		root: H::Out,
@@ -368,7 +368,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie_proof<P: sp_trie::BackendStorageProof<BlakeTwo256>>()
+	pub(crate) fn test_trie_proof<P: sp_trie::BackendProof<BlakeTwo256>>()
 		-> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256, P> {
 		let (mdb, root) = test_db();
 		TrieBackend::new(mdb, root)

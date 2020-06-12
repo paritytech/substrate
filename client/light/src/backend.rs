@@ -29,7 +29,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
-	backend::{Backend as StateBackend, ProofRegStateFor}, InMemoryBackend, ChangesTrieTransaction,
+	backend::{Backend as StateBackend, RegProofStateFor}, InMemoryBackend, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
@@ -381,7 +381,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	type Error = ClientError;
 	type Transaction = <InMemoryBackend<H> as StateBackend<H>>::Transaction;
 	type StorageProof = <InMemoryBackend<H> as StateBackend<H>>::StorageProof;
-	type ProofRegBackend = <InMemoryBackend<H> as StateBackend<H>>::ProofRegBackend;
+	type RegProofBackend = <InMemoryBackend<H> as StateBackend<H>>::RegProofBackend;
 	type ProofCheckBackend = <InMemoryBackend<H> as StateBackend<H>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
@@ -511,7 +511,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		sp_state_machine::UsageInfo::empty()
 	}
 
-	fn from_reg_state(self, previous: ProofRegStateFor<Self, H>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(self, previous: RegProofStateFor<Self, H>) -> Option<Self::RegProofBackend> {
 		match self {
 			GenesisOrUnavailableState::Genesis(state) => state.from_reg_state(previous),
 			GenesisOrUnavailableState::Unavailable => None,

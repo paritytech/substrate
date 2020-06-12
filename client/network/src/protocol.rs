@@ -56,7 +56,7 @@ use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use sc_client_api::{ChangesProof, StorageProof};
+use sc_client_api::{ChangesProof, ProofCommon};
 use util::LruHashSet;
 use wasm_timer::Instant;
 
@@ -1473,7 +1473,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					error
 				);
 				self.peerset_handle.report_peer(who.clone(), rep::RPC_FAILED);
-				StorageProof::empty()
+				ProofCommon::empty()
 			}
 		};
 
@@ -1619,7 +1619,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.block,
 					error
 				);
-				StorageProof::empty()
+				ProofCommon::empty()
 			}
 		};
 		self.send_message(
@@ -1675,7 +1675,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.block,
 					error
 				);
-				StorageProof::empty()
+				ProofCommon::empty()
 			}
 		};
 		self.send_message(
@@ -1704,7 +1704,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.block,
 					error
 				);
-				(Default::default(), StorageProof::empty())
+				(Default::default(), ProofCommon::empty())
 			}
 		};
 		self.send_message(
@@ -1764,7 +1764,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					max_block: Zero::zero(),
 					proof: vec![],
 					roots: BTreeMap::new(),
-					roots_proof: StorageProof::empty(),
+					roots_proof: ProofCommon::empty(),
 				}
 			}
 		};

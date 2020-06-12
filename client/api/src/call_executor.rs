@@ -111,7 +111,7 @@ pub trait CallExecutor<B: BlockT> {
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRegFor<S, HashFor<B>>), sp_blockchain::Error> {
+	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRawFor<S, HashFor<B>>), sp_blockchain::Error> {
 		let proof_state = state.as_proof_backend()
 			.ok_or_else(||
 				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
@@ -124,13 +124,13 @@ pub trait CallExecutor<B: BlockT> {
 	///
 	/// No changes are made.
 	/// TODO EMCH try to remove P param and use the associated backend type?
-	fn prove_at_proof_backend_state<P: sp_state_machine::backend::ProofRegBackend<HashFor<B>>>(
+	fn prove_at_proof_backend_state<P: sp_state_machine::backend::RegProofBackend<HashFor<B>>>(
 		&self,
 		proof_backend: &P,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
-	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRegFor<P, HashFor<B>>), sp_blockchain::Error>;
+	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRawFor<P, HashFor<B>>), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;

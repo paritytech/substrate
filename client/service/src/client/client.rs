@@ -18,7 +18,7 @@
 
 //! Substrate Client
 
-use sc_client_api::backend::{ProofFor, ProofRegFor};
+use sc_client_api::backend::{ProofFor, ProofRawFor};
 use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
@@ -45,7 +45,7 @@ use sp_state_machine::{
 	DBValue, backend::Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof, SimpleProof as StorageProof,
-	MergeableStorageProof,
+	MergeableProof,
 };
 use sc_executor::RuntimeVersion;
 use sp_consensus::{
@@ -1183,7 +1183,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B, Block>> for Client<B, E, 
 		&self,
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-	) -> sp_blockchain::Result<ProofRegFor<B::State, HashFor<Block>>> {
+	) -> sp_blockchain::Result<ProofRawFor<B::State, HashFor<Block>>> {
 		self.state_at(id)
 			.and_then(|state| prove_read(state, keys)
 				.map_err(Into::into))
@@ -1194,7 +1194,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B, Block>> for Client<B, E, 
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
-	) -> sp_blockchain::Result<ProofRegFor<B::State, HashFor<Block>>> {
+	) -> sp_blockchain::Result<ProofRawFor<B::State, HashFor<Block>>> {
 		self.state_at(id)
 			.and_then(|state| prove_child_read(state, child_info, keys)
 				.map_err(Into::into))
@@ -1205,7 +1205,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B, Block>> for Client<B, E, 
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-	) -> sp_blockchain::Result<(Vec<u8>, ProofRegFor<B::State, HashFor<Block>>)> {
+	) -> sp_blockchain::Result<(Vec<u8>, ProofRawFor<B::State, HashFor<Block>>)> {
 		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
 		//
@@ -1224,7 +1224,7 @@ impl<B, E, Block, RA> ProofProvider<Block, ProofFor<B, Block>> for Client<B, E, 
 			method,
 			call_data,
 		).and_then(|(r, p)| {
-			Ok((r, ProofRegFor::<B::State, HashFor<Block>>::merge(
+			Ok((r, ProofRawFor::<B::State, HashFor<Block>>::merge(
 				vec![p, code_proof],
 			)))
 		})

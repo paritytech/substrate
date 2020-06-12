@@ -39,8 +39,8 @@ extern crate self as sp_api;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	OverlayedChanges, StorageProof, StorageProofKind, backend::Backend as StateBackend, ChangesTrieState, InMemoryBackend,
-	ProofInput, backend::{ProofRegFor, ProofRegBackend}, RegStorageProof,
+	OverlayedChanges, ProofCommon, backend::Backend as StateBackend, ChangesTrieState, InMemoryBackend,
+	ProofInput, backend::{ProofRawFor, RegProofBackend}, RecordableProof,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -381,7 +381,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// This stops the proof recording.
 	///
 	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(&mut self) -> Option<ProofRegFor<Self::StateBackend, HashFor<Block>>>;
+	fn extract_proof(&mut self) -> Option<ProofRawFor<Self::StateBackend, HashFor<Block>>>;
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
@@ -527,7 +527,7 @@ pub struct ProofRecorder<Backend: StateBackend<HashFor<Block>>, Block: BlockT> {
 	/// The recorder to use over the db use by trie db.
 	/// TODO EMCH this the sync recorder and we got a mechanism of extract / merge for it
 	/// when it should only be reusing it, but merge still needed for input.
-	pub recorder: sp_state_machine::backend::ProofRegStateFor<Backend, HashFor<Block>>,
+	pub recorder: sp_state_machine::backend::RegProofStateFor<Backend, HashFor<Block>>,
 	/// The additional input needed for the proof.
 	pub input: ProofInput,
 }

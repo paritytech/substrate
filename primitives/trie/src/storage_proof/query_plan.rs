@@ -46,7 +46,7 @@ impl<T> Clone for KnownQueryPlanAndValues<T> {
 	}
 }
 
-impl<T> StorageProof for KnownQueryPlanAndValues<T> {
+impl<T> Common for KnownQueryPlanAndValues<T> {
 	fn empty() -> Self {
 		KnownQueryPlanAndValues(Default::default(), PhantomData)
 	}
@@ -56,7 +56,7 @@ impl<T> StorageProof for KnownQueryPlanAndValues<T> {
 	}
 }
 
-impl<T> RegStorageProof<T::Hash> for KnownQueryPlanAndValues<T>
+impl<T> Recordable<T::Hash> for KnownQueryPlanAndValues<T>
 	where
 		T: TrieConfiguration,
 		TrieHash<T>: Decode,
@@ -91,7 +91,7 @@ impl<T> RegStorageProof<T::Hash> for KnownQueryPlanAndValues<T>
 	}
 }
 
-impl<T> CheckableStorageProof for KnownQueryPlanAndValues<T>
+impl<T> Verifiable for KnownQueryPlanAndValues<T>
 	where
 		T: TrieConfiguration,
 		TrieHash<T>: Decode,

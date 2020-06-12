@@ -57,7 +57,7 @@ use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client_api::{
 	SimpleProof as StorageProof,
-	StorageProof as StorageProofT,
+	ProofCommon,
 	light::{
 		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
 		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
@@ -1330,7 +1330,7 @@ mod tests {
 		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
 		yamux
 	};
-	use sc_client_api::{StorageProof as StorageProofT, RemoteReadChildRequest, FetchChecker, SimpleProof as StorageProof};
+	use sc_client_api::{ProofCommon, RemoteReadChildRequest, FetchChecker, SimpleProof as StorageProof};
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{

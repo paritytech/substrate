@@ -77,7 +77,7 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
 	StorageCollection, ChildStorageCollection, SimpleProof,
-	backend::{Backend as StateBackend, ProofRegStateFor}, StateMachineStats,
+	backend::{Backend as StateBackend, RegProofStateFor}, StateMachineStats,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
@@ -154,7 +154,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
 	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type StorageProof = <DbState<B> as StateBackend<HashFor<B>>>::StorageProof;
-	type ProofRegBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofRegBackend;
+	type RegProofBackend = <DbState<B> as StateBackend<HashFor<B>>>::RegProofBackend;
 	type ProofCheckBackend = <DbState<B> as StateBackend<HashFor<B>>>::ProofCheckBackend;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -253,7 +253,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state().child_keys(child_info, prefix)
 	}
 
-	fn from_reg_state(mut self, previous: ProofRegStateFor<Self, HashFor<B>>) -> Option<Self::ProofRegBackend> {
+	fn from_reg_state(mut self, previous: RegProofStateFor<Self, HashFor<B>>) -> Option<Self::RegProofBackend> {
 		let state = std::mem::replace(&mut self.state, Default::default()).expect("Non dropped state");
 		state.from_reg_state(previous)
 	}

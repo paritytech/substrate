@@ -81,7 +81,7 @@ impl<T> sp_std::fmt::Debug for Full<T> {
 pub struct FullForMerge(ChildrenProofMap<(ProofMapTrieNodes, Vec<u8>)>);
 
 
-impl<T> StorageProof for Flat<T> {
+impl<T> Common for Flat<T> {
 	fn empty() -> Self {
 		Flat(Default::default(), PhantomData)
 	}
@@ -91,7 +91,7 @@ impl<T> StorageProof for Flat<T> {
 	}
 }
 
-impl<T> StorageProof for Full<T> {
+impl<T> Common for Full<T> {
 	fn empty() -> Self {
 		Full(Default::default(), PhantomData)
 	}
@@ -101,7 +101,7 @@ impl<T> StorageProof for Full<T> {
 	}
 }
 
-impl StorageProof for FullForMerge {
+impl Common for FullForMerge {
 	fn empty() -> Self {
 		FullForMerge(Default::default())
 	}
@@ -112,7 +112,7 @@ impl StorageProof for FullForMerge {
 }
 
 /// Note that this implementation assumes all proof are from a same state.
-impl MergeableStorageProof for FullForMerge {
+impl Mergeable for FullForMerge {
 	fn merge<I>(proofs: I) -> Self where I: IntoIterator<Item=Self> {
 		// TODO EMCH optimize all merge to init to first element
 		let mut child_sets = ChildrenProofMap::<(ProofMapTrieNodes, Vec<u8>)>::default();
@@ -131,8 +131,7 @@ impl MergeableStorageProof for FullForMerge {
 	}
 }
 
-// TODO EMCH can remove Default bound with manual impl on recorder
-impl<T> RegStorageProof<T::Hash> for Flat<T>
+impl<T> Recordable<T::Hash> for Flat<T>
 	where
 		T: TrieLayout,
 		TrieHash<T>: Decode,
@@ -158,7 +157,7 @@ impl<T> RegStorageProof<T::Hash> for Flat<T>
 	}
 }
 
-impl<T> RegStorageProof<T::Hash> for Full<T>
+impl<T> Recordable<T::Hash> for Full<T>
 	where
 		T: TrieLayout,
 		TrieHash<T>: Decode,
@@ -184,7 +183,7 @@ impl<T> RegStorageProof<T::Hash> for Full<T>
 	}
 }
 
-impl<H> RegStorageProof<H> for FullForMerge
+impl<H> Recordable<H> for FullForMerge
 	where
 		H: Hasher,
 		H::Out: Encode,
@@ -212,12 +211,12 @@ impl<H> RegStorageProof<H> for FullForMerge
 	}
 }
 
-impl<T> BackendStorageProof<T::Hash> for Flat<T>
+impl<T> BackendProof<T::Hash> for Flat<T>
 	where
 		T: TrieLayout,
 		TrieHash<T>: Codec,
 {
-	type StorageProofReg = FullForMerge;
+	type ProofRaw = FullForMerge;
 
 	fn into_partial_db(self) -> Result<MemoryDB<T::Hash>> {
 		let mut db = MemoryDB::default();
@@ -235,12 +234,12 @@ impl<T> BackendStorageProof<T::Hash> for Flat<T>
 	}
 }
 
-impl<T> BackendStorageProof<T::Hash> for Full<T>
+impl<T> BackendProof<T::Hash> for Full<T>
 	where
 		T: TrieLayout,
 		TrieHash<T>: Codec,
 {
-	type StorageProofReg = FullForMerge;
+	type ProofRaw = FullForMerge;
 
 	fn into_partial_db(self) -> Result<MemoryDB<T::Hash>> {
 		let mut db = MemoryDB::default();
@@ -258,7 +257,7 @@ impl<T> BackendStorageProof<T::Hash> for Full<T>
 	}
 }
 
-impl<T> FullBackendStorageProof<T::Hash> for Full<T>
+impl<T> FullBackendProof<T::Hash> for Full<T>
 	where
 		T: TrieLayout,
 		TrieHash<T>: Codec,
@@ -401,8 +400,6 @@ impl<L: TrieLayout> TryInto<super::simple::Full> for Full<L> {
 }
 
 /// Container recording trie nodes and their encoded hash.
-/// TODO remove Encode by relieving mergeable storage proof from the
-/// constraint to bring back btreemap?
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct ProofMapTrieNodes(pub BTreeMap<Vec<u8>, DBValue>);
 
