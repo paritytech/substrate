@@ -93,7 +93,7 @@ use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{Weight, GetDispatchInfo, FunctionOf, Pays};
+use frame_support::weights::{Weight, GetDispatchInfo};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
@@ -126,11 +126,7 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000,
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
-			Pays::Yes,
-		)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -150,11 +146,7 @@ decl_module! {
 		/// - O(1).
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &weight): (&Box<<T as Trait>::Call>,&Weight,)| weight,
-			|(call, _): (&Box<<T as Trait>::Call>,&Weight,)| call.get_dispatch_info().class,
-			Pays::Yes,
-		)]
+		#[weight = (*_weight, call.get_dispatch_info().class)]
 		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -195,15 +187,7 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
-				args.1.get_dispatch_info().weight + 10_000
-			},
-			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
-				args.1.get_dispatch_info().class
-			},
-			Pays::Yes,
-		)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

@@ -450,9 +450,11 @@ impl<T: IntoIterator + Clone,> Len for T where <T as IntoIterator>::IntoIter: Ex
 	}
 }
 
-/// A trait for querying a single fixed value from a type.
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
 pub trait Get<T> {
-	/// Return a constant value.
+	/// Return the current value.
 	fn get() -> T;
 }
 
@@ -1006,6 +1008,7 @@ pub trait Currency<AccountId> {
 }
 
 /// Status of funds.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
