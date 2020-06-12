@@ -193,11 +193,11 @@ pub trait BareCryptoStore: Send + Sync {
 	/// the public key and key type provided do not match a private
 	/// key in the keystore. Or, in the context of remote signing
 	/// an error could be a network one.
-	fn sr25519_vrf_sign(
-		&self,
+	async fn sr25519_vrf_sign<'a>(
+		&'a self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
+		transcript_data: VRFTranscriptData<'a>,
 	) -> Result<VRFSignature, Error>;
 }
 

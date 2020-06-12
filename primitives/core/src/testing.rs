@@ -244,15 +244,15 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}
 	}
 
-	fn sr25519_vrf_sign(
-		&self,
+	async fn sr25519_vrf_sign<'a>(
+		&'a self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
+		transcript_data: VRFTranscriptData<'a>,
 	) -> Result<VRFSignature, Error> {
 		let transcript = make_transcript(transcript_data);
 		let pair = self.sr25519_key_pair(key_type, public)
-			.ok_or_else(|| Error::PairNotFound("Not found".to_owned()))?;
+			.ok_or(Error::PairNotFound("Not found".to_owned()))?;
 
 		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
 		Ok(VRFSignature {
@@ -443,24 +443,24 @@ mod tests {
 			]
 		};
 
-		let result = store.read().sr25519_vrf_sign(
+		let result = block_on(store.read().sr25519_vrf_sign(
 			SR25519,
 			&key_pair.public(),
 			transcript_data.clone(),
-		);
+		));
 		assert!(result.is_err());
 
-		store.write().insert_unknown(
+		block_on(store.write().insert_unknown(
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
-		).expect("Inserts unknown key");
+		)).expect("Inserts unknown key");
 
-		let result = store.read().sr25519_vrf_sign(
+		let result = block_on(store.read().sr25519_vrf_sign(
 			SR25519,
 			&key_pair.public(),
 			transcript_data,
-		);
+		));
 
 		assert!(result.is_ok());
 	}
