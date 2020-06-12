@@ -20,7 +20,7 @@
 use super::*;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
-	weights::{Weight, DispatchClass}
+	weights::Weight,
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
