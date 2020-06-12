@@ -283,18 +283,24 @@ impl<L> Into<Flat<L>> for Full<L> {
 	}
 }
 
-// TODO switch to try into (works only for one compact flat)
-impl<L> Into<Full<L>> for Flat<L> {
-	fn into(mut self) -> Full<L> {
-		assert!(self.0.len() == 1); // works only if only top trie
+impl<L> TryInto<Full<L>> for Flat<L> {
+	type Error = super::Error;
+
+	fn try_into(mut self) -> Result<Full<L>> {
+		if self.0.len() > 1 {
+			return Err(super::error(
+				"Can only convert compact flat proof if it is only top storage"
+			));
+		}
 		let mut result = ChildrenProofMap::default();
-		result.insert(ChildInfoProof::top_trie(), self.0.pop().expect("asserted above; qed"));
-		Full(result, PhantomData)
+		if let Some(v) = self.0.pop() {
+			result.insert(ChildInfoProof::top_trie(), v);
+		}
+		Ok(Full(result, PhantomData))
 	}
 }
 
 impl FullForMerge {
-	// TODO EMCH use try_into!
 	fn to_full<L>(self) -> Result<Full<L>>
 		where
 			L: TrieLayout,
@@ -311,7 +317,6 @@ impl FullForMerge {
 		Ok(Full(result, PhantomData))
 	}
 
-	// TODO EMCH use try_into!
 	fn to_flat<L>(self) -> Result<Flat<L>>
 		where
 			L: TrieLayout,
@@ -334,10 +339,9 @@ impl<L> Into<Full<L>> for FullForMerge
 		L: TrieLayout,
 		TrieHash<L>: Codec,
 {
-	// TODO consider only using try into (may not be very straightforward with backend)
 	fn into(self) -> Full<L> {
 		self.to_full()
-			.expect("Full for merge was recorded on a correct state")
+			.expect("Full for merge was recorded on a valid state; qed")
 	}
 }
 
@@ -348,7 +352,7 @@ impl<L> Into<Flat<L>> for FullForMerge
 {
 	fn into(self) -> Flat<L> {
 		self.to_flat()
-			.expect("Full for merge was recorded on a correct state")
+			.expect("Full for merge was recorded on a valid state; qed")
 	}
 }
 
