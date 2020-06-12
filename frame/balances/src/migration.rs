@@ -21,17 +21,18 @@ use super::*;
 use frame_support::storage::migration::{
 	get_storage_value, have_storage_value, put_storage_value, take_storage_value, StorageIterator
 };
+use frame_support::weights::Weight;
 use sp_io::hashing::twox_64;
 
-pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() {
+pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() -> Weight {
 	match StorageVersion::<I>::get() {
-		Releases::V2_0_0 => return,
+		Releases::V2_0_0 => T::DbWeight::get().reads(1),
 		Releases::V1_0_0 => upgrade_v1_to_v2::<T, I>(),
 	}
 }
 
 // Upgrade from the pre-#4649 balances/vesting into the new balances.
-fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() {
+fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	sp_runtime::print("Upgrading account balances...");
 	// First, migrate from old FreeBalance to new Account.
 	// We also move all locks across since only accounts with FreeBalance values have locks.
@@ -114,4 +115,7 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() {
 	take_storage_value::<T::Index>(b"Balances", b"IsUpgraded", &[]);
 
 	StorageVersion::<I>::put(Releases::V2_0_0);
+
+	// TODO determine actual weight
+	T::DbWeight::get().reads_writes(1, 1)
 }

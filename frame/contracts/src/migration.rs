@@ -18,8 +18,9 @@
 
 use super::*;
 use frame_support::storage::migration::{put_storage_value, take_storage_value, StorageIterator};
+use frame_support::weights::Weight;
 
-pub fn on_runtime_upgrade<T: Trait>() {
+pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 	change_name_contract_to_contracts::<T>()
 }
 
@@ -29,34 +30,49 @@ pub fn on_runtime_upgrade<T: Trait>() {
 // need to keep track of a storage version. If the runtime does not need to be
 // upgraded, nothing here will happen anyway.
 
-fn change_name_contract_to_contracts<T: Trait>() {
+fn change_name_contract_to_contracts<T: Trait>() -> Weight {
 	sp_runtime::print("Migrating Contracts.");
 
+	let mut weight = 0;
+	let db = T::DbWeight::get();
 	if let Some(gas_spent) = take_storage_value::<Gas>(b"Contract", b"GasSpent", &[]) {
 		put_storage_value(b"Contracts", b"GasSpent", &[], gas_spent);
+		weight += db.writes(2);
 	}
+	weight += db.reads(1);
 
 	if let Some(current_schedule) = take_storage_value::<Schedule>(b"Contract", b"CurrentSchedule", &[]) {
 		put_storage_value(b"Contracts", b"CurrentSchedule", &[], current_schedule);
+		weight += db.writes(2);
 	}
+	weight += db.reads(1);
 
 	for (hash, pristine_code) in StorageIterator::<Vec<u8>>::new(b"Contract", b"PristineCode").drain() {
 		put_storage_value(b"Contracts", b"PristineCode", &hash, pristine_code);
+		weight += db.reads_writes(1, 2);
 	}
 
 	for (hash, code_storage) in StorageIterator::<wasm::PrefabWasmModule>::new(b"Contract", b"CodeStorage").drain() {
 		put_storage_value(b"Contracts", b"CodeStorage", &hash, code_storage);
+		weight += db.reads_writes(1, 2);
 	}
 
 	if let Some(current_schedule) = take_storage_value::<u64>(b"Contract", b"AccountCounter", &[]) {
 		put_storage_value(b"Contracts", b"AccountCounter", &[], current_schedule);
+		weight += db.writes(2);
 	}
+	weight += db.reads(1);
 
 	for (hash, contract_info_of) in StorageIterator::<ContractInfo<T>>::new(b"Contract", b"ContractInfoOf").drain() {
 		put_storage_value(b"Contracts", b"ContractInfoOf", &hash, contract_info_of);
+		weight += db.reads_writes(1, 2);
 	}
 
 	if let Some(get_price) = take_storage_value::<BalanceOf<T>>(b"Contract", b"GetPrice", &[]) {
 		put_storage_value(b"Contracts", b"GetPrice", &[], get_price);
+		weight += db.writes(2);
 	}
+	weight += db.reads(1);
+
+	weight
 }

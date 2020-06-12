@@ -1135,7 +1135,7 @@ decl_module! {
 			)).into())
 		}
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			migration::on_runtime_upgrade::<T>()
 		}
 	}

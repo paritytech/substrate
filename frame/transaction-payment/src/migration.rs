@@ -18,9 +18,10 @@
 
 use super::*;
 use frame_support::storage::migration::{put_storage_value, take_storage_value};
+use frame_support::weights::Weight;
 
-pub fn on_runtime_upgrade() {
-	change_name_balances_to_transaction_payment()
+pub fn on_runtime_upgrade<T: Trait>() -> Weight {
+	change_name_balances_to_transaction_payment::<T>()
 }
 
 // Change the storage name used by this pallet from `Balances` to `TransactionPayment`.
@@ -29,10 +30,16 @@ pub fn on_runtime_upgrade() {
 // need to keep track of a storage version. If the runtime does not need to be
 // upgraded, nothing here will happen anyway.
 
-fn change_name_balances_to_transaction_payment() {
+fn change_name_balances_to_transaction_payment<T: Trait>() -> Weight {
 	sp_runtime::print("Migrating Transaction Payment.");
 
+	let mut reads = 0;
+	let mut writes = 0;
 	if let Some(next_fee_multiplier) = take_storage_value::<Multiplier>(b"Balances", b"NextFeeMultiplier", &[]) {
 		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], next_fee_multiplier);
+		writes += 2;
 	}
+	reads += 1;
+
+	T::DbWeight::get().reads_writes(reads, writes)
 }

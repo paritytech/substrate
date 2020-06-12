@@ -24,7 +24,7 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
-use frame_support::weights::{DispatchClass};
+use frame_support::weights::{DispatchClass, Weight};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
@@ -95,7 +95,7 @@ decl_module! {
 			Self::update_hint(<Self as Store>::Update::take())
 		}
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			migration::on_runtime_upgrade::<T>()
 		}
 	}
