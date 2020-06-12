@@ -359,6 +359,14 @@ cargo-check-macos:
   tags:
     - osx
 
+test-prometheus-alerting-rules:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - wget https://github.com/prometheus/prometheus/releases/download/v2.19.0/prometheus-2.19.0.linux-amd64.tar.gz
+    - tar -xzf prometheus-*.tar.gz
+    - ./prometheus-*/promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+
 #### stage:                        build
 
 check-polkadot-companion-status:
