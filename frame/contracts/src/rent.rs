@@ -20,6 +20,8 @@ use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
 	TombstoneContractInfo, Trait, CodeHash,
 };
+use sp_std::prelude::*;
+use sp_io::hashing::blake2_256;
 use frame_support::storage::child;
 use frame_support::traits::{Currency, ExistenceRequirement, Get, OnUnbalanced, WithdrawReason};
 use frame_support::StorageMap;
@@ -415,8 +417,6 @@ pub fn restore_to<T: Trait>(
 	rent_allowance: BalanceOf<T>,
 	delta: Vec<crate::exec::StorageKey>,
 ) -> Result<(), &'static str> {
-	use sp_core::blake2_256;
-
 	let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
 		.and_then(|c| c.get_alive())
 		.ok_or("Cannot restore from inexisting or tombstone contract")?;
