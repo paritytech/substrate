@@ -400,7 +400,7 @@ mod tests {
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
 		traits::{OnInitialize, OnFinalize},
-		weights::{DispatchClass, FunctionOf, Pays, constants::RocksDbWeight},
+		weights::constants::RocksDbWeight,
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -439,11 +439,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 				fn deposit_event() = default;
 
-				#[weight = FunctionOf(
-					|args: (&u32, &Weight)| *args.1,
-					|_: (&u32, &Weight)| DispatchClass::Normal,
-					Pays::Yes,
-				)]
+				#[weight = *weight]
 				fn log(origin, i: u32, weight: Weight) {
 					ensure_root(origin)?;
 					Self::deposit_event(Event::Logged(i, weight));
