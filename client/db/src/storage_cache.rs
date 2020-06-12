@@ -26,7 +26,7 @@ use sp_runtime::traits::{Block as BlockT, Header, HashFor, NumberFor};
 use sp_core::hexdisplay::HexDisplay;
 use sp_core::storage::ChildInfo;
 use sp_state_machine::{
-	backend::{Backend as StateBackend, RegProofStateFor}, StorageKey, StorageValue,
+	backend::{Backend as StateBackend, RecordBackendFor}, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 };
 use log::trace;
@@ -656,7 +656,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 
 	fn from_reg_state(
 		self,
-		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: sp_state_machine::ProofInput,
 	) -> Option<Self::RegProofBackend> {
 		self.state.from_reg_state(previous, previous_input)
@@ -852,7 +852,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn from_reg_state(
 		mut self,
-		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: sp_state_machine::ProofInput,
 	) -> Option<Self::RegProofBackend> {
 		self.sync().and_then(|s| s.from_reg_state(previous, previous_input))

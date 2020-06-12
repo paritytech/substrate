@@ -29,7 +29,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
-	backend::{Backend as StateBackend, RegProofStateFor}, InMemoryBackend, ChangesTrieTransaction,
+	backend::{Backend as StateBackend, RecordBackendFor}, InMemoryBackend, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
@@ -513,7 +513,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn from_reg_state(
 		self,
-		previous: RegProofStateFor<Self, H>,
+		previous: RecordBackendFor<Self, H>,
 		previous_input: sp_state_machine::ProofInput,
 	) -> Option<Self::RegProofBackend> {
 		match self {

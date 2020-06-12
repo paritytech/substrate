@@ -22,7 +22,7 @@ use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
 	ChildrenProofMap, ProofInput, BackendProof, FullBackendProof};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use crate::backend::{RegProofStateFor};
+use crate::backend::RecordBackendFor;
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
 use crate::{
@@ -303,7 +303,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 
 	fn from_reg_state(
 		self,
-		recorder: RegProofStateFor<Self, H>,
+		recorder: RecordBackendFor<Self, H>,
 		previous_input: ProofInput,
 	) -> Option<Self::RegProofBackend> {
 		let root = self.essence.root().clone();

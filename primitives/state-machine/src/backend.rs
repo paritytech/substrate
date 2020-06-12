@@ -24,7 +24,7 @@ use crate::{UsageInfo, StorageKey, StorageValue, StorageCollection};
 use sp_trie::{ProofInput, BackendProof};
 
 /// Access the state of the proof backend of a backend.
-pub type RegProofStateFor<B, H> = <<B as Backend<H>>::RegProofBackend as RegProofBackend<H>>::State;
+pub type RecordBackendFor<B, H> = sp_trie::RecordBackendFor<<B as Backend<H>>::StorageProof, H>;
 
 /// Access the raw proof of a backend.
 pub type ProofRawFor<B, H> = <<B as Backend<H>>::StorageProof as BackendProof<H>>::ProofRaw;
@@ -175,7 +175,7 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	/// proof later.
 	fn from_reg_state(
 		self,
-		previous: RegProofStateFor<Self, H>,
+		previous: RecordBackendFor<Self, H>,
 		previous_input: ProofInput,
 	) -> Option<Self::RegProofBackend>;
 
@@ -252,18 +252,17 @@ pub trait RegProofBackend<H>: crate::backend::Backend<H>
 	where
 		H: Hasher,
 {
-	/// State of a backend.
-	/// TODO try to merge with RecordBackendFor (aka remove the arc rwlock in code)
-	type State: Default;
-
 	/// Extract proof after running operation to prove.
 	fn extract_proof(&self) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
 
 	/// Get current recording state.
-	fn extract_recorder(self) -> (Self::State, ProofInput);
+	fn extract_recorder(self) -> (RecordBackendFor<Self, H>, ProofInput);
 
 	/// Extract from the state and input.
-	fn extract_proof_reg(recorder_state: &Self::State, input: ProofInput) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
+	fn extract_proof_reg(
+		recorder_state: &RecordBackendFor<Self, H>,
+		input: ProofInput,
+	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
 }
 
 /// Backend used to produce proof.
@@ -363,7 +362,7 @@ impl<'a, T, H> Backend<H> for &'a T
 		(*self).usage_info()
 	}
 
-	fn from_reg_state(self, _previous: RegProofStateFor<Self, H>, _input: ProofInput) -> Option<Self::RegProofBackend> {
+	fn from_reg_state(self, _previous: RecordBackendFor<Self, H>, _input: ProofInput) -> Option<Self::RegProofBackend> {
 		// cannot move out of reference, consider cloning when needed.
 		None
 	}

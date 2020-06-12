@@ -27,7 +27,7 @@ use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
-use sp_state_machine::{DBValue, backend::{Backend as StateBackend, RegProofStateFor},
+use sp_state_machine::{DBValue, backend::{Backend as StateBackend, RecordBackendFor},
 	SimpleProof, ProofInput};
 use kvdb::{KeyValueDB, DBTransaction};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
@@ -283,7 +283,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn from_reg_state(
 		self,
-		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: ProofInput,
 	) -> Option<Self::RegProofBackend> {
 		self.state.borrow_mut().take().and_then(|s| s.from_reg_state(previous, previous_input))

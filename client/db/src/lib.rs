@@ -77,7 +77,7 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
 	StorageCollection, ChildStorageCollection, SimpleProof,
-	backend::{Backend as StateBackend, RegProofStateFor}, StateMachineStats,
+	backend::{Backend as StateBackend, RecordBackendFor}, StateMachineStats,
 };
 use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
@@ -255,7 +255,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn from_reg_state(
 		mut self,
-		previous: RegProofStateFor<Self, HashFor<B>>,
+		previous: RecordBackendFor<Self, HashFor<B>>,
 		previous_input: sp_state_machine::ProofInput,
 	) -> Option<Self::RegProofBackend> {
 		let state = std::mem::replace(&mut self.state, Default::default()).expect("Non dropped state");

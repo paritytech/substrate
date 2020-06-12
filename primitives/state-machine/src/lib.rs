@@ -46,7 +46,7 @@ mod read_only;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
 	TrieNodesStorageProof, ProofCommon,  StorageProofKind, ChildrenProofMap,
-	ProofInput, ProofInputKind, ProofNodes, RecordBackendFor, RecordableProof,
+	ProofInput, ProofInputKind, ProofNodes, RecordableProof,
 	SimpleProof, CompactProof, BackendProof, MergeableProof};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
@@ -628,7 +628,7 @@ where
 pub fn prove_read_for_query_plan_check<B, H, I>(
 	backend: B,
 	keys: I,
-) -> Result<(crate::backend::RegProofStateFor<B, H>, ProofInput), Box<dyn Error>>
+) -> Result<(crate::backend::RecordBackendFor<B, H>, ProofInput), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -713,7 +713,7 @@ pub fn prove_child_read_for_query_plan_check<B, H, I, I2, I3>(
 	backend: B,
 	top_keys: I,
 	child_keys: I3,
-) -> Result<(crate::backend::RegProofStateFor<B, H>, ProofInput), Box<dyn Error>>
+) -> Result<(crate::backend::RecordBackendFor<B, H>, ProofInput), Box<dyn Error>>
 where
 	B: Backend<H>,
 	H: Hasher,
@@ -1306,13 +1306,6 @@ mod tests {
 	fn prove_read_and_proof_check_works_query_plan() {
 		use sp_trie::{VerifiableProof, ProofInput};
 
-/*		fn extract_recorder<T: Clone>(recorder: std::sync::Arc<parking_lot::RwLock<T>>) -> T {
-			match std::sync::Arc::try_unwrap(recorder) {
-				Ok(r) => r.into_inner(),
-				Err(arc) => arc.read().clone(),
-			}
-		}*/
-
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node.
@@ -1321,7 +1314,6 @@ mod tests {
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_root_child = remote_backend.child_storage_root(child_info, std::iter::empty()).0;
 		let (recorder, root_input) = prove_read_for_query_plan_check(remote_backend, &[b"value2"]).unwrap();
-//		let recorder = extract_recorder(recorder);
 		let mut root_map = ChildrenProofMap::default();
 		root_map.insert(ChildInfo::top_trie().proof_info(), remote_root.encode());
 		assert!(ProofInput::ChildTrieRoots(root_map) == root_input); 
@@ -1351,7 +1343,6 @@ mod tests {
 			&[b"value2"],
 			vec![(child_info.clone(), &[b"value3"])],
 		).unwrap();
-//		let recorder = extract_recorder(recorder);
 
 		let test_with_roots = |include_roots: bool| {
 			let input = ProofInput::query_plan(

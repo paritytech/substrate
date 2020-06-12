@@ -525,9 +525,7 @@ pub trait RuntimeApiInfo {
 #[cfg(feature = "std")]
 pub struct ProofRecorder<Backend: StateBackend<HashFor<Block>>, Block: BlockT> {
 	/// The recorder to use over the db use by trie db.
-	/// TODO EMCH this the sync recorder and we got a mechanism of extract / merge for it
-	/// when it should only be reusing it, but merge still needed for input.
-	pub recorder: sp_state_machine::backend::RegProofStateFor<Backend, HashFor<Block>>,
+	pub recorder: sp_state_machine::backend::RecordBackendFor<Backend, HashFor<Block>>,
 	/// The additional input needed for the proof.
 	pub input: ProofInput,
 }
