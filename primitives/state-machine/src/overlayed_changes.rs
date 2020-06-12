@@ -211,12 +211,10 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
 		let map = self.children.get(child_info.storage_key())?;
-			let val = map.0.get(key)?;
-				let value = val.value();
-				let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
-				self.stats.tally_read_modified(size_read);
+		let value = map.0.get(key)?.value();
+		let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_read_modified(size_read);
 		Some(value.map(AsRef::as_ref))
-		None
 	}
 
 	/// Set a new value for the specified key.
