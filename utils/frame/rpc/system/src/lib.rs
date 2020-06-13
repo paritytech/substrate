@@ -321,12 +321,35 @@ mod tests {
 		let ext1 = new_transaction(1);
 		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
-		let accounts = FullSystem::new(client, pool);
+		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let nonce = accounts.nonce(AccountKeyring::Alice.into());
 
 		// then
 		assert_eq!(nonce.wait().unwrap(), 2);
+	}
+
+	#[test]
+	fn dry_run_should_deny_unsafe() {
+		let _ = env_logger::try_init();
+
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let pool = Arc::new(
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
+		);
+
+		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
+
+		// when
+		let res = accounts.dry_run(vec![].into(), None);
+
+		// then
+		assert_eq!(res.wait(), Err(RpcError::method_not_found()));
 	}
 }
