@@ -264,7 +264,7 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 		}
 	}
 
-	/// Extend ative lock's deadline
+	/// Extend active lock's deadline
 	fn extend_active_lock(&mut self) -> Result<<L as Lockable>::Deadline, ()> {
 		let res = self.value_ref.mutate(|s: Option<Option<L::Deadline>>| -> Result<<L as Lockable>::Deadline, ()> {
 			match s {
@@ -356,14 +356,16 @@ impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
 		let _ = self.lock.take();
 	}
 
-	/// Extend the lock by guard if the lock is existed.
+	/// Extend the lock by guard deadline if it already exists.
 	///
-	/// Can be used to extend deadline when doing iterations
-	/// that it's hard to be estimated consumed time. After
-	/// a successful step, extend the lock if the lock is still active.
-	pub fn extend_lock(&mut self) {
+	/// i.e. large sets of items for which it is hard to calculate a
+	/// meaning full conservative deadline which does not block for a
+	/// very long time on node termination.
+	pub fn extend_lock(&mut self) -> Result<<L as Lockable>::Deadline, ()> {
 		if let Some(ref mut lock) = self.lock {
-			let _ = lock.extend_active_lock();
+			lock.extend_active_lock()
+		} else {
+			Err(())
 		}
 	}
 }
@@ -558,7 +560,7 @@ mod tests {
 			offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
 
 			// the lock is still active, extend it successfully
-			guard.extend_lock();
+			assert_eq!(guard.extend_lock().is_ok(), true);
 			guard.forget();
 
 			// sleep_until < deadline
