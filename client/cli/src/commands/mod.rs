@@ -278,10 +278,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn execution_strategies(&self, is_dev: bool)
+			fn execution_strategies(&self, is_dev: bool, is_validator: bool)
 			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
-					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
+					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev, is_validator)),*
 				}
 			}
 

@@ -20,7 +20,7 @@
 use super::*;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
-	weights::{Weight, DispatchClass}
+	weights::Weight,
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -56,11 +56,7 @@ pub mod logger {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event() = default;
 
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
+			#[weight = *weight]
 			fn privileged_i32_log(origin, i: i32, weight: Weight){
 				// Ensure that the `origin` is `Root`.	
 				ensure_root(origin)?;
@@ -68,11 +64,7 @@ pub mod logger {
 				Self::deposit_event(RawEvent::AppendI32(i, weight));
 			}
 
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
+			#[weight = *weight]
 			fn non_privileged_log(origin, i: i32, weight: Weight){
 				// Ensure that the `origin` is some signed account.		
 				let sender = ensure_signed(origin)?;
