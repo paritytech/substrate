@@ -187,6 +187,13 @@ decl_event! {
 mod weight_of {
 	use super::*;
 
+	pub fn as_multi<T: Trait>(
+		sig_len: usize,
+		call_weight: Weight,
+	) -> Weight {
+		0
+	}
+
 	/// - Base Weight:
 	///     - Create:          41.89 + 0.118 * S + .002 * Z µs
 	///     - Create w/ Store: 53.57 + 0.119 * S + .003 * Z µs
@@ -196,7 +203,7 @@ mod weight_of {
 	///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
 	///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 	/// - Plus Call Weight
-	pub fn as_multi<T: Trait>(
+	pub fn as_multi_new<T: Trait>(
 		sig_len: usize,
 		call_len: usize,
 		call_weight: Weight,
@@ -294,19 +301,15 @@ decl_module! {
 		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = (
-			weight_of::as_multi::<T>(
-				other_signatories.len(),
-				call.using_encoded(|x| x.len()),
-				call.get_dispatch_info().weight,
-				*store_call
-			),
+			0,
 			call.get_dispatch_info().class,
 			Pays::Yes,
 		)]
 		fn as_multi_threshold_1(origin,
 			other_signatories: Vec<T::AccountId>,
-			call: T::Call,
+			call: Box<<T as Trait>::Call>,
 		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			let other_signatories_len = other_signatories.len();
@@ -387,16 +390,14 @@ decl_module! {
 		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
 		/// - Plus Call Weight
 		/// # </weight>
-		#[weight = (
-			weight_of::as_multi::<T>(
+		#[weight =
+			weight_of::as_multi_new::<T>(
 				other_signatories.len(),
 				call.using_encoded(|x| x.len()),
-				call.get_dispatch_info().weight,
+				0,
 				*store_call
-			),
-			call.get_dispatch_info().class,
-			Pays::Yes,
-		)]
+			)
+		]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
@@ -578,7 +579,7 @@ impl<T: Trait> Module<T> {
 
 			// We only bother fetching/decoding call if we know that we're ready to execute.
 			let maybe_approved_call = if approvals >= threshold {
-				Self::get_call(&call_hash, maybe_call.as_ref().map(Into::into))
+				Self::get_call(&call_hash, maybe_call.as_ref().map(|c| c.as_ref()))
 			} else { None };
 
 			if let Some(call) = maybe_approved_call {
@@ -601,7 +602,7 @@ impl<T: Trait> Module<T> {
 
 				// Store the call if desired.
 				let stored = maybe_call
-					.filter(|| store)
+					.filter(|_| store)
 					.map_or(false, |data| Self::store_call(who.clone(), &call_hash, data));
 
 				if let Some(pos) = maybe_pos {
@@ -625,7 +626,7 @@ impl<T: Trait> Module<T> {
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
 			T::Currency::reserve(&who, deposit)?;
-			call.filter(|| store).map(|d| Self::store_call(who.clone(), &call_hash, d));
+			maybe_call.filter(|_| store).map(|d| Self::store_call(who.clone(), &call_hash, d));
 			<Multisigs<T>>::insert(&id, call_hash, Multisig {
 				when: Self::timepoint(),
 				deposit,
@@ -658,9 +659,15 @@ impl<T: Trait> Module<T> {
 
 	/// Attempt to read a call from storage, returning it.
 	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<<T as Trait>::Call> {
-		Calls::<T>::get(hash).and_then(|(data, ..)| {
-			Decode::decode(&mut &data[..]).ok()
-		})
+		if maybe_known.is_some() {
+			maybe_known.and_then(|data| {
+				Decode::decode(&mut &data[..]).ok()
+			})
+		} else {
+			Calls::<T>::get(hash).and_then(|(data, ..)| {
+				Decode::decode(&mut &data[..]).ok()
+			})
+		}
 	}
 
 	/// Attempt to remove a call from storage, returning any deposit on it to the owner.
