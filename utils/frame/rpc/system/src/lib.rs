@@ -57,7 +57,7 @@ pub trait SystemApi<BlockHash, AccountId, Index> {
 	#[rpc(name = "system_accountNextIndex", alias("account_nextIndex"))]
 	fn nonce(&self, account: AccountId) -> FutureResult<Index>;
 
-	/// Dry run an extrinsic at a given block. Return all encoded events emitted during execution.
+	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
 	#[rpc(name = "system_dryRun", alias("system_dryRunAt"))]
 	fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> FutureResult<Bytes>;
 }
