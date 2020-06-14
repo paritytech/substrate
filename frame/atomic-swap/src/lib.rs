@@ -82,6 +82,8 @@ decl_error! {
 		AlreadyExist,
 		/// Swap proof is invalid.
 		InvalidProof,
+		/// Proof is too large.
+		ProofTooLarge,
 		/// Swap does not exist.
 		NotExist,
 		/// Duration has not yet passed for the swap to be cancelled.
@@ -101,7 +103,7 @@ decl_event!(
 		/// Swap claimed.
 		SwapClaimed(AccountId, HashedProof, Balance),
 		/// Swap cancelled.
-		SwapCancelled(AccountId, HashedProof, Balance),
+		SwapCancelled(AccountId, HashedProof),
 	}
 );
 
@@ -133,7 +135,11 @@ decl_module! {
 				balance,
 				end_block: frame_system::Module::<T>::block_number() + duration,
 			};
-			PendingSwaps::<T>::insert(target, hashed_proof, swap);
+			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
+
+			Self::deposit_event(
+				RawEvent::NewSwap(target, hashed_proof, swap)
+			);
 		}
 
 		#[weight = 0]
@@ -141,6 +147,11 @@ decl_module! {
 			origin,
 			proof: Vec<u8>,
 		) {
+			ensure!(
+				proof.len() <= T::ProofLimit::get() as usize,
+				Error::<T>::ProofTooLarge,
+			);
+
 			let target = ensure_signed(origin)?;
 			let hashed_proof = blake2_256(&proof);
 
@@ -152,7 +163,11 @@ decl_module! {
 				swap.balance,
 				BalanceStatus::Free,
 			)?;
-			PendingSwaps::<T>::remove(target, hashed_proof);
+			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
+
+			Self::deposit_event(
+				RawEvent::SwapClaimed(target, hashed_proof, swap.balance)
+			);
 		}
 
 		#[weight = 0]
@@ -174,7 +189,11 @@ decl_module! {
 				&swap.source,
 				swap.balance,
 			);
-			PendingSwaps::<T>::remove(&target, hashed_proof);
+			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
+
+			Self::deposit_event(
+				RawEvent::SwapCancelled(target, hashed_proof)
+			);
 		}
 	}
 }
