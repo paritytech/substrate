@@ -25,7 +25,7 @@ mod tests;
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use frame_support::{
-	dispatch::DispatchResult, decl_module, decl_storage, decl_event, decl_error, ensure,
+	decl_module, decl_storage, decl_event, decl_error, ensure,
 	traits::{Currency, ReservableCurrency, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed};
