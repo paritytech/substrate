@@ -67,7 +67,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Trait> as AtomicSwap {
 		pub PendingSwaps: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) HashedProof
 			=> Option<PendingSwapFor<T>>;
