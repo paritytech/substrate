@@ -23,13 +23,14 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::{Bounded, Saturating};
+use core::convert::TryInto;
 
 use crate::Module as Multisig;
 
 const SEED: u32 = 0;
 
 fn setup_multi<T: Trait>(s: u32, z: u32)
-	-> Result<(Vec<T::AccountId>, Box<<T as Trait>::Call>), &'static str>
+	-> Result<(Vec<T::AccountId>, Vec<u8>), &'static str>
 {
 	let mut signatories: Vec<T::AccountId> = Vec::new();
 	for i in 0 .. s {
@@ -41,8 +42,10 @@ fn setup_multi<T: Trait>(s: u32, z: u32)
 		signatories.push(signatory);
 	}
 	signatories.sort();
-	let call: Box<<T as Trait>::Call> = Box::new(frame_system::Call::remark(vec![0; z as usize]).into());
-	return Ok((signatories, call))
+	// Must first convert to outer call type.
+	let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![0; z as usize]).into();
+	let call_data = call.encode();
+	return Ok((signatories, call_data))
 }
 
 benchmarks! {
@@ -54,8 +57,13 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let call_hash = blake2_256(&call);
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, false)
+	verify {
+		assert!(Multisigs::<T>::contains_key(multi_account_id, call_hash));
+	}
 
 	as_multi_create_store {
 		// Signatories, need at least 2 total people
@@ -63,16 +71,24 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let call_hash = blake2_256(&call);
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call, true)
+	verify {
+		assert!(Multisigs::<T>::contains_key(multi_account_id, call_hash));
+		assert!(Calls::<T>::contains_key(call_hash));
+	}
 
 	as_multi_approve {
-		// Signatories, need at least 2 people
-		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Signatories, need at least 3 people (so we don't complete the multisig)
+		let s in 3 .. T::MaxSignatories::get() as u32;
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let call_hash = blake2_256(&call);
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		// before the call, get the timepoint
@@ -81,6 +97,10 @@ benchmarks! {
 		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false)?;
 		let caller2 = signatories2.remove(0);
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false)
+	verify {
+		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
+		assert_eq!(multisig.approvals.len(), 2);
+	}
 
 	as_multi_complete {
 		// Signatories, need at least 2 people
@@ -88,6 +108,8 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let call_hash = blake2_256(&call);
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		// before the call, get the timepoint
@@ -102,7 +124,11 @@ benchmarks! {
 			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone(), false)?;
 		}
 		let caller2 = signatories2.remove(0);
+		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false)
+	verify {
+		assert!(!Multisigs::<T>::contains_key(&multi_account_id, call_hash));
+	}
 
 	approve_as_multi_create {
 		// Signatories, need at least 2 people
@@ -110,10 +136,14 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		let call_hash = call.using_encoded(blake2_256);
+		let call_hash = blake2_256(&call);
 		// Create the multi
 	}: approve_as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call_hash)
+	verify {
+		assert!(Multisigs::<T>::contains_key(multi_account_id, call_hash));
+	}
 
 	approve_as_multi_approve {
 		// Signatories, need at least 2 people
@@ -122,14 +152,19 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let mut signatories2 = signatories.clone();
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		let call_hash = call.using_encoded(blake2_256);
+		let call_hash = blake2_256(&call);
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), false)?;
+		Multisig::<T>::as_multi(RawOrigin::Signed(caller.clone()).into(), s as u16, signatories, None, call.clone(), false)?;
 		let caller2 = signatories2.remove(0);
 	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash)
+	verify {
+		let multisig = Multisigs::<T>::get(multi_account_id, call_hash).ok_or("multisig not created")?;
+		assert_eq!(multisig.approvals.len(), 2);
+	}
 
 	approve_as_multi_complete {
 		// Signatories, need at least 2 people
@@ -137,10 +172,11 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		let call_hash = call.using_encoded(blake2_256);
+		let call_hash = blake2_256(&call);
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
@@ -153,7 +189,11 @@ benchmarks! {
 			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone(), false)?;
 		}
 		let caller2 = signatories2.remove(0);
+		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
 	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash)
+	verify {
+		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
+	}
 
 	cancel_as_multi {
 		// Signatories, need at least 2 people
@@ -161,13 +201,18 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		let call_hash = call.using_encoded(blake2_256);
+		let call_hash = blake2_256(&call);
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
 		let o = RawOrigin::Signed(caller.clone()).into();
 		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), false)?;
+		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
+	verify {
+		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
+	}
 
 	cancel_as_multi_store {
 		// Signatories, need at least 2 people
@@ -175,14 +220,21 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		let call_hash = call.using_encoded(blake2_256);
+		let call_hash = blake2_256(&call);
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
 		let o = RawOrigin::Signed(caller.clone()).into();
 		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), true)?;
+		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
+		assert!(Calls::<T>::contains_key(call_hash));
 	}: cancel_as_multi(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
+	verify {
+		assert!(!Multisigs::<T>::contains_key(&multi_account_id, call_hash));
+		assert!(!Calls::<T>::contains_key(call_hash));
+	}
 }
 
 #[cfg(test)]

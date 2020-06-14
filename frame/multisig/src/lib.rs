@@ -657,7 +657,7 @@ impl<T: Trait> Module<T> {
 		false
 	}
 
-	/// Attempt to read a call from storage, returning it.
+	/// Attempt to decode and return the call, provided by the user or from storage.
 	fn get_call(hash: &[u8; 32], maybe_known: Option<&[u8]>) -> Option<<T as Trait>::Call> {
 		if maybe_known.is_some() {
 			maybe_known.and_then(|data| {
