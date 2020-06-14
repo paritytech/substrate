@@ -27,6 +27,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure,
 	traits::{Get, Currency, ReservableCurrency, BalanceStatus},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
@@ -114,7 +115,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn create_swap(
 			origin,
 			target: AccountIdFor<T>,
@@ -142,7 +143,10 @@ decl_module! {
 			);
 		}
 
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+		  .saturating_add(40_000_000)
+		  .saturating_add((proof.len() as Weight).saturating_mul(100))
+		]
 		fn claim_swap(
 			origin,
 			proof: Vec<u8>,
@@ -170,7 +174,7 @@ decl_module! {
 			);
 		}
 
-		#[weight = 0]
+		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn cancel_swap(
 			origin,
 			target: AccountIdFor<T>,
