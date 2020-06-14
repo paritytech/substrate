@@ -188,8 +188,8 @@ mod weight_of {
 	use super::*;
 
 	pub fn as_multi<T: Trait>(
-		sig_len: usize,
-		call_weight: Weight,
+		_sig_len: usize,
+		_call_weight: Weight,
 	) -> Weight {
 		0
 	}
