@@ -23,10 +23,10 @@
 mod tests;
 
 use sp_std::prelude::*;
-use sp_core::H256;
+use sp_io::hashing::blake2_256;
 use frame_support::{
-	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	traits::{Currency, ReservableCurrency},
+	dispatch::DispatchResult, decl_module, decl_storage, decl_event, decl_error, ensure,
+	traits::{Currency, ReservableCurrency, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
@@ -55,6 +55,9 @@ pub type BlockNumberFor<T> = <T as frame_system::Trait>::BlockNumber;
 /// PendingSwap type from the pallet's point of view.
 pub type PendingSwapFor<T> = PendingSwap<AccountIdFor<T>, BalanceFor<T>, BlockNumberFor<T>>;
 
+/// Hashed proof type.
+pub type HashedProof = [u8; 32];
+
 /// Atomic swap's pallet configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -66,8 +69,21 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Example {
 		pub PendingSwaps: double_map
-			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) H256
+			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) HashedProof
 			=> Option<PendingSwapFor<T>>;
+	}
+}
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// Swap already exists.
+		AlreadyExist,
+		/// Swap proof is invalid.
+		InvalidProof,
+		/// Swap does not exist.
+		NotExist,
+		/// Duration has not yet passed for the swap to be cancelled.
+		DurationNotPassed,
 	}
 }
 
@@ -79,49 +95,84 @@ decl_event!(
 		PendingSwap = PendingSwapFor<T>,
 	{
 		/// Swap created.
-		NewSwap(AccountId, H256, PendingSwap),
+		NewSwap(AccountId, HashedProof, PendingSwap),
 		/// Swap claimed.
-		SwapClaimed(AccountId, H256, Balance),
+		SwapClaimed(AccountId, HashedProof, Balance),
 		/// Swap cancelled.
-		SwapCancelled(AccountId, H256, Balance),
+		SwapCancelled(AccountId, HashedProof, Balance),
 	}
 );
 
 decl_module! {
 	/// Module definition of atomic swap pallet.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		type Error = Error<T>;
+
 		fn deposit_event() = default;
 
 		#[weight = 0]
 		fn create_swap(
 			origin,
-			_target: AccountIdFor<T>,
-			_hashed_proof: H256,
-			_balance: BalanceFor<T>,
-			_duration: BlockNumberFor<T>,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-			unimplemented!()
+			target: AccountIdFor<T>,
+			hashed_proof: HashedProof,
+			balance: BalanceFor<T>,
+			duration: BlockNumberFor<T>,
+		) {
+			let source = ensure_signed(origin)?;
+			ensure!(
+				PendingSwaps::<T>::get(&target, hashed_proof).is_none(),
+				Error::<T>::AlreadyExist
+			);
+
+			T::Currency::reserve(&source, balance)?;
+
+			let swap = PendingSwap {
+				source,
+				balance,
+				end_block: frame_system::Module::<T>::block_number() + duration,
+			};
+			PendingSwaps::<T>::insert(target, hashed_proof, swap);
 		}
 
 		#[weight = 0]
 		fn claim_swap(
 			origin,
-			_hashed_proof: H256,
-			_proof: Vec<u8>,
-		) -> DispatchResult {
-			ensure_signed(origin)?;
-			unimplemented!()
+			proof: Vec<u8>,
+		) {
+			let target = ensure_signed(origin)?;
+			let hashed_proof = blake2_256(&proof);
+
+			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
+				.ok_or(Error::<T>::InvalidProof)?;
+			T::Currency::repatriate_reserved(
+				&swap.source,
+				&target,
+				swap.balance,
+				BalanceStatus::Free,
+			)?;
+			PendingSwaps::<T>::remove(target, hashed_proof);
 		}
 
 		#[weight = 0]
 		fn cancel_swap(
 			origin,
-			_target: AccountIdFor<T>,
-			_hashed_proof: H256,
-		) -> DispatchResult {
+			target: AccountIdFor<T>,
+			hashed_proof: HashedProof,
+		) {
 			ensure_signed(origin)?;
-			unimplemented!()
+
+			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
+				.ok_or(Error::<T>::NotExist)?;
+			ensure!(
+				frame_system::Module::<T>::block_number() >= swap.end_block,
+				Error::<T>::DurationNotPassed,
+			);
+
+			T::Currency::unreserve(
+				&swap.source,
+				swap.balance,
+			);
+			PendingSwaps::<T>::remove(&target, hashed_proof);
 		}
 	}
 }
