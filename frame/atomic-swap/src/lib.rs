@@ -85,6 +85,8 @@ decl_error! {
 		InvalidProof,
 		/// Proof is too large.
 		ProofTooLarge,
+		/// Source does not match.
+		SourceMismatch,
 		/// Swap does not exist.
 		NotExist,
 		/// Duration has not yet passed for the swap to be cancelled.
@@ -115,6 +117,16 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		/// Register a new atomic swap, declaring an intention to send funds from origin to target
+		/// on the current blockchain. The target can claim the fund using the revealed proof. If
+		/// the fund is not claimed after `duration` blocks, then the sender can cancel the swap.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `target`: Receiver of the atomic swap.
+		/// - `hashed_proof`: The blake2_256 hash of the secret proof.
+		/// - `balance`: Funds to be sent from origin.
+		/// - `duration`: Locked duration of the atomic swap.
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn create_swap(
 			origin,
@@ -143,6 +155,11 @@ decl_module! {
 			);
 		}
 
+		/// Claim an atomic swap.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `proof`: Revealed proof of the claim.
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 		  .saturating_add(40_000_000)
 		  .saturating_add((proof.len() as Weight).saturating_mul(100))
@@ -174,19 +191,29 @@ decl_module! {
 			);
 		}
 
+		/// Cancel an atomic swap. Only possible after the originally set duration has passed.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `target`: Target of the original atomic swap.
+		/// - `hashed_proof`: Hashed proof of the original atomic swap.
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn cancel_swap(
 			origin,
 			target: AccountIdFor<T>,
 			hashed_proof: HashedProof,
 		) {
-			ensure_signed(origin)?;
+			let source = ensure_signed(origin)?;
 
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::NotExist)?;
 			ensure!(
 				frame_system::Module::<T>::block_number() >= swap.end_block,
 				Error::<T>::DurationNotPassed,
+			);
+			ensure!(
+				swap.source == source,
+				Error::<T>::SourceMismatch,
 			);
 
 			T::Currency::unreserve(
