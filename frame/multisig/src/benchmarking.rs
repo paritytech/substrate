@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::RawOrigin;
+use frame_system::{Module as System, RawOrigin, EventRecord};
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::{Bounded, Saturating};
 use core::convert::TryInto;
@@ -28,6 +28,14 @@ use core::convert::TryInto;
 use crate::Module as Multisig;
 
 const SEED: u32 = 0;
+
+fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+	let events = System::<T>::events();
+	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	assert_eq!(event, &system_event);
+}
 
 fn setup_multi<T: Trait>(s: u32, z: u32)
 	-> Result<(Vec<T::AccountId>, Vec<u8>), &'static str>
@@ -50,6 +58,23 @@ fn setup_multi<T: Trait>(s: u32, z: u32)
 
 benchmarks! {
 	_ { }
+
+	as_multi_threshold_1 {
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let max_signatories = T::MaxSignatories::get().into();
+		let (mut signatories, _) = setup_multi::<T>(max_signatories, z)?;
+		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![0; z as usize]).into();
+		let call_hash = call.using_encoded(blake2_256);
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, 1);
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+	}: _(RawOrigin::Signed(caller.clone()), signatories, Box::new(call))
+	verify {
+		let timepoint = Multisig::<T>::timepoint();
+		assert_last_event::<T>(
+			RawEvent::MultisigExecuted(caller, timepoint, multi_account_id, call_hash, Ok(())).into()
+		);
+	}
 
 	as_multi_create {
 		// Signatories, need at least 2 total people
@@ -246,6 +271,7 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_as_multi_threshold_1::<Test>());
 			assert_ok!(test_benchmark_as_multi_create::<Test>());
 			assert_ok!(test_benchmark_as_multi_create_store::<Test>());
 			assert_ok!(test_benchmark_as_multi_approve::<Test>());

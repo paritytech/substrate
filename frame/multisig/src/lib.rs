@@ -323,19 +323,25 @@ decl_module! {
 			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 
-			call.dispatch(frame_system::RawOrigin::Signed(id).into())
-				.map(|post_dispatch_info| post_dispatch_info.actual_weight
-					.map(|actual_weight| weight_of::as_multi::<T>(other_signatories_len, actual_weight))
-					.into()
-				).map_err(|err| match err.post_info.actual_weight {
-					Some(actual_weight) => {
-						let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
-						let post_info = Some(weight_used).into();
-						let error = err.error.into();
-						DispatchErrorWithPostInfo { post_info, error }
-					},
-					None => err,
-				})
+			let call_hash = call.using_encoded(blake2_256);
+			let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
+
+			Self::deposit_event(RawEvent::MultisigExecuted(
+				who, Self::timepoint(), id, call_hash, result.map(|_| ()).map_err(|e| e.error)
+			));
+
+			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
+				.map(|actual_weight| weight_of::as_multi::<T>(other_signatories_len, actual_weight))
+				.into()
+			).map_err(|err| match err.post_info.actual_weight {
+				Some(actual_weight) => {
+					let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
+					let post_info = Some(weight_used).into();
+					let error = err.error.into();
+					DispatchErrorWithPostInfo { post_info, error }
+				},
+				None => err,
+			})
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
