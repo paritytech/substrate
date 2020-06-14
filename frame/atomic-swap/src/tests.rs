@@ -28,6 +28,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const ProofLimit: u32 = 1024;
 }
 impl frame_system::Trait for Test {
 	type Origin = Origin;
@@ -67,6 +68,7 @@ impl pallet_balances::Trait for Test {
 impl Trait for Test {
 	type Event = ();
 	type Currency = Balances;
+	type ProofLimit = ProofLimit;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;

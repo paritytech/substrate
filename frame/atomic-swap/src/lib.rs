@@ -26,7 +26,7 @@ use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure,
-	traits::{Currency, ReservableCurrency, BalanceStatus},
+	traits::{Get, Currency, ReservableCurrency, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
@@ -64,6 +64,8 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
+	/// Limit of proof size.
+	type ProofLimit: Get<u32>;
 }
 
 decl_storage! {
