@@ -22,13 +22,10 @@
 //!
 //! ```
 //! # use sc_basic_authorship::ProposerFactory;
-//! # use sp_consensus::{Environment, Proposer, RecordProof, StorageProofKind};
+//! # use sp_consensus::{Environment, Proposer, RecordProof};
 //! # use sp_runtime::generic::BlockId;
 //! # use std::{sync::Arc, time::Duration};
-//! # use substrate_test_runtime_client::{
-//! #     runtime::{Extrinsic, Transfer}, AccountKeyring,
-//! #     DefaultTestClientBuilderExt, TestClientBuilderExt,
-//! # };
+//! # use substrate_test_runtime_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
 //! # let client = Arc::new(substrate_test_runtime_client::new());
 //! # let txpool = Arc::new(BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())), None).0);
@@ -49,7 +46,7 @@
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Duration::from_secs(2),
-//! 	RecordProof::Yes(StorageProofKind::Flat),
+//! 	RecordProof::Yes,
 //! );
 //!
 //! // We wait until the proposition is performed.
