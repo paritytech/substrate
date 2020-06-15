@@ -54,7 +54,7 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
+use frame_support::{decl_module, decl_event, decl_storage, Parameter};
 use frame_support::{
 	traits::{OriginTrait, UnfilteredDispatchable},
 	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
