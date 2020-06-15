@@ -118,10 +118,9 @@ pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
 
-	/// Returns true if the given offence has not been previously reported,
-	/// i.e. there is at least one offender at the given time slot that we
-	/// didn't know about. This function is useful to prevent the sending of
-	/// duplicate offence reports. FIXME
+	/// Returns true iff all of the given offenders have been previously reported
+	/// at the given time slot. This function is useful to prevent the sending of
+	/// duplicate offence reports.
 	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
