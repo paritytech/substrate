@@ -59,7 +59,7 @@ pub use self::{
 	verify::VerifyCmd,
 	revert_cmd::RevertCmd,
 	run_cmd::RunCmd,
-	utils::*
+	utils::*,
 };
 
 /// All core commands that are provided by default.

@@ -34,7 +34,7 @@ pub type SeedFor<P> = <P as sp_core::Pair>::Seed;
 /// helper method to fetch uri from `Option<String>` either as a file or read from stdin
 pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 	let uri = if let Some(uri) = uri {
-		let file = PathBuf::from(uri.clone());
+		let file = PathBuf::from(&uri);
 		if file.is_file() {
 			std::fs::read_to_string(uri)?
 				.trim_end()

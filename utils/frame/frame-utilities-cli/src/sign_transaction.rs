@@ -28,6 +28,8 @@ use frame_system::extras::{SignedExtensionProvider, IndexFor, CallFor, AccountId
 use crate::utils::create_extrinsic_for;
 use sp_core::hexdisplay::HexDisplay;
 
+/// structopt's parse attr doesn't work with generic types, eg Vec<u8>
+/// https://github.com/TeXitoi/structopt/issues/94#issuecomment-381778827
 type Bytes = Vec<u8>;
 
 /// The `sign-transaction` command

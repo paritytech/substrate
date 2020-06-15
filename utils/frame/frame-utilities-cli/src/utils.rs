@@ -27,7 +27,7 @@ use frame_system::extras::{
 use sp_runtime::generic::Era;
 use sc_cli::pair_from_suri;
 
-/// create an extrinsic for the runtime.
+/// create an extrinsic for the runtime, takes a uri, password, call, nonce and prior hash (for extras).
 pub fn create_extrinsic_for<Pair, P, Call>(
 	uri: &str,
 	pass: Option<&str>,

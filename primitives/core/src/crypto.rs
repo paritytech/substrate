@@ -356,8 +356,7 @@ lazy_static::lazy_static! {
 macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
-		#[derive(Copy, Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.
@@ -377,8 +376,8 @@ macro_rules! ss58_address_format {
 
 		impl Ss58AddressFormat {
 			/// names of all address formats
-			pub fn all_names() -> [&'static str; 0 $(+ { let _ = $number; 1})*] {
-				[
+			pub fn all_names() -> &'static [&'static str] {
+				&[
 					$($name),*,
 				]
 			}

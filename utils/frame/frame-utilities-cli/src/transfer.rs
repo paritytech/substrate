@@ -31,6 +31,8 @@ use frame_system::extras::{AddressFor, IndexFor, AccountIdFor, SignedExtensionPr
 use pallet_balances::Call as BalancesCall;
 use crate::utils::create_extrinsic_for;
 
+/// structopt's parse attr doesn't work with generic types, eg Vec<u8>
+/// https://github.com/TeXitoi/structopt/issues/94#issuecomment-381778827
 type Bytes = Vec<u8>;
 
 /// Balance type
@@ -59,7 +61,7 @@ pub struct TransferCmd {
     #[structopt(long)]
     to: String,
 
-    /// genesis hash, for signed extensions.
+    /// Genesis hash, for signed extensions.
     #[structopt(long, parse(try_from_str = decode_hex))]
     prior_block_hash: Bytes,
 
@@ -90,7 +92,6 @@ impl TransferCmd {
             BalancesCall<R>: Encode,
     {
         let password = self.keystore_params.read_password()?;
-        let pass = password.as_ref().map(String::as_str);
         let nonce = self.index.parse::<IndexFor<R>>()?;
         let to = if let Ok(data_vec) = decode_hex(&self.to) {
             AccountIdFor::<R>::try_from(&data_vec)
@@ -109,7 +110,7 @@ impl TransferCmd {
 			self.crypto_scheme.scheme,
 			create_extrinsic_for<R, R::Call>(
                 &self.from,
-                pass,
+                password.as_ref().map(String::as_str),
                 call,
                 nonce,
                 prior_block_hash
