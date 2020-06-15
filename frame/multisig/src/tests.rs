@@ -531,3 +531,23 @@ fn multisig_filters() {
 		);
 	});
 }
+
+#[test]
+fn weight_check_works() {
+	new_test_ext().execute_with(|| {
+		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
+		assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));
+		assert_ok!(Balances::transfer(Origin::signed(2), multi, 5));
+		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
+
+		let call = Call::Balances(BalancesCall::transfer(6, 15));
+		let data = call.encode();
+		assert_ok!(Multisig::as_multi(Origin::signed(1), 2, vec![2, 3], None, data.clone(), false, 0));
+		assert_eq!(Balances::free_balance(6), 0);
+
+		assert_noop!(
+			Multisig::as_multi(Origin::signed(2), 2, vec![1, 3], Some(now()), data, false, 0),
+			Error::<Test>::WeightTooLow,
+		);
+	});
+}
