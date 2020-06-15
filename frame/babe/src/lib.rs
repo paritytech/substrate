@@ -28,7 +28,7 @@ use frame_support::{
 	weights::Weight,
 	Parameter,
 };
-use frame_system::ensure_none;
+use frame_system::{ensure_none, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::{
 	generic::DigestItem,
@@ -252,6 +252,25 @@ decl_module! {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
+		#[weight = 0]
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Header>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
+		}
+
+		/// Report authority equivocation/misbehavior. This method will verify
+		/// the equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence will
+		/// be reported.
 		/// This extrinsic must be called unsigned and it is expected that only
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
@@ -264,48 +283,11 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 
-			let offender = equivocation_proof.offender.clone();
-			let slot_number = equivocation_proof.slot_number;
-
-			// validate the equivocation proof
-			sp_consensus_babe::check_equivocation_proof(equivocation_proof)
-				.ok_or(Error::<T>::InvalidEquivocationProof)?;
-
-			let validator_set_count = key_owner_proof.validator_count();
-			let session_index = key_owner_proof.session();
-
-			let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) / T::EpochDuration::get())
-				.saturated_into::<u32>();
-
-			// check that the slot number is consistent with the session index
-			// in the key ownership proof (i.e. slot is for that epoch)
-			if epoch_index != session_index {
-				return Err(Error::<T>::InvalidEquivocationProof.into());
-			}
-
-			// check the membership proof and extract the offender's id
-			let offender =
-				T::KeyOwnerProofSystem::check_proof(
-					(sp_consensus_babe::KEY_TYPE, offender),
-					key_owner_proof,
-				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-			let offence = BabeEquivocationOffence {
-				slot: slot_number,
-				validator_set_count,
-				offender,
-				session_index,
-			};
-
-			// report to the offences module rewarding the block author if defined.
-			let reporters = if let Some(id) = T::HandleEquivocation::block_author() {
-				vec![id]
-			} else {
-				vec![]
-			};
-
-			T::HandleEquivocation::report_offence(reporters, offence)
-				.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
 		}
 	}
 }
@@ -614,6 +596,54 @@ impl<T: Trait> Module<T> {
 			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
 			Authorities::put(authorities);
 		}
+	}
+
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<T::Header>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Result<(), Error<T>> {
+		let offender = equivocation_proof.offender.clone();
+		let slot_number = equivocation_proof.slot_number;
+
+		// validate the equivocation proof
+		sp_consensus_babe::check_equivocation_proof(equivocation_proof)
+			.ok_or(Error::InvalidEquivocationProof)?;
+
+		let validator_set_count = key_owner_proof.validator_count();
+		let session_index = key_owner_proof.session();
+
+		let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) /
+			T::EpochDuration::get())
+		.saturated_into::<u32>();
+
+		// check that the slot number is consistent with the session index
+		// in the key ownership proof (i.e. slot is for that epoch)
+		if epoch_index != session_index {
+			return Err(Error::InvalidEquivocationProof.into());
+		}
+
+		// check the membership proof and extract the offender's id
+		let key = (sp_consensus_babe::KEY_TYPE, offender);
+		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
+			.ok_or(Error::InvalidKeyOwnershipProof)?;
+
+		let offence = BabeEquivocationOffence {
+			slot: slot_number,
+			validator_set_count,
+			offender,
+			session_index,
+		};
+
+		let reporters = match reporter {
+			Some(id) => vec![id],
+			None => vec![],
+		};
+
+		T::HandleEquivocation::report_offence(reporters, offence)
+			.map_err(|_| Error::DuplicateOffenceReport)?;
+
+		Ok(())
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will create
