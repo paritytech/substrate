@@ -244,7 +244,9 @@ pub struct BabeEpochConfiguration {
 	pub allowed_slots: AllowedSlots,
 }
 
-/// TODO
+/// Verifies the equivocation proof by making sure that: both headers have
+/// different hashes, are targetting the same slot, and have valid signatures by
+/// the same authority.
 pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> Option<()>
 where
 	H: Header,
@@ -268,14 +270,15 @@ where
 	let first_pre_digest = find_pre_digest(&proof.first_header)?;
 	let second_pre_digest = find_pre_digest(&proof.second_header)?;
 
-	// and both headers must be targetting the same slot
+	// both headers must be targetting the same slot and it must
+	// be the same as the one in the proof.
 	if proof.slot_number != first_pre_digest.slot_number() ||
 		first_pre_digest.slot_number() != second_pre_digest.slot_number()
 	{
 		return None;
 	}
 
-	// and must be authored by the same authority
+	// both headers must have been authored by the same authority
 	if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
 		return None;
 	}
@@ -300,6 +303,28 @@ where
 	Some(())
 }
 
+/// An opaque type used to represent the key ownership proof at the runtime API
+/// boundary. The inner value is an encoded representation of the actual key
+/// ownership proof which will be parameterized when defining the runtime. At
+/// the runtime API boundary this type is unknown and as such we keep this
+/// opaque representation, implementors of the runtime API will have to make
+/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+#[derive(Decode, Encode, PartialEq)]
+pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+impl OpaqueKeyOwnershipProof {
+	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+		OpaqueKeyOwnershipProof(inner)
+	}
+
+	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+	/// ownership proof type.
+	pub fn decode<T: Decode>(self) -> Option<T> {
+		Decode::decode(&mut &self.0[..]).ok()
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
@@ -314,15 +339,26 @@ sp_api::decl_runtime_apis! {
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;
 
-		/// FIXME
+		/// Generates a proof of key ownership for the given authority in the
+		/// current epoch. An example usage of this module is coupled with the
+		/// session historical module to prove that a given authority key is
+		/// tied to a given staking identity during a specific session. Proofs
+		/// of key ownership are necessary for submitting equivocation reports.
 		fn generate_key_ownership_proof(
 			authority_id: AuthorityId,
-		) -> Option<Vec<u8>>;
+		) -> Option<OpaqueKeyOwnershipProof>;
 
-		/// FIXME
+		/// Submits an unsigned extrinsic to report an equivocation. The caller
+		/// must provide the equivocation proof and a key ownership proof
+		/// (should be obtained using `generate_key_ownership_proof`). The
+		/// extrinsic will be unsigned and should only be accepted for local
+		/// authorship (not to be broadcast to the network). This method returns
+		/// `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is
+		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof: EquivocationProof<Block::Header>,
-			key_owner_proof: Vec<u8>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 	}
 }

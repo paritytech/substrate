@@ -1015,19 +1015,19 @@ impl_runtime_apis! {
 
 		fn generate_key_ownership_proof(
 			authority_id: sp_consensus_babe::AuthorityId,
-		) -> Option<Vec<u8>> {
+		) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 			use codec::Encode;
 
 			Historical::prove((sp_consensus_babe::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
+				.map(sp_consensus_babe::OpaqueKeyOwnershipProof::new)
 		}
 
-		/// FIXME
 		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof: sp_consensus_babe::EquivocationProof<<Block as BlockT>::Header>,
-			key_owner_proof: Vec<u8>,
+			key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
 		) -> Option<()> {
-			let key_owner_proof = Decode::decode(&mut &key_owner_proof[..]).ok()?;
+			let key_owner_proof = key_owner_proof.decode()?;
 
 			Babe::submit_unsigned_equivocation_report(
 				equivocation_proof,
