@@ -90,6 +90,7 @@ pub fn check_equivocation<C, H, P>(
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
+					slot_number: slot,
 					offender: signer.clone(),
 					first_header: prev_header.clone(),
 					second_header: header.clone(),

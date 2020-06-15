@@ -32,6 +32,8 @@ pub type SlotNumber = u64;
 pub struct EquivocationProof<Header, Id> {
 	/// Returns the authority id of the equivocator.
 	pub offender: Id,
+	/// The slot number at which the equivocation happened.
+	pub slot_number: SlotNumber,
 	/// The first header involved in the equivocation.
 	pub first_header: Header,
 	/// The second header involved in the equivocation.

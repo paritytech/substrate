@@ -245,7 +245,7 @@ pub struct BabeEpochConfiguration {
 }
 
 /// TODO
-pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> Option<SlotNumber>
+pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> Option<()>
 where
 	H: Header,
 {
@@ -269,7 +269,9 @@ where
 	let second_pre_digest = find_pre_digest(&proof.second_header)?;
 
 	// and both headers must be targetting the same slot
-	if first_pre_digest.slot_number() != second_pre_digest.slot_number() {
+	if proof.slot_number != first_pre_digest.slot_number() ||
+		first_pre_digest.slot_number() != second_pre_digest.slot_number()
+	{
 		return None;
 	}
 
@@ -295,7 +297,7 @@ where
 	verify_seal_signature(proof.first_header)?;
 	verify_seal_signature(proof.second_header)?;
 
-	Some(first_pre_digest.slot_number())
+	Some(())
 }
 
 sp_api::decl_runtime_apis! {

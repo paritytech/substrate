@@ -239,11 +239,10 @@ decl_module! {
 			ensure_none(origin)?;
 
 			let offender = equivocation_proof.offender.clone();
+			let slot_number = equivocation_proof.slot_number;
 
-			let slot_number = match sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-				Some(slot_number) => slot_number,
-				None => return Err("".into()),
-			};
+			sp_consensus_babe::check_equivocation_proof(equivocation_proof)
+				.ok_or("")?;
 
 			let validator_set_count = key_owner_proof.validator_count();
 			let session_index = key_owner_proof.session();
@@ -821,12 +820,6 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
-			let slot_number =
-				match sp_consensus_babe::check_equivocation_proof(equivocation_proof.clone()) {
-					Some(slot_number) => slot_number,
-					None => return Err(InvalidTransaction::Call.into()),
-				};
-
 			// check the membership and extract the offender's id
 			let offender = T::KeyOwnerProofSystem::check_proof(
 				(
@@ -837,7 +830,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			)
 			.ok_or(InvalidTransaction::Call)?;
 
-			if T::HandleEquivocation::is_known_offence(&[offender], &slot_number) {
+			if T::HandleEquivocation::is_known_offence(&[offender], &equivocation_proof.slot_number) {
 				Err(InvalidTransaction::Stale.into())
 			} else {
 				Ok(())
