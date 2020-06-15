@@ -16,31 +16,29 @@
 // limitations under the License.
 
 //! # Scheduler
+//! A module for scheduling dispatches.
 //!
-//! \# Scheduler
+//! - [`scheduler::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
-//! - \[`scheduler::Trait`](./trait.Trait.html)
-//! - \[`Call`](./enum.Call.html)
-//! - \[`Module`](./struct.Module.html)
+//! ## Overview
 //!
-//! \## Overview
+//! This module exposes capabilities for scheduling dispatches to occur at a
+//! specified block number or at a specified period. These scheduled dispatches
+//! may be named or anonymous and may be canceled.
 //!
-//! // Short description of pallet's purpose.
-//! // Links to Traits that should be implemented.
-//! // What this pallet is for.
-//! // What functionality the pallet provides.
-//! // When to use the pallet (use case examples).
-//! // How it is used.
-//! // Inputs it uses and the source of each input.
-//! // Outputs it produces.
+//! ## Interface
 //!
-//! \## Terminology
+//! ### Dispatchable Functions
 //!
-//! \## Goals
-//!
-//! \## Interface
-//!
-//! \### Dispatchable Functions
+//! * `schedule` - schedule a dispatch, which may be periodic, to occur at a
+//!   specified block and with a specified priority.
+//! * `cancel` - cancel a scheduled dispatch, specified by block number and
+//!   index.
+//! * `schedule_named` - augments the `schedule` interface with an additional
+//!   `Vec<u8>` parameter that can be used for identification.
+//! * `cancel_named` - the named complement to the cancel function.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -402,7 +400,7 @@ mod tests {
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
 		traits::{OnInitialize, OnFinalize},
-		weights::{DispatchClass, FunctionOf, Pays, constants::RocksDbWeight},
+		weights::constants::RocksDbWeight,
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -441,11 +439,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 				fn deposit_event() = default;
 
-				#[weight = FunctionOf(
-					|args: (&u32, &Weight)| *args.1,
-					|_: (&u32, &Weight)| DispatchClass::Normal,
-					Pays::Yes,
-				)]
+				#[weight = *weight]
 				fn log(origin, i: u32, weight: Weight) {
 					ensure_root(origin)?;
 					Self::deposit_event(Event::Logged(i, weight));
