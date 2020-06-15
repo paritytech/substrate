@@ -157,7 +157,7 @@ decl_error! {
 		UnexpectedTimepoint,
 		/// A call with a `false` `IsCallable` filter was attempted.
 		Uncallable,
-		/// The maximum weight information was provided was too low.
+		/// The maximum weight information provided was too low.
 		WeightTooLow,
 	}
 }
@@ -262,7 +262,7 @@ decl_module! {
 		/// Result is equivalent to the dispatched result.
 		///
 		/// # <weight>
-		/// O(Z) where Z is the length of the call.
+		/// O(Z + C) where Z is the length of the call and C its execution weight.
 		/// -------------------------------
 		/// - Base Weight: 33.72 + 0.002 * Z µs
 		/// - DB Weight: None
@@ -376,8 +376,8 @@ decl_module! {
 			other_signatories.len(),
 			call.len(),
 			*max_weight,
-			true,
-			true,
+			true, // assume worst case: calls write
+			true, // assume worst case: refunded
 		)]
 		fn as_multi(origin,
 			threshold: u16,
@@ -434,8 +434,8 @@ decl_module! {
 			other_signatories.len(),
 			0, // call_len is zero in this case
 			*max_weight,
-			true,
-			true,
+			true, // assume worst case: calls write
+			true, // assume worst case: refunded
 		)]
 		fn approve_as_multi(origin,
 			threshold: u16,
