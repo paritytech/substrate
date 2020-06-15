@@ -198,6 +198,8 @@ macro_rules! impl_filter_stack {
 #[impl_for_tuples(30)]
 pub trait IntegrityTest {
 	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
 	fn integrity_test() {}
 }
 
