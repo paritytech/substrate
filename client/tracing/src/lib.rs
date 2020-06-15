@@ -351,12 +351,11 @@ pub struct TelemetryTraceHandler;
 impl TraceHandler for TelemetryTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
-		"name" => span_datum.name,
-		"target" => span_datum.target,
-		"line" => span_datum.line,
-		"time" => span_datum.overall_time.as_nanos(),
-		"values" => span_datum.values
+			"name" => span_datum.name,
+			"target" => span_datum.target,
+			"line" => span_datum.line,
+			"time" => span_datum.overall_time.as_nanos(),
+			"values" => span_datum.values
 		);
 	}
 }
-
