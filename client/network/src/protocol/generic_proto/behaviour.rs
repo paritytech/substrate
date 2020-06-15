@@ -688,7 +688,9 @@ impl GenericProto {
 				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: occ_entry.key().clone(),
 					handler: NotifyHandler::All,
-					event: NotifsHandlerIn::Enable,
+					event: NotifsHandlerIn::Enable {
+						send_legacy_handshake: true,
+					},
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { open };
 			},
@@ -707,7 +709,9 @@ impl GenericProto {
 				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: occ_entry.key().clone(),
 					handler: NotifyHandler::All,
-					event: NotifsHandlerIn::Enable,
+					event: NotifsHandlerIn::Enable {
+						send_legacy_handshake: true,
+					},
 				});
 				*occ_entry.into_mut() = PeerState::Enabled { open: SmallVec::new() };
 			},
@@ -827,7 +831,9 @@ impl GenericProto {
 				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: incoming.peer_id,
 					handler: NotifyHandler::All,
-					event: NotifsHandlerIn::Enable,
+					event: NotifsHandlerIn::Enable {
+						send_legacy_handshake: true,
+					},
 				});
 				*state = PeerState::Enabled { open: SmallVec::new() };
 			}
@@ -907,7 +913,9 @@ impl NetworkBehaviour for GenericProto {
 				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::One(*conn),
-					event: NotifsHandlerIn::Enable
+					event: NotifsHandlerIn::Enable {
+						send_legacy_handshake: true,
+					}
 				});
 			}
 
@@ -967,7 +975,9 @@ impl NetworkBehaviour for GenericProto {
 				self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 					peer_id: peer_id.clone(),
 					handler: NotifyHandler::One(*conn),
-					event: NotifsHandlerIn::Enable
+					event: NotifsHandlerIn::Enable {
+						send_legacy_handshake: false,
+					}
 				});
 			}
 
@@ -1409,11 +1419,15 @@ impl NetworkBehaviour for GenericProto {
 
 				PeerState::DisabledPendingEnable { timer, open, .. } if *timer == delay_id => {
 					debug!(target: "sub-libp2p", "Handler({:?}) <= Enable (ban expired)", peer_id);
-					self.events.push_back(NetworkBehaviourAction::NotifyHandler {
-						peer_id,
-						handler: NotifyHandler::All,
-						event: NotifsHandlerIn::Enable,
-					});
+					for (index_in_open, open) in open.iter().enumerate() {
+						self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+							peer_id: peer_id.clone(),
+							handler: NotifyHandler::One(*open),
+							event: NotifsHandlerIn::Enable {
+								send_legacy_handshake: index_in_open == 0,
+							},
+						});
+					}
 					*peer_state = PeerState::Enabled { open: mem::replace(open, Default::default()) };
 				}
 
