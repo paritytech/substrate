@@ -17,13 +17,13 @@
 
 //! Implementation of the `moduleid` subcommand
 
-use crate::{
+use sc_cli::{
 	Error, SharedParams, print_from_uri, CryptoSchemeFlag,
 	OutputTypeFlag, KeystoreParams, CliConfiguration, with_crypto_scheme,
 };
 use sp_runtime::ModuleId;
 use sp_runtime::traits::AccountIdConversion;
-use sp_core::crypto::{AccountId32, Ss58Codec, Ss58AddressFormat};
+use sp_core::crypto::{Ss58Codec, Ss58AddressFormat};
 use std::convert::{TryInto, TryFrom};
 use structopt::StructOpt;
 
@@ -67,7 +67,11 @@ pub struct ModuleIdCmd {
 
 impl ModuleIdCmd {
 	/// runs the command
-	pub fn run(&self) -> Result<(), Error> {
+	pub fn run<R>(&self) -> Result<(), Error>
+		where
+			R: frame_system::Trait,
+			R::AccountId: Ss58Codec,
+	{
 		if self.id.len() != 8 {
 			Err("a module id must be a string of 8 characters")?
 		}
@@ -77,7 +81,7 @@ impl ModuleIdCmd {
 			.try_into()
 			.map_err(|_| "Cannot convert argument to moduleid: argument should be 8-character string")?;
 
-		let account_id: AccountId32 = ModuleId(id_fixed_array).into_account();
+		let account_id: R::AccountId = ModuleId(id_fixed_array).into_account();
 		let network = self.network;
 
 		with_crypto_scheme!(

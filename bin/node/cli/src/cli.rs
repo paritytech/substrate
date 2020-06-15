@@ -38,13 +38,13 @@ pub enum Subcommand {
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
 
-	/// prints hex-encoded, signed, transfer extrinsic with given arguments.
+	/// Prints hex-encoded, signed, transfer extrinsic with given arguments.
 	Transfer(TransferCmd),
 
-	/// key utilities
+	/// Key management cli utilities
 	Key(KeySubcommand),
 
-	/// sign transaction
+	/// Sign transaction
 	SignTransaction(SignTransactionCmd),
 
 	/// The custom inspect subcommmand for decoding blocks and extrinsics.

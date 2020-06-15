@@ -18,10 +18,10 @@
 
 use structopt::StructOpt;
 use sc_cli::{
-	Error, VanityCmd, SignCmd, VerifyCmd, ModuleIdCmd, InsertCmd,
+	Error, VanityCmd, SignCmd, VerifyCmd, InsertCmd,
 	GenerateNodeKeyCmd, GenerateCmd, InspectCmd, InspectNodeKeyCmd
 };
-use substrate_frame_cli::{TransferCmd, SignTransactionCmd};
+use substrate_frame_cli::{TransferCmd, SignTransactionCmd, ModuleIdCmd};
 use node_runtime::Runtime;
 use frame_system::extras::HashFor;
 
@@ -74,7 +74,7 @@ fn main() -> Result<(), Error> {
 		Subkey::InspectKey(cmd) => cmd.run()?,
 		Subkey::InspectNodeKey(cmd) => cmd.run()?,
 		Subkey::Insert(cmd) => cmd.run::<HashFor<Runtime>>()?,
-		Subkey::ModuleId(cmd) => cmd.run()?,
+		Subkey::ModuleId(cmd) => cmd.run::<Runtime>()?,
 		Subkey::Transfer(cmd) => cmd.run::<Runtime>()?,
 		Subkey::Vanity(cmd) => cmd.run()?,
 		Subkey::Verify(cmd) => cmd.run()?,

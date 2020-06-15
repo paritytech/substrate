@@ -18,11 +18,14 @@
 //! frame-system CLI utilities
 
 mod utils;
+mod module_id;
 mod sign_transaction;
 
 #[cfg(feature = "balances")]
 mod transfer;
 #[cfg(feature = "balances")]
 pub use transfer::TransferCmd;
+
 pub use sign_transaction::SignTransactionCmd;
+pub use module_id::ModuleIdCmd;
 

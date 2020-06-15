@@ -33,7 +33,6 @@ mod insert;
 mod inspect_node_key;
 mod inspect;
 mod key;
-mod module_id;
 
 #[cfg(test)]
 pub mod tests;
@@ -56,7 +55,6 @@ pub use self::{
 	generate_node_key::GenerateNodeKeyCmd,
 	inspect_node_key::InspectNodeKeyCmd,
 	key::KeySubcommand,
-	module_id::ModuleIdCmd,
 	vanity::VanityCmd,
 	verify::VerifyCmd,
 	revert_cmd::RevertCmd,
