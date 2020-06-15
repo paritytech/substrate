@@ -53,7 +53,9 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
+#[cfg(all(feature = "std", test))]
 mod mock;
+#[cfg(all(feature = "std", test))]
 mod tests;
 
 pub use equivocation::{
