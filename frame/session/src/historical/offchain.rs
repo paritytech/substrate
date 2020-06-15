@@ -210,7 +210,7 @@ mod tests {
 			b"alphaomega"[..].using_encoded(|key| sp_io::offchain_index::set(key, DATA));
 		});
 
-		ext.sync_offchain_index_changes();
+		ext.persist_offchain_overlay();
 
 		ext.execute_with(|| {
 			let data =
@@ -243,7 +243,7 @@ mod tests {
 			force_new_session();
 		});
 
-		ext.sync_offchain_index_changes();
+		ext.persist_offchain_overlay();
 
 		ext.execute_with(|| {
 
