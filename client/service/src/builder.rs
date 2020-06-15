@@ -439,7 +439,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				fetch_checker,
 				client.cache().ok_or_else(|| Error::CacheRequired)?,
 				db_storage,
-				Box::new(task_manager.spawn_handle()))
+			)
 		);
 
 
