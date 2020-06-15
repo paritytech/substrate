@@ -1,12 +1,12 @@
 [package]
 name = "pallet-im-online-rpc-runtime-api"
-version = "2.0.0-rc2"
+version = "2.0.0-rc3"
 authors = ["TovarishFin <tovarishfin@gmail.com>"]
 edition = "2018"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-sp-api = { version = '2.0.0-rc2', default-features = false, path = "../../../../primitives/api" }
+sp-api = { version = '2.0.0-rc3', default-features = false, path = "../../../../primitives/api" }
 
 [dev-dependencies]
 serde_json = "1.0.41"

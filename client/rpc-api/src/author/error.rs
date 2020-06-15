@@ -20,6 +20,7 @@
 
 use crate::errors;
 use jsonrpc_core as rpc;
+use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -114,10 +115,18 @@ impl From<Error> for rpc::Error {
 				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError::InvalidTransaction(e)) => rpc::Error {
+			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
-				data: serde_json::to_value(e).ok(),
+				data: Some(format!("Custom error: {}", e).into()),
+			},
+			Error::Pool(PoolError::InvalidTransaction(e)) => {
+				let msg: &str = e.into();
+				rpc::Error {
+					code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
+					message: "Invalid Transaction".into(),
+					data: Some(msg.into()),
+				}
 			},
 			Error::Pool(PoolError::UnknownTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),

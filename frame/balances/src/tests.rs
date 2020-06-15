@@ -37,7 +37,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{FixedPointNumber, Fixed128, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{FixedPointNumber, FixedI128, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -67,6 +67,10 @@ macro_rules! decl_tests {
 			System::reset_events();
 
 			evt
+		}
+
+		fn last_event() -> Event {
+			system::Module::<Test>::events().pop().expect("Event expected").event
 		}
 
 		#[test]
@@ -162,7 +166,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Fixed128::saturating_from_integer(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(FixedI128::saturating_from_integer(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
@@ -170,7 +174,7 @@ macro_rules! decl_tests {
 					);
 					assert_noop!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions
+						Error::<$test, _>::LiquidityRestrictions,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
@@ -485,6 +489,10 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
+				assert_eq!(
+					last_event(),
+					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(2), 0);
@@ -680,6 +688,40 @@ macro_rules! decl_tests {
 					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_reserve_and_unreserve() {
+			<$ext_builder>::default()
+				.build()
+				.execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 100);
+
+					System::set_block_number(2);
+					let _ = Balances::reserve(&1, 10);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Reserved(1, 10)),
+					);
+
+					System::set_block_number(3);
+					let _ = Balances::unreserve(&1, 5);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
+
+					System::set_block_number(4);
+					let _ = Balances::unreserve(&1, 6);
+
+					// should only unreserve 5
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
 				});
 		}
 

@@ -1157,6 +1157,7 @@ macro_rules! impl_opaque_keys {
 		$( #[ $attr:meta ] )*
 		pub struct $name:ident {
 			$(
+				$( #[ $inner_attr:meta ] )*
 				pub $field:ident: $type:ty,
 			)*
 		}
@@ -1171,6 +1172,7 @@ macro_rules! impl_opaque_keys {
 		#[cfg_attr(feature = "std", derive($crate::serde::Serialize, $crate::serde::Deserialize))]
 		pub struct $name {
 			$(
+				$( #[ $inner_attr ] )*
 				pub $field: <$type as $crate::BoundToRuntimeAppPublic>::Public,
 			)*
 		}

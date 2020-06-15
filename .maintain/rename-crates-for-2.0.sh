@@ -64,7 +64,7 @@ TO_RENAME=(
     "substrate-keyring sp-keyring"
     "substrate-offchain-primitives sp-offchain"
     "substrate-panic-handler sp-panic-handler"
-    "substrate-phragmen sp-phragmen"
+    "substrate-phragmen sp-npos-elections"
     "substrate-rpc-primitives sp-rpc"
     "substrate-runtime-interface sp-runtime-interface"
     "substrate-runtime-interface-proc-macro sp-runtime-interface-proc-macro"

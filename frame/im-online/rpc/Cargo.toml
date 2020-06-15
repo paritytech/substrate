@@ -1,6 +1,6 @@
 [package]
 name = "pallet-im-online-rpc"
-version = "2.0.0-rc2"
+version = "2.0.0-rc3"
 authors = ["TovarishFin <tovarishfin@gmail.com>"]
 edition = "2018"
 license = "GPL-3.0-or-later"
@@ -9,17 +9,17 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.3.0" }
-jsonrpc-core = "14.0.3"
-jsonrpc-core-client = "14.0.3"
-jsonrpc-derive = "14.0.3"
+jsonrpc-core = "14.2.0"
+jsonrpc-core-client = "14.2.0"
+jsonrpc-derive = "14.2.1"
 serde = { version = "1.0.101", features = ["derive"], optional = true }
 
-sp-rpc = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/rpc" }
-sp-runtime = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/runtime" }
-sp-blockchain = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/blockchain" }
-sp-api = { version = '2.0.0-rc2', default-features = false, path = "../../../primitives/api" }
-pallet-im-online-rpc-runtime-api = { version = "2.0.0-rc2", default-features = false, path = "./runtime-api" }
-pallet-im-online= { version = "2.0.0-rc2", default-features = false, path = "../../im-online" }
+sp-rpc = { version = '2.0.0-rc3', default-features = false, path = "../../../primitives/rpc" }
+sp-runtime = { version = '2.0.0-rc3', default-features = false, path = "../../../primitives/runtime" }
+sp-blockchain = { version = '2.0.0-rc3', default-features = false, path = "../../../primitives/blockchain" }
+sp-api = { version = '2.0.0-rc3', default-features = false, path = "../../../primitives/api" }
+pallet-im-online-rpc-runtime-api = { version = "2.0.0-rc3", default-features = false, path = "./runtime-api" }
+pallet-im-online= { version = "2.0.0-rc3", default-features = false, path = "../../im-online" }
 
 [features]
 default = ["std"]

@@ -67,7 +67,7 @@
 /frame/staking/ @kianenigma
 /frame/elections/ @kianenigma
 /frame/elections-phragmen/ @kianenigma
-/primitives/phragmen/ @kianenigma
+/primitives/npos-elections/ @kianenigma
 
 # Fixed point arithmetic
 /primitives/sp-arithmetic/ @kianenigma
