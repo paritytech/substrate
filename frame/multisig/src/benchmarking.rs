@@ -223,7 +223,14 @@ benchmarks! {
 		}
 		let caller2 = signatories2.remove(0);
 		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
-	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash, Weight::max_value())
+	}: approve_as_multi(
+		RawOrigin::Signed(caller2),
+		s as u16,
+		signatories2,
+		Some(timepoint),
+		call_hash,
+		Weight::max_value()
+	)
 	verify {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
 	}
