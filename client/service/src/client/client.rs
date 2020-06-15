@@ -28,8 +28,9 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ChangesTrieConfiguration, convert_hash, NativeOrEncoded,
-	storage::{StorageKey, PrefixedStorageKey, StorageData, well_known_keys, ChildInfo},
+	convert_hash,
+	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
+	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
@@ -752,11 +753,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
-					// if let Some(mut offchain_storage) = self.backend.offchain_storage() {
-					// 	offchain_sc.iter().for_each(|(k,v)| {
-					// 		offchain_storage.set(b"block-import-info", k,v)
-					// 	});
-					// }
 					operation.op.update_offchain_storage(offchain_sc)?;
 				}
 
@@ -863,9 +859,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// block.
 			(true, ref mut storage_changes @ None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
+				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
+					ExecutionContext::Syncing
+				} else {
+					ExecutionContext::Importing
+				};
 
-				runtime_api.execute_block(
+				runtime_api.execute_block_with_context(
 					&at,
+					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 

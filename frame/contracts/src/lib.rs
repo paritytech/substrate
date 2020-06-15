@@ -117,7 +117,7 @@ use frame_support::{
 	parameter_types, IsSubType, storage::child::{self, ChildInfo},
 };
 use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
-use frame_support::weights::{FunctionOf, DispatchClass, Weight, GetDispatchInfo, Pays};
+use frame_support::weights::GetDispatchInfo;
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
@@ -481,11 +481,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
-		#[weight = FunctionOf(
-			|args: (&Vec<u8>,)| Module::<T>::calc_code_put_costs(args.0),
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = Module::<T>::calc_code_put_costs(&code)]
 		pub fn put_code(
 			origin,
 			code: Vec<u8>
@@ -506,11 +502,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[weight = FunctionOf(
-			|args: (&<T::Lookup as StaticLookup>::Source, &BalanceOf<T>, &Weight, &Vec<u8>)| *args.2,
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = *gas_limit]
 		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -538,11 +530,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		#[weight = FunctionOf(
-			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| *args.1,
-			DispatchClass::Normal,
-			Pays::Yes
-		)]
+		#[weight = *gas_limit]
 		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,

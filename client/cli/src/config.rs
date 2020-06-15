@@ -27,9 +27,9 @@ use crate::{
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
-	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
-	TaskType, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
+	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods, TaskType,
+	TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
@@ -87,7 +87,7 @@ pub trait CliConfiguration: Sized {
 	/// Get the base path of the configuration (if any)
 	///
 	/// By default this is retrieved from `SharedParams`.
-	fn base_path(&self) -> Result<Option<PathBuf>> {
+	fn base_path(&self) -> Result<Option<BasePath>> {
 		Ok(self.shared_params().base_path())
 	}
 
@@ -246,9 +246,14 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `ExecutionStrategies::default()`.
-	fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
-		Ok(self.import_params()
-			.map(|x| x.execution_strategies(is_dev))
+	fn execution_strategies(
+		&self,
+		is_dev: bool,
+		is_validator: bool,
+	) -> Result<ExecutionStrategies> {
+		Ok(self
+			.import_params()
+			.map(|x| x.execution_strategies(is_dev, is_validator))
 			.unwrap_or(Default::default()))
 	}
 
@@ -402,14 +407,12 @@ pub trait CliConfiguration: Sized {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
 		let chain_spec = cli.load_spec(chain_id.as_str())?;
-		let config_dir = self
+		let base_path = self
 			.base_path()?
-			.unwrap_or_else(|| {
-				directories::ProjectDirs::from("", "", C::executable_name())
-					.expect("app directories exist on all supported platforms; qed")
-					.data_local_dir()
-					.into()
-			})
+			.unwrap_or_else(|| BasePath::from_project("", "", C::executable_name()));
+		let config_dir = base_path
+			.path()
+			.to_path_buf()
 			.join("chains")
 			.join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
@@ -419,6 +422,7 @@ pub trait CliConfiguration: Sized {
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
+		let is_validator = role.is_network_authority();
 
 		let unsafe_pruning = self
 			.import_params()
@@ -444,7 +448,7 @@ pub trait CliConfiguration: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
-			execution_strategies: self.execution_strategies(is_dev)?,
+			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
 			rpc_methods: self.rpc_methods()?,
@@ -464,6 +468,7 @@ pub trait CliConfiguration: Sized {
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
 			role,
+			base_path: Some(base_path),
 		})
 	}
 
@@ -507,5 +512,5 @@ pub fn generate_node_name() -> String {
 		if count < NODE_NAME_MAX_LENGTH {
 			return node_name;
 		}
-	};
+	}
 }
