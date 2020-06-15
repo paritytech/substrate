@@ -34,7 +34,7 @@ use frame_support::{
 };
 use frame_system::{
 	EnsureRoot, EnsureOneOf,
-	extras::{SignedExtensionProvider, SystemExtraParams, SignedExtensionData},
+	extras::{SignedExtensionProvider, ExtrasParamsBuilder, SignedExtensionData, BuilderError},
 };
 use frame_support::traits::{Filter, InstanceFilter};
 use codec::{Encode, Decode};
@@ -629,57 +629,80 @@ parameter_types! {
 }
 
 #[derive(Default)]
-pub struct ExtrasParams {
+pub struct RuntimeExtrasBuilder {
 	era: Option<Era>,
-	index: Option<<Runtime as frame_system::Trait>::Index>,
 	tip: u128,
-	prior_block_hash: Option<<Runtime as frame_system::Trait>::Hash>,
+	index: Option<<Runtime as frame_system::Trait>::Index>,
+	genesis_hash: Option<<Runtime as frame_system::Trait>::Hash>,
+	era_start_hash: Option<<Runtime as frame_system::Trait>::Hash>,
 }
 
-impl SystemExtraParams<Runtime> for ExtrasParams {
-	fn set_nonce(&mut self, index: <Runtime as frame_system::Trait>::Index) {
+pub struct RuntimeExtrasParams {
+	era: Era,
+	tip: u128,
+	index: <Runtime as frame_system::Trait>::Index,
+	genesis_hash: Option<<Runtime as frame_system::Trait>::Hash>,
+	era_start_hash: Option<<Runtime as frame_system::Trait>::Hash>,
+}
+
+impl ExtrasParamsBuilder<Runtime> for RuntimeExtrasBuilder {
+	type ExtrasParams = RuntimeExtrasParams;
+
+	fn set_nonce(mut self, index: <Runtime as frame_system::Trait>::Index) -> Self {
 		self.index = Some(index);
+		self
 	}
 
-	fn set_era(&mut self, era: Era) {
+	fn set_era(mut self, era: Era) -> Self {
 		self.era = Some(era);
+		self
 	}
 
-	fn set_starting_era_hash(&mut self, hash: <Runtime as frame_system::Trait>::Hash) {
-		self.prior_block_hash = Some(hash);
+	fn set_tip(mut self, tip: u128) -> Self {
+		self.tip = tip;
+		self
 	}
 
-	fn set_genesis_hash(&mut self, _: <Runtime as frame_system::Trait>::Hash) {
-		todo!()
+	fn set_starting_era_hash(mut self, hash: <Runtime as frame_system::Trait>::Hash) -> Self {
+		self.era_start_hash = Some(hash);
+		self
+	}
+
+	fn set_genesis_hash(mut self, hash: <Runtime as frame_system::Trait>::Hash) -> Self {
+		self.genesis_hash = Some(hash);
+		self
+	}
+
+	fn build(self) -> Result<Self::ExtrasParams, BuilderError> {
+		Ok(RuntimeExtrasParams {
+			era: self.era.ok_or_else(|| BuilderError::EraIsRequired)?,
+			index: self.index.ok_or_else(|| BuilderError::NonceIsRequired)?,
+			tip: self.tip,
+			genesis_hash: self.genesis_hash,
+			era_start_hash: self.era_start_hash,
+		})
 	}
 }
 
 
 impl SignedExtensionProvider for Runtime {
 	type Extra = SignedExtra;
-	type Params = ExtrasParams;
+	type Builder = RuntimeExtrasBuilder;
 
-	fn extension_params() -> ExtrasParams {
-		ExtrasParams {
-			prior_block_hash: None,
-			index: None,
-			era: None,
-			tip: 0,
-		}
+	fn extras_params_builder() -> RuntimeExtrasBuilder {
+		RuntimeExtrasBuilder::default()
 	}
 
-	fn construct_extras(params: ExtrasParams) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
-		let ExtrasParams {
+	fn construct_extras(params: RuntimeExtrasParams) -> SignedExtensionData<Self::Extra> {
+		let RuntimeExtrasParams {
 			tip,
 			era,
 			index,
-			prior_block_hash
+			era_start_hash,
+			genesis_hash
 		} = params;
-		let (era, index) = (
-			era.ok_or("era is required")?,
-			index.ok_or("index is required")?,
-		);
-		let data = SignedExtensionData {
+		
+		SignedExtensionData {
 			extra: (
 				frame_system::CheckSpecVersion::<Runtime>::new(),
 				frame_system::CheckTxVersion::<Runtime>::new(),
@@ -690,21 +713,20 @@ impl SignedExtensionProvider for Runtime {
 				pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 				pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
 			),
-			additional: prior_block_hash.map(|hash| {
-				(
+			additional: match (genesis_hash, era_start_hash) {
+				(Some(genesis), Some(era)) => Some((
 					VERSION.spec_version,
 					VERSION.transaction_version,
-					hash,
-					hash,
+					genesis,
+					era,
 					(),
 					(),
 					(),
 					(),
-				)
-			})
-		};
-
-		Ok(data)
+				)),
+				_ => None
+			}
+		}
 	}
 }
 
@@ -729,16 +751,17 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			// so the actual block number is `n`.
 			.saturating_sub(1);
 		let era = Era::mortal(period, current_block);
-		let mut input = Runtime::extension_params();
-		input.set_nonce(nonce);
-		input.set_era(era);
-		let SignedExtensionData { extra, additional } = match Runtime::construct_extras(input) {
+		let input = Runtime::extras_params_builder()
+			.set_nonce(nonce)
+			.set_era(era);
+		let input = match input.build()  {
 			Ok(d) => d,
 			Err(e) => {
-				debug::warn!("unable to construct extras: {}", e);
+				debug::warn!("unable to construct extras: {:?}", e);
 				return None
 			}
 		};
+		let SignedExtensionData { extra, additional } = Runtime::construct_extras(input);
 		let raw_payload = if let Some(additional_signed) = additional {
 			SignedPayload::from_raw(call, extra, additional_signed)
 		} else {

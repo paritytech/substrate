@@ -16,6 +16,7 @@
 
 use sp_runtime::traits::{StaticLookup, SignedExtension};
 use sp_runtime::generic::Era;
+use sp_runtime::RuntimeDebug;
 
 /// AccountIndex type for Runtime
 pub type IndexFor<R> = <R as crate::Trait>::Index;
@@ -28,84 +29,64 @@ pub type HashFor<R> = <R as crate::Trait>::Hash;
 /// AccountId type for runtime.
 pub type AccountIdFor<R> = <R as crate::Trait>::AccountId;
 
-///
 /// Strongly typed interface for the `SignedExtensions` that should be included in extrinsics
 /// for them to valid for your runtime.
-///
-/// ```rust
-/// use runtime::{Runtime, SignedExtra};
-/// use frame_system::extras::IndexFor;
-///
-/// #[derive(Default)]
-/// struct ExtraParams {
-///		
-/// }
-///
-/// impl SignedExtensionProvider for Runtime {
-///     type Extra = SignedExtra;
-///
-///		type Params = ExtraParams;
-///	
-///		fn extension_params() -> Self::Params {
-///			Default::default()
-/// 	}
-///		
-///     fn construct_extras(params: ExtraParams) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
-///         // take the biggest period possible.
-///         let period = BlockHashCount::get()
-///             .checked_next_power_of_two()
-///             .map(|c| c / 2)
-///             .unwrap_or(2) as u64;
-///         let current_block = System::block_number()
-///             .saturated_into::<u64>()
-///             // The `System::block_number` is initialized with `n+1`,
-///             // so the actual block number is `n`.
-///             .saturating_sub(1);
-///
-///         (
-///             frame_system::CheckSpecVersion::new(),
-///             frame_system::CheckTxVersion::new(),
-///             frame_system::CheckGenesis::new(),
-///             frame_system::CheckEra::from(generic::Era::mortal(period, current_block)),
-///             frame_system::CheckNonce::from(index),
-///             frame_system::CheckWeight::new(),
-///         )
-///     }
-/// }
-///
-/// ```
-///
 pub trait SignedExtensionProvider: crate::Trait {
     /// Concrete SignedExtension type.
 	type Extra: SignedExtension;
+
 	/// Concrete type for params used to construct the `SignedExtension`-Data
-	type Params: SystemExtraParams<Self>;
+	type Builder: ExtrasParamsBuilder<Self>;
 
-	/// retrieve an instance of the input object.
-	fn extension_params() -> Self::Params;
+	/// Retrieve an instance of the builder.
+	fn extras_params_builder() -> Self::Builder;
 
-    /// construct extras and optionally additional_signed data for inclusion in extrinsics.
-    fn construct_extras(input: Self::Params) -> Result<SignedExtensionData<Self::Extra>, &'static str>;
+    /// Construct extras and optionally additional_signed data for inclusion in extrinsics.
+	fn construct_extras(input: <Self::Builder as ExtrasParamsBuilder<Self>>::ExtrasParams) ->
+		SignedExtensionData<Self::Extra>;
 }
 
-/// extras that should be included in extrinsics,
+
+/// Extras that should be included in extrinsics,
 /// additional data is provided for call sites that don't have access to storage.
 pub struct SignedExtensionData<S: SignedExtension> {
-	/// signed extras
+	/// Signed extras
 	pub extra: S,
-	/// additional data for the signed extras.
+	/// Additional data for the signed extras.
 	pub additional: Option<S::AdditionalSigned>,
 }
 
-/// used internally by substrate to set extras for inclusion in 
-/// `SignedExtensionProvider`
-pub trait SystemExtraParams<T: crate::Trait> {
-	/// sets the nonce
-	fn set_nonce(&mut self, index: T::Index);
-	/// sets the nonce
-	fn set_era(&mut self, era: Era);
-	/// sets the block hash for the start of the era this transaction is valid for.
-	fn set_starting_era_hash(&mut self, hash: T::Hash);
-	/// set the genesis hash
-	fn set_genesis_hash(&mut self, hash: T::Hash);
+/// Builder for `ExtrasParams`, used by runtimes to define data required for constructing signed extras
+pub trait ExtrasParamsBuilder<T: crate::Trait> {
+	/// Concrete type passed to `construct_extras`.
+	type ExtrasParams;
+	
+	/// Sets the nonce
+	fn set_nonce(self, index: T::Index) -> Self;
+	
+	/// Sets the era
+	fn set_era(self, era: Era) -> Self;
+
+	/// Sets the tip
+	fn set_tip(self, tip: u128) -> Self;
+	
+	/// Sets the block hash for the start of the era this transaction is valid for.
+	/// this is an additional signed data and is therefore **optional**
+	/// only provide it you know `construct_extras` will be called outside of an externalities environment.
+	fn set_starting_era_hash(self, hash: T::Hash) -> Self;
+	
+	/// Sets the genesis hash
+	/// this is an additional signed data and is therefore **optional**
+	/// only provide it you know `construct_extras` will be called outside of an externalities environment.
+	fn set_genesis_hash(self, hash: T::Hash) -> Self;
+	
+	/// build the extras params
+	fn build(self) -> Result<Self::ExtrasParams, BuilderError>;
+}
+#[derive(RuntimeDebug)]
+pub enum BuilderError {
+	/// Era value wasn't supplied
+	EraIsRequired,
+	/// Nonce value wasn't supplied
+	NonceIsRequired,
 }

@@ -55,9 +55,6 @@ use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
-use frame_system::extras::{SignedExtensionProvider, SystemExtraParams, SignedExtensionData};
-use sp_runtime::generic::Era;
-use frame_system::Trait;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
@@ -420,53 +417,6 @@ impl pallet_balances::Trait for Runtime {
 	type AccountStore = frame_system::Module<Runtime>;
 }
 
-impl SystemExtraParams<Runtime> for ExtrasParams {
-	fn set_nonce(&mut self, _index: <Runtime as Trait>::Index) {
-		unimplemented!()
-	}
-
-	fn set_era(&mut self, era: Era) {
-		self.era = era;
-	}
-
-	fn set_starting_era_hash(&mut self, _hash: <Runtime as Trait>::Hash) {
-		unimplemented!()
-	}
-
-	fn set_genesis_hash(&mut self, _: <Runtime as frame_system::Trait>::Hash) {
-		todo!()
-	}
-}
-
-pub struct ExtrasParams {
-	era: Era
-}
-
-impl SignedExtensionProvider for Runtime {
-	type Extra = (
-		frame_system::CheckTxVersion<Runtime>,
-		frame_system::CheckGenesis<Runtime>,
-		frame_system::CheckEra<Runtime>,
-	);
-
-	type Params = ExtrasParams;
-
-	fn extension_params() -> Self::Params {
-		ExtrasParams { era: Era::Immortal }
-	}
-
-	fn construct_extras(params: Self::Params) -> Result<SignedExtensionData<Self::Extra>, &'static str> {
-		let data = SignedExtensionData {
-			extra: (
-				frame_system::CheckTxVersion::new(),
-				frame_system::CheckGenesis::new(),
-				frame_system::CheckEra::from(params.era)
-			),
-			additional: None
-		};
-		Ok(data)
-	}
-}
 
 impl frame_system::Trait for Runtime {
 	type Origin = Origin;

@@ -21,7 +21,7 @@ use sp_runtime::{
 };
 use codec::Encode;
 use frame_system::extras::{
-	SignedExtensionProvider, SystemExtraParams,
+	SignedExtensionProvider, ExtrasParamsBuilder,
 	IndexFor, AddressFor, AccountIdFor, SignedExtensionData,
 };
 use sp_runtime::generic::Era;
@@ -48,11 +48,13 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 		AddressFor<P>: From<AccountIdFor<P>>,
 {
 	let pair = pair_from_suri::<Pair>(uri, pass)?;
-	let mut input = P::extension_params();
-	input.set_nonce(nonce);
-	input.set_era(Era::Immortal);
-	input.set_starting_era_hash(hash);
-	let SignedExtensionData { extra, additional } = P::construct_extras(input)?;
+	let input = P::extras_params_builder()
+		.set_nonce(nonce)
+		.set_era(Era::Immortal)
+		.set_starting_era_hash(hash)
+		.build()
+		.map_err(|err| format!("failed to construct extras: {:?}", err))?;
+	let SignedExtensionData { extra, additional } = P::construct_extras(input);
 
 	let payload = if let Some(additional_signed) = additional {
 		SignedPayload::from_raw(call, extra, additional_signed)
