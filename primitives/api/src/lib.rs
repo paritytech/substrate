@@ -71,7 +71,9 @@ pub use sp_std::{slice, mem};
 use sp_std::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
+#[doc(hidden)]
 use sp_core::OpaqueMetadata;
+#[doc(hidden)]
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
 
@@ -308,6 +310,7 @@ pub type StorageTransactionCache<Block, Backend> =
 		<Backend as StateBackend<HashFor<Block>>>::Transaction, HashFor<Block>, NumberFor<Block>
 	>;
 
+/// A type containing storage changes.
 #[cfg(feature = "std")]
 pub type StorageChanges<SBackend, Block> =
 	sp_state_machine::StorageChanges<
@@ -373,7 +376,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 		pred: P,
 	) -> Result<bool, Self::Error> where Self: Sized;
 
-	/// Start recording all accessed trie nodes for generating proofs.
+	/// Start record a proof.
 	fn record_proof(&mut self);
 
 	/// Extract the recorded proof.
