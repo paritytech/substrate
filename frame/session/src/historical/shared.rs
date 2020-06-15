@@ -20,8 +20,7 @@
 
 
 use super::SessionIndex;
-use sp_std::prelude::Vec;
-use core::convert::AsRef;
+use sp_std::prelude::*;
 use codec::Encode;
 
 pub(super) const PREFIX: &[u8] = b"session_historical";
