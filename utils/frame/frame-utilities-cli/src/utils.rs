@@ -25,9 +25,9 @@ use frame_system::extras::{
 	IndexFor, AddressFor, AccountIdFor, SignedExtensionData,
 };
 use sp_runtime::generic::Era;
-use sc_cli::pair_from_suri;
+use sc_cli::{pair_from_suri, Error};
 
-/// create an extrinsic for the runtime, takes a uri, password, call, nonce and prior hash (for extras).
+/// Creates an extrinsic for the runtime, takes a uri, password, call, nonce and prior hash (for extras).
 pub fn create_extrinsic_for<Pair, P, Call>(
 	uri: &str,
 	pass: Option<&str>,
@@ -36,7 +36,7 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 	hash: P::Hash,
 ) -> Result<
 		UncheckedExtrinsic<AddressFor<P>, Call, MultiSignature, P::Extra>,
-		&'static str
+		Error
 	>
 	where
 		Call: Encode,
@@ -47,18 +47,18 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 		AccountIdFor<P>: From<AccountId32>,
 		AddressFor<P>: From<AccountIdFor<P>>,
 {
-	let pair = pair_from_suri::<Pair>(uri, pass);
+	let pair = pair_from_suri::<Pair>(uri, pass)?;
 	let mut input = P::extension_params();
 	input.set_nonce(nonce);
 	input.set_era(Era::Immortal);
-	input.set_prior_block_hash(hash);
+	input.set_starting_era_hash(hash);
 	let SignedExtensionData { extra, additional } = P::construct_extras(input)?;
 
 	let payload = if let Some(additional_signed) = additional {
 		SignedPayload::from_raw(call, extra, additional_signed)
 	} else {
 		SignedPayload::new(call, extra)
-			.map_err(|_| "Transaction validity error")?
+			.map_err(|err| format!("Transaction validity error: {:?}", err))?
 	};
 
 	let account_public = pair.public().into().into_account();

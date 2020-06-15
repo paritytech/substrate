@@ -77,7 +77,7 @@ impl InsertCmd {
 		let public = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			to_vec(&suri, password.as_ref().map(String::as_str))
-		);
+		)?;
 
 		let node_url = self.node_url.as_ref()
 			.map(String::as_str)
@@ -112,9 +112,9 @@ impl CliConfiguration for InsertCmd {
 	}
 }
 
-fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<&str>) -> Vec<u8> {
-	let p = pair_from_suri::<P>(uri, pass);
-	p.public().as_ref().to_vec()
+fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<&str>) -> Result<Vec<u8>, Error> {
+	let p = pair_from_suri::<P>(uri, pass)?;
+	Ok(p.public().as_ref().to_vec())
 }
 
 fn insert_key<H>(url: &str, key_type: String, suri: String, public: Bytes)

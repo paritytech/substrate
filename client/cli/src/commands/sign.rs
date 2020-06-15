@@ -85,6 +85,6 @@ impl CliConfiguration for SignCmd {
 }
 
 fn sign<P: sp_core::Pair>(suri: &str, password: Option<&str>, message: Vec<u8>) ->  error::Result<String> {
-	let pair = pair_from_suri::<P>(suri, password);
+	let pair = pair_from_suri::<P>(suri, password)?;
 	Ok(format!("{}", hex::encode(pair.sign(&message))))
 }

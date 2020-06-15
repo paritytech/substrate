@@ -62,7 +62,6 @@ wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-run
 default = [
 	"std",
 ]
-indices-lookup = []
 std = [
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",

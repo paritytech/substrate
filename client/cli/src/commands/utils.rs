@@ -150,8 +150,10 @@ pub fn print_from_uri<Pair>(
 }
 
 /// generate a pair from suri
-pub fn pair_from_suri<P: Pair>(suri: &str, password: Option<&str>) -> P {
-	P::from_string(suri, password).expect("Invalid phrase")
+pub fn pair_from_suri<P: Pair>(suri: &str, password: Option<&str>) -> Result<P, Error> {
+	let pair = P::from_string(suri, password)
+		.map_err(|err| format!("Invalid phrase {:?}", err))?;
+	Ok(pair)
 }
 
 /// formats seed as hex

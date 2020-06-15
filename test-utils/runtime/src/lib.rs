@@ -429,8 +429,12 @@ impl SystemExtraParams<Runtime> for ExtrasParams {
 		self.era = era;
 	}
 
-	fn set_prior_block_hash(&mut self, _hash: <Runtime as Trait>::Hash) {
+	fn set_starting_era_hash(&mut self, _hash: <Runtime as Trait>::Hash) {
 		unimplemented!()
+	}
+
+	fn set_genesis_hash(&mut self, _: <Runtime as frame_system::Trait>::Hash) {
+		todo!()
 	}
 }
 
@@ -471,9 +475,6 @@ impl frame_system::Trait for Runtime {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = Hashing;
-	#[cfg(feature = "indices-lookup")]
-	type AccountId = sr25519::Public;
-	#[cfg(not(feature = "indices-lookup"))]
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;

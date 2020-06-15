@@ -645,8 +645,12 @@ impl SystemExtraParams<Runtime> for ExtrasParams {
 		self.era = Some(era);
 	}
 
-	fn set_prior_block_hash(&mut self, hash: <Runtime as frame_system::Trait>::Hash) {
+	fn set_starting_era_hash(&mut self, hash: <Runtime as frame_system::Trait>::Hash) {
 		self.prior_block_hash = Some(hash);
+	}
+
+	fn set_genesis_hash(&mut self, _: <Runtime as frame_system::Trait>::Hash) {
+		todo!()
 	}
 }
 
@@ -730,7 +734,10 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 		input.set_era(era);
 		let SignedExtensionData { extra, additional } = match Runtime::construct_extras(input) {
 			Ok(d) => d,
-			Err(_) => return None,
+			Err(e) => {
+				debug::warn!("unable to construct extras: {}", e);
+				return None
+			}
 		};
 		let raw_payload = if let Some(additional_signed) = additional {
 			SignedPayload::from_raw(call, extra, additional_signed)

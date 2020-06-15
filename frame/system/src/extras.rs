@@ -32,7 +32,7 @@ pub type AccountIdFor<R> = <R as crate::Trait>::AccountId;
 /// Strongly typed interface for the `SignedExtensions` that should be included in extrinsics
 /// for them to valid for your runtime.
 ///
-/// ```rust,ignore
+/// ```rust
 /// use runtime::{Runtime, SignedExtra};
 /// use frame_system::extras::IndexFor;
 ///
@@ -41,7 +41,7 @@ pub type AccountIdFor<R> = <R as crate::Trait>::AccountId;
 ///		
 /// }
 ///
-/// impl RuntimeAdapter for Runtime {
+/// impl SignedExtensionProvider for Runtime {
 ///     type Extra = SignedExtra;
 ///
 ///		type Params = ExtraParams;
@@ -104,6 +104,8 @@ pub trait SystemExtraParams<T: crate::Trait> {
 	fn set_nonce(&mut self, index: T::Index);
 	/// sets the nonce
 	fn set_era(&mut self, era: Era);
-	/// sets the prior block hash
-	fn set_prior_block_hash(&mut self, hash: T::Hash);
+	/// sets the block hash for the start of the era this transaction is valid for.
+	fn set_starting_era_hash(&mut self, hash: T::Hash);
+	/// set the genesis hash
+	fn set_genesis_hash(&mut self, hash: T::Hash);
 }
