@@ -24,8 +24,9 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 use sp_core::offchain::{OpaquePeerId, OpaqueMultiaddr};
-use sp_runtime::traits::{ValidateUnsigned, Zero, Dispatchable};
+use sp_runtime::traits::{ValidateUnsigned, Zero};
 use sp_runtime::transaction_validity::TransactionSource;
+use frame_support::traits::UnfilteredDispatchable;
 
 use crate::Module as ImOnline;
 
@@ -85,7 +86,7 @@ benchmarks! {
 		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
-		call.dispatch(RawOrigin::None.into())?;
+		call.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
 }
 
