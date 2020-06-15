@@ -664,13 +664,15 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use std::sync::{Arc, Mutex};
 
-	struct TestTraceHandler(Arc<Mutex<Vec<(String,String)>>>);
+	use sc_tracing::SpanDatum;
 
 	impl sc_tracing::TraceHandler for TestTraceHandler {
-		fn process_span(&self, sd: sc_tracing::SpanDatum) {
-			self.0.lock().unwrap().push((sd.target, sd.name));
+		fn process_span(&self, sd: SpanDatum) {
+			self.0.lock().unwrap().push(sd);
 		}
 	}
+
+	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
 
 	let traces = Arc::new(Mutex::new(Vec::new()));
 	let handler = TestTraceHandler(traces.clone());
@@ -748,8 +750,10 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	let len = traces.lock().unwrap().len();
 	assert_eq!(len, 1);
 
-	let (target, name) = traces.lock().unwrap().pop().unwrap();
-	// Ensure that the wasm trace has correct target and name and has "_wasm" appended to the name
-	assert_eq!(target, "integration_test_span_target");
-	assert_eq!(name, "integration_test_span_name_wasm");
+	let span_datum = traces.lock().unwrap().pop().unwrap();
+	let values = span_datum.values.into_inner();
+	assert_eq!(span_datum.target, "integration_test_span_target");
+	assert_eq!(span_datum.name, "integration_test_span_name");
+	assert_eq!(values.get("wasm").unwrap(), "true");
+	assert_eq!(values.get("is_valid_trace").unwrap(), "true");
 }

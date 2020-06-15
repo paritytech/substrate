@@ -85,6 +85,12 @@ pub struct SpanDatum {
 #[derive(Clone, Debug)]
 pub struct Visitor(FxHashMap<String, String>);
 
+impl Visitor {
+	pub fn into_inner(self) -> FxHashMap<String, String> {
+		self.0
+	}
+}
+
 impl Visit for Visitor {
 	fn record_i64(&mut self, field: &Field, value: i64) {
 		self.0.insert(field.name().to_string(), value.to_string());
@@ -285,8 +291,9 @@ impl Subscriber for ProfilingSubscriber {
 		};
 		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
+				span_datum.values.0.insert("wasm".to_owned(), "true".to_owned());
 				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
-					span_datum.name = [&n, "_wasm"].concat();
+					span_datum.name = n;
 				}
 				if let Some(t) = span_datum.values.0.remove(WASM_TARGET_KEY) {
 					span_datum.target = t;
