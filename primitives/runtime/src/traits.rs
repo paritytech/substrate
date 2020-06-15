@@ -144,7 +144,7 @@ impl<
 }
 
 /// An error type that indicates that the origin is invalid.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct BadOrigin;
 
 impl From<BadOrigin> for &'static str {
