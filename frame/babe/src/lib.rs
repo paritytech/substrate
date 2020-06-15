@@ -23,7 +23,7 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	decl_module, decl_storage,
+	decl_error, decl_module, decl_storage,
 	traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness as RandomnessT},
 	weights::Weight,
 	Parameter,
@@ -91,6 +91,12 @@ pub trait Trait: pallet_timestamp::Trait {
 		IdentificationTuple = Self::KeyOwnerIdentification,
 	>;
 
+	/// The equivocation handling subsystem, defines methods to report an
+	/// offence (after the equivocation has been validated) and for submitting a
+	/// transaction to report an equivocation (from an offchain context).
+	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
@@ -127,6 +133,17 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
 type MaybeRandomness = Option<schnorrkel::Randomness>;
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
+	}
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
@@ -231,7 +248,14 @@ decl_module! {
 			Lateness::<T>::kill();
 		}
 
-		// FIXME: deal with weight
+		/// Report authority equivocation/misbehavior. This method will verify
+		/// the equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence will
+		/// be reported.
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
 		#[weight = 0]
 		fn report_equivocation_unsigned(
 			origin,
@@ -243,8 +267,9 @@ decl_module! {
 			let offender = equivocation_proof.offender.clone();
 			let slot_number = equivocation_proof.slot_number;
 
+			// validate the equivocation proof
 			sp_consensus_babe::check_equivocation_proof(equivocation_proof)
-				.ok_or("")?;
+				.ok_or(Error::<T>::InvalidEquivocationProof)?;
 
 			let validator_set_count = key_owner_proof.validator_count();
 			let session_index = key_owner_proof.session();
@@ -255,15 +280,15 @@ decl_module! {
 			// check that the slot number is consistent with the session index
 			// in the key ownership proof (i.e. slot is for that epoch)
 			if epoch_index != session_index {
-				return Err("".into());
+				return Err(Error::<T>::InvalidEquivocationProof.into());
 			}
 
-			// check the membership and extract the offender's id
+			// check the membership proof and extract the offender's id
 			let offender =
 				T::KeyOwnerProofSystem::check_proof(
 					(sp_consensus_babe::KEY_TYPE, offender),
 					key_owner_proof,
-				).ok_or("")?;
+				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 			let offence = BabeEquivocationOffence {
 				slot: slot_number,
@@ -272,13 +297,15 @@ decl_module! {
 				session_index,
 			};
 
-			let mut reporters = Vec::new();
-			if let Some(id) = T::HandleEquivocation::block_author() {
-				reporters.push(id);
-			}
+			// report to the offences module rewarding the block author if defined.
+			let reporters = if let Some(id) = T::HandleEquivocation::block_author() {
+				vec![id]
+			} else {
+				vec![]
+			};
 
 			T::HandleEquivocation::report_offence(reporters, offence)
-				.map_err(|_| "")?;
+				.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 		}
 	}
 }
@@ -589,6 +616,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain
+	/// context.
 	pub fn submit_unsigned_equivocation_report(
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
