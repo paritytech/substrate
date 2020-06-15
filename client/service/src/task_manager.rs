@@ -13,11 +13,11 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, pin::Pin, result::Result, sync::Arc};
+use std::{panic, pin::Pin, result::Result, sync::Arc, task::{Poll, Context}};
 use exit_future::Signal;
 use log::{debug, error};
 use futures::{
-	Future, FutureExt,
+	Future, FutureExt, Stream,
 	future::{select, Either, BoxFuture},
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
@@ -30,7 +30,7 @@ use prometheus_endpoint::{
 };
 use sc_client_api::CloneableSpawn;
 use crate::config::TaskType;
-use sp_utils::mpsc::TracingUnboundedSender;
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 
 mod prometheus_future;
 
@@ -177,6 +177,8 @@ pub struct TaskManager {
 	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
 	essential_failed_tx: TracingUnboundedSender<()>,
+	/// A receiver for spawned essential-tasks concluding.
+	essential_failed_rx: TracingUnboundedReceiver<()>,
 }
 
 impl TaskManager {
@@ -185,9 +187,10 @@ impl TaskManager {
 	pub(super) fn new(
 		executor: ServiceTaskExecutor,
 		prometheus_registry: Option<&Registry>,
-		essential_failed_tx: TracingUnboundedSender<()>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
+		// A side-channel for essential tasks to communicate shutdown.
+		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
@@ -197,6 +200,7 @@ impl TaskManager {
 			executor,
 			metrics,
 			essential_failed_tx,
+			essential_failed_rx,
 		})
 	}
 
@@ -223,6 +227,27 @@ impl TaskManager {
 		}
 	}
 }
+
+impl Future for TaskManager {
+	type Output = Result<(), crate::Error>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		match Pin::new(&mut this.essential_failed_rx).poll_next(cx) {
+			Poll::Pending => {},
+			Poll::Ready(_) => {
+				// Ready(None) should not be possible since we hold a live
+				// sender.
+				return Poll::Ready(Err(crate::Error::Other("Essential task failed.".into())));
+			}
+		}
+
+		// The task manager future never ends.
+		Poll::Pending
+	}
+}
+
 
 impl Drop for TaskManager {
 	fn drop(&mut self) {

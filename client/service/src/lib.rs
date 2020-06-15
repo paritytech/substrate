@@ -47,7 +47,7 @@ use parking_lot::Mutex;
 
 use client::Client;
 use futures::{Future, FutureExt, Stream, StreamExt, stream::FusedStream, compat::*};
-use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, PeerId};
+use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
@@ -99,56 +99,9 @@ impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
 #[cfg(target_os = "unknown")]
 impl<T> MallocSizeOfWasm for T {}
 
-/// Substrate service.
-pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
-	select_chain: Option<TSc>,
-	network: Arc<TNet>,
-	// Sinks to propagate network status updates.
-	// For each element, every time the `Interval` fires we push an element on the sender.
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
-	// A receiver for spawned essential-tasks concluding.
-	essential_failed_rx: TracingUnboundedReceiver<()>,
-	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
-	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry: Option<sc_telemetry::Telemetry>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
-	_offchain_workers: Option<Arc<TOc>>,
-	marker: PhantomData<TBl>,
-	prometheus_registry: Option<prometheus_endpoint::Registry>,
-	// The base path is kept here because it can be a temporary directory which will be deleted
-	// when dropped
-	_base_path: Option<Arc<BasePath>>,
-	_phantom: PhantomData<(TCl, TTxPool)>
-}
+pub struct RpcHandlers(sc_rpc_server::RpcHandler<sc_rpc::Metadata>);
 
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
-
-/// Abstraction over a Substrate service.
-pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + 'static {
-	/// Type of block of this chain.
-	type Block: BlockT;
-	/// Backend storage for the client.
-	type Backend: 'static + BackendT<Self::Block>;
-	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + CallExecutor<Self::Block> + Send + Sync + Clone;
-	/// API that the runtime provides.
-	type RuntimeApi: Send + Sync;
-	/// Chain selection algorithm.
-	type SelectChain: sp_consensus::SelectChain<Self::Block>;
-	/// Transaction pool.
-	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
-	/// The generic Client type, the bounds here are the ones specifically required by
-	/// internal crates like sc_informant.
-	type Client:
-		HeaderMetadata<Self::Block, Error = sp_blockchain::Error> + UsageProvider<Self::Block>
-		+ BlockchainEvents<Self::Block> + HeaderBackend<Self::Block> + Send + Sync;
-
-	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
-
-	/// return a shared instance of Telemetry (if enabled)
-	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
-
+impl RpcHandlers {
 	/// Starts an RPC query.
 	///
 	/// The query is passed as a string and must be a JSON text similar to what an HTTP client
@@ -158,49 +111,59 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + '
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>;
+	pub fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
+		self.0.handle_request(request, mem.metadata.clone())
+			.compat()
+			.map(|res| res.expect("this should never fail"))
+			.boxed()
+	}
+}
+
+/// Substrate service.
+pub struct Service<TBl, TSc, TNetStatus, TOc> {
+	select_chain: Option<TSc>,
+	// Sinks to propagate network status updates.
+	// For each element, every time the `Interval` fires we push an element on the sender.
+	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
+	_rpc: Box<dyn std::any::Any + Send + Sync>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
+	_offchain_workers: Option<Arc<TOc>>,
+	marker: PhantomData<TBl>,
+	prometheus_registry: Option<prometheus_endpoint::Registry>,
+}
+
+impl<TBl, TSc, TNetStatus, TOc> Unpin for Service<TBl, TSc, TNetStatus, TOc> {}
+
+/// Abstraction over a Substrate service.
+pub trait AbstractService: Send + Unpin + 'static {
+	/// Type of block of this chain.
+	type Block: BlockT;
+	/// Chain selection algorithm.
+	type SelectChain: sp_consensus::SelectChain<Self::Block> + Sized;
+	
+	/// Get event stream for telemetry connection established events.
+	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
+
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
-
-	/// Get shared network instance.
-	fn network(&self)
-		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
 	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
-
-	/// Get a clone of the base_path
-	fn base_path(&self) -> Option<Arc<BasePath>>;
 }
 
-impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
-	Service<TBl, Client<TBackend, TExec, TBl, TRtApi>, TSc, NetworkStatus<TBl>,
-		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
+impl<TBl, TSc, TOc> AbstractService for
+	Service<TBl, TSc, NetworkStatus<TBl>, TOc>
 where
 	TBl: BlockT,
-	TBackend: 'static + BackendT<TBl>,
-	TExec: 'static + CallExecutor<TBl, Backend = TBackend> + Send + Sync + Clone,
-	TRtApi: 'static + Send + Sync + ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>,
-	<TRtApi as ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>>::RuntimeApi:
-		sp_api::Core<TBl>
-		+ ApiExt<TBl, StateBackend = TBackend::State>
-		+ ApiErrorExt<Error = sp_blockchain::Error>
-		+ BlockBuilder<TBl>,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
-	TExPool: 'static + TransactionPool<Block = TBl> + MallocSizeOfWasm,
 	TOc: 'static + Send + Sync,
 {
 	type Block = TBl;
-	type Backend = TBackend;
-	type CallExecutor = TExec;
-	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
-	type TransactionPool = TExPool;
-	type Client = Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>;
 
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
@@ -208,26 +171,8 @@ where
 		stream
 	}
 
-	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
-		self._telemetry.clone()
-	}
-
-	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
-		Box::pin(
-			self.rpc_handlers.handle_request(request, mem.metadata.clone())
-				.compat()
-				.map(|res| res.expect("this should never fail"))
-		)
-	}
-
 	fn select_chain(&self) -> Option<Self::SelectChain> {
 		self.select_chain.clone()
-	}
-
-	fn network(&self)
-		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>
-	{
-		self.network.clone()
 	}
 
 	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
@@ -238,32 +183,6 @@ where
 
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
-	}
-
-	fn base_path(&self) -> Option<Arc<BasePath>> {
-		self._base_path.clone()
-	}
-}
-
-impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
-	Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc>
-{
-	type Output = Result<(), Error>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		match Pin::new(&mut this.essential_failed_rx).poll_next(cx) {
-			Poll::Pending => {},
-			Poll::Ready(_) => {
-				// Ready(None) should not be possible since we hold a live
-				// sender.
-				return Poll::Ready(Err(Error::Other("Essential task failed.".into())));
-			}
-		}
-
-		// The service future never ends.
-		Poll::Pending
 	}
 }
 

@@ -21,7 +21,7 @@ use crate::{
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	status_sinks, metrics::MetricsService,
 	client::{light, Client, ClientConfig},
-	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
+	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig, BasePath},
 };
 use sc_client_api::{
 	self, BlockchainEvents, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
@@ -103,7 +103,6 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 	informant_prefix: String,
-	essential_failed_rx: TracingUnboundedReceiver<()>,
 }
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -206,7 +205,6 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	Arc<TFullBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
 	TaskManager,
-	TracingUnboundedReceiver<()>,
 );
 
 /// Creates a new full client for the given config.
@@ -233,12 +231,9 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 	};
 
-	// A side-channel for essential tasks to communicate shutdown.
-	let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
-
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.task_executor.clone(), registry, essential_failed_tx)?
+		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -286,7 +281,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		)?
 	};
 
-	Ok((client, backend, keystore, task_manager, essential_failed_rx))
+	Ok((client, backend, keystore, task_manager))
 }
 
 
@@ -352,7 +347,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let (client, backend, keystore, task_manager, essential_failed_rx) = new_full_parts(&config)?;
+		let (client, backend, keystore, task_manager) = new_full_parts(&config)?;
 
 		let client = Arc::new(client);
 
@@ -362,7 +357,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			backend,
 			keystore,
 			task_manager,
-			essential_failed_rx,
 			fetcher: None,
 			select_chain: None,
 			import_queue: (),
@@ -393,12 +387,9 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		// A side-channel for essential tasks to communicate shutdown.
-		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
-
 		let task_manager = {
 			let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-			TaskManager::new(config.task_executor.clone(), registry, essential_failed_tx)?
+			TaskManager::new(config.task_executor.clone(), registry)?
 		};
 
 		let keystore = match &config.keystore {
@@ -450,7 +441,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			backend,
 			task_manager,
 			keystore,
-			essential_failed_rx,
 			fetcher: Some(fetcher.clone()),
 			select_chain: None,
 			import_queue: (),
@@ -557,7 +547,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -604,7 +593,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -644,7 +632,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -712,7 +699,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -770,7 +756,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -809,7 +794,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -856,7 +840,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
 			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-			essential_failed_rx: self.essential_failed_rx,
 		})
 	}
 
@@ -976,19 +959,26 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	fn build_common(self) -> Result<(Service<
-		TBl,
-		Client<TBackend, TExec, TBl, TRtApi>,
-		TSc,
-		NetworkStatus<TBl>,
-		NetworkService<TBl, <TBl as BlockT>::Hash>,
-		TExPool,
-		sc_offchain::OffchainWorkers<
-			Client<TBackend, TExec, TBl, TRtApi>,
-			TBackend::OffchainStorage,
-			TBl
+	fn build_common(self) -> Result<(
+		Service<
+			TBl,
+			TSc,
+			NetworkStatus<TBl>,
+			sc_offchain::OffchainWorkers<
+				Client<TBackend, TExec, TBl, TRtApi>,
+				TBackend::OffchainStorage,
+				TBl
+			>,
 		>,
-	>, Arc<Client<TBackend, TExec, TBl, TRtApi>>, Arc<TExPool>, TaskManager, Arc<RwLock<Keystore>>), Error>
+		Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+		Arc<TExPool>,
+		TaskManager,
+		Arc<RwLock<Keystore>>,
+		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		Option<sc_telemetry::Telemetry>,
+		Option<Arc<BasePath>>,
+		crate::RpcHandlers,
+	), Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		let ServiceBuilder {
@@ -1008,7 +998,6 @@ ServiceBuilder<
 			remote_backend,
 			block_announce_validator_builder,
 			informant_prefix,
-			essential_failed_rx,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -1316,7 +1305,7 @@ ServiceBuilder<
 		};
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 		// This is used internally, so don't restrict access to unsafe RPC
-		let rpc_handlers = gen_handler(sc_rpc::DenyUnsafe::No);
+		let rpc_handlers = crate::RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No));
 
 		// The network worker is responsible for gathering all network messages and processing
 		// them. This is quite a heavy task, and at the time of the writing of this comment it
@@ -1412,36 +1401,37 @@ ServiceBuilder<
 		spawn_handle.spawn("informant", informant_future);
 
 		Ok((Service {
-			network,
 			network_status_sinks,
 			select_chain,
-			essential_failed_rx,
-			rpc_handlers,
 			_rpc: rpc,
-			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			marker: PhantomData::<TBl>,
 			prometheus_registry: config.prometheus_config.map(|config| config.registry),
-			_base_path: config.base_path.map(Arc::new),
-			_phantom: PhantomData
-		}, client, transaction_pool, task_manager, keystore))
+		}, client, transaction_pool, task_manager, keystore, network, telemetry, config.base_path.map(Arc::new), rpc_handlers))
 	}
 
 	/// Builds the light service.
-	pub fn build_light(self) -> Result<(Service<
-		TBl,
-		Client<TBackend, TExec, TBl, TRtApi>,
-		TSc,
-		NetworkStatus<TBl>,
-		NetworkService<TBl, <TBl as BlockT>::Hash>,
-		TExPool,
-		sc_offchain::OffchainWorkers<
-			Client<TBackend, TExec, TBl, TRtApi>,
-			TBackend::OffchainStorage,
-			TBl
+	pub fn build_light(self) -> Result<(
+		Service<
+			TBl,
+			TSc,
+			NetworkStatus<TBl>,
+			sc_offchain::OffchainWorkers<
+				Client<TBackend, TExec, TBl, TRtApi>,
+				TBackend::OffchainStorage,
+				TBl
+			>,
 		>,
-	>, Arc<Client<TBackend, TExec, TBl, TRtApi>>, Arc<TExPool>, TaskManager, Arc<RwLock<Keystore>>), Error>
+		Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+		Arc<TExPool>,
+		TaskManager,
+		Arc<RwLock<Keystore>>,
+		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		Option<sc_telemetry::Telemetry>,
+		Option<Arc<BasePath>>,
+		crate::RpcHandlers,
+	), Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		self.build_common()
@@ -1484,19 +1474,26 @@ ServiceBuilder<
 {
 
 	/// Builds the full service.
-	pub fn build_full(self) -> Result<(Service<
-		TBl,
-		Client<TBackend, TExec, TBl, TRtApi>,
-		TSc,
-		NetworkStatus<TBl>,
-		NetworkService<TBl, <TBl as BlockT>::Hash>,
-		TExPool,
-		sc_offchain::OffchainWorkers<
-			Client<TBackend, TExec, TBl, TRtApi>,
-			TBackend::OffchainStorage,
-			TBl
+	pub fn build_full(self) -> Result<(
+		Service<
+			TBl,
+			TSc,
+			NetworkStatus<TBl>,
+			sc_offchain::OffchainWorkers<
+				Client<TBackend, TExec, TBl, TRtApi>,
+				TBackend::OffchainStorage,
+				TBl
+			>,
 		>,
-	>, Arc<Client<TBackend, TExec, TBl, TRtApi>>, Arc<TExPool>, TaskManager, Arc<RwLock<Keystore>>), Error>
+		Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+		Arc<TExPool>,
+		TaskManager,
+		Arc<RwLock<Keystore>>,
+		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+		Option<sc_telemetry::Telemetry>,
+		Option<Arc<BasePath>>,
+		crate::RpcHandlers,
+	), Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		// make transaction pool available for off-chain runtime calls.

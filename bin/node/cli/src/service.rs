@@ -30,7 +30,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
-	TaskManager,
+	TaskManager, BasePath, RpcHandlers,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
@@ -174,7 +174,7 @@ macro_rules! new_full {
 		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
 			new_full_start!($config);
 
-		let (service, client, transaction_pool, task_manager, keystore) = builder
+		let (service, client, transaction_pool, task_manager, keystore, network, telemetry, base_path, rpc_handlers) = builder
 			.with_finality_proof_provider(|client, backend| {
 				// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
@@ -209,7 +209,7 @@ macro_rules! new_full {
 				select_chain,
 				env: proposer,
 				block_import,
-				sync_oracle: service.network(),
+				sync_oracle: network.clone(),
 				inherent_data_providers: inherent_data_providers.clone(),
 				force_authoring,
 				babe_link,
@@ -236,14 +236,13 @@ macro_rules! new_full {
 				_ => unreachable!("Due to outer matches! constraint; qed.")
 			};
 
-			let network = service.network();
 			let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}}).boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				client.clone(),
-				network,
+				network.clone(),
 				sentries,
 				dht_event_stream,
 				authority_discovery_role,
@@ -282,7 +281,7 @@ macro_rules! new_full {
 			let grandpa_config = grandpa::GrandpaParams {
 				config,
 				link: grandpa_link,
-				network: service.network(),
+				network: network.clone(),
 				inherent_data_providers: inherent_data_providers.clone(),
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
@@ -300,11 +299,11 @@ macro_rules! new_full {
 			grandpa::setup_disabled_grandpa(
 				client,
 				&inherent_data_providers,
-				service.network(),
+				network.clone(),
 			)?;
 		}
 
-		Ok((service, inherent_data_providers, task_manager))
+		Ok((service, inherent_data_providers, task_manager, telemetry, base_path, rpc_handlers))
 	}};
 	($config:expr) => {{
 		new_full!($config, |_, _| {})
@@ -313,17 +312,18 @@ macro_rules! new_full {
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<(impl AbstractService, TaskManager), ServiceError>
+-> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError>
 {
-	new_full!(config).map(|(service, _, task_manager)| (service, task_manager))
+	new_full!(config).map(|(service, _, task_manager, telemetry, base_path, _)| {
+		(service, task_manager, telemetry, base_path)
+	})
 }
 
-/// Builds a new service for a light client.
-pub fn new_light(config: Configuration)
--> Result<(impl AbstractService, TaskManager), ServiceError> {
+fn new_light_base(config: Configuration)
+-> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>, RpcHandlers), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	let (service, _, _, task_manager, _) = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
+	let (service, _, _, task_manager, _, _, telemetry, base_path, rpc_handlers) = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
@@ -407,7 +407,19 @@ pub fn new_light(config: Configuration)
 		})?
 		.build_light()?;
 
-	Ok((service, task_manager))
+	Ok((service, task_manager, telemetry, base_path, rpc_handlers))
+}
+
+/// Builds a new service for a light client.
+pub fn new_light(config: Configuration)
+-> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError> {	
+	new_light_base(config).map(|(service, task_manager, telemetry, base_path, _)| (service, task_manager, telemetry, base_path))
+}
+
+/// Builds a new service for a browser light client.
+pub fn new_light_browser(config: Configuration)
+-> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>, RpcHandlers), ServiceError> {
+	new_light_base(config)	
 }
 
 #[cfg(test)]

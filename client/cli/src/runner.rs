@@ -25,11 +25,16 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager};
+use sc_service::{
+	AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager,
+	BasePath,
+};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
+
+type Initialised<T> = (T, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>);
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -177,16 +182,12 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can run a full or a light node depending on
 	/// the node's configuration.
-	pub fn run_node<SL, SF>(
+	pub fn run_node<F: AbstractService, L: AbstractService>(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<(SL, TaskManager)>,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<(SF, TaskManager)>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<L>>,
 		runtime_version: RuntimeVersion,
-	) -> Result<()>
-	where
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
-	{
+	) -> Result<()> {
 		match self.config.role {
 			Role::Light => self.run_light_node(new_light, runtime_version),
 			_ => self.run_full_node(new_full, runtime_version),
@@ -196,14 +197,11 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "full" node and will fail if
 	/// the node's configuration uses a "light" role.
-	pub fn run_full_node<S>(
+	pub fn run_full_node<F: AbstractService>(
 		self,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<(S, TaskManager)>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
 		runtime_version: RuntimeVersion,
-	) -> Result<()>
-	where
-		S: AbstractService + Unpin,
-	{
+	) -> Result<()> {
 		if matches!(self.config.role, Role::Light) {
 			return Err("Light node has been requested but this is not implemented".into());
 		}
@@ -215,14 +213,11 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "light" node and will fail if
 	/// the node's configuration uses a "full" role.
-	pub fn run_light_node<S>(
+	pub fn run_light_node<F: AbstractService>(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<(S, TaskManager)>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
 		runtime_version: RuntimeVersion,
-	) -> Result<()>
-	where
-		S: AbstractService + Unpin,
-	{
+	) -> Result<()> {
 		if !matches!(self.config.role, Role::Light) {
 			return Err("Full node has been requested but this is not implemented".into());
 		}
@@ -259,24 +254,24 @@ impl<C: SubstrateCli> Runner<C> {
 		}
 	}
 
-	fn run_service_until_exit<T, F>(mut self, service_builder: F) -> Result<()>
-	where
-		F: FnOnce(Configuration) -> std::result::Result<(T, TaskManager), sc_service::error::Error>,
-		T: AbstractService + Unpin,
-	{
-		let (service, _task_manager) = service_builder(self.config)?;
-
-		// we eagerly drop the service so that the internal exit future is fired,
-		// but we need to keep holding a reference to the global telemetry guard
-		// and drop the runtime first.
-		let _telemetry = service.telemetry();
-
-		// we hold a reference to the base path so if the base path is a temporary directory it will
-		// not be deleted before the tokio runtime finish to clean up
-		let _base_path = service.base_path();
+	fn run_service_until_exit<F: AbstractService>(
+		mut self,
+		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
+	) -> Result<()> {
+		let (
+			_service,
+			task_manager,
+			// we eagerly drop the service so that the internal exit future is fired,
+			// but we need to keep holding a reference to the global telemetry guard
+			// and drop the runtime first.
+			_telemetry,
+			// we hold a reference to the base path so if the base path is a temporary directory it will
+			// not be deleted before the tokio runtime finish to clean up
+			_base_path,
+		) = initialise(self.config)?;
 
 		{
-			let f = service.fuse();
+			let f = task_manager.fuse();
 			self.tokio_runtime
 				.block_on(main(f))
 				.map_err(|e| e.to_string())?;

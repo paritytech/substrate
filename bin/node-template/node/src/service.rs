@@ -5,7 +5,10 @@ use std::time::Duration;
 use sc_client_api::ExecutorProvider;
 use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
-use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder, TaskManager};
+use sc_service::{
+	error::{Error as ServiceError},
+	AbstractService, Configuration, ServiceBuilder, TaskManager, BasePath,
+};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
@@ -93,7 +96,9 @@ macro_rules! new_full_start {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<(impl AbstractService, TaskManager), ServiceError> {
+pub fn new_full(config: Configuration)
+-> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError>
+{
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
@@ -105,7 +110,7 @@ pub fn new_full(config: Configuration) -> Result<(impl AbstractService, TaskMana
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let (service, client, transaction_pool, task_manager, keystore) = builder
+	let (service, client, transaction_pool, task_manager, keystore, network, telemetry, base_path, _) = builder
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
@@ -132,7 +137,7 @@ pub fn new_full(config: Configuration) -> Result<(impl AbstractService, TaskMana
 			select_chain,
 			block_import,
 			proposer,
-			service.network(),
+			network.clone(),
 			inherent_data_providers.clone(),
 			force_authoring,
 			keystore.clone(),
@@ -173,7 +178,7 @@ pub fn new_full(config: Configuration) -> Result<(impl AbstractService, TaskMana
 		let grandpa_config = sc_finality_grandpa::GrandpaParams {
 			config: grandpa_config,
 			link: grandpa_link,
-			network: service.network(),
+			network: network.clone(),
 			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
@@ -191,15 +196,15 @@ pub fn new_full(config: Configuration) -> Result<(impl AbstractService, TaskMana
 		sc_finality_grandpa::setup_disabled_grandpa(
 			client,
 			&inherent_data_providers,
-			service.network(),
+			network.clone(),
 		)?;
 	}
 
-	Ok((service, task_manager))
+	Ok((service, task_manager, telemetry, base_path))
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<(impl AbstractService, TaskManager), ServiceError> {
+pub fn new_light(config: Configuration) -> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
@@ -264,5 +269,7 @@ pub fn new_light(config: Configuration) -> Result<(impl AbstractService, TaskMan
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
 		.build_light()
-		.map(|(service, _, _, task_manager, _)| (service, task_manager))
+		.map(|(service, _, _, task_manager, _, _, telemetry, base_path, _)| {
+			(service, task_manager, telemetry, base_path)
+		})
 }
