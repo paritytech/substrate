@@ -57,7 +57,7 @@ use std::{
 };
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_transaction_pool::MaintainedTransactionPool;
+use sp_transaction_pool::{LocalTransactionPool, MaintainedTransactionPool};
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
@@ -959,8 +959,7 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	/// Builds the service.
-	pub fn build(self) -> Result<Service<
+	fn build_common(self) -> Result<Service<
 		TBl,
 		Client<TBackend, TExec, TBl, TRtApi>,
 		TSc,
@@ -1015,10 +1014,6 @@ ServiceBuilder<
 			"height" => chain_info.best_number.saturated_into::<u64>(),
 			"best" => ?chain_info.best_hash
 		);
-
-		// make transaction pool available for off-chain runtime calls.
-		client.execution_extensions()
-			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
 
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 			imports_external_transactions: !matches!(config.role, Role::Light),
@@ -1420,5 +1415,83 @@ ServiceBuilder<
 			prometheus_registry: config.prometheus_config.map(|config| config.registry),
 			_base_path: config.base_path.map(Arc::new),
 		})
+	}
+
+	/// Builds the light service.
+	pub fn build_light(self) -> Result<Service<
+		TBl,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TSc,
+		NetworkStatus<TBl>,
+		NetworkService<TBl, <TBl as BlockT>::Hash>,
+		TExPool,
+		sc_offchain::OffchainWorkers<
+			Client<TBackend, TExec, TBl, TRtApi>,
+			TBackend::OffchainStorage,
+			TBl
+		>,
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
+		self.build_common()
+	}
+}
+
+impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
+ServiceBuilder<
+	TBl,
+	TRtApi,
+	Client<TBackend, TExec, TBl, TRtApi>,
+	Arc<OnDemand<TBl>>,
+	TSc,
+	TImpQu,
+	BoxFinalityProofRequestBuilder<TBl>,
+	Arc<dyn FinalityProofProvider<TBl>>,
+	TExPool,
+	TRpc,
+	TBackend,
+> where
+	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+		sp_api::Metadata<TBl> +
+		sc_offchain::OffchainWorkerApi<TBl> +
+		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
+		sp_session::SessionKeys<TBl> +
+		sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+		sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
+	TBl: BlockT,
+	TRtApi: 'static + Send + Sync,
+	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
+	TExec: 'static + CallExecutor<TBl> + Send + Sync + Clone,
+	TSc: Clone,
+	TImpQu: 'static + ImportQueue<TBl>,
+	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> +
+		LocalTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> +
+		MallocSizeOfWasm +
+		'static,
+	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
+{
+
+	/// Builds the full service.
+	pub fn build_full(self) -> Result<Service<
+		TBl,
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TSc,
+		NetworkStatus<TBl>,
+		NetworkService<TBl, <TBl as BlockT>::Hash>,
+		TExPool,
+		sc_offchain::OffchainWorkers<
+			Client<TBackend, TExec, TBl, TRtApi>,
+			TBackend::OffchainStorage,
+			TBl
+		>,
+	>, Error>
+		where TExec: CallExecutor<TBl, Backend = TBackend>,
+	{
+		// make transaction pool available for off-chain runtime calls.
+		self.client.execution_extensions()
+			.register_transaction_pool(Arc::downgrade(&self.transaction_pool) as _);
+
+		self.build_common()
 	}
 }

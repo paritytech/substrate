@@ -69,6 +69,10 @@ macro_rules! decl_tests {
 			evt
 		}
 
+		fn last_event() -> Event {
+			system::Module::<Test>::events().pop().expect("Event expected").event
+		}
+
 		#[test]
 		fn basic_locking_should_work() {
 			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
@@ -170,7 +174,7 @@ macro_rules! decl_tests {
 					);
 					assert_noop!(
 						<Balances as ReservableCurrency<_>>::reserve(&1, 1),
-						Error::<$test, _>::LiquidityRestrictions
+						Error::<$test, _>::LiquidityRestrictions,
 					);
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
@@ -485,6 +489,10 @@ macro_rules! decl_tests {
 				let _ = Balances::deposit_creating(&2, 1);
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
+				assert_eq!(
+					last_event(),
+					Event::balances(RawEvent::ReserveRepatriated(1, 2, 41, Status::Free)),
+				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
 				assert_eq!(Balances::reserved_balance(2), 0);
@@ -680,6 +688,40 @@ macro_rules! decl_tests {
 					assert!(Balances::is_dead_account(&1));
 					assert_eq!(Balances::free_balance(1), 0);
 					assert_eq!(Balances::reserved_balance(1), 0);
+				});
+		}
+
+		#[test]
+		fn emit_events_with_reserve_and_unreserve() {
+			<$ext_builder>::default()
+				.build()
+				.execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 100);
+
+					System::set_block_number(2);
+					let _ = Balances::reserve(&1, 10);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Reserved(1, 10)),
+					);
+
+					System::set_block_number(3);
+					let _ = Balances::unreserve(&1, 5);
+
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
+
+					System::set_block_number(4);
+					let _ = Balances::unreserve(&1, 6);
+
+					// should only unreserve 5
+					assert_eq!(
+						last_event(),
+						Event::balances(RawEvent::Unreserved(1, 5)),
+					);
 				});
 		}
 
