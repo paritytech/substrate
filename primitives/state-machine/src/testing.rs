@@ -126,8 +126,8 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		}
 	}
 
-	/// Apply the changes made by the offchain indexing API.
-	pub fn sync_offchain_index_changes(&mut self) {
+	/// Move offchain changes from overlay to the persistent store.
+	pub fn persist_offchain_overlay(&mut self) {
 		self.offchain_db.apply_offchain_changes(&mut self.offchain_overlay);
 	}
 

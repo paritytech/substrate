@@ -53,22 +53,13 @@ impl<T: Trait> ValidatorSet<T> {
 			.map(|validator_set| Self { validator_set })
 	}
 
-	/// Access the underlying `ValidatorId` and `FullIdentification` tuples as slice.
-	pub fn as_slice(&self) -> &[(T::ValidatorId, T::FullIdentification)] {
-		self.validator_set.as_slice()
-	}
-
-	/// Convert `self` into a vector and consume `self`.
-	pub fn into_vec(self) -> Vec<(T::ValidatorId, T::FullIdentification)> {
-		self.validator_set
-	}
 
 	/// Attempt to prune anything that is older than `first_to_keep` session index.
 	///
 	/// Due to re-organisation it could be that the `first_to_keep` might be less
 	/// than the stored one, in which case the conservative choice is made to keep records
 	/// up to the one that is the lesser.
-	pub fn prune_older_than(first_to_keep: SessionIndex) {
+	fn prune_older_than(first_to_keep: SessionIndex) {
 		let derived_key = shared::LAST_PRUNE.to_vec();
 		let entry = StorageValueRef::persistent(derived_key.as_ref());
 		match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
@@ -114,7 +105,7 @@ impl<T: Trait> ValidatorSet<T> {
 
 /// Implement conversion into iterator for usage
 /// with [ProvingTrie](super::ProvingTrie::generate_for).
-impl<T: Trait> core::iter::IntoIterator for ValidatorSet<T> {
+impl<T: Trait> sp_std::iter::IntoIterator for ValidatorSet<T> {
 	type Item = (T::ValidatorId, T::FullIdentification);
 	type IntoIter = sp_std::vec::IntoIter<Self::Item>;
 	fn into_iter(self) -> Self::IntoIter {

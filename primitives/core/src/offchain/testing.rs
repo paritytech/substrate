@@ -98,8 +98,7 @@ impl OffchainStorage for TestPersistentOffchainDB {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let value = self.persistent.read().get(prefix, key);
-		value
+		self.persistent.read().get(prefix, key)
 	}
 
 	fn compare_and_set(
