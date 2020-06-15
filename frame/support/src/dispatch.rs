@@ -299,6 +299,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -332,6 +333,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -350,6 +352,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event() = default;
@@ -367,6 +370,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -383,6 +387,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event
@@ -405,6 +410,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -424,6 +430,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -441,6 +448,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -467,6 +475,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -491,6 +500,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -517,6 +527,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -536,6 +547,48 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
+			[ $( $dispatchables )* ]
+			$($rest)*
+		);
+	};
+	// Add integrity_test
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{}
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn integrity_test() { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		$crate::decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name$(<I>, I: $instantiable $(= $module_default_instance)?)?>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $other_where_bounds )* }
+			{ $( $deposit_event )* }
+			{ $( $on_initialize )* }
+			{ $( $on_runtime_upgrade )* }
+			{ $( $on_finalize )* }
+			{ $( $offchain )* }
+			{ $( $constants )* }
+			{ $( $error_type )* }
+			{
+				$(#[doc = $doc_attr])*
+				fn integrity_test() { $( $impl)* }
+			}
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -555,6 +608,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -579,6 +633,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -605,6 +660,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
@@ -624,6 +680,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -643,6 +700,7 @@ macro_rules! decl_module {
 		{ }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
@@ -662,6 +720,7 @@ macro_rules! decl_module {
 			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $constants )* }
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -683,6 +742,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$( #[doc = $doc_attr:tt] )*
 		const $name:ident: $ty:ty = $value:expr;
@@ -707,6 +767,7 @@ macro_rules! decl_module {
 				$name: $ty = $value;
 			}
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -728,6 +789,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		type Error = $error_type:ty;
@@ -747,6 +809,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $error_type }
+			{ $( $integrity_test)* }
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
@@ -767,6 +830,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ }
+		{ $( $integrity_test:tt )* }
 		[ $($t:tt)* ]
 		$($rest:tt)*
 	) => {
@@ -784,6 +848,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ &'static str }
+			{ $( $integrity_test)* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -805,6 +870,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $error_type:ty }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		#[weight = $weight:expr]
@@ -827,6 +893,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $error_type }
+			{ $( $integrity_test)* }
 			[
 				$( $dispatchables )*
 				$(#[doc = $doc_attr])*
@@ -855,6 +922,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -881,6 +949,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -907,6 +976,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -933,6 +1003,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 		$(#[doc = $doc_attr:tt])*
 		$(#[weight = $weight:expr])?
@@ -960,6 +1031,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
 		[ $( $dispatchables:tt )* ]
 	) => {
 		$crate::decl_module!(@imp
@@ -976,6 +1048,7 @@ macro_rules! decl_module {
 			{ $( $offchain )* }
 			{ $( $constants )* }
 			{ $( $error_type )* }
+			{ $( $integrity_test)* }
 		);
 	};
 
@@ -1081,6 +1154,32 @@ macro_rules! decl_module {
 		{}
 	};
 
+	(@impl_integrity_test
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+		$(#[doc = $doc_attr:tt])*
+		fn integrity_test() { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
+			$crate::traits::IntegrityTest
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		{
+			$(#[doc = $doc_attr])*
+			fn integrity_test() {
+				$( $impl )*
+			}
+		}
+	};
+
+	(@impl_integrity_test
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
+			$crate::traits::IntegrityTest
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		{}
+	};
 
 	(@impl_on_finalize
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
@@ -1340,6 +1439,7 @@ macro_rules! decl_module {
 		{ $( $offchain:tt )* }
 		{ $( $constants:tt )* }
 		{ $error_type:ty }
+		{ $( $integrity_test:tt )* }
 	) => {
 		$crate::__check_reserved_fn_name! { $( $fn_name )* }
 
@@ -1366,7 +1466,6 @@ macro_rules! decl_module {
 			$( $on_runtime_upgrade )*
 		}
 
-
 		$crate::decl_module! {
 			@impl_on_finalize
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
@@ -1386,6 +1485,13 @@ macro_rules! decl_module {
 			$system;
 			{ $( $other_where_bounds )* }
 			$( $deposit_event )*
+		}
+
+		$crate::decl_module! {
+			@impl_integrity_test
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
+			$( $integrity_test )*
 		}
 
 		/// Can also be called using [`Call`].
@@ -2011,6 +2117,9 @@ macro_rules! __check_reserved_fn_name {
 	(offchain_worker $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!(@compile_error offchain_worker);
 	};
+	(integrity_test $( $rest:ident )*) => {
+		$crate::__check_reserved_fn_name!(@compile_error integrity_test);
+	};
 	($t:ident $( $rest:ident )*) => {
 		$crate::__check_reserved_fn_name!($( $rest )*);
 	};
@@ -2046,7 +2155,8 @@ mod tests {
 	use super::*;
 	use crate::weights::{DispatchInfo, DispatchClass, Pays};
 	use crate::traits::{
-		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade
+		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
+		IntegrityTest,
 	};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
@@ -2095,6 +2205,8 @@ mod tests {
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { 10 }
 			fn offchain_worker() {}
+			/// Some doc
+			fn integrity_test() { panic!("integrity_test") }
 		}
 	}
 
@@ -2280,5 +2392,11 @@ mod tests {
 	fn get_module_names() {
 		let module_names = OuterCall::get_module_names();
 		assert_eq!(["Test"], module_names);
+	}
+
+	#[test]
+	#[should_panic(expected = "integrity_test")]
+	fn integrity_test_should_work() {
+		<Module<TraitImpl> as IntegrityTest>::integrity_test();
 	}
 }
