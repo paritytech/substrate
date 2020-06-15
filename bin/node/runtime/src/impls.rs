@@ -18,11 +18,9 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use node_primitives::Balance;
-use sp_runtime::traits::{Convert, Saturating};
-use sp_runtime::{FixedPointNumber, Perquintill};
-use frame_support::traits::{OnUnbalanced, Currency, Get};
-use pallet_transaction_payment::Multiplier;
-use crate::{Balances, System, Authorship, MaximumBlockWeight, AvailableBlockRatio, NegativeImbalance};
+use sp_runtime::traits::Convert;
+use frame_support::traits::{OnUnbalanced, Currency};
+use crate::{Balances, Authorship, NegativeImbalance};
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {
@@ -47,109 +45,25 @@ impl Convert<u128, Balance> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> Balance { x * Self::factor() }
 }
 
-/// A struct to update the weight multiplier per block. It implements `Convert<Multiplier,
-/// Multiplier>`, meaning that it can convert the previous multiplier to the next one. This should
-/// be called on `on_finalize` of a block, prior to potentially cleaning the weight data from the
-/// system module.
-///
-/// given:
-/// 	s = previous block weight
-/// 	s'= ideal block weight
-/// 	m = maximum block weight
-///		diff = (s - s')/m
-///		v = 0.00001
-///		t1 = (v * diff)
-///		t2 = (v * diff)^2 / 2
-///	then:
-/// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
-///
-/// Where `(s', v)` must be given as the `Get` implementation of the `T` generic type.
-///
-/// note that `s'` is interpreted as a portion in the _normal transaction_ capacity of the block.
-/// For example, given `s' == 0.25` and `AvailableBlockRatio = 0.75`, then the target fullness is
-/// _0.25 of the normal capacity_ and _0.1875 of the entire block_.
-///
-/// This implementation implies the bound:
-/// - `v ≤ p / k * (s − s')`
-/// - or, solving for `p`: `p >= v * k * (s - s')`
-///
-/// where `p` is the amount of change over `k` blocks.
-///
-/// Hence:
-/// - in an fully congested chain: `p >= v * k * (1 - s')`.
-/// - in an empty chain: `p >= v * k * (-s')`.
-///
-/// For example, when all block are full, and 28800 blocks per day (default in `substrate-node`)
-/// and v == 0.00001, s' == 0.25, we'd have:
-///
-/// p >= 0.00001 * 28800 * 3 / 4
-/// p >= 0.216
-///
-/// Meaning that fees can change by around ~21% per day, given extreme congestion.
-///
-/// More info can be found at:
-/// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
-pub struct TargetedFeeAdjustment<S, V>(sp_std::marker::PhantomData<(S, V)>);
-
-const PARTS: i128 = 1_000_000_000;
-pub const MIN_MULTIPLIER: Multiplier = Multiplier::from_inner(PARTS);
-
-impl<S, V> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<S, V>
-	where S: Get<Perquintill>, V: Get<Multiplier>
-{
-	fn convert(previous: Multiplier) -> Multiplier {
-		// Defensive only. The multiplier in storage should always be at most positive. Nonetheless
-		// we recover here in case of errors, because any value below this would be stale and can
-		// never change.
-		let previous = previous.max(MIN_MULTIPLIER);
-
-		let max_weight = AvailableBlockRatio::get() * MaximumBlockWeight::get();
-		let block_weight = System::block_weight().total().min(max_weight);
-
-		let s = S::get();
-		let v = V::get();
-
-		let target_weight = (s * max_weight) as u128;
-		let block_weight = block_weight as u128;
-
-		// determines if the first_term is positive
-		let positive = block_weight >= target_weight;
-		let diff_abs = block_weight.max(target_weight) - block_weight.min(target_weight);
-		// safe, diff_abs cannot exceed u64.
-		let diff = Multiplier::saturating_from_rational(diff_abs, max_weight.max(1));
-		let diff_squared = diff.saturating_mul(diff);
-
-		let v_squared_2 = v.saturating_mul(v) / Multiplier::saturating_from_integer(2);
-
-		let first_term = v.saturating_mul(diff);
-		let second_term = v_squared_2.saturating_mul(diff_squared);
-
-		if positive {
-			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			previous.saturating_add(excess).max(MIN_MULTIPLIER)
-		} else {
-			// Defensive-only: first_term > second_term. Safe subtraction.
-			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
-			previous.saturating_sub(negative).max(MIN_MULTIPLIER)
-		}
-	}
-}
-
 #[cfg(test)]
-mod tests {
+mod multiplier_tests {
 	use super::*;
-	use sp_runtime::assert_eq_error_rate;
-	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
+	use sp_runtime::{assert_eq_error_rate, FixedPointNumber};
+	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
+
 	use crate::{
 		constants::{currency::*, time::*},
-		TransactionPayment,
-		TargetBlockFullness,
-		AdjustmentVariable,
+		TransactionPayment, MaximumBlockWeight, AvailableBlockRatio, Runtime, TargetBlockFullness,
+		AdjustmentVariable, System, MinimumMultiplier,
 	};
 	use frame_support::weights::{Weight, WeightToFeePolynomial};
 
 	fn max() -> Weight {
 		AvailableBlockRatio::get() * MaximumBlockWeight::get()
+	}
+
+	fn min_multiplier() -> Multiplier {
+		MinimumMultiplier::get()
 	}
 
 	fn target() -> Weight {
@@ -158,7 +72,12 @@ mod tests {
 
 	// update based on runtime impl.
 	fn runtime_multiplier_update(fm: Multiplier) -> Multiplier {
-		TargetedFeeAdjustment::<TargetBlockFullness, AdjustmentVariable>::convert(fm)
+		TargetedFeeAdjustment::<
+			Runtime,
+			TargetBlockFullness,
+			AdjustmentVariable,
+			MinimumMultiplier,
+		>::convert(fm)
 	}
 
 	// update based on reference impl.
@@ -166,7 +85,7 @@ mod tests {
 		let accuracy = Multiplier::accuracy() as f64;
 		let previous_float = previous.into_inner() as f64 / accuracy;
 		// bump if it is zero.
-		let previous_float = previous_float.max(PARTS as f64 / accuracy);
+		let previous_float = previous_float.max(min_multiplier().into_inner() as f64 / accuracy);
 
 		// maximum tx weight
 		let m = max() as f64;
@@ -222,8 +141,8 @@ mod tests {
 		// if the min is too small, then this will not change, and we are doomed forever.
 		// the weight is 1/10th bigger than target.
 		run_with_system_weight(target() * 101 / 100, || {
-			let next = runtime_multiplier_update(MIN_MULTIPLIER);
-			assert!(next > MIN_MULTIPLIER, "{:?} !>= {:?}", next, MIN_MULTIPLIER);
+			let next = runtime_multiplier_update(min_multiplier());
+			assert!(next > min_multiplier(), "{:?} !>= {:?}", next, min_multiplier());
 		})
 	}
 
@@ -231,8 +150,8 @@ mod tests {
 	fn multiplier_cannot_go_below_limit() {
 		// will not go any further below even if block is empty.
 		run_with_system_weight(0, || {
-			let next = runtime_multiplier_update(MIN_MULTIPLIER);
-			assert_eq!(next, MIN_MULTIPLIER);
+			let next = runtime_multiplier_update(min_multiplier());
+			assert_eq!(next, min_multiplier());
 		})
 	}
 
@@ -255,7 +174,7 @@ mod tests {
 			loop {
 				let next = runtime_multiplier_update(fm);
 				fm = next;
-				if fm == MIN_MULTIPLIER { break; }
+				if fm == min_multiplier() { break; }
 				iterations += 1;
 			}
 			assert!(iterations > 533_333);

@@ -26,7 +26,7 @@ use frame_support::{
 };
 use sp_core::{NeverNativeValue, traits::Externalities, storage::well_known_keys};
 use sp_runtime::{
-	ApplyExtrinsicResult, FixedI128, FixedPointNumber,
+	ApplyExtrinsicResult, FixedPointNumber,
 	traits::Hash as HashT,
 	transaction_validity::InvalidTransaction,
 };
@@ -35,7 +35,7 @@ use frame_system::{self, EventRecord, Phase};
 
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
-	System, TransactionPayment, Event, TransactionByteFee,
+	System, TransactionPayment, Event, TransactionByteFee, Multiplier,
 	constants::currency::*,
 };
 use node_primitives::{Balance, Hash};
@@ -53,7 +53,7 @@ use self::common::{*, sign};
 pub const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 
 /// Default transfer fee
-fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: FixedI128) -> Balance {
+fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Multiplier) -> Balance {
 	let length_fee = TransactionByteFee::get() * (extrinsic.encode().len() as Balance);
 
 	let base_weight = ExtrinsicBaseWeight::get();

@@ -44,7 +44,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	FixedI128, FixedPointNumber, FixedPointOperand,
+	FixedU128, FixedPointNumber, FixedPointOperand, Perquintill, RuntimeDebug,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
@@ -57,12 +57,124 @@ use sp_runtime::{
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
 /// Fee multiplier.
-pub type Multiplier = FixedI128;
+pub type Multiplier = FixedU128;
 
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+
+/// A struct to update the weight multiplier per block. It implements `Convert<Multiplier,
+/// Multiplier>`, meaning that it can convert the previous multiplier to the next one. This should
+/// be called on `on_finalize` of a block, prior to potentially cleaning the weight data from the
+/// system module.
+///
+/// given:
+/// 	s = previous block weight
+/// 	s'= ideal block weight
+/// 	m = maximum block weight
+///		diff = (s - s')/m
+///		v = 0.00001
+///		t1 = (v * diff)
+///		t2 = (v * diff)^2 / 2
+///	then:
+/// 	next_multiplier = prev_multiplier * (1 + t1 + t2)
+///
+/// Where `(s', v)` must be given as the `Get` implementation of the `T` generic type. Moreover, `M`
+/// must provide the minimum allowed value for the multiplier. Note that a runtime should ensure
+/// with tests that the combination of this `M` and `V` is not such that the multiplier can drop to
+/// zero and never recover.
+///
+/// note that `s'` is interpreted as a portion in the _normal transaction_ capacity of the block.
+/// For example, given `s' == 0.25` and `AvailableBlockRatio = 0.75`, then the target fullness is
+/// _0.25 of the normal capacity_ and _0.1875 of the entire block_.
+///
+/// This implementation implies the bound:
+/// - `v ≤ p / k * (s − s')`
+/// - or, solving for `p`: `p >= v * k * (s - s')`
+///
+/// where `p` is the amount of change over `k` blocks.
+///
+/// Hence:
+/// - in an fully congested chain: `p >= v * k * (1 - s')`.
+/// - in an empty chain: `p >= v * k * (-s')`.
+///
+/// For example, when all block are full, and 28800 blocks per day (default in `substrate-node`)
+/// and v == 0.00001, s' == 0.25, we'd have:
+///
+/// p >= 0.00001 * 28800 * 3 / 4
+/// p >= 0.216
+///
+/// Meaning that fees can change by around ~21% per day, given extreme congestion.
+///
+/// More info can be found at:
+/// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
+pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
+
+impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
+	where T: Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
+{
+	fn convert(previous: Multiplier) -> Multiplier {
+		// Defensive only. The multiplier in storage should always be at most positive. Nonetheless
+		// we recover here in case of errors, because any value below this would be stale and can
+		// never change.
+		let min_multiplier = M::get();
+		let previous = previous.max(min_multiplier);
+
+		// the computed ratio is only among the normal class.
+		let normal_max_weight =
+			<T as frame_system::Trait>::AvailableBlockRatio::get() *
+			<T as frame_system::Trait>::MaximumBlockWeight::get();
+		let normal_block_weight =
+			<frame_system::Module<T>>::block_weight()
+			.get(frame_support::weights::DispatchClass::Normal)
+			.min(normal_max_weight);
+
+		let s = S::get();
+		let v = V::get();
+
+		let target_weight = (s * normal_max_weight) as u128;
+		let block_weight = normal_block_weight as u128;
+
+		// determines if the first_term is positive
+		let positive = block_weight >= target_weight;
+		let diff_abs = block_weight.max(target_weight) - block_weight.min(target_weight);
+
+		// defensive only, a test case assures that the maximum weight diff can fit in Multiplier
+		// without any saturation.
+		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(1));
+		let diff_squared = diff.saturating_mul(diff);
+
+		let v_squared_2 = v.saturating_mul(v) / Multiplier::saturating_from_integer(2);
+
+		let first_term = v.saturating_mul(diff);
+		let second_term = v_squared_2.saturating_mul(diff_squared);
+
+		if positive {
+			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
+			previous.saturating_add(excess).max(min_multiplier)
+		} else {
+			// Defensive-only: first_term > second_term. Safe subtraction.
+			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
+			previous.saturating_sub(negative).max(min_multiplier)
+		}
+	}
+}
+
+/// Storage releases of the module.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	/// Original version of the module.
+	V1Ancient,
+	/// One that bumps the usage to FixedU128 from FixedI128.
+	V2,
+}
+
+impl Default for Releases {
+	fn default() -> Self {
+		Releases::V1Ancient
+	}
+}
 
 pub trait Trait: frame_system::Trait {
 	/// The currency type in which fees will be paid.
@@ -86,6 +198,8 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as TransactionPayment {
 		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::saturating_from_integer(1);
+
+		StorageVersion build(|_: &GenesisConfig| Releases::V2): Releases;
 	}
 }
 
@@ -102,6 +216,38 @@ decl_module! {
 			NextFeeMultiplier::mutate(|fm| {
 				*fm = T::FeeMultiplierUpdate::convert(*fm);
 			});
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			use frame_support::migration::take_storage_value;
+			use sp_std::convert::TryInto;
+			use frame_support::debug::native::error;
+
+			type OldMultiplier = sp_runtime::FixedI128;
+			type OldInner = <OldMultiplier as FixedPointNumber>::Inner;
+			type Inner = <Multiplier as FixedPointNumber>::Inner;
+
+			if let Releases::V1Ancient = StorageVersion::get() {
+				StorageVersion::put(Releases::V2);
+
+				if let Some(old) = take_storage_value::<OldMultiplier>(
+					b"TransactionPayment",
+					b"NextFeeMultiplier",
+					&[],
+				) {
+					let inner = old.into_inner();
+					let new_inner = <OldInner as TryInto<Inner>>::try_into(inner)
+						.unwrap_or_default();
+					let new = Multiplier::from_inner(new_inner);
+					NextFeeMultiplier::put(new);
+					T::DbWeight::get().reads_writes(1, 1)
+				} else {
+					error!("transaction-payment migration failed.");
+					0
+				}
+			} else {
+				0
+			}
 		}
 	}
 }
@@ -380,10 +526,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::{Header, TestXt},
-		traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup, Bounded},
 		Perbill,
 	};
 	use std::cell::RefCell;
+	use std::convert::TryInto;
 	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Trait>::Call =
@@ -573,6 +720,49 @@ mod tests {
 
 	fn default_post_info() -> PostDispatchInfo {
 		PostDispatchInfo { actual_weight: None, }
+	}
+
+	#[test]
+	fn multiplier_can_fit_all_weight() {
+		// given weight == u64, we build multipliers from `diff` of two weight values, which can at
+		// most be MaximumBlockWeight. Make sure that this can fit in a multiplier without loss.
+		assert!(
+			<Multiplier as Bounded>::max_value() >=
+			Multiplier::checked_from_integer(
+				<Runtime as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
+			).unwrap(),
+		);
+	}
+
+	#[test]
+	fn migration_to_v2_works() {
+		use sp_runtime::FixedI128;
+		use frame_support::traits::OnRuntimeUpgrade;
+
+		let with_old_multiplier = |mul: FixedI128, expected: FixedU128| {
+			ExtBuilder::default().build().execute_with(|| {
+				frame_support::migration::put_storage_value(
+					b"TransactionPayment",
+					b"NextFeeMultiplier",
+					&[],
+					mul,
+				);
+
+				assert_eq!(StorageVersion::get(), Releases::V1Ancient);
+
+				TransactionPayment::on_runtime_upgrade();
+
+				assert_eq!(StorageVersion::get(), Releases::V2);
+				assert_eq!(NextFeeMultiplier::get(), expected);
+			})
+		};
+
+		with_old_multiplier(FixedI128::saturating_from_integer(-1), FixedU128::zero());
+		with_old_multiplier(FixedI128::saturating_from_rational(-1, 2), FixedU128::zero());
+		with_old_multiplier(
+			FixedI128::saturating_from_rational(1, 2),
+			FixedU128::saturating_from_rational(1, 2),
+		);
 	}
 
 	#[test]

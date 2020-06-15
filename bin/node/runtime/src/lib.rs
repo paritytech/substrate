@@ -61,7 +61,7 @@ use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
-use pallet_transaction_payment::Multiplier;
+pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
@@ -78,7 +78,7 @@ pub use pallet_staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, Author, TargetedFeeAdjustment};
+use impls::{CurrencyToVoteHandler, Author};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -308,6 +308,7 @@ parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
 	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(1, 100_000);
+	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 1_000_000_000i128);
 }
 
 impl pallet_transaction_payment::Trait for Runtime {
@@ -315,7 +316,8 @@ impl pallet_transaction_payment::Trait for Runtime {
 	type OnTransactionPayment = DealWithFees;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = TargetedFeeAdjustment<TargetBlockFullness, AdjustmentVariable>;
+	type FeeMultiplierUpdate =
+		TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
 }
 
 parameter_types! {
