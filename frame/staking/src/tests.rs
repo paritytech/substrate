@@ -337,7 +337,7 @@ fn staking_should_work() {
 					claimed_rewards: vec![0],
 				})
 			);
-			// e.g. it cannot spend more than 500 that it has free from the total 2000
+			// e.g. it cannot reserve more than 500 that it has free from the total 2000
 			assert_noop!(
 				Balances::reserve(&3, 501),
 				BalancesError::<Test, _>::LiquidityRestrictions
@@ -783,10 +783,10 @@ fn cannot_reserve_staked_balance() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11).own, 1000);
-		// Confirm account 11 cannot transfer as a result
+		// Confirm account 11 cannot reserve as a result
 		assert_noop!(
 			Balances::reserve(&11, 1),
-			BalancesError::<Test, _>::LiquidityRestrictions
+			BalancesError::<Test, _>::LiquidityRestrictions,
 		);
 
 		// Give account 11 extra free balance

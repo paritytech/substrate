@@ -21,10 +21,10 @@ log = "0.4.8"
 structopt = "0.3.8"
 parking_lot = "0.10.0"
 
-sc-cli = { version = "0.8.0-rc3", path = "../../../client/cli" }
+sc-cli = { version = "0.8.0-rc3", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "2.0.0-rc3", path = "../../../primitives/core" }
-sc-executor = { version = "0.8.0-rc3", path = "../../../client/executor" }
-sc-service = { version = "0.8.0-rc3", path = "../../../client/service" }
+sc-executor = { version = "0.8.0-rc3", path = "../../../client/executor", features = ["wasmtime"] }
+sc-service = { version = "0.8.0-rc3", path = "../../../client/service", features = ["wasmtime"] }
 sp-inherents = { version = "2.0.0-rc3", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0-rc3", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-rc3", path = "../../../primitives/transaction-pool" }

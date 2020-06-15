@@ -425,9 +425,11 @@ impl<T> PaysFee<T> for (Weight, Pays) {
 ///   with the same argument list as the dispatched, wrapped in a tuple.
 /// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that
 ///   returns a `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
+#[deprecated = "Function arguments are available directly inside the annotation now."]
 pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
 // `WeighData` as a raw value
+#[allow(deprecated)]
 impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 	fn weigh_data(&self, _: Args) -> Weight {
 		self.0
@@ -435,6 +437,7 @@ impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 }
 
 // `WeighData` as a closure
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
 	WD : Fn(Args) -> Weight
 {
@@ -444,6 +447,7 @@ impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `ClassifyDispatch` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> {
 	fn classify_dispatch(&self, _: Args) -> DispatchClass {
 		self.1
@@ -451,6 +455,7 @@ impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> 
 }
 
 // `ClassifyDispatch` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 	CD : Fn(Args) -> DispatchClass
 {
@@ -460,6 +465,7 @@ impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `PaysFee` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 	fn pays_fee(&self, _: Args) -> Pays {
 		self.2
@@ -467,6 +473,7 @@ impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 }
 
 // `PaysFee` as a closure
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF> where
 	PF : Fn(Args) -> Pays
 {
@@ -663,10 +670,10 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, Pays::Yes)]
+			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
