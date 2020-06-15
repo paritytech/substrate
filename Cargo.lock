@@ -7713,6 +7713,7 @@ dependencies = [
 name = "sp-session"
 version = "2.0.0-rc3"
 dependencies = [
+ "frame-support",
  "parity-scale-codec",
  "sp-api",
  "sp-core",

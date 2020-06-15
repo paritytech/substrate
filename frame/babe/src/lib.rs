@@ -32,6 +32,7 @@ use frame_system::{ensure_none, ensure_signed};
 use sp_application_crypto::Public;
 use sp_runtime::traits::{Hash, IsMember, One, SaturatedConversion, Saturating};
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, KeyTypeId, Perbill};
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::{
 	offence::{Kind, Offence},
 	SessionIndex,
@@ -745,41 +746,6 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		} else {
 			Err(sp_inherents::Error::from("timestamp set in block doesn't match slot in seal").into())
 		}
-	}
-}
-
-/// A trait to get a session number the `MembershipProof` belongs to.
-pub trait GetSessionNumber {
-	fn session(&self) -> SessionIndex;
-}
-
-/// A trait to get the validator count at the session the `MembershipProof`
-/// belongs to.
-pub trait GetValidatorCount {
-	fn validator_count(&self) -> sp_session::ValidatorCount;
-}
-
-impl GetSessionNumber for frame_support::Void {
-	fn session(&self) -> SessionIndex {
-		Default::default()
-	}
-}
-
-impl GetValidatorCount for frame_support::Void {
-	fn validator_count(&self) -> sp_session::ValidatorCount {
-		Default::default()
-	}
-}
-
-impl GetSessionNumber for sp_session::MembershipProof {
-	fn session(&self) -> SessionIndex {
-		self.session
-	}
-}
-
-impl GetValidatorCount for sp_session::MembershipProof {
-	fn validator_count(&self) -> sp_session::ValidatorCount {
-		self.validator_count
 	}
 }
 

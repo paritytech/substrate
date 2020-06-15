@@ -49,6 +49,7 @@ use sp_runtime::{
 	traits::Zero,
 	DispatchResult, KeyTypeId,
 };
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
@@ -56,8 +57,8 @@ mod mock;
 mod tests;
 
 pub use equivocation::{
-	EquivocationHandler, GetSessionNumber, GetValidatorCount, GrandpaEquivocationOffence,
-	GrandpaOffence, GrandpaTimeSlot, HandleEquivocation, ValidateEquivocationReport,
+	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
+	HandleEquivocation, ValidateEquivocationReport,
 };
 
 pub trait Trait: frame_system::Trait {

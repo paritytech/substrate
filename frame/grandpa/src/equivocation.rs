@@ -50,6 +50,7 @@ use sp_runtime::{
 	},
 	DispatchResult, Perbill,
 };
+use sp_session::GetSessionNumber;
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
@@ -374,40 +375,5 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()
-	}
-}
-
-/// A trait to get a session number the `MembershipProof` belongs to.
-pub trait GetSessionNumber {
-	fn session(&self) -> SessionIndex;
-}
-
-/// A trait to get the validator count at the session the `MembershipProof`
-/// belongs to.
-pub trait GetValidatorCount {
-	fn validator_count(&self) -> sp_session::ValidatorCount;
-}
-
-impl GetSessionNumber for frame_support::Void {
-	fn session(&self) -> SessionIndex {
-		Default::default()
-	}
-}
-
-impl GetValidatorCount for frame_support::Void {
-	fn validator_count(&self) -> sp_session::ValidatorCount {
-		Default::default()
-	}
-}
-
-impl GetSessionNumber for sp_session::MembershipProof {
-	fn session(&self) -> SessionIndex {
-		self.session
-	}
-}
-
-impl GetValidatorCount for sp_session::MembershipProof {
-	fn validator_count(&self) -> sp_session::ValidatorCount {
-		self.validator_count
 	}
 }
