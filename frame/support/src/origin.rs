@@ -45,19 +45,23 @@ macro_rules! impl_outer_origin {
 			$( $rest_with_system:tt )*
 		}
 	) => {
-		$crate::impl_outer_origin!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			$system;
-			Modules { $( $rest_with_system )* };
-		);
+		$crate::paste::item! {
+			$crate::impl_outer_origin!(
+				$( #[$attr] )*;
+				$name;
+				[< $name Caller >];
+				$runtime;
+				$system;
+				Modules { $( $rest_with_system )* };
+			);
+		}
 	};
 
 	// Generic + Instance
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
+		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules {
@@ -69,6 +73,7 @@ macro_rules! impl_outer_origin {
 		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
+			$caller_name;
 			$runtime;
 			$system;
 			Modules { $( $( $rest_module )* )? };
@@ -80,6 +85,7 @@ macro_rules! impl_outer_origin {
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
+		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules {
@@ -91,6 +97,7 @@ macro_rules! impl_outer_origin {
 		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
+			$caller_name;
 			$runtime;
 			$system;
 			Modules { $( $rest_module )* };
@@ -102,6 +109,7 @@ macro_rules! impl_outer_origin {
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
+		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules {
@@ -113,6 +121,7 @@ macro_rules! impl_outer_origin {
 		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
+			$caller_name;
 			$runtime;
 			$system;
 			Modules { $( $( $rest_module )* )? };
@@ -124,6 +133,7 @@ macro_rules! impl_outer_origin {
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
+		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules {
@@ -135,6 +145,7 @@ macro_rules! impl_outer_origin {
 		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
+			$caller_name;
 			$runtime;
 			$system;
 			Modules { $( $( $rest_module )* )? };
@@ -146,16 +157,78 @@ macro_rules! impl_outer_origin {
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
+		$caller_name:ident;
 		$runtime:ident;
 		$system:ident;
 		Modules { };
 		$( $module:ident $( < $generic:ident > )? $( { $generic_instance:ident } )? ,)*
 	) => {
+		// WARNING: All instance must hold the filter `frame_system::Trait::BaseCallFilter`.
+		// One can use `OriginTrait::reset_filter` to do so.
+		#[derive(Clone)]
+		pub struct $name {
+			caller: $caller_name,
+			filter: $crate::sp_std::rc::Rc<Box<dyn Fn(&<$runtime as $system::Trait>::Call) -> bool>>,
+		}
+
+		#[cfg(not(feature = "std"))]
+		impl $crate::sp_std::fmt::Debug for $name {
+			fn fmt(
+				&self,
+				fmt: &mut $crate::sp_std::fmt::Formatter
+			) -> $crate::sp_std::result::Result<(), $crate::sp_std::fmt::Error> {
+				fmt.write_str("<wasm:stripped>")
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl $crate::sp_std::fmt::Debug for $name {
+			fn fmt(
+				&self,
+				fmt: &mut $crate::sp_std::fmt::Formatter
+			) -> $crate::sp_std::result::Result<(), $crate::sp_std::fmt::Error> {
+				fmt.debug_struct(stringify!($name))
+					.field("caller", &self.caller)
+					.field("filter", &"[function ptr]")
+					.finish()
+			}
+		}
+
+		impl $crate::traits::OriginTrait for $name {
+			type Call = <$runtime as $system::Trait>::Call;
+			type PalletsOrigin = $caller_name;
+
+			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
+				let f = self.filter.clone();
+
+				self.filter = $crate::sp_std::rc::Rc::new(Box::new(move |call| {
+					f(call) && filter(call)
+				}));
+			}
+
+			fn reset_filter(&mut self) {
+				let filter = <
+					<$runtime as $system::Trait>::BaseCallFilter
+					as $crate::traits::Filter<<$runtime as $system::Trait>::Call>
+				>::filter;
+
+				self.filter = $crate::sp_std::rc::Rc::new(Box::new(filter));
+			}
+
+			fn set_caller_from(&mut self, other: impl Into<Self>) {
+				self.caller = other.into().caller
+			}
+
+			fn filter_call(&self, call: &Self::Call) -> bool {
+				(self.filter)(call)
+			}
+		}
+
 		$crate::paste::item! {
 			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
-			pub enum $name {
+			pub enum $caller_name {
 				system($system::Origin<$runtime>),
 				$(
 					[< $module $( _ $generic_instance )? >]
@@ -168,20 +241,30 @@ macro_rules! impl_outer_origin {
 
 		#[allow(dead_code)]
 		impl $name {
-			pub const NONE: Self = $name::system($system::RawOrigin::None);
-			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
+			pub fn none() -> Self {
+				$system::RawOrigin::None.into()
+			}
+			pub fn root() -> Self {
+				$system::RawOrigin::Root.into()
+			}
 			pub fn signed(by: <$runtime as $system::Trait>::AccountId) -> Self {
-				$name::system($system::RawOrigin::Signed(by))
+				$system::RawOrigin::Signed(by).into()
 			}
 		}
+
 		impl From<$system::Origin<$runtime>> for $name {
 			fn from(x: $system::Origin<$runtime>) -> Self {
-				$name::system(x)
+				let mut o = $name {
+					caller: $caller_name::system(x),
+					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
+				};
+				$crate::traits::OriginTrait::reset_filter(&mut o);
+				o
 			}
 		}
 		impl Into<$crate::sp_std::result::Result<$system::Origin<$runtime>, $name>> for $name {
 			fn into(self) -> $crate::sp_std::result::Result<$system::Origin<$runtime>, Self> {
-				if let $name::system(l) = self {
+				if let $caller_name::system(l) = self.caller {
 					Ok(l)
 				} else {
 					Err(self)
@@ -197,7 +280,12 @@ macro_rules! impl_outer_origin {
 			$crate::paste::item! {
 				impl From<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > for $name {
 					fn from(x: $module::Origin < $( $generic )? $(, $module::$generic_instance )? >) -> Self {
-						$name::[< $module $( _ $generic_instance )? >](x)
+						let mut o = $name {
+							caller: $caller_name::[< $module $( _ $generic_instance )? >](x),
+							filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
+						};
+						$crate::traits::OriginTrait::reset_filter(&mut o);
+						o
 					}
 				}
 				impl Into<
@@ -210,7 +298,7 @@ macro_rules! impl_outer_origin {
 						$module::Origin < $( $generic )? $(, $module::$generic_instance )? >,
 						Self,
 					> {
-						if let $name::[< $module $( _ $generic_instance )? >](l) = self {
+						if let $caller_name::[< $module $( _ $generic_instance )? >](l) = self.caller {
 							Ok(l)
 						} else {
 							Err(self)
@@ -224,9 +312,12 @@ macro_rules! impl_outer_origin {
 
 #[cfg(test)]
 mod tests {
+	use crate::traits::{Filter, OriginTrait};
 	mod system {
 		pub trait Trait {
 			type AccountId;
+			type Call;
+			type BaseCallFilter;
 		}
 
 		#[derive(Clone, PartialEq, Eq, Debug)]
@@ -263,8 +354,17 @@ mod tests {
 	#[derive(Clone, PartialEq, Eq, Debug)]
 	pub struct TestRuntime;
 
+	pub struct BaseCallFilter;
+	impl Filter<u32> for BaseCallFilter {
+		fn filter(c: &u32) -> bool {
+			*c % 2 == 0
+		}
+	}
+
 	impl system::Trait for TestRuntime {
 		type AccountId = u32;
+		type Call = u32;
+		type BaseCallFilter = BaseCallFilter;
 	}
 
 	impl_outer_origin!(
@@ -298,4 +398,35 @@ mod tests {
 	impl_outer_origin!(
 		pub enum OriginEmpty for TestRuntime where system = system {}
 	);
+
+	#[test]
+	fn test_default_filter() {
+		assert_eq!(OriginWithSystem::root().filter_call(&0), true);
+		assert_eq!(OriginWithSystem::root().filter_call(&1), false);
+		assert_eq!(OriginWithSystem::none().filter_call(&0), true);
+		assert_eq!(OriginWithSystem::none().filter_call(&1), false);
+		assert_eq!(OriginWithSystem::signed(0).filter_call(&0), true);
+		assert_eq!(OriginWithSystem::signed(0).filter_call(&1), false);
+		assert_eq!(OriginWithSystem::from(Some(0)).filter_call(&0), true);
+		assert_eq!(OriginWithSystem::from(Some(0)).filter_call(&1), false);
+		assert_eq!(OriginWithSystem::from(None).filter_call(&0), true);
+		assert_eq!(OriginWithSystem::from(None).filter_call(&1), false);
+		assert_eq!(OriginWithSystem::from(origin_without_generic::Origin).filter_call(&0), true);
+		assert_eq!(OriginWithSystem::from(origin_without_generic::Origin).filter_call(&1), false);
+
+		let mut origin = OriginWithSystem::from(Some(0));
+
+		origin.add_filter(|c| *c % 2 == 1);
+		assert_eq!(origin.filter_call(&0), false);
+		assert_eq!(origin.filter_call(&1), false);
+
+		origin.set_caller_from(OriginWithSystem::root());
+		assert!(matches!(origin.caller, OriginWithSystemCaller::system(system::RawOrigin::Root)));
+		assert_eq!(origin.filter_call(&0), false);
+		assert_eq!(origin.filter_call(&1), false);
+
+		origin.reset_filter();
+		assert_eq!(origin.filter_call(&0), true);
+		assert_eq!(origin.filter_call(&1), false);
+	}
 }

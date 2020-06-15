@@ -29,7 +29,7 @@ pub use crate::weights::{
 	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
+pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -47,10 +47,9 @@ pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
 pub type DispatchErrorWithPostInfo =
 	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
 
-/// Serializable version of Dispatchable.
-/// This value can be used as a "function" in an extrinsic.
+/// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo> + Codec + Clone + PartialEq + Eq;
+	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -1005,6 +1004,7 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?> $module<$trait_instance $(, $instance)?>
 			where $( $other_where_bounds )*
 		{
+			/// Deposits an event using `frame_system::Module::deposit_event`.
 			$vis fn deposit_event(
 				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
 			) {
@@ -1402,6 +1402,8 @@ macro_rules! decl_module {
 					$error_type;
 					$from;
 					$(#[doc = $doc_attr])*
+					///
+					/// NOTE: Calling this function will bypass origin filters.
 					$fn_vis fn $fn_name (
 						$from $(, $param_name : $param )*
 					) $( -> $result )* { $( $impl )* }
@@ -1546,14 +1548,11 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Dispatchable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::UnfilteredDispatchable
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			type Info = $crate::weights::DispatchInfo;
-			type PostInfo = $crate::weights::PostDispatchInfo;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
+			fn dispatch_bypass_filter(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1574,17 +1573,6 @@ macro_rules! decl_module {
 			type Call = $call_type<$trait_instance $(, $instance)?>;
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
-			where $( $other_where_bounds )*
-		{
-			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance, PostInfo = $crate::weights::PostDispatchInfo>>(
-				d: D,
-				origin: D::Origin
-			) -> $crate::dispatch::DispatchResultWithPostInfo {
-				d.dispatch(origin)
-			}
-		}
 		$crate::__dispatch_impl_metadata! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
@@ -1685,6 +1673,20 @@ macro_rules! impl_outer_dispatch {
 				self,
 				origin: $origin,
 			) -> $crate::dispatch::DispatchResultWithPostInfo {
+				if !<Self::Origin as $crate::traits::OriginTrait>::filter_call(&origin, &self) {
+					return $crate::sp_std::result::Result::Err($crate::dispatch::DispatchError::BadOrigin.into())
+				}
+
+				$crate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+			}
+		}
+
+		impl $crate::traits::UnfilteredDispatchable for $call_type {
+			type Origin = $origin;
+			fn dispatch_bypass_filter(
+				self,
+				origin: $origin,
+			) -> $crate::dispatch::DispatchResultWithPostInfo {
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self
@@ -1696,6 +1698,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		}
+
 		$(
 			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
 				#[allow(unreachable_patterns)]
@@ -1731,7 +1734,8 @@ macro_rules! impl_outer_dispatch {
 			$origin
 			{
 				$( $generated )*
-				$call_type::$name(call) => call.dispatch($origin),
+				$call_type::$name(call) =>
+					$crate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, $origin),
 			}
 			$index + 1;
 			$( $rest ),*
@@ -2050,21 +2054,34 @@ mod tests {
 	};
 
 	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
-		type Origin;
 		type BlockNumber: Into<u32>;
-		type Call: From<Call<Self>>;
 	}
 
 	pub mod system {
-		use super::*;
-
 		pub trait Trait {
 			type AccountId;
+			type Call;
+			type BaseCallFilter;
+			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 		}
 
-		pub fn ensure_root<R>(_: R) -> DispatchResult {
-			Ok(())
+		#[derive(Clone, PartialEq, Eq, Debug)]
+		pub enum RawOrigin<AccountId> {
+			Root,
+			Signed(AccountId),
+			None,
 		}
+
+		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+				match s {
+					Some(who) => RawOrigin::Signed(who),
+					None => RawOrigin::None,
+				}
+			}
+		}
+
+		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
 	}
 
 	decl_module! {
@@ -2169,21 +2186,26 @@ mod tests {
 	pub struct TraitImpl {}
 
 	impl Trait for TraitImpl {
-		type Origin = u32;
 		type BlockNumber = u32;
-		type Call = OuterCall;
 	}
 
 	type Test = Module<TraitImpl>;
 
+	impl_outer_origin!{
+		pub enum OuterOrigin for TraitImpl where system = system {}
+	}
+
 	impl_outer_dispatch! {
-		pub enum OuterCall for TraitImpl where origin: u32 {
+		pub enum OuterCall for TraitImpl where origin: OuterOrigin {
 			self::Test,
 		}
 	}
 
 	impl system::Trait for TraitImpl {
+		type Origin = OuterOrigin;
 		type AccountId = u32;
+		type Call = OuterCall;
+		type BaseCallFilter = ();
 	}
 
 	#[test]

@@ -598,7 +598,7 @@ fn create_reserved_should_create_a_default_account_with_the_balance_given() {
 		let created_asset_id = 9;
 		let created_account_id = 0;
 
-		assert_ok!(GenericAsset::create_reserved(Origin::ROOT, created_asset_id, options));
+		assert_ok!(GenericAsset::create_reserved(Origin::root(), created_asset_id, options));
 
 		// Tests for side effects.
 		assert_eq!(<TotalIssuance<Test>>::get(created_asset_id), expected_total_issuance);
