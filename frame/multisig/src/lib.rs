@@ -281,12 +281,8 @@ decl_module! {
 
 			let id = Self::multi_account_id(&signatories, 1);
 
-			let (call_len, call_hash) = call.using_encoded(|c| (c.len(), blake2_256(&c)));
+			let call_len = call.using_encoded(|c| c.len());
 			let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
-
-			Self::deposit_event(RawEvent::MultisigExecuted(
-				who, Self::timepoint(), id, call_hash, result.map(|_| ()).map_err(|e| e.error)
-			));
 
 			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
 				.map(|actual_weight| weight_of::as_multi_threshold_1::<T>(

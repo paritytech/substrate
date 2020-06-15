@@ -20,7 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::{Module as System, RawOrigin, EventRecord};
+use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::{Bounded, Saturating};
 use core::convert::TryInto;
@@ -28,14 +28,6 @@ use core::convert::TryInto;
 use crate::Module as Multisig;
 
 const SEED: u32 = 0;
-
-fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
-	let events = System::<T>::events();
-	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
-}
 
 fn setup_multi<T: Trait>(s: u32, z: u32)
 	-> Result<(Vec<T::AccountId>, Vec<u8>), &'static str>
@@ -70,10 +62,7 @@ benchmarks! {
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 	}: _(RawOrigin::Signed(caller.clone()), signatories, Box::new(call))
 	verify {
-		let timepoint = Multisig::<T>::timepoint();
-		assert_last_event::<T>(
-			RawEvent::MultisigExecuted(caller, timepoint, multi_account_id, call_hash, Ok(())).into()
-		);
+		// If the benchmark resolves, then the call was dispatched successfully.
 	}
 
 	as_multi_create {
