@@ -23,7 +23,7 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event, dispatch::DispatchError, traits::Filter,
+	weights::Weight, impl_outer_event, dispatch::DispatchError, traits::Filter, storage,
 };
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -171,14 +171,19 @@ fn as_sub_filters() {
 #[test]
 fn batch_with_root_works() {
 	new_test_ext().execute_with(|| {
+		let k = b"a".to_vec();
+		let call = Call::System(frame_system::Call::set_storage(vec![(k.clone(), k.clone())]));
+		assert!(!TestBaseCallFilter::filter(&call));
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
 		assert_ok!(Utility::batch(Origin::root(), vec![
 			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
-			Call::Balances(BalancesCall::force_transfer(1, 2, 5))
+			Call::Balances(BalancesCall::force_transfer(1, 2, 5)),
+			call, // Check filters are correctly bypassed
 		]));
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
+		assert_eq!(storage::unhashed::get_raw(&k), Some(k));
 	});
 }
 

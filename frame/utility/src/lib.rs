@@ -56,10 +56,10 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_storage, Parameter};
 use frame_support::{
-	traits::OriginTrait,
+	traits::{OriginTrait, UnfilteredDispatchable},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays}, dispatch::PostDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
@@ -72,7 +72,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>>;
+		+ GetDispatchInfo + From<frame_system::Call<Self>>
+		+ UnfilteredDispatchable<Origin=Self::Origin>;
 }
 
 decl_storage! {
@@ -109,6 +110,9 @@ decl_module! {
 		///
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
+		/// If origin is root then call are dispatch without checking origin filter. (This includes
+		/// bypassing `frame_system::Trait::BaseCallFilter`).
+		///
 		/// # <weight>
 		/// - Base weight: 14.39 + .987 * c µs
 		/// - Plus the sum of the weights of the `calls`.
@@ -139,8 +143,13 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
+			let is_root = ensure_root(origin.clone()).is_ok();
 			for (index, call) in calls.into_iter().enumerate() {
-				let result = call.dispatch(origin.clone());
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					call.dispatch(origin.clone())
+				};
 				if let Err(e) = result {
 					Self::deposit_event(Event::BatchInterrupted(index as u32, e.error));
 					return Ok(());

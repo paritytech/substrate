@@ -22,7 +22,7 @@ use super::*;
 use frame_benchmarking::{benchmarks, account};
 use frame_support::{
 	IterableStorageMap,
-	traits::{Currency, Get, EnsureOrigin, OnInitialize, PalletDispatchable},
+	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};

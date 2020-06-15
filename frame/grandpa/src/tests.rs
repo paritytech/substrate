@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize, PalletDispatchable},
+	traits::{Currency, OnFinalize, UnfilteredDispatchable},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;

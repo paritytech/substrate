@@ -244,7 +244,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			$name { $( $code )* }: {
 				<
-					Call<T> as $crate::frame_support::traits::PalletDispatchable
+					Call<T> as $crate::frame_support::traits::UnfilteredDispatchable
 				>::dispatch_bypass_filter(Call::<T>::$dispatch($($arg),*), $origin.into())?;
 			}
 			verify $postcode
@@ -266,7 +266,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			$name { $( $code )* }: {
 				<
-					Call<T, I> as $crate::frame_support::traits::PalletDispatchable
+					Call<T, I> as $crate::frame_support::traits::UnfilteredDispatchable
 				>::dispatch_bypass_filter(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
 			}
 			verify $postcode

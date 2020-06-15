@@ -29,7 +29,7 @@ pub use crate::weights::{
 	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName, PalletDispatchable};
+pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -49,7 +49,7 @@ pub type DispatchErrorWithPostInfo =
 
 /// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: PalletDispatchable + Codec + Clone + PartialEq + Eq;
+	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -1548,7 +1548,7 @@ macro_rules! decl_module {
 			}
 		}
 
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletDispatchable
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::UnfilteredDispatchable
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			type Origin = $origin_type;
@@ -1673,11 +1673,20 @@ macro_rules! impl_outer_dispatch {
 				self,
 				origin: $origin,
 			) -> $crate::dispatch::DispatchResultWithPostInfo {
-				use $crate::traits::PalletDispatchable;
 				if !<Self::Origin as $crate::traits::OriginTrait>::filter_call(&origin, &self) {
 					return $crate::sp_std::result::Result::Err($crate::dispatch::DispatchError::BadOrigin.into())
 				}
 
+				$crate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+			}
+		}
+
+		impl $crate::traits::UnfilteredDispatchable for $call_type {
+			type Origin = $origin;
+			fn dispatch_bypass_filter(
+				self,
+				origin: $origin,
+			) -> $crate::dispatch::DispatchResultWithPostInfo {
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self
@@ -1689,6 +1698,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		}
+
 		$(
 			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
 				#[allow(unreachable_patterns)]
@@ -1724,7 +1734,8 @@ macro_rules! impl_outer_dispatch {
 			$origin
 			{
 				$( $generated )*
-				$call_type::$name(call) => call.dispatch_bypass_filter($origin),
+				$call_type::$name(call) =>
+					$crate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, $origin),
 			}
 			$index + 1;
 			$( $rest ),*

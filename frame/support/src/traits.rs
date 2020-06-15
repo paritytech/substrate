@@ -1547,15 +1547,17 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn successful_origin() -> OuterOrigin;
 }
 
-/// Trait implemented for pallet dispatchable type by `decl_module`.
-pub trait PalletDispatchable {
+/// Type that can be dispatched with an origin but without checking the origin filter.
+///
+/// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
+/// `construct_runtime` and `impl_outer_dispatch`.
+pub trait UnfilteredDispatchable {
 	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
-
 
 /// Methods available on `frame_system::Trait::Origin`.
 pub trait OriginTrait: Sized {
