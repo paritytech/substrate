@@ -166,7 +166,8 @@ impl ProfilingSubscriber {
 			TracingReceiver::Telemetry => Self::new_with_handler(
 				Box::new(TelemetryTraceHandler),
 				targets,
-				wasm_tracing),
+				wasm_tracing,
+			),
 		}
 	}
 
@@ -315,16 +316,22 @@ fn log_level(level: Level) -> log::Level {
 impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
-			log::log!(log_level(span_datum.level), "{}: {}, time: {}",
-				span_datum.target,
-				span_datum.name,
-				span_datum.overall_time.as_nanos());
-		} else {
-			log::log!(log_level(span_datum.level), "{}: {}, time: {}, {}",
+			log::log!(
+				log_level(span_datum.level), 
+				"{}: {}, time: {}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
-				span_datum.values);
+			);
+		} else {
+			log::log!(
+				log_level(span_datum.level),
+				"{}: {}, time: {}, {}",
+				span_datum.target,
+				span_datum.name,
+				span_datum.overall_time.as_nanos(),
+				span_datum.values,
+			);
 		}
 	}
 }
@@ -345,5 +352,4 @@ impl TraceHandler for TelemetryTraceHandler {
 		);
 	}
 }
-
 
