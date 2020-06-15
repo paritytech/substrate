@@ -295,8 +295,10 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		remote_proof: StorageProof,
 	) -> ClientResult<Vec<u8>> {
 		let block = BlockId::Hash(request.header.hash());
+		
 		let (runtime_code, heap_pages) = self.code_and_heap_pages_from_cache(&block)?;
 		let hash = H::hash(&runtime_code).encode();
+
 		let runtime_code = RuntimeCode {
 			code_fetcher: &WrappedRuntimeCode(Cow::Owned(runtime_code)),
 			heap_pages: Some(heap_pages),

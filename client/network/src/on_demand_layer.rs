@@ -200,8 +200,6 @@ where
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
-		let (sender, receiver) = oneshot::channel();
-
 		let (header, cache, backend, req_sender) = (
 			request.header.clone(),
 			self.cache.clone(),
@@ -209,12 +207,14 @@ where
 			self.requests_send.clone(),
 		);
 
-		let _ = self
-			.requests_send
-			.unbounded_send(light_client_handler::Request::Call { request, sender });
 
 		async move {
-			fetch_and_store_code(header, cache, backend, req_sender).await?;
+			fetch_and_store_code(header, cache, backend, req_sender.clone()).await?;
+
+			let (sender, receiver) = oneshot::channel();
+
+			let _ = req_sender
+				.unbounded_send(light_client_handler::Request::Call { request, sender });
 
 			let data = receiver.await
 				.map_err(|_| ClientError::RemoteFetchCancelled)??;
