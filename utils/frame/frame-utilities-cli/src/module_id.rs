@@ -107,16 +107,3 @@ impl CliConfiguration for ModuleIdCmd {
 		Some(&self.keystore_params)
 	}
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn module_id() {
-		let seed = "sdad1fb7";
-
-		let cmd = ModuleIdCmd::from_iter(&["moduleid", seed]);
-		assert!(cmd.run().is_ok());
-	}
-}
