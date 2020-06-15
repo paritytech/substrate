@@ -34,12 +34,14 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-pub use storage_proof::{Common as ProofCommon, ChildrenProofMap, simple::ProofNodes, compact::FullForMerge,
-	compact::Flat as CompactProof, simple::Full as SimpleFullProof, compact::Full as CompactFullProof,
-	query_plan::KnownQueryPlanAndValues as QueryPlanProof, Verifiable as VerifiableProof,
-	Input as ProofInput, InputKind as ProofInputKind, RecordMapTrieNodes, Recordable as RecordableProof, FullBackendProof,
-	BackendProof, Mergeable as MergeableProof, RecordBackend, multiple::FlatDefault as ProofFlatDefault,
-	multiple::StorageProofKind, multiple::MultipleStorageProof as TrieNodesStorageProof, simple::Flat as SimpleProof};
+pub use storage_proof::{Common as ProofCommon, ChildrenProofMap, simple::ProofNodes,
+	compact::FullForMerge, compact::Flat as CompactProof, simple::Full as SimpleFullProof,
+	compact::Full as CompactFullProof, query_plan::KnownQueryPlanAndValues as QueryPlanProof,
+	Verifiable as VerifiableProof, Input as ProofInput, InputKind as ProofInputKind,
+	RecordMapTrieNodes, Recordable as RecordableProof, FullBackendProof, BackendProof,
+	Mergeable as MergeableProof, RecordBackend, multiple::FlatDefault as ProofFlatDefault,
+	multiple::StorageProofKind, multiple::MultipleStorageProof as TrieNodesStorageProof,
+	simple::Flat as SimpleProof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,

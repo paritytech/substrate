@@ -56,9 +56,17 @@ pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor
 	pub proof: Option<backend::ProofRawFor<StateBackend, HashFor<Block>>>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBlock<Block, StateBackend> {
+impl<Block, StateBackend> BuiltBlock<Block, StateBackend>
+	where
+		Block: BlockT,
+		StateBackend: backend::StateBackend<HashFor<Block>>,
+{
 	/// Convert into the inner values.
-	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<backend::ProofRawFor<StateBackend, HashFor<Block>>>) {
+	pub fn into_inner(self) -> (
+		Block,
+		StorageChanges<StateBackend, Block>,
+		Option<backend::ProofRawFor<StateBackend, HashFor<Block>>>,
+	) {
 		(self.block, self.storage_changes, self.proof)
 	}
 }

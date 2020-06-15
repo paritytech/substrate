@@ -158,14 +158,21 @@ impl Input {
 	pub fn query_plan_with_values(
 		top_encoded_root: Vec<u8>,
 		top: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
-		children: impl Iterator<Item = (ChildInfo, Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>)>,
+		children: impl Iterator<Item = (
+			ChildInfo,
+			Vec<u8>,
+			impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
+		)>,
 		include_child_root: bool,
 	) -> Input {
 		let mut result = ChildrenProofMap::default();
 		let mut additional_roots = Vec::new();
 		for (child_info, encoded_root, key_values) in children {
 			if include_child_root {
-				additional_roots.push((child_info.prefixed_storage_key().into_inner(), Some(encoded_root.clone())));
+				additional_roots.push((
+					child_info.prefixed_storage_key().into_inner(),
+					Some(encoded_root.clone()),
+				));
 			}
 			result.insert(child_info.proof_info(), (encoded_root, key_values.collect()));
 		}

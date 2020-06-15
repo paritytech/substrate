@@ -207,7 +207,12 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		_child_info: &ChildInfo,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
 }

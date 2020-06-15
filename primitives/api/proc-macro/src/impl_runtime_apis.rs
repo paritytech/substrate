@@ -285,7 +285,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				self.recorder = Some(std::cell::RefCell::new(Default::default()));
 			}
 
-			fn extract_proof(&mut self) -> Option<#crate_::ProofRawFor<Self::StateBackend, #crate_::HashFor<Block>>> {
+			fn extract_proof(
+				&mut self,
+			) -> Option<#crate_::ProofRawFor<Self::StateBackend, #crate_::HashFor<Block>>> {
 				use #crate_::RecordableProof;
 				self.recorder
 					.take()
@@ -295,7 +297,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 						<
 							<Self::StateBackend as #crate_::StateBackend<#crate_::HashFor<Block>>>::RecProofBackend
 								as #crate_::RecProofBackend<#crate_::HashFor<Block>>
-						>::extract_proof_reg(
+						>::extract_proof_rec(
 							&recorder,
 							input,
 						).ok()

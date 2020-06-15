@@ -48,11 +48,13 @@ use std::marker::PhantomData;
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
 
 /// Extracts the proof for the given backend.
-pub type ProofFor<B, Block> = <RegProofForB<B, Block> as StateBackend<HashFor<Block>>>::StorageProof;
+pub type ProofFor<B, Block> = <
+	RecProofForB<B, Block> as StateBackend<HashFor<Block>>
+>::StorageProof;
 
-type RegProofForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::RecProofBackend;
+type RecProofForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::RecProofBackend;
 
-type RegProofForB<B, Block> = RegProofForSB<StateBackendFor<B, Block>, Block>;
+type RecProofForB<B, Block> = RecProofForSB<StateBackendFor<B, Block>, Block>;
 
 /// Extracts the transaction for the given state backend.
 pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Transaction;

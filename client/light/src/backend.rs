@@ -517,7 +517,8 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		previous_input: sp_state_machine::ProofInput,
 	) -> Option<Self::RecProofBackend> {
 		match self {
-			GenesisOrUnavailableState::Genesis(state) => state.from_previous_rec_state(previous, previous_input),
+			GenesisOrUnavailableState::Genesis(state) => state
+				.from_previous_rec_state(previous, previous_input),
 			GenesisOrUnavailableState::Unavailable => None,
 		}
 	}

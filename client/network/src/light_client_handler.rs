@@ -1330,7 +1330,8 @@ mod tests {
 		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
 		yamux
 	};
-	use sc_client_api::{ProofCommon, RemoteReadChildRequest, FetchChecker, SimpleProof as StorageProof};
+	use sc_client_api::{ProofCommon, RemoteReadChildRequest, FetchChecker,
+		SimpleProof as StorageProof};
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{

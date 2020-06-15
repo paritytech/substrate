@@ -259,7 +259,10 @@ impl<S, H, P> RecProofBackend<H> for ProvingBackend<S, H, P>
 		(recorder, input)
 	}
 
-	fn extract_proof_reg(recorder_state: &RecordBackendFor<P, H>, input: ProofInput) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>> {
+	fn extract_proof_rec(
+		recorder_state: &RecordBackendFor<P, H>,
+		input: ProofInput,
+	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>> {
 		<<Self::StorageProof as BackendProof<H>>::ProofRaw>::extract_proof(
 			recorder_state,
 			input,

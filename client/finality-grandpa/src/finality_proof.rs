@@ -70,7 +70,8 @@ pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 }
 
 /// Trait that combines `StorageProvider` and `ProofProvider`
-pub trait StorageAndProofProvider<Block, BE>: StorageProvider<Block, BE> + ProofProvider<Block, StorageProof> + Send + Sync
+pub trait StorageAndProofProvider<Block, BE>: StorageProvider<Block, BE>
+	+ ProofProvider<Block, StorageProof> + Send + Sync
 	where
 		Block: BlockT,
 		BE: Backend<Block> + Send + Sync,
@@ -85,9 +86,10 @@ impl<Block, BE, P> StorageAndProofProvider<Block, BE> for P
 {}
 
 /// Implementation of AuthoritySetForFinalityProver.
-impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn StorageAndProofProvider<Block, BE>>
+impl<BE, Block> AuthoritySetForFinalityProver<Block> for Arc<dyn StorageAndProofProvider<Block, BE>>
 	where
 		BE: Backend<Block> + Send + Sync + 'static,
+		Block: BlockT,
 {
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
 		let storage_key = StorageKey(GRANDPA_AUTHORITIES_KEY.to_vec());
@@ -874,8 +876,8 @@ pub(crate) mod tests {
 			&blockchain,
 			0,
 			auth3,
-			&ClosureAuthoritySetForFinalityChecker(
-				|hash, _header, proof: StorageProof| match proof.clone().into_nodes().into_iter().next().map(|x| x[0]) {
+			&ClosureAuthoritySetForFinalityChecker(|hash, _header, proof: StorageProof|
+				match proof.clone().into_nodes().into_iter().next().map(|x| x[0]) {
 					Some(50) => Ok(auth5.clone()),
 					Some(70) => Ok(auth7.clone()),
 					_ => unreachable!("no other proofs should be checked: {}", hash),

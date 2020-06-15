@@ -32,6 +32,7 @@ use sp_core::{NativeOrEncoded,offchain::storage::OffchainOverlayedChanges};
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
+use sp_state_machine::backend::ProofRawFor;
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -93,7 +94,9 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		proof_recorder: Option<&RefCell<ProofRecorder<<Self::Backend as crate::backend::Backend<B>>::State, B>>>,
+		proof_recorder: Option<&RefCell<
+			ProofRecorder<<Self::Backend as crate::backend::Backend<B>>::State, B>
+		>>,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -111,7 +114,7 @@ pub trait CallExecutor<B: BlockT> {
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
-	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRawFor<S, HashFor<B>>), sp_blockchain::Error> {
+	) -> Result<(Vec<u8>, ProofRawFor<S, HashFor<B>>), sp_blockchain::Error> {
 		let proof_state = state.as_proof_backend()
 			.ok_or_else(||
 				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
@@ -129,7 +132,7 @@ pub trait CallExecutor<B: BlockT> {
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
-	) -> Result<(Vec<u8>, sp_state_machine::backend::ProofRawFor<P, HashFor<B>>), sp_blockchain::Error>;
+	) -> Result<(Vec<u8>, ProofRawFor<P, HashFor<B>>), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.
 	fn native_runtime_version(&self) -> Option<&NativeVersion>;

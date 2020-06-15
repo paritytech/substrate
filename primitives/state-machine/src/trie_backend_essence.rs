@@ -32,10 +32,12 @@ use sp_core::storage::{ChildInfo, ChildrenMap};
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
 
+type Result<T> = std::result::Result<T, String>;
+
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
 /// Patricia trie-based pairs storage essence.
@@ -68,7 +70,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Get trie backend for child trie. 
-	pub fn child_backend<'a>(&'a self, child_info: &'a ChildInfo) -> ChildTrieBackendEssence<'a, S, H> {
+	pub fn child_backend<'a>(
+		&'a self,
+		child_info: &'a ChildInfo,
+	) -> ChildTrieBackendEssence<'a, S, H> {
 		ChildTrieBackendEssence{
 			essence: self,
 			child_info: Some(child_info),
@@ -121,12 +126,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
-	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, String> {
+	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>> {
 		self.next_storage_key_from_root(&self.root, None, key)
 	}
 
 	/// Access the root of the child storage in its parent trie
-	pub(crate) fn child_root_encoded(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>, String> {
+	pub(crate) fn child_root_encoded(
+		&self,
+		child_info: &ChildInfo,
+	) -> Result<Option<StorageValue>> {
 		if let Some(cache) = self.register_roots.as_ref() {
 			if let Some(result) = cache.read().get(child_info) {
 				return Ok(result.clone());
@@ -143,7 +151,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>, String> {
+	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>> {
 		if let Some(cache) = self.register_roots.as_ref() {
 			if let Some(root) = cache.read().get(child_info) {
 				let root = root.as_ref()
@@ -169,7 +177,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<StorageKey>, String> {
+	) -> Result<Option<StorageKey>> {
 		let hash = match self.child_root(child_info)? {
 			Some(child_root) => child_root,
 			None => return Ok(None),
@@ -184,7 +192,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		root: &H::Out,
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
-	) -> Result<Option<StorageKey>, String> {
+	) -> Result<Option<StorageKey>> {
 		let dyn_eph: &dyn hash_db::HashDBRef<_, _>;
 		let keyspace_eph;
 		let top_backend;
@@ -228,7 +236,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Get the value of storage at given key.
-	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, String> {
+	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		read_trie_value::<Layout<H>, _>(&self.top_backend(), &self.root, key).map_err(map_e)
@@ -239,14 +247,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<StorageValue>, String> {
+	) -> Result<Option<StorageValue>> {
 		let root = self.child_root_encoded(child_info)?
 			.unwrap_or(empty_child_trie_root::<Layout<H>>().encode());
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), &self.child_backend(child_info), &root, key)
-			.map_err(map_e)
+		read_child_trie_value::<Layout<H>, _>(
+			child_info.keyspace(),
+			&self.child_backend(child_info),
+			&root,
+			key,
+		).map_err(map_e)
 	}
 
 	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
@@ -304,7 +316,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		mut f: F,
 		child_info: Option<&ChildInfo>,
 	) {
-		let mut iter = move |db| -> Result<(), Box<TrieError<H::Out>>> {
+		let mut iter = move |db| -> std::result::Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
 
 			for x in TrieDBIterator::new_prefixed(&trie, prefix)? {
@@ -423,13 +435,13 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.
-	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
+	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
 impl<'a, H: Hasher, S: TrieBackendStorage<H>> TrieBackendStorage<H> for &'a S {
 	type Overlay = S::Overlay;
 
-	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		<S as TrieBackendStorage<H>>::get(self, child_info, key, prefix)
 	}
 }
@@ -438,7 +450,7 @@ impl<'a, H: Hasher, S: TrieBackendStorage<H>> TrieBackendStorage<H> for &'a S {
 impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Storage::<H>::get(self.deref(), key, prefix)
 	}
 }
@@ -447,7 +459,7 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 	type Overlay = PrefixedMemoryDB<H>;
 
-	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
@@ -455,7 +467,7 @@ impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
@@ -468,7 +480,7 @@ impl<H: Hasher> TrieBackendStorage<H> for ChildrenProofMap<MemoryDB<H>> {
 		child_info: &ChildInfo,
 		key: &H::Out,
 		prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
+	) -> Result<Option<DBValue>> {
 		let child_info_proof = child_info.proof_info();
 		Ok(self.deref().get(&child_info_proof).and_then(|s|
 			hash_db::HashDB::get(s, key, prefix)

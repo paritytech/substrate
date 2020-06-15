@@ -531,7 +531,11 @@ pub struct ProofRecorder<Backend: StateBackend<HashFor<Block>>, Block: BlockT> {
 }
 
 #[cfg(feature = "std")]
-impl<Backend: StateBackend<HashFor<Block>>, Block: BlockT> Default for ProofRecorder<Backend, Block> {
+impl<Backend, Block> Default for ProofRecorder<Backend, Block>
+	where
+		Backend: StateBackend<HashFor<Block>>,
+		Block: BlockT,
+{
 	fn default() -> Self {
 		ProofRecorder {
 			recorder: Default::default(),

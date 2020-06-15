@@ -140,7 +140,9 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: Option<&RefCell<ProofRecorder<<Self::Backend as backend::Backend<Block>>::State, Block>>>,
+		recorder: Option<&RefCell<
+			ProofRecorder<<Self::Backend as backend::Backend<Block>>::State, Block>
+		>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -174,9 +176,8 @@ where
 				let backend = state.from_previous_rec_state(
 					std::mem::replace(recorder, Default::default()),
 					std::mem::replace(input, Default::default()),
-				).ok_or_else(||
-					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
-				)?;
+				).ok_or_else(|| Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
+						as Box<dyn sp_state_machine::Error>)?;
 
 				let result = {
 					let mut state_machine = StateMachine::new(

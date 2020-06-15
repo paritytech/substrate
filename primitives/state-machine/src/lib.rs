@@ -1324,7 +1324,10 @@ mod tests {
 			std::iter::empty::<(_, _, std::iter::Empty<_>)>(),
 			true,
 		);
-		let remote_proof = <QueryPlanProof as sp_trie::RecordableProof<_>>::extract_proof(&recorder, input).unwrap();
+		let remote_proof = <QueryPlanProof as sp_trie::RecordableProof<_>>::extract_proof(
+			&recorder,
+			input,
+		).unwrap();
 
 		let input_check = ProofInput::query_plan_with_values(
 			remote_root.encode(),
@@ -1348,15 +1351,26 @@ mod tests {
 			let input = ProofInput::query_plan(
 				remote_root.encode(),
 				vec![b"value2".to_vec()].into_iter(),
-				vec![(child_info.clone(), remote_root_child.encode(), vec![b"value3".to_vec()].into_iter())].into_iter(),
+				vec![(
+					child_info.clone(),
+					remote_root_child.encode(),
+					vec![b"value3".to_vec()].into_iter(),
+				)].into_iter(),
 				include_roots,
 			);
-			let remote_proof = <QueryPlanProof as sp_trie::RecordableProof<_>>::extract_proof(&recorder, input).unwrap();
+			let remote_proof = <QueryPlanProof as sp_trie::RecordableProof<_>>::extract_proof(
+				&recorder,
+				input,
+			).unwrap();
 
 			let input_check = ProofInput::query_plan_with_values(
 				remote_root.encode(),
 				vec![(b"value2".to_vec(), Some(vec![24u8]))].into_iter(),
-				vec![(child_info.clone(), remote_root_child.encode(), vec![(b"value3".to_vec(), Some(vec![142u8]))].into_iter())].into_iter(),
+				vec![(
+					child_info.clone(),
+					remote_root_child.encode(),
+					vec![(b"value3".to_vec(), Some(vec![142u8]))].into_iter(),
+				)].into_iter(),
 				include_roots,
 			);
 		
@@ -1365,7 +1379,11 @@ mod tests {
 			let input_check = ProofInput::query_plan_with_values(
 				remote_root.encode(),
 				vec![(b"value2".to_vec(), Some(vec![24u8]))].into_iter(),
-				vec![(child_info.clone(), remote_root_child.encode(), vec![(b"value3".to_vec(), Some(vec![142u8]))].into_iter())].into_iter(),
+				vec![(
+					child_info.clone(),
+					remote_root_child.encode(),
+					vec![(b"value3".to_vec(), Some(vec![142u8]))].into_iter(),
+				)].into_iter(),
 				!include_roots, // not including child root in parent breaks extract
 			);
 		
@@ -1396,12 +1414,20 @@ mod tests {
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 
 		// check proof locally
-		let local_result1 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_proof_check::<
+			InMemoryProofCheckBackend<BlakeTwo256, P>,
+			BlakeTwo256,
+			_,
+		>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
-		let local_result2 = read_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_proof_check::<
+			InMemoryProofCheckBackend<BlakeTwo256, P>,
+			BlakeTwo256,
+			_,
+		>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[&[0xff]],
@@ -1421,13 +1447,21 @@ mod tests {
 			child_info,
 			&[b"value3"],
 		).unwrap();
-		let local_result1 = read_child_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_child_proof_check::<
+			InMemoryProofCheckBackend<BlakeTwo256, P>,
+			BlakeTwo256,
+			_,
+		>(
 			remote_root,
 			remote_proof.clone().into(),
 			child_info,
 			&[b"value3"],
 		).unwrap();
-		let local_result2 = read_child_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_child_proof_check::<
+			InMemoryProofCheckBackend<BlakeTwo256, P>,
+			BlakeTwo256,
+			_,
+		>(
 			remote_root,
 			remote_proof.clone().into(),
 			child_info,
@@ -1461,12 +1495,20 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
  		// check proof locally
-		let local_result1 = read_proof_check::<InMemoryFullProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result1 = read_proof_check::<
+			InMemoryFullProofCheckBackend<BlakeTwo256, P>,
+			BlakeTwo256,
+			_,
+		>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
-		let local_result2 = read_proof_check::<InMemoryFullProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, _>(
+		let local_result2 = read_proof_check::<
+			InMemoryFullProofCheckBackend<BlakeTwo256, P>,
+			BlakeTwo256,
+			_,
+		>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[&[0xff]],

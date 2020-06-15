@@ -259,7 +259,7 @@ pub trait RecProofBackend<H>: crate::backend::Backend<H>
 	fn extract_recorder(self) -> (RecordBackendFor<Self, H>, ProofInput);
 
 	/// Extract from the state and input.
-	fn extract_proof_reg(
+	fn extract_proof_rec(
 		recorder_state: &RecordBackendFor<Self, H>,
 		input: ProofInput,
 	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
@@ -362,7 +362,11 @@ impl<'a, T, H> Backend<H> for &'a T
 		(*self).usage_info()
 	}
 
-	fn from_previous_rec_state(self, _previous: RecordBackendFor<Self, H>, _input: ProofInput) -> Option<Self::RecProofBackend> {
+	fn from_previous_rec_state(
+		self,
+		_previous: RecordBackendFor<Self, H>,
+		_input: ProofInput,
+	) -> Option<Self::RecProofBackend> {
 		// cannot move out of reference, consider cloning when needed.
 		None
 	}
