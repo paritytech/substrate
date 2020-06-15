@@ -50,8 +50,8 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
-	weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+use frame_support::{traits::{Get, ReservableCurrency, Currency},
+	weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_NANOS, WEIGHT_PER_MICROS}},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
@@ -89,9 +89,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
-
-	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: FilterStack<<Self as Trait>::Call>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -155,8 +152,6 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
-		/// A call with a `false` `IsCallable` filter was attempted.
-		Uncallable,
 		/// The maximum weight information provided was too low.
 		WeightTooLow,
 	}
@@ -181,8 +176,6 @@ decl_event! {
 		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account, fourth is hash of the call.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
-		/// A call with a `false` IsCallable filter was attempted.
-		Uncallable(u32),
 	}
 }
 
@@ -288,11 +281,6 @@ decl_module! {
 
 			let id = Self::multi_account_id(&signatories, 1);
 
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-
 			let (call_len, call_hash) = call.using_encoded(|c| (c.len(), blake2_256(&c)));
 			let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 
@@ -323,8 +311,7 @@ decl_module! {
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
-		/// If there are enough, then dispatch the call. Calls must each fulfil the `IsCallable`
-		/// filter.
+		/// If there are enough, then dispatch the call.
 		///
 		/// Payment: `DepositBase` will be reserved if this is the first approval, plus
 		/// `threshold` times `DepositFactor`. It is returned once this dispatch happens or
@@ -567,10 +554,6 @@ impl<T: Trait> Module<T> {
 			if let Some(call) = maybe_approved_call {
 				// verify weight
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
-				// We're now executing as a freshly authenticated new account, so the previous call
-				// restrictions no longer apply.
-				let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-				ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
 
 				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
