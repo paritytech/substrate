@@ -53,50 +53,6 @@ impl<T: Trait> ValidatorSet<T> {
 			.map(|validator_set| Self { validator_set })
 	}
 
-
-	/// Attempt to prune anything that is older than `first_to_keep` session index.
-	///
-	/// Due to re-organisation it could be that the `first_to_keep` might be less
-	/// than the stored one, in which case the conservative choice is made to keep records
-	/// up to the one that is the lesser.
-	fn prune_older_than(first_to_keep: SessionIndex) {
-		let derived_key = shared::LAST_PRUNE.to_vec();
-		let entry = StorageValueRef::persistent(derived_key.as_ref());
-		match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
-			match current {
-				Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
-				// do not move the cursor, if the new one would be behind ours
-				Some(Some(current)) => Ok(current),
-				None => Ok(first_to_keep),
-				// if the storage contains undecodable data, overwrite with current anyways
-				// which might leak some entries being never purged, but that is acceptable
-				// in this context
-				Some(None) => Ok(first_to_keep),
-			}
-		}) {
-			Ok(Ok(new_value)) => {
-				// on a re-org this is not necessarily true, with the above they might be equal
-				if new_value < first_to_keep {
-					for session_index in new_value..first_to_keep {
-						let derived_key = shared::derive_key(shared::PREFIX, session_index);
-						let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
-					}
-				}
-			}
-			Ok(Err(_)) => {} // failed to store the value calculated with the given closure
-			Err(_) => {}     // failed to calculate the value to store with the given closure
-		}
-	}
-
-	/// Keep the newest `n` items, and prune all items older than that.
-	pub fn keep_newest(n_to_keep: usize) {
-		let session_index = <SessionModule<T>>::current_index();
-		let n_to_keep = n_to_keep as SessionIndex;
-		if n_to_keep < session_index {
-			Self::prune_older_than(session_index - n_to_keep)
-		}
-	}
-
 	#[inline]
 	fn len(&self) -> usize {
 		self.validator_set.len()
@@ -133,6 +89,50 @@ pub fn prove_session_membership<T: Trait, D: AsRef<[u8]>>(
 			trie_nodes,
 			validator_count: count,
 		})
+}
+
+
+/// Attempt to prune anything that is older than `first_to_keep` session index.
+///
+/// Due to re-organisation it could be that the `first_to_keep` might be less
+/// than the stored one, in which case the conservative choice is made to keep records
+/// up to the one that is the lesser.
+pub fn prune_older_than(first_to_keep: SessionIndex) {
+	let derived_key = shared::LAST_PRUNE.to_vec();
+	let entry = StorageValueRef::persistent(derived_key.as_ref());
+	match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
+		match current {
+			Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
+			// do not move the cursor, if the new one would be behind ours
+			Some(Some(current)) => Ok(current),
+			None => Ok(first_to_keep),
+			// if the storage contains undecodable data, overwrite with current anyways
+			// which might leak some entries being never purged, but that is acceptable
+			// in this context
+			Some(None) => Ok(first_to_keep),
+		}
+	}) {
+		Ok(Ok(new_value)) => {
+			// on a re-org this is not necessarily true, with the above they might be equal
+			if new_value < first_to_keep {
+				for session_index in new_value..first_to_keep {
+					let derived_key = shared::derive_key(shared::PREFIX, session_index);
+					let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
+				}
+			}
+		}
+		Ok(Err(_)) => {} // failed to store the value calculated with the given closure
+		Err(_) => {}     // failed to calculate the value to store with the given closure
+	}
+}
+
+/// Keep the newest `n` items, and prune all items older than that.
+pub fn keep_newest(n_to_keep: usize) {
+	let session_index = <SessionModule<T>>::current_index();
+	let n_to_keep = n_to_keep as SessionIndex;
+	if n_to_keep < session_index {
+		Self::prune_older_than(session_index - n_to_keep)
+	}
 }
 
 #[cfg(test)]
