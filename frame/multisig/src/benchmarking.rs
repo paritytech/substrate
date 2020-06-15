@@ -183,7 +183,15 @@ benchmarks! {
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
-		Multisig::<T>::as_multi(RawOrigin::Signed(caller.clone()).into(), s as u16, signatories, None, call.clone(), false, 0)?;
+		Multisig::<T>::as_multi(
+			RawOrigin::Signed(caller.clone()).into(),
+			s as u16,
+			signatories,
+			None,
+			call.clone(),
+			false,
+			0
+		)?;
 		let caller2 = signatories2.remove(0);
 	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash, 0)
 	verify {
