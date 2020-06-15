@@ -30,11 +30,11 @@ pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
+pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_std;
 #[doc(hidden)]
 pub use codec;
-use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -363,11 +363,6 @@ macro_rules! assert_ok {
 		assert_eq!($x, Ok($y));
 	}
 }
-
-/// The void type - it cannot exist.
-// Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
-pub enum Void {}
 
 #[cfg(feature = "std")]
 #[doc(hidden)]

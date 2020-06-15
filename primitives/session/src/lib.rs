@@ -82,13 +82,13 @@ pub trait GetValidatorCount {
 	fn validator_count(&self) -> ValidatorCount;
 }
 
-impl GetSessionNumber for frame_support::Void {
+impl GetSessionNumber for sp_core::Void {
 	fn session(&self) -> SessionIndex {
 		Default::default()
 	}
 }
 
-impl GetValidatorCount for frame_support::Void {
+impl GetValidatorCount for sp_core::Void {
 	fn validator_count(&self) -> ValidatorCount {
 		Default::default()
 	}
