@@ -417,7 +417,7 @@ fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
 			use super::*;
 
 			#[test]
-			pub fn test() {
+			pub fn runtime_integrity_tests() {
 				<AllModules as #scrate::traits::IntegrityTest>::integrity_test();
 			}
 		}
