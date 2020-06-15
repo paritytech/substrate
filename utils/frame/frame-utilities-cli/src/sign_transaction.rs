@@ -107,7 +107,7 @@ fn print_ext<Pair, P>(
 	pass: Option<&str>,
 	call: CallFor<P>,
 	nonce: IndexFor<P>,
-	hash: P::Hash
+	hash: P::Hash,
 ) -> Result<(), Error>
 	where
 		Pair: sp_core::Pair,

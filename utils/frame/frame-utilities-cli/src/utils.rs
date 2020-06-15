@@ -29,7 +29,7 @@ use sp_runtime::generic::Era;
 /// create an extrinsic for the runtime.
 pub fn create_extrinsic_for<Pair, P, Call>(
 	call: Call,
-	nonce:  IndexFor<P>,
+	nonce: IndexFor<P>,
 	pair: Pair,
 	hash: P::Hash,
 ) -> Result<

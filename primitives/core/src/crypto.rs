@@ -377,8 +377,8 @@ macro_rules! ss58_address_format {
 
 		impl Ss58AddressFormat {
 			/// names of all address formats
-			pub fn all_names() -> [&'static str; 0 $(+ { let _ = $number; 1})*] {
-				[
+			pub fn all_names() -> &[&'static str] {
+				&[
 					$($name),*,
 				]
 			}

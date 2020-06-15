@@ -631,13 +631,13 @@ parameter_types! {
 #[derive(Default)]
 pub struct ExtrasParams {
 	era: Option<Era>,
-	index: Option<Index>,
+	index: Option<Runtime::Index>,
 	tip: u128,
-	prior_block_hash: Option<Hash>,
+	prior_block_hash: Option<Runtime::Hash>,
 }
 
 impl SystemExtraParams<Runtime> for ExtrasParams {
-	fn set_nonce(&mut self, index: Index) {
+	fn set_nonce(&mut self, index: Runtime::Index) {
 		self.index = Some(index);
 	}
 
@@ -645,7 +645,7 @@ impl SystemExtraParams<Runtime> for ExtrasParams {
 		self.era = Some(era);
 	}
 
-	fn set_prior_block_hash(&mut self, hash: Hash) {
+	fn set_prior_block_hash(&mut self, hash: Runtime::Hash) {
 		self.prior_block_hash = Some(hash);
 	}
 }
