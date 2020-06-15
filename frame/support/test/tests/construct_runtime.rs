@@ -22,15 +22,16 @@
 #![recursion_limit="128"]
 
 use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
-use core::sync::atomic::{AtomicU8, Ordering};
 use sp_core::{H256, sr25519};
-
+use sp_std::cell::RefCell;
 
 mod system;
 
 pub trait Currency {}
 
-static INTEGRITY_TEST_EXEC: AtomicU8 = AtomicU8::new(0);
+thread_local! {
+    pub static INTEGRITY_TEST_EXEC: RefCell<u32> = RefCell::new(0);
+}
 
 mod module1 {
 	use super::*;
@@ -74,7 +75,7 @@ mod module2 {
 			}
 
 			fn integrity_test() {
-				INTEGRITY_TEST_EXEC.fetch_add(1, Ordering::Relaxed);
+				INTEGRITY_TEST_EXEC.with(|i| *i.borrow_mut() += 1);
 			}
 		}
 	}
@@ -151,8 +152,6 @@ fn check_module2_error_type() {
 
 #[test]
 fn integrity_test_works() {
-	// If __construct_runtime_integrity_test::test is executed then the atomic value will be
-	// modified two times in the test suite.
-	__construct_runtime_integrity_test::test();
-	assert!(INTEGRITY_TEST_EXEC.load(Ordering::Relaxed) > 1);
+	__construct_runtime_integrity_test::runtime_integrity_tests();
+	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 1);
 }
