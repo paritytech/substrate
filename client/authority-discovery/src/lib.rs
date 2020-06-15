@@ -23,7 +23,7 @@
 //! authority:
 //!
 //!
-//! 1. **Makes itself discoverable**
+//! 1. **Makes itself discoverable** (publishing)
 //!
 //!    1. Retrieves its external addresses (including peer id) or the ones of its sentry nodes.
 //!
@@ -32,7 +32,7 @@
 //!    3. Puts the signature and the addresses on the libp2p Kademlia DHT.
 //!
 //!
-//! 2. **Discovers other authorities**
+//! 2. **Discovers other authorities** (querying)
 //!
 //!    1. Retrieves the current set of authorities.
 //!
@@ -104,6 +104,15 @@ pub enum Role {
 	Sentry,
 }
 
+enum Querying {
+	Enabled {
+		/// Interval on which to query for addresses of other authorities.
+		interval: Interval,
+		addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
+	},
+	Disabled,
+}
+
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -128,10 +137,8 @@ where
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
-	/// Interval on which to query for addresses of other authorities.
-	query_interval: Interval,
 
-	addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
+	querying: Querying,
 
 	metrics: Option<Metrics>,
 
@@ -159,6 +166,7 @@ where
 		sentry_nodes: Vec<MultiaddrWithPeerId>,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 		role: Role,
+		discover_authorities: bool,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
@@ -170,21 +178,26 @@ where
 			Duration::from_secs(12 * 60 * 60),
 		);
 
-		// External addresses of other authorities can change at any given point in time. The
-		// interval on which to query for external addresses of other authorities is a trade off
-		// between efficiency and performance.
-		let query_interval = interval_at(
-			Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
-			Duration::from_secs(10 * 60),
-		);
+		let querying = if discover_authorities {
+			Querying::Enabled {
+				// External addresses of other authorities can change at any given point in time.
+				// The interval on which to query for external addresses of other authorities is a
+				// trade off between efficiency and performance.
+				interval: interval_at(
+					Instant::now() + LIBP2P_KADEMLIA_BOOTSTRAP_TIME,
+					Duration::from_secs(10 * 60),
+				),
+				addr_cache: AddrCache::new(),
+			}
+		} else {
+			Querying::Disabled
+		};
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
 			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
 			None
 		};
-
-		let addr_cache = AddrCache::new();
 
 		let metrics = match prometheus_registry {
 			Some(registry) => {
@@ -205,8 +218,7 @@ where
 			sentry_nodes,
 			dht_event_rx,
 			publish_interval,
-			query_interval,
-			addr_cache,
+			querying,
 			role,
 			metrics,
 			phantom: PhantomData,
@@ -393,6 +405,13 @@ where
 		&mut self,
 		values: Vec<(libp2p::kad::record::Key, Vec<u8>)>,
 	) -> Result<()> {
+		let addr_cache = match self.querying {
+			Querying::Enabled { ref mut addr_cache, .. } => addr_cache,
+			Querying::Disabled => {
+				return Err(Error::ReceivingDhtValueFoundEventWithQueryingDisabled);
+			}
+		};
+
 		// Ensure `values` is not empty and all its keys equal.
 		let remote_key = values.iter().fold(Ok(None), |acc, (key, _)| {
 			match acc {
@@ -411,7 +430,7 @@ where
 			// authority id and to ensure it is actually an authority, we match the hash against the
 			// hash of the authority id of all other authorities.
 			let authorities = self.client.runtime_api().authorities(&block_id)?;
-			self.addr_cache.retain_ids(&authorities);
+			addr_cache.retain_ids(&authorities);
 			authorities
 				.into_iter()
 				.map(|id| (hash_authority_id(id.as_ref()), id))
@@ -450,7 +469,7 @@ where
 			.into_iter().flatten().collect();
 
 		if !remote_addresses.is_empty() {
-			self.addr_cache.insert(authority_id.clone(), remote_addresses);
+			addr_cache.insert(authority_id.clone(), remote_addresses);
 			self.update_peer_set_priority_group()?;
 		}
 
@@ -490,7 +509,14 @@ where
 
 	/// Update the peer set 'authority' priority group.
 	fn update_peer_set_priority_group(&self) -> Result<()> {
-		let addresses = self.addr_cache.get_subset();
+		let addr_cache = match self.querying {
+			Querying::Enabled { ref addr_cache, .. } => addr_cache,
+			Querying::Disabled => {
+				return Err(Error::ReceivingDhtValueFoundEventWithQueryingDisabled);
+			}
+		};
+
+		let addresses = addr_cache.get_subset();
 
 		if let Some(metrics) = &self.metrics {
 			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
@@ -530,7 +556,6 @@ where
 			return Poll::Ready(());
 		}
 
-
 		// Publish own addresses.
 		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
 			// Register waker of underlying task for next interval.
@@ -544,16 +569,18 @@ where
 			}
 		}
 
-		// Request addresses of authorities.
-		if let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {
-			// Register waker of underlying task for next interval.
-			while let Poll::Ready(_) = self.query_interval.poll_next_unpin(cx) {}
+		if let Querying::Enabled { interval, .. } = &mut self.querying {
+			// Request addresses of authorities.
+			if let Poll::Ready(_) = interval.poll_next_unpin(cx) {
+				// Register waker of underlying task for next interval.
+				while let Poll::Ready(_) = interval.poll_next_unpin(cx) {}
 
-			if let Err(e) = self.request_addresses_of_others() {
-				error!(
-					target: LOG_TARGET,
-					"Failed to request addresses of authorities: {:?}", e,
-				);
+				if let Err(e) = self.request_addresses_of_others() {
+					error!(
+						target: LOG_TARGET,
+						"Failed to request addresses of authorities: {:?}", e,
+					);
+				}
 			}
 		}
 

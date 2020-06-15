@@ -536,7 +536,7 @@ pub enum TransportConfig {
 }
 
 /// The policy for connections to non-reserved peers.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NonReservedPeerMode {
 	/// Accept them. This is the default.
 	Accept,

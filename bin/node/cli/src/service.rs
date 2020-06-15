@@ -154,7 +154,7 @@ macro_rules! new_full_start {
 macro_rules! new_full {
 	($config:expr, $with_startup_data: expr) => {{
 		use futures::prelude::*;
-		use sc_network::Event;
+		use sc_network::{config::NonReservedPeerMode, Event};
 		use sc_client_api::ExecutorProvider;
 		use sp_core::traits::BareCryptoStorePtr;
 
@@ -162,11 +162,13 @@ macro_rules! new_full {
 			role,
 			force_authoring,
 			name,
+			non_reserved_peer_mode,
 			disable_grandpa,
 		) = (
 			$config.role.clone(),
 			$config.force_authoring,
 			$config.network.node_name.clone(),
+			$config.network.non_reserved_mode,
 			$config.disable_grandpa,
 		);
 
@@ -236,6 +238,10 @@ macro_rules! new_full {
 				_ => unreachable!("Due to outer matches! constraint; qed.")
 			};
 
+			// When a node is only allowed to connect to the configured reserved nodes
+			// (`NonReservedPeerMode::Deny`) there is no benefit in discovering other authorities.
+			let discover_authorities = non_reserved_peer_mode == NonReservedPeerMode::Accept;
+
 			let network = service.network();
 			let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
@@ -247,6 +253,7 @@ macro_rules! new_full {
 				sentries,
 				dht_event_stream,
 				authority_discovery_role,
+				discover_authorities,
 				service.prometheus_registry(),
 			);
 

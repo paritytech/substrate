@@ -28,6 +28,8 @@ pub enum Error {
 	ReceivingDhtValueFoundEventWithDifferentKeys,
 	/// Received dht value found event with no records.
 	ReceivingDhtValueFoundEventWithNoRecords,
+	/// Received dht value found event even though querying for authorities is disabled.
+	ReceivingDhtValueFoundEventWithQueryingDisabled,
 	/// Failed to verify a dht payload with the given signature.
 	VerifyingDhtPayload,
 	/// Failed to hash the authority id to be used as a dht key.

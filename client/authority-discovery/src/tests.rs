@@ -231,6 +231,7 @@ fn new_registers_metrics() {
 		vec![],
 		dht_event_rx.boxed(),
 		Role::Authority(key_store),
+		true,
 		Some(registry.clone()),
 	);
 
@@ -259,6 +260,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		vec![],
 		dht_event_rx.boxed(),
 		Role::Authority(key_store),
+		true,
 		None,
 	);
 
@@ -301,6 +303,7 @@ fn publish_discover_cycle() {
 		vec![],
 		dht_event_rx.boxed(),
 		Role::Authority(key_store),
+		true,
 		None,
 	);
 
@@ -330,6 +333,7 @@ fn publish_discover_cycle() {
 		vec![],
 		dht_event_rx.boxed(),
 		Role::Authority(key_store),
+		true,
 		None,
 	);
 
@@ -373,6 +377,7 @@ fn terminate_when_event_stream_terminates() {
 		vec![],
 		dht_event_rx.boxed(),
 		Role::Authority(key_store),
+		true,
 		None,
 	);
 
@@ -414,6 +419,7 @@ fn dont_stop_polling_when_error_is_returned() {
 		vec![],
 		dht_event_rx.boxed(),
 		Role::Authority(key_store),
+		true,
 		None,
 	);
 
