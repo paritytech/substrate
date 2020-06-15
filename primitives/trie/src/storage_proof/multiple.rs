@@ -25,8 +25,8 @@ pub enum StorageProofKind {
 	/// Kind for `MultipleStorageProof::Flat`.
 	Flat = 1,
 
-	/// Kind for `MultipleStorageProof::TrieSkipHashes`.
-	TrieSkipHashes = 2,
+	/// Kind for `MultipleStorageProof::Compact`.
+	Compact = 2,
 }
 
 impl StorageProofKind {
@@ -35,7 +35,7 @@ impl StorageProofKind {
 	pub fn from_byte(encoded: u8) -> Option<Self> {
 		Some(match encoded {
 			x if x == StorageProofKind::Flat as u8 => StorageProofKind::Flat,
-			x if x == StorageProofKind::TrieSkipHashes as u8 => StorageProofKind::TrieSkipHashes,
+			x if x == StorageProofKind::Compact as u8 => StorageProofKind::Compact,
 			_ => return None,
 		})
 	}
@@ -51,14 +51,14 @@ pub enum MultipleStorageProof<H, D> {
 	Flat(super::simple::Flat),
 
 	/// See `crate::storage_proof::compact::Flat`.
-	TrieSkipHashes(super::compact::Flat<crate::Layout<H>>, PhantomData<D>),
+	Compact(super::compact::Flat<crate::Layout<H>>, PhantomData<D>),
 }
 
 impl<H, D> sp_std::fmt::Debug for MultipleStorageProof<H, D> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		match self {
 			MultipleStorageProof::Flat(v) => v.fmt(f),
-			MultipleStorageProof::TrieSkipHashes(v, _) => v.fmt(f),
+			MultipleStorageProof::Compact(v, _) => v.fmt(f),
 		}
 	}
 }
@@ -82,7 +82,7 @@ impl<H, D> Decode for MultipleStorageProof<H, D> {
 		Ok(match StorageProofKind::from_byte(kind)
 			.ok_or_else(|| codec::Error::from("Invalid storage kind"))? {
 				StorageProofKind::Flat => MultipleStorageProof::Flat(Decode::decode(value)?),
-				StorageProofKind::TrieSkipHashes => MultipleStorageProof::TrieSkipHashes(
+				StorageProofKind::Compact => MultipleStorageProof::Compact(
 					Decode::decode(value)?,
 					PhantomData,
 				),
@@ -95,7 +95,7 @@ impl<H, D> Encode for MultipleStorageProof<H, D> {
 		(self.kind() as u8).encode_to(dest);
 		match self {
 			MultipleStorageProof::Flat(p) => p.encode_to(dest),
-			MultipleStorageProof::TrieSkipHashes(p, _) => p.encode_to(dest),
+			MultipleStorageProof::Compact(p, _) => p.encode_to(dest),
 		}
 	}
 }
@@ -105,15 +105,15 @@ impl<H, D: DefaultKind> Common for MultipleStorageProof<H, D> {
 		match D::KIND {
 			StorageProofKind::Flat =>
 				MultipleStorageProof::Flat(super::simple::Flat::empty()),
-			StorageProofKind::TrieSkipHashes =>
-				MultipleStorageProof::TrieSkipHashes(super::compact::Flat::empty(), PhantomData),
+			StorageProofKind::Compact =>
+				MultipleStorageProof::Compact(super::compact::Flat::empty(), PhantomData),
 		}
 	}
 
 	fn is_empty(&self) -> bool {
 		match self {
 			MultipleStorageProof::Flat(data) => data.is_empty(),
-			MultipleStorageProof::TrieSkipHashes(data, _) => data.is_empty(),
+			MultipleStorageProof::Compact(data, _) => data.is_empty(),
 		}
 	}
 }
@@ -128,7 +128,7 @@ impl<H: Hasher, D: DefaultKind> MultipleRecorder<H, D> {
 	pub fn new_recorder(kind: StorageProofKind) -> Self {
 		match kind {
 			StorageProofKind::Flat => MultipleRecorder::Flat(Default::default(), D::KIND, PhantomData),
-			StorageProofKind::TrieSkipHashes => MultipleRecorder::Full(Default::default(), D::KIND),
+			StorageProofKind::Compact => MultipleRecorder::Full(Default::default(), D::KIND),
 		}
 	}
 
@@ -149,13 +149,13 @@ impl<H: Hasher, D: DefaultKind> Default for MultipleRecorder<H, D> {
 
 impl<H: Hasher, D> Clone for MultipleRecorder<H, D> {
 	fn clone(&self) -> Self {
+		use MultipleRecorder::{Flat, Full};
 		match self {
-			MultipleRecorder::Flat(data, kind, _) => MultipleRecorder::Flat(data.clone(), *kind, PhantomData),
-			MultipleRecorder::Full(data, kind) => MultipleRecorder::Full(data.clone(), *kind),
+			Flat(data, kind, _) => Flat(data.clone(), *kind, PhantomData),
+			Full(data, kind) => Full(data.clone(), *kind),
 		}
 	}
 }
-
 
 impl<H: Hasher, D: DefaultKind> RecordBackend<H> for MultipleRecorder<H, D> {
 	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>> {
@@ -214,9 +214,9 @@ impl<H, D: DefaultKind> Recordable<H> for MultipleStorageProof<H, D>
 					return Ok(MultipleStorageProof::Flat(super::simple::Flat::extract_proof(rec, input)?))
 				}
 			},
-			StorageProofKind::TrieSkipHashes => {
+			StorageProofKind::Compact => {
 				if let MultipleRecorder::Full(rec, _) = recorder {
-					return Ok(MultipleStorageProof::TrieSkipHashes(
+					return Ok(MultipleStorageProof::Compact(
 						super::compact::Flat::extract_proof(rec, input)?,
 						PhantomData,
 					))
@@ -238,7 +238,7 @@ impl<H, D> BackendProof<H> for MultipleStorageProof<H, D>
 	fn into_partial_db(self) -> Result<MemoryDB<H>> {
 		match self {
 			MultipleStorageProof::Flat(p) => p.into_partial_db(),
-			MultipleStorageProof::TrieSkipHashes(p, _) => p.into_partial_db(),
+			MultipleStorageProof::Compact(p, _) => p.into_partial_db(),
 		}
 	}
 
@@ -260,7 +260,7 @@ impl<H, D> TryInto<super::compact::Flat<Layout<H>>> for MultipleStorageProof<H, 
 
 	fn try_into(self) -> Result<super::compact::Flat<Layout<H>>> {
 		match self {
-			MultipleStorageProof::TrieSkipHashes(p, _) => Ok(p),
+			MultipleStorageProof::Compact(p, _) => Ok(p),
 			_ => Err(incompatible_type()),
 		}
 	}
@@ -271,7 +271,7 @@ impl<H, D> MultipleStorageProof<H, D> {
 	pub fn kind(&self) -> StorageProofKind {
 		match self {
 			MultipleStorageProof::Flat(_) => StorageProofKind::Flat,
-			MultipleStorageProof::TrieSkipHashes(_, _) => StorageProofKind::TrieSkipHashes,
+			MultipleStorageProof::Compact(_, _) => StorageProofKind::Compact,
 		}
 	}
 }
@@ -283,7 +283,7 @@ impl<H: Hasher, D: DefaultKind> Into<MultipleStorageProof<H, D>> for super::comp
 	fn into(self) -> MultipleStorageProof<H, D> {
 		match D::KIND {
 			StorageProofKind::Flat => MultipleStorageProof::Flat(self.into()),
-			StorageProofKind::TrieSkipHashes => MultipleStorageProof::TrieSkipHashes(self.into(), PhantomData),
+			StorageProofKind::Compact => MultipleStorageProof::Compact(self.into(), PhantomData),
 		}
 	}
 }

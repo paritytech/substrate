@@ -70,7 +70,6 @@ impl<T> sp_std::fmt::Debug for Full<T> {
 
 /// Proof cotaining an intermediate representation of state
 /// which is mergeable and can be converted to compact representation.
-/// Compatible with `TrieSkipHashes` and `TrieSkipHashesFull` proofs.
 ///
 /// This is needed mainly for technical reasons (merge then compact proofs).
 /// (though if possible user should rather use a flat record
