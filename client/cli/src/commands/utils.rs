@@ -206,7 +206,7 @@ macro_rules! with_crypto_scheme {
 	($scheme:expr, $method:ident($($params:expr),*)) => {
 		with_crypto_scheme!($scheme, $method<>($($params),*))
 	};
-	($scheme:expr, $method:ident<$($generics:ident),*>($($params:expr),*)) => {
+	($scheme:expr, $method:ident<$($generics:ty),*>($($params:expr),*)) => {
 		match $scheme {
 			$crate::CryptoScheme::Ecdsa => {
 				$method::<sp_core::ecdsa::Pair, $($generics),*>($($params),*)

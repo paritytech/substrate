@@ -17,14 +17,13 @@
 
 //! Implementation of the `sign-transaction` subcommand
 use sc_cli::{
-	Error, CliConfiguration, KeystoreParams, SharedParams,
-	pair_from_suri, decode_hex, with_crypto_scheme,
-	CryptoSchemeFlag, GenericNumber,
+	Error, CliConfiguration, KeystoreParams, SharedParams, decode_hex,
+	with_crypto_scheme, CryptoSchemeFlag, GenericNumber,
 };
 use structopt::StructOpt;
 use codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Debug};
-use sp_runtime::{MultiSigner, MultiSignature, AccountId32};
+use sp_runtime::AccountId32;
 use frame_system::extras::{SignedExtensionProvider, IndexFor, CallFor, AccountIdFor, AddressFor};
 use crate::utils::create_extrinsic_for;
 use sp_core::hexdisplay::HexDisplay;
@@ -83,10 +82,18 @@ impl SignTransactionCmd {
 		let call = CallFor::<P>::decode(&mut &self.call[..])?;
 		let password = self.keystore_params.read_password()?;
 
-		with_crypto_scheme!(
+		let extrinsic = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			print_ext<P>(&self.suri, password.as_ref().map(String::as_str), call, nonce, hash)
-		)
+			create_extrinsic_for<P, P::Call>(
+				&self.suri,
+				password.as_ref().map(String::as_str),
+				call,
+				nonce,
+				hash
+			)
+		)?;
+		println!("0x{}", HexDisplay::from(&extrinsic.encode()));
+		Ok(())
 	}
 }
 
@@ -99,27 +106,4 @@ impl CliConfiguration for SignTransactionCmd {
 	fn keystore_params(&self) -> Option<&KeystoreParams> {
 		Some(&self.keystore_params)
 	}
-}
-
-
-fn print_ext<Pair, P>(
-	uri: &str,
-	pass: Option<&str>,
-	call: CallFor<P>,
-	nonce: IndexFor<P>,
-	hash: P::Hash
-) -> Result<(), Error>
-	where
-		Pair: sp_core::Pair,
-		Pair::Public: Into<MultiSigner>,
-		Pair::Signature: Into<MultiSignature>,
-		P: SignedExtensionProvider + pallet_indices::Trait,
-		AccountIdFor<P>: From<AccountId32>,
-		AddressFor<P>: From<AccountIdFor<P>>,
-		CallFor<P>: Codec,
-{
-	let signer = pair_from_suri::<Pair>(uri, pass);
-	let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, hash)?;
-	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
-	Ok(())
 }

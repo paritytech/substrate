@@ -25,12 +25,14 @@ use frame_system::extras::{
 	IndexFor, AddressFor, AccountIdFor, SignedExtensionData,
 };
 use sp_runtime::generic::Era;
+use sc_cli::pair_from_suri;
 
 /// create an extrinsic for the runtime.
 pub fn create_extrinsic_for<Pair, P, Call>(
+	uri: &str,
+	pass: Option<&str>,
 	call: Call,
 	nonce:  IndexFor<P>,
-	pair: Pair,
 	hash: P::Hash,
 ) -> Result<
 		UncheckedExtrinsic<AddressFor<P>, Call, MultiSignature, P::Extra>,
@@ -45,6 +47,7 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 		AccountIdFor<P>: From<AccountId32>,
 		AddressFor<P>: From<AccountIdFor<P>>,
 {
+	let pair = pair_from_suri::<Pair>(uri, pass);
 	let mut input = P::extension_params();
 	input.set_nonce(nonce);
 	input.set_era(Era::Immortal);
@@ -58,8 +61,8 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 			.map_err(|_| "Transaction validity error")?
 	};
 
-	let signer = pair.public().into().into_account();
-	let account_id: AccountIdFor<P> = From::from(signer.clone());
+	let account_public = pair.public().into().into_account();
+	let account_id: AccountIdFor<P> = From::from(account_public.clone());
 	let address = AddressFor::<P>::from(account_id);
 
 	let signature = payload.using_encoded(|payload| pair.sign(payload).into());

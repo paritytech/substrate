@@ -18,20 +18,16 @@
 //! Implementation of the `transfer` cli subcommand for nodes that use the pallet-balances crate.
 
 use sc_cli::{
-    Error, SharedParams, pair_from_suri, with_crypto_scheme,
-	CryptoSchemeFlag, decode_hex, CliConfiguration, KeystoreParams,
-	GenericNumber,
+    Error, SharedParams, with_crypto_scheme, CryptoSchemeFlag, decode_hex,
+    CliConfiguration, KeystoreParams, GenericNumber,
 };
 use structopt::StructOpt;
 use std::{str::FromStr, fmt::Debug};
 use codec::{Encode, Decode};
-use sp_runtime::{MultiSigner, MultiSignature, AccountId32};
+use sp_runtime::AccountId32;
 use std::convert::TryFrom;
 use sp_core::{crypto::Ss58Codec, hexdisplay::HexDisplay};
-use frame_system::extras::{
-    AddressFor, IndexFor, AccountIdFor,
-    SignedExtensionProvider, CallFor,
-};
+use frame_system::extras::{AddressFor, IndexFor, AccountIdFor, SignedExtensionProvider, CallFor};
 use pallet_balances::Call as BalancesCall;
 use crate::utils::create_extrinsic_for;
 
@@ -94,6 +90,7 @@ impl TransferCmd {
             BalancesCall<R>: Encode,
     {
         let password = self.keystore_params.read_password()?;
+        let pass = password.as_ref().map(String::as_str);
         let nonce = self.index.parse::<IndexFor<R>>()?;
         let to = if let Ok(data_vec) = decode_hex(&self.to) {
             AccountIdFor::<R>::try_from(&data_vec)
@@ -102,20 +99,26 @@ impl TransferCmd {
             AccountIdFor::<R>::from_ss58check(&self.to)
                 .map_err(|_| "Invalid SS58-check address given for account ID.")?
         };
+
         let amount = self.amount.parse::<BalanceFor<R>>()?;
         let prior_block_hash = <R::Hash as Decode>::decode(&mut &self.prior_block_hash[..])?;
 
-        with_crypto_scheme!(
+        let call: CallFor<R> = BalancesCall::transfer(to.into(), amount).into();
+
+        let extrinsic = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			print_ext<R>(
-				&self.from,
-				password.as_ref().map(String::as_str),
-				to.into(),
-				nonce,
-				amount,
-				prior_block_hash
-			)
-		)
+			create_extrinsic_for<R, R::Call>(
+                &self.from,
+                pass,
+                call,
+                nonce,
+                prior_block_hash
+            )
+		)?;
+
+        println!("extrinsic: 0x{}", HexDisplay::from(&extrinsic.encode()));
+
+        Ok(())
     }
 }
 
@@ -127,29 +130,4 @@ impl CliConfiguration for TransferCmd {
     fn keystore_params(&self) -> Option<&KeystoreParams> {
         Some(&self.keystore_params)
     }
-}
-
-fn print_ext<Pair, P>(
-    uri: &str,
-    pass: Option<&str>,
-    to: AddressFor<P>,
-    nonce: IndexFor<P>,
-    amount: BalanceFor<P>,
-    prior_block_hash: P::Hash
-) -> Result<(), Error>
-    where
-        Pair: sp_core::Pair,
-        Pair::Public: Into<MultiSigner>,
-        Pair::Signature: Into<MultiSignature>,
-        BalancesCall<P>: Encode,
-        AccountIdFor<P>: From<AccountId32>,
-        AddressFor<P>: From<AccountIdFor<P>>,
-        CallFor<P>: Encode + From<BalancesCall<P>>,
-        P: pallet_balances::Trait + pallet_indices::Trait + SignedExtensionProvider,
-{
-    let signer = pair_from_suri::<Pair>(uri, pass);
-    let call: CallFor<P> = BalancesCall::transfer(to, amount).into();
-    let extrinsic = create_extrinsic_for::<Pair, P, P::Call>(call, nonce, signer, prior_block_hash)?;
-    println!("extrinsic: 0x{}", HexDisplay::from(&extrinsic.encode()));
-    Ok(())
 }
