@@ -17,18 +17,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
+	 NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm,
 	start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle,
 	status_sinks, metrics::MetricsService,
 	client::{light, Client, ClientConfig},
-	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig, BasePath},
+	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
 use sc_client_api::{
 	self, BlockchainEvents, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
 	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
 	backend::RemoteBackend,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
@@ -42,7 +42,7 @@ use jsonrpc_pubsub::manager::SubscriptionManager;
 use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
-use sc_network::{NetworkService, NetworkStateInfo};
+use sc_network::NetworkStateInfo;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
@@ -64,6 +64,7 @@ use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
 use sp_core::storage::Storage;
+use crate::{ChainComponents, TelemetryOnConnectSinks, RpcHandlers, NetworkStatusSinks};
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -959,26 +960,7 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	fn build_common(self) -> Result<(
-		Service<
-			TBl,
-			TSc,
-			NetworkStatus<TBl>,
-			sc_offchain::OffchainWorkers<
-				Client<TBackend, TExec, TBl, TRtApi>,
-				TBackend::OffchainStorage,
-				TBl
-			>,
-		>,
-		Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-		Arc<TExPool>,
-		TaskManager,
-		Arc<RwLock<Keystore>>,
-		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		Option<sc_telemetry::Telemetry>,
-		Option<Arc<BasePath>>,
-		crate::RpcHandlers,
-	), Error>
+	fn build_common(self) -> Result<ChainComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		let ServiceBuilder {
@@ -1305,7 +1287,7 @@ ServiceBuilder<
 		};
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 		// This is used internally, so don't restrict access to unsafe RPC
-		let rpc_handlers = crate::RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No));
+		let rpc_handlers = RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No));
 
 		// The network worker is responsible for gathering all network messages and processing
 		// them. This is quite a heavy task, and at the time of the writing of this comment it
@@ -1400,38 +1382,26 @@ ServiceBuilder<
 		);
 		spawn_handle.spawn("informant", informant_future);
 
-		Ok((Service {
-			network_status_sinks,
+		Ok(ChainComponents {
+			client,
+			task_manager,
+			network,
 			select_chain,
-			_rpc: rpc,
-			_offchain_workers: offchain_workers,
-			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
-			marker: PhantomData::<TBl>,
+			transaction_pool,
+			rpc_handlers,
+			rpc,
+			telemetry,
+			keystore,
+			offchain_workers,
+			telemetry_on_connect_sinks: TelemetryOnConnectSinks(telemetry_connection_sinks),
+			base_path: config.base_path.map(Arc::new),
+			network_status_sinks: NetworkStatusSinks::new(network_status_sinks),
 			prometheus_registry: config.prometheus_config.map(|config| config.registry),
-		}, client, transaction_pool, task_manager, keystore, network, telemetry, config.base_path.map(Arc::new), rpc_handlers))
+		})
 	}
 
 	/// Builds the light service.
-	pub fn build_light(self) -> Result<(
-		Service<
-			TBl,
-			TSc,
-			NetworkStatus<TBl>,
-			sc_offchain::OffchainWorkers<
-				Client<TBackend, TExec, TBl, TRtApi>,
-				TBackend::OffchainStorage,
-				TBl
-			>,
-		>,
-		Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-		Arc<TExPool>,
-		TaskManager,
-		Arc<RwLock<Keystore>>,
-		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		Option<sc_telemetry::Telemetry>,
-		Option<Arc<BasePath>>,
-		crate::RpcHandlers,
-	), Error>
+	pub fn build_light(self) -> Result<ChainComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		self.build_common()
@@ -1474,26 +1444,7 @@ ServiceBuilder<
 {
 
 	/// Builds the full service.
-	pub fn build_full(self) -> Result<(
-		Service<
-			TBl,
-			TSc,
-			NetworkStatus<TBl>,
-			sc_offchain::OffchainWorkers<
-				Client<TBackend, TExec, TBl, TRtApi>,
-				TBackend::OffchainStorage,
-				TBl
-			>,
-		>,
-		Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-		Arc<TExPool>,
-		TaskManager,
-		Arc<RwLock<Keystore>>,
-		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		Option<sc_telemetry::Telemetry>,
-		Option<Arc<BasePath>>,
-		crate::RpcHandlers,
-	), Error>
+	pub fn build_full(self) -> Result<ChainComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		// make transaction pool available for off-chain runtime calls.

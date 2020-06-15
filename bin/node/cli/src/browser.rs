@@ -23,6 +23,7 @@ use browser_utils::{
 	Client,
 	browser_configuration, set_console_error_panic_hook, init_console_log,
 };
+use sc_cli::KeepAliveChainComponents;
 use std::str::FromStr;
 
 /// Starts the client.
@@ -52,7 +53,7 @@ async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Cl
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
-	let (_, task_manager, _, _, rpc_handlers) = crate::service::new_light_browser(config)
+	let (KeepAliveChainComponents { task_manager, .. }, rpc_handlers) = crate::service::new_light_browser(config)
 		.map_err(|e| format!("{:?}", e))?;
 
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))

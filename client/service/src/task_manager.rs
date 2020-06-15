@@ -248,7 +248,6 @@ impl Future for TaskManager {
 	}
 }
 
-
 impl Drop for TaskManager {
 	fn drop(&mut self) {
 		debug!(target: "service", "Tasks manager shutdown");

@@ -29,11 +29,12 @@ use node_executor;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
-	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
-	TaskManager, BasePath, RpcHandlers,
+	ServiceBuilder, config::Configuration, error::{Error as ServiceError},
+	RpcHandlers, ChainComponents,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
+use sc_cli::KeepAliveChainComponents;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -174,7 +175,10 @@ macro_rules! new_full {
 		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
 			new_full_start!($config);
 
-		let (service, client, transaction_pool, task_manager, keystore, network, telemetry, base_path, rpc_handlers) = builder
+		let ChainComponents {
+			client, transaction_pool, task_manager, keystore, network, telemetry, base_path,
+			select_chain, prometheus_registry, rpc, telemetry_on_connect_sinks, ..
+		} = builder
 			.with_finality_proof_provider(|client, backend| {
 				// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
@@ -194,10 +198,10 @@ macro_rules! new_full {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				client.clone(),
 				transaction_pool,
-				service.prometheus_registry().as_ref(),
+				prometheus_registry.as_ref(),
 			);
 
-			let select_chain = service.select_chain()
+			let select_chain = select_chain
 				.ok_or(sc_service::Error::SelectChainRequired)?;
 
 			let can_author_with =
@@ -246,7 +250,7 @@ macro_rules! new_full {
 				sentries,
 				dht_event_stream,
 				authority_discovery_role,
-				service.prometheus_registry(),
+				prometheus_registry.clone(),
 			);
 
 			task_manager.spawn("authority-discovery", authority_discovery);
@@ -283,9 +287,9 @@ macro_rules! new_full {
 				link: grandpa_link,
 				network: network.clone(),
 				inherent_data_providers: inherent_data_providers.clone(),
-				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+				telemetry_on_connect: Some(telemetry_on_connect_sinks.on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
-				prometheus_registry: service.prometheus_registry(),
+				prometheus_registry: prometheus_registry.clone(),
 				shared_voter_state,
 			};
 
@@ -303,7 +307,9 @@ macro_rules! new_full {
 			)?;
 		}
 
-		Ok((service, inherent_data_providers, task_manager, telemetry, base_path, rpc_handlers))
+		Ok(KeepAliveChainComponents {
+			task_manager, telemetry, base_path, rpc,
+		})
 	}};
 	($config:expr) => {{
 		new_full!($config, |_, _| {})
@@ -312,18 +318,17 @@ macro_rules! new_full {
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError>
-{
-	new_full!(config).map(|(service, _, task_manager, telemetry, base_path, _)| {
-		(service, task_manager, telemetry, base_path)
-	})
+-> Result<KeepAliveChainComponents, ServiceError> {
+	new_full!(config)
 }
 
 fn new_light_base(config: Configuration)
--> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>, RpcHandlers), ServiceError> {
+-> Result<(KeepAliveChainComponents, RpcHandlers), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	let (service, _, _, task_manager, _, _, telemetry, base_path, rpc_handlers) = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
+	let ChainComponents {
+		task_manager, telemetry, base_path, rpc_handlers, rpc, ..
+	 } = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
@@ -407,21 +412,25 @@ fn new_light_base(config: Configuration)
 		})?
 		.build_light()?;
 
-	Ok((service, task_manager, telemetry, base_path, rpc_handlers))
+	Ok((
+		KeepAliveChainComponents {
+			task_manager, telemetry, base_path, rpc,
+		},
+		rpc_handlers,
+	))
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration)
--> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError> {	
-	new_light_base(config).map(|(service, task_manager, telemetry, base_path, _)| (service, task_manager, telemetry, base_path))
+pub fn new_light(config: Configuration) -> Result<KeepAliveChainComponents, ServiceError> {	
+	new_light_base(config).map(|(components, _)| components)
 }
 
 /// Builds a new service for a browser light client.
-pub fn new_light_browser(config: Configuration)
--> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>, RpcHandlers), ServiceError> {
+pub fn new_light_browser(config: Configuration) -> Result<(KeepAliveChainComponents, RpcHandlers), ServiceError> {
 	new_light_base(config)	
 }
 
+/*
 #[cfg(test)]
 mod tests {
 	use std::{sync::Arc, borrow::Cow, any::Any};
@@ -447,14 +456,13 @@ mod tests {
 	use sp_timestamp;
 	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
-	use sc_service::AbstractService;
 	use crate::service::{new_full, new_light};
 	use sp_runtime::traits::IdentifyAccount;
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
-	/*#[test]
+	#[test]
 	// It is "ignored", but the node-cli ignored tests are running on the CI.
 	// This can be run locally with `cargo test --release -p node-cli test_sync -- --ignored`.
 	#[ignore]
@@ -643,5 +651,6 @@ mod tests {
 				"//Bob".into(),
 			],
 		)
-	}*/
+	}
 }
+*/

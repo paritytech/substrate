@@ -26,7 +26,7 @@ use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{
-	AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager,
+	Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager,
 	BasePath,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -34,7 +34,17 @@ use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
 
-type Initialised<T> = (T, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>);
+/// The components of the chain that we need to keep alive until the node quits.
+pub struct KeepAliveChainComponents {
+	/// The chain task manager. 
+	pub task_manager: TaskManager,
+	/// A shared instance of Telemetry (if enabled).
+	pub telemetry: Option<sc_telemetry::Telemetry>,
+	/// The base path.
+	pub base_path: Option<Arc<BasePath>>,
+	/// A RPC instance.
+	pub rpc: Box<dyn std::any::Any + Send + Sync>,
+}
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -182,10 +192,10 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can run a full or a light node depending on
 	/// the node's configuration.
-	pub fn run_node<F: AbstractService, L: AbstractService>(
+	pub fn run_node(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<L>>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		match self.config.role {
@@ -197,9 +207,9 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "full" node and will fail if
 	/// the node's configuration uses a "light" role.
-	pub fn run_full_node<F: AbstractService>(
+	pub fn run_full_node(
 		self,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		if matches!(self.config.role, Role::Light) {
@@ -213,9 +223,9 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "light" node and will fail if
 	/// the node's configuration uses a "full" role.
-	pub fn run_light_node<F: AbstractService>(
+	pub fn run_light_node(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		if !matches!(self.config.role, Role::Light) {
@@ -254,21 +264,22 @@ impl<C: SubstrateCli> Runner<C> {
 		}
 	}
 
-	fn run_service_until_exit<F: AbstractService>(
+	fn run_service_until_exit(
 		mut self,
-		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<Initialised<F>>,
+		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
 	) -> Result<()> {
-		let (
-			_service,
+		let KeepAliveChainComponents {
 			task_manager,
 			// we eagerly drop the service so that the internal exit future is fired,
 			// but we need to keep holding a reference to the global telemetry guard
 			// and drop the runtime first.
-			_telemetry,
+			telemetry: _telemetry,
 			// we hold a reference to the base path so if the base path is a temporary directory it will
 			// not be deleted before the tokio runtime finish to clean up
-			_base_path,
-		) = initialise(self.config)?;
+			base_path: _base_path,
+			rpc: _rpc,
+			..
+		} = initialise(self.config)?;
 
 		{
 			let f = task_manager.fuse();

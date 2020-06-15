@@ -20,7 +20,7 @@ use log::{debug, info};
 use std::sync::Arc;
 use sc_network::config::TransportConfig;
 use sc_service::{
-	AbstractService, RpcSession, Role, Configuration,
+	RpcSession, Role, Configuration,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis, TaskManager, RpcHandlers,
 };

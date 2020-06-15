@@ -37,12 +37,11 @@ mod status_sinks;
 mod task_manager;
 
 use std::{io, pin::Pin};
-use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
 use wasm_timer::Instant;
-use std::task::{Poll, Context};
+use std::task::Poll;
 use parking_lot::Mutex;
 
 use client::Client;
@@ -80,12 +79,7 @@ pub use sc_network::config::{
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
-use sp_blockchain::{HeaderBackend, HeaderMetadata};
-use sp_api::{ApiExt, ConstructRuntimeApi, ApiErrorExt};
-use sc_client_api::{
-	Backend as BackendT, BlockchainEvents, CallExecutor, UsageProvider,
-};
-use sp_block_builder::BlockBuilder;
+use sc_client_api::BlockchainEvents;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -99,6 +93,7 @@ impl<T: MallocSizeOf> MallocSizeOfWasm for T {}
 #[cfg(target_os = "unknown")]
 impl<T> MallocSizeOfWasm for T {}
 
+/// RPC handlers that can perform RPC queries.
 pub struct RpcHandlers(sc_rpc_server::RpcHandler<sc_rpc::Metadata>);
 
 impl RpcHandlers {
@@ -119,71 +114,76 @@ impl RpcHandlers {
 	}
 }
 
-/// Substrate service.
-pub struct Service<TBl, TSc, TNetStatus, TOc> {
-	select_chain: Option<TSc>,
-	// Sinks to propagate network status updates.
-	// For each element, every time the `Interval` fires we push an element on the sender.
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
-	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
-	_offchain_workers: Option<Arc<TOc>>,
-	marker: PhantomData<TBl>,
-	prometheus_registry: Option<prometheus_endpoint::Registry>,
+/// Sinks to propagate network status updates.
+/// For each element, every time the `Interval` fires we push an element on the sender.
+pub struct NetworkStatusSinks<Block: BlockT> {
+	inner: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>,
 }
 
-impl<TBl, TSc, TNetStatus, TOc> Unpin for Service<TBl, TSc, TNetStatus, TOc> {}
-
-/// Abstraction over a Substrate service.
-pub trait AbstractService: Send + Unpin + 'static {
-	/// Type of block of this chain.
-	type Block: BlockT;
-	/// Chain selection algorithm.
-	type SelectChain: sp_consensus::SelectChain<Self::Block> + Sized;
-	
-	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
-
-
-	/// Get clone of select chain.
-	fn select_chain(&self) -> Option<Self::SelectChain>;
+impl<Block: BlockT> NetworkStatusSinks<Block> {
+	fn new(sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>) -> Self {
+		Self {
+			inner: sinks,
+		}
+	}
 
 	/// Returns a receiver that periodically receives a status of the network.
-	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
-
-	/// Get the prometheus metrics registry, if available.
-	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
+	pub fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Block>, NetworkState)> {
+		let (sink, stream) = tracing_unbounded("mpsc_network_status");
+		self.inner.lock().push(interval, sink);
+		stream
+	}
 }
 
-impl<TBl, TSc, TOc> AbstractService for
-	Service<TBl, TSc, NetworkStatus<TBl>, TOc>
-where
-	TBl: BlockT,
-	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
-	TOc: 'static + Send + Sync,
-{
-	type Block = TBl;
-	type SelectChain = TSc;
+/// Sinks to propagate telemetry connection established events.
+pub struct TelemetryOnConnectSinks(pub Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
 
-	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
-		self._telemetry_on_connect_sinks.lock().push(sink);
+impl TelemetryOnConnectSinks {
+	/// Get event stream for telemetry connection established events.
+	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
+		self.0.lock().push(sink);
 		stream
 	}
+}
 
-	fn select_chain(&self) -> Option<Self::SelectChain> {
-		self.select_chain.clone()
-	}
-
-	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
-		let (sink, stream) = tracing_unbounded("mpsc_network_status");
-		self.network_status_sinks.lock().push(interval, sink);
-		stream
-	}
-
-	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
-		self.prometheus_registry.clone()
-	}
+/// The individual components of the chain, built by the service builder. You are encouraged to
+/// deconstruct this into its fields.
+pub struct ChainComponents<
+	TBl: BlockT, TBackend: sc_client_api::backend::Backend<TBl>, TExec, TRtApi, TSc, TExPool,
+> {
+	/// A blockchain client.
+	pub client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+	/// A shared transaction pool instance.
+	pub transaction_pool: Arc<TExPool>,
+	/// The chain task manager. 
+	pub task_manager: TaskManager,
+	/// A keystore that stores keys.
+	pub keystore: sc_keystore::KeyStorePtr,
+	/// A shared network instance.
+	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	/// A shared instance of Telemetry (if enabled).
+	pub telemetry: Option<sc_telemetry::Telemetry>,
+	/// The base path.
+	pub base_path: Option<Arc<BasePath>>,
+	/// RPC handlers that can perform RPC queries.
+	pub rpc_handlers: crate::RpcHandlers,
+	/// A shared instance of the chain selection algorithm.
+	pub select_chain: Option<TSc>,
+	/// Sinks to propagate network status updates.
+	pub network_status_sinks: NetworkStatusSinks<TBl>,
+	/// A prometheus metrics registry, (if enabled).
+	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
+	/// A RPC instance.
+	pub rpc: Box<dyn std::any::Any + Send + Sync>,
+	/// Shared Telemetry connection sinks,
+	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
+	/// A shared offchain workers instance.
+	pub offchain_workers: Option<Arc<sc_offchain::OffchainWorkers<
+		Client<TBackend, TExec, TBl, TRtApi>,
+		TBackend::OffchainStorage,
+		TBl
+	>>>,
 }
 
 /// Builds a never-ending future that continuously polls the network.

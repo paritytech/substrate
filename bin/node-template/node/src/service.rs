@@ -7,7 +7,7 @@ use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{
 	error::{Error as ServiceError},
-	AbstractService, Configuration, ServiceBuilder, TaskManager, BasePath,
+	Configuration, ServiceBuilder, ChainComponents,
 };
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
@@ -16,6 +16,7 @@ use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{
 	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
 };
+use sc_cli::KeepAliveChainComponents;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -97,7 +98,7 @@ macro_rules! new_full_start {
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError>
+-> Result<KeepAliveChainComponents, ServiceError>
 {
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
@@ -110,7 +111,10 @@ pub fn new_full(config: Configuration)
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let (service, client, transaction_pool, task_manager, keystore, network, telemetry, base_path, _) = builder
+	let ChainComponents {
+		client, transaction_pool, task_manager, keystore, network, telemetry, base_path,
+		select_chain, prometheus_registry, telemetry_on_connect_sinks, rpc, ..
+	 } = builder
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
@@ -122,10 +126,10 @@ pub fn new_full(config: Configuration)
 		let proposer = sc_basic_authorship::ProposerFactory::new(
 			client.clone(),
 			transaction_pool,
-			service.prometheus_registry().as_ref(),
+			prometheus_registry.as_ref(),
 		);
 
-		let select_chain = service.select_chain()
+		let select_chain = select_chain
 			.ok_or(ServiceError::SelectChainRequired)?;
 
 		let can_author_with =
@@ -180,9 +184,9 @@ pub fn new_full(config: Configuration)
 			link: grandpa_link,
 			network: network.clone(),
 			inherent_data_providers: inherent_data_providers.clone(),
-			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
+			telemetry_on_connect: Some(telemetry_on_connect_sinks.on_connect_stream()),
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry: service.prometheus_registry(),
+			prometheus_registry: prometheus_registry.clone(),
 			shared_voter_state: SharedVoterState::empty(),
 		};
 
@@ -200,11 +204,13 @@ pub fn new_full(config: Configuration)
 		)?;
 	}
 
-	Ok((service, task_manager, telemetry, base_path))
+	Ok(KeepAliveChainComponents {
+		task_manager, telemetry, base_path, rpc,
+	})
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<(impl AbstractService, TaskManager, Option<sc_telemetry::Telemetry>, Option<Arc<BasePath>>), ServiceError> {
+pub fn new_light(config: Configuration) -> Result<KeepAliveChainComponents, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
@@ -269,7 +275,9 @@ pub fn new_light(config: Configuration) -> Result<(impl AbstractService, TaskMan
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
 		.build_light()
-		.map(|(service, _, _, task_manager, _, _, telemetry, base_path, _)| {
-			(service, task_manager, telemetry, base_path)
+		.map(|ChainComponents { task_manager, telemetry, base_path, rpc, .. }| {
+			KeepAliveChainComponents {
+				task_manager, telemetry, base_path, rpc,
+			}
 		})
 }
