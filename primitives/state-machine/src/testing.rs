@@ -131,7 +131,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		self.offchain_db.apply_offchain_changes(&mut self.offchain_overlay);
 	}
 
-	/// Create a sync wrapper around the persistent part of the offchain worker storage.
+	/// A shared reference type around the offchain worker storage.
 	pub fn offchain_db(&self) -> TestPersistentOffchainDB {
 		self.offchain_db.clone()
 	}
