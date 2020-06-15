@@ -58,7 +58,7 @@ default:
     name: parity-build
 
 .docker-env:                       &docker-env
-  image:                           parity/rust-builder:latest
+  image:                           paritytech/ci-linux:production
   before_script:
     - rustup show
     - cargo --version

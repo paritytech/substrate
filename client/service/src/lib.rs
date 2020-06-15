@@ -66,7 +66,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
 };
-pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
+pub use config::{BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -110,14 +110,14 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	task_manager: TaskManager,
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
-	/// Sinks to propagate network status updates.
-	/// For each element, every time the `Interval` fires we push an element on the sender.
+	// Sinks to propagate network status updates.
+	// For each element, every time the `Interval` fires we push an element on the sender.
 	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
 	transaction_pool: Arc<TTxPool>,
-	/// Send a signal when a spawned essential task has concluded. The next time
-	/// the service future is polled it should complete with an error.
+	// Send a signal when a spawned essential task has concluded. The next time
+	// the service future is polled it should complete with an error.
 	essential_failed_tx: TracingUnboundedSender<()>,
-	/// A receiver for spawned essential-tasks concluding.
+	// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
@@ -127,6 +127,9 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
+	// The base path is kept here because it can be a temporary directory which will be deleted
+	// when dropped
+	_base_path: Option<Arc<BasePath>>,
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
@@ -210,6 +213,9 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
+
+	/// Get a clone of the base_path
+	fn base_path(&self) -> Option<Arc<BasePath>>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -244,7 +250,7 @@ where
 	}
 
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
+		self._telemetry.clone()
 	}
 
 	fn keystore(&self) -> sc_keystore::KeyStorePtr {
@@ -309,6 +315,10 @@ where
 
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
+	}
+
+	fn base_path(&self) -> Option<Arc<BasePath>> {
+		self._base_path.clone()
 	}
 }
 
