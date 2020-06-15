@@ -568,7 +568,7 @@ decl_module! {
 		// that's not possible at present (since it's within the decl_module macro).
 		#[weight = FunctionOf(
 			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
-			DispatchClass::Operational,
+			DispatchClass::Normal,
 			Pays::Yes,
 		)]
 		fn fill_block(origin, _ratio: Perbill) {

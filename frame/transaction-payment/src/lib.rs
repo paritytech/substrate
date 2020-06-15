@@ -100,10 +100,10 @@ type NegativeImbalanceOf<T> =
 /// - in an empty chain: `p >= v * k * (-s')`.
 ///
 /// For example, when all block are full, and 28800 blocks per day (default in `substrate-node`)
-/// and v == 0.00001, s' == 0.25, we'd have:
+/// and v == 0.00001, s' == 0.1875, we'd have:
 ///
-/// p >= 0.00001 * 28800 * 3 / 4
-/// p >= 0.216
+/// p >= 0.00001 * 28800 * 0.8125
+/// p >= 0.234
 ///
 /// Meaning that fees can change by around ~21% per day, given extreme congestion.
 ///
@@ -340,11 +340,12 @@ impl<T: Trait> Module<T> where
 		if pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
-			let len_fee = per_byte.saturating_mul(len);
-			let unadjusted_weight_fee = Self::weight_to_fee(weight);
 
+			let unadjusted_len_fee = per_byte.saturating_mul(len);
+			let unadjusted_weight_fee = Self::weight_to_fee(weight);
 			// the adjustable part of the fee
-			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
+			let adjustable_fee = unadjusted_len_fee.saturating_add(unadjusted_weight_fee);
+
 			let targeted_fee_adjustment = Self::next_fee_multiplier();
 			let adjusted_fee = targeted_fee_adjustment.saturating_mul_int(adjustable_fee);
 

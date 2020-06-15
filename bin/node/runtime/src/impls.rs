@@ -182,15 +182,16 @@ mod multiplier_tests {
 	}
 
 	#[test]
-	fn max_change_per_day() {
+	fn min_change_per_day() {
 		run_with_system_weight(max(), || {
 			let mut fm = Multiplier::one();
-			// See the example in the module doc. Changes can be at most 0.216, hence fm < 1.216
+			// See the example in the doc of `TargetedFeeAdjustment`. are at least 0.234, hence
+			// `fm > 1.234`.
 			for _ in 0..DAYS {
 				let next = runtime_multiplier_update(fm);
 				fm = next;
 			}
-			assert!(fm < Multiplier::saturating_from_rational(13, 10));
+			assert!(fm > Multiplier::saturating_from_rational(1234, 1000));
 		})
 	}
 
