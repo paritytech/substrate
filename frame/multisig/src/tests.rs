@@ -450,12 +450,16 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 }
 
 #[test]
-fn zero_threshold_fails() {
+fn minimum_threshold_check_works() {
 	new_test_ext().execute_with(|| {
 		let call = Call::Balances(BalancesCall::transfer(6, 15)).encode();
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 0, vec![2], None, call, false, 0),
-			Error::<Test>::ZeroThreshold,
+			Multisig::as_multi(Origin::signed(1), 0, vec![2], None, call.clone(), false, 0),
+			Error::<Test>::MinimumThreshold,
+		);
+		assert_noop!(
+			Multisig::as_multi(Origin::signed(1), 1, vec![2], None, call.clone(), false, 0),
+			Error::<Test>::MinimumThreshold,
 		);
 	});
 }
@@ -501,11 +505,11 @@ fn multisig_1_of_3_works() {
 		let hash = blake2_256(&call);
 		assert_noop!(
 			Multisig::approve_as_multi(Origin::signed(1), 1, vec![2, 3], None, hash.clone(), 0),
-			Error::<Test>::ZeroThreshold,
+			Error::<Test>::MinimumThreshold,
 		);
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(4), 1, vec![2, 3], None, call.clone(), false, 0),
-			Error::<Test>::ZeroThreshold,
+			Multisig::as_multi(Origin::signed(1), 1, vec![2, 3], None, call.clone(), false, 0),
+			Error::<Test>::MinimumThreshold,
 		);
 		let boxed_call = Box::new(Call::Balances(BalancesCall::transfer(6, 15)));
 		assert_ok!(Multisig::as_multi_threshold_1(Origin::signed(1), vec![2, 3], boxed_call));

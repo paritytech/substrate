@@ -54,7 +54,7 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_NANOS, WEIGHT_PER_MICROS}},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, RawOrigin};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
@@ -128,8 +128,8 @@ decl_storage! {
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		/// Threshold is too low (zero).
-		ZeroThreshold,
+		/// Threshold must be 2 or greater.
+		MinimumThreshold,
 		/// Call is already approved by this signatory.
 		AlreadyApproved,
 		/// Call doesn't need any (more) approvals.
@@ -282,7 +282,7 @@ decl_module! {
 			let id = Self::multi_account_id(&signatories, 1);
 
 			let call_len = call.using_encoded(|c| c.len());
-			let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
+			let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
 
 			result.map(|post_dispatch_info| post_dispatch_info.actual_weight
 				.map(|actual_weight| weight_of::as_multi_threshold_1::<T>(
@@ -469,7 +469,7 @@ decl_module! {
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(threshold >= 2, Error::<T>::ZeroThreshold);
+			ensure!(threshold >= 2, Error::<T>::MinimumThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
@@ -510,7 +510,7 @@ impl<T: Trait> Module<T> {
 		call_or_hash: CallOrHash,
 		max_weight: Weight,
 	) -> DispatchResultWithPostInfo {
-		ensure!(threshold >= 2, Error::<T>::ZeroThreshold);
+		ensure!(threshold >= 2, Error::<T>::MinimumThreshold);
 		let max_sigs = T::MaxSignatories::get() as usize;
 		ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
 		let other_signatories_len = other_signatories.len();
@@ -551,7 +551,7 @@ impl<T: Trait> Module<T> {
 				// verify weight
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
 
-				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
+				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
 				Self::clear_call(&call_hash);
