@@ -548,3 +548,27 @@ fn weight_check_works() {
 		);
 	});
 }
+
+#[test]
+fn multisig_handles_no_preimage_after_all_approve() {
+	// This test checks the situation where everyone approves a multi-sig, but no-one provides the call data.
+	// In the end, any of the multisig callers can approve again with the call data and the call will go through.
+	new_test_ext().execute_with(|| {
+		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 3);
+		assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));
+		assert_ok!(Balances::transfer(Origin::signed(2), multi, 5));
+		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
+
+		let call = Call::Balances(BalancesCall::transfer(6, 15));
+		let call_weight = call.get_dispatch_info().weight;
+		let data = call.encode();
+		let hash = blake2_256(&data);
+		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 3, vec![2, 3], None, hash.clone(), 0));
+		assert_ok!(Multisig::approve_as_multi(Origin::signed(2), 3, vec![1, 3], Some(now()), hash.clone(), 0));
+		assert_ok!(Multisig::approve_as_multi(Origin::signed(3), 3, vec![1, 2], Some(now()), hash.clone(), 0));
+		assert_eq!(Balances::free_balance(6), 0);
+
+		assert_ok!(Multisig::as_multi(Origin::signed(3), 3, vec![1, 2], Some(now()), data, false, call_weight));
+		assert_eq!(Balances::free_balance(6), 15);
+	});
+}
