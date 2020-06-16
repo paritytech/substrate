@@ -269,6 +269,7 @@ pub use libp2p::{Multiaddr, PeerId};
 pub use libp2p::multiaddr;
 
 pub use sc_peerset::ReputationChange;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -292,4 +293,23 @@ pub trait NetworkStateInfo {
 
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId;
+}
+
+/// Overview status of the network.
+#[derive(Clone)]
+pub struct NetworkStatus<B: BlockT> {
+	/// Current global sync state.
+	pub sync_state: SyncState,
+	/// Target sync block number.
+	pub best_seen_block: Option<NumberFor<B>>,
+	/// Number of peers participating in syncing.
+	pub num_sync_peers: u32,
+	/// Total number of connected peers
+	pub num_connected_peers: usize,
+	/// Total number of active peers.
+	pub num_active_peers: usize,
+	/// Downloaded bytes per second averaged over the past few seconds.
+	pub average_download_per_sec: u64,
+	/// Uploaded bytes per second averaged over the past few seconds.
+	pub average_upload_per_sec: u64,
 }

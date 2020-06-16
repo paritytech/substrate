@@ -57,6 +57,7 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 pub struct Test;
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type DbWeight = ();
 	type BlockExecutionWeight = ();

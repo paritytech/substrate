@@ -29,7 +29,8 @@ pub use utils::*;
 pub use analysis::Analysis;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
-pub use sp_runtime::traits::{Dispatchable, Zero};
+pub use sp_runtime::traits::Zero;
+pub use frame_support;
 pub use paste;
 
 /// Construct pallet benchmarks for weighing dispatchables.
@@ -242,7 +243,9 @@ macro_rules! benchmarks_iter {
 			{ $( $common )* }
 			( $( $names )* )
 			$name { $( $code )* }: {
-				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
+				<
+					Call<T> as $crate::frame_support::traits::UnfilteredDispatchable
+				>::dispatch_bypass_filter(Call::<T>::$dispatch($($arg),*), $origin.into())?;
 			}
 			verify $postcode
 			$( $rest )*
@@ -262,7 +265,9 @@ macro_rules! benchmarks_iter {
 			{ $( $common )* }
 			( $( $names )* )
 			$name { $( $code )* }: {
-				<Call<T, I> as $crate::Dispatchable>::dispatch(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
+				<
+					Call<T, I> as $crate::frame_support::traits::UnfilteredDispatchable
+				>::dispatch_bypass_filter(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
 			}
 			verify $postcode
 			$( $rest )*
