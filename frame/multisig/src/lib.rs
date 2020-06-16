@@ -48,16 +48,14 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
+use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
 	weights::{Weight, GetDispatchInfo, DispatchClass, Pays},
 	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
-use sp_runtime::{
-	DispatchError, DispatchResult,
-	traits::{Dispatchable, Hash},
-};
+use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 
 mod tests;
 mod benchmarking;
@@ -122,10 +120,10 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Multisig {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
-			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) T::Hash
+			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 
-		pub Calls: map hasher(identity) T::Hash => Option<(Vec<u8>, T::AccountId, BalanceOf<T>)>;
+		pub Calls: map hasher(identity) [u8; 32] => Option<(Vec<u8>, T::AccountId, BalanceOf<T>)>;
 	}
 }
 
@@ -165,7 +163,7 @@ decl_event! {
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
 		BlockNumber = <T as system::Trait>::BlockNumber,
-		CallHash = <T as system::Trait>::Hash
+		CallHash = [u8; 32]
 	{
 		/// A new multisig operation has begun. First param is the account that is approving,
 		/// second is the multisig account, third is hash of the call.
@@ -257,7 +255,7 @@ decl_module! {
 		fn create(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			call_hash: T::Hash,
+			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::ensure_valid_input(threshold, &other_signatories)?;
@@ -288,7 +286,7 @@ decl_module! {
 			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
 			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			let encoded_call = call.encode();
-			let call_hash = T::Hashing::hash(&encoded_call);
+			let call_hash = blake2_256(&encoded_call);
 			Self::store_call(who.clone(), &call_hash, encoded_call)?;
 		}
 
@@ -342,7 +340,7 @@ decl_module! {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			timepoint: Timepoint<T::BlockNumber>,
-			call_hash: T::Hash,
+			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::ensure_valid_input(threshold, &other_signatories)?;
@@ -369,7 +367,7 @@ decl_module! {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			timepoint: Timepoint<T::BlockNumber>,
-			call_hash: T::Hash,
+			call_hash: [u8; 32],
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::ensure_valid_input(threshold, &other_signatories)?;
@@ -431,7 +429,7 @@ decl_module! {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			timepoint: Timepoint<T::BlockNumber>,
-			call_hash: T::Hash,
+			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::ensure_valid_input(threshold, &other_signatories)?;
@@ -460,12 +458,12 @@ impl<T: Trait> Module<T> {
 	///
 	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
-		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(T::Hashing::hash);
-		T::AccountId::decode(&mut &entropy.as_ref()[..]).unwrap_or_default()
+		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
+		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
 	/// Place a call's encoded data in storage, reserving funds as appropriate.
-	fn store_call(who: T::AccountId, hash: &T::Hash, data: Vec<u8>) -> DispatchResult {
+	fn store_call(who: T::AccountId, hash: &[u8; 32], data: Vec<u8>) -> DispatchResult {
 		if !Calls::<T>::contains_key(hash) {
 			let deposit = T::DepositBase::get()
 				+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
@@ -477,7 +475,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to remove a call from storage, returning it and any deposit on it to the owner.
-	fn take_call(hash: &T::Hash) -> Option<<T as Trait>::Call> {
+	fn take_call(hash: &[u8; 32]) -> Option<<T as Trait>::Call> {
 		if let Some((data, who, deposit)) = Calls::<T>::take(hash) {
 			T::Currency::unreserve(&who, deposit);
 			Decode::decode(&mut &data[..]).ok()
