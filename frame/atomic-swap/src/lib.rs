@@ -121,7 +121,8 @@ decl_event!(
 		NewSwap(AccountId, HashedProof, PendingSwap),
 		/// Swap claimed.
 		SwapClaimed(AccountId, HashedProof, Balance),
-		/// Swap claim failed its execution. The last parameter indicates whether retry is possible.
+		/// Swap claim failed its execution.
+		/// The third parameter indicates whether retry is possible.
 		SwapClaimFailed(AccountId, HashedProof, bool),
 		/// Swap cancelled.
 		SwapCancelled(AccountId, HashedProof),
@@ -205,7 +206,7 @@ decl_module! {
 				swap.balance,
 				BalanceStatus::Free,
 			) {
-				Err(e) => {
+				Err(_) => {
 					let expired = frame_system::Module::<T>::block_number() >
 						swap.end_block.saturating_add(T::ExpireDuration::get());
 					if expired {
@@ -222,7 +223,7 @@ decl_module! {
 						);
 					}
 
-					Err(e.into())
+					Ok(())
 				},
 				Ok(_) => {
 					PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
