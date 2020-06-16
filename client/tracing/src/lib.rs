@@ -86,6 +86,7 @@ pub struct SpanDatum {
 pub struct Visitor(FxHashMap<String, String>);
 
 impl Visitor {
+	/// Consume the Visitor, returning the inner FxHashMap
 	pub fn into_inner(self) -> FxHashMap<String, String> {
 		self.0
 	}
