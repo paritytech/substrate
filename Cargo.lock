@@ -6368,6 +6368,7 @@ dependencies = [
  "futures 0.3.4",
  "log",
  "parity-util-mem",
+ "parking_lot 0.10.2",
  "sc-client-api",
  "sc-network",
  "sp-blockchain",
@@ -7880,6 +7881,7 @@ version = "2.0.0-rc3"
 dependencies = [
  "futures 0.3.4",
  "futures-core",
+ "futures-timer 3.0.2",
  "lazy_static",
  "prometheus",
 ]
