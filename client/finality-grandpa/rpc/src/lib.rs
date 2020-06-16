@@ -19,7 +19,7 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{FutureExt, TryFutureExt, stream, TryStreamExt};
+use futures::{FutureExt, TryFutureExt, stream, TryStreamExt, future, StreamExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
 
@@ -43,10 +43,7 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi<Block>
-where
-	Block: BlockT
-{
+pub trait GrandpaApi<Notification> {
 	/// RPC Metadata
 	type Metadata;
 
@@ -58,7 +55,7 @@ where
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
 	#[pubsub(subscription = "grandpa_justifications", subscribe, name = "grandpa_subscribeJustifications")]
-	fn subscribe_justifications(&self, metadata: Self::Metadata, subscriber: Subscriber<JustificationNotification<Block>>);
+	fn subscribe_justifications(&self, metadata: Self::Metadata, subscriber: Subscriber<Notification>);
 
 	/// Unsubscribe from receiving notifications about recently finalized blocks.
 	#[pubsub(subscription = "grandpa_justifications", unsubscribe, name = "grandpa_unsubscribeJustifications")]
@@ -94,7 +91,7 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 	}
 }
 
-impl<AuthoritySet, VoterState, Block> GrandpaApi<Block> for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
+impl<AuthoritySet, VoterState, Block> GrandpaApi<JustificationNotification<Block>> for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -109,7 +106,9 @@ where
 	}
 
 	fn subscribe_justifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<JustificationNotification<Block>>) {
-		let stream = self.justification_receiver.subscribe().compat();
+		let stream = self.justification_receiver.subscribe()
+			.map(|x| Ok::<_,()>(x))
+			.compat();
 
 		let _id = self.manager.add(subscriber, |sink| {
 			let stream = stream.map(|res| Ok(res));
