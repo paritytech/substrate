@@ -76,5 +76,6 @@ fn change_name_contract_to_contracts<T: Trait>() -> Weight {
 	}
 	weight += db.reads(1);
 
+	sp_runtime::print("Done Contracts.");
 	weight
 }

@@ -65,5 +65,6 @@ fn change_name_timestamp_to_finality_tracker<T:Trait>() -> Weight {
 	}
 	reads += 1;
 
+	sp_runtime::print("Done Finality Tracker.");
 	T::DbWeight::get().reads_writes(reads, writes)
 }

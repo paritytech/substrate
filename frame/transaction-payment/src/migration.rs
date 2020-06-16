@@ -41,5 +41,6 @@ fn change_name_balances_to_transaction_payment<T: Trait>() -> Weight {
 	}
 	reads += 1;
 
+	sp_runtime::print("Done Transaction Payment.");
 	T::DbWeight::get().reads_writes(reads, writes)
 }
