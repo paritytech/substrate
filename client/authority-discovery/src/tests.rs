@@ -210,7 +210,7 @@ impl NetworkStateInfo for TestNetwork {
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
-		vec!["/ip6/2001:db8::".parse().unwrap()]
+		vec!["/ip6/2001:db8::/tcp/30333".parse().unwrap()]
 	}
 }
 
@@ -477,7 +477,7 @@ fn never_add_own_address_to_priority_group() {
 
 	let sentry_multiaddr = {
 		let peer_id = sentry_network.local_peer_id();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2".parse().unwrap();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
 
 		address.with(multiaddr::Protocol::P2p(
 			peer_id.into(),
@@ -487,7 +487,7 @@ fn never_add_own_address_to_priority_group() {
 	// Address of some other sentry node of `validator`.
 	let random_multiaddr = {
 		let peer_id = PeerId::random();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1".parse().unwrap();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
 		address.with(multiaddr::Protocol::P2p(
 			peer_id.into(),
