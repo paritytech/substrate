@@ -55,7 +55,7 @@ use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed, RawOrigin};
-use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
+use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
 
 mod tests;
 mod benchmarking;
@@ -154,6 +154,8 @@ decl_error! {
 		UnexpectedTimepoint,
 		/// The maximum weight information provided was too low.
 		WeightTooLow,
+		/// The data to be stored is already stored.
+		AlreadyStored,
 	}
 }
 
@@ -552,7 +554,7 @@ impl<T: Trait> Module<T> {
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
+				T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
 				Self::clear_call(&call_hash);
 				Self::deposit_event(RawEvent::MultisigExecuted(
@@ -570,9 +572,12 @@ impl<T: Trait> Module<T> {
 				// don't have threshold approvals even with our signature.
 
 				// Store the call if desired.
-				let stored = maybe_call
-					.filter(|_| store)
-					.map_or(false, |data| Self::store_call(who.clone(), &call_hash, data));
+				let stored = if let Some(data) = maybe_call.filter(|_| store) {
+					Self::store_call_and_reserve(who.clone(), &call_hash, data, BalanceOf::<T>::zero())?;
+					true
+				} else {
+					false
+				};
 
 				if let Some(pos) = maybe_pos {
 					// Record approval.
@@ -600,12 +605,15 @@ impl<T: Trait> Module<T> {
 
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
-			T::Currency::reserve(&who, deposit)?;
 
 			// Store the call if desired.
-			let stored = maybe_call
-				.filter(|_| store)
-				.map_or(false, |data| Self::store_call(who.clone(), &call_hash, data));
+			let stored = if let Some(data) = maybe_call.filter(|_| store) {
+				Self::store_call_and_reserve(who.clone(), &call_hash, data, deposit)?;
+				true
+			} else {
+				T::Currency::reserve(&who, deposit)?;
+				false
+			};
 
 			<Multisigs<T>>::insert(&id, call_hash, Multisig {
 				when: Self::timepoint(),
@@ -630,17 +638,15 @@ impl<T: Trait> Module<T> {
 	/// We store `data` here because storing `call` would result in needing another `.encode`.
 	///
 	/// Returns a `bool` indicating whether the data did end up being stored.
-	fn store_call(who: T::AccountId, hash: &[u8; 32], data: Vec<u8>) -> bool {
-		if !Calls::<T>::contains_key(hash) {
-			let deposit = T::DepositBase::get()
-				+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
-			if T::Currency::reserve(&who, deposit).is_ok() {
-				// Only store the data if the deposit was paid.
-				Calls::<T>::insert(&hash, (data, who, deposit));
-				return true
-			}
-		}
-		false
+	fn store_call_and_reserve(who: T::AccountId, hash: &[u8; 32], data: Vec<u8>, other_deposit: BalanceOf<T>)
+		-> DispatchResult
+	{
+		ensure!(!Calls::<T>::contains_key(hash), Error::<T>::AlreadyStored);
+		let deposit = other_deposit + T::DepositBase::get()
+			+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);
+		T::Currency::reserve(&who, deposit)?;
+		Calls::<T>::insert(&hash, (data, who, deposit));
+		Ok(())
 	}
 
 	/// Attempt to decode and return the call, provided by the user or from storage.
