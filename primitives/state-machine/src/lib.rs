@@ -301,8 +301,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			None => &mut cache,
 		};
 
-		self.overlay.enter_runtime()
-			.expect("This function is supposed to be called from the client only.");
+		self.overlay.enter_runtime().expect("StateMachine is never called from the runtime; qed");
 
 		let mut ext = Ext::new(
 			self.overlay,
