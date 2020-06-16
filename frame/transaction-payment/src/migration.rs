@@ -19,6 +19,9 @@
 use super::*;
 use frame_support::storage::migration::{put_storage_value, take_storage_value};
 use frame_support::weights::Weight;
+use sp_runtime::Fixed64;
+
+type OldMultiplier = Fixed64;
 
 pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 	change_name_balances_to_transaction_payment::<T>()
@@ -35,8 +38,11 @@ fn change_name_balances_to_transaction_payment<T: Trait>() -> Weight {
 
 	let mut reads = 0;
 	let mut writes = 0;
-	if let Some(next_fee_multiplier) = take_storage_value::<Multiplier>(b"Balances", b"NextFeeMultiplier", &[]) {
-		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], next_fee_multiplier);
+	if let Some(next_fee_multiplier) =
+		take_storage_value::<OldMultiplier>(b"Balances", b"NextFeeMultiplier", &[])
+	{
+		let mult = Multiplier::from(next_fee_multiplier.into_inner() as i128);
+		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], mult);
 		writes += 2;
 	}
 	reads += 1;
