@@ -117,30 +117,25 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 
 	sp_runtime::print("Balances: Balance::Account -> System::Account");
 	for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
-		sp_runtime::print("Balances: AccountNonce");
 		let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
 		let mut refs: system::RefCount = 0;
 		// The items in Kusama that would result in a ref count being incremented.
-		sp_runtime::print("Balances: Proxy");
 		if have_storage_value(b"Democracy", b"Proxy", &hash) {
 			refs += 1
 		}
 		// We skip Recovered since it's being replaced anyway.
 		let mut prefixed_hash = prefix.clone();
 		prefixed_hash.extend(&hash[..]);
-		sp_runtime::print("Balances: NextKeys");
 		if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) {
 			refs += 1
 		}
-		sp_runtime::print("Balances: Bonded");
 		if have_storage_value(b"Staking", b"Bonded", &hash) {
 			refs += 1
 		}
 		put_storage_value(b"System", b"Account", &hash, (nonce, refs, &balances));
 	}
 
-	sp_runtime::print("Balances: IsUpgraded");
-	take_storage_value::<T::Index>(b"Balances", b"IsUpgraded", &[]);
+	take_storage_value::<bool>(b"Balances", b"IsUpgraded", &[]);
 
 	StorageVersion::<I>::put(Releases::V2_0_0);
 
