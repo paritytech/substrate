@@ -17,3 +17,4 @@ jobs:
         if: github.event.pull_request.draft == false
         with:
           add-labels: 'A0-pleasereview'
+          remove-labels: 'A3-inprogress'
