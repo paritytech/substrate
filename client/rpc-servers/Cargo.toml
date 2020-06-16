@@ -22,3 +22,4 @@ sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 http = { package = "jsonrpc-http-server", version = "14.2.0" }
 ws = { package = "jsonrpc-ws-server", version = "14.2.0" }
+ipc = { version = "14.2.0", package = "jsonrpc-ipc-server" }
