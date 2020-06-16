@@ -179,7 +179,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// - `proof`: Revealed proof of the claim.
-		#[weight = T::DbWeight::get().reads_writes(1, 1)
+		#[weight = T::DbWeight::get().reads_writes(2, 2)
 		  .saturating_add(40_000_000)
 		  .saturating_add((proof.len() as Weight).saturating_mul(100))
 		]
