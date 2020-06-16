@@ -63,7 +63,7 @@ pub trait HandleEquivocation<T: Trait> {
 	) -> Result<(), OffenceError>;
 
 	/// Returns true if all of the offenders at the given time slot have already been reported.
-	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &SlotNumber) -> bool;
+	fn is_known_offence(offenders: &[T::KeyOwnerIdentification], time_slot: &SlotNumber) -> bool;
 
 	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_unsigned_equivocation_report(

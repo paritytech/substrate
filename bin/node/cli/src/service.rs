@@ -77,7 +77,7 @@ macro_rules! new_full_start {
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
 					&(client.clone() as Arc<_>),
-					select_chain,
+					select_chain.clone(),
 				)?;
 				let justification_import = grandpa_block_import.clone();
 
@@ -93,6 +93,7 @@ macro_rules! new_full_start {
 					Some(Box::new(justification_import)),
 					None,
 					client,
+					select_chain,
 					inherent_data_providers.clone(),
 					spawn_task_handle,
 					prometheus_registry,
@@ -347,14 +348,18 @@ pub fn new_light(config: Configuration)
 			client,
 			backend,
 			fetcher,
-			_select_chain,
+			mut select_chain,
 			_tx_pool,
 			spawn_task_handle,
 			registry,
 		| {
+			let select_chain = select_chain.take()
+				.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
+
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
+
 			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(),
 				backend,
@@ -378,6 +383,7 @@ pub fn new_light(config: Configuration)
 				None,
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
+				select_chain,
 				inherent_data_providers.clone(),
 				spawn_task_handle,
 				registry,
