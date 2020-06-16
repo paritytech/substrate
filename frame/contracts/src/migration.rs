@@ -21,7 +21,9 @@ use frame_support::storage::migration::{put_storage_value, take_storage_value, S
 use frame_support::weights::Weight;
 
 pub fn on_runtime_upgrade<T: Trait>() -> Weight {
-	change_name_contract_to_contracts::<T>()
+	// TODO: removed for now because it's failing
+	// change_name_contract_to_contracts::<T>()
+	0
 }
 
 // Change the storage name used by this pallet from `Contract` to `Contracts`.
