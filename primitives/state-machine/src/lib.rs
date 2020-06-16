@@ -94,9 +94,10 @@ pub type ChangesTrieTransaction<H, N> = (
 );
 
 /// Trie backend with in-memory storage.
-pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H, SimpleProof>;
+pub type InMemoryBackend<H, P> = TrieBackend<MemoryDB<H>, H, P>;
 
 /// Trie backend with in-memory storage and choice of proof.
+/// TODO EMCH replace by InMemoryBackend when not specific to check
 pub type InMemoryProofCheckBackend<H, P> = TrieBackend<MemoryDB<H>, H, P>;
 
 /// Trie backend with in-memory storage and choice of proof running over
@@ -1058,7 +1059,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256, SimpleProof>::from(initial);
 		let backend = state.as_proof_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();

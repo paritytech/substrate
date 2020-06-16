@@ -29,7 +29,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor};
 use sp_runtime::{Justification, Storage};
 use sp_state_machine::{
-	ChangesTrieTransaction, InMemoryBackend, backend::Backend as StateBackend, StorageCollection,
+	ChangesTrieTransaction, backend::Backend as StateBackend, StorageCollection,
 	ChildStorageCollection,
 };
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
@@ -43,6 +43,8 @@ use crate::{
 	light,
 	leaves::LeafSet,
 };
+
+type InMemoryBackend<H> = sp_state_machine::InMemoryBackend<H, sp_state_machine::SimpleProof>;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,

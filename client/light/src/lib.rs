@@ -30,6 +30,8 @@ pub mod fetcher;
 
 pub use {backend::*, blockchain::*, call_executor::*, fetcher::*};
 
+type InMemoryBackend<H> = sp_state_machine::InMemoryBackend<H, sp_state_machine::SimpleProof>;
+
 /// Create an instance of fetch data checker.
 pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>>(
 	blockchain: Arc<Blockchain<S>>,

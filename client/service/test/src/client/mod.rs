@@ -29,7 +29,7 @@ use substrate_test_runtime_client::{
 	BlockBuilderExt, DefaultTestClientBuilderExt, TestClientBuilderExt, ClientExt,
 };
 use sc_client_api::{
-	StorageProvider, BlockBackend, in_mem, BlockchainEvents,
+	StorageProvider, BlockBackend, in_mem, BlockchainEvents, SimpleProof,
 };
 use sc_client_db::{Backend, DatabaseSettings, DatabaseSettingsSrc, PruningMode};
 use sc_block_builder::BlockBuilderProvider;
@@ -142,7 +142,7 @@ pub fn prepare_client_with_key_changes() -> (
 }
 
 fn construct_block(
-	backend: &InMemoryBackend<BlakeTwo256>,
+	backend: &InMemoryBackend<BlakeTwo256, SimpleProof>,
 	number: BlockNumber,
 	parent_hash: Hash,
 	state_root: Hash,
@@ -217,7 +217,7 @@ fn construct_block(
 	(vec![].and(&Block { header, extrinsics: transactions }), hash)
 }
 
-fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8>, Hash) {
+fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256, SimpleProof>) -> (Vec<u8>, Hash) {
 	construct_block(
 		backend,
 		1,

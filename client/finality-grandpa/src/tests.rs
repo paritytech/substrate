@@ -52,9 +52,9 @@ use finality_proof::{
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
-use sp_state_machine::SimpleProof as StorageProof;
+use sp_state_machine::SimpleProof;
 
-type ProofCheckBackend<H> = sp_state_machine::InMemoryProofCheckBackend<H, StorageProof>;
+type ProofCheckBackend<H> = sp_state_machine::InMemoryProofCheckBackend<H, SimpleProof>;
 
 type PeerData =
 Mutex<
@@ -247,9 +247,9 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 		Ok(self.genesis_authorities.clone())
 	}
 
-	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<StorageProof> {
+	fn prove_authorities(&self, block: &BlockId<Block>) -> Result<SimpleProof> {
 		let authorities = self.authorities(block)?;
-		let backend = <InMemoryBackend<HashFor<Block>>>::from(vec![
+		let backend = <InMemoryBackend<HashFor<Block>, SimpleProof>>::from(vec![
 			(None, vec![(b"authorities".to_vec(), Some(authorities.encode()))])
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
@@ -263,7 +263,7 @@ impl AuthoritySetForFinalityChecker<Block> for TestApi {
 		&self,
 		_hash: <Block as BlockT>::Hash,
 		header: <Block as BlockT>::Header,
-		proof: StorageProof,
+		proof: SimpleProof,
 	) -> Result<AuthorityList> {
 		let results = read_proof_check::<ProofCheckBackend<HashFor<Block>>, HashFor<Block>, _>(
 			*header.state_root(), proof, vec![b"authorities"]

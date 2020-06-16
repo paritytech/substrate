@@ -32,9 +32,8 @@ use sp_trie;
 use sp_core::{H256, convert_hash};
 use sp_runtime::traits::{Header as HeaderT, AtLeast32Bit, Zero, One};
 use sp_state_machine::{
-	backend::Backend as StateBackend, SimpleProof as StorageProof,
+	backend::Backend as StateBackend, SimpleProof, InMemoryBackend,
 	prove_read_on_proof_backend, read_proof_check, read_proof_check_on_proving_backend,
-	SimpleProof, InMemoryBackend,
 };
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -106,7 +105,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	cht_num: Header::Number,
 	blocks: BlocksI,
 	hashes: HashesI
-) -> ClientResult<StorageProof>
+) -> ClientResult<SimpleProof>
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
@@ -118,7 +117,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let storage = InMemoryBackend::<Hasher>::default().update(vec![(None, transaction)]);
+	let storage = InMemoryBackend::<Hasher, SimpleProof>::default().update(vec![(None, transaction)]);
 	let proof_backend = storage.as_proof_backend()
 		.expect("InMemoryState::as_proof_backend always returns Some; qed");
 	prove_read_on_proof_backend(
@@ -132,7 +131,7 @@ pub fn check_proof<Header, Hasher>(
 	local_root: Header::Hash,
 	local_number: Header::Number,
 	remote_hash: Header::Hash,
-	remote_proof: StorageProof,
+	remote_proof: SimpleProof,
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,

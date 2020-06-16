@@ -331,20 +331,20 @@ fn prepare_digest_input<'a, H, Number>(
 #[cfg(test)]
 mod test {
 	use sp_core::Blake2Hasher;
-	use crate::InMemoryBackend;
+	use crate::{InMemoryBackend, SimpleProof};
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use super::*;
 
 	fn prepare_for_build(zero: u64) -> (
-		InMemoryBackend<Blake2Hasher>,
+		InMemoryBackend<Blake2Hasher, SimpleProof>,
 		InMemoryStorage<Blake2Hasher, u64>,
 		OverlayedChanges,
 		Configuration,
 	) {
 		let child_info_1 = ChildInfo::new_default(b"storage_key1");
 		let child_info_2 = ChildInfo::new_default(b"storage_key2");
-		let backend: InMemoryBackend<_> = vec![
+		let backend: InMemoryBackend<_, _> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
 			(vec![102], vec![255]),

@@ -21,7 +21,7 @@ use std::any::{Any, TypeId};
 use codec::Decode;
 use hash_db::Hasher;
 use crate::{
-	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
+	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext,
 	StorageKey, StorageValue,
 	changes_trie::{
 		Configuration as ChangesTrieConfiguration,
@@ -39,6 +39,8 @@ use sp_core::{
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
+
+type InMemoryBackend<H> = crate::InMemoryBackend<H, sp_trie::SimpleProof>;
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>

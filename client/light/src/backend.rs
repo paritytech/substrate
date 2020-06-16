@@ -29,7 +29,7 @@ use sp_core::ChangesTrieConfiguration;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
-	backend::{Backend as StateBackend, RecordBackendFor}, InMemoryBackend, ChangesTrieTransaction,
+	backend::{Backend as StateBackend, RecordBackendFor}, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
@@ -49,6 +49,7 @@ use sc_client_api::{
 };
 use super::blockchain::Blockchain;
 use hash_db::Hasher;
+use super::InMemoryBackend;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 

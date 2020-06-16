@@ -673,7 +673,7 @@ mod tests {
 		}, InMemoryBackend,
 	};
 
-	type TestBackend = InMemoryBackend<Blake2Hasher>;
+	type TestBackend = InMemoryBackend<Blake2Hasher, crate::SimpleProof>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {

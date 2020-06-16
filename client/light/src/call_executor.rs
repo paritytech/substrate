@@ -30,8 +30,9 @@ use sp_runtime::{
 use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, OverlayedChanges, ExecutionStrategy, execution_proof_check_on_proof_backend,
-	ExecutionManager, CloneableSpawn, InMemoryBackend,
+	ExecutionManager, CloneableSpawn,
 };
+use super::InMemoryBackend;
 use sp_state_machine::backend::{Backend as StateBackend, ProofRawFor};
 use hash_db::Hasher;
 use sp_state_machine::{SimpleProof as StorageProof, MergeableProof};
