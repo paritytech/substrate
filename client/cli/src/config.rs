@@ -264,6 +264,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
+	/// Get the RPC IPC path (`None` if disabled).
+	///
+	/// By default this is `None`.
+	fn rpc_ipc(&self) -> Result<Option<String>> {
+		Ok(Default::default())
+	}
+
 	/// Get the RPC websocket address (`None` if disabled).
 	///
 	/// By default this is `None`.
@@ -451,6 +458,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
+			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
