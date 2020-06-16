@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	ExecutionStrategy, TracingReceiver, WasmExecutionMethod,
-	DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
+	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
 	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
 };
 use crate::params::DatabaseParams;
@@ -104,22 +104,27 @@ impl ImportParams {
 	}
 
 	/// Get execution strategies for the parameters
-	pub fn execution_strategies(
-		&self,
-		is_dev: bool,
-	) -> ExecutionStrategies {
+	pub fn execution_strategies(&self, is_dev: bool, is_validator: bool) -> ExecutionStrategies {
 		let exec = &self.execution_strategies;
-		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
-			exec.execution.unwrap_or(if strat == default && is_dev {
+		let exec_all_or = |strat: Option<ExecutionStrategy>, default: ExecutionStrategy| {
+			let default = if is_dev {
 				ExecutionStrategy::Native
 			} else {
-				strat
-			}).into()
+				default
+			};
+
+			exec.execution.unwrap_or(strat.unwrap_or(default)).into()
+		};
+
+		let default_execution_import_block = if is_validator {
+			DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR
+		} else {
+			DEFAULT_EXECUTION_IMPORT_BLOCK
 		};
 
 		ExecutionStrategies {
 			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
-			importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
+			importing: exec_all_or(exec.execution_import_block, default_execution_import_block),
 			block_construction:
 				exec_all_or(exec.execution_block_construction, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION),
 			offchain_worker:
@@ -132,25 +137,25 @@ impl ImportParams {
 /// Execution strategies parameters.
 #[derive(Debug, StructOpt)]
 pub struct ExecutionStrategiesParams {
-	/// The means of execution used when calling into the runtime while syncing blocks.
+	/// The means of execution used when calling into the runtime for importing blocks as
+	/// part of an initial sync.
 	#[structopt(
 		long = "execution-syncing",
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_SYNCING.as_str(),
 	)]
-	pub execution_syncing: ExecutionStrategy,
+	pub execution_syncing: Option<ExecutionStrategy>,
 
-	/// The means of execution used when calling into the runtime while importing blocks.
+	/// The means of execution used when calling into the runtime for general block import
+	/// (including locally authored blocks).
 	#[structopt(
 		long = "execution-import-block",
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_IMPORT_BLOCK.as_str(),
 	)]
-	pub execution_import_block: ExecutionStrategy,
+	pub execution_import_block: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
 	#[structopt(
@@ -158,9 +163,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_BLOCK_CONSTRUCTION.as_str(),
 	)]
-	pub execution_block_construction: ExecutionStrategy,
+	pub execution_block_construction: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while using an off-chain worker.
 	#[structopt(
@@ -168,9 +172,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_OFFCHAIN_WORKER.as_str(),
 	)]
-	pub execution_offchain_worker: ExecutionStrategy,
+	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
 	#[structopt(
@@ -178,9 +181,8 @@ pub struct ExecutionStrategiesParams {
 		value_name = "STRATEGY",
 		possible_values = &ExecutionStrategy::variants(),
 		case_insensitive = true,
-		default_value = DEFAULT_EXECUTION_OTHER.as_str(),
 	)]
-	pub execution_other: ExecutionStrategy,
+	pub execution_other: Option<ExecutionStrategy>,
 
 	/// The execution strategy that should be used by all execution contexts.
 	#[structopt(

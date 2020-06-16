@@ -142,9 +142,13 @@ impl Spawn for SpawnTaskHandle {
 	}
 }
 
-impl sp_core::traits::SpawnBlocking for SpawnTaskHandle {
+impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_blocking(name, future);
+	}
+
+	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
 	}
 }
 
@@ -218,6 +222,13 @@ impl TaskManager {
 		self.spawn_handle().spawn(name, task)
 	}
 
+	/// Spawns the blocking task with the given name.
+	///
+	/// See also the documentation of [`SpawnTaskHandler::spawn_blocking`].
+	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_handle().spawn_blocking(name, task)
+	}
+
 	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
@@ -227,6 +238,17 @@ impl TaskManager {
 		}
 	}
 }
+
+impl sp_core::traits::SpawnNamed for TaskManager {
+	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn_blocking(name, future);
+	}
+
+	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
+	}
+}
+
 
 impl Future for TaskManager {
 	type Output = Result<(), crate::Error>;

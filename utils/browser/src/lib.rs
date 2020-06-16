@@ -86,6 +86,7 @@ where
 		pruning: Default::default(),
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
+		rpc_ipc: Default::default(),
 		rpc_ws: Default::default(),
 		rpc_ws_max_connections: Default::default(),
 		rpc_methods: Default::default(),

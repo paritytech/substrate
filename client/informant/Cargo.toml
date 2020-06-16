@@ -23,3 +23,4 @@ sp-blockchain = { version = "2.0.0-rc3", path = "../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-rc2", path = "../../primitives/utils" }
 sp-transaction-pool = { version = "2.0.0-rc2", path = "../../primitives/transaction-pool" }
+parking_lot = "0.10.2"
