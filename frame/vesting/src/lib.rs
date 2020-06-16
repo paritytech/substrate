@@ -280,13 +280,13 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
+		/// - DbWeight: 4 Reads, 4 Writes
+		///     - Reads: Vesting Storage, Balances Locks, Target Account, Source Account
+		///     - Writes: Vesting Storage, Balances Locks, Target Account, Source Account
 		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
 		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(4, 4)]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
