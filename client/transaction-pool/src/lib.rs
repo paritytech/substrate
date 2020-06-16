@@ -683,3 +683,23 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 		}
 	}
 }
+
+/// Inform the transaction pool about imported and finalized blocks.
+pub async fn notification_future<Client, Pool, Block>(
+	client: Arc<Client>,
+	txpool: Arc<Pool>
+)
+	where
+		Block: BlockT,
+		Client: sc_client_api::BlockchainEvents<Block>,
+		Pool: MaintainedTransactionPool<Block=Block>,
+{
+	let import_stream = client.import_notification_stream().map(Into::into).fuse();
+	let finality_stream = client.finality_notification_stream()
+		.map(Into::into)
+		.fuse();
+
+	futures::stream::select(import_stream, finality_stream)
+		.for_each(|evt| txpool.maintain(evt))
+		.await
+}
