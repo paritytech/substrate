@@ -21,7 +21,7 @@ use super::*;
 use crate::Module as Staking;
 use testing_utils::*;
 
-use sp_runtime::{traits::{Dispatchable, One}};
+use sp_runtime::traits::One;
 use frame_system::RawOrigin;
 pub use frame_benchmarking::{benchmarks, account};
 const SEED: u32 = 0;
@@ -379,12 +379,12 @@ benchmarks! {
 		let current_era = CurrentEra::get().unwrap();
 		let mut points_total = 0;
 		let mut points_individual = Vec::new();
-		let mut payout_calls = Vec::new();
+		let mut payout_calls_arg = Vec::new();
 
 		for validator in new_validators.iter() {
 			points_total += 10;
 			points_individual.push((validator.clone(), 10));
-			payout_calls.push(Call::<T>::payout_stakers(validator.clone(), current_era))
+			payout_calls_arg.push((validator.clone(), current_era));
 		}
 
 		// Give Era Points
@@ -401,8 +401,8 @@ benchmarks! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 	}: {
-		for call in payout_calls {
-			call.dispatch(RawOrigin::Signed(caller.clone()).into())?;
+		for arg in payout_calls_arg {
+			<Staking<T>>::payout_stakers(RawOrigin::Signed(caller.clone()).into(), arg.0, arg.1)?;
 		}
 	}
 
