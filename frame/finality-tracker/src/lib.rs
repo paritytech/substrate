@@ -252,6 +252,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -337,10 +338,7 @@ mod tests {
 					&Default::default(),
 					Default::default(),
 				);
-				assert_ok!(FinalityTracker::dispatch(
-					Call::final_hint(i-1),
-					Origin::NONE,
-				));
+				assert_ok!(FinalityTracker::final_hint(Origin::none(), i - 1));
 				FinalityTracker::on_finalize(i);
 				let hdr = System::finalize();
 				parent_hash = hdr.hash();

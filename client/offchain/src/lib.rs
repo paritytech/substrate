@@ -41,8 +41,9 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use futures::future::Future;
 use log::{debug, warn};
 use sc_network::NetworkStateInfo;
-use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext};
+use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
+use futures::{prelude::*, future::ready};
 
 mod api;
 
@@ -159,6 +160,43 @@ impl<Client, Storage, Block> OffchainWorkers<
 	fn spawn_worker(&self, f: impl FnOnce() -> () + Send + 'static) {
 		self.thread_pool.lock().execute(f);
 	}
+}
+
+/// Inform the offchain worker about new imported blocks
+pub async fn notification_future<Client, Storage, Block, Spawner>(
+	is_validator: bool,
+	client: Arc<Client>,
+	offchain: Arc<OffchainWorkers<Client, Storage, Block>>,
+	spawner: Spawner,
+	network_state_info: Arc<dyn NetworkStateInfo + Send + Sync>,
+)
+	where
+		Block: traits::Block,
+		Client: ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
+		Client::Api: OffchainWorkerApi<Block>,
+		Storage: OffchainStorage + 'static,
+		Spawner: SpawnNamed
+{
+	client.import_notification_stream().for_each(move |n| {
+		if n.is_new_best {
+			spawner.spawn(
+				"offchain-on-block",
+				offchain.on_block_imported(
+					&n.header,
+					network_state_info.clone(),
+					is_validator,
+				).boxed(),
+			);
+		} else {
+			log::debug!(
+				target: "sc_offchain",
+				"Skipping offchain workers for non-canon block: {:?}",
+				n.header,
+			)
+		}
+
+		ready(())
+	}).await;
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedI
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
 use sc_client_api::ClientInfo;
+use sc_network::config::Role;
 
 use sysinfo::{self, ProcessExt, SystemExt};
 
@@ -260,10 +261,17 @@ impl MetricsService {
 
 
 impl MetricsService {
-	pub fn with_prometheus(registry: &Registry, name: &str, version: &str, roles: u64)
+	pub fn with_prometheus(registry: &Registry, name: &str, version: &str, role: &Role)
 		-> Result<Self, PrometheusError>
 	{
-		PrometheusMetrics::setup(registry, name, version, roles).map(|p| {
+		let role_bits = match role {
+			Role::Full => 1u64,
+			Role::Light => 2u64,
+			Role::Sentry { .. } => 3u64,
+			Role::Authority { .. } => 4u64,
+		};
+
+		PrometheusMetrics::setup(registry, name, version, role_bits).map(|p| {
 			Self::inner_new(Some(p))
 		})
 	}

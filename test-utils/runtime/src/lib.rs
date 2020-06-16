@@ -188,7 +188,7 @@ impl ExtrinsicT for Extrinsic {
 }
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
-	type Origin = ();
+	type Origin = Origin;
 	type Trait = ();
 	type Info = ();
 	type PostInfo = ();
@@ -405,6 +405,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
