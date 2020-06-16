@@ -97,7 +97,7 @@ pub fn prove_session_membership<T: Trait, D: AsRef<[u8]>>(
 /// Due to re-organisation it could be that the `first_to_keep` might be less
 /// than the stored one, in which case the conservative choice is made to keep records
 /// up to the one that is the lesser.
-pub fn prune_older_than(first_to_keep: SessionIndex) {
+pub fn prune_older_than<T: Trait>(first_to_keep: SessionIndex) {
 	let derived_key = shared::LAST_PRUNE.to_vec();
 	let entry = StorageValueRef::persistent(derived_key.as_ref());
 	match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
@@ -127,11 +127,11 @@ pub fn prune_older_than(first_to_keep: SessionIndex) {
 }
 
 /// Keep the newest `n` items, and prune all items older than that.
-pub fn keep_newest(n_to_keep: usize) {
+pub fn keep_newest<T: Trait>(n_to_keep: usize) {
 	let session_index = <SessionModule<T>>::current_index();
 	let n_to_keep = n_to_keep as SessionIndex;
 	if n_to_keep < session_index {
-		Self::prune_older_than(session_index - n_to_keep)
+		prune_older_than::<T>(session_index - n_to_keep)
 	}
 }
 
