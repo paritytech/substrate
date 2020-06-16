@@ -6,8 +6,8 @@ use sc_client_api::ExecutorProvider;
 use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{
-	error::{Error as ServiceError},
-	Configuration, ServiceBuilder, ChainComponents,
+	error::{Error as ServiceError}, Configuration, ServiceBuilder, ChainComponents,
+	KeepAliveChainComponents,
 };
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
@@ -16,7 +16,6 @@ use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{
 	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
 };
-use sc_cli::KeepAliveChainComponents;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -205,7 +204,7 @@ pub fn new_full(config: Configuration)
 	}
 
 	Ok(KeepAliveChainComponents {
-		task_manager, telemetry, base_path, rpc,
+		task_manager, other: Box::new((telemetry, base_path, rpc)),
 	})
 }
 
@@ -277,7 +276,7 @@ pub fn new_light(config: Configuration) -> Result<KeepAliveChainComponents, Serv
 		.build_light()
 		.map(|ChainComponents { task_manager, telemetry, base_path, rpc, .. }| {
 			KeepAliveChainComponents {
-				task_manager, telemetry, base_path, rpc,
+				task_manager, other: Box::new((telemetry, base_path, rpc)),
 			}
 		})
 }
