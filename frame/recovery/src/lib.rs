@@ -320,6 +320,18 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		/// The base amount of currency needed to reserve for creating a recovery configuration.
+		const ConfigDepositBase: BalanceOf<T> = T::ConfigDepositBase::get();
+
+		/// The amount of currency needed per additional user when creating a recovery configuration.
+		const FriendDepositFactor: BalanceOf<T> = T::FriendDepositFactor::get();
+
+		/// The maximum amount of friends allowed in a recovery configuration.
+		const MaxFriends: u16 = T::MaxFriends::get();
+
+		/// The base amount of currency needed to reserve for starting a recovery.
+		const RecoveryDeposit: BalanceOf<T> = T::RecoveryDeposit::get();
+
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
