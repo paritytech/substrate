@@ -233,7 +233,9 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_initialize_block: InitializeBlock<'a, Block>,
 		_execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
-		_proof_recorder: Option<&RefCell<ProofRecorder<<Self::Backend as sc_client_api::backend::Backend<Block>>::State, Block>>>,
+		_proof_recorder: Option<&RefCell<
+			ProofRecorder<<Self::Backend as sc_client_api::backend::Backend<Block>>::State, Block>
+		>>,
 		_extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		unreachable!()
@@ -577,12 +579,17 @@ fn header_with_computed_extrinsics_root(extrinsics: Vec<Extrinsic>) -> Header {
 #[test]
 fn storage_read_proof_is_generated_and_checked() {
 	let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
-	assert_eq!((&local_checker as &dyn FetchChecker<Block, StorageProof>).check_read_proof(&RemoteReadRequest::<Header> {
-		block: remote_block_header.hash(),
-		header: remote_block_header,
-		keys: vec![well_known_keys::HEAP_PAGES.to_vec()],
-		retry_count: None,
-	}, remote_read_proof).unwrap().remove(well_known_keys::HEAP_PAGES).unwrap().unwrap()[0], heap_pages as u8);
+	assert_eq!(
+		(&local_checker as &dyn FetchChecker<Block, StorageProof>)
+			.check_read_proof(&RemoteReadRequest::<Header> {
+				block: remote_block_header.hash(),
+				header: remote_block_header,
+				keys: vec![well_known_keys::HEAP_PAGES.to_vec()],
+				retry_count: None,
+			}, remote_read_proof).unwrap()
+			.remove(well_known_keys::HEAP_PAGES).unwrap().unwrap()[0],
+		heap_pages as u8,
+	);
 }
 
 #[test]

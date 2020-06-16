@@ -835,6 +835,7 @@ mod tests {
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{Layout, SimpleProof, SimpleFullProof, BackendProof, FullBackendProof};
 
+	type TestCheckBackend<P> = InMemoryProofCheckBackend<BlakeTwo256, P>;
 	type CompactProof = sp_trie::CompactProof<Layout<BlakeTwo256>>;
 	type CompactFullProof = sp_trie::CompactFullProof<Layout<BlakeTwo256>>;
 	type QueryPlanProof = sp_trie::QueryPlanProof<Layout<BlakeTwo256>>;
@@ -1035,7 +1036,7 @@ mod tests {
 		).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<InMemoryProofCheckBackend<BlakeTwo256, P>, BlakeTwo256, u64, _>(
+		let local_result = execution_proof_check::<TestCheckBackend<P>, BlakeTwo256, u64, _>(
 			remote_root,
 			remote_proof.into(),
 			&mut Default::default(),
@@ -1314,7 +1315,8 @@ mod tests {
 		let remote_backend = trie_backend::tests::test_trie_proof::<CompactProof>();
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_root_child = remote_backend.child_storage_root(child_info, std::iter::empty()).0;
-		let (recorder, root_input) = prove_read_for_query_plan_check(remote_backend, &[b"value2"]).unwrap();
+		let (recorder, root_input) = prove_read_for_query_plan_check(remote_backend, &[b"value2"])
+			.unwrap();
 		let mut root_map = ChildrenProofMap::default();
 		root_map.insert(ChildInfo::top_trie().proof_info(), remote_root.encode());
 		assert!(ProofInput::ChildTrieRoots(root_map) == root_input);
@@ -1415,20 +1417,12 @@ mod tests {
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 
 		// check proof locally
-		let local_result1 = read_proof_check::<
-			InMemoryProofCheckBackend<BlakeTwo256, P>,
-			BlakeTwo256,
-			_,
-		>(
+		let local_result1 = read_proof_check::<TestCheckBackend<P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[b"value2"],
 		).unwrap();
-		let local_result2 = read_proof_check::<
-			InMemoryProofCheckBackend<BlakeTwo256, P>,
-			BlakeTwo256,
-			_,
-		>(
+		let local_result2 = read_proof_check::<TestCheckBackend<P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			&[&[0xff]],
@@ -1448,21 +1442,13 @@ mod tests {
 			child_info,
 			&[b"value3"],
 		).unwrap();
-		let local_result1 = read_child_proof_check::<
-			InMemoryProofCheckBackend<BlakeTwo256, P>,
-			BlakeTwo256,
-			_,
-		>(
+		let local_result1 = read_child_proof_check::<TestCheckBackend<P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			child_info,
 			&[b"value3"],
 		).unwrap();
-		let local_result2 = read_child_proof_check::<
-			InMemoryProofCheckBackend<BlakeTwo256, P>,
-			BlakeTwo256,
-			_,
-		>(
+		let local_result2 = read_child_proof_check::<TestCheckBackend<P>, BlakeTwo256, _>(
 			remote_root,
 			remote_proof.clone().into(),
 			child_info,

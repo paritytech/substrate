@@ -220,7 +220,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher, R: RecordBackend<H>> TrieBackendStorag
 {
 	type Overlay = S::Overlay;
 
-	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(
+		&self,
+		child_info: &ChildInfo,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.read().get(child_info, key) {
 			return Ok(v.clone());
 		}
@@ -531,7 +536,10 @@ mod tests {
 
 		let proof = proving.extract_proof().unwrap();
 
-		let proof_check = create_proof_check_backend::<BlakeTwo256, P>(in_memory_root.into(), proof.into()).unwrap();
+		let proof_check = create_proof_check_backend::<BlakeTwo256, P>(
+			in_memory_root.into(),
+			proof.into(),
+		).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 
