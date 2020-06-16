@@ -72,7 +72,6 @@ use sc_network::{
 	ExHashT,
 	Multiaddr,
 	NetworkStateInfo,
-	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
