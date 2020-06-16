@@ -191,7 +191,7 @@ decl_module! {
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::InvalidProof)?;
 
-			let succeed = T::Currency::repatriate_reserved(
+			let succeeded = T::Currency::repatriate_reserved(
 				&swap.source,
 				&target,
 				swap.balance,
@@ -201,7 +201,7 @@ decl_module! {
 			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
 
 			Self::deposit_event(
-				RawEvent::SwapClaimed(target, hashed_proof, swap.balance, succeed)
+				RawEvent::SwapClaimed(target, hashed_proof, swap.balance, succeeded)
 			);
 
 			Ok(())
