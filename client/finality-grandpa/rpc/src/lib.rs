@@ -32,7 +32,7 @@ mod report;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
-use sc_finality_grandpa::GrandpaJustificationReceiver;
+use sc_finality_grandpa::{JustificationNotification , GrandpaJustificationReceiver};
 use sp_runtime::traits::Block as BlockT;
 
 /// Returned when Grandpa RPC endpoint is not ready.
@@ -43,7 +43,10 @@ type FutureResult<T> =
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
-pub trait GrandpaApi {
+pub trait GrandpaApi<Block>
+where
+	Block: BlockT
+{
 	/// RPC Metadata
 	type Metadata;
 
@@ -55,7 +58,7 @@ pub trait GrandpaApi {
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
 	#[pubsub(subscription = "grandpa_justifications", subscribe, name = "grandpa_subscribeJustifications")]
-	fn justification_subscription(&self, metadata: Self::Metadata, subscriber: Subscriber<bool>);
+	fn subscribe_justifications(&self, metadata: Self::Metadata, subscriber: Subscriber<JustificationNotification<Block>>);
 
 	/// Unsubscribe from receiving notifications about recently finalized blocks.
 	#[pubsub(subscription = "grandpa_justifications", unsubscribe, name = "grandpa_unsubscribeJustifications")]
@@ -91,7 +94,7 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 	}
 }
 
-impl<AuthoritySet, VoterState, Block> GrandpaApi for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
+impl<AuthoritySet, VoterState, Block> GrandpaApi<Block> for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -105,28 +108,15 @@ where
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
 	}
 
-	// WIP: Should be changed to Subscriber<JustificationNotification>
-	fn justification_subscription(&self, _metadata: Self::Metadata, subscriber: Subscriber<bool>) {
-		// let stream = self.receiver.subscribe().compat();
-		//
-		// This will need to use the SubscriptionManager from `jsonrpc_pubsub`
-		//
-		// manager.add(subscriber, |sink| {
-		//      // Write to the sink using the receiver stream
-		//      // Check client/rpc/src/chain/mod.rs or the jsonrpc
-		//      // repo for examples
-		// });
+	fn subscribe_justifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<JustificationNotification<Block>>) {
+		let stream = self.justification_receiver.subscribe().compat();
 
-		let stream = stream::iter(vec![Ok::<_,()>(true)]).compat();
-
-		let id = self.manager.add(subscriber, |sink| {
+		let _id = self.manager.add(subscriber, |sink| {
 			let stream = stream.map(|res| Ok(res));
 			sink.sink_map_err(|e| ())
 				.send_all(stream)
 				.map(|_| ())
 		});
-
-		todo!()
 	}
 
 	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool> {

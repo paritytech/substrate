@@ -39,6 +39,7 @@
 use std::sync::Arc;
 use log::{trace, warn};
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -151,7 +152,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 }
 
 /// Justification for a finalized block.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct JustificationNotification<Block: BlockT> {
 	/// Highest finalized block header
 	pub header: Block::Header,
