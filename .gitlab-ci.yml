@@ -727,7 +727,7 @@ validator 4 4:
 check-labels:
   stage:                          .post
   image:                          paritytech/tools:latest
-  <<:                             *kubernetes-env
+  <<:                             *kubernetes-build
   only:
     - /^[0-9]+$/
   script:
