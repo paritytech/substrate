@@ -23,7 +23,7 @@ use browser_utils::{
 	Client,
 	browser_configuration, set_console_error_panic_hook, init_console_log,
 };
-use sc_cli::KeepAliveChainComponents;
+use sc_service::KeepAliveChainComponents;
 use std::str::FromStr;
 
 /// Starts the client.

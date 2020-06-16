@@ -25,26 +25,11 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{
-	Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager,
-	BasePath,
-};
+use sc_service::{Configuration, Role, ServiceBuilderCommand, TaskType, KeepAliveChainComponents};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
 use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
-
-/// The components of the chain that we need to keep alive until the node quits.
-pub struct KeepAliveChainComponents {
-	/// The chain task manager. 
-	pub task_manager: TaskManager,
-	/// A shared instance of Telemetry (if enabled).
-	pub telemetry: Option<sc_telemetry::Telemetry>,
-	/// The base path.
-	pub base_path: Option<Arc<BasePath>>,
-	/// A RPC instance.
-	pub rpc: Box<dyn std::any::Any + Send + Sync>,
-}
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -270,15 +255,8 @@ impl<C: SubstrateCli> Runner<C> {
 	) -> Result<()> {
 		let KeepAliveChainComponents {
 			task_manager,
-			// we eagerly drop the service so that the internal exit future is fired,
-			// but we need to keep holding a reference to the global telemetry guard
-			// and drop the runtime first.
-			telemetry: _telemetry,
-			// we hold a reference to the base path so if the base path is a temporary directory it will
-			// not be deleted before the tokio runtime finish to clean up
-			base_path: _base_path,
-			rpc: _rpc,
-			..
+			// We need to keep a hold of these until the tasks are finished.
+			other: _other,
 		} = initialise(self.config)?;
 
 		{

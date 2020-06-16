@@ -30,11 +30,15 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	ServiceBuilder, config::Configuration, error::{Error as ServiceError},
-	RpcHandlers, ChainComponents,
+	RpcHandlers, ChainComponents, KeepAliveChainComponents,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
-use sc_cli::KeepAliveChainComponents;
+use sc_network::{Event, NetworkService};
+use sp_runtime::traits::Block as BlockT;
+use futures::prelude::*;
+use sc_client_api::ExecutorProvider;
+use sp_core::traits::BareCryptoStorePtr;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -149,186 +153,196 @@ macro_rules! new_full_start {
 	}}
 }
 
-/// Creates a full service from the configuration.
-///
-/// We need to use a macro because the test suit doesn't work with an opaque service. It expects
-/// concrete types instead.
-macro_rules! new_full {
-	($config:expr, $with_startup_data: expr) => {{
-		use futures::prelude::*;
-		use sc_network::Event;
-		use sc_client_api::ExecutorProvider;
-		use sp_core::traits::BareCryptoStorePtr;
+type FullClient = sc_service::TFullClient<Block, RuntimeApi, node_executor::Executor>;
+type FullBackend = sc_service::TFullBackend<Block>;
+type GrandpaBlockImport = grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, sc_consensus::LongestChain<FullBackend, Block>>;
+type BabeBlockImport = sc_consensus_babe::BabeBlockImport<Block, FullClient, GrandpaBlockImport>;
 
-		let (
-			role,
-			force_authoring,
-			name,
-			disable_grandpa,
-		) = (
-			$config.role.clone(),
-			$config.force_authoring,
-			$config.network.node_name.clone(),
-			$config.disable_grandpa,
+/// Creates a full service from the configuration.
+pub fn new_full_base(
+	config: Configuration,
+	with_startup_data: impl FnOnce(&BabeBlockImport, &sc_consensus_babe::BabeLink<Block>)
+) -> Result<(
+	KeepAliveChainComponents,
+	InherentDataProviders,
+	Arc<FullClient>, Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::FullChainApi<FullClient, Block>, Block>>
+), ServiceError> {
+	let (
+		role,
+		force_authoring,
+		name,
+		disable_grandpa,
+	) = (
+		config.role.clone(),
+		config.force_authoring,
+		config.network.node_name.clone(),
+		config.disable_grandpa,
+	);
+
+	let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
+		new_full_start!(config);
+
+	let ChainComponents {
+		client, transaction_pool, task_manager, keystore, network, telemetry, base_path,
+		select_chain, prometheus_registry, rpc, telemetry_on_connect_sinks, ..
+	} = builder
+		.with_finality_proof_provider(|client, backend| {
+			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+			let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
+			Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
+		})?
+		.build_full()?;
+
+	let (block_import, grandpa_link, babe_link) = import_setup.take()
+		.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+
+	let shared_voter_state = rpc_setup.take()
+		.expect("The SharedVoterState is present for Full Services or setup failed before. qed");
+
+	(with_startup_data)(&block_import, &babe_link);
+
+	if let sc_service::config::Role::Authority { .. } = &role {
+		let proposer = sc_basic_authorship::ProposerFactory::new(
+			client.clone(),
+			transaction_pool.clone(),
+			prometheus_registry.as_ref(),
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup) =
-			new_full_start!($config);
+		let select_chain = select_chain
+			.ok_or(sc_service::Error::SelectChainRequired)?;
 
-		let ChainComponents {
-			client, transaction_pool, task_manager, keystore, network, telemetry, base_path,
-			select_chain, prometheus_registry, rpc, telemetry_on_connect_sinks, ..
-		} = builder
-			.with_finality_proof_provider(|client, backend| {
-				// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
-				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
-			})?
-			.build_full()?;
+		let can_author_with =
+			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let (block_import, grandpa_link, babe_link) = import_setup.take()
-			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
-
-		let shared_voter_state = rpc_setup.take()
-			.expect("The SharedVoterState is present for Full Services or setup failed before. qed");
-
-		($with_startup_data)(&block_import, &babe_link);
-
-		if let sc_service::config::Role::Authority { .. } = &role {
-			let proposer = sc_basic_authorship::ProposerFactory::new(
-				client.clone(),
-				transaction_pool,
-				prometheus_registry.as_ref(),
-			);
-
-			let select_chain = select_chain
-				.ok_or(sc_service::Error::SelectChainRequired)?;
-
-			let can_author_with =
-				sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
-
-			let babe_config = sc_consensus_babe::BabeParams {
-				keystore: keystore.clone(),
-				client: client.clone(),
-				select_chain,
-				env: proposer,
-				block_import,
-				sync_oracle: network.clone(),
-				inherent_data_providers: inherent_data_providers.clone(),
-				force_authoring,
-				babe_link,
-				can_author_with,
-			};
-
-			let babe = sc_consensus_babe::start_babe(babe_config)?;
-			task_manager.spawn_essential("babe-proposer", babe);
-		}
-
-		// Spawn authority discovery module.
-		if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry {..}) {
-			let (sentries, authority_discovery_role) = match role {
-				sc_service::config::Role::Authority { ref sentry_nodes } => (
-					sentry_nodes.clone(),
-					sc_authority_discovery::Role::Authority (
-						keystore.clone(),
-					),
-				),
-				sc_service::config::Role::Sentry {..} => (
-					vec![],
-					sc_authority_discovery::Role::Sentry,
-				),
-				_ => unreachable!("Due to outer matches! constraint; qed.")
-			};
-
-			let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
-				Event::Dht(e) => Some(e),
-				_ => None,
-			}}).boxed();
-			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
-				client.clone(),
-				network.clone(),
-				sentries,
-				dht_event_stream,
-				authority_discovery_role,
-				prometheus_registry.clone(),
-			);
-
-			task_manager.spawn("authority-discovery", authority_discovery);
-		}
-
-		// if the node isn't actively participating in consensus then it doesn't
-		// need a keystore, regardless of which protocol we use below.
-		let keystore = if role.is_authority() {
-			Some(keystore.clone() as BareCryptoStorePtr)
-		} else {
-			None
+		let babe_config = sc_consensus_babe::BabeParams {
+			keystore: keystore.clone(),
+			client: client.clone(),
+			select_chain,
+			env: proposer,
+			block_import,
+			sync_oracle: network.clone(),
+			inherent_data_providers: inherent_data_providers.clone(),
+			force_authoring,
+			babe_link,
+			can_author_with,
 		};
 
-		let config = grandpa::Config {
-			// FIXME #1578 make this available through chainspec
-			gossip_duration: std::time::Duration::from_millis(333),
-			justification_period: 512,
-			name: Some(name),
-			observer_enabled: false,
-			keystore,
-			is_authority: role.is_network_authority(),
+		let babe = sc_consensus_babe::start_babe(babe_config)?;
+		task_manager.spawn_essential("babe-proposer", babe);
+	}
+
+	// Spawn authority discovery module.
+	if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry {..}) {
+		let (sentries, authority_discovery_role) = match role {
+			sc_service::config::Role::Authority { ref sentry_nodes } => (
+				sentry_nodes.clone(),
+				sc_authority_discovery::Role::Authority (
+					keystore.clone(),
+				),
+			),
+			sc_service::config::Role::Sentry {..} => (
+				vec![],
+				sc_authority_discovery::Role::Sentry,
+			),
+			_ => unreachable!("Due to outer matches! constraint; qed.")
 		};
 
-		let enable_grandpa = !disable_grandpa;
-		if enable_grandpa {
-			// start the full GRANDPA voter
-			// NOTE: non-authorities could run the GRANDPA observer protocol, but at
-			// this point the full voter should provide better guarantees of block
-			// and vote data availability than the observer. The observer has not
-			// been tested extensively yet and having most nodes in a network run it
-			// could lead to finality stalls.
-			let grandpa_config = grandpa::GrandpaParams {
-				config,
-				link: grandpa_link,
-				network: network.clone(),
-				inherent_data_providers: inherent_data_providers.clone(),
-				telemetry_on_connect: Some(telemetry_on_connect_sinks.on_connect_stream()),
-				voting_rule: grandpa::VotingRulesBuilder::default().build(),
-				prometheus_registry: prometheus_registry.clone(),
-				shared_voter_state,
-			};
+		let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
+			Event::Dht(e) => Some(e),
+			_ => None,
+		}}).boxed();
+		let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
+			client.clone(),
+			network.clone(),
+			sentries,
+			dht_event_stream,
+			authority_discovery_role,
+			prometheus_registry.clone(),
+		);
 
-			// the GRANDPA voter task is considered infallible, i.e.
-			// if it fails we take down the service with it.
-			task_manager.spawn_essential(
-				"grandpa-voter",
-				grandpa::run_grandpa_voter(grandpa_config)?
-			);
-		} else {
-			grandpa::setup_disabled_grandpa(
-				client,
-				&inherent_data_providers,
-				network.clone(),
-			)?;
-		}
+		task_manager.spawn("authority-discovery", authority_discovery);
+	}
 
-		Ok(KeepAliveChainComponents {
-			task_manager, telemetry, base_path, rpc,
-		})
-	}};
-	($config:expr) => {{
-		new_full!($config, |_, _| {})
-	}}
+	// if the node isn't actively participating in consensus then it doesn't
+	// need a keystore, regardless of which protocol we use below.
+	let keystore = if role.is_authority() {
+		Some(keystore.clone() as BareCryptoStorePtr)
+	} else {
+		None
+	};
+
+	let config = grandpa::Config {
+		// FIXME #1578 make this available through chainspec
+		gossip_duration: std::time::Duration::from_millis(333),
+		justification_period: 512,
+		name: Some(name),
+		observer_enabled: false,
+		keystore,
+		is_authority: role.is_network_authority(),
+	};
+
+	let enable_grandpa = !disable_grandpa;
+	if enable_grandpa {
+		// start the full GRANDPA voter
+		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
+		// this point the full voter should provide better guarantees of block
+		// and vote data availability than the observer. The observer has not
+		// been tested extensively yet and having most nodes in a network run it
+		// could lead to finality stalls.
+		let grandpa_config = grandpa::GrandpaParams {
+			config,
+			link: grandpa_link,
+			network: network.clone(),
+			inherent_data_providers: inherent_data_providers.clone(),
+			telemetry_on_connect: Some(telemetry_on_connect_sinks.on_connect_stream()),
+			voting_rule: grandpa::VotingRulesBuilder::default().build(),
+			prometheus_registry: prometheus_registry.clone(),
+			shared_voter_state,
+		};
+
+		// the GRANDPA voter task is considered infallible, i.e.
+		// if it fails we take down the service with it.
+		task_manager.spawn_essential(
+			"grandpa-voter",
+			grandpa::run_grandpa_voter(grandpa_config)?
+		);
+	} else {
+		grandpa::setup_disabled_grandpa(
+			client.clone(),
+			&inherent_data_providers,
+			network.clone(),
+		)?;
+	}
+
+	Ok((
+		KeepAliveChainComponents {
+			task_manager, other: Box::new((telemetry, base_path, rpc)),
+		},
+		inherent_data_providers,
+		client, network, transaction_pool
+	))
 }
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
 -> Result<KeepAliveChainComponents, ServiceError> {
-	new_full!(config)
+	new_full_base(config, |_, _| ()).map(|(keep_alive, _, _, _, _)| keep_alive)
 }
 
-fn new_light_base(config: Configuration)
--> Result<(KeepAliveChainComponents, RpcHandlers), ServiceError> {
+type LightClient = sc_service::TLightClient<Block, RuntimeApi, node_executor::Executor>;
+type LightFetcher = sc_network::config::OnDemand<Block>;
+
+pub fn new_light_base(config: Configuration) -> Result<(
+	KeepAliveChainComponents, RpcHandlers, Arc<LightClient>,
+	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block>>
+), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let ChainComponents {
-		task_manager, telemetry, base_path, rpc_handlers, rpc, ..
-	 } = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
+		task_manager, telemetry, base_path, rpc_handlers, rpc, client, network, transaction_pool, ..
+	} = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
@@ -414,23 +428,23 @@ fn new_light_base(config: Configuration)
 
 	Ok((
 		KeepAliveChainComponents {
-			task_manager, telemetry, base_path, rpc,
+			task_manager, other: Box::new((telemetry, base_path, rpc)),
 		},
 		rpc_handlers,
+		client, network, transaction_pool
 	))
 }
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<KeepAliveChainComponents, ServiceError> {	
-	new_light_base(config).map(|(components, _)| components)
+	new_light_base(config).map(|(components, _, _, _, _)| components)
 }
 
 /// Builds a new service for a browser light client.
 pub fn new_light_browser(config: Configuration) -> Result<(KeepAliveChainComponents, RpcHandlers), ServiceError> {
-	new_light_base(config)	
+	new_light_base(config).map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
 }
 
-/*
 #[cfg(test)]
 mod tests {
 	use std::{sync::Arc, borrow::Cow, any::Any};
@@ -456,7 +470,8 @@ mod tests {
 	use sp_timestamp;
 	use sp_finality_tracker;
 	use sp_keyring::AccountKeyring;
-	use crate::service::{new_full, new_light};
+	use sc_service_test::TestNetNode;
+	use crate::service::{new_full_base, new_light_base};
 	use sp_runtime::traits::IdentifyAccount;
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 
@@ -487,14 +502,20 @@ mod tests {
 			chain_spec,
 			|config| {
 				let mut setup_handles = None;
-				new_full!(config, |
+				let (keep_alive, inherent_data_providers, client, network, transaction_pool) = new_full_base(config, |
 					block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
 					babe_link: &sc_consensus_babe::BabeLink<Block>,
 				| {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
-				}).map(move |(node, x)| (node, (x, setup_handles.unwrap())))
+				})?;
+				
+				let node = sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool);
+				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
 			},
-			|config| new_light(config),
+			|config| {
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+			},
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
 					.create_inherent_data()
@@ -644,8 +665,14 @@ mod tests {
 	fn test_consensus() {
 		sc_service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
-			|config| new_full(config),
-			|config| new_light(config),
+			|config| {
+				let (keep_alive, _, client, network, transaction_pool) = new_full_base(config, |_, _| ())?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+			},
+			|config| {
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+			},
 			vec![
 				"//Alice".into(),
 				"//Bob".into(),
@@ -653,4 +680,3 @@ mod tests {
 		)
 	}
 }
-*/

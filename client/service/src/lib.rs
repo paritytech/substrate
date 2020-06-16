@@ -186,6 +186,14 @@ pub struct ChainComponents<
 	>>>,
 }
 
+/// The components of the chain that we need to keep alive until the node quits.
+pub struct KeepAliveChainComponents {
+	/// The chain task manager. 
+	pub task_manager: TaskManager,
+	/// Everything else.
+	pub other: Box<dyn std::any::Any + Send>,
+}
+
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
