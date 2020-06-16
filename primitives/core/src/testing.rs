@@ -358,8 +358,11 @@ impl SpawnBlockingExecutor {
 }
 
 #[cfg(feature = "std")]
-impl crate::traits::SpawnBlocking for SpawnBlockingExecutor {
+impl crate::traits::SpawnNamed for SpawnBlockingExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.0.spawn_ok(future);
+	}
+	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}
 }

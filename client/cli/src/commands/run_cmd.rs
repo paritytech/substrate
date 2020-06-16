@@ -122,6 +122,10 @@ pub struct RunCmd {
 	#[structopt(long = "prometheus-external")]
 	pub prometheus_external: bool,
 
+	/// Specify IPC RPC server path
+	#[structopt(long = "ipc-path", value_name = "PATH")]
+	pub ipc_path: Option<String>,
+
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
 	pub rpc_port: Option<u16>,
@@ -432,6 +436,10 @@ impl CliConfiguration for RunCmd {
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
+	}
+
+	fn rpc_ipc(&self) -> Result<Option<String>> {
+		Ok(self.ipc_path.clone())
 	}
 
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {

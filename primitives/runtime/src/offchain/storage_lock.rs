@@ -264,6 +264,24 @@ impl<'a, L: Lockable> StorageLock<'a, L> {
 		}
 	}
 
+	/// Extend active lock's deadline
+	fn extend_active_lock(&mut self) -> Result<<L as Lockable>::Deadline, ()> {
+		let res = self.value_ref.mutate(|s: Option<Option<L::Deadline>>| -> Result<<L as Lockable>::Deadline, ()> {
+			match s {
+				// lock is present and is still active, extend the lock.
+				Some(Some(deadline)) if !<L as Lockable>::has_expired(&deadline) =>
+					Ok(self.lockable.deadline()),
+				// other cases
+				_ => Err(()),
+			}
+		});
+		match res {
+			Ok(Ok(deadline)) => Ok(deadline),
+			Ok(Err(_)) => Err(()),
+			Err(e) => Err(e),
+		}
+	}
+
 	/// Internal lock helper to avoid lifetime conflicts.
 	fn try_lock_inner(
 		&mut self,
@@ -336,6 +354,19 @@ impl<'a, 'b, L: Lockable> StorageLockGuard<'a, 'b, L> {
 	/// can already exit.
 	pub fn forget(mut self) {
 		let _ = self.lock.take();
+	}
+
+	/// Extend the lock by guard deadline if it already exists.
+	///
+	/// i.e. large sets of items for which it is hard to calculate a
+	/// meaning full conservative deadline which does not block for a
+	/// very long time on node termination.
+	pub fn extend_lock(&mut self) -> Result<<L as Lockable>::Deadline, ()> {
+		if let Some(ref mut lock) = self.lock {
+			lock.extend_active_lock()
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -511,5 +542,52 @@ mod tests {
 		// lock must have been cleared at this point
 		let opt = state.read().persistent_storage.get(b"", b"lock_3");
 		assert!(opt.is_some());
+	}
+
+	#[test]
+	fn extend_active_lock() {
+		let (offchain, state) = testing::TestOffchainExt::new();
+		let mut t = TestExternalities::default();
+		t.register_extension(OffchainExt::new(offchain));
+
+		t.execute_with(|| {
+			let lock_expiration = Duration::from_millis(300);
+
+			let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
+			let mut guard = lock.lock();
+
+			// sleep_until < lock_expiration
+			offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
+
+			// the lock is still active, extend it successfully
+            assert_eq!(guard.extend_lock().is_ok(), true);
+
+            // sleep_until < deadline
+            offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
+
+            // the lock is still active, try_lock will fail
+            let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
+            let res = lock.try_lock();
+            assert_eq!(res.is_ok(), false);
+
+            // sleep again untill sleep_until > deadline
+            offchain::sleep_until(offchain::timestamp().add(Duration::from_millis(200)));
+
+            // the lock has expired, failed to extend it
+            assert_eq!(guard.extend_lock().is_ok(), false);
+            guard.forget();
+
+            // try_lock will succeed
+            let mut lock = StorageLock::<'_, Time>::with_deadline(b"lock_4", lock_expiration);
+            let res = lock.try_lock();
+            assert!(res.is_ok());
+            let guard = res.unwrap();
+
+            guard.forget();
+        });
+
+        // lock must have been cleared at this point
+        let opt = state.read().persistent_storage.get(b"", b"lock_4");
+        assert_eq!(opt.unwrap(), vec![132_u8, 3u8, 0, 0, 0, 0, 0, 0]); // 132 + 256 * 3 = 900
 	}
 }

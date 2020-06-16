@@ -160,7 +160,7 @@ use codec::{Encode, Decode};
 
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	Parameter, RuntimeDebug, weights::{GetDispatchInfo, FunctionOf, Pays},
+	Parameter, RuntimeDebug, weights::GetDispatchInfo,
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 	dispatch::PostDispatchInfo,
 };
@@ -320,6 +320,18 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		/// The base amount of currency needed to reserve for creating a recovery configuration.
+		const ConfigDepositBase: BalanceOf<T> = T::ConfigDepositBase::get();
+
+		/// The amount of currency needed per additional user when creating a recovery configuration.
+		const FriendDepositFactor: BalanceOf<T> = T::FriendDepositFactor::get();
+
+		/// The maximum amount of friends allowed in a recovery configuration.
+		const MaxFriends: u16 = T::MaxFriends::get();
+
+		/// The base amount of currency needed to reserve for starting a recovery.
+		const RecoveryDeposit: BalanceOf<T> = T::RecoveryDeposit::get();
+
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
@@ -336,11 +348,7 @@ decl_module! {
 		/// - The weight of the `call` + 10,000.
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
-			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			Pays::Yes,
-		)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
 		fn as_recovered(origin,
 			account: T::AccountId,
 			call: Box<<T as Trait>::Call>

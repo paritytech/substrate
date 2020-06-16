@@ -36,7 +36,7 @@ use frame_system::{
 	EnsureRoot, EnsureOneOf,
 	extras::{SignedExtensionProvider, ExtrasParamsBuilder, SignedExtensionData},
 };
-use frame_support::traits::{Filter, InstanceFilter};
+use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
@@ -117,15 +117,6 @@ pub fn native_version() -> NativeVersion {
 
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
 
-pub struct BaseFilter;
-impl Filter<Call> for BaseFilter {
-	fn filter(_call: &Call) -> bool {
-		true
-	}
-}
-pub struct IsCallable;
-frame_support::impl_filter_stack!(IsCallable, BaseFilter, Call, is_callable);
-
 pub struct DealWithFees;
 impl OnUnbalanced<NegativeImbalance> for DealWithFees {
 	fn on_unbalanceds<B>(mut fees_then_tips: impl Iterator<Item=NegativeImbalance>) {
@@ -159,6 +150,7 @@ parameter_types! {
 const_assert!(AvailableBlockRatio::get().deconstruct() >= AVERAGE_ON_INITIALIZE_WEIGHT.deconstruct());
 
 impl frame_system::Trait for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = Index;
@@ -187,7 +179,6 @@ impl frame_system::Trait for Runtime {
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type IsCallable = IsCallable;
 }
 
 parameter_types! {
@@ -205,7 +196,6 @@ impl pallet_multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
-	type IsCallable = IsCallable;
 }
 
 parameter_types! {
@@ -255,7 +245,6 @@ impl pallet_proxy::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
-	type IsCallable = IsCallable;
 	type ProxyType = ProxyType;
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
