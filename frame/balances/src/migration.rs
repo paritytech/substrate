@@ -33,10 +33,11 @@ pub fn on_runtime_upgrade<T: Trait<I>, I: Instance>() -> Weight {
 
 // Upgrade from the pre-#4649 balances/vesting into the new balances.
 fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
-	sp_runtime::print("Upgrading account balances...");
+	sp_runtime::print("Upgrading Account Balances...");
 	// First, migrate from old FreeBalance to new Account.
 	// We also move all locks across since only accounts with FreeBalance values have locks.
 	// FreeBalance: map T::AccountId => T::Balance
+	sp_runtime::print("Balances: FreeBalance -> Account");
 	for (hash, free) in StorageIterator::<T::Balance>::new(b"Balances", b"FreeBalance").drain() {
 		let mut account = AccountData { free, ..Default::default() };
 		// Locks: map T::AccountId => Vec<BalanceLock>
@@ -68,6 +69,7 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	}
 	// Second, migrate old ReservedBalance into new Account.
 	// ReservedBalance: map T::AccountId => T::Balance
+	sp_runtime::print("Balances: ReservedBalance -> Account");
 	for (hash, reserved) in StorageIterator::<T::Balance>::new(b"Balances", b"ReservedBalance").drain() {
 		let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
 		account.reserved = reserved;
@@ -78,6 +80,7 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	// for the maximum amount (i.e. at genesis). Users will need to call "vest" to reduce the
 	// lock to something sensible.
 	// pub Vesting: map T::AccountId => Option<VestingSchedule>;
+	sp_runtime::print("Balances: Vesting");
 	for (hash, vesting) in StorageIterator::<(T::Balance, T::Balance, T::BlockNumber)>::new(b"Balances", b"Vesting").drain() {
 		let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
 		let mut locks = get_storage_value::<Vec<BalanceLock<T::Balance>>>(b"Balances", b"Locks", &hash).unwrap_or_default();
@@ -99,6 +102,7 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 		h
 	};
 
+	sp_runtime::print("Balances: Balance::Account -> System::Account");
 	for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
 		let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
 		let mut refs: system::RefCount = 0;
@@ -116,7 +120,7 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 
 	StorageVersion::<I>::put(Releases::V2_0_0);
 
-	sp_runtime::print("Done account balances.");
+	sp_runtime::print("Done Account Balances.");
 	// TODO determine actual weight
 	T::MaximumBlockWeight::get()
 }
