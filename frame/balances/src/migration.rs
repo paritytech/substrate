@@ -19,7 +19,7 @@
 use super::*;
 
 use frame_support::storage::migration::{
-	get_storage_value, have_storage_value, put_storage_value, take_storage_value, StorageIterator
+	get_storage_value, have_storage_value, put_storage_value, take_storage_value, StorageIterator,
 };
 use frame_support::weights::Weight;
 use sp_io::hashing::twox_64;
@@ -39,11 +39,19 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	// FreeBalance: map T::AccountId => T::Balance
 	sp_runtime::print("Balances: FreeBalance -> Account");
 	for (hash, free) in StorageIterator::<T::Balance>::new(b"Balances", b"FreeBalance").drain() {
-		let mut account = AccountData { free, ..Default::default() };
+		let mut account = AccountData {
+			free,
+			..Default::default()
+		};
 		// Locks: map T::AccountId => Vec<BalanceLock>
-		let old_locks = get_storage_value::<Vec<OldBalanceLock<T::Balance, T::BlockNumber>>>(b"Balances", b"Locks", &hash);
+		let old_locks = get_storage_value::<Vec<OldBalanceLock<T::Balance, T::BlockNumber>>>(
+			b"Balances",
+			b"Locks",
+			&hash,
+		);
 		if let Some(locks) = old_locks {
-			let locks = locks.into_iter()
+			let locks = locks
+				.into_iter()
 				.map(|i| {
 					let (result, expiry) = i.upgraded();
 					if expiry != T::BlockNumber::max_value() {
@@ -71,7 +79,8 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	// ReservedBalance: map T::AccountId => T::Balance
 	sp_runtime::print("Balances: ReservedBalance -> Account");
 	for (hash, reserved) in StorageIterator::<T::Balance>::new(b"Balances", b"ReservedBalance").drain() {
-		let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
+		let mut account =
+			get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
 		account.reserved = reserved;
 		put_storage_value(b"Balances", b"Account", &hash, account);
 	}
@@ -81,9 +90,13 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 	// lock to something sensible.
 	// pub Vesting: map T::AccountId => Option<VestingSchedule>;
 	sp_runtime::print("Balances: Vesting");
-	for (hash, vesting) in StorageIterator::<(T::Balance, T::Balance, T::BlockNumber)>::new(b"Balances", b"Vesting").drain() {
-		let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
-		let mut locks = get_storage_value::<Vec<BalanceLock<T::Balance>>>(b"Balances", b"Locks", &hash).unwrap_or_default();
+	for (hash, vesting) in
+		StorageIterator::<(T::Balance, T::Balance, T::BlockNumber)>::new(b"Balances", b"Vesting").drain()
+	{
+		let mut account =
+			get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
+		let mut locks = get_storage_value::<Vec<BalanceLock<T::Balance>>>(b"Balances", b"Locks", &hash)
+			.unwrap_or_default();
 		locks.push(BalanceLock {
 			id: *b"vesting ",
 			amount: vesting.0.clone(),
@@ -107,12 +120,18 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 		let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
 		let mut refs: system::RefCount = 0;
 		// The items in Kusama that would result in a ref count being incremented.
-		if have_storage_value(b"Democracy", b"Proxy", &hash) { refs += 1 }
+		if have_storage_value(b"Democracy", b"Proxy", &hash) {
+			refs += 1
+		}
 		// We skip Recovered since it's being replaced anyway.
 		let mut prefixed_hash = prefix.clone();
 		prefixed_hash.extend(&hash[..]);
-		if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) { refs += 1 }
-		if have_storage_value(b"Staking", b"Bonded", &hash) { refs += 1 }
+		if have_storage_value(b"Session", b"NextKeys", &prefixed_hash) {
+			refs += 1
+		}
+		if have_storage_value(b"Staking", b"Bonded", &hash) {
+			refs += 1
+		}
 		put_storage_value(b"System", b"Account", &hash, (nonce, refs, &balances));
 	}
 
