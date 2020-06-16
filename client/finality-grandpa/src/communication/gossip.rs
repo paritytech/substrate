@@ -829,13 +829,13 @@ impl<Block: BlockT> Inner<Block> {
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
 
-		if let Err(()) = sp_finality_grandpa::check_message_signature(
+		if sp_finality_grandpa::check_message_signature(
 			&full.message.message,
 			&full.message.id,
 			&full.message.signature,
 			full.round.0,
 			full.set_id.0,
-		) {
+		).is_none() {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::BAD_SIGNATURE);

@@ -257,7 +257,7 @@ impl<H, N> Equivocation<H, N> {
 
 /// Verifies the equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
-pub fn check_equivocation_proof<H, N>(report: EquivocationProof<H, N>) -> Result<(), ()>
+pub fn check_equivocation_proof<H, N>(report: EquivocationProof<H, N>) -> Option<()>
 where
 	H: Clone + Encode + PartialEq,
 	N: Clone + Encode + PartialEq,
@@ -270,7 +270,7 @@ where
 			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
 				$equivocation.first.0.target_number == $equivocation.second.0.target_number
 			{
-				return Err(());
+				return None;
 			}
 
 			// check signatures on both votes are valid
@@ -290,7 +290,7 @@ where
 				report.set_id,
 			)?;
 
-			return Ok(());
+			return Some(());
 		};
 	}
 
@@ -332,7 +332,7 @@ pub fn check_message_signature<H, N>(
 	signature: &AuthoritySignature,
 	round: RoundNumber,
 	set_id: SetId,
-) -> Result<(), ()>
+) -> Option<()>
 where
 	H: Encode,
 	N: Encode,
@@ -351,7 +351,7 @@ pub fn check_message_signature_with_buffer<H, N>(
 	round: RoundNumber,
 	set_id: SetId,
 	buf: &mut Vec<u8>,
-) -> Result<(), ()>
+) -> Option<()>
 where
 	H: Encode,
 	N: Encode,
@@ -361,12 +361,12 @@ where
 	localized_payload_with_buffer(round, set_id, message, buf);
 
 	if id.verify(&buf, signature) {
-		Ok(())
+		Some(())
 	} else {
 		#[cfg(feature = "std")]
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
 
-		Err(())
+		None
 	}
 }
 
