@@ -69,6 +69,15 @@ pub trait Trait: frame_system::Trait {
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
 	/// Limit of proof size.
+	///
+	/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the proofs
+	/// on-chain. If A is the one that generates the proof, then it requires that either:
+	/// - A's blockchain has the same proof length limit as B's blockchain.
+	/// - Or A's blockchain has shorter proof length limit as B's blockchain.
+	///
+	/// If B sees A is on a blockchain with larger proof length limit, then it should kindly refuse
+	/// to accept the atomic swap request if A generates the proof, and asks that B generates the
+	/// proof instead.
 	type ProofLimit: Get<u32>;
 	/// Block when the swap completely expires.
 	type ExpireDuration: Get<BlockNumberFor<Self>>;
