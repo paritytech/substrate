@@ -22,7 +22,7 @@ use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
-	CheckedShl, CheckedShr, checked_pow, Signed
+	CheckedShl, CheckedShr, checked_pow, Signed, Unsigned
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -78,6 +78,15 @@ impl<T:
 pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
 
 impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
+
+/// A meta trait for arithmetic.
+///
+/// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
+/// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
+/// and smaller integers. All other conversions are fallible. And is unsigned.
+pub trait AtLeast32BitUnsigned: BaseArithmetic + From<u16> + From<u32> + Unsigned {}
+
+impl<T: BaseArithmetic + From<u16> + From<u32> + Unsigned> AtLeast32BitUnsigned for T {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.
