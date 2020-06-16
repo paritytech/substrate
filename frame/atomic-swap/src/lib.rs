@@ -32,7 +32,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
-use sp_runtime::{RuntimeDebug, traits::Saturating};
+use sp_runtime::RuntimeDebug;
 
 /// Pending atomic swap operation.
 #[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode)]
@@ -43,8 +43,6 @@ pub struct PendingSwap<AccountId, Balance, BlockNumber> {
 	pub balance: Balance,
 	/// End block of the lock.
 	pub end_block: BlockNumber,
-	/// Whether the swap has already been claimed.
-	pub claimed: bool,
 }
 
 /// Balance type from the pallet's point of view.
@@ -79,8 +77,6 @@ pub trait Trait: frame_system::Trait {
 	/// to accept the atomic swap request if A generates the proof, and asks that B generates the
 	/// proof instead.
 	type ProofLimit: Get<u32>;
-	/// Block when the swap completely expires.
-	type ExpireDuration: Get<BlockNumberFor<Self>>;
 }
 
 decl_storage! {
@@ -119,11 +115,8 @@ decl_event!(
 	{
 		/// Swap created.
 		NewSwap(AccountId, HashedProof, PendingSwap),
-		/// Swap claimed.
-		SwapClaimed(AccountId, HashedProof, Balance),
-		/// Swap claim failed its execution.
-		/// The third parameter indicates whether retry is possible.
-		SwapClaimFailed(AccountId, HashedProof, bool),
+		/// Swap claimed. The last parameter indicates whether the execution succeeds.
+		SwapClaimed(AccountId, HashedProof, Balance, bool),
 		/// Swap cancelled.
 		SwapCancelled(AccountId, HashedProof),
 	}
@@ -166,7 +159,6 @@ decl_module! {
 				source,
 				balance,
 				end_block: frame_system::Module::<T>::block_number() + duration,
-				claimed: false,
 			};
 			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
 
@@ -196,46 +188,23 @@ decl_module! {
 			let target = ensure_signed(origin)?;
 			let hashed_proof = blake2_256(&proof);
 
-			let mut swap = PendingSwaps::<T>::get(&target, hashed_proof)
+			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::InvalidProof)?;
-			swap.claimed = true;
 
-			match T::Currency::repatriate_reserved(
+			let succeed = T::Currency::repatriate_reserved(
 				&swap.source,
 				&target,
 				swap.balance,
 				BalanceStatus::Free,
-			) {
-				Err(_) => {
-					let expired = frame_system::Module::<T>::block_number() >
-						swap.end_block.saturating_add(T::ExpireDuration::get());
-					if expired {
-						PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
+			).is_ok();
 
-						Self::deposit_event(
-							RawEvent::SwapClaimFailed(target, hashed_proof, false)
-						);
-					} else {
-						PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap);
+			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
 
-						Self::deposit_event(
-							RawEvent::SwapClaimFailed(target, hashed_proof, true)
-						);
-					}
+			Self::deposit_event(
+				RawEvent::SwapClaimed(target, hashed_proof, swap.balance, succeed)
+			);
 
-					Ok(())
-				},
-				Ok(_) => {
-					PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
-
-					Self::deposit_event(
-						RawEvent::SwapClaimed(target, hashed_proof, swap.balance)
-					);
-
-					Ok(())
-				},
-
-			}
+			Ok(())
 		}
 
 		/// Cancel an atomic swap. Only possible after the originally set duration has passed.
@@ -254,10 +223,6 @@ decl_module! {
 
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::NotExist)?;
-			ensure!(
-				!swap.claimed,
-				Error::<T>::AlreadyClaimed,
-			);
 			ensure!(
 				swap.source == source,
 				Error::<T>::SourceMismatch,

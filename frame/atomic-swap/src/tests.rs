@@ -72,7 +72,6 @@ impl Trait for Test {
 	type Event = ();
 	type Currency = Balances;
 	type ProofLimit = ProofLimit;
-	type ExpireDuration = ExpireDuration;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
