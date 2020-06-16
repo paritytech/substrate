@@ -75,6 +75,30 @@ pub trait HandleEquivocation<T: Trait> {
 	fn block_author() -> Option<T::AccountId>;
 }
 
+impl<T: Trait> HandleEquivocation<T> for () {
+	fn report_offence(
+		_reporters: Vec<T::AccountId>,
+		_offence: BabeEquivocationOffence<T::KeyOwnerIdentification>,
+	) -> Result<(), OffenceError> {
+		Ok(())
+	}
+
+	fn is_known_offence(_offenders: &[T::KeyOwnerIdentification], _time_slot: &SlotNumber) -> bool {
+		true
+	}
+
+	fn submit_unsigned_equivocation_report(
+		_equivocation_proof: EquivocationProof<T::Header>,
+		_key_owner_proof: T::KeyOwnerProof,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn block_author() -> Option<T::AccountId> {
+		None
+	}
+}
+
 /// Generic equivocation handler. This type implements `HandleEquivocation`
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all

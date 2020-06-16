@@ -27,12 +27,12 @@ use sp_runtime::{
 use frame_system::InitKind;
 use frame_support::{
 	impl_outer_origin, parameter_types, StorageValue,
-	traits::OnInitialize,
+	traits::{KeyOwnerProofSystem, OnInitialize},
 	weights::Weight,
 };
 use sp_io;
-use sp_core::{H256, U256, crypto::Pair};
-use sp_consensus_babe::AuthorityPair;
+use sp_core::{H256, U256, crypto::{KeyTypeId, Pair}};
+use sp_consensus_babe::{AuthorityId, AuthorityPair};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 impl_outer_origin!{
@@ -110,6 +110,18 @@ impl Trait for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = crate::ExternalTrigger;
+
+	type KeyOwnerProofSystem = ();
+
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		AuthorityId,
+	)>>::IdentificationTuple;
+
+	type HandleEquivocation = ();
 }
 
 pub fn new_test_ext(authorities_len: usize) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
