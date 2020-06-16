@@ -364,7 +364,8 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 							&BlockId::Hash(block),
 							&mut keys.iter().map(|key| key.0.as_ref()),
 						)
-						// A new version of this rpc could return a proof with skiped hashes.
+						// A next version of this rpc should use a parameter proof and includ only encoded
+						// proof in `ReadProof`.
 						.map(|proof| proof.into_nodes().into_iter().map(|node| node.into()).collect())
 						.map(|proof| ReadProof { at: block, proof })
 				})

@@ -147,6 +147,8 @@ impl<Block, B, Local> CallExecutor<Block> for
 				initialize_block,
 				ExecutionManager::NativeWhenPossible,
 				native_call,
+				// we are not passing the recorder at it would invole some additional
+				// type constraint when the client do not support proving
 				None,
 				extensions,
 			).map_err(|e| ClientError::Execution(Box::new(e.to_string()))),

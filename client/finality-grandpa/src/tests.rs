@@ -57,15 +57,15 @@ use sp_state_machine::SimpleProof;
 type ProofCheckBackend<H> = sp_state_machine::InMemoryProofCheckBackend<H, SimpleProof>;
 
 type PeerData =
-Mutex<
-Option<
-LinkHalf<
-Block,
-PeersFullClient,
-LongestChain<substrate_test_runtime_client::Backend, Block>
->
->
->;
+	Mutex<
+		Option<
+			LinkHalf<
+				Block,
+				PeersFullClient,
+				LongestChain<substrate_test_runtime_client::Backend, Block>
+			>
+		>
+	>;
 type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
@@ -254,7 +254,7 @@ impl AuthoritySetForFinalityProver<Block> for TestApi {
 		]);
 		let proof = prove_read(backend, vec![b"authorities"])
 			.expect("failure proving read from in-memory storage backend");
-			Ok(proof)
+		Ok(proof)
 	}
 }
 

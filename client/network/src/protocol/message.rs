@@ -29,7 +29,7 @@ pub use self::generic::{
 	FromBlock, RemoteReadChildRequest, Roles,
 };
 
-/// Forme storage proof type, to be replace by
+/// Former storage proof type, to be replace by
 /// `use sc_client_api::StorageProof`;
 type StorageProof = Vec<Vec<u8>>;
 
