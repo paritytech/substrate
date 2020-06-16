@@ -116,6 +116,7 @@ fn upgrade_v1_to_v2<T: Trait<I>, I: Instance>() -> Weight {
 
 	StorageVersion::<I>::put(Releases::V2_0_0);
 
+	sp_runtime::print("Done account balances.");
 	// TODO determine actual weight
 	T::MaximumBlockWeight::get()
 }
