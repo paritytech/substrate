@@ -119,8 +119,18 @@ where
 	}
 
 	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool> {
-		// Ok(self.manager().cancel(id))
-		todo!()
+		let cancel = self.manager.cancel(id);
+		let future = async move { cancel }
+			.boxed()
+			.unit_error()
+			.map_err(|_| {
+				jsonrpc_core::Error {
+					message: "WIP: JON".to_string(),
+					code: jsonrpc_core::ErrorCode::ServerError(0), // WIP: change me
+					data: None,
+				}
+			});
+		Box::new(future.compat())
 	}
 }
 
