@@ -32,7 +32,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{RuntimeDebug, traits::Saturating};
 
 /// Pending atomic swap operation.
 #[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode)]
@@ -70,6 +70,8 @@ pub trait Trait: frame_system::Trait {
 	type Currency: ReservableCurrency<Self::AccountId>;
 	/// Limit of proof size.
 	type ProofLimit: Get<u32>;
+	/// Block when the swap completely expires.
+	type ExpireDuration: Get<BlockNumberFor<Self>>;
 }
 
 decl_storage! {
@@ -110,9 +112,8 @@ decl_event!(
 		NewSwap(AccountId, HashedProof, PendingSwap),
 		/// Swap claimed.
 		SwapClaimed(AccountId, HashedProof, Balance),
-		/// Swap claim failed its execution. However, the swap is still marked as claimed, and the
-		/// caller can try again later if it believes that this is a temporary error.
-		SwapClaimFailed(AccountId, HashedProof),
+		/// Swap claim failed its execution. The last parameter indicates whether retry is possible.
+		SwapClaimFailed(AccountId, HashedProof, bool),
 		/// Swap cancelled.
 		SwapCancelled(AccountId, HashedProof),
 	}
@@ -195,6 +196,25 @@ decl_module! {
 				swap.balance,
 				BalanceStatus::Free,
 			) {
+				Err(e) => {
+					let expired = frame_system::Module::<T>::block_number() >
+						swap.end_block.saturating_add(T::ExpireDuration::get());
+					if expired {
+						PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
+
+						Self::deposit_event(
+							RawEvent::SwapClaimFailed(target, hashed_proof, false)
+						);
+					} else {
+						PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap);
+
+						Self::deposit_event(
+							RawEvent::SwapClaimFailed(target, hashed_proof, true)
+						);
+					}
+
+					Err(e.into())
+				},
 				Ok(_) => {
 					PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
 
@@ -204,15 +224,7 @@ decl_module! {
 
 					Ok(())
 				},
-				Err(e) => {
-					PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap);
 
-					Self::deposit_event(
-						RawEvent::SwapClaimFailed(target, hashed_proof)
-					);
-
-					Err(e.into())
-				},
 			}
 		}
 
