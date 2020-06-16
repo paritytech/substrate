@@ -28,6 +28,7 @@ use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure,
 	traits::{Get, Currency, ReservableCurrency, BalanceStatus},
 	weights::Weight,
+	dispatch::DispatchResult,
 };
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
@@ -42,6 +43,8 @@ pub struct PendingSwap<AccountId, Balance, BlockNumber> {
 	pub balance: Balance,
 	/// End block of the lock.
 	pub end_block: BlockNumber,
+	/// Whether the swap has already been claimed.
+	pub claimed: bool,
 }
 
 /// Balance type from the pallet's point of view.
@@ -87,6 +90,8 @@ decl_error! {
 		ProofTooLarge,
 		/// Source does not match.
 		SourceMismatch,
+		/// Swap has already been claimed.
+		AlreadyClaimed,
 		/// Swap does not exist.
 		NotExist,
 		/// Duration has not yet passed for the swap to be cancelled.
@@ -105,6 +110,9 @@ decl_event!(
 		NewSwap(AccountId, HashedProof, PendingSwap),
 		/// Swap claimed.
 		SwapClaimed(AccountId, HashedProof, Balance),
+		/// Swap claim failed its execution. However, the swap is still marked as claimed, and the
+		/// caller can try again later if it believes that this is a temporary error.
+		SwapClaimFailed(AccountId, HashedProof),
 		/// Swap cancelled.
 		SwapCancelled(AccountId, HashedProof),
 	}
@@ -137,7 +145,7 @@ decl_module! {
 		) {
 			let source = ensure_signed(origin)?;
 			ensure!(
-				PendingSwaps::<T>::get(&target, hashed_proof).is_none(),
+				!PendingSwaps::<T>::contains_key(&target, hashed_proof),
 				Error::<T>::AlreadyExist
 			);
 
@@ -147,6 +155,7 @@ decl_module! {
 				source,
 				balance,
 				end_block: frame_system::Module::<T>::block_number() + duration,
+				claimed: false,
 			};
 			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
 
@@ -167,7 +176,7 @@ decl_module! {
 		fn claim_swap(
 			origin,
 			proof: Vec<u8>,
-		) {
+		) -> DispatchResult {
 			ensure!(
 				proof.len() <= T::ProofLimit::get() as usize,
 				Error::<T>::ProofTooLarge,
@@ -176,19 +185,35 @@ decl_module! {
 			let target = ensure_signed(origin)?;
 			let hashed_proof = blake2_256(&proof);
 
-			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
+			let mut swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::InvalidProof)?;
-			T::Currency::repatriate_reserved(
+			swap.claimed = true;
+
+			match T::Currency::repatriate_reserved(
 				&swap.source,
 				&target,
 				swap.balance,
 				BalanceStatus::Free,
-			)?;
-			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
+			) {
+				Ok(_) => {
+					PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
 
-			Self::deposit_event(
-				RawEvent::SwapClaimed(target, hashed_proof, swap.balance)
-			);
+					Self::deposit_event(
+						RawEvent::SwapClaimed(target, hashed_proof, swap.balance)
+					);
+
+					Ok(())
+				},
+				Err(e) => {
+					PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap);
+
+					Self::deposit_event(
+						RawEvent::SwapClaimFailed(target, hashed_proof)
+					);
+
+					Err(e.into())
+				},
+			}
 		}
 
 		/// Cancel an atomic swap. Only possible after the originally set duration has passed.
@@ -208,12 +233,16 @@ decl_module! {
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::NotExist)?;
 			ensure!(
-				frame_system::Module::<T>::block_number() >= swap.end_block,
-				Error::<T>::DurationNotPassed,
+				!swap.claimed,
+				Error::<T>::AlreadyClaimed,
 			);
 			ensure!(
 				swap.source == source,
 				Error::<T>::SourceMismatch,
+			);
+			ensure!(
+				frame_system::Module::<T>::block_number() >= swap.end_block,
+				Error::<T>::DurationNotPassed,
 			);
 
 			T::Currency::unreserve(
