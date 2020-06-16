@@ -271,7 +271,7 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Root_.
 		///
-		/// - `source`: The account who funds should be transferred.
+		/// - `source`: The account whose funds should be transferred.
 		/// - `target`: The account that should be transferred the vested funds.
 		/// - `amount`: The amount of funds to transfer and will be vested.
 		/// - `schedule`: The vesting schedule attached to the transfer.
