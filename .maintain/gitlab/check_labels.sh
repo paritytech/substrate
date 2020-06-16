@@ -5,7 +5,7 @@ source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/lib.sh
 
 ensure_labels() {
   for label in "$@"; do
-    if has_label 'paritytech/polkadot' "$CI_COMMIT_BRANCH" "$label"; then
+    if has_label 'paritytech/substrate' "$CI_COMMIT_BRANCH" "$label"; then
       return 0
     fi
   done
