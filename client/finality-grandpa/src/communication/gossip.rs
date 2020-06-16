@@ -750,7 +750,11 @@ impl<Block: BlockT> Inner<Block> {
 					Round(1),
 				)),
 				Some(ref mut v) => if v.set_id == set_id {
-					if self.authorities != authorities {
+					let diff_authorities =
+						self.authorities.iter().collect::<HashSet<_>>() !=
+						authorities.iter().collect();
+
+					if diff_authorities {
 						debug!(target: "afg",
 							"Gossip validator noted set {:?} twice with different authorities. \
 							Was the authority set hard forked?",
