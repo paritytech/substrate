@@ -558,7 +558,13 @@ impl<T: Trait> Module<T> {
 				Self::deposit_event(RawEvent::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
-				Ok(None.into())
+				Ok(get_result_weight(result).map(|actual_weight| weight_of::as_multi::<T>(
+					other_signatories_len,
+					call_len,
+					actual_weight,
+					true, // Call is removed
+					true, // User is refunded
+				)).into())
 			} else {
 				// We cannot dispatch the call now; either it isn't available, or it is, but we
 				// don't have threshold approvals even with our signature.
@@ -682,5 +688,15 @@ impl<T: Trait> Module<T> {
 		}
 		signatories.insert(index, who);
 		Ok(signatories)
+	}
+}
+
+/// Return the weight of a dispatch call result as an `Option`.
+///
+/// Will return the weight regardless of what the state of the result is.
+fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
+	match result {
+		Ok(post_info) => post_info.actual_weight,
+		Err(err) => err.post_info.actual_weight,
 	}
 }
