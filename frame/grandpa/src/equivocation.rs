@@ -145,7 +145,7 @@ where
 
 		// validate equivocation proof (check votes are different and
 		// signatures are valid).
-		if sp_finality_grandpa::check_equivocation_proof(equivocation_proof.clone()).is_none() {
+		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof.clone()) {
 			return Err(ReportEquivocationValidityError::InvalidEquivocationProof.into());
 		}
 

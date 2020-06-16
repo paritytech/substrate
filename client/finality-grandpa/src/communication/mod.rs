@@ -793,14 +793,14 @@ fn check_compact_commit<Block: BlockT>(
 		use crate::communication::gossip::Misbehavior;
 		use finality_grandpa::Message as GrandpaMessage;
 
-		if sp_finality_grandpa::check_message_signature_with_buffer(
+		if !sp_finality_grandpa::check_message_signature_with_buffer(
 			&GrandpaMessage::Precommit(precommit.clone()),
 			id,
 			sig,
 			round.0,
 			set_id.0,
 			&mut buf,
-		).is_none() {
+		) {
 			debug!(target: "afg", "Bad commit message signature {}", id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
 			let cost = Misbehavior::BadCommitMessage {
@@ -881,14 +881,14 @@ fn check_catch_up<Block: BlockT>(
 		for (msg, id, sig) in messages {
 			signatures_checked += 1;
 
-			if sp_finality_grandpa::check_message_signature_with_buffer(
+			if !sp_finality_grandpa::check_message_signature_with_buffer(
 				&msg,
 				id,
 				sig,
 				round,
 				set_id,
 				buf,
-			).is_none() {
+			) {
 				debug!(target: "afg", "Bad catch up message signature {}", id);
 				telemetry!(CONSENSUS_DEBUG; "afg.bad_catch_up_msg_signature"; "id" => ?id);
 

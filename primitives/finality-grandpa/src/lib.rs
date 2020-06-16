@@ -257,7 +257,7 @@ impl<H, N> Equivocation<H, N> {
 
 /// Verifies the equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
-pub fn check_equivocation_proof<H, N>(report: EquivocationProof<H, N>) -> Option<()>
+pub fn check_equivocation_proof<H, N>(report: EquivocationProof<H, N>) -> bool
 where
 	H: Clone + Encode + PartialEq,
 	N: Clone + Encode + PartialEq,
@@ -270,27 +270,27 @@ where
 			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
 				$equivocation.first.0.target_number == $equivocation.second.0.target_number
 			{
-				return None;
+				return false;
 			}
 
 			// check signatures on both votes are valid
-			check_message_signature(
+			let valid_first = check_message_signature(
 				&$message($equivocation.first.0),
 				&$equivocation.identity,
 				&$equivocation.first.1,
 				$equivocation.round_number,
 				report.set_id,
-			)?;
+			);
 
-			check_message_signature(
+			let valid_second = check_message_signature(
 				&$message($equivocation.second.0),
 				&$equivocation.identity,
 				&$equivocation.second.1,
 				$equivocation.round_number,
 				report.set_id,
-			)?;
+			);
 
-			return Some(());
+			return valid_first && valid_second;
 		};
 	}
 
@@ -332,7 +332,7 @@ pub fn check_message_signature<H, N>(
 	signature: &AuthoritySignature,
 	round: RoundNumber,
 	set_id: SetId,
-) -> Option<()>
+) -> bool
 where
 	H: Encode,
 	N: Encode,
@@ -351,7 +351,7 @@ pub fn check_message_signature_with_buffer<H, N>(
 	round: RoundNumber,
 	set_id: SetId,
 	buf: &mut Vec<u8>,
-) -> Option<()>
+) -> bool
 where
 	H: Encode,
 	N: Encode,
@@ -360,14 +360,14 @@ where
 
 	localized_payload_with_buffer(round, set_id, message, buf);
 
-	if id.verify(&buf, signature) {
-		Some(())
-	} else {
+	let valid = id.verify(&buf, signature);
+
+	if !valid {
 		#[cfg(feature = "std")]
 		debug!(target: "afg", "Bad signature on message from {:?}", id);
-
-		None
 	}
+
+	valid
 }
 
 /// Localizes the message to the given set and round and signs the payload.
