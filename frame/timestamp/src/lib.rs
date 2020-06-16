@@ -314,6 +314,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -352,7 +353,7 @@ mod tests {
 	fn timestamp_works() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
+			assert_ok!(Timestamp::set(Origin::none(), 69));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -362,8 +363,8 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
+			assert_ok!(Timestamp::set(Origin::none(), 69));
+			let _ = Timestamp::set(Origin::none(), 70);
 		});
 	}
 
@@ -372,7 +373,7 @@ mod tests {
 	fn block_period_minimum_enforced() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
+			let _ = Timestamp::set(Origin::none(), 46);
 		});
 	}
 }
