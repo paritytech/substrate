@@ -19,8 +19,8 @@
 //! implementation of the `verify` subcommand
 
 use crate::{
-	read_message, decode_hex, read_uri, CliConfiguration,
-	error, SharedParams, with_crypto_scheme, CryptoSchemeFlag,
+	error, utils, with_crypto_scheme,
+	CliConfiguration, CryptoSchemeFlag, SharedParams,
 };
 use sp_core::{Public, crypto::Ss58Codec};
 use structopt::StructOpt;
@@ -61,9 +61,9 @@ pub struct VerifyCmd {
 impl VerifyCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let message = read_message(self.message.as_ref(), self.hex)?;
-		let sig_data = decode_hex(&self.sig)?;
-		let uri = read_uri(self.uri.as_ref())?;
+		let message = utils::read_message(self.message.as_ref(), self.hex)?;
+		let sig_data = utils::decode_hex(&self.sig)?;
+		let uri = utils::read_uri(self.uri.as_ref())?;
 		let uri = if uri.starts_with("0x") {
 			&uri[2..]
 		} else {

@@ -17,11 +17,7 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{
-	Error, pair_from_suri, CliConfiguration,
-	KeystoreParams, with_crypto_scheme,
-	CryptoSchemeFlag, SharedParams, read_uri,
-};
+use crate::{Error, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag, SharedParams, utils};
 use structopt::StructOpt;
 use sp_core::{crypto::KeyTypeId, Bytes};
 use std::convert::TryFrom;
@@ -71,7 +67,7 @@ impl InsertCmd {
 		where
 			H: DeserializeOwned + Serialize + Send + Sync + 'static,
 	{
-		let suri = read_uri(self.suri.as_ref())?;
+		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
 		let public = with_crypto_scheme!(
@@ -113,7 +109,7 @@ impl CliConfiguration for InsertCmd {
 }
 
 fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<&str>) -> Result<Vec<u8>, Error> {
-	let p = pair_from_suri::<P>(uri, pass)?;
+	let p = utils::pair_from_suri::<P>(uri, pass)?;
 	Ok(p.public().as_ref().to_vec())
 }
 

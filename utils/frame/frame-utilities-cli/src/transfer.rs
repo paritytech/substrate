@@ -18,7 +18,7 @@
 //! Implementation of the `transfer` cli subcommand for nodes that use the pallet-balances crate.
 
 use sc_cli::{
-    Error, SharedParams, with_crypto_scheme, CryptoSchemeFlag, decode_hex,
+    Error, SharedParams, with_crypto_scheme, CryptoSchemeFlag, utils,
     CliConfiguration, KeystoreParams, GenericNumber,
 };
 use structopt::StructOpt;
@@ -62,7 +62,7 @@ pub struct TransferCmd {
     to: String,
 
     /// Genesis hash, for signed extensions.
-    #[structopt(long, parse(try_from_str = decode_hex))]
+    #[structopt(long, parse(try_from_str = utils::decode_hex))]
     prior_block_hash: Bytes,
 
     #[allow(missing_docs)]
@@ -86,6 +86,7 @@ impl TransferCmd {
             R: pallet_balances::Trait + pallet_indices::Trait + SignedExtensionProvider,
             AccountIdFor<R>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec + From<AccountId32>,
             AddressFor<R>: From<AccountIdFor<R>>,
+            IndexFor<R>: FromStr,
 			<IndexFor<R> as FromStr>::Err: Debug,
 			BalanceFor<R>: FromStr,
             <BalanceFor<R> as FromStr>::Err: Debug,
@@ -94,7 +95,7 @@ impl TransferCmd {
     {
         let password = self.keystore_params.read_password()?;
         let nonce = self.index.parse::<IndexFor<R>>()?;
-        let to = if let Ok(data_vec) = decode_hex(&self.to) {
+        let to = if let Ok(data_vec) = utils::decode_hex(&self.to) {
             AccountIdFor::<R>::try_from(&data_vec)
                 .map_err(|_| "Invalid hex length for account ID; should be 32 bytes")?
         } else {

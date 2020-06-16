@@ -19,7 +19,7 @@
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
 use crate::{
-	print_from_uri, CliConfiguration, KeystoreParams, SharedParams, Error,
+	utils::print_from_uri, CliConfiguration, KeystoreParams, SharedParams, Error,
 	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
 };
 
@@ -27,7 +27,7 @@ use crate::{
 #[derive(Debug, StructOpt)]
 #[structopt(name = "generate", about = "Generate a random account")]
 pub struct GenerateCmd {
-	/// The number of words in the phrase to generate. One of 12 default), 15, 18, 21 and 24.
+	/// The number of words in the phrase to generate. One of 12 (default), 15, 18, 21 and 24.
 	#[structopt(long, short = "w", value_name = "WORDS")]
 	words: Option<usize>,
 

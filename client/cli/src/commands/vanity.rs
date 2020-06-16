@@ -19,8 +19,8 @@
 //! implementation of the `vanity` subcommand
 
 use crate::{
-	error, format_seed, SharedParams, print_from_uri, CliConfiguration,
-	with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
+	error, utils, CliConfiguration, with_crypto_scheme,
+	CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag, SharedParams,
 };
 use sp_core::crypto::Ss58Codec;
 use structopt::StructOpt;
@@ -66,6 +66,7 @@ impl VanityCmd {
 			.map(String::as_str)
 			.unwrap_or("");
 		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(desired))?;
+		use utils::print_from_uri;
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
@@ -117,7 +118,7 @@ fn generate_key<Pair>(desired: &str) -> Result<String, &'static str>
 			best = score;
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(format_seed::<Pair>(seed.clone()));
+				return Ok(utils::format_seed::<Pair>(seed.clone()));
 			}
 		}
 		done += 1;

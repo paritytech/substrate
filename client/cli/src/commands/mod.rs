@@ -22,7 +22,6 @@ mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
 mod sign;
-mod utils;
 mod verify;
 mod vanity;
 mod revert_cmd;
@@ -33,6 +32,7 @@ mod insert;
 mod inspect_node_key;
 mod inspect;
 mod key;
+pub mod utils;
 
 #[cfg(test)]
 pub mod tests;
@@ -59,7 +59,6 @@ pub use self::{
 	verify::VerifyCmd,
 	revert_cmd::RevertCmd,
 	run_cmd::RunCmd,
-	utils::*,
 };
 
 /// All core commands that are provided by default.

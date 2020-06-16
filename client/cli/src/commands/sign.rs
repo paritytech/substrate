@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::{error, pair_from_suri, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
-use super::{SharedParams, read_message, read_uri};
+use crate::{error, utils, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
+use super::SharedParams;
 use structopt::StructOpt;
 
 /// The `sign` command
@@ -60,8 +60,8 @@ pub struct SignCmd {
 impl SignCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let message = read_message(self.message.as_ref(), self.hex)?;
-		let suri = read_uri(self.suri.as_ref())?;
+		let message = utils::read_message(self.message.as_ref(), self.hex)?;
+		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
 		let signature = with_crypto_scheme!(
@@ -85,6 +85,6 @@ impl CliConfiguration for SignCmd {
 }
 
 fn sign<P: sp_core::Pair>(suri: &str, password: Option<&str>, message: Vec<u8>) ->  error::Result<String> {
-	let pair = pair_from_suri::<P>(suri, password)?;
+	let pair = utils::pair_from_suri::<P>(suri, password)?;
 	Ok(format!("{}", hex::encode(pair.sign(&message))))
 }

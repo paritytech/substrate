@@ -16,7 +16,6 @@
 
 use sp_runtime::traits::{StaticLookup, SignedExtension};
 use sp_runtime::generic::Era;
-use sp_runtime::RuntimeDebug;
 
 /// AccountIndex type for Runtime
 pub type IndexFor<R> = <R as crate::Trait>::Index;
@@ -32,7 +31,7 @@ pub type AccountIdFor<R> = <R as crate::Trait>::AccountId;
 /// Strongly typed interface for the `SignedExtensions` that should be included in extrinsics
 /// for them to valid for your runtime.
 pub trait SignedExtensionProvider: crate::Trait {
-    /// Concrete SignedExtension type.
+	/// Concrete SignedExtension type.
 	type Extra: SignedExtension;
 
 	/// Concrete type for params used to construct the `SignedExtension`-Data
@@ -41,7 +40,7 @@ pub trait SignedExtensionProvider: crate::Trait {
 	/// Retrieve an instance of the builder.
 	fn extras_params_builder() -> Self::Builder;
 
-    /// Construct extras and optionally additional_signed data for inclusion in extrinsics.
+	/// Construct extras and optionally additional_signed data for inclusion in extrinsics.
 	fn construct_extras(input: <Self::Builder as ExtrasParamsBuilder<Self>>::ExtrasParams) ->
 		SignedExtensionData<Self::Extra>;
 }
@@ -60,12 +59,6 @@ pub struct SignedExtensionData<S: SignedExtension> {
 pub trait ExtrasParamsBuilder<T: crate::Trait> {
 	/// Concrete type passed to `construct_extras`.
 	type ExtrasParams;
-	
-	/// Sets the nonce
-	fn set_nonce(self, index: T::Index) -> Self;
-	
-	/// Sets the era
-	fn set_era(self, era: Era) -> Self;
 
 	/// Sets the tip
 	fn set_tip(self, tip: u128) -> Self;
@@ -81,12 +74,5 @@ pub trait ExtrasParamsBuilder<T: crate::Trait> {
 	fn set_genesis_hash(self, hash: T::Hash) -> Self;
 	
 	/// build the extras params
-	fn build(self) -> Result<Self::ExtrasParams, BuilderError>;
-}
-#[derive(RuntimeDebug)]
-pub enum BuilderError {
-	/// Era value wasn't supplied
-	EraIsRequired,
-	/// Nonce value wasn't supplied
-	NonceIsRequired,
+	fn build(self, nonce: T::Index, era: Era) -> Self::ExtrasParams;
 }

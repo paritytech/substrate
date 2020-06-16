@@ -25,7 +25,7 @@ use frame_system::extras::{
 	IndexFor, AddressFor, AccountIdFor, SignedExtensionData,
 };
 use sp_runtime::generic::Era;
-use sc_cli::{pair_from_suri, Error};
+use sc_cli::{utils, Error};
 
 /// Creates an extrinsic for the runtime, takes a uri, password, call, nonce and prior hash (for extras).
 pub fn create_extrinsic_for<Pair, P, Call>(
@@ -47,13 +47,10 @@ pub fn create_extrinsic_for<Pair, P, Call>(
 		AccountIdFor<P>: From<AccountId32>,
 		AddressFor<P>: From<AccountIdFor<P>>,
 {
-	let pair = pair_from_suri::<Pair>(uri, pass)?;
+	let pair = utils::pair_from_suri::<Pair>(uri, pass)?;
 	let input = P::extras_params_builder()
-		.set_nonce(nonce)
-		.set_era(Era::Immortal)
 		.set_starting_era_hash(hash)
-		.build()
-		.map_err(|err| format!("failed to construct extras: {:?}", err))?;
+		.build(nonce, Era::Immortal);
 	let SignedExtensionData { extra, additional } = P::construct_extras(input);
 
 	let payload = if let Some(additional_signed) = additional {

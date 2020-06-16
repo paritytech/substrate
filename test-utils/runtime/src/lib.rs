@@ -389,12 +389,6 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
-impl From<pallet_balances::Event<Runtime>> for Event {
-	fn from(_evt: pallet_balances::Event<Runtime>) -> Self {
-		unimplemented!("Not required in tests!")
-	}
-}
-
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const MinimumPeriod: u64 = 5;
@@ -405,18 +399,7 @@ parameter_types! {
 	};
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
-	pub const Deposit: u64 = 1;
-	pub const ExistentialDeposit: u64 = 1;
 }
-
-impl pallet_balances::Trait for Runtime {
-	type Balance = u64;
-	type DustRemoval = ();
-	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
-	type AccountStore = frame_system::Module<Runtime>;
-}
-
 
 impl frame_system::Trait for Runtime {
 	type Origin = Origin;
@@ -439,7 +422,7 @@ impl frame_system::Trait for Runtime {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }

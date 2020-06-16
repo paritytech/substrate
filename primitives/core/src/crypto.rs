@@ -415,15 +415,27 @@ macro_rules! ss58_address_format {
 			}
 		}
 
-		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = &'static str;
+		/// Error encountered while parsing `Ss58AddressFormat` from &'_ str
+		/// unit struct for now.
+		#[derive(Copy, Clone, PartialEq, Eq, crate::RuntimeDebug)]
+		pub struct ParseError;
 
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, &'static str> {
+		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
+			type Error = ParseError;
+
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, Self::Error> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
 					a => a.parse::<u8>().map(Ss58AddressFormat::Custom)
-						.map_err(|_| "failed to parse network value as u8"),
+						.map_err(|_| ParseError),
 				}
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl std::fmt::Display for ParseError {
+			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				write!(f, "failed to parse network value as u8")
 			}
 		}
 

@@ -17,7 +17,7 @@
 
 //! Implementation of the `sign-transaction` subcommand
 use sc_cli::{
-	Error, CliConfiguration, KeystoreParams, SharedParams, decode_hex,
+	Error, CliConfiguration, KeystoreParams, SharedParams, utils,
 	with_crypto_scheme, CryptoSchemeFlag, GenericNumber,
 };
 use structopt::StructOpt;
@@ -49,11 +49,11 @@ pub struct SignTransactionCmd {
 	nonce: GenericNumber,
 
 	/// genesis hash, for signed extensions.
-	#[structopt(long, parse(try_from_str = decode_hex))]
+	#[structopt(long, parse(try_from_str = utils::decode_hex))]
 	prior_block_hash: Bytes,
 
 	/// The call, hex-encoded.
-	#[structopt(long, parse(try_from_str = decode_hex))]
+	#[structopt(long, parse(try_from_str = utils::decode_hex))]
 	call: Bytes,
 
 	#[allow(missing_docs)]
@@ -74,6 +74,7 @@ impl SignTransactionCmd {
 	pub fn run<P>(&self) -> Result<(), Error>
 		where
 			P: SignedExtensionProvider + pallet_indices::Trait,
+			IndexFor<P>: FromStr,
 			<IndexFor<P> as FromStr>::Err: Debug,
 			AccountIdFor<P>: From<AccountId32>,
 			AddressFor<P>: From<AccountIdFor<P>>,

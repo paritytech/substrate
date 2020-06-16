@@ -18,7 +18,7 @@
 //! Implementation of the `moduleid` subcommand
 
 use sc_cli::{
-	Error, SharedParams, print_from_uri, CryptoSchemeFlag,
+	Error, SharedParams, utils::print_from_uri, CryptoSchemeFlag,
 	OutputTypeFlag, KeystoreParams, CliConfiguration, with_crypto_scheme,
 };
 use sp_runtime::ModuleId;

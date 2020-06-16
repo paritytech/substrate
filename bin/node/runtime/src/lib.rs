@@ -34,7 +34,7 @@ use frame_support::{
 };
 use frame_system::{
 	EnsureRoot, EnsureOneOf,
-	extras::{SignedExtensionProvider, ExtrasParamsBuilder, SignedExtensionData, BuilderError},
+	extras::{SignedExtensionProvider, ExtrasParamsBuilder, SignedExtensionData},
 };
 use frame_support::traits::{Filter, InstanceFilter};
 use codec::{Encode, Decode};
@@ -630,9 +630,7 @@ parameter_types! {
 
 #[derive(Default)]
 pub struct RuntimeExtrasBuilder {
-	era: Option<Era>,
 	tip: u128,
-	index: Option<<Runtime as frame_system::Trait>::Index>,
 	genesis_hash: Option<<Runtime as frame_system::Trait>::Hash>,
 	era_start_hash: Option<<Runtime as frame_system::Trait>::Hash>,
 }
@@ -647,16 +645,6 @@ pub struct RuntimeExtrasParams {
 
 impl ExtrasParamsBuilder<Runtime> for RuntimeExtrasBuilder {
 	type ExtrasParams = RuntimeExtrasParams;
-
-	fn set_nonce(mut self, index: <Runtime as frame_system::Trait>::Index) -> Self {
-		self.index = Some(index);
-		self
-	}
-
-	fn set_era(mut self, era: Era) -> Self {
-		self.era = Some(era);
-		self
-	}
 
 	fn set_tip(mut self, tip: u128) -> Self {
 		self.tip = tip;
@@ -673,14 +661,14 @@ impl ExtrasParamsBuilder<Runtime> for RuntimeExtrasBuilder {
 		self
 	}
 
-	fn build(self) -> Result<Self::ExtrasParams, BuilderError> {
-		Ok(RuntimeExtrasParams {
-			era: self.era.ok_or_else(|| BuilderError::EraIsRequired)?,
-			index: self.index.ok_or_else(|| BuilderError::NonceIsRequired)?,
+	fn build(self, index: <Runtime as frame_system::Trait>::Index, era: Era) -> Self::ExtrasParams {
+		RuntimeExtrasParams {
+			era,
+			index,
 			tip: self.tip,
 			genesis_hash: self.genesis_hash,
 			era_start_hash: self.era_start_hash,
-		})
+		}
 	}
 }
 
@@ -751,16 +739,8 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			// so the actual block number is `n`.
 			.saturating_sub(1);
 		let era = Era::mortal(period, current_block);
-		let input = Runtime::extras_params_builder()
-			.set_nonce(nonce)
-			.set_era(era);
-		let input = match input.build()  {
-			Ok(d) => d,
-			Err(e) => {
-				debug::warn!("unable to construct extras: {:?}", e);
-				return None
-			}
-		};
+		let builder = Runtime::extras_params_builder();
+		let input = builder.build(nonce, era);
 		let SignedExtensionData { extra, additional } = Runtime::construct_extras(input);
 		let raw_payload = if let Some(additional_signed) = additional {
 			SignedPayload::from_raw(call, extra, additional_signed)

@@ -18,7 +18,7 @@
 //! Implementation of the `inspect` subcommand
 
 use crate::{
-	print_from_uri, CliConfiguration, KeystoreParams, SharedParams, read_uri,
+	utils, CliConfiguration, KeystoreParams, SharedParams,
 	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag, Error,
 };
 use structopt::StructOpt;
@@ -61,9 +61,10 @@ pub struct InspectCmd {
 impl InspectCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
-		let uri = read_uri(self.uri.as_ref())?;
+		let uri = utils::read_uri(self.uri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
+		use utils::print_from_uri;
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
