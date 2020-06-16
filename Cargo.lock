@@ -1515,6 +1515,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
+ "sp-std",
  "trybuild",
 ]
 
