@@ -24,6 +24,12 @@ sp-state-machine = { version = "0.8.0-rc3", path = "../../../primitives/state-ma
 structopt = "0.3.8"
 codec = { version = "1.3.0", package = "parity-scale-codec" }
 
+hash-db = "0.15.2"
+sp-trie = { version = "2.0.0-rc3", path = "../../../primitives/trie" }
+kvdb = "0.6.0"
+kvdb-memorydb = "0.6.0"
+
+
 [features]
 default = ["db"]
 db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]

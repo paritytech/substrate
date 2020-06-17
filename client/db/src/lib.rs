@@ -37,7 +37,7 @@ pub mod bench;
 mod children;
 mod cache;
 mod changes_tries_storage;
-mod storage_cache;
+pub mod storage_cache;
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
 mod utils;

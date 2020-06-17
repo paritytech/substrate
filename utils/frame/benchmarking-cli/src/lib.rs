@@ -16,6 +16,7 @@
 // limitations under the License.
 
 mod command;
+mod backend;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;

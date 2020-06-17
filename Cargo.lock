@@ -1403,6 +1403,9 @@ name = "frame-benchmarking-cli"
 version = "2.0.0-rc3"
 dependencies = [
  "frame-benchmarking",
+ "hash-db",
+ "kvdb",
+ "kvdb-memorydb",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-db",
@@ -1412,6 +1415,7 @@ dependencies = [
  "sp-externalities",
  "sp-runtime",
  "sp-state-machine",
+ "sp-trie",
  "structopt",
 ]
 

@@ -423,7 +423,7 @@ impl<B: BlockT> CacheChanges<B> {
 
 impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
-	pub(crate) fn new(
+	pub fn new(
 		state: S,
 		shared_cache: SharedCache<B>,
 		parent_hash: Option<B::Hash>,
