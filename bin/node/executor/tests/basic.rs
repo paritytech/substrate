@@ -49,9 +49,9 @@ use self::common::{*, sign};
 /// test code paths that differ between native and wasm versions.
 pub const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 
-/// Default transfer fee. This will use the same logic is implemented in transaction-payment module.
+/// Default transfer fee. This will use the same logic that is implemented in transaction-payment module.
 ///
-/// Note that uses reads the multiplier from storage directly, hence to get the fee of `extrinsic`
+/// Note that reads the multiplier from storage directly, hence to get the fee of `extrinsic`
 /// at block `n`, it must be called prior to executing block `n` to do the calculation with the
 /// correct multiplier.
 fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {

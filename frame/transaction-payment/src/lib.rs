@@ -96,16 +96,16 @@ type NegativeImbalanceOf<T> =
 /// where `p` is the amount of change over `k` blocks.
 ///
 /// Hence:
-/// - in an fully congested chain: `p >= v * k * (1 - s')`.
+/// - in a fully congested chain: `p >= v * k * (1 - s')`.
 /// - in an empty chain: `p >= v * k * (-s')`.
 ///
-/// For example, when all block are full, and 28800 blocks per day (default in `substrate-node`)
+/// For example, when all blocks are full and there are 28800 blocks per day (default in `substrate-node`)
 /// and v == 0.00001, s' == 0.1875, we'd have:
 ///
 /// p >= 0.00001 * 28800 * 0.8125
 /// p >= 0.234
 ///
-/// Meaning that fees can change by around ~21% per day, given extreme congestion.
+/// Meaning that fees can change by around ~23% per day, given extreme congestion.
 ///
 /// More info can be found at:
 /// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
