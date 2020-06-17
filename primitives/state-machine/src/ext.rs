@@ -570,6 +570,7 @@ where
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
+			changes.main_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
 	}

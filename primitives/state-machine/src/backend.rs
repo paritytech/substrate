@@ -212,7 +212,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Commit given transaction to storage.
-	fn commit(&self, _: H::Out, _: Self::Transaction) -> Result<(), Self::Error> {
+	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
 }

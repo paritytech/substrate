@@ -27,7 +27,7 @@ use sp_trie::{MemoryDB, prefixed_key};
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
-use sp_state_machine::{DBValue, backend::Backend as StateBackend};
+use sp_state_machine::{DBValue, backend::Backend as StateBackend, StorageCollection};
 use kvdb::{KeyValueDB, DBTransaction};
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 
@@ -125,7 +125,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		);
 		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
-		state.commit(root, transaction)?;
+		state.commit(root, transaction, Vec::new())?;
 		state.record.take();
 		Ok(state)
 	}
@@ -333,7 +333,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		None
 	}
 
-	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
+	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, mut transaction: Self::Transaction, storage_changes: StorageCollection)
 		-> Result<(), Self::Error>
 	{
 		if let Some(db) = self.db.take() {
@@ -351,7 +351,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			self.record.set(keys);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 			self.root.set(storage_root);
-			self.db.set(Some(db))
+			self.db.set(Some(db));
+
+			// Track DB Writes
+			storage_changes.iter().for_each(|(key, _)| {
+				self.add_write_key(key);
+			});
 		} else {
 			return Err("Trying to commit to a closed db".into())
 		}
