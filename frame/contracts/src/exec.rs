@@ -703,15 +703,10 @@ where
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {
-		if let Some(ref value) = value {
-			// TODO: Move this earlier to runtime.rs? This way the buffer won't get loaded.
-			if self.max_value_size() < value.len() as u32 {
-				return Err("value size exceeds maximum");
-			}
-		}
-
 		match self.ctx.self_trie_id {
-			Some(ref trie_id) => storage::write_contract_storage::<T>(&self.ctx.self_account, trie_id, &key, value),
+			Some(ref trie_id) => {
+				storage::write_contract_storage::<T>(&self.ctx.self_account, trie_id, &key, value);
+			}
 			// TODO: My current understanding is that `self.ctx.self_trie_id` can be `None` only
 			// for the top-level account, i.e. EOA. As such, it cannot issue any reads to the
 			// storage, because it has no. Furthermore, EOA cannot have contract storage.
