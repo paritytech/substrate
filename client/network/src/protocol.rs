@@ -104,8 +104,6 @@ mod rep {
 	pub const CLOGGED_PEER: Rep = Rep::new(-(1 << 12), "Clogged message queue");
 	/// Reputation change when a peer doesn't respond in time to our messages.
 	pub const TIMEOUT: Rep = Rep::new(-(1 << 10), "Request timeout");
-	/// Reputation change when a peer sends us a status message while we already received one.
-	pub const UNEXPECTED_STATUS: Rep = Rep::new(-(1 << 20), "Unexpected status message");
 	/// Reputation change when we are a light client and a peer is behind us.
 	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
 	/// Reputation change when a peer sends us any extrinsic.
@@ -979,12 +977,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
-				log!(
-					target: "sync",
-					if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
-					"Unexpected status packet from {}", who
-				);
-				self.peerset_handle.report_peer(who, rep::UNEXPECTED_STATUS);
+				debug!(target: "sync", "Ignoring duplicate status packet from {}", who);
 				return CustomMessageOutcome::None;
 			}
 			if status.genesis_hash != self.genesis_hash {
