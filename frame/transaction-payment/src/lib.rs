@@ -243,10 +243,10 @@ decl_module! {
 					T::DbWeight::get().reads_writes(1, 1)
 				} else {
 					error!("transaction-payment migration failed.");
-					0
+					T::DbWeight::get().reads(1)
 				}
 			} else {
-				0
+				T::DbWeight::get().reads(1)
 			}
 		}
 	}
