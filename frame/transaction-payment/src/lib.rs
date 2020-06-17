@@ -218,6 +218,19 @@ decl_module! {
 			});
 		}
 
+		fn integrity_test() {
+			// given weight == u64, we build multipliers from `diff` of two weight values, which can
+			// at most be MaximumBlockWeight. Make sure that this can fit in a multiplier without
+			// loss.
+			use sp_std::convert::TryInto;
+			assert!(
+				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
+				Multiplier::checked_from_integer(
+					<T as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
+				).unwrap(),
+			);
+		}
+
 		fn on_runtime_upgrade() -> Weight {
 			use frame_support::migration::take_storage_value;
 			use sp_std::convert::TryInto;
@@ -527,11 +540,10 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::{Header, TestXt},
-		traits::{BlakeTwo256, IdentityLookup, Bounded},
+		traits::{BlakeTwo256, IdentityLookup},
 		Perbill,
 	};
 	use std::cell::RefCell;
-	use std::convert::TryInto;
 	use smallvec::smallvec;
 
 	const CALL: &<Runtime as frame_system::Trait>::Call =
@@ -722,18 +734,6 @@ mod tests {
 
 	fn default_post_info() -> PostDispatchInfo {
 		PostDispatchInfo { actual_weight: None, }
-	}
-
-	#[test]
-	fn multiplier_can_fit_all_weight() {
-		// given weight == u64, we build multipliers from `diff` of two weight values, which can at
-		// most be MaximumBlockWeight. Make sure that this can fit in a multiplier without loss.
-		assert!(
-			<Multiplier as Bounded>::max_value() >=
-			Multiplier::checked_from_integer(
-				<Runtime as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
-			).unwrap(),
-		);
 	}
 
 	#[test]
