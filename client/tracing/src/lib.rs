@@ -167,13 +167,12 @@ impl ProfilingSubscriber {
 	/// either with a level: "pallet=trace,frame=debug"
 	/// or without: "pallet,frame" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new(receiver: TracingReceiver, targets: &str, wasm_tracing: bool) -> ProfilingSubscriber {
+	pub fn new(receiver: TracingReceiver, targets: &str) -> ProfilingSubscriber {
 		match receiver {
-			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets, wasm_tracing),
+			TracingReceiver::Log => Self::new_with_handler(Box::new(LogTraceHandler), targets),
 			TracingReceiver::Telemetry => Self::new_with_handler(
 				Box::new(TelemetryTraceHandler),
 				targets,
-				wasm_tracing,
 			),
 		}
 	}
@@ -183,10 +182,9 @@ impl ProfilingSubscriber {
 	/// either with a level, eg: "pallet=trace"
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
-	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str, wasm_tracing: bool)
+	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
 		-> ProfilingSubscriber
 	{
-		sp_tracing::set_wasm_tracing(wasm_tracing);
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
 			next_id: AtomicU64::new(1),

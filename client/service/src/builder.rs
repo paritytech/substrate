@@ -1374,7 +1374,7 @@ ServiceBuilder<
 		// Instrumentation
 		if let Some(tracing_targets) = config.tracing_targets.as_ref() {
 			let subscriber = sc_tracing::ProfilingSubscriber::new(
-				config.tracing_receiver, tracing_targets, config.tracing_enable_wasm
+				config.tracing_receiver, tracing_targets
 			);
 			match tracing::subscriber::set_global_default(subscriber) {
 				Ok(_) => (),
