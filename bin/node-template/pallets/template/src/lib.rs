@@ -72,6 +72,14 @@ decl_module! {
 		// this is needed only if you are using events in your pallet
 		fn deposit_event() = default;
 
+		fn on_initialize() -> Weight {
+			0
+		}
+
+		fn on_initialize() -> Weight {
+			0
+		}
+
 		/// Just a dummy entry point.
 		/// function that can be called by the external world as an extrinsics call
 		/// takes a parameter of the type `AccountId`, stores it, and emits an event
