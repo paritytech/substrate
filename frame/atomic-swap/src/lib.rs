@@ -138,7 +138,9 @@ decl_module! {
 		/// - `target`: Receiver of the atomic swap.
 		/// - `hashed_proof`: The blake2_256 hash of the secret proof.
 		/// - `balance`: Funds to be sent from origin.
-		/// - `duration`: Locked duration of the atomic swap.
+		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
+		///   that the revealer uses a shorter duration than the counterparty, to prevent the
+		///   situation where the revealer reveals the proof too late around the end block.
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn create_swap(
 			origin,
