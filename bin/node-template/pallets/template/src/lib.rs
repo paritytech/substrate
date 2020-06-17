@@ -10,6 +10,7 @@
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
+use frame_support::weights::Weight;
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
