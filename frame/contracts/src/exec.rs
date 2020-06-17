@@ -514,7 +514,8 @@ where
 		Ok((dest, output))
 	}
 
-	pub fn terminate(
+	/// Perform termination of the contract associated with the current context.
+	fn terminate(
 		&mut self,
 		beneficiary: &T::AccountId,
 		gas_meter: &mut GasMeter<T>,
@@ -536,7 +537,14 @@ where
 			value,
 			self,
 		)?;
-		storage::destroy_contract::<T>(&self_id, self.self_trie_id.as_ref().expect("")); // TODO: Proof
+		let self_trie_id = self
+			.self_trie_id
+			.as_ref()
+			.expect("this function is only invoked by in the context of a contract;\
+				a contract has a trie id;\
+				this can't be None; qed"
+			);
+		storage::destroy_contract::<T>(&self_id, self_trie_id);
 		Ok(())
 	}
 
@@ -573,7 +581,6 @@ where
 			(output, nested.deferred)
 		};
 		if output.is_success() {
-			// self.overlay.commit(change_set);
 			self.deferred.extend(deferred);
 		}
 		Ok(output)
