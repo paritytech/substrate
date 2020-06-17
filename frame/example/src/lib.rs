@@ -256,7 +256,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
+	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
@@ -609,14 +609,13 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
+impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T>
+where
+	<T as frame_system::Trait>::Call: IsSubType<Module<T>, T>,
+{
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	// Note that this could also be assigned to the top-level call enum. It is passed into the
-	// Balances Pallet directly and since `Trait: pallet_balances::Trait`, you could also use `T::Call`.
-	// In that case, you would have had access to all call variants and could match on variants from
-	// other pallets.
-	type Call = Call<T>;
+	type Call = <T as frame_system::Trait>::Call;
 	type AdditionalSigned = ();
 	type Pre = ();
 
@@ -635,8 +634,8 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		}
 
 		// check for `set_dummy`
-		match call {
-			Call::set_dummy(..) => {
+		match call.is_sub_type() {
+			Some(Call::set_dummy(..)) => {
 				sp_runtime::print("set_dummy was received.");
 
 				let mut valid_tx = ValidTransaction::default();
@@ -711,8 +710,8 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		assert_ok, impl_outer_origin, parameter_types, weights::{DispatchInfo, GetDispatchInfo},
-		traits::{OnInitialize, OnFinalize}
+		assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -727,6 +726,12 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
+	impl_outer_dispatch! {
+		pub enum OuterCall for Test where origin: Origin {
+			self::Example,
+		}
+	}
+
 	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
 	// configuration traits of pallets we want to use.
@@ -739,11 +744,12 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
+		type Call = OuterCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
@@ -827,7 +833,7 @@ mod tests {
 	#[test]
 	fn signed_ext_watch_dummy_works() {
 		new_test_ext().execute_with(|| {
-			let call = <Call<Test>>::set_dummy(10);
+			let call = <Call<Test>>::set_dummy(10).into();
 			let info = DispatchInfo::default();
 
 			assert_eq!(

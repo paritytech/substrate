@@ -23,7 +23,7 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event
+	weights::Weight, impl_outer_event, traits::Filter,
 };
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
@@ -60,6 +60,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = TestBaseCallFilter;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -99,8 +100,8 @@ parameter_types! {
 	pub const DepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
 }
-pub struct TestIsCallable;
-impl Filter<Call> for TestIsCallable {
+pub struct TestBaseCallFilter;
+impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
@@ -110,13 +111,6 @@ impl Filter<Call> for TestIsCallable {
 		}
 	}
 }
-impl FilterStack<Call> for TestIsCallable {
-	type Stack = ();
-	fn push(_: impl Fn(&Call) -> bool + 'static) {}
-	fn pop() {}
-	fn take() -> Self::Stack { () }
-	fn restore(_: Self::Stack) {}
-}
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
@@ -124,7 +118,6 @@ impl Trait for Test {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
-	type IsCallable = TestIsCallable;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -403,8 +396,8 @@ fn multisig_filters() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(Call::System(frame_system::Call::set_code(vec![])));
 		assert_noop!(
-			Multisig::as_multi(Origin::signed(1), 1, vec![], None, call.clone()),
-			Error::<Test>::Uncallable,
+			Multisig::as_multi(Origin::signed(1), 1, vec![2], None, call.clone()),
+			DispatchError::BadOrigin,
 		);
 	});
 }

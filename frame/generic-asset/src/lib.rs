@@ -1120,6 +1120,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 }
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
+	type BaseCallFilter = T::BaseCallFilter;
 	type Origin = T::Origin;
 	type Call = T::Call;
 	type Index = T::Index;

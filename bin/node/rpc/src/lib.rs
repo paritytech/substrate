@@ -30,7 +30,7 @@
 
 #![warn(missing_docs)]
 
-use std::{sync::Arc, fmt};
+use std::sync::Arc;
 
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use node_runtime::UncheckedExtrinsic;
@@ -46,6 +46,7 @@ use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
+use sp_block_builder::BlockBuilder;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -104,7 +105,7 @@ pub fn create_full<C, P, M, SC>(
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance, UncheckedExtrinsic>,
 	C::Api: BabeApi<Block>,
-	<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
+	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 	SC: SelectChain<Block> +'static,
@@ -133,7 +134,7 @@ pub fn create_full<C, P, M, SC>(
 	} = grandpa;
 
 	io.extend_with(
-		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
+		SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe))
 	);
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
@@ -185,7 +186,7 @@ pub fn create_light<C, P, M, F>(
 	} = deps;
 	let mut io = jsonrpc_core::IoHandler::default();
 	io.extend_with(
-		SystemApi::<AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
+		SystemApi::<Hash, AccountId, Index>::to_delegate(LightSystem::new(client, remote_blockchain, fetcher, pool))
 	);
 
 	io

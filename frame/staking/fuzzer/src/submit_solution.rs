@@ -23,9 +23,9 @@ use honggfuzz::fuzz;
 
 use mock::Test;
 use pallet_staking::testing_utils::*;
-use frame_support::{assert_ok, storage::StorageValue};
+use frame_support::{assert_ok, storage::StorageValue, traits::UnfilteredDispatchable};
 use frame_system::RawOrigin;
-use sp_runtime::{traits::Dispatchable, DispatchError};
+use sp_runtime::DispatchError;
 use sp_core::offchain::{testing::TestOffchainExt, OffchainExt};
 use pallet_staking::{EraElectionStatus, ElectionStatus, Module as Staking, Call as StakingCall};
 
@@ -159,7 +159,7 @@ fn main() {
 				match mode {
 					Mode::WeakerSubmission => {
 						assert_eq!(
-							call.dispatch(origin.clone().into()).unwrap_err().error,
+							call.dispatch_bypass_filter(origin.clone().into()).unwrap_err().error,
 							DispatchError::Module {
 								index: 0,
 								error: 16,
@@ -170,7 +170,7 @@ fn main() {
 					// NOTE: so exhaustive pattern doesn't work here.. maybe some rust issue?
 					// or due to `#[repr(u32)]`?
 					Mode::InitialSubmission | Mode::StrongerSubmission => {
-						assert_ok!(call.dispatch(origin.into()));
+						assert_ok!(call.dispatch_bypass_filter(origin.into()));
 					}
 				};
 			})

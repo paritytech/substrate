@@ -233,12 +233,14 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 
 impl system::Trait for Runtime {
+	type BaseCallFilter= ();
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
 	type ModuleToIndex = ();
+	type Call = Call;
 }
 
 frame_support::construct_runtime!(
