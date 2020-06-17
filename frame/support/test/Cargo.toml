@@ -20,6 +20,7 @@ frame-support = { version = "2.0.0-rc3", default-features = false, path = "../" 
 sp-inherents = { version = "2.0.0-rc3", default-features = false, path = "../../../primitives/inherents" }
 sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0-rc3", default-features = false, path = "../../../primitives/core" }
+sp-std = { version = "2.0.0-rc3", default-features = false, path = "../../../primitives/std" }
 trybuild = "1.0.17"
 pretty_assertions = "0.6.1"
 rustversion = "1.0.0"
@@ -33,6 +34,7 @@ std = [
 	"frame-support/std",
 	"sp-inherents/std",
 	"sp-core/std",
+	"sp-std/std",
 	"sp-runtime/std",
 	"sp-state-machine",
 ]

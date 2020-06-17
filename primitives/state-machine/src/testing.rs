@@ -31,7 +31,10 @@ use crate::{
 	},
 };
 use sp_core::{
-	offchain::storage::OffchainOverlayedChanges,
+	offchain::{
+		testing::TestPersistentOffchainDB,
+		storage::OffchainOverlayedChanges
+	},
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
@@ -47,6 +50,7 @@ where
 {
 	overlay: OverlayedChanges,
 	offchain_overlay: OffchainOverlayedChanges,
+	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache: StorageTransactionCache<
 		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
 	>,
@@ -108,15 +112,28 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
 
 
+		let offchain_db = TestPersistentOffchainDB::new();
+
 		TestExternalities {
 			overlay,
 			offchain_overlay,
+			offchain_db,
 			changes_trie_config,
 			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
 			storage_transaction_cache: Default::default(),
 		}
+	}
+
+	/// Move offchain changes from overlay to the persistent store.
+	pub fn persist_offchain_overlay(&mut self) {
+		self.offchain_db.apply_offchain_changes(&mut self.offchain_overlay);
+	}
+
+	/// A shared reference type around the offchain worker storage.
+	pub fn offchain_db(&self) -> TestPersistentOffchainDB {
+		self.offchain_db.clone()
 	}
 
 	/// Insert key/value into backend

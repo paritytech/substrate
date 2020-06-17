@@ -26,6 +26,7 @@ impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
 	type Trait = ();
 	type Info = frame_support::weights::DispatchInfo;
 	type PostInfo = frame_support::weights::PostDispatchInfo;
+
 	fn dispatch(self, _origin: Self::Origin)
 		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 			panic!("Do not use dummy implementation for dispatch.");
@@ -37,7 +38,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{FixedPointNumber, FixedI128, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -45,7 +46,7 @@ macro_rules! decl_tests {
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
 			}
 		};
-		use pallet_transaction_payment::ChargeTransactionPayment;
+		use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier};
 		use frame_system::RawOrigin;
 
 		const ID_1: LockIdentifier = *b"1       ";
@@ -166,7 +167,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(FixedI128::saturating_from_integer(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
