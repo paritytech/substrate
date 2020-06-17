@@ -146,6 +146,11 @@ impl<B: BlockT> BenchmarkingState<B> {
 		Ok(())
 	}
 
+	fn wipe_tracker(&self) {
+		*self.key_tracker.borrow_mut() = HashMap::new();
+		*self.read_write_tracker.borrow_mut() = Default::default();
+	}
+
 	fn add_read_key(&self, key: &[u8]) {
 		let mut key_tracker = self.key_tracker.borrow_mut();
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
@@ -172,6 +177,34 @@ impl<B: BlockT> BenchmarkingState<B> {
 			}
 		}
 	}
+
+	fn add_write_key(&self, key: &[u8]) {
+		let mut key_tracker = self.key_tracker.borrow_mut();
+		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
+
+		let maybe_tracker = key_tracker.get(&key.to_vec());
+
+		// If we have written to the key, we also consider that we have read from it.
+		let has_been_written = KeyTracker {
+			has_been_read: true,
+			has_been_written: true,
+		};
+
+		match maybe_tracker {
+			None => {
+				key_tracker.insert(key.to_vec(), has_been_written);
+				read_write_tracker.add_write();
+			},
+			Some(tracker) => {
+				if !tracker.has_been_written {
+					key_tracker.insert(key.to_vec(), has_been_written);
+					read_write_tracker.add_write();
+				} else {
+					read_write_tracker.add_repeat_write();
+				}
+			}
+		}
+	}
 }
 
 fn state_err() -> String {
@@ -184,10 +217,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.storage_hash(key)
 	}
 
@@ -196,6 +231,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.child_storage(child_info, key)
 	}
 
@@ -209,10 +245,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.next_storage_key(key)
 	}
 
@@ -221,6 +259,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.next_child_storage_key(child_info, key)
 	}
 
@@ -336,6 +375,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 		self.root.set(self.genesis_root.clone());
 		self.reopen()?;
+		self.wipe_tracker();
 		Ok(())
 	}
 
