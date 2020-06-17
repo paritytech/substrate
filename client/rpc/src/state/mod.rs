@@ -40,7 +40,8 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 pub use sc_rpc_api::child_state::*;
-use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider, SimpleProof};
+use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend,
+	ProofProvider, SimpleProof};
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;

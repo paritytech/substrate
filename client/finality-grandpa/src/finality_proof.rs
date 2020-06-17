@@ -53,7 +53,8 @@ use sp_runtime::{
 };
 use sp_core::storage::StorageKey;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
+use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList,
+	GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
 use crate::VoterSet;
@@ -116,7 +117,8 @@ pub trait AuthoritySetForFinalityChecker<Block: BlockT>: Send + Sync {
 }
 
 /// FetchChecker-based implementation of AuthoritySetForFinalityChecker.
-impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchChecker<Block, StorageProof>> {
+impl<Block> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchChecker<Block, StorageProof>>
+	where	Block: BlockT {
 	fn check_authorities_proof(
 		&self,
 		hash: Block::Hash,

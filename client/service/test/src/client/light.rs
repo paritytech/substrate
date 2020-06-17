@@ -616,11 +616,12 @@ fn storage_child_read_proof_is_generated_and_checked() {
 #[test]
 fn header_proof_is_generated_and_checked() {
 	let (local_checker, local_cht_root, remote_block_header, remote_header_proof) = prepare_for_header_proof_check(true);
-	assert_eq!((&local_checker as &dyn FetchChecker<Block, StorageProof>).check_header_proof(&RemoteHeaderRequest::<Header> {
-		cht_root: local_cht_root,
-		block: 1,
-		retry_count: None,
-	}, Some(remote_block_header.clone()), remote_header_proof).unwrap(), remote_block_header);
+	assert_eq!((&local_checker as &dyn FetchChecker<Block, StorageProof>)
+		.check_header_proof(&RemoteHeaderRequest::<Header> {
+			cht_root: local_cht_root,
+			block: 1,
+			retry_count: None,
+		}, Some(remote_block_header.clone()), remote_header_proof).unwrap(), remote_block_header);
 }
 
 #[test]
