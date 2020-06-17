@@ -497,8 +497,6 @@ where
 					gas_meter,
 				)?;
 
-			// TODO: Handle the case when after returning from the nested call the balance
-			// is below existential deposit.
 			// Error out if insufficient remaining balance.
 			if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
 				return Err(ExecError {
