@@ -1384,6 +1384,8 @@ fn gen_handler<TBl, TBackend, TExec, TRtApi, TExPool, TRpc>(
 		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
 			sp_session::SessionKeys<TBl> +
 			sp_api::Metadata<TBl, Error = sp_blockchain::Error>,
+	// This constraint should be lifted when client get generic over StateBackend and Proof
+	TBackend::State: StateBackend<HashFor<TBl>, StorageProof = SimpleProof>,
 {
 	use sc_rpc::{chain, state, author, system, offchain};
 
@@ -1480,6 +1482,8 @@ fn build_network<TBl, TBackend, TExec, TRtApi, TExPool, TImpQu>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
+		// This constraint should be lifted when client get generic over StateBackend and Proof
+		TBackend::State: StateBackend<HashFor<TBl>, StorageProof = SimpleProof>,
 {
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),
