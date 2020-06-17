@@ -192,6 +192,17 @@ macro_rules! impl_filter_stack {
 	}
 }
 
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[impl_for_tuples(30)]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
 #[cfg(test)]
 mod test_impl_filter_stack {
 	use super::*;

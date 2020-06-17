@@ -124,9 +124,13 @@ impl Spawn for SpawnTaskHandle {
 	}
 }
 
-impl sp_core::traits::SpawnBlocking for SpawnTaskHandle {
+impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_blocking(name, future);
+	}
+
+	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
 	}
 }
 
