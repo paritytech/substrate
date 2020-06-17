@@ -873,11 +873,6 @@ fn deposit_event<T: Trait>(
 /// In these tests the VM/loader are mocked. Instead of dealing with wasm bytecode they use simple closures.
 /// This allows you to tackle executive logic more thoroughly without writing a
 /// wasm VM code.
-///
-/// Because it's the executive layer:
-///
-/// - no gas meter setup and teardown logic. All balances are *AFTER* gas purchase.
-/// - executive layer doesn't alter any storage!
 #[cfg(test)]
 mod tests {
 	use super::{
