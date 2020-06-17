@@ -105,14 +105,22 @@ pub fn rent_allowance<T: Trait>(account: &AccountIdOf<T>) -> Option<BalanceOf<T>
 	<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.rent_allowance))
 }
 
-pub fn set_rent_allowance<T: Trait>(account: &AccountIdOf<T>, rent_allowance: BalanceOf<T>) {
-	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| {
-		match maybe_contract_info {
-			Some(ContractInfo::Alive(ref mut alive_info)) => {
-				alive_info.rent_allowance = rent_allowance
-			}
-			_ => panic!(), // TODO: Justify this.
+/// An error returned if `set_rent_allowance` was called on an account which doesn't have a contract.
+pub struct AllowanceSetError;
+
+/// Set the rent allowance for the contract given by the account id.
+///
+/// Returns `Err` if the contract is not alive.
+pub fn set_rent_allowance<T: Trait>(
+	account: &AccountIdOf<T>,
+	rent_allowance: BalanceOf<T>,
+) -> Result<(), AllowanceSetError> {
+	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| match maybe_contract_info {
+		Some(ContractInfo::Alive(ref mut alive_info)) => {
+			alive_info.rent_allowance = rent_allowance;
+			Ok(())
 		}
+		_ => Err(AllowanceSetError),
 	})
 }
 

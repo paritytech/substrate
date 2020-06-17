@@ -1353,9 +1353,6 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			// Advance 4 blocks, to the 5th.
 			initialize_block(5);
 
-			// Preserve `BOB`'s code hash for later introspection.
-			let bob_code_hash = ContractInfoOf::<Test>::get(BOB).unwrap()
-				.get_alive().unwrap().code_hash;
 			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 			// we expect that it will get removed leaving tombstone.
 			assert_err_ignore_postinfo!(
@@ -1397,17 +1394,25 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			// Perform a call to `DJANGO`. This should either perform restoration successfully or
 			// fail depending on the test parameters.
-			assert_ok!(Contracts::call(
-				Origin::signed(ALICE),
-				DJANGO,
-				0,
-				GAS_LIMIT,
-				vec![],
-			));
+			let perform_the_restoration = || {
+				Contracts::call(
+					Origin::signed(ALICE),
+					DJANGO,
+					0,
+					GAS_LIMIT,
+					vec![],
+				)
+			};
 
 			if test_different_storage || test_restore_to_with_dirty_storage {
 				// Parametrization of the test imply restoration failure. Check that `DJANGO` aka
 				// restoration contract is still in place and also that `BOB` doesn't exist.
+
+				assert_err_ignore_postinfo!(
+					perform_the_restoration(),
+					"contract trapped during execution"
+				);
+
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 				let django_contract = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 					.get_alive().unwrap();
@@ -1416,15 +1421,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(django_contract.deduct_block, System::block_number());
 				match (test_different_storage, test_restore_to_with_dirty_storage) {
 					(true, false) => {
-						assert_eq!(System::events(), vec![
-							EventRecord {
-								phase: Phase::Initialization,
-								event: MetaEvent::contracts(
-									RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
-								),
-								topics: vec![],
-							},
-						]);
+						assert_eq!(System::events(), vec![]);
 					}
 					(_, true) => {
 						pretty_assertions::assert_eq!(System::events(), vec![
@@ -1465,22 +1462,13 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 								event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, DJANGO)),
 								topics: vec![],
 							},
-							EventRecord {
-								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Restored(
-									DJANGO,
-									BOB,
-									bob_code_hash,
-									50,
-									false,
-								)),
-								topics: vec![],
-							},
 						]);
 					}
 					_ => unreachable!(),
 				}
 			} else {
+				assert_ok!(perform_the_restoration());
+
 				// Here we expect that the restoration is succeeded. Check that the restoration
 				// contract `DJANGO` ceased to exist and that `BOB` returned back.
 				println!("{:?}", ContractInfoOf::<Test>::get(BOB));
@@ -1500,7 +1488,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::contracts(
-							RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
+							RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50)
 						),
 						topics: vec![],
 					},

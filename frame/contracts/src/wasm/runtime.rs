@@ -51,6 +51,8 @@ enum SpecialTrap {
 	/// Signals that a trap was generated in response to a succesful call to the
 	/// `ext_terminate` host function.
 	Termination,
+	/// Signals that a trap was generated because of a successful restoration.
+	Restoration,
 }
 
 /// Can only be used for one call.
@@ -100,6 +102,12 @@ pub(crate) fn to_execution_result<E: Ext>(
 				data: Vec::new(),
 			})
 		},
+		Some(SpecialTrap::Restoration) => {
+			return Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: Vec::new(),
+			})
+		}
 		Some(SpecialTrap::OutOfGas) => {
 			return Err(ExecError {
 				reason: "ran out of gas during contract execution".into(),
@@ -830,7 +838,7 @@ define_env!(Env, <E: Ext>,
 		rent_allowance_len: u32,
 		delta_ptr: u32,
 		delta_count: u32
-	) -> u32 => {
+	) => {
 		let dest: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, dest_ptr, dest_len)?;
 		let code_hash: CodeHash<<E as Ext>::T> =
@@ -858,15 +866,15 @@ define_env!(Env, <E: Ext>,
 			delta
 		};
 
-		match ctx.ext.restore_to(
+		if let Ok(()) = ctx.ext.restore_to(
 			dest,
 			code_hash,
 			rent_allowance,
 			delta,
 		) {
-			Ok(_) => Ok(0),
-			Err(_) => Ok(1),
+			ctx.special_trap = Some(SpecialTrap::Restoration);
 		}
+		Err(sp_sandbox::HostError)
 	},
 
 	// Returns the size of the scratch buffer.

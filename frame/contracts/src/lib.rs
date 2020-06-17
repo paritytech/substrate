@@ -695,7 +695,7 @@ decl_event! {
 		/// - `tombstone`: `bool`: True if the evicted contract left behind a tombstone.
 		Evicted(AccountId, bool),
 
-		/// Restoration for a contract has been initiated.
+		/// Restoration for a contract has been successful.
 		///
 		/// # Params
 		///
@@ -703,8 +703,7 @@ decl_event! {
 		/// - `dest`: `AccountId`: Account ID of the restored contract
 		/// - `code_hash`: `Hash`: Code hash of the restored contract
 		/// - `rent_allowance: `Balance`: Rent allowance of the restored contract
-		/// - `success`: `bool`: True if the restoration was successful
-		Restored(AccountId, AccountId, Hash, Balance, bool),
+		Restored(AccountId, AccountId, Hash, Balance),
 
 		/// Code with the specified hash has been stored.
 		CodeStored(Hash),

@@ -129,6 +129,9 @@ pub trait Ext {
 	) -> Result<(), DispatchError>;
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
+	///
+	/// Since this function removes the self contract eagerly, no further actions should be performed
+	/// on this `Ext` instance.
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
@@ -148,6 +151,9 @@ pub trait Ext {
 	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
 
 	/// Restores the given destination contract sacrificing the current one.
+	///
+	/// Since this function removes the self contract eagerly, no further actions should be performed
+	/// on this `Ext` instance.
 	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
@@ -681,6 +687,17 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	Ok(())
 }
 
+/// A context that is active within a call.
+///
+/// This context has some invariants that must be held at all times. Specifically:
+///`ctx` always points to a context of an alive contract. That implies that it has an existent
+/// `self_trie_id`.
+///
+/// Be advised that there are brief time spans where these invariants could be invalidated.
+/// For example, when a contract requests self-termination the contract is removed eagerly. That
+/// implies that the control won't be returned to the contract anymore, but there is still some code
+/// on the path of the return from that call context. Therefore, take must be taken in these
+/// situations.
 struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	ctx: &'a mut ExecutionContext<'b, T, V, L>,
 	caller: T::AccountId,
@@ -778,17 +795,17 @@ where
 			rent_allowance,
 			delta,
 		);
-		// Deposit an event accordingly regardless if it succeeded.
-		deposit_event::<Self::T>(
-			vec![],
-			RawEvent::Restored(
-				self.ctx.self_account.clone(),
-				dest,
-				code_hash,
-				rent_allowance,
-				result.is_ok(),
-			),
-		);
+		if let Ok(_) = result {
+			deposit_event::<Self::T>(
+				vec![],
+				RawEvent::Restored(
+					self.ctx.self_account.clone(),
+					dest,
+					code_hash,
+					rent_allowance,
+				),
+			);
+		}
 		result
 	}
 
@@ -832,7 +849,13 @@ where
 	}
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
-		storage::set_rent_allowance::<T>(&self.ctx.self_account, rent_allowance);
+		match storage::set_rent_allowance::<T>(&self.ctx.self_account, rent_allowance) {
+			Ok(()) => {},
+			Err(storage::AllowanceSetError) => {
+				panic!("`self_account` points to an alive contract within the `CallContext`;
+					set_rent_allowance cannot return `Err`; qed");
+			}
+		}
 	}
 
 	fn rent_allowance(&self) -> BalanceOf<T> {
