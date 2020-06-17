@@ -316,7 +316,7 @@ impl<T: Trait> Module<T> where
 	/// the minimum fee for a transaction to be included in a block.
 	///
 	/// ```ignore
-	/// inclusion_fee = base_fee + targeted_fee_adjustment * (len_fee + weight_fee);
+	/// inclusion_fee = base_fee + len_fee + [targeted_fee_adjustment * weight_fee];
 	/// final_fee = inclusion_fee + tip;
 	/// ```
 	pub fn compute_fee(
@@ -354,16 +354,20 @@ impl<T: Trait> Module<T> where
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 
-			let unadjusted_len_fee = per_byte.saturating_mul(len);
-			let unadjusted_weight_fee = Self::weight_to_fee(weight);
-			// the adjustable part of the fee
-			let adjustable_fee = unadjusted_len_fee.saturating_add(unadjusted_weight_fee);
+			// length fee. this is not adjusted.
+			let fixed_len_fee = per_byte.saturating_mul(len);
 
-			let targeted_fee_adjustment = Self::next_fee_multiplier();
-			let adjusted_fee = targeted_fee_adjustment.saturating_mul_int(adjustable_fee);
+			// the adjustable part of the fee.
+			let unadjusted_weight_fee = Self::weight_to_fee(weight);
+			let multiplier = Self::next_fee_multiplier();
+			// final adjusted weight fee.
+			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
-			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
+			base_fee
+				.saturating_add(fixed_len_fee)
+				.saturating_add(adjusted_weight_fee)
+				.saturating_add(tip)
 		} else {
 			tip
 		}
@@ -816,8 +820,8 @@ mod tests {
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
 				.unwrap();
-			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip
-			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 150 - 5);
+			// 5 base fee, 10 byte fee, 3/2 * 100 weight fee, 5 tip
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 150 - 5);
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>
@@ -825,7 +829,7 @@ mod tests {
 					.is_ok()
 			);
 			// 75 (3/2 of the returned 50 units of weight) is refunded
-			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 75 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 75 - 5);
 		});
 	}
 
@@ -912,7 +916,8 @@ mod tests {
 				100 // original
 				- 10 // tip
 				- 5 // base
-				- (10 + 3) * 3 / 2 // adjusted len + weight
+				- 10 // len
+				- (3 * 3 / 2) // adjusted weight
 			);
 		})
 	}
@@ -942,10 +947,8 @@ mod tests {
 					class: info.class,
 					partial_fee:
 						5 * 2 /* base * weight_fee */
-						+ (
-							len as u64 /* len * 1 */
-							+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
-						) * 3 / 2
+						+ len as u64  /* len * 1 */
+						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
 
@@ -1018,10 +1021,10 @@ mod tests {
 				pays_fee: Pays::Yes,
 			};
 			// 123 weight, 456 length, 100 base
-			// adjustable fee = (123 * 1) + (456 * 10) = 4683
-			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
-			// final fee = 100 + 7024 + 789 tip = 7913
-			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 7913);
+			assert_eq!(
+				Module::<Runtime>::compute_fee(456, &dispatch_info, 789),
+				100 + (3 * 123 / 2) + 4560 + 789,
+			);
 		});
 	}
 
@@ -1052,10 +1055,10 @@ mod tests {
 				pays_fee: Pays::Yes,
 			};
 			// 123 weight, 456 length, 100 base
-			// adjustable fee = (123 * 1) + (456 * 10) = 4683
-			// adjusted fee = 4683 * 0.5 = 4683 - 2341.5 = 4683 - 2342 = 2341
-			// final fee = 100 + 2341 + 789 tip = 3230
-			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 3230);
+			assert_eq!(
+				Module::<Runtime>::compute_fee(456, &dispatch_info, 789),
+				100 + (123 / 2) + 4560 + 789,
+			);
 		});
 	}
 
@@ -1205,11 +1208,8 @@ mod tests {
 			let actual_fee = Module::<Runtime>
 				::compute_actual_fee(len as u32, &info, &post_info, tip);
 
-			// 33 weight, 10 length, 7 base
-			// adjustable fee = (33 * 1) + (10 * 1) = 43
-			// adjusted fee = 43 + (43 * .25)  = 43 + 10.75 = 43 + 10 = 53
-			// final fee = 7 + 53 + 5 tip = 65
-			assert_eq!(actual_fee, 65);
+			// 33 weight, 10 length, 7 base, 5 tip
+			assert_eq!(actual_fee, 7 + 10 + (33 * 5 / 4) + 5);
 			assert_eq!(refund_based_fee, actual_fee);
 		});
 	}
