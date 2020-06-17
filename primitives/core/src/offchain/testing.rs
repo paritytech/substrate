@@ -26,7 +26,7 @@ use std::{
 };
 use crate::offchain::{
 	self,
-	storage::InMemOffchainStorage,
+	storage::{InMemOffchainStorage, OffchainOverlayedChange, OffchainOverlayedChanges},
 	HttpError,
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
@@ -36,6 +36,7 @@ use crate::offchain::{
 	TransactionPool,
 	OffchainStorage,
 };
+
 use parking_lot::RwLock;
 
 /// Pending request.
@@ -61,6 +62,57 @@ pub struct PendingRequest {
 	pub response_headers: Vec<(String, String)>,
 }
 
+/// Sharable "persistent" offchain storage for test.
+#[derive(Debug, Clone, Default)]
+pub struct TestPersistentOffchainDB {
+	persistent: Arc<RwLock<InMemOffchainStorage>>,
+}
+
+impl TestPersistentOffchainDB {
+	/// Create a new and empty offchain storage db for persistent items
+	pub fn new() -> Self {
+		Self {
+			persistent: Arc::new(RwLock::new(InMemOffchainStorage::default()))
+		}
+	}
+
+	/// Apply a set of off-chain changes directly to the test backend
+	pub fn apply_offchain_changes(&mut self, changes: &mut OffchainOverlayedChanges) {
+		let mut me = self.persistent.write();
+		for ((_prefix, key), value_operation) in changes.drain() {
+			match value_operation {
+				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()),
+				OffchainOverlayedChange::Remove => me.remove(b"", key.as_slice()),
+			}
+		}
+	}
+}
+
+impl OffchainStorage for TestPersistentOffchainDB {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+		self.persistent.write().set(prefix, key, value);
+	}
+
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		self.persistent.write().remove(prefix, key);
+	}
+
+	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		self.persistent.read().get(prefix, key)
+	}
+
+	fn compare_and_set(
+		&mut self,
+		prefix: &[u8],
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		self.persistent.write().compare_and_set(prefix, key, old_value, new_value)
+	}
+}
+
+
 /// Internal state of the externalities.
 ///
 /// This can be used in tests to respond or assert stuff about interactions.
@@ -70,7 +122,7 @@ pub struct OffchainState {
 	pub requests: BTreeMap<RequestId, PendingRequest>,
 	expected_requests: BTreeMap<RequestId, PendingRequest>,
 	/// Persistent local storage
-	pub persistent_storage: InMemOffchainStorage,
+	pub persistent_storage: TestPersistentOffchainDB,
 	/// Local storage
 	pub local_storage: InMemOffchainStorage,
 	/// A supposedly random seed.
@@ -145,6 +197,13 @@ impl TestOffchainExt {
 		let state = ext.0.clone();
 		(ext, state)
 	}
+
+	/// Create new `TestOffchainExt` and a reference to the internal state.
+	pub fn with_offchain_db(offchain_db: TestPersistentOffchainDB) -> (Self, Arc<RwLock<OffchainState>>) {
+		let (ext, state) = Self::new();
+		ext.0.write().persistent_storage = offchain_db;
+		(ext, state)
+	}
 }
 
 impl offchain::Externalities for TestOffchainExt {
@@ -174,17 +233,17 @@ impl offchain::Externalities for TestOffchainExt {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => &mut state.local_storage,
-			StorageKind::PERSISTENT => &mut state.persistent_storage,
-		}.set(b"", key, value);
+			StorageKind::LOCAL => state.local_storage.set(b"", key, value),
+			StorageKind::PERSISTENT => state.persistent_storage.set(b"", key, value),
+		};
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => &mut state.local_storage,
-			StorageKind::PERSISTENT => &mut state.persistent_storage,
-		}.remove(b"", key);
+			StorageKind::LOCAL => state.local_storage.remove(b"", key),
+			StorageKind::PERSISTENT => state.persistent_storage.remove(b"", key),
+		};
 	}
 
 	fn local_storage_compare_and_set(
@@ -196,17 +255,17 @@ impl offchain::Externalities for TestOffchainExt {
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => &mut state.local_storage,
-			StorageKind::PERSISTENT => &mut state.persistent_storage,
-		}.compare_and_set(b"", key, old_value, new_value)
+			StorageKind::LOCAL => state.local_storage.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::PERSISTENT => state.persistent_storage.compare_and_set(b"", key, old_value, new_value),
+		}
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
 		let state = self.0.read();
 		match kind {
-			StorageKind::LOCAL => &state.local_storage,
-			StorageKind::PERSISTENT => &state.persistent_storage,
-		}.get(b"", key)
+			StorageKind::LOCAL => state.local_storage.get(b"", key),
+			StorageKind::PERSISTENT => state.persistent_storage.get(b"", key),
+		}
 	}
 
 	fn http_request_start(&mut self, method: &str, uri: &str, meta: &[u8]) -> Result<RequestId, ()> {

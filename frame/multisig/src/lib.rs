@@ -50,7 +50,7 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
-use frame_support::{traits::{Get, ReservableCurrency, Currency, Filter, FilterStack, ClearFilterGuard},
+use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{Weight, GetDispatchInfo, DispatchClass, Pays},
 	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
@@ -87,9 +87,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
-
-	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: FilterStack<<Self as Trait>::Call>;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -151,8 +148,6 @@ decl_error! {
 		WrongTimepoint,
 		/// A timepoint was given, yet no multisig operation is underway.
 		UnexpectedTimepoint,
-		/// A call with a `false` `IsCallable` filter was attempted.
-		Uncallable,
 	}
 }
 
@@ -175,8 +170,6 @@ decl_event! {
 		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account, fourth is hash of the call.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
-		/// A call with a `false` IsCallable filter was attempted.
-		Uncallable(u32),
 	}
 }
 
@@ -220,8 +213,7 @@ decl_module! {
 		/// Register approval for a dispatch to be made from a deterministic composite account if
 		/// approved by a total of `threshold - 1` of `other_signatories`.
 		///
-		/// If there are enough, then dispatch the call. Calls must each fulfil the `IsCallable`
-		/// filter.
+		/// If there are enough, then dispatch the call.
 		///
 		/// Payment: `DepositBase` will be reserved if this is the first approval, plus
 		/// `threshold` times `DepositFactor`. It is returned once this dispatch happens or
@@ -280,10 +272,6 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(call.as_ref()), Error::<T>::Uncallable);
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);

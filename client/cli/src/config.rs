@@ -246,9 +246,14 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `ExecutionStrategies::default()`.
-	fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
-		Ok(self.import_params()
-			.map(|x| x.execution_strategies(is_dev))
+	fn execution_strategies(
+		&self,
+		is_dev: bool,
+		is_validator: bool,
+	) -> Result<ExecutionStrategies> {
+		Ok(self
+			.import_params()
+			.map(|x| x.execution_strategies(is_dev, is_validator))
 			.unwrap_or(Default::default()))
 	}
 
@@ -256,6 +261,13 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is `None`.
 	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
+		Ok(Default::default())
+	}
+
+	/// Get the RPC IPC path (`None` if disabled).
+	///
+	/// By default this is `None`.
+	fn rpc_ipc(&self) -> Result<Option<String>> {
 		Ok(Default::default())
 	}
 
@@ -417,6 +429,7 @@ pub trait CliConfiguration: Sized {
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
+		let is_validator = role.is_network_authority();
 
 		let unsafe_pruning = self
 			.import_params()
@@ -442,9 +455,10 @@ pub trait CliConfiguration: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
-			execution_strategies: self.execution_strategies(is_dev)?,
+			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
+			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,

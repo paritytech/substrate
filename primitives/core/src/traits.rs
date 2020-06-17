@@ -349,10 +349,14 @@ impl TaskExecutorExt {
 	}
 }
 
-/// Something that can spawn a blocking future.
-pub trait SpawnBlocking {
+/// Something that can spawn futures (blocking and non-blocking) with am assigned name.
+pub trait SpawnNamed {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.
 	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// Spawn the given non-blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
 }

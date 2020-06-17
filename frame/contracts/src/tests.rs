@@ -82,11 +82,12 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = ();
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -936,7 +937,7 @@ fn call_contract_removals() {
 
 #[test]
 fn inherent_claim_surcharge_contract_removals() {
-	removals(|| Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok());
+	removals(|| Contracts::claim_surcharge(Origin::none(), BOB, Some(ALICE)).is_ok());
 }
 
 #[test]
@@ -947,10 +948,10 @@ fn signed_claim_surcharge_contract_removals() {
 #[test]
 fn claim_surcharge_malus() {
 	// Test surcharge malus for inherent
-	claim_surcharge(4, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(3, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(2, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), true);
-	claim_surcharge(1, || Contracts::claim_surcharge(Origin::NONE, BOB, Some(ALICE)).is_ok(), false);
+	claim_surcharge(4, || Contracts::claim_surcharge(Origin::none(), BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(3, || Contracts::claim_surcharge(Origin::none(), BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(2, || Contracts::claim_surcharge(Origin::none(), BOB, Some(ALICE)).is_ok(), true);
+	claim_surcharge(1, || Contracts::claim_surcharge(Origin::none(), BOB, Some(ALICE)).is_ok(), false);
 
 	// Test surcharge malus for signed
 	claim_surcharge(4, || Contracts::claim_surcharge(Origin::signed(ALICE), BOB, None).is_ok(), true);
