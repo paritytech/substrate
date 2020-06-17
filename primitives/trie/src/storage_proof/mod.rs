@@ -438,7 +438,8 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 	}
 }
 
-/// Container recording trie nodes. TODO EMCH make it a type alias.
+/// Container recording trie nodes. Only here to factor `HashDBRef` methods
+/// between `FullRecorder` and `FlatRecorder`.
 struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
 
 impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {
