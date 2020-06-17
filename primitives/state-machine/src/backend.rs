@@ -23,13 +23,13 @@ use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use crate::{UsageInfo, StorageKey, StorageValue, StorageCollection};
 use sp_trie::{ProofInput, BackendProof};
 
-/// Access the state of the proof backend of a backend.
+/// Access the state of the recording proof backend of a backend.
 pub type RecordBackendFor<B, H> = sp_trie::RecordBackendFor<<B as Backend<H>>::StorageProof, H>;
 
 /// Access the raw proof of a backend.
 pub type ProofRawFor<B, H> = <<B as Backend<H>>::StorageProof as BackendProof<H>>::ProofRaw;
 
-/// Access the state of the proof backend of a backend.
+/// Access the proof of a backend.
 pub type ProofFor<B, H> = <B as Backend<H>>::StorageProof;
 
 /// A state backend is used to read state data and can have changes committed
@@ -43,13 +43,13 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	/// Storage changes to be applied if committing
 	type Transaction: Consolidate + Default + Send;
 
-	/// The actual proof produced.
+	/// Proof to use with this backend.
 	type StorageProof: BackendProof<H>;
 
-	/// Type of backend for recording proof.
+	/// Associated backend for recording proof.
 	type RecProofBackend: RecProofBackend<H, StorageProof = Self::StorageProof>;
 
-	/// Type of backend for using a proof.
+	/// Associated backend for using a proof.
 	type ProofCheckBackend: ProofCheckBackend<H, StorageProof = Self::StorageProof>;
 
 	/// Get keyed storage or None if there is nothing associated.
@@ -171,8 +171,7 @@ pub trait Backend<H: Hasher>: Sized + std::fmt::Debug {
 	}
 
 	/// Try convert into a recording proof backend from previous recording state.
-	/// We can optionally use a previous proof backend to avoid having to merge
-	/// proof later.
+	/// Using a previous proof backend avoids a costier merge of proof later.
 	fn from_previous_rec_state(
 		self,
 		previous: RecordBackendFor<Self, H>,
@@ -247,25 +246,33 @@ pub trait GenesisStateBackend<H>: Backend<H>
 	fn new(storage: sp_core::storage::Storage) -> Self;
 }
 
-/// Backend used to register a proof record.
+/// Backend used to record a proof.
 pub trait RecProofBackend<H>: crate::backend::Backend<H>
 	where
 		H: Hasher,
 {
 	/// Extract proof after running operation to prove.
+	/// The proof extracted is raw and can be merge before
+	/// being converted into final proof format.
 	fn extract_proof(&self) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
 
-	/// Get current recording state.
+	/// Extract current recording state.
 	fn extract_recorder(self) -> (RecordBackendFor<Self, H>, ProofInput);
 
-	/// Extract from the state and input.
+	/// Extract proof from a recording state.
 	fn extract_proof_rec(
 		recorder_state: &RecordBackendFor<Self, H>,
 		input: ProofInput,
-	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>>;
+	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>> {
+		use sp_trie::RecordableProof;
+		<<Self::StorageProof as BackendProof<H>>::ProofRaw>::extract_proof(
+			recorder_state,
+			input,
+		).map_err(|e| Box::new(e) as Box<dyn crate::Error>)
+	}
 }
 
-/// Backend used to utilize a proof.
+/// Backend used to run a proof.
 pub trait ProofCheckBackend<H>: Sized + crate::backend::Backend<H>
 	where
 		H: Hasher,
@@ -367,7 +374,7 @@ impl<'a, T, H> Backend<H> for &'a T
 		_previous: RecordBackendFor<Self, H>,
 		_input: ProofInput,
 	) -> Option<Self::RecProofBackend> {
-		// cannot move out of reference, consider cloning when needed.
+		// Cannot move out of reference, consider cloning if needed.
 		None
 	}
 }

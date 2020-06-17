@@ -66,7 +66,7 @@ where
 	new_in_mem_proof::<H, sp_trie::SimpleProof>()
 }
 
-/// Create a new empty instance of in-memory backend, specifying proof type.
+/// Create a new empty instance of in-memory backend, for a parameterized proof type.
 pub fn new_in_mem_proof<H: Hasher, P>() -> TrieBackend<MemoryDB<H>, H, P>
 where
 	H::Out: Codec + Ord,

@@ -36,10 +36,10 @@ type CodecResult<T> = sp_std::result::Result<T, codec::Error>;
 #[cfg(feature = "std")]
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Error {
-	/// Error produce by storage proof logic.
+	/// Error produced by storage proof logic.
 	/// It is formatted in std to simplify type.
 	Proof(&'static str),
-	/// Error produce by trie manipulation.
+	/// Error produced by trie manipulation.
 	Trie(String),
 }
 
@@ -49,9 +49,9 @@ impl std::error::Error for Error { }
 #[cfg(not(feature = "std"))]
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Error {
-	/// Error produce by storage proof logic.
+	/// Error produced by storage proof logic.
 	Proof,
-	/// Error produce by trie manipulation.
+	/// Error produced by trie manipulation.
 	Trie,
 }
 
@@ -68,7 +68,8 @@ impl sp_std::fmt::Display for Error {
 #[cfg(feature = "std")]
 impl<E: sp_std::fmt::Display> sp_std::convert::From<sp_std::boxed::Box<E>> for Error {
 	fn from(e: sp_std::boxed::Box<E>) -> Self {
-		// Only trie error is build from box so we use a tiny shortcut here.
+		// Only trie error is build from box so we do a tiny simplification here
+		// by generalizing.
 		Error::Trie(format!("{}", e))
 	}
 }
@@ -114,7 +115,7 @@ const fn incompatible_type() -> Error {
 
 
 #[derive(Clone, Eq, PartialEq)]
-/// Additional information needed for packing or unpacking storage proof.
+/// Additional information needed to manage a storage proof.
 /// These do not need to be part of the proof but are required
 /// when processing the proof.
 pub enum Input {
@@ -237,6 +238,10 @@ pub trait Common: sp_std::fmt::Debug + Sized {
 }
 
 /// Trait for proofs that can be merged.
+///
+/// Merging can be a non negligeable additional cost.
+/// So when possible, user should rather share recording context
+/// than merge multiple recorded proofs.
 pub trait Mergeable: Common {
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
@@ -244,7 +249,7 @@ pub trait Mergeable: Common {
 	fn merge<I>(proofs: I) -> Self where I: IntoIterator<Item=Self>;
 }
 
-/// Trait for proofs that can be recorded against a trie backend.
+/// Trait for proofs that can be recorded against a `RecordBackend`.
 pub trait Recordable<H: Hasher>: Common {
 	/// Variant of enum input to use.
 	const INPUT_KIND: InputKind;
@@ -252,43 +257,47 @@ pub trait Recordable<H: Hasher>: Common {
 	/// The data structure for recording proof entries.
 	type RecordBackend: RecordBackend<H>;
 
-	/// Extracts the gathered unordered encoded trie nodes.
-	/// Depending on `kind`, encoded trie nodes can change
-	/// (usually to compact the proof).
+	/// Extracts the gathered proof.
+	/// The input provided must match the kind specified by `Recordable::INPUT_KIND`.
 	fn extract_proof(recorder: &Self::RecordBackend, input: Input) -> Result<Self>;
 }
 
 /// Proof that could be use as a backend to execute action
-/// other a `MemoryDB`.
+/// on a backend.
 pub trait BackendProof<H: Hasher>: Codec + Common {
-	/// Intermediate proof format before getting finalize
+	/// Intermediate proof format that is recorded
+	/// and mergeable.
 	type ProofRaw: Recordable<H>
 		+ Mergeable
 		+ Into<Self>;
 
-	/// Extract a flat trie db from the proof.
-	/// Fail on invalid proof content.
+	/// Extract a trie db from the proof.
+	/// This mainly allows running proof against
+	/// a trie backend (memorydb containing unordered
+	/// gathered encoded node in this case). 
+	/// Can fail on invalid proof content.
 	fn into_partial_db(self) -> Result<MemoryDB<H>>;
 }
 
 /// Proof that could be use as a backend to execute action
-/// other one `MemoryDB` per child proofs.
+/// on a backend, with a different backend per child proofs.
 pub trait FullBackendProof<H: Hasher>: BackendProof<H> {
-	/// Extract a trie db with children info from the proof.
-	/// Fail on invalid proof content.
+	/// Extract a trie dbs with children info from the proof.
+	/// Can fail on invalid proof content.
 	fn into_partial_full_db(self) -> Result<ChildrenProofMap<MemoryDB<H>>>;
 }
 
-/// Trait for proofs that can use to create a partial trie backend.
+/// Trait for proofs that simply provides validity information.
 pub trait Verifiable: Codec + Common {
-	/// Run proof validation when the proof allows immediate
-	/// verification.
+	/// Run proof validation, return verification result.
+	/// Error is returned for invalid input, or bad proof format.
 	fn verify(self, input: &Input) -> Result<bool>;
 }
 
-/// Trie encoded node recorder.
-/// Note that this trait and other could use H::Out as generic parameter,
-/// but currently use Hasher for code readability.
+/// Trie encoded node recorder trait.
+///
+/// This trait does not strictly need H as generic parameter and could use H::Out,
+/// but currently use Hasher makes code more readable.
 pub trait RecordBackend<H: Hasher>: Send + Sync + Clone + Default {
 	/// Access recorded value, allow using the backend as a cache.
 	fn get(&self, child_info: &ChildInfo, key: &H::Out) -> Option<Option<DBValue>>;
@@ -298,15 +307,14 @@ pub trait RecordBackend<H: Hasher>: Send + Sync + Clone + Default {
 	fn merge(&mut self, other: Self) -> bool;
 }
 
-/// Records are separated by child trie, this is needed for
-/// proof compaction.
+/// Trie node recorder with child trie isolation, keeping child trie origin
+/// is needed for proof compaction.
 pub struct FullRecorder<H: Hasher>(ChildrenMap<RecordMapTrieNodes<H>>);
 
-/// Single storage for all recoded nodes (as in
+/// Trie node recorder with a single storage for all recoded nodes (as in
 /// state db column).
-/// That this variant exists only for performance
-/// (on less map access than in `Full`), but is not strictly
-/// necessary.
+/// This variant exists only for performance, but is not strictly necessary.
+/// (`FullRecorder` cost an additional map access)
 pub struct FlatRecorder<H: Hasher>(RecordMapTrieNodes<H>);
 
 impl<H: Hasher> Default for FlatRecorder<H> {
@@ -396,20 +404,6 @@ impl<H: Hasher> RecordBackend<H> for FlatRecorder<H> {
 	}
 }
 
-/// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
-/// be traversed in any particular order.
-pub struct StorageProofNodeIterator {
-	inner: <Vec<Vec<u8>> as IntoIterator>::IntoIter,
-}
-
-impl Iterator for StorageProofNodeIterator {
-	type Item = Vec<u8>;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
-}
-
 /// Type for storing a map of child trie proof related information.
 /// A few utilities methods are defined.
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
@@ -444,8 +438,8 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 	}
 }
 
-/// Container recording trie nodes.
-pub struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
+/// Container recording trie nodes. TODO EMCH make it a type alias.
+struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
 
 impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {
 	fn default() -> Self {
@@ -458,7 +452,6 @@ impl<H: Hasher> Clone for RecordMapTrieNodes<H> {
 		RecordMapTrieNodes(self.0.clone())
 	}
 }
-
 
 impl<H: Hasher> sp_std::ops::Deref for RecordMapTrieNodes<H> {
 	type Target = HashMap<H::Out, Option<DBValue>>;
@@ -481,44 +474,5 @@ impl<H: Hasher> HashDBRef<H, DBValue> for RecordMapTrieNodes<H> {
 
 	fn contains(&self, key: &H::Out, _prefix: hash_db::Prefix) -> bool {
 		self.0.get(key).map(Option::is_some).unwrap_or(false)
-	}
-}
-
-/// Container recording trie nodes and their encoded hash.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProofMapTrieNodes(pub HashMap<Vec<u8>, DBValue>);
-
-impl sp_std::default::Default for ProofMapTrieNodes {
-	fn default() -> Self {
-		ProofMapTrieNodes(Default::default())
-	}
-}
-
-impl sp_std::ops::Deref for ProofMapTrieNodes {
-	type Target = HashMap<Vec<u8>, DBValue>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl sp_std::ops::DerefMut for ProofMapTrieNodes {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-impl<H: Hasher> HashDBRef<H, DBValue> for ProofMapTrieNodes
-	where
-		H::Out: Encode,
-{
-	fn get(&self, key: &H::Out, _prefix: hash_db::Prefix) -> Option<DBValue> {
-		let key = key.encode();
-		self.0.get(&key).cloned()
-	}
-
-	fn contains(&self, key: &H::Out, _prefix: hash_db::Prefix) -> bool {
-		let key = key.encode();
-		self.0.contains_key(&key)
 	}
 }

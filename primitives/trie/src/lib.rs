@@ -38,7 +38,7 @@ pub use storage_proof::{Common as ProofCommon, ChildrenProofMap, simple::ProofNo
 	compact::FullForMerge, compact::Flat as CompactProof, simple::Full as SimpleFullProof,
 	compact::Full as CompactFullProof, query_plan::KnownQueryPlanAndValues as QueryPlanProof,
 	Verifiable as VerifiableProof, Input as ProofInput, InputKind as ProofInputKind,
-	RecordMapTrieNodes, Recordable as RecordableProof, FullBackendProof, BackendProof,
+	Recordable as RecordableProof, FullBackendProof, BackendProof,
 	Mergeable as MergeableProof, RecordBackend, multiple::FlatDefault as ProofFlatDefault,
 	multiple::StorageProofKind, multiple::MultipleStorageProof as TrieNodesStorageProof,
 	simple::Flat as SimpleProof};

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ! Trie storage proofs allowing using different proofs.
+// ! Enumeration to use different storage proofs from a single type.
 
 use super::*;
 use sp_std::convert::TryInto;
@@ -202,7 +202,7 @@ impl<H, D: DefaultKind> Recordable<H> for MultipleStorageProof<H, D>
 		H::Out: Codec,
 		D: DefaultKind,
 {
-	// Actually one could ignore this if he knows its type to be non compact.
+	// This could be ignored in case it is knowned that the type is not compact.
 	const INPUT_KIND: InputKind = InputKind::ChildTrieRoots;
 
 	type RecordBackend = MultipleRecorder<H, D>;

@@ -48,7 +48,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, P> TrieBackend<S, H, P> where H::Out: 
 	}
 
 	/// Create a trie backend that also record visited trie roots.
-	/// to pack proofs and does small caching of child trie root)).
+	/// Visited trie roots allow packing proofs and does cache child trie roots.
 	pub fn new_with_roots(storage: S, root: H::Out) -> Self {
 		let register_roots = Some(RwLock::new(Default::default()));
 		TrieBackend {
@@ -76,9 +76,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher, P> TrieBackend<S, H, P> where H::Out: 
 			ProofInput::None
 		}
 	}
+
 	/// Set previously registered roots.
-	/// Return false if conflict.
-	pub fn push_registered_roots(&self, previous: ChildrenProofMap<Vec<u8>>) -> bool {
+	/// Return false if there is some conflicting information (roots should not change
+	/// for a given `StateMachine` instante).
+	pub(crate) fn push_registered_roots(&self, previous: ChildrenProofMap<Vec<u8>>) -> bool {
 		if let Some(register_roots) = self.essence.register_roots() {
 			let mut roots = register_roots.write();
 			for (child_info_proof, encoded_root) in previous {

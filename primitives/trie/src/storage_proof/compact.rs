@@ -58,7 +58,7 @@ impl<T> Clone for Flat<T> {
 
 /// Compacted proof with child trie .
 ///
-///	This currently mainly provided for test purpose and extensibility.
+/// This currently mainly provided for test purpose and extensibility.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Full<T>(ChildrenProofMap<ProofCompacted>, PhantomData<T>);
 
@@ -72,8 +72,6 @@ impl<T> sp_std::fmt::Debug for Full<T> {
 /// which is mergeable and can be converted to compact representation.
 ///
 /// This is needed mainly for technical reasons (merge then compact proofs).
-/// (though if possible user should rather use a flat record
-/// backend in the different context and avoid merge).
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct FullForMerge(ChildrenProofMap<(ProofMapTrieNodes, Vec<u8>)>);
 
@@ -399,7 +397,7 @@ impl<L: TrieLayout> TryInto<super::simple::Full> for Full<L> {
 
 /// Container recording trie nodes and their encoded hash.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct ProofMapTrieNodes(pub BTreeMap<Vec<u8>, DBValue>);
+struct ProofMapTrieNodes(pub BTreeMap<Vec<u8>, DBValue>);
 
 impl sp_std::default::Default for ProofMapTrieNodes {
 	fn default() -> Self {

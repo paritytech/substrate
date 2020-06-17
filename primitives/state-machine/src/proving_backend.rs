@@ -184,8 +184,10 @@ impl<S, H, P> ProvingBackend<S, H, P>
 		H::Out: Codec,
 		P: BackendProof<H>,
 {
-	/// Create new proving backend with the given recorder.
-	pub fn from_backend_with_recorder(
+	/// Create new proving backend from a given recorder.
+	/// This does not manage root registration and can
+	/// leave new recorder in a inconsistent state.
+	pub(crate) fn from_backend_with_recorder(
 		backend: S,
 		root: H::Out,
 		proof_recorder: RecordBackendFor<P, H>,
@@ -262,16 +264,6 @@ impl<S, H, P> RecProofBackend<H> for ProvingBackend<S, H, P>
 		let input = self.trie_backend.extract_registered_roots();
 		let recorder = self.trie_backend.into_storage().proof_recorder.into_inner();
 		(recorder, input)
-	}
-
-	fn extract_proof_rec(
-		recorder_state: &RecordBackendFor<P, H>,
-		input: ProofInput,
-	) -> Result<ProofRawFor<Self, H>, Box<dyn crate::Error>> {
-		<<Self::StorageProof as BackendProof<H>>::ProofRaw>::extract_proof(
-			recorder_state,
-			input,
-		).map_err(|e| Box::new(e) as Box<dyn Error>)
 	}
 }
 
@@ -401,7 +393,7 @@ impl<S, H, P> Backend<H> for ProvingBackend<S, H, P>
 	}
 }
 
-/// Create flat proof check backend.
+/// Create proof check backend.
 pub fn create_proof_check_backend<H, P>(
 	root: H::Out,
 	proof: P,
@@ -420,7 +412,8 @@ where
 	}
 }
 
-/// Create proof check backend.
+/// Create proof check backend with different backend for each
+/// child trie.
 pub fn create_full_proof_check_backend<H, P>(
 	root: H::Out,
 	proof: P,
