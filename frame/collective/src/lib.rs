@@ -334,6 +334,16 @@ fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
 	}
 }
 
+mod migration {
+	use super::*;
+
+	pub fn migrate<T: Trait<I>, I: Instance>() {
+		for p in Proposals::<T, I>::get().into_iter() {
+			ProposalOf::<T, I>::migrate_key_from_blake(&p);
+			Voting::<T, I>::migrate_key_from_blake(&p);
+		}
+	}
+}
 
 // Note that councillor operations are assigned to the operational class.
 decl_module! {
@@ -341,6 +351,12 @@ decl_module! {
 		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T, I>();
+			// TODO: determine actual weight
+			0
+		}
 
 		/// Set the collective's membership.
 		///
@@ -990,7 +1006,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	impl Trait<Instance1> for Test {

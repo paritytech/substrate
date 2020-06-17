@@ -28,10 +28,10 @@ use frame_support::weights::{DispatchClass, Weight};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
-mod migration;
-
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
+
+mod migration;
 
 pub trait Trait: SystemTrait {
 	/// Something which can be notified when the timestamp is set. Set this to `()`
@@ -279,7 +279,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

@@ -141,6 +141,14 @@ decl_module! {
 
 			consumed
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			Reports::<T>::remove_all();
+			ConcurrentReportsIndex::<T>::remove_all();
+			ReportsByKindIndex::remove_all();
+			// TODO: determine actual weight
+			0
+		}
 	}
 }
 

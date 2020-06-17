@@ -102,6 +102,7 @@ use frame_support::{
 };
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_support::traits::MigrateAccount;
 
 mod benchmarking;
 
@@ -694,6 +695,31 @@ decl_event!(
 	}
 );
 
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		mod deprecated {
+			use super::*;
+
+			decl_module! {
+				pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
+			}
+			decl_storage! {
+				trait Store for Module<T: Trait> as PhragmenElection {
+					pub VotesOf get(fn votes_of):
+						map hasher(opaque_blake2_256) T::AccountId => Vec<T::AccountId>;
+					pub StakeOf get(fn stake_of):
+						map hasher(opaque_blake2_256) T::AccountId => BalanceOf<T>;
+				}
+			}
+		}
+
+		// TODO: will not actually do any useful migration
+		if deprecated::StakeOf::<T>::migrate_key_from_blake(a).is_some() {
+			deprecated::VotesOf::<T>::migrate_key_from_blake(a);
+		}
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
 	/// Ok(true). is returned.
@@ -1095,7 +1121,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 

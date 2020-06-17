@@ -41,7 +41,7 @@ use fg_primitives::{
 };
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
-	Parameter,
+	Parameter, weights::Weight,
 };
 use frame_system::{self as system, ensure_signed, DigestOf};
 use sp_runtime::{
@@ -224,11 +224,33 @@ decl_storage! {
 	}
 }
 
+mod migration {
+	use super::*;
+	pub fn migrate<T: Trait>() {
+		for i in 0..=CurrentSetId::get() {
+			SetIdSession::migrate_key_from_blake(i);
+		}
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>();
+			// TODO: determine actual weight
+			0
+		}
+
+		fn on_initialize() -> Weight {
+			#[cfg(feature = "migrate-authorities")]
+			Self::migrate_authorities();
+			// TODO: determine actual weight
+			0
+		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the
 		/// equivocation proof and validate the given key ownership proof

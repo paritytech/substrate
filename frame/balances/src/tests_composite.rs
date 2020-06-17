@@ -77,7 +77,7 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = super::AccountData<u64>;
-	type OnNewAccount = ();
+	type MigrateAccount = (); type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 parameter_types! {

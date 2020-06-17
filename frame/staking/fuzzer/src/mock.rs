@@ -78,6 +78,7 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
+	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = (Balances,);
 }
