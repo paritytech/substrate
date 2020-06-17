@@ -50,6 +50,38 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct KeyTracker {
+	has_been_read: bool,
+	has_been_written: bool,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct ReadWriteTracker {
+	reads: u32,
+	repeat_reads: u32,
+	writes: u32,
+	repeat_writes: u32,
+}
+
+impl ReadWriteTracker {
+	fn add_read(&mut self) {
+		self.reads += 1;
+	}
+
+	fn add_repeat_read(&mut self) {
+		self.repeat_reads += 1;
+	}
+
+	fn add_write(&mut self) {
+		self.writes += 1;
+	}
+
+	fn add_repeat_write(&mut self) {
+		self.repeat_writes += 1;
+	}
+}
+
 /// State that manages the backend database reference. Allows runtime to control the database.
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
@@ -59,6 +91,8 @@ pub struct BenchmarkingState<B: BlockT> {
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
 	shared_cache: SharedCache<B>, // shared cache is always empty
+	key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
+	read_write_tracker: RefCell<ReadWriteTracker>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -76,6 +110,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis_root: Default::default(),
 			record: Default::default(),
 			shared_cache: new_shared_cache(0, (1, 10)),
+			key_tracker: Default::default(),
+			read_write_tracker: Default::default(),
 		};
 
 		state.reopen()?;
@@ -109,6 +145,33 @@ impl<B: BlockT> BenchmarkingState<B> {
 		));
 		Ok(())
 	}
+
+	fn add_read_key(&self, key: &[u8]) {
+		let mut key_tracker = self.key_tracker.borrow_mut();
+		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
+
+		let maybe_tracker = key_tracker.get(&key.to_vec());
+
+		let has_been_read = KeyTracker {
+			has_been_read: true,
+			has_been_written: false,
+		};
+
+		match maybe_tracker {
+			None => {
+				key_tracker.insert(key.to_vec(), has_been_read);
+				read_write_tracker.add_read();
+			},
+			Some(tracker) => {
+				if !tracker.has_been_read {
+					key_tracker.insert(key.to_vec(), has_been_read);
+					read_write_tracker.add_read();
+				} else {
+					read_write_tracker.add_repeat_read();
+				}
+			}
+		}
+	}
 }
 
 fn state_err() -> String {
@@ -137,6 +200,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		self.add_read_key(key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_storage(key)
 	}
 
