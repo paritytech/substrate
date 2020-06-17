@@ -41,10 +41,11 @@ mod fixed_point;
 mod rational128;
 
 pub use fixed_point::{FixedPointNumber, FixedPointOperand, FixedI64, FixedI128, FixedU128};
-pub use per_things::{PerThing, InnerOf, Percent, PerU16, Permill, Perbill, Perquintill};
+pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
 
-use sp_std::cmp::Ordering;
+use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
+use traits::{BaseArithmetic, One, Zero};
 
 /// Trait for comparing two numbers with an threshold.
 ///
@@ -85,8 +86,311 @@ where
 	}
 }
 
+/// A collection-like object that is made of values of type `T` and can normalize its individual
+/// values around a centric point.
+pub trait Normalizable<T> {
+	/// Normalize self around `t_max`.
+	///
+	/// Only returns `Ok` if the new sum of results is guaranteed to be equal to `t_max`. Else,
+	/// returns an error explaining why it failed to do so.
+	fn normalize(&self, t_max: T) -> Result<Vec<T>, &'static str>;
+}
+
+impl<T: Clone + Copy + Ord + BaseArithmetic + Debug> Normalizable<T> for Vec<T> {
+	fn normalize(&self, t_max: T) -> Result<Vec<T>, &'static str> {
+		normalize(self.as_ref(), t_max)
+	}
+}
+
+/// Normalize `input` so that the sum of all elements reaches `t_max`.
+///
+/// This implementation is currently in a balanced position between being performant and accurate.
+///
+/// 1. We prefer storing original indices, and sorting the `input` only once. This will save the
+///    cost of sorting per round at the cost of a little bit of memory.
+/// 2. The granularity of increment/decrements is determined by the difference and the number of
+///    elements in `input` and their sum difference with `t_max`. In short, the implementation is
+///    very likely to over-increment/decrement in case the `diff / input.len()` is rather small.
+///
+/// This function can return an error is if `T` cannot be built from the size of `input`, or if
+/// `sum(input)` cannot fit inside `T`. Moreover, if any of the internal operations saturate, it
+/// will also return en `Err`.
+///
+/// Based on the above, the best use case of the function will be only to correct small rounding
+/// errors. If the difference of the elements is vert large, then the subtraction/addition of one
+/// element with `diff / input.len()` might easily saturate and results will be `Err`.
+pub fn normalize<T>(input: &[T], t_max: T) -> Result<Vec<T>, &'static str>
+	where T: Clone + Copy + Ord + BaseArithmetic + Debug,
+{
+	let mut sum = T::zero();
+	for t in input.iter() {
+		sum = sum.checked_add(t).ok_or("sum of input cannot fit in `T`")?;
+	}
+	let count = input.len();
+
+	// early exit if needed.
+	if count.is_zero() {
+		return Ok(Vec::<T>::new());
+	}
+
+	let diff = t_max.max(sum) - t_max.min(sum);
+	if diff.is_zero() {
+		return Ok(input.to_vec());
+	}
+
+	let needs_bump = t_max > sum;
+	let per_round = diff / count.try_into().map_err(|_| "failed to build T from usize")?;
+	let mut leftover = diff % count.try_into().map_err(|_| "failed to build T from usize")?;
+
+	let mut output_with_idx = input.iter().cloned().enumerate().collect::<Vec<(usize, T)>>();
+	// sort output once based on diff. This will require more data transfer and saving original
+	// index, but we sort only twice instead: once now and once at the very end.
+	output_with_idx.sort_unstable_by_key(|x| x.1);
+
+	if needs_bump {
+		// must increase the values a bit. Bump from the min element. Index of minimum is now zero
+		// because we did a sort. If at any point the min goes greater or equal the `max_threshold`,
+		// we move to the next minimum.
+		let mut min_index = 0;
+		// at this threshold we move to next index.
+		let threshold = output_with_idx
+			.last()
+			.expect("length of input is greater than zero; it must have a last; qed").1;
+
+		if !per_round.is_zero() {
+			for _ in 0..count {
+				output_with_idx[min_index].1 = output_with_idx[min_index].1
+					.checked_add(&per_round)
+					.ok_or("Failed to add.")?;
+				if output_with_idx[min_index].1 >= threshold {
+					min_index += 1;
+					min_index = min_index % count;
+				}
+			}
+		}
+
+		// continue with the previous min_index
+		while !leftover.is_zero() {
+			output_with_idx[min_index].1 = output_with_idx[min_index].1
+				.checked_add(&One::one())
+				.ok_or("Failed to add.")?;
+			if output_with_idx[min_index].1 >= threshold {
+				min_index += 1;
+				min_index = min_index % count;
+			}
+			leftover = leftover.saturating_sub(One::one());
+		}
+	} else {
+		// must decrease the stakes a bit. decrement from the max element. index of maximum is now
+		// last. if at any point the max goes less or equal the `min_threshold`, we move to the next
+		// maximum.
+		let mut max_index = count - 1;
+		// at this threshold we move to next index.
+		let threshold = output_with_idx
+			.first()
+			.expect("length of input is greater than zero; it must have a fist; qed").1;
+
+		if !per_round.is_zero() {
+			for _ in 0..count {
+				output_with_idx[max_index].1 = output_with_idx[max_index].1
+					.checked_sub(&per_round)
+					.ok_or("Failed to subtract.")?;
+				if output_with_idx[max_index].1 <= threshold {
+					max_index = max_index.checked_sub(1).unwrap_or(count - 1);
+				}
+			}
+		}
+
+		// continue with the previous max_index
+		while !leftover.is_zero() {
+			output_with_idx[max_index].1 = output_with_idx[max_index].1
+				.checked_sub(&One::one())
+				.ok_or("Failed to subtract.")?;
+			if output_with_idx[max_index].1 <= threshold {
+				max_index = max_index.checked_sub(1).unwrap_or(count - 1);
+			}
+			leftover = leftover.saturating_sub(One::one());
+		}
+	}
+
+	debug_assert_eq!(
+		output_with_idx.iter().fold(T::zero(), |acc, (_, x)| acc + *x),
+		t_max,
+		"sum({:?}) != {:?}",
+		output_with_idx,
+		t_max,
+	);
+
+	// sort again based on the original index.
+	output_with_idx.sort_unstable_by_key(|x| x.0);
+	Ok(output_with_idx.into_iter().map(|(_, t)| t).collect())
+}
+
 #[cfg(test)]
-mod tests {
+mod normalize_tests {
+	use super::*;
+
+	#[test]
+	fn work_for_all_types() {
+		macro_rules! test_for {
+			($type:ty) => {
+				assert_eq!(
+					normalize(vec![8 as $type, 9, 7, 10].as_ref(), 40).unwrap(),
+					vec![10, 10, 10, 10],
+				);
+			}
+		}
+		// it should work for all types as long as the length of vector can be converted to T.
+		test_for!(u128);
+		test_for!(u64);
+		test_for!(u32);
+		test_for!(u16);
+		test_for!(u8);
+	}
+
+	#[test]
+	fn fails_on_large_input() {
+		assert!(normalize(vec![1u8; 255].as_ref(), 10).is_ok());
+		assert!(normalize(vec![10u8; 256].as_ref(), 10).is_err());
+	}
+
+	#[test]
+	fn works_for_vec() {
+		use super::Normalizable;
+		assert_eq!(vec![8u32, 9, 7, 10].normalize(40).unwrap(), vec![10u32, 10, 10, 10]);
+	}
+
+	#[test]
+	fn works_for_per_thing() {
+		assert_eq!(
+			vec![
+				Perbill::from_percent(33),
+				Perbill::from_percent(33),
+				Perbill::from_percent(33)
+			].normalize(Perbill::one()).unwrap(),
+			vec![
+				Perbill::from_parts(333333334),
+				Perbill::from_parts(333333333),
+				Perbill::from_parts(333333333),
+			]
+		);
+
+		assert_eq!(
+			vec![
+				Perbill::from_percent(20),
+				Perbill::from_percent(15),
+				Perbill::from_percent(30)
+			].normalize(Perbill::one()).unwrap(),
+			vec![
+				Perbill::from_parts(316666666),
+				Perbill::from_parts(383333333),
+				Perbill::from_parts(300000001),
+			]
+		);
+	}
+
+	#[test]
+	fn can_work_for_peru16() {
+		// Peru16 is a rather special case; since inner type is exactly the same as capacity, we
+		// could have a situation where the sum cannot be calculated in the inner type. Calculating
+		// using the upper type of the per_thing should assure this to be okay.
+		assert_eq!(
+			vec![
+				PerU16::from_percent(40),
+				PerU16::from_percent(40),
+				PerU16::from_percent(40),
+			].normalize(PerU16::one()).unwrap(),
+			vec![
+				PerU16::from_parts(21845), // 33%
+				PerU16::from_parts(21845), // 33%
+				PerU16::from_parts(21845), // 33%
+			]
+		);
+	}
+
+	#[test]
+	fn normalize_works_all_le() {
+		assert_eq!(
+			normalize(vec![8u32, 9, 7, 10].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![7u32, 7, 7, 7].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![7u32, 7, 7, 10].as_ref(), 40).unwrap(),
+			vec![11, 11, 8, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![7u32, 8, 7, 10].as_ref(), 40).unwrap(),
+			vec![11, 8, 11, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![7u32, 7, 8, 10].as_ref(), 40).unwrap(),
+			vec![11, 11, 8, 10],
+		);
+	}
+
+	#[test]
+	fn normalize_works_some_ge() {
+		assert_eq!(
+			normalize(vec![8u32, 11, 9, 10].as_ref(), 40).unwrap(),
+			vec![10, 11, 9, 10],
+		);
+	}
+
+	#[test]
+	fn always_inc_min() {
+		assert_eq!(
+			normalize(vec![10u32, 7, 10, 10].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+		assert_eq!(
+			normalize(vec![10u32, 10, 7, 10].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+		assert_eq!(
+			normalize(vec![10u32, 10, 10, 7].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+	}
+
+	#[test]
+	fn normalize_works_all_ge() {
+		assert_eq!(
+			normalize(vec![12u32, 11, 13, 10].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![13u32, 13, 13, 13].as_ref(), 40).unwrap(),
+			vec![10, 10, 10, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![13u32, 13, 13, 10].as_ref(), 40).unwrap(),
+			vec![12, 9, 9, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![13u32, 12, 13, 10].as_ref(), 40).unwrap(),
+			vec![9, 12, 9, 10],
+		);
+
+		assert_eq!(
+			normalize(vec![13u32, 13, 12, 10].as_ref(), 40).unwrap(),
+			vec![9, 9, 12, 10],
+		);
+	}
+}
+
+#[cfg(test)]
+mod threshold_compare_tests {
 	use super::*;
 	use crate::traits::Saturating;
 	use sp_std::cmp::Ordering;
