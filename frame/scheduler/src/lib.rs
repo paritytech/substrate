@@ -400,7 +400,7 @@ mod tests {
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
 		traits::{OnInitialize, OnFinalize},
-		weights::{DispatchClass, FunctionOf, Pays, constants::RocksDbWeight},
+		weights::constants::RocksDbWeight,
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -439,11 +439,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 				fn deposit_event() = default;
 
-				#[weight = FunctionOf(
-					|args: (&u32, &Weight)| *args.1,
-					|_: (&u32, &Weight)| DispatchClass::Normal,
-					Pays::Yes,
-				)]
+				#[weight = *weight]
 				fn log(origin, i: u32, weight: Weight) {
 					ensure_root(origin)?;
 					Self::deposit_event(Event::Logged(i, weight));
@@ -485,8 +481,9 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
-		type Call = ();
+		type Call = Call;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -706,14 +703,14 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
 			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
-			assert_ok!(Scheduler::schedule_named(Origin::ROOT, 1u32.encode(), 4, None, 127, call));
-			assert_ok!(Scheduler::schedule(Origin::ROOT, 4, None, 127, call2));
+			assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call));
+			assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
 			run_to_block(3);
 			// Scheduled calls are in the agenda.
 			assert_eq!(Agenda::<Test>::get(4).len(), 2);
 			assert!(logger::log().is_empty());
-			assert_ok!(Scheduler::cancel_named(Origin::ROOT, 1u32.encode()));
-			assert_ok!(Scheduler::cancel(Origin::ROOT, 4, 1));
+			assert_ok!(Scheduler::cancel_named(Origin::root(), 1u32.encode()));
+			assert_ok!(Scheduler::cancel(Origin::root(), 4, 1));
 			// Scheduled calls are made NONE, so should not effect state
 			run_to_block(100);
 			assert!(logger::log().is_empty());

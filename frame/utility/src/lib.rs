@@ -54,9 +54,10 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
-use frame_support::{traits::{Filter, FilterStack, ClearFilterGuard},
-	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays}, dispatch::PostDispatchInfo,
+use frame_support::{decl_module, decl_event, decl_storage, Parameter};
+use frame_support::{
+	traits::{OriginTrait, UnfilteredDispatchable},
+	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -71,21 +72,12 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>>;
-
-	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: FilterStack<<Self as Trait>::Call>;
+		+ GetDispatchInfo + From<frame_system::Call<Self>>
+		+ UnfilteredDispatchable<Origin=Self::Origin>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {}
-}
-
-decl_error! {
-	pub enum Error for Module<T: Trait> {
-		/// A call with a `false` `IsCallable` filter was attempted.
-		Uncallable,
-	}
 }
 
 decl_event! {
@@ -96,8 +88,6 @@ decl_event! {
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
-		/// A call with a `false` IsCallable filter was attempted.
-		Uncallable(u32),
 	}
 }
 
@@ -111,19 +101,17 @@ impl TypeId for IndexedUtilityModuleId {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
 		/// Send a batch of dispatch calls.
 		///
-		/// This will execute until the first one fails and then stop. Calls must fulfil the
-		/// `IsCallable` filter unless the origin is `Root`.
-		///
 		/// May be called from any origin.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin.
+		///
+		/// If origin is root then call are dispatch without checking origin filter. (This includes
+		/// bypassing `frame_system::Trait::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Base weight: 14.39 + .987 * c µs
@@ -136,14 +124,12 @@ decl_module! {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
-		#[weight = FunctionOf(
-			|args: (&Vec<<T as Trait>::Call>,)| {
-				args.0.iter()
-					.map(|call| call.get_dispatch_info().weight)
-					.fold(15_000_000, |a: Weight, n| a.saturating_add(n).saturating_add(1_000_000))
-			},
-			|args: (&Vec<<T as Trait>::Call>,)| {
-				let all_operational = args.0.iter()
+		#[weight = (
+			calls.iter()
+				.map(|call| call.get_dispatch_info().weight)
+				.fold(15_000_000, |a: Weight, n| a.saturating_add(n).saturating_add(1_000_000)),
+			{
+				let all_operational = calls.iter()
 					.map(|call| call.get_dispatch_info().class)
 					.all(|class| class == DispatchClass::Operational);
 				if all_operational {
@@ -152,16 +138,15 @@ decl_module! {
 					DispatchClass::Normal
 				}
 			},
-			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			for (index, call) in calls.into_iter().enumerate() {
-				if !is_root && !T::IsCallable::filter(&call) {
-					Self::deposit_event(Event::Uncallable(index as u32));
-					return Ok(())
-				}
-				let result = call.dispatch(origin.clone());
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					call.dispatch(origin.clone())
+				};
 				if let Err(e) = result {
 					Self::deposit_event(Event::BatchInterrupted(index as u32, e.error));
 					return Ok(());
@@ -171,9 +156,6 @@ decl_module! {
 		}
 
 		/// Send a call through an indexed pseudonym of the sender.
-		///
-		/// The call must fulfil only the pre-cleared `IsCallable` filter (i.e. only the level of
-		/// filtering that remains after calling `take()`).
 		///
 		/// NOTE: If you need to ensure that any account-based filtering is honored (i.e. because
 		/// you expect `proxy` to have been used prior in the call stack and you want it to apply to
@@ -185,19 +167,14 @@ decl_module! {
 		/// - Base weight: 2.861 µs
 		/// - Plus the weight of the `call`
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| {
-				args.1.get_dispatch_info().weight.saturating_add(3_000_000)
-			},
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			Pays::Yes,
+		#[weight = (
+			call.get_dispatch_info().weight.saturating_add(3_000_000),
+			call.get_dispatch_info().class,
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
+
+			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
 			let pseudonym = Self::sub_account_id(who, index);
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
 				.map(|_| ()).map_err(|e| e.error)
@@ -205,7 +182,8 @@ decl_module! {
 
 		/// Send a call through an indexed pseudonym of the sender.
 		///
-		/// Calls must each fulfil the `IsCallable` filter; it is not cleared before.
+		/// Filter from origin are passed along. The call will be dispatched with an origin which
+		/// use the same filter as the origin of this call.
 		///
 		/// NOTE: If you need to ensure that any account-based filtering is not honored (i.e.
 		/// because you expect `proxy` to have been used prior in the call stack and you do not want
@@ -217,19 +195,16 @@ decl_module! {
 		/// - Base weight: 2.861 µs
 		/// - Plus the weight of the `call`
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| {
-				args.1.get_dispatch_info().weight.saturating_add(3_000_000)
-			},
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			Pays::Yes,
+		#[weight = (
+			call.get_dispatch_info().weight.saturating_add(3_000_000),
+			call.get_dispatch_info().class,
 		)]
 		fn as_limited_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
+			let mut origin = origin;
+			let who = ensure_signed(origin.clone())?;
 			let pseudonym = Self::sub_account_id(who, index);
-			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
-				.map(|_| ()).map_err(|e| e.error)
+			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
+			call.dispatch(origin).map(|_| ()).map_err(|e| e.error)
 		}
 	}
 }

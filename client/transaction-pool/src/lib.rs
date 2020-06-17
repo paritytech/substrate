@@ -495,11 +495,6 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: ChainApi<Block = Block>>(
 	api: &Api,
 	pool: &sc_transaction_graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
-	// We don't query block if we won't prune anything
-	if pool.validated_pool().status().is_empty() {
-		return Vec::new();
-	}
-
 	let hashes = api.block_body(&block_id).await
 		.unwrap_or_else(|e| {
 			log::warn!("Prune known transactions: error request {:?}!", e);
@@ -559,8 +554,16 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					let mut pruned_log = HashSet::<ExtrinsicHash<PoolApi>>::new();
 
 					// If there is a tree route, we use this to prune known tx based on the enacted
-					// blocks.
+					// blocks. Before pruning enacted transactions, we inform the listeners about
+					// retracted blocks and their transactions. This order is important, because
+					// if we enact and retract the same transaction at the same time, we want to
+					// send first the retract and than the prune event.
 					if let Some(ref tree_route) = tree_route {
+						for retracted in tree_route.retracted() {
+							// notify txs awaiting finality that it has been retracted
+							pool.validated_pool().on_block_retracted(retracted.hash.clone());
+						}
+
 						future::join_all(
 							tree_route
 								.enacted()
@@ -591,9 +594,6 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 						for retracted in tree_route.retracted() {
 							let hash = retracted.hash.clone();
-
-							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(hash.clone());
 
 							let block_transactions = api.block_body(&BlockId::hash(hash))
 								.await
@@ -682,4 +682,24 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 			}
 		}
 	}
+}
+
+/// Inform the transaction pool about imported and finalized blocks.
+pub async fn notification_future<Client, Pool, Block>(
+	client: Arc<Client>,
+	txpool: Arc<Pool>
+)
+	where
+		Block: BlockT,
+		Client: sc_client_api::BlockchainEvents<Block>,
+		Pool: MaintainedTransactionPool<Block=Block>,
+{
+	let import_stream = client.import_notification_stream().map(Into::into).fuse();
+	let finality_stream = client.finality_notification_stream()
+		.map(Into::into)
+		.fuse();
+
+	futures::stream::select(import_stream, finality_stream)
+		.for_each(|evt| txpool.maintain(evt))
+		.await
 }

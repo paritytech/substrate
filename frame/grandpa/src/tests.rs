@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize},
+	traits::{Currency, OnFinalize, UnfilteredDispatchable},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -376,7 +376,7 @@ fn report_equivocation_current_set_works() {
 
 		// report the equivocation and the tx should be dispatched successfully
 		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(Grandpa::dispatch(inner, Origin::signed(1)));
+		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
 
 		start_era(2);
 
@@ -457,7 +457,7 @@ fn report_equivocation_old_set_works() {
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
 		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(Grandpa::dispatch(inner, Origin::signed(1)));
+		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
 
 		start_era(3);
 

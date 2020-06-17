@@ -1015,10 +1015,11 @@ mod tests {
 		pub const MaxProposals: u32 = 100;
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1167,7 +1168,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3), MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(3), MAX_MEMBERS));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1192,7 +1193,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1), MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(1), MAX_MEMBERS));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1260,7 +1261,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4], None, MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![2, 3, 4], None, MAX_MEMBERS));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -1275,7 +1276,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4], None, MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![2, 4], None, MAX_MEMBERS));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
@@ -1618,7 +1619,7 @@ mod tests {
 			// Proposal would normally succeed
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			// But Root can disapprove and remove it anyway
-			assert_ok!(Collective::disapprove_proposal(Origin::ROOT, hash.clone()));
+			assert_ok!(Collective::disapprove_proposal(Origin::root(), hash.clone()));
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 2))),

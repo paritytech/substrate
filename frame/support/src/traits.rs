@@ -192,6 +192,17 @@ macro_rules! impl_filter_stack {
 	}
 }
 
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[impl_for_tuples(30)]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
 #[cfg(test)]
 mod test_impl_filter_stack {
 	use super::*;
@@ -1008,6 +1019,7 @@ pub trait Currency<AccountId> {
 }
 
 /// Status of funds.
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -1547,6 +1559,63 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
+}
+
+/// Type that can be dispatched with an origin but without checking the origin filter.
+///
+/// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
+/// `construct_runtime` and `impl_outer_dispatch`.
+pub trait UnfilteredDispatchable {
+	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	type Origin;
+
+	/// Dispatch this call but do not check the filter in origin.
+	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
+}
+
+/// Methods available on `frame_system::Trait::Origin`.
+pub trait OriginTrait: Sized {
+	/// Runtime call type, as in `frame_system::Trait::Call`
+	type Call;
+
+	/// The caller origin, overarching type of all pallets origins.
+	type PalletsOrigin;
+
+	/// Add a filter to the origin.
+	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
+
+	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	fn reset_filter(&mut self);
+
+	/// Replace the caller with caller from the other origin
+	fn set_caller_from(&mut self, other: impl Into<Self>);
+
+	/// Filter the call, if false then call is filtered out.
+	fn filter_call(&self, call: &Self::Call) -> bool;
+}
+
+/// Trait to be used when types are exactly same.
+///
+/// This allow to convert back and forth from type, a reference and a mutable reference.
+pub trait IsType<T>: Into<T> + From<T> {
+	/// Cast reference.
+	fn from_ref(t: &T) -> &Self;
+
+	/// Cast reference.
+	fn into_ref(&self) -> &T;
+
+	/// Cast mutable reference.
+	fn from_mut(t: &mut T) -> &mut Self;
+
+	/// Cast mutable reference.
+	fn into_mut(&mut self) -> &mut T;
+}
+
+impl<T> IsType<T> for T {
+	fn from_ref(t: &T) -> &Self { t }
+	fn into_ref(&self) -> &T { self }
+	fn from_mut(t: &mut T) -> &mut Self { t }
+	fn into_mut(&mut self) -> &mut T { self }
 }
 
 #[cfg(test)]
