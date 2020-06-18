@@ -148,20 +148,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 #[derive(Debug, Clone)]
 pub enum NotifsHandlerIn {
 	/// The node should start using custom protocols.
-	Enable {
-		/// In the legacy protocol, the `Status` message (that serves as a handshake) is only ever
-		/// sent on the first substream that is open with a given peer. If a second substream with
-		/// that same peer is later opened (no matter whether it is on the same connection or a
-		/// different one), no `Status` message is sent.
-		///
-		/// This flag indicates whether or not this connection should send a `Status` message.
-		///
-		/// Note that this only concerns the `Status` message that our node sends out. Whatever
-		/// the value of this flag is, we should always propagate any `Status` sent by the remote,
-		/// and consider as successful the lack of `Status` message. If it the role of the upper
-		/// layers to properly enforce the uniqueness of the `Status` message sent by the remote.
-		send_legacy_handshake: bool,
-	},
+	Enable,
 
 	/// The node should stop using custom protocols.
 	Disable,
@@ -344,12 +331,12 @@ impl ProtocolsHandler for NotifsHandler {
 
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
-			NotifsHandlerIn::Enable { send_legacy_handshake } => {
+			NotifsHandlerIn::Enable => {
 				if let EnabledState::Enabled = self.enabled {
 					debug!("enabling already-enabled handler");
 				}
 				self.enabled = EnabledState::Enabled;
-				self.legacy.inject_event(LegacyProtoHandlerIn::Enable { send_legacy_handshake });
+				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for (handler, initial_message) in &mut self.out_handlers {
 					// We create `initial_message` on a separate line to be sure that the lock
 					// is released as soon as possible.

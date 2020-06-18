@@ -200,10 +200,7 @@ enum ProtocolState {
 #[derive(Debug)]
 pub enum LegacyProtoHandlerIn {
 	/// The node should start using custom protocols.
-	Enable {
-		/// See the documentation of this flag in the parent module.
-		send_legacy_handshake: bool,
-	},
+	Enable,
 
 	/// The node should stop using custom protocols.
 	Disable,
@@ -222,9 +219,8 @@ pub enum LegacyProtoHandlerOut {
 	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.
 		version: u8,
-		/// First message that has been sent to us.
-		/// This can be a "Status" message, or a non-"Status" message in case this is not the
-		/// first substream that's been opened, but this out of the concern of this code.
+		/// Handshake message that has been sent to us.
+		/// This is normally a "Status" message, but this out of the concern of this code.
 		received_handshake: Vec<u8>,
 		/// The connected endpoint.
 		endpoint: ConnectedPoint,
@@ -274,7 +270,7 @@ impl LegacyProtoHandler {
 	}
 
 	/// Enables the handler.
-	fn enable(&mut self, send_legacy_handshake: bool) {
+	fn enable(&mut self) {
 		self.state = match mem::replace(&mut self.state, ProtocolState::Poisoned) {
 			ProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler with {:?} is in poisoned state",
@@ -564,8 +560,7 @@ impl ProtocolsHandler for LegacyProtoHandler {
 	fn inject_event(&mut self, message: LegacyProtoHandlerIn) {
 		match message {
 			LegacyProtoHandlerIn::Disable => self.disable(),
-			LegacyProtoHandlerIn::Enable { send_legacy_handshake } =>
-				self.enable(send_legacy_handshake),
+			LegacyProtoHandlerIn::Enable => self.enable(),
 			LegacyProtoHandlerIn::SendCustomMessage { message } =>
 				self.send_message(message),
 		}
