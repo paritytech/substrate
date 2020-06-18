@@ -25,7 +25,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{Configuration, Role, ServiceBuilderCommand, TaskType, KeepAliveChainComponents};
+use sc_service::{Configuration, Role, ServiceBuilderCommand, TaskType, KeepAliveServiceComponents};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
@@ -174,13 +174,13 @@ impl<C: SubstrateCli> Runner<C> {
 		info!("⛓  Native runtime: {}", runtime_version);
 	}
 
-	/// A helper function that runs an `AbstractService` with tokio and stops if the process
+	/// A helper function that runs a node with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can run a full or a light node depending on
 	/// the node's configuration.
 	pub fn run_node(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		match self.config.role {
@@ -189,12 +189,12 @@ impl<C: SubstrateCli> Runner<C> {
 		}
 	}
 
-	/// A helper function that runs an `AbstractService` with tokio and stops if the process
+	/// A helper function that runs a node with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "full" node and will fail if
 	/// the node's configuration uses a "light" role.
 	pub fn run_full_node(
 		self,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		if matches!(self.config.role, Role::Light) {
@@ -205,12 +205,12 @@ impl<C: SubstrateCli> Runner<C> {
 		self.run_service_until_exit(new_full)
 	}
 
-	/// A helper function that runs an `AbstractService` with tokio and stops if the process
+	/// A helper function that runs a node with tokio and stops if the process
 	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "light" node and will fail if
 	/// the node's configuration uses a "full" role.
 	pub fn run_light_node(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		if !matches!(self.config.role, Role::Light) {
@@ -251,9 +251,9 @@ impl<C: SubstrateCli> Runner<C> {
 
 	fn run_service_until_exit(
 		mut self,
-		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveChainComponents>,
+		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
 	) -> Result<()> {
-		let KeepAliveChainComponents {
+		let KeepAliveServiceComponents {
 			task_manager,
 			// We need to keep a hold of these until the tasks are finished.
 			other: _other,

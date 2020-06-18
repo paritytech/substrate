@@ -64,7 +64,7 @@ use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
 use sp_core::storage::Storage;
-use crate::{ChainComponents, TelemetryOnConnectSinks, RpcHandlers, NetworkStatusSinks};
+use crate::{ServiceComponents, TelemetryOnConnectSinks, RpcHandlers, NetworkStatusSinks};
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -960,7 +960,7 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	fn build_common(self) -> Result<ChainComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
+	fn build_common(self) -> Result<ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		let ServiceBuilder {
@@ -1130,7 +1130,7 @@ ServiceBuilder<
 			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
 		));
 
-		Ok(ChainComponents {
+		Ok(ServiceComponents {
 			client,
 			task_manager,
 			network,
@@ -1149,7 +1149,7 @@ ServiceBuilder<
 	}
 
 	/// Builds the light service.
-	pub fn build_light(self) -> Result<ChainComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
+	pub fn build_light(self) -> Result<ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		self.build_common()
@@ -1192,7 +1192,7 @@ ServiceBuilder<
 {
 
 	/// Builds the full service.
-	pub fn build_full(self) -> Result<ChainComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
+	pub fn build_full(self) -> Result<ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		// make transaction pool available for off-chain runtime calls.

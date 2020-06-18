@@ -30,7 +30,7 @@ use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use sc_service::{
-	KeepAliveChainComponents,
+	KeepAliveServiceComponents,
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
@@ -79,7 +79,7 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 }
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
-	keep_alive: Arc<Mutex<KeepAliveChainComponents>>,
+	keep_alive: Arc<Mutex<KeepAliveServiceComponents>>,
 	rpc_handlers: Arc<RpcHandlers>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
@@ -89,7 +89,7 @@ pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
 TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	pub fn new(
-		keep_alive: KeepAliveChainComponents,
+		keep_alive: KeepAliveServiceComponents,
 		rpc_handlers: RpcHandlers,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,

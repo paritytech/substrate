@@ -23,7 +23,7 @@ use browser_utils::{
 	Client,
 	browser_configuration, set_console_error_panic_hook, init_console_log,
 };
-use sc_service::KeepAliveChainComponents;
+use sc_service::KeepAliveServiceComponents;
 use std::str::FromStr;
 
 /// Starts the client.
@@ -53,7 +53,7 @@ async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Cl
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
-	let (KeepAliveChainComponents { task_manager, .. }, rpc_handlers) =
+	let (KeepAliveServiceComponents { task_manager, .. }, rpc_handlers) =
 		crate::service::new_light_base(config)
 			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
 			.map_err(|e| format!("{:?}", e))?;

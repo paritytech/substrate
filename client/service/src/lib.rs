@@ -150,7 +150,7 @@ impl TelemetryOnConnectSinks {
 
 /// The individual components of the chain, built by the service builder. You are encouraged to
 /// deconstruct this into its fields.
-pub struct ChainComponents<
+pub struct ServiceComponents<
 	TBl: BlockT, TBackend: sc_client_api::backend::Backend<TBl>, TExec, TRtApi, TSc, TExPool,
 > {
 	/// A blockchain client.
@@ -188,7 +188,7 @@ pub struct ChainComponents<
 }
 
 /// The components of the chain that we need to keep alive until the node quits.
-pub struct KeepAliveChainComponents {
+pub struct KeepAliveServiceComponents {
 	/// The chain task manager. 
 	pub task_manager: TaskManager,
 	/// Everything else.
