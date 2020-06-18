@@ -354,7 +354,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				}
 				keys.push(key);
 			}
-			self.record.set(keys);
+			let mut record = self.record.take();
+			record.extend(keys);
+			self.record.set(record);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 			self.root.set(storage_root);
 			self.db.set(Some(db));
