@@ -115,6 +115,7 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = balances::AccountData<u128>;
+	type MigrateAccount = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }

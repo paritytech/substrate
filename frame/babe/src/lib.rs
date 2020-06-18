@@ -208,6 +208,14 @@ decl_module! {
 			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			for i in 0..=SegmentIndex::get() {
+				UnderConstruction::migrate_key_from_blake(i);
+			}
+			// TODO: determine weight
+			0
+		}
 	}
 }
 

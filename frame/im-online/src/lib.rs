@@ -94,7 +94,7 @@ use sp_staking::{
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
-	traits::Get,
+	traits::{Get, MigrateAccount},
 	weights::Weight,
 };
 use frame_system::{self as system, ensure_none};
@@ -311,11 +311,39 @@ decl_error! {
 	}
 }
 
+mod migration {
+	use super::*;
+	use frame_support::Blake2_256;
+	pub fn migrate<T: Trait>() {
+		let current_index = <pallet_session::Module<T>>::current_index();
+		let key_count = Keys::<T>::get().len() as AuthIndex;
+		for i in 0..key_count {
+			ReceivedHeartbeats::migrate_keys::<Blake2_256, Blake2_256, _, _>(current_index, i);
+		}
+	}
+}
+
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		use frame_support::Blake2_256;
+		let current_index = <pallet_session::Module<T>>::current_index();
+		if let Ok(v) = a.using_encoded(|mut d| T::ValidatorId::decode(&mut d)) {
+			AuthoredBlocks::<T>::migrate_keys::<Blake2_256, Blake2_256, _, _>(current_index, v);
+		}
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>();
+			// TODO: determine actual weight
+			0
+		}
 
 		/// # <weight>
 		/// - Complexity: `O(K + E)` where K is length of `Keys` and E is length of

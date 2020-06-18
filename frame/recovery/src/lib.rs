@@ -165,6 +165,7 @@ use frame_support::{
 	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -256,6 +257,13 @@ decl_storage! {
 		/// Map from the user who can access it to the recovered account.
 		pub Proxy get(fn proxy):
 			map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
+	}
+}
+
+impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
+	fn migrate_account(a: &T::AccountId) {
+		Recoverable::<T>::migrate_key_from_blake(a);
+		Proxy::<T>::migrate_key_from_blake(a);
 	}
 }
 

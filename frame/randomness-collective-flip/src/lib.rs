@@ -179,7 +179,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 
