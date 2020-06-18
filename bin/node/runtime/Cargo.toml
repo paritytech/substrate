@@ -111,6 +111,7 @@ std = [
 	"pallet-membership/std",
 	"pallet-multisig/std",
 	"pallet-identity/std",
+	"pallet-scheduler/std",
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",

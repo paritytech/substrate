@@ -24,6 +24,7 @@ sp-wasm-interface = { version = "2.0.0-rc3", path = "../../primitives/wasm-inter
 sp-runtime-interface = { version = "2.0.0-rc3", default-features = false, path = "../runtime-interface" }
 sp-trie = { version = "2.0.0-rc3", optional = true, path = "../../primitives/trie" }
 sp-externalities = { version = "0.8.0-rc3", optional = true, path = "../externalities" }
+sp-tracing = { version = "2.0.0-rc3", default-features = false, path = "../tracing" }
 log = { version = "0.4.8", optional = true }
 futures = { version = "0.3.1", features = ["thread-pool"], optional = true }
 parking_lot = { version = "0.10.0", optional = true }
