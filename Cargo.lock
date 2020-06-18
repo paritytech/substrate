@@ -6000,6 +6000,7 @@ dependencies = [
  "blake2-rfc",
  "env_logger 0.7.1",
  "hash-db",
+ "hex-literal",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
