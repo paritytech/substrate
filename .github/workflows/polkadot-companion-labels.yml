@@ -2,7 +2,7 @@ name: Check Polkadot Companion and Label
 
 on:
   pull_request:
-    types: [synchronize]
+    types: [opened, synchronize]
   
 jobs:
   check_status:
