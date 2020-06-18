@@ -25,11 +25,13 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
+use sc_service::{
+	AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType, config::TaskExecutor,
+};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
-use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, str::FromStr};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -119,7 +121,7 @@ impl<C: SubstrateCli> Runner<C> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
 
-		let task_executor = Arc::new(
+		let task_executor = TaskExecutor::from_fn(
 			move |fut, task_type| {
 				match task_type {
 					TaskType::Async => { runtime_handle.spawn(fut); }

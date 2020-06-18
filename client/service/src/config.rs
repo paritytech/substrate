@@ -254,9 +254,11 @@ impl std::convert::From<PathBuf> for BasePath {
 	}
 }
 
+type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
+
 /// Callable object that execute tasks.
 #[derive(Clone)]
-pub struct TaskExecutor(Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>);
+pub struct TaskExecutor(TaskExecutorInner);
 
 impl std::fmt::Debug for TaskExecutor {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -264,16 +266,17 @@ impl std::fmt::Debug for TaskExecutor {
 	}
 }
 
-impl std::convert::From<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>>
-for TaskExecutor {
-	fn from(x: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>)
+/*
+impl std::convert::From<TaskExecutorInner> for TaskExecutor {
+	fn from(x: TaskExecutorInner)
 	-> Self {
 		Self(x)
 	}
 }
+*/
 
 impl std::ops::Deref for TaskExecutor {
-	type Target = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
+	type Target = TaskExecutorInner;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
@@ -282,7 +285,9 @@ impl std::ops::Deref for TaskExecutor {
 
 impl TaskExecutor {
 	/// Create a `TaskExecutor` from a function
-	pub fn from_fn(f: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static) -> Self {
+	pub fn from_fn(
+		f: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static,
+	) -> Self {
 		Self(Arc::new(f))
 	}
 }
