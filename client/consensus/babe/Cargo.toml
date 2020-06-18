@@ -58,6 +58,7 @@ sc-service = { version = "0.8.0-rc3", default-features = false, path = "../../se
 substrate-test-runtime-client = { version = "2.0.0-rc3", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "0.8.0-rc3", path = "../../block-builder" }
 env_logger = "0.7.0"
+rand_chacha = "0.2.2"
 tempfile = "3.1.0"
 
 [features]
