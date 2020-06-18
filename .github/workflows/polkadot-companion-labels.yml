@@ -14,7 +14,7 @@ jobs:
         with:
           authToken: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.sha }}
-          contexts: 'continuous-integration/gitlab-check-companion-build'
+          contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
       - name: Label success
         uses: andymckay/labeler@master
         if: steps.check-companion-status.outputs.result == 'success'
