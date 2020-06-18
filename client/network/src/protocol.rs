@@ -92,6 +92,9 @@ pub(crate) const MIN_VERSION: u32 = 3;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
+// Maximum total bytes allowed for block bodies in `BlockResponse`
+const MAX_BODIES_BYTES: usize = 8 * 1024 * 1024;
+
 /// When light node connects to the full node and the full node is behind light node
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
 /// and disconnect to free connection slot.
@@ -762,8 +765,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let get_justification = request
 			.fields
 			.contains(message::BlockAttributes::JUSTIFICATION);
+		let mut total_size = 0;
 		while let Some(header) = self.context_data.chain.header(id).unwrap_or(None) {
-			if blocks.len() >= max {
+			if blocks.len() >= max || total_size > MAX_BODIES_BYTES {
 				break;
 			}
 			let number = *header.number();
@@ -794,6 +798,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				trace!(target: "sync", "Missing data for block request.");
 				break;
 			}
+			total_size += block_data.body.as_ref().map_or(0, |b| b.len());
 			blocks.push(block_data);
 			match request.direction {
 				message::Direction::Ascending => id = BlockId::Number(number + One::one()),
