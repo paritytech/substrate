@@ -1593,7 +1593,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		// extrinsics that result in error.
 		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
 			"Bad mandantory".print();
-			err.print();
+			e.print();
 
 			Err(InvalidTransaction::BadMandatory)?
 		}
