@@ -20,9 +20,9 @@ use log::{debug, info};
 use std::sync::Arc;
 use sc_network::config::TransportConfig;
 use sc_service::{
-	RpcSession, Role, Configuration,
+	RpcSession, Role, Configuration, TaskManager, RpcHandlers,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	GenericChainSpec, RuntimeGenesis, TaskManager, RpcHandlers,
+	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};

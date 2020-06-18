@@ -19,11 +19,11 @@
 //! Service integration test utils.
 
 use std::iter;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::net::Ipv4Addr;
 use std::pin::Pin;
 use std::time::Duration;
-use log::info;
+use log::{info, debug};
 use futures01::{Future, Stream, Poll};
 use futures::{FutureExt as _, TryFutureExt as _};
 use tempfile::TempDir;
@@ -40,6 +40,7 @@ use sc_service::{
 	Error,
 	TaskType,
 	client::Client,
+	RpcHandlers,
 };
 use sp_blockchain::HeaderBackend;
 use sc_network::{multiaddr, Multiaddr};
@@ -48,7 +49,6 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
 use sc_client_api::{Backend, CallExecutor};
 use parking_lot::Mutex;
-
 
 #[cfg(test)]
 mod client;
@@ -80,6 +80,7 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 	keep_alive: Arc<Mutex<KeepAliveChainComponents>>,
+	rpc_handlers: Arc<RpcHandlers>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
 	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -89,12 +90,14 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
 TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	pub fn new(
 		keep_alive: KeepAliveChainComponents,
+		rpc_handlers: RpcHandlers,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		transaction_pool: Arc<TExPool>,
 	) -> Self {
 		Self {
 			client, transaction_pool, network,
+			rpc_handlers: Arc::new(rpc_handlers),
 			keep_alive: Arc::new(Mutex::new(keep_alive)),
 		}
 	}
@@ -109,6 +112,7 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			network: self.network.clone(),
+			rpc_handlers: self.rpc_handlers.clone()
 		}
 	}
 }
@@ -414,10 +418,16 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			}
 
 			network.run_until_all_full(
-				move |_index, service| service.network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.network().num_connected()
-					== expected_light_connections,
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} full connections...", connected, expected_full_connections);
+					connected == expected_full_connections
+				},
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} light connections...", connected, expected_light_connections);
+					connected == expected_light_connections
+				},
 			);
 
 			network.runtime
@@ -460,10 +470,16 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 			}
 
 			network.run_until_all_full(
-				move |_index, service| service.network().num_connected()
-					== expected_full_connections,
-				move |_index, service| service.network().num_connected()
-					== expected_light_connections,
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} full connections...", connected, expected_full_connections);
+					connected == expected_full_connections
+				},
+				move |_index, service| {
+					let connected = service.network().num_connected();
+					debug!("Got {}/{} light connections...", connected, expected_light_connections);
+					connected == expected_light_connections
+				},
 			);
 		}
 		temp.close().expect("Error removing temp dir");

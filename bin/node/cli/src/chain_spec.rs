@@ -431,12 +431,12 @@ pub(crate) mod tests {
 		sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
 			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_full_base(config,|_, _| ())?;
-				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+				let (keep_alive, _, rpc_handlers, client, network, transaction_pool) = new_full_base(config,|_, _| ())?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, rpc_handlers, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
-				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
+				let (keep_alive, rpc_handlers, client, network, transaction_pool) = new_light_base(config)?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, rpc_handlers, client, network, transaction_pool))
 			}
 		);
 	}

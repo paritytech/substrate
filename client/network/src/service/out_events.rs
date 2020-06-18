@@ -35,7 +35,7 @@
 use crate::Event;
 use super::maybe_utf8_bytes_to_string;
 
-use futures::{prelude::*, channel::mpsc, ready, stream::FusedStream};
+use futures::{prelude::*, channel::mpsc, ready};
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
@@ -120,16 +120,7 @@ impl fmt::Debug for Receiver {
 impl Drop for Receiver {
 	fn drop(&mut self) {
 		// Empty the list to properly decrease the metrics.
-		loop {
-			if self.inner.is_terminated() {
-				return;
-			}
-
-			match self.next().now_or_never() {
-				Some(Some(_)) => {},
-				_ => return,
-			}
-		}
+		while let Some(Some(_)) = self.next().now_or_never() {}
 	}
 }
 

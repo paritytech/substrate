@@ -44,7 +44,7 @@ use std::task::Poll;
 use parking_lot::Mutex;
 
 use client::Client;
-use futures::{Future, FutureExt, Stream, StreamExt, stream::FusedStream, compat::*};
+use futures::{Future, FutureExt, Stream, StreamExt, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
@@ -168,7 +168,7 @@ pub struct ChainComponents<
 	/// The base path.
 	pub base_path: Option<Arc<BasePath>>,
 	/// RPC handlers that can perform RPC queries.
-	pub rpc_handlers: crate::RpcHandlers,
+	pub rpc_handlers: RpcHandlers,
 	/// A shared instance of the chain selection algorithm.
 	pub select_chain: Option<TSc>,
 	/// Sinks to propagate network status updates.
@@ -234,81 +234,71 @@ fn build_network_future<
 		}
 
 		// Poll the RPC requests and answer them.
-		loop {
-			if rpc_rx.is_terminated() {
-				return Poll::Ready(());
-			}
-
-			match Pin::new(&mut rpc_rx).poll_next(cx) {
-				Poll::Ready(Some(request)) => {
-					match request {
-						sc_rpc::system::Request::Health(sender) => {
-							let _ = sender.send(sc_rpc::system::Health {
-								peers: network.peers_debug_info().len(),
-								is_syncing: network.service().is_major_syncing(),
-								should_have_peers,
-							});
-						},
-						sc_rpc::system::Request::LocalPeerId(sender) => {
-							let _ = sender.send(network.local_peer_id().to_base58());
-						},
-						sc_rpc::system::Request::LocalListenAddresses(sender) => {
-							let peer_id = network.local_peer_id().clone().into();
-							let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
-							let addresses = network.listen_addresses()
-								.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
-								.collect();
-							let _ = sender.send(addresses);
-						},
-						sc_rpc::system::Request::Peers(sender) => {
-							let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-								sc_rpc::system::PeerInfo {
-									peer_id: peer_id.to_base58(),
-									roles: format!("{:?}", p.roles),
-									protocol_version: p.protocol_version,
-									best_hash: p.best_hash,
-									best_number: p.best_number,
-								}
-							).collect());
-						}
-						sc_rpc::system::Request::NetworkState(sender) => {
-							if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
-								let _ = sender.send(network_state);
-							}
-						}
-						sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
-							let x = network.add_reserved_peer(peer_addr)
-								.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
-							let _ = sender.send(x);
-						}
-						sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
-							let _ = match peer_id.parse::<PeerId>() {
-								Ok(peer_id) => {
-									network.remove_reserved_peer(peer_id);
-									sender.send(Ok(()))
-								}
-								Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
-									e.to_string(),
-								))),
-							};
-						}
-						sc_rpc::system::Request::NodeRoles(sender) => {
-							use sc_rpc::system::NodeRole;
-		
-							let node_role = match role {
-								Role::Authority { .. } => NodeRole::Authority,
-								Role::Light => NodeRole::LightClient,
-								Role::Full => NodeRole::Full,
-								Role::Sentry { .. } => NodeRole::Sentry,
-							};
-		
-							let _ = sender.send(vec![node_role]);
-						}
-					};
+		while let Poll::Ready(Some(request)) = Pin::new(&mut rpc_rx).poll_next(cx) {
+			match request {
+				sc_rpc::system::Request::Health(sender) => {
+					let _ = sender.send(sc_rpc::system::Health {
+						peers: network.peers_debug_info().len(),
+						is_syncing: network.service().is_major_syncing(),
+						should_have_peers,
+					});
 				},
-				Poll::Ready(None) => return Poll::Ready(()),
-				Poll::Pending => break,
-			}
+				sc_rpc::system::Request::LocalPeerId(sender) => {
+					let _ = sender.send(network.local_peer_id().to_base58());
+				},
+				sc_rpc::system::Request::LocalListenAddresses(sender) => {
+					let peer_id = network.local_peer_id().clone().into();
+					let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
+					let addresses = network.listen_addresses()
+						.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
+						.collect();
+					let _ = sender.send(addresses);
+				},
+				sc_rpc::system::Request::Peers(sender) => {
+					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+						sc_rpc::system::PeerInfo {
+							peer_id: peer_id.to_base58(),
+							roles: format!("{:?}", p.roles),
+							protocol_version: p.protocol_version,
+							best_hash: p.best_hash,
+							best_number: p.best_number,
+						}
+					).collect());
+				}
+				sc_rpc::system::Request::NetworkState(sender) => {
+					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+						let _ = sender.send(network_state);
+					}
+				}
+				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+					let x = network.add_reserved_peer(peer_addr)
+						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+					let _ = sender.send(x);
+				}
+				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+					let _ = match peer_id.parse::<PeerId>() {
+						Ok(peer_id) => {
+							network.remove_reserved_peer(peer_id);
+							sender.send(Ok(()))
+						}
+						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+							e.to_string(),
+						))),
+					};
+				}
+				sc_rpc::system::Request::NodeRoles(sender) => {
+					use sc_rpc::system::NodeRole;
+
+					let node_role = match role {
+						Role::Authority { .. } => NodeRole::Authority,
+						Role::Light => NodeRole::LightClient,
+						Role::Full => NodeRole::Full,
+						Role::Sentry { .. } => NodeRole::Sentry,
+					};
+
+					let _ = sender.send(vec![node_role]);
+				}
+			};
 		}
 
 		// Interval report for the external API.
