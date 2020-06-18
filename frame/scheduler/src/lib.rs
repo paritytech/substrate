@@ -45,13 +45,13 @@
 
 mod benchmarking;
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
+use sp_std::{prelude::*, marker::PhantomData};
+use codec::{Encode, Decode, Codec};
 use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
-	traits::{Get, schedule},
+	traits::{Get, schedule, OriginTrait},
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_root};
@@ -66,7 +66,10 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
-	type Origin: From<system::RawOrigin<Self::AccountId>>;
+	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin> + From<Self::PalletsOrigin>;
+
+	/// The caller origin, overarching type of all pallets origins.
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone;
 
 	/// The aggregated call type.
 	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo + From<system::Call<Self>>;
@@ -82,8 +85,8 @@ pub type PeriodicIndex = u32;
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
 /// Information regarding an item to be executed in the future.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
-pub struct Scheduled<Call, BlockNumber> {
+#[derive(Clone, RuntimeDebug, Encode)]
+pub struct Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
 	maybe_id: Option<Vec<u8>>,
 	/// This task's priority.
@@ -92,13 +95,36 @@ pub struct Scheduled<Call, BlockNumber> {
 	call: Call,
 	/// If the call is periodic, then this points to the information concerning that.
 	maybe_periodic: Option<schedule::Period<BlockNumber>>,
+	/// The origin to dispatch the call.
+	origin: PalletsOrigin,
+	_phantom: PhantomData<AccountId>,
+}
+
+impl<Call, BlockNumber, PalletsOrigin, AccountId> Decode for Scheduled<Call, BlockNumber, PalletsOrigin, AccountId>
+where
+	Call: Decode,
+	BlockNumber: Decode,
+	PalletsOrigin: Decode + From<system::RawOrigin<AccountId>>
+{
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		// Implement decode manually to keep backwards compatibility.
+		// Old version does not have origin field and default to ROOT.
+		Ok(Scheduled {
+			maybe_id: Decode::decode(input)?,
+			priority: Decode::decode(input)?,
+			call: Decode::decode(input)?,
+			maybe_periodic: Decode::decode(input)?,
+			origin: Decode::decode(input).unwrap_or_else(|_| system::RawOrigin::Root.into()),
+			_phantom: Default::default(),
+		})
+	}
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Scheduler {
 		/// Items to be executed, indexed by the block number that they should be executed on.
 		pub Agenda: map hasher(twox_64_concat) T::BlockNumber
-			=> Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber>>>;
+			=> Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber, T::PalletsOrigin, T::AccountId>>>;
 
 		/// Lookup from identity to the block number and index of the task.
 		Lookup: map hasher(twox_64_concat) Vec<u8> => Option<TaskAddress<T::BlockNumber>>;
@@ -145,7 +171,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) {
 			ensure_root(origin)?;
-			let _ = Self::do_schedule(when, maybe_periodic, priority, *call);
+			let _ = Self::do_schedule(when, maybe_periodic, priority, system::RawOrigin::Root.into(), *call);
 		}
 
 		/// Cancel an anonymously scheduled task.
@@ -183,7 +209,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) {
 			ensure_root(origin)?;
-			Self::do_schedule_named(id, when, maybe_periodic, priority, *call)?;
+			Self::do_schedule_named(id, when, maybe_periodic, priority, system::RawOrigin::Root.into(), *call)?;
 		}
 
 		/// Cancel a named scheduled task.
@@ -247,7 +273,7 @@ decl_module! {
 					// - It does not push the weight past the limit.
 					// - It is the first item in the schedule
 					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit || order == 0 {
-						let r = s.call.clone().dispatch(system::RawOrigin::Root.into());
+						let r = s.call.clone().dispatch(s.origin.clone().into());
 						let maybe_id = s.maybe_id.clone();
 						if let &Some((period, count)) = &s.maybe_periodic {
 							if count > 1 {
@@ -293,6 +319,7 @@ impl<T: Trait> Module<T> {
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
 		call: <T as Trait>::Call
 	) -> TaskAddress<T::BlockNumber> {
 		// sanitize maybe_periodic
@@ -300,7 +327,9 @@ impl<T: Trait> Module<T> {
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
 			// Remove one from the number of repetitions since we will schedule one now.
 			.map(|(p, c)| (p, c - 1));
-		let s = Some(Scheduled { maybe_id: None, priority, call, maybe_periodic });
+		let s = Some(Scheduled {
+			maybe_id: None, priority, call, maybe_periodic, origin, _phantom: PhantomData::<T::AccountId>::default(),
+		});
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		Self::deposit_event(RawEvent::Scheduled(when, index));
@@ -324,6 +353,7 @@ impl<T: Trait> Module<T> {
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
 		call: <T as Trait>::Call,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		// ensure id it is unique
@@ -337,7 +367,9 @@ impl<T: Trait> Module<T> {
 			// Remove one from the number of repetitions since we will schedule one now.
 			.map(|(p, c)| (p, c - 1));
 
-		let s = Scheduled { maybe_id: Some(id.clone()), priority, call, maybe_periodic };
+		let s = Scheduled {
+			maybe_id: Some(id.clone()), priority, call, maybe_periodic, origin, _phantom: Default::default()
+		};
 		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
@@ -358,16 +390,17 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule(
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
 		call: <T as Trait>::Call
 	) -> Self::Address {
-		Self::do_schedule(when, maybe_periodic, priority, call)
+		Self::do_schedule(when, maybe_periodic, priority, origin, call)
 	}
 
 	fn cancel((when, index): Self::Address) -> Result<(), ()> {
@@ -375,7 +408,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> 
 	}
 }
 
-impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule_named(
@@ -383,9 +416,10 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T>
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
+		origin: T::PalletsOrigin,
 		call: <T as Trait>::Call,
 	) -> Result<Self::Address, ()> {
-		Self::do_schedule_named(id, when, maybe_periodic, priority, call).map_err(|_| ())
+		Self::do_schedule_named(id, when, maybe_periodic, priority, origin, call).map_err(|_| ())
 	}
 
 	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {

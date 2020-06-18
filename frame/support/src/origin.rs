@@ -222,10 +222,14 @@ macro_rules! impl_outer_origin {
 			fn filter_call(&self, call: &Self::Call) -> bool {
 				(self.filter)(call)
 			}
+
+			fn caller(&self) -> &Self::PalletsOrigin {
+				&self.caller
+			}
 		}
 
 		$crate::paste::item! {
-			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
+			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug, $crate::codec::Encode, $crate::codec::Decode)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {
@@ -252,14 +256,27 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
-		impl From<$system::Origin<$runtime>> for $name {
+		impl From<$system::Origin<$runtime>> for $caller_name {
 			fn from(x: $system::Origin<$runtime>) -> Self {
+				$caller_name::system(x)
+			}
+		}
+
+		impl From<$caller_name> for $name {
+			fn from(x: $caller_name) -> Self {
 				let mut o = $name {
-					caller: $caller_name::system(x),
+					caller: x,
 					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
 				$crate::traits::OriginTrait::reset_filter(&mut o);
 				o
+			}
+		}
+
+		impl From<$system::Origin<$runtime>> for $name {
+			fn from(x: $system::Origin<$runtime>) -> Self {
+				let x: $caller_name = x.into();
+				x.into()
 			}
 		}
 		impl Into<$crate::sp_std::result::Result<$system::Origin<$runtime>, $name>> for $name {
@@ -276,16 +293,19 @@ macro_rules! impl_outer_origin {
 				<$system::Origin<$runtime>>::from(x).into()
 			}
 		}
+
 		$(
 			$crate::paste::item! {
+				impl From<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > for $caller_name {
+					fn from(x: $module::Origin < $( $generic )? $(, $module::$generic_instance )? >) -> Self {
+						$caller_name::[< $module $( _ $generic_instance )? >](x)
+					}
+				}
+
 				impl From<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > for $name {
 					fn from(x: $module::Origin < $( $generic )? $(, $module::$generic_instance )? >) -> Self {
-						let mut o = $name {
-							caller: $caller_name::[< $module $( _ $generic_instance )? >](x),
-							filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
-						};
-						$crate::traits::OriginTrait::reset_filter(&mut o);
-						o
+						let x: $caller_name = x.into();
+						x.into()
 					}
 				}
 				impl Into<
