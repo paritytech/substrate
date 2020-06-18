@@ -663,16 +663,15 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use std::sync::{Arc, Mutex};
-
 	use sc_tracing::SpanDatum;
+
+	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
 
 	impl sc_tracing::TraceHandler for TestTraceHandler {
 		fn process_span(&self, sd: SpanDatum) {
 			self.0.lock().unwrap().push(sd);
 		}
 	}
-
-	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
 
 	let traces = Arc::new(Mutex::new(Vec::new()));
 	let handler = TestTraceHandler(traces.clone());
