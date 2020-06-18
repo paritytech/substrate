@@ -31,22 +31,22 @@ pub struct Analysis {
 
 impl Analysis {
 	pub fn median_slopes(r: &Vec<BenchmarkResults>) -> Option<Self> {
-		let results = r[0].0.iter().enumerate().map(|(i, &(param, _))| {
+		let results = r[0].components.iter().enumerate().map(|(i, &(param, _))| {
 			let mut counted = BTreeMap::<Vec<u32>, usize>::new();
-			for (params, _, _) in r.iter() {
-				let mut p = params.iter().map(|x| x.1).collect::<Vec<_>>();
+			for result in r.iter() {
+				let mut p = result.components.iter().map(|x| x.1).collect::<Vec<_>>();
 				p[i] = 0;
 				*counted.entry(p).or_default() += 1;
 			}
 			let others: Vec<u32> = counted.iter().max_by_key(|i| i.1).expect("r is not empty; qed").0.clone();
 			let values = r.iter()
 				.filter(|v|
-					v.0.iter()
+					v.components.iter()
 						.map(|x| x.1)
 						.zip(others.iter())
 						.enumerate()
 						.all(|(j, (v1, v2))| j == i || v1 == *v2)
-				).map(|(ps, v, _)| (ps[i].1, *v))
+				).map(|result| (result.components[i].1, result.extrinsic_time))
 				.collect::<Vec<_>>();
 			(format!("{:?}", param), i, others, values)
 		}).collect::<Vec<_>>();
@@ -99,9 +99,9 @@ impl Analysis {
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResults>) -> Option<Self> {
 		let mut results = BTreeMap::<Vec<u32>, Vec<u128>>::new();
-		for &(ref params, t, _) in r.iter() {
-			let p = params.iter().map(|x| x.1).collect::<Vec<_>>();
-			results.entry(p).or_default().push(t);
+		for result in r.iter() {
+			let p = result.components.iter().map(|x| x.1).collect::<Vec<_>>();
+			results.entry(p).or_default().push(result.extrinsic_time);
 		}
 		for (_, rs) in results.iter_mut() {
 			rs.sort();
@@ -111,7 +111,7 @@ impl Analysis {
 
 		let mut data = vec![("Y", results.iter().flat_map(|x| x.1.iter().map(|v| *v as f64)).collect())];
 
-		let names = r[0].0.iter().map(|x| format!("{:?}", x.0)).collect::<Vec<_>>();
+		let names = r[0].components.iter().map(|x| format!("{:?}", x.0)).collect::<Vec<_>>();
 		data.extend(names.iter()
 			.enumerate()
 			.map(|(i, p)| (

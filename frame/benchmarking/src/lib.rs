@@ -795,7 +795,11 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+							results.push($crate::BenchmarkResults {
+								components: c.clone(),
+								extrinsic_time: elapsed_extrinsic,
+								storage_root_time: elapsed_storage_root
+							});
 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
@@ -909,7 +913,11 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+							results.push($crate::BenchmarkResults {
+								components: c.clone(),
+								extrinsic_time: elapsed_extrinsic,
+								storage_root_time: elapsed_storage_root
+							});
 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
