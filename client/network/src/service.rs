@@ -41,7 +41,7 @@ use crate::{
 	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
-use futures::prelude::*;
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
@@ -747,6 +747,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
 	}
 
+	/// Returns a stream containing the listen addresses
+	pub fn listen_addresses(&self) -> impl Future<Output = Vec<Multiaddr>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ListenAddresses(tx));
+
+		async {
+			rx.await.expect("the sender is never dropped; qed")
+		}
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -813,6 +822,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
+	ListenAddresses(oneshot::Sender<Vec<Multiaddr>>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1143,6 +1153,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::UpdateChain =>
 					this.network_service.user_protocol_mut().update_chain(),
+				ServiceToWorkerMsg::ListenAddresses(sender) => {
+					let _ = sender.send(this.listen_addresses().cloned().collect());
+				},
 			}
 		}
 
