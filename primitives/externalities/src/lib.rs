@@ -224,6 +224,13 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Resets read/write count for the benchmarking process.
 	fn reset_read_write_count(&mut self);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Adds new storage keys to the DB tracking whitelist.
+	fn set_whitelist(&mut self, new: Vec<Vec<u8>>);
 }
 
 /// Extension for the [`Externalities`] trait.

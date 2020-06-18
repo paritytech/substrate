@@ -47,6 +47,10 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
 
+	/// Select how many repetitions of this benchmark should run.
+	#[structopt(long, use_delimiter = true)]
+	pub whitelist: Vec<String>,
+
 	/// Print the raw results.
 	#[structopt(long = "raw")]
 	pub raw_data: bool,

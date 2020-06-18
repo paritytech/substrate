@@ -52,7 +52,7 @@ impl BenchmarkCmd {
 		let mut changes = Default::default();
 		let mut offchain_changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
-		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
+		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size, Vec::new())?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			None, // heap pages
@@ -78,6 +78,7 @@ impl BenchmarkCmd {
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
+				&self.whitelist,
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
