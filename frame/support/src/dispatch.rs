@@ -399,6 +399,29 @@ macro_rules! decl_module {
 			"`deposit_event` function is reserved and must follow the syntax: `$vis:vis fn deposit_event() = default;`"
 		);
 	};
+	// Compile error on `deposit_event` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )+ }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		$vis:vis fn deposit_event() = default;
+		$($rest:tt)*
+	) => {
+		compile_error!("`deposit_event` can only be passed once as input.");
+	};
 	// Add on_finalize
 	(@normalize
 		$(#[$attr:meta])*
@@ -461,6 +484,30 @@ macro_rules! decl_module {
 			"`on_finalize` can't be given weight attribute anymore, weight must be returned by \
 			`on_initialize` or `on_runtime_upgrade` instead"
 		);
+	};
+	// Compile error on `on_finalize` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )+ }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
+		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_finalize` can only be passed once as input.");
 	};
 	// compile_error on_runtime_upgrade, without a given weight removed syntax.
 	(@normalize
@@ -554,6 +601,29 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Compile error on `on_runtime_upgrade` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )+ }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_runtime_upgrade` can only be passed once as input.");
+	};
 	// Add integrity_test
 	(@normalize
 		$(#[$attr:meta])*
@@ -594,6 +664,29 @@ macro_rules! decl_module {
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
+	};
+	// Compile error on `integrity_test` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )+ }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn integrity_test() { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`integrity_test` can only be passed once as input.");
 	};
 	// compile_error on_initialize, without a given weight removed syntax.
 	(@normalize
@@ -687,6 +780,29 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Compile error on trying to add a second `on_initialize`.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )+ }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_initialize` can only be passed once as input.");
+	};
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -727,7 +843,29 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-
+	// Compile error on trying to add a second `offchain_worker`.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )+ }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`offchain_worker` can only be passed once as input.");
+	};
 	// This puts a constant in the parsed constants list.
 	(@normalize
 		$(#[$attr:meta])*
