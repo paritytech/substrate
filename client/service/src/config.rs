@@ -100,6 +100,8 @@ pub struct Configuration {
 	pub tracing_targets: Option<String>,
 	/// Tracing receiver
 	pub tracing_receiver: sc_tracing::TracingReceiver,
+	/// Enable wasm tracing
+	pub tracing_enable_wasm: bool,
 	/// The size of the instances cache.
 	///
 	/// The default value is 8.

@@ -1237,7 +1237,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) -> $return {
-				$crate::sp_tracing::enter_span!("on_initialize");
+				$crate::enter_span!("on_initialize");
 				{ $( $impl )* }
 			}
 		}
@@ -1253,7 +1253,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) -> $return {
-				$crate::sp_tracing::enter_span!("on_initialize");
+				$crate::enter_span!("on_initialize");
 				{ $( $impl )* }
 			}
 		}
@@ -1279,7 +1279,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_runtime_upgrade() -> $return {
-				$crate::sp_tracing::enter_span!("on_runtime_upgrade");
+				$crate::enter_span!("on_runtime_upgrade");
 				{ $( $impl )* }
 			}
 		}
@@ -1332,7 +1332,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
-				$crate::sp_tracing::enter_span!("on_finalize");
+				$crate::enter_span!("on_finalize");
 				{ $( $impl )* }
 			}
 		}
@@ -1348,7 +1348,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
-				$crate::sp_tracing::enter_span!("on_finalize");
+				$crate::enter_span!("on_finalize");
 				{ $( $impl )* }
 			}
 		}
@@ -1417,7 +1417,7 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_tracing::enter_span!(stringify!($name));
+			$crate::enter_span!(stringify!($name));
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -1436,7 +1436,7 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$crate::sp_tracing::enter_span!(stringify!($name));
+			$crate::enter_span!(stringify!($name));
 			$( $impl )*
 		}
 	};

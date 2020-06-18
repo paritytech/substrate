@@ -80,6 +80,10 @@ pub struct ImportParams {
 		default_value = "Log"
 	)]
 	pub tracing_receiver: TracingReceiver,
+
+	/// Enable wasm tracing
+	#[structopt(long)]
+	pub tracing_enable_wasm: bool,
 }
 
 impl ImportParams {
@@ -91,6 +95,11 @@ impl ImportParams {
 	/// Comma separated list of targets for tracing.
 	pub fn tracing_targets(&self) -> Option<String> {
 		self.tracing_targets.clone()
+	}
+
+	/// Flag to enable wasm tracing.
+	pub fn tracing_enable_wasm(&self) -> bool {
+		self.tracing_enable_wasm
 	}
 
 	/// Specify the state cache size.
