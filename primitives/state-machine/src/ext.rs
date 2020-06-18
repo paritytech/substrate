@@ -578,6 +578,10 @@ where
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		self.backend.read_write_count()
 	}
+
+	fn reset_read_write_count(&mut self) {
+		self.backend.reset_read_write_count()
+	}
 }
 
 

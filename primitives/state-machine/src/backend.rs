@@ -220,6 +220,11 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		unimplemented!()
 	}
+
+	/// Get the read/write count of the db
+	fn reset_read_write_count(&mut self) {
+		unimplemented!()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

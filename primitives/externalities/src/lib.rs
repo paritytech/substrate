@@ -217,6 +217,13 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Gets the current read/write count for the benchmarking process.
 	fn read_write_count(&self) -> (u32, u32, u32, u32);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Resets read/write count for the benchmarking process.
+	fn reset_read_write_count(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

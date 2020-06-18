@@ -88,6 +88,11 @@ pub trait Benchmarking {
 	fn read_write_count(&self) -> (u32, u32, u32, u32) {
 		self.read_write_count()
 	}
+
+	/// Reset the read/write count
+	fn reset_read_write_count(&mut self) {
+		self.reset_read_write_count()
+	}
 }
 
 /// The pallet benchmarking trait.

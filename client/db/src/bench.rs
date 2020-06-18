@@ -398,6 +398,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		(count.reads, count.repeat_reads, count.writes, count.repeat_writes)
 	}
 
+	/// Reset the key tracking information for the state db.
+	fn reset_read_write_count(&mut self) {
+		self.wipe_tracker()
+	}
+
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
 		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
 	}
