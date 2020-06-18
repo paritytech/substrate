@@ -843,7 +843,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-	// Compile error on trying to add a second `on_initialize`.
+	// Compile error on trying to add a second `offchain_worker`.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
