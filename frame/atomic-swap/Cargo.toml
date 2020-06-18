@@ -22,7 +22,7 @@ sp-io = { version = "2.0.0-rc3", default-features = false, path = "../../primiti
 sp-core = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
-pallet-balances = { version = "2.0.0-rc3", default-features = false, path = "../balances" }
+pallet-balances = { version = "2.0.0-rc3", path = "../balances" }
 
 [features]
 default = ["std"]
@@ -35,5 +35,4 @@ std = [
 	"sp-std/std",
 	"sp-io/std",
 	"sp-core/std",
-	"pallet-balances/std",
 ]
