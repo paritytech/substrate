@@ -2776,9 +2776,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-ping"
-version = "0.19.1"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c189cf1dfe4b3f01e2c0fe5e97a6f5df8aeb6f3569e26981015eb7c08015ce5f"
+checksum = "ffb3c4f9273313357d4977799aec69f581cfe9568854919c5b8066018ccf59f5"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
