@@ -310,6 +310,10 @@ impl Externalities for BasicExternalities {
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!("read_write_count is not supported in Basic")
+	}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

@@ -574,6 +574,10 @@ where
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
 	}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.backend.read_write_count()
+	}
 }
 
 

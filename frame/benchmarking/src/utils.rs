@@ -83,6 +83,11 @@ pub trait Benchmarking {
 	fn commit_db(&mut self) {
 		self.commit()
 	}
+
+	/// Get the read/write count
+	fn read_write_count(&self) -> u32 {
+		self.read_write_count().0
+	}
 }
 
 /// The pallet benchmarking trait.

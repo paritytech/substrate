@@ -215,6 +215,11 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn commit(&self, _: H::Out, _: Self::Transaction, _: StorageCollection) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
+
+	/// Get the read/write count of the db
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

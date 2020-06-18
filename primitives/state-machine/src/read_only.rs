@@ -173,6 +173,10 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!("read_write_count is not supported in ReadOnlyExternalities")
+	}
 }
 
 impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for ReadOnlyExternalities<'a, H, B> {

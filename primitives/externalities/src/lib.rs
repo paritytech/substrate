@@ -210,6 +210,13 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Commits all changes to the database and clears all caches.
 	fn commit(&mut self);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Gets the current read/write count for the benchmarking process.
+	fn read_write_count(&self) -> (u32, u32, u32, u32);
 }
 
 /// Extension for the [`Externalities`] trait.

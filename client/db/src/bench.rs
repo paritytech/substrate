@@ -50,13 +50,15 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 }
 
+/// Track whether a specific key has already been read or written to.
 #[derive(Default, Clone, Copy)]
 pub struct KeyTracker {
 	has_been_read: bool,
 	has_been_written: bool,
 }
 
-#[derive(Default, Clone, Copy)]
+/// A simple object that counts the reads and writes at the key level to the underlying state db.
+#[derive(Default, Clone, Copy, Debug)]
 pub struct ReadWriteTracker {
 	reads: u32,
 	repeat_reads: u32,
@@ -382,6 +384,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.reopen()?;
 		self.wipe_tracker();
 		Ok(())
+	}
+
+	/// Get the key tracking information for the state db.
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		let count = *self.read_write_tracker.borrow_mut();
+		(count.reads, count.repeat_reads, count.writes, count.repeat_writes)
 	}
 
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
