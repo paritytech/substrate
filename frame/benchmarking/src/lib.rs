@@ -774,9 +774,9 @@ macro_rules! impl_benchmark {
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
-							$crate::benchmarking::reset_read_write_count();
 
-							frame_support::debug::trace!(target: "benchmark", "BEFORE {:?}", $crate::benchmarking::read_write_count());
+							// Reset the read/write counter so we don't count operations in the setup process.
+							$crate::benchmarking::reset_read_write_count();
 
 							// Time the extrinsic logic.
 							frame_support::debug::trace!(target: "benchmark", "Start Benchmark: {:?} {:?}", name, component_value);
@@ -888,6 +888,8 @@ macro_rules! impl_benchmark {
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
+
+							// Reset the read/write counter so we don't count operations in the setup process.
 							$crate::benchmarking::reset_read_write_count();
 
 							// Time the extrinsic logic.
