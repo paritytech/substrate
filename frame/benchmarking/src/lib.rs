@@ -783,6 +783,8 @@ macro_rules! impl_benchmark {
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
 
+							$crate::benchmarking::commit_db();
+
 							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
 
 							// Time the storage root recalculation.
