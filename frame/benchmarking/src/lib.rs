@@ -775,16 +775,17 @@ macro_rules! impl_benchmark {
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 
+							frame_support::debug::trace!(target: "benchmark", "BEFORE {:?}", $crate::benchmarking::read_write_count());
+
 							// Time the extrinsic logic.
 							frame_support::debug::trace!(target: "benchmark", "Start Benchmark: {:?} {:?}", name, component_value);
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
-
+							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
-
+							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
 							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
 
 							// Time the storage root recalculation.
@@ -893,8 +894,9 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+							// Commit the changes to get proper write count
+							$crate::benchmarking::commit_db();
 							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
-
 							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
 
 							// Time the storage root recalculation.
