@@ -83,7 +83,7 @@ impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
-/// and smaller integers. All other conversions are fallible. And is unsigned.
+/// Same as [`AtLeast32Bit `], but also bounded to be unsigned. 
 pub trait AtLeast32BitUnsigned: BaseArithmetic + From<u16> + From<u32> + Unsigned {}
 
 impl<T: BaseArithmetic + From<u16> + From<u32> + Unsigned> AtLeast32BitUnsigned for T {}
