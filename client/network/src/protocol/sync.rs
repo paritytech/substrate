@@ -54,8 +54,7 @@ mod blocks;
 mod extra_requests;
 
 /// Maximum blocks to request in a single packet.
-/// TODO: set to 128 once yamux issue is resolved.
-const MAX_BLOCKS_TO_REQUEST: usize = 64;
+const MAX_BLOCKS_TO_REQUEST: usize = 128;
 
 /// Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
