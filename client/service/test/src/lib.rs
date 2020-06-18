@@ -255,13 +255,11 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
-		let task_executor = {
+		let task_executor: TaskExecutor = {
 			let executor = executor.clone();
-			TaskExecutor::from_fn(
-				move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
-					executor.spawn(fut.unit_error().compat());
-				},
-			)
+			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
+				executor.spawn(fut.unit_error().compat());
+			}).into()
 		};
 
 		for (key, authority) in authorities {

@@ -266,28 +266,19 @@ impl std::fmt::Debug for TaskExecutor {
 	}
 }
 
-/*
-impl std::convert::From<TaskExecutorInner> for TaskExecutor {
-	fn from(x: TaskExecutorInner)
-	-> Self {
-		Self(x)
+impl<F> std::convert::From<F> for TaskExecutor
+where
+	F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static,
+{
+	fn from(x: F) -> Self {
+		Self(Arc::new(x))
 	}
 }
-*/
 
 impl std::ops::Deref for TaskExecutor {
 	type Target = TaskExecutorInner;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
-	}
-}
-
-impl TaskExecutor {
-	/// Create a `TaskExecutor` from a function
-	pub fn from_fn(
-		f: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static,
-	) -> Self {
-		Self(Arc::new(f))
 	}
 }

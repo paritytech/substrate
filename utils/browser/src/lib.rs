@@ -20,7 +20,7 @@ use log::{debug, info};
 use sc_network::config::TransportConfig;
 use sc_service::{
 	AbstractService, RpcSession, Role, Configuration,
-	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration, TaskExecutor},
+	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
@@ -63,7 +63,7 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: TaskExecutor::from_fn(|fut, _| wasm_bindgen_futures::spawn_local(fut)),
+		task_executor: (|fut, _| wasm_bindgen_futures::spawn_local(fut)).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
