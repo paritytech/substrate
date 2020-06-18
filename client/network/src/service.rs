@@ -298,8 +298,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
-				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
-				.connection_event_buffer_size(128);
+				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
+				.connection_event_buffer_size(1024);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {

@@ -37,9 +37,9 @@ A PR needs to be reviewed and approved by project maintainers unless:
 
 . Please tag each PR with exactly one `A`, `B` and `C` label at the minimum.
 . Once a PR is ready for review please add the https://github.com/paritytech/substrate/pulls?q=is%3Apr+is%3Aopen+label%3AA0-pleasereview[`A0-pleasereview`] label. Generally PRs should sit with this label for 48 hours in order to garner feedback. It may be merged before if all relevant parties had a look at it.
-. If the first review is not an approval, swap `A0-pleasereview` to any label `[A3, A7]` to indicate that the PR has received some feedback, but needs further work. For example. https://github.com/paritytech/substrate/labels/A3-inprogress[`A3-inprogress`] is a general indicator that the PR is work in progress and https://github.com/paritytech/substrate/labels/A4-gotissues[`A4-gotissues`] means that it has significant problems that need fixing. Once the work is done, change the label back to `A0-pleasereview`. You might end up swapping a few times back and forth to climb up the A label group. Once a PR is https://github.com/paritytech/substrate/labels/A8-mergeoncegreen[`A8-mergeoncegreen`], it is ready to merge. 
+. If the first review is not an approval, swap `A0-pleasereview` to any label `[A3, A7]` to indicate that the PR has received some feedback, but needs further work. For example. https://github.com/paritytech/substrate/labels/A3-inprogress[`A3-inprogress`] is a general indicator that the PR is work in progress and https://github.com/paritytech/substrate/labels/A4-gotissues[`A4-gotissues`] means that it has significant problems that need fixing. Once the work is done, change the label back to `A0-pleasereview`. You might end up swapping a few times back and forth to climb up the A label group. Once a PR is https://github.com/paritytech/substrate/labels/A8-mergeoncegreen[`A8-mergeoncegreen`], it is ready to merge.
 . PRs must be tagged with respect to _release notes_ with https://github.com/paritytech/substrate/labels/B0-silent[`B0-silent`] and `B1-..`. The former indicates that no changes should be mentioned in any release notes. The latter indicates that the changes should be reported in the corresponding release note
-. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/B2-breaksapi[`B2-breaksapi`], when it changes the FRAME or consensus of running system with https://github.com/paritytech/substrate/labels/B3-breaksconsensus[`B3-breaksconsensus`].
+. PRs that break the external API must be tagged with https://github.com/paritytech/substrate/labels/D2-breaksapi[`D2-breaksapi`], when it changes the FRAME or consensus of running system with https://github.com/paritytech/substrate/labels/B3-breaksconsensus[`B3-breaksconsensus`].
 . PRs should be labeled with their release importance via the `C1-C9`.
 . PRs should be categorized into projects.
 . No PR should be merged until all reviews' comments are addressed and CI is successful.
@@ -69,12 +69,12 @@ To create a Polkadot companion PR:
 . Pull latest Polkadot master (or clone it, if you haven't yet).
 . Override your local cargo config to point to your local substrate (pointing to your WIP branch): place `paths = ["path/to/substrate"]` in `~/.cargo/config`.
 . Make the changes required and build polkadot locally.
-. Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]" OR use the same name for your Polkdadot branch as the Substrate branch. 
+. Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]" OR use the same name for your Polkdadot branch as the Substrate branch.
 . Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
 . Wait for reviews on both
-. Once both PRs have been green lit, they can both be merged 🍻.  
+. Once both PRs have been green lit, they can both be merged 🍻.
 
-If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged. 
+If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/A7-needspolkadotpr[`A7-needspolkadotpr`] to prevent it from getting automatically merged.
 
 As there might be multiple pending PRs that might conflict with one another, a) you should not merge the substrate PR until the Polkadot PR has also been reviewed and b) both should be merged pretty quickly after another to not block others.
 
