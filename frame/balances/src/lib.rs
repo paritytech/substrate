@@ -546,7 +546,9 @@ decl_module! {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			migration::on_runtime_upgrade::<T, I>()
+			// Moved to custom runtime upgrade
+			// migration::on_runtime_upgrade::<T, I>()
+			0
 		}
 	}
 }
