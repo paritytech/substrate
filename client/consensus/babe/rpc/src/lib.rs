@@ -43,7 +43,7 @@ use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
@@ -98,7 +98,6 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
 		C::Api: BabeRuntimeApi<B>,
-		<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 		SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {

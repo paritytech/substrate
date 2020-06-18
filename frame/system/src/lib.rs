@@ -123,11 +123,11 @@ use frame_support::{
 	storage,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap, EnsureOrigin,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
-		FunctionOf, Pays, extract_actual_weight,
+		extract_actual_weight,
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -149,11 +149,15 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
-	/// The aggregated `Origin` type used by dispatchable calls.
+	/// The basic call filter to use in Origin.
+	type BaseCallFilter: Filter<Self::Call>;
+
+	/// The `Origin` type used by dispatchable calls.
 	type Origin:
 		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>
-		+ Clone;
+		+ Clone
+		+ OriginTrait<Call = Self::Call>;
 
 	/// The aggregated `Call` type.
 	type Call: Dispatchable + Debug;
@@ -566,11 +570,7 @@ decl_module! {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = FunctionOf(
-			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
-			DispatchClass::Operational,
-			Pays::Yes,
-		)]
+		#[weight = *_ratio * T::MaximumBlockWeight::get()]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -669,13 +669,10 @@ decl_module! {
 		/// - Base Weight: 0.568 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(items,): (&Vec<KeyValue>,)| {
-				T::DbWeight::get().writes(items.len() as Weight)
-					.saturating_add((items.len() as Weight).saturating_mul(600_000))
-			},
+		#[weight = (
+			T::DbWeight::get().writes(items.len() as Weight)
+				.saturating_add((items.len() as Weight).saturating_mul(600_000)),
 			DispatchClass::Operational,
-			Pays::Yes,
 		)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
@@ -692,13 +689,10 @@ decl_module! {
 		/// - Base Weight: .378 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(keys,): (&Vec<Key>,)| {
-				T::DbWeight::get().writes(keys.len() as Weight)
-					.saturating_add((keys.len() as Weight).saturating_mul(400_000))
-			},
+		#[weight = (
+			T::DbWeight::get().writes(keys.len() as Weight)
+				.saturating_add((keys.len() as Weight).saturating_mul(400_000)),
 			DispatchClass::Operational,
-			Pays::Yes,
 		)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
@@ -718,13 +712,10 @@ decl_module! {
 		/// - Base Weight: 0.834 * P µs
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &subkeys): (&Key, &u32)| {
-				T::DbWeight::get().writes(Weight::from(subkeys) + 1)
-					.saturating_add((Weight::from(subkeys) + 1).saturating_mul(850_000))
-			},
+		#[weight = (
+			T::DbWeight::get().writes(Weight::from(*_subkeys) + 1)
+				.saturating_add((Weight::from(*_subkeys) + 1).saturating_mul(850_000)),
 			DispatchClass::Operational,
-			Pays::Yes,
 		)]
 		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {
 			ensure_root(origin)?;
@@ -1903,8 +1894,8 @@ pub(crate) mod tests {
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
 	use frame_support::{
-		impl_outer_origin, parameter_types, assert_ok, assert_noop, assert_err,
-		weights::WithPostDispatchInfo,
+		impl_outer_origin, parameter_types, assert_ok, assert_noop,
+		weights::{WithPostDispatchInfo, Pays},
 	};
 
 	impl_outer_origin! {
@@ -1950,7 +1941,7 @@ pub(crate) mod tests {
 	pub struct Call;
 
 	impl Dispatchable for Call {
-		type Origin = ();
+		type Origin = Origin;
 		type Trait = ();
 		type Info = DispatchInfo;
 		type PostInfo = PostDispatchInfo;
@@ -1961,6 +1952,7 @@ pub(crate) mod tests {
 	}
 
 	impl Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
@@ -2010,7 +2002,7 @@ pub(crate) mod tests {
 	fn origin_works() {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
 		let x: Result<RawOrigin<u64>, Origin> = o.into();
-		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+		assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
 	}
 
 	#[test]
@@ -2732,8 +2724,8 @@ pub(crate) mod tests {
 			EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
 		}
 
-		assert_ok!(ensure_root_or_signed(RawOrigin::Root), Either::Left(()));
-		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)), Either::Right(0));
-		assert_err!(ensure_root_or_signed(RawOrigin::None), Origin::from(RawOrigin::None));
+		assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
+		assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
+		assert!(ensure_root_or_signed(RawOrigin::None).is_err())
 	}
 }

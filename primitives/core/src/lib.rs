@@ -95,9 +95,16 @@ pub use sp_std;
 
 /// Context for executing a call into the runtime.
 pub enum ExecutionContext {
-	/// Context for general importing (including own blocks).
+	/// Context used for general block import (including locally authored blocks).
 	Importing,
-	/// Context used when syncing the blockchain.
+	/// Context used for importing blocks as part of an initial sync of the blockchain.
+	///
+	/// We distinguish between major sync and import so that validators who are running
+	/// their initial sync (or catching up after some time offline) can use the faster
+	/// native runtime (since we can reasonably assume the network as a whole has already
+	/// come to a broad conensus on the block and it probably hasn't been crafted
+	/// specifically to attack this node), but when importing blocks at the head of the
+	/// chain in normal operation they can use the safer Wasm version.
 	Syncing,
 	/// Context used for block construction.
 	BlockConstruction,

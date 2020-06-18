@@ -149,7 +149,7 @@ fn should_return_block_hash() {
 	);
 
 	assert_matches!(
-		api.block_hash(Some(vec![0u64.into(), 1.into(), 2.into()].into())),
+		api.block_hash(Some(vec![0u64.into(), 1u64.into(), 2u64.into()].into())),
 		Ok(ListOrValue::List(list)) if list == &[client.genesis_hash().into(), block.hash().into(), None]
 	);
 }

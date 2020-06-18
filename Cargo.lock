@@ -1515,6 +1515,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
+ "sp-std",
  "trybuild",
 ]
 
@@ -2384,6 +2385,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpc-ipc-server"
+version = "14.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dedccd693325d833963b549e959137f30a7a0ea650cde92feda81dc0c1393cb5"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-server-utils",
+ "log",
+ "parity-tokio-ipc",
+ "parking_lot 0.10.2",
+ "tokio-service",
+]
+
+[[package]]
 name = "jsonrpc-pubsub"
 version = "14.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3042,9 +3057,9 @@ dependencies = [
 
 [[package]]
 name = "memory-db"
-version = "0.20.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be512cb2ccb4ecbdca937fdd4a62ea5f09f8e7195466a85e4632b3d5bcce82e6"
+checksum = "fb2999ff7a65d5a1d72172f6d51fa2ea03024b51aee709ba5ff81c3c629a2410"
 dependencies = [
  "ahash",
  "hash-db",
@@ -3092,7 +3107,7 @@ dependencies = [
  "kernel32-sys",
  "libc",
  "log",
- "miow",
+ "miow 0.2.1",
  "net2",
  "slab",
  "winapi 0.2.8",
@@ -3108,6 +3123,18 @@ dependencies = [
  "log",
  "mio",
  "slab",
+]
+
+[[package]]
+name = "mio-named-pipes"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5e374eff525ce1c5b7687c4cef63943e7686524a387933ad27ca7ec43779cb3"
+dependencies = [
+ "log",
+ "mio",
+ "miow 0.3.5",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -3131,6 +3158,16 @@ dependencies = [
  "net2",
  "winapi 0.2.8",
  "ws2_32-sys",
+]
+
+[[package]]
+name = "miow"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07b88fb9795d4d36d62a012dfbf49a8f5cf12751f36d31a9dbe66d528e58979e"
+dependencies = [
+ "socket2",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -3440,6 +3477,7 @@ dependencies = [
  "sc-keystore",
  "sc-rpc-api",
  "sp-api",
+ "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
@@ -3799,6 +3837,21 @@ version = "2.0.0-rc3"
 dependencies = [
  "frame-support",
  "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-atomic-swap"
+version = "2.0.0-rc3"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4549,6 +4602,7 @@ dependencies = [
  "pallet-balances",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
+ "serde",
  "smallvec 1.4.0",
  "sp-core",
  "sp-io",
@@ -4733,6 +4787,25 @@ name = "parity-send-wrapper"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9777aa91b8ad9dd5aaa04a9b6bcb02c7f1deb952fca5a66034d5e63afc5c6f"
+
+[[package]]
+name = "parity-tokio-ipc"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e57fea504fea33f9fbb5f49f378359030e7e026a6ab849bb9e8f0787376f1bf"
+dependencies = [
+ "bytes 0.4.12",
+ "futures 0.1.29",
+ "libc",
+ "log",
+ "mio-named-pipes",
+ "miow 0.3.5",
+ "rand 0.7.3",
+ "tokio 0.1.22",
+ "tokio-named-pipes",
+ "tokio-uds",
+ "winapi 0.3.8",
+]
 
 [[package]]
 name = "parity-util-mem"
@@ -5564,6 +5637,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "rental"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8545debe98b2b139fb04cad8618b530e9b07c152d99a5de83c860b877d67847f"
+dependencies = [
+ "rental-impl",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "rental-impl"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "475e68978dc5b743f2f40d8e0a8fdc83f1c5e78cbf4b8fa5e74e73beebc340de"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.6",
+ "syn 1.0.17",
+]
+
+[[package]]
 name = "ring"
 version = "0.16.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6174,6 +6268,7 @@ dependencies = [
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
  "sc-runtime-test",
+ "sc-tracing",
  "sp-api",
  "sp-core",
  "sp-externalities",
@@ -6183,11 +6278,13 @@ dependencies = [
  "sp-runtime-interface",
  "sp-serializer",
  "sp-state-machine",
+ "sp-tracing",
  "sp-trie",
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
  "test-case",
+ "tracing",
  "wabt",
  "wasmi",
 ]
@@ -6313,6 +6410,7 @@ dependencies = [
  "futures 0.3.4",
  "log",
  "parity-util-mem",
+ "parking_lot 0.10.2",
  "sc-client-api",
  "sc-network",
  "sp-blockchain",
@@ -6582,6 +6680,7 @@ version = "2.0.0-rc3"
 dependencies = [
  "jsonrpc-core",
  "jsonrpc-http-server",
+ "jsonrpc-ipc-server",
  "jsonrpc-pubsub",
  "jsonrpc-ws-server",
  "log",
@@ -6747,10 +6846,12 @@ dependencies = [
  "erased-serde",
  "log",
  "parking_lot 0.10.2",
+ "rustc-hash",
  "sc-telemetry",
  "serde",
  "serde_json",
  "slog",
+ "sp-tracing",
  "tracing",
  "tracing-core",
 ]
@@ -7510,6 +7611,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
+ "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
 ]
@@ -7785,6 +7887,8 @@ dependencies = [
 name = "sp-tracing"
 version = "2.0.0-rc3"
 dependencies = [
+ "log",
+ "rental",
  "tracing",
 ]
 
@@ -7827,6 +7931,7 @@ version = "2.0.0-rc3"
 dependencies = [
  "futures 0.3.4",
  "futures-core",
+ "futures-timer 3.0.2",
  "lazy_static",
  "prometheus",
 ]
@@ -8061,9 +8166,11 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-client-api",
+ "sc-rpc-api",
  "sc-transaction-pool",
  "serde",
  "sp-api",
+ "sp-block-builder",
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
@@ -8660,6 +8767,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-named-pipes"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d282d483052288b2308ba5ee795f5673b159c9bdf63c385a05609da782a5eae"
+dependencies = [
+ "bytes 0.4.12",
+ "futures 0.1.29",
+ "mio",
+ "mio-named-pipes",
+ "tokio 0.1.22",
+]
+
+[[package]]
 name = "tokio-reactor"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8688,6 +8808,15 @@ dependencies = [
  "rustls",
  "tokio 0.2.18",
  "webpki",
+]
+
+[[package]]
+name = "tokio-service"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24da22d077e0f15f55162bdbdc661228c1581892f52074fb242678d015b45162"
+dependencies = [
+ "futures 0.1.29",
 ]
 
 [[package]]
@@ -8818,9 +8947,9 @@ checksum = "e987b6bf443f4b5b3b6f38704195592cca41c5bb7aedd3c3693c7081f8289860"
 
 [[package]]
 name = "tracing"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1721cc8cf7d770cc4257872507180f35a4797272f5962f24c806af9e7faf52ab"
+checksum = "a7c6b59d116d218cb2d990eb06b77b64043e0268ef7323aae63d8b30ae462923"
 dependencies = [
  "cfg-if",
  "tracing-attributes",
@@ -8829,10 +8958,11 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fbad39da2f9af1cae3016339ad7f2c7a9e870f12e8fd04c4fd7ef35b30c0d2b"
+checksum = "99bbad0de3fd923c9c3232ead88510b783e5a4d16a6154adffa3d53308de984c"
 dependencies = [
+ "proc-macro2",
  "quote 1.0.6",
  "syn 1.0.17",
 ]
@@ -8854,9 +8984,9 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 
 [[package]]
 name = "trie-bench"
-version = "0.21.1"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c48b309cdda1abbdada28424bdc46f8b85362b3e66d6786d91223e83874429c7"
+checksum = "ed8419971832eb3333dc26066e50943a20e0934efeb451b3df5ee94f7f7323ab"
 dependencies = [
  "criterion 0.2.11",
  "hash-db",
@@ -8870,9 +9000,9 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.20.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcc309f34008563989045a4c4dbcc5770467f3a3785ee80a9b5cc0d83362475f"
+checksum = "cb230c24c741993b04cfccbabb45acff6f6480c5f00d3ed8794ea43db3a9d727"
 dependencies = [
  "hash-db",
  "hashbrown",

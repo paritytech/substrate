@@ -77,7 +77,7 @@
 //! - WebSockets for addresses of the form `/ip4/1.2.3.4/tcp/5/ws`. A TCP/IP connection is open and
 //! the WebSockets protocol is negotiated on top. Communications then happen inside WebSockets data
 //! frames. Encryption and multiplexing are additionally negotiated again inside this channel.
-//! - DNS for addresses of the form `/dns4/example.com/tcp/5` or `/dns4/example.com/tcp/5/ws`. A
+//! - DNS for addresses of the form `/dns/example.com/tcp/5` or `/dns/example.com/tcp/5/ws`. A
 //! node's address can contain a domain name.
 //! - (All of the above using IPv6 instead of IPv4.)
 //!
