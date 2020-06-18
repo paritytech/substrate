@@ -44,6 +44,9 @@ substrate-test-runtime = { version = "2.0.0-rc3", path = "../../test-utils/runti
 sp-state-machine = { version = "0.8.0-rc3", path = "../../primitives/state-machine" }
 test-case = "0.3.3"
 sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
+sp-tracing = { version = "2.0.0-rc3", path = "../../primitives/tracing" }
+sc-tracing = { version = "2.0.0-rc3", path = "../tracing" }
+tracing = "0.1.14"
 
 [features]
 default = [ "std" ]
