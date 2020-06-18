@@ -24,7 +24,7 @@ use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
-use sp_core::storage::ChildInfo;
+use sp_core::{storage::ChildInfo, hexdisplay::HexDisplay};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend, StorageCollection};
@@ -154,6 +154,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 	}
 
 	fn add_read_key(&self, key: &[u8]) {
+		log::trace!(target: "benchmark", "Read: {}", HexDisplay::from(&key));
+
 		let mut key_tracker = self.key_tracker.borrow_mut();
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
 
@@ -181,6 +183,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 	}
 
 	fn add_write_key(&self, key: &[u8]) {
+		log::trace!(target: "benchmark", "Write: {}", HexDisplay::from(&key));
+
 		let mut key_tracker = self.key_tracker.borrow_mut();
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
 
