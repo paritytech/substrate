@@ -339,8 +339,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		None
 	}
 
-	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, mut transaction: Self::Transaction, storage_changes: StorageCollection)
-		-> Result<(), Self::Error>
+	fn commit(&self,
+		storage_root: <HashFor<B> as Hasher>::Out,
+		mut transaction: Self::Transaction,
+		storage_changes: StorageCollection,
+	) -> Result<(), Self::Error>
 	{
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
