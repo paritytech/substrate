@@ -443,11 +443,6 @@ pub fn new_light(config: Configuration) -> Result<KeepAliveChainComponents, Serv
 	new_light_base(config).map(|(components, _, _, _, _)| components)
 }
 
-/// Builds a new service for a browser light client.
-pub fn new_light_browser(config: Configuration) -> Result<(KeepAliveChainComponents, RpcHandlers), ServiceError> {
-	new_light_base(config).map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
-}
-
 #[cfg(test)]
 mod tests {
 	use std::{sync::Arc, borrow::Cow, any::Any};

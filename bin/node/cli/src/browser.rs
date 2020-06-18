@@ -54,7 +54,9 @@ async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Cl
 
 	// Create the service. This is the most heavy initialization step.
 	let (KeepAliveChainComponents { task_manager, .. }, rpc_handlers) =
-		crate::service::new_light_browser(config).map_err(|e| format!("{:?}", e))?;
+		crate::service::new_light_base(config)
+			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
+			.map_err(|e| format!("{:?}", e))?;
 
 	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }
