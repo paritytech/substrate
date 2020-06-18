@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor the status of the gitlab-check-companion-build job
-        uses: Sibz/await-status-action@v1
+        uses: s3krit/await-status-action@4528ebbdf6e29bbec77c41caad1b2dec148ba894
         id: 'check-companion-status'
         with:
           authToken: ${{ secrets.GITHUB_TOKEN }}
