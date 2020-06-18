@@ -25,8 +25,3 @@ jobs:
         if: steps.check-companion-status.outputs.result == 'failure'
         with:
           add-labels: 'A7-needspolkadotpr'
-      - name: Label timeout
-        uses: andymckay/labeler@master
-        if: steps.check-companion-status.outputs.result == 'timeout'
-        with:
-          add-labels: 'A7-needspolkadotpr'
