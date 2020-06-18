@@ -105,7 +105,8 @@ impl RpcHandlers {
 	///
 	/// If the request subscribes you to events, the `Sender` in the `RpcSession` object is used to
 	/// send back spontaneous events.
-	pub fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
+	pub fn rpc_query(&self, mem: &RpcSession, request: &str)
+		-> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
 		self.0.handle_request(request, mem.metadata.clone())
 			.compat()
 			.map(|res| res.expect("this should never fail"))
@@ -115,21 +116,22 @@ impl RpcHandlers {
 
 /// Sinks to propagate network status updates.
 /// For each element, every time the `Interval` fires we push an element on the sender.
-pub struct NetworkStatusSinks<Block: BlockT> {
-	inner: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>,
-}
+pub struct NetworkStatusSinks<Block: BlockT>(
+	Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>,
+);
 
 impl<Block: BlockT> NetworkStatusSinks<Block> {
-	fn new(sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>) -> Self {
-		Self {
-			inner: sinks,
-		}
+	fn new(
+		sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>
+	) -> Self {
+		Self(sinks)
 	}
 
 	/// Returns a receiver that periodically receives a status of the network.
-	pub fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Block>, NetworkState)> {
+	pub fn network_status(&self, interval: Duration)
+		-> TracingUnboundedReceiver<(NetworkStatus<Block>, NetworkState)> {
 		let (sink, stream) = tracing_unbounded("mpsc_network_status");
-		self.inner.lock().push(interval, sink);
+		self.0.lock().push(interval, sink);
 		stream
 	}
 }

@@ -155,7 +155,9 @@ macro_rules! new_full_start {
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, node_executor::Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
-type GrandpaBlockImport = grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, sc_consensus::LongestChain<FullBackend, Block>>;
+type GrandpaBlockImport = grandpa::GrandpaBlockImport<
+	FullBackend, Block, FullClient, sc_consensus::LongestChain<FullBackend, Block>
+>;
 type BabeBlockImport = sc_consensus_babe::BabeBlockImport<Block, FullClient, GrandpaBlockImport>;
 
 /// Creates a full service from the configuration.
