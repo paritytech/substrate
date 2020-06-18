@@ -22,7 +22,8 @@ use std::cell::RefCell;
 use codec::Encode;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize}, weights::Weight,
+	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize, Filter},
+	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -74,6 +75,14 @@ impl_outer_event! {
 	}
 }
 
+// Test that a fitlered call can be dispatched.
+pub struct BaseFilter;
+impl Filter<Call> for BaseFilter {
+	fn filter(call: &Call) -> bool {
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
+	}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
@@ -84,7 +93,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = BaseFilter;
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -223,6 +232,14 @@ fn params_should_work() {
 
 fn set_balance_proposal(value: u64) -> Vec<u8> {
 	Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
+}
+
+#[test]
+fn set_balance_proposal_is_correctly_filtered_out() {
+	for i in 0..10 {
+		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
+		assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+	}
 }
 
 fn set_balance_proposal_hash(value: u64) -> H256 {
