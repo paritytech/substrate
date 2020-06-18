@@ -222,7 +222,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	}
 
 	/// Get the read/write count of the db
-	fn reset_read_write_count(&mut self) {
+	fn reset_read_write_count(&self) {
 		unimplemented!()
 	}
 }
