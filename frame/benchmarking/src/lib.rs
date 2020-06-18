@@ -783,6 +783,8 @@ macro_rules! impl_benchmark {
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
 
+							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
+
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
 							$crate::storage_root();
@@ -790,9 +792,6 @@ macro_rules! impl_benchmark {
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
-
-							frame_support::debug::trace!(target: "benchmark", "Read Count {}", $crate::benchmarking::read_write_count());
-
 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
@@ -894,9 +893,7 @@ macro_rules! impl_benchmark {
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
 							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
 
-							frame_support::debug::trace!(target: "benchmark", "TEST");
-
-							frame_support::debug::trace!(target: "benchmark", "Read Count {}", $crate::benchmarking::read_write_count());
+							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -906,7 +903,6 @@ macro_rules! impl_benchmark {
 
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
 
-							frame_support::debug::trace!(target: "benchmark", "Read Count {}", $crate::benchmarking::read_write_count());
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
 						}

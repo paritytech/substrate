@@ -85,8 +85,8 @@ pub trait Benchmarking {
 	}
 
 	/// Get the read/write count
-	fn read_write_count(&self) -> u32 {
-		self.read_write_count().0
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.read_write_count()
 	}
 }
 
