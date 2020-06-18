@@ -100,11 +100,7 @@ pub struct BenchmarkingState<B: BlockT> {
 
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
-	pub fn new(
-		genesis: Storage,
-		_cache_size_mb: Option<usize>,
-		whitelist: Vec<Vec<u8>>,
-	) -> Result<Self, String> {
+	pub fn new(genesis: Storage, _cache_size_mb: Option<usize>) -> Result<Self, String> {
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
 		sp_state_machine::TrieDBMut::<HashFor<B>>::new(&mut mdb, &mut root);
@@ -119,7 +115,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			shared_cache: new_shared_cache(0, (1, 10)),
 			key_tracker: Default::default(),
 			read_write_tracker: Default::default(),
-			whitelist: RefCell::new(whitelist),
+			whitelist: Default::default(),
 		};
 
 		state.add_whitelist_to_tracker();
