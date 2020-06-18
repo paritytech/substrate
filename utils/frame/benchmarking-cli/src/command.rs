@@ -78,7 +78,6 @@ impl BenchmarkCmd {
 				self.highest_range_values.clone(),
 				self.steps.clone(),
 				self.repeat,
-				&self.whitelist,
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,

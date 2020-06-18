@@ -66,7 +66,6 @@ sp_api::decl_runtime_apis! {
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-			whitelist: Vec<Vec<u8>>,
 		) -> Result<Vec<BenchmarkBatch>, RuntimeString>;
 	}
 }
