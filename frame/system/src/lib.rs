@@ -1591,7 +1591,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
 		// to them actually being useful. Block producers are thus not allowed to include mandatory
 		// extrinsics that result in error.
-		if info.class == DispatchClass::Mandatory && result.is_err() {
+		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
+			"Bad mandantory".print();
+			err.print();
+
 			Err(InvalidTransaction::BadMandatory)?
 		}
 
