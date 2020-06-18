@@ -192,7 +192,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut key_tracker = self.key_tracker.borrow_mut();
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
 
-		let maybe_tracker = key_tracker.get(&key.to_vec());
+		let maybe_tracker = key_tracker.get(key);
 
 		let has_been_read = KeyTracker {
 			has_been_read: true,
@@ -221,7 +221,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut key_tracker = self.key_tracker.borrow_mut();
 		let mut read_write_tracker = self.read_write_tracker.borrow_mut();
 
-		let maybe_tracker = key_tracker.get(&key.to_vec());
+		let maybe_tracker = key_tracker.get(key);
 
 		// If we have written to the key, we also consider that we have read from it.
 		let has_been_written = KeyTracker {
