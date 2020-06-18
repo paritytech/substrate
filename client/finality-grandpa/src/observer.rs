@@ -432,12 +432,17 @@ mod tests {
 		).unwrap();
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");
+
+		let finality_notifiers = Arc::new(parking_lot::Mutex::new(vec![]));
+		let justification_sender = GrandpaJustificationSender::new(finality_notifiers.clone());
+
 		let observer = ObserverWork::new(
 			client,
 			tester.net_handle.clone(),
 			persistent_data,
 			None,
 			voter_command_rx,
+			justification_sender,
 		);
 
 		// Trigger a reputation change through the gossip validator.

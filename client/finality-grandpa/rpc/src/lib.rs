@@ -140,7 +140,16 @@ mod tests {
 	use jsonrpc_core::IoHandler;
 	use sc_finality_grandpa::{report, AuthorityId};
 	use sp_core::crypto::Public;
-	use std::{collections::HashSet, convert::TryInto};
+	use std::{collections::HashSet, convert::TryInto, sync::Arc};
+	use parking_lot::Mutex;
+
+	use sc_network_test::Block;
+
+	use jsonrpc_core::futures::sink::Sink as Sink01;
+	use jsonrpc_core::futures::stream::Stream as Stream01;
+	use jsonrpc_core::futures::{future as future01, Future as Future01};
+
+	use futures::{compat::Future01CompatExt, executor, FutureExt};
 
 	struct TestAuthoritySet;
 	struct TestVoterState;
@@ -197,22 +206,61 @@ mod tests {
 		}
 	}
 
+	lazy_static::lazy_static! {
+		static ref EXECUTOR: executor::ThreadPool = executor::ThreadPool::new()
+			.expect("Failed to create thread pool executor for tests");
+	}
+
+	pub struct TestTaskExecutor;
+	type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
+
+	impl future01::Executor<Boxed01Future01> for TestTaskExecutor {
+		fn execute(&self, future: Boxed01Future01) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>> {
+			EXECUTOR.spawn_ok(future.compat().map(drop));
+			Ok(())
+		}
+	}
+
 	#[test]
 	fn uninitialized_rpc_handler() {
-		let handler = GrandpaRpcHandler::new(TestAuthoritySet, EmptyVoterState);
-		let mut io = IoHandler::new();
+		let finality_notifiers = Arc::new(Mutex::new(vec![]));
+		let justification_receiver =
+			GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
+		let manager = SubscriptionManager::new(Arc::new(TestTaskExecutor));
+
+		let handler = GrandpaRpcHandler::new(
+			TestAuthoritySet,
+			EmptyVoterState,
+			justification_receiver,
+			manager,
+		);
+		// let mut io = IoHandler::new();
+		let mut io = jsonrpc_core::MetaIoHandler::default();
+		// let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
 
-		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+		let meta = sc_rpc::Metadata::default();
+
+		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
 	}
 
 	#[test]
 	fn working_rpc_handler() {
-		let handler = GrandpaRpcHandler::new(TestAuthoritySet, TestVoterState);
-		let mut io = IoHandler::new();
+		let finality_notifiers = Arc::new(Mutex::new(vec![]));
+		let justification_receiver = GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
+		let manager = SubscriptionManager::new(Arc::new(TestTaskExecutor));
+
+		let handler = GrandpaRpcHandler::new(
+			TestAuthoritySet,
+			TestVoterState,
+			justification_receiver,
+			manager,
+		);
+		// let mut io = IoHandler::new();
+		let mut io = jsonrpc_core::MetaIoHandler::default();
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
@@ -230,6 +278,7 @@ mod tests {
 			\"setId\":1\
 		},\"id\":1}";
 
-		assert_eq!(io.handle_request_sync(request), Some(response.into()));
+		let meta = sc_rpc::Metadata::default();
+		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
 }
