@@ -15,6 +15,8 @@ jobs:
           authToken: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event.pull_request.head.sha }}
           contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
+          timeout: 1200
+          notPresentTimeout: 600
       - name: Label success
         uses: andymckay/labeler@master
         if: steps.check-companion-status.outputs.result == 'success'
