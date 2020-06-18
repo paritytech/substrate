@@ -787,7 +787,8 @@ macro_rules! impl_benchmark {
 							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
 							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
-							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
+							let read_write_count = $crate::benchmarking::read_write_count();
+							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", read_write_count);
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -798,7 +799,11 @@ macro_rules! impl_benchmark {
 							results.push($crate::BenchmarkResults {
 								components: c.clone(),
 								extrinsic_time: elapsed_extrinsic,
-								storage_root_time: elapsed_storage_root
+								storage_root_time: elapsed_storage_root,
+								reads: read_write_count.0,
+								repeat_reads: read_write_count.1,
+								writes: read_write_count.2,
+								repeat_writes: read_write_count.3,
 							});
 
 							// Wipe the DB back to the genesis state.
@@ -905,7 +910,8 @@ macro_rules! impl_benchmark {
 							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
 							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
-							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", $crate::benchmarking::read_write_count());
+							let read_write_count = $crate::benchmarking::read_write_count();
+							frame_support::debug::trace!(target: "benchmark", "Read/Write Count {:?}", read_write_count);
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -916,7 +922,11 @@ macro_rules! impl_benchmark {
 							results.push($crate::BenchmarkResults {
 								components: c.clone(),
 								extrinsic_time: elapsed_extrinsic,
-								storage_root_time: elapsed_storage_root
+								storage_root_time: elapsed_storage_root,
+								reads: read_write_count.0,
+								repeat_reads: read_write_count.1,
+								writes: read_write_count.2,
+								repeat_writes: read_write_count.3,
 							});
 
 							// Wipe the DB back to the genesis state.

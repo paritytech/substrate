@@ -109,13 +109,20 @@ impl BenchmarkCmd {
 					// Print the table header
 					batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
 
-					print!("extrinsic_time,storage_root_time\n");
+					print!("extrinsic_time,storage_root_time,reads,repeat_reads,writes,repeat_writes\n");
 					// Print the values
 					batch.results.iter().for_each(|result| {
 						let parameters = &result.components;
 						parameters.iter().for_each(|param| print!("{:?},", param.1));
 						// Print extrinsic time and storage root time
-						print!("{:?},{:?}\n", result.extrinsic_time, result.storage_root_time);
+						print!("{:?},{:?},{:?},{:?},{:?},{:?}\n",
+							result.extrinsic_time,
+							result.storage_root_time,
+							result.reads,
+							result.repeat_reads,
+							result.writes,
+							result.repeat_writes,
+						);
 					});
 
 					println!();

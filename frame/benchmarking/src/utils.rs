@@ -44,11 +44,15 @@ pub struct BenchmarkBatch {
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
-#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkResults {
 	pub components: Vec<(BenchmarkParameter, u32)>,
 	pub extrinsic_time: u128,
 	pub storage_root_time: u128,
+	pub reads: u32,
+	pub repeat_reads: u32,
+	pub writes: u32,
+	pub repeat_writes: u32,
 }
 
 sp_api::decl_runtime_apis! {
