@@ -34,6 +34,7 @@ use prometheus_endpoint::Registry;
 use tempfile::TempDir;
 
 /// Service configuration.
+#[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
 	pub impl_name: &'static str,
@@ -42,7 +43,7 @@ pub struct Configuration {
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+	pub task_executor: TaskExecutor,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -118,7 +119,7 @@ pub enum TaskType {
 }
 
 /// Configuration of the client keystore.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum KeystoreConfig {
 	/// Keystore at a path on-disk. Recommended for native nodes.
 	Path {
@@ -141,7 +142,7 @@ impl KeystoreConfig {
 	}
 }
 /// Configuration of the database of the client.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OffchainWorkerConfig {
 	/// If this is allowed.
 	pub enabled: bool,
@@ -150,7 +151,7 @@ pub struct OffchainWorkerConfig {
 }
 
 /// Configuration of the Prometheus endpoint.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PrometheusConfig {
 	/// Port to use.
 	pub port: SocketAddr,
@@ -197,6 +198,7 @@ impl Default for RpcMethods {
 }
 
 /// The base path that is used for everything that needs to be write on disk to run a node.
+#[derive(Debug)]
 pub enum BasePath {
 	/// A temporary directory is used as base path and will be deleted when dropped.
 	#[cfg(not(target_os = "unknown"))]
@@ -249,5 +251,38 @@ impl BasePath {
 impl std::convert::From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
+	}
+}
+
+/// Callable object that execute tasks.
+#[derive(Clone)]
+pub struct TaskExecutor(Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>);
+
+impl std::fmt::Debug for TaskExecutor {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "TaskExecutor")
+	}
+}
+
+impl std::convert::From<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>>
+for TaskExecutor {
+	fn from(x: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>)
+	-> Self {
+		Self(x)
+	}
+}
+
+impl std::ops::Deref for TaskExecutor {
+	type Target = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl TaskExecutor {
+	/// Create a `TaskExecutor` from a function
+	pub fn from_fn(f: impl Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static) -> Self {
+		Self(Arc::new(f))
 	}
 }

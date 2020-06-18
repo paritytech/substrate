@@ -176,7 +176,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		impl_name: "network-test-impl",
 		impl_version: "0.1",
 		role,
-		task_executor,
+		task_executor: task_executor.into(),
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {

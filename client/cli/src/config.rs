@@ -432,7 +432,7 @@ pub trait CliConfiguration: Sized {
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
-			task_executor,
+			task_executor: task_executor.into(),
 			transaction_pool: self.transaction_pool()?,
 			network: self.network_config(
 				&chain_spec,
