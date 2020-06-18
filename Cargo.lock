@@ -5637,6 +5637,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "rental"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8545debe98b2b139fb04cad8618b530e9b07c152d99a5de83c860b877d67847f"
+dependencies = [
+ "rental-impl",
+ "stable_deref_trait",
+]
+
+[[package]]
+name = "rental-impl"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "475e68978dc5b743f2f40d8e0a8fdc83f1c5e78cbf4b8fa5e74e73beebc340de"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.6",
+ "syn 1.0.17",
+]
+
+[[package]]
 name = "ring"
 version = "0.16.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6246,6 +6267,7 @@ dependencies = [
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
  "sc-runtime-test",
+ "sc-tracing",
  "sp-api",
  "sp-core",
  "sp-externalities",
@@ -6255,11 +6277,13 @@ dependencies = [
  "sp-runtime-interface",
  "sp-serializer",
  "sp-state-machine",
+ "sp-tracing",
  "sp-trie",
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
  "test-case",
+ "tracing",
  "wabt",
  "wasmi",
 ]
@@ -6820,10 +6844,12 @@ dependencies = [
  "erased-serde",
  "log",
  "parking_lot 0.10.2",
+ "rustc-hash",
  "sc-telemetry",
  "serde",
  "serde_json",
  "slog",
+ "sp-tracing",
  "tracing",
  "tracing-core",
 ]
@@ -7581,6 +7607,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
+ "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
 ]
@@ -7856,6 +7883,8 @@ dependencies = [
 name = "sp-tracing"
 version = "2.0.0-rc3"
 dependencies = [
+ "log",
+ "rental",
  "tracing",
 ]
 
@@ -8914,9 +8943,9 @@ checksum = "e987b6bf443f4b5b3b6f38704195592cca41c5bb7aedd3c3693c7081f8289860"
 
 [[package]]
 name = "tracing"
-version = "0.1.13"
+version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1721cc8cf7d770cc4257872507180f35a4797272f5962f24c806af9e7faf52ab"
+checksum = "a7c6b59d116d218cb2d990eb06b77b64043e0268ef7323aae63d8b30ae462923"
 dependencies = [
  "cfg-if",
  "tracing-attributes",
@@ -8925,10 +8954,11 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fbad39da2f9af1cae3016339ad7f2c7a9e870f12e8fd04c4fd7ef35b30c0d2b"
+checksum = "99bbad0de3fd923c9c3232ead88510b783e5a4d16a6154adffa3d53308de984c"
 dependencies = [
+ "proc-macro2",
  "quote 1.0.6",
  "syn 1.0.17",
 ]
