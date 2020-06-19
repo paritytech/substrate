@@ -335,23 +335,6 @@ where
 		}
 	}
 
-	/// Transfer balance to `dest` without calling any contract code.
-	pub fn transfer(
-		&mut self,
-		dest: T::AccountId,
-		value: BalanceOf<T>,
-		gas_meter: &mut GasMeter<T>
-	) -> Result<(), DispatchError> {
-		transfer(
-			gas_meter,
-			TransferCause::Call,
-			&self.self_account.clone(),
-			&dest,
-			value,
-			self,
-		)
-	}
-
 	/// Make a call to the specified address, optionally transferring some funds.
 	pub fn call(
 		&mut self,
@@ -727,7 +710,14 @@ where
 		value: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<(), DispatchError> {
-		self.ctx.transfer(to.clone(), value, gas_meter)
+		transfer(
+			gas_meter,
+			TransferCause::Call,
+			&self.ctx.self_account.clone(),
+			&to,
+			value,
+			self.ctx,
+		)
 	}
 
 	fn terminate(
