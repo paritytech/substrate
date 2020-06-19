@@ -303,7 +303,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
+	Percent, Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
@@ -1792,6 +1792,34 @@ decl_module! {
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
+		}
+
+		/// Increments the ideal number of validators.
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Base Weight: 1.717 µs
+		/// Read/Write: Validator Count
+		/// # </weight>
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 1)]
+		fn increase_validator_count(origin, #[compact] additional: u32) {
+			ensure_root(origin)?;
+			ValidatorCount::mutate(|n| *n += additional);
+		}
+
+		/// Scale up the ideal number of validators by a factor.
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Base Weight: 1.717 µs
+		/// Read/Write: Validator Count
+		/// # </weight>
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 1)]
+		fn scale_validator_count(origin, factor: Percent) {
+			ensure_root(origin)?;
+			ValidatorCount::mutate(|n| *n += factor * *n);
 		}
 
 		/// Force there to be no new eras indefinitely.

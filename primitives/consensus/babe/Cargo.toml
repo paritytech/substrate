@@ -17,6 +17,7 @@ codec = { package = "parity-scale-codec", version = "1.3.0", default-features = 
 merlin = { version = "2.0", default-features = false }
 sp-std = { version = "2.0.0-rc3", default-features = false, path = "../../std" }
 sp-api = { version = "2.0.0-rc3", default-features = false, path = "../../api" }
+sp-core = { version = "2.0.0-rc3", default-features = false, path = "../../core" }
 sp-consensus = { version = "0.8.0-rc3", optional = true, path = "../common" }
 sp-consensus-vrf = { version = "0.8.0-rc3", path = "../vrf", default-features = false }
 sp-inherents = { version = "2.0.0-rc3", default-features = false, path = "../../inherents" }
@@ -26,6 +27,7 @@ sp-timestamp = { version = "2.0.0-rc3", default-features = false, path = "../../
 [features]
 default = ["std"]
 std = [
+	"sp-core/std",
 	"sp-application-crypto/std",
 	"codec/std",
 	"merlin/std",
