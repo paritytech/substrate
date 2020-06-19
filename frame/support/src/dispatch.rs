@@ -283,7 +283,7 @@ macro_rules! decl_module {
 			$trait_instance:ident: $trait_name:ident
 			$( <I>, I: $instantiable:path $( = $module_default_instance:path )? )?
 		>
-		for enum $call_type:ident where origin: $origin_type:ty $(, $where_ty:ty: $where_bound:path )* {
+		for enum $call_type:ident where origin: $origin_type:ty $(, $where_ty:ty: $where_bound:path )* $(,)? {
 			$( $t:tt )*
 		}
 	) => {
@@ -317,6 +317,7 @@ macro_rules! decl_module {
 			origin: $origin_type:ty,
 			system = $system:ident
 			$(, $where_ty:ty: $where_bound:path )*
+			$(,)?
 		{
 			$($t:tt)*
 		}
