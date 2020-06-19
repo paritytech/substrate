@@ -575,8 +575,24 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 
 	let wasmtime_module = wasmtime::Module::new(&wasmtime_store, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 
-	// TODO &guest_env.imports);
-	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_module, &[]).map_err(|_| InstantiationError::Instantiation)?;
+	let module_imports: Vec<_> = wasmtime_module
+		.imports()
+		.filter_map(|import| {
+			if let wasmtime::ExternType::Func(func_ty) = import.ty() {
+				Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
+					move |_, _, _| Err(wasmtime::Trap::new(format!(
+						"Sandbox function stub",
+						// func_ty.to_string(),
+						// func_ty.name().to_string()
+					)))
+				)))
+			} else {
+				None
+			}
+		})
+		.collect();
+
+	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -596,6 +612,8 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 			wasmi_instance
 				.run_start(guest_externals)
 				.map_err(|_| InstantiationError::StartTrapped)
+
+			// Note: no need to run start on wasmtime instance, since it's done automatically
 		},
 	)?;
 
