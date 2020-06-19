@@ -258,6 +258,7 @@ impl pallet_scheduler::Trait for Runtime {
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type ScheduleOrigin = EnsureRoot<AccountId>;
 }
 
 parameter_types! {

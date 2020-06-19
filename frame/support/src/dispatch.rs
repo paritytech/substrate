@@ -1452,8 +1452,7 @@ macro_rules! decl_module {
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
-		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
-			$( $other_where_bounds )*;
+		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>);
 
 		$crate::decl_module! {
 			@impl_on_initialize

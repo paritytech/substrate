@@ -51,10 +51,10 @@ use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
-	traits::{Get, schedule, OriginTrait},
+	traits::{Get, schedule, OriginTrait, EnsureOrigin},
 	weights::{GetDispatchInfo, Weight},
 };
-use frame_system::{self as system, ensure_root};
+use frame_system::{self as system};
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
@@ -77,6 +77,9 @@ pub trait Trait: system::Trait {
 	/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 	/// than `schedule::HARD_DEADLINE`.
 	type MaximumWeight: Get<Weight>;
+
+	/// Required origin to schedule or cancel calls.
+	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
 }
 
 /// Just a simple index for naming period tasks.
@@ -150,7 +153,12 @@ decl_error! {
 
 decl_module! {
 	/// Scheduler module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+	pub struct Module<T: Trait> for enum Call
+	where
+		origin: <T as system::Trait>::Origin,
+		<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
+	{
+		type Error = Error<T>;
 		fn deposit_event() = default;
 
 		/// Anonymously schedule a task.
@@ -170,8 +178,8 @@ decl_module! {
 			priority: schedule::Priority,
 			call: Box<<T as Trait>::Call>,
 		) {
-			ensure_root(origin)?;
-			let _ = Self::do_schedule(when, maybe_periodic, priority, system::RawOrigin::Root.into(), *call);
+			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			let _ = Self::do_schedule(when, maybe_periodic, priority, origin.caller().clone(), *call);
 		}
 
 		/// Cancel an anonymously scheduled task.
@@ -186,7 +194,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
-			ensure_root(origin)?;
+			T::ScheduleOrigin::ensure_origin(origin)?;
 			Self::do_cancel((when, index))?;
 		}
 
@@ -208,8 +216,8 @@ decl_module! {
 			priority: schedule::Priority,
 			call: Box<<T as Trait>::Call>,
 		) {
-			ensure_root(origin)?;
-			Self::do_schedule_named(id, when, maybe_periodic, priority, system::RawOrigin::Root.into(), *call)?;
+			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			Self::do_schedule_named(id, when, maybe_periodic, priority, origin.caller().clone(), *call)?;
 		}
 
 		/// Cancel a named scheduled task.
@@ -224,7 +232,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn cancel_named(origin, id: Vec<u8>) {
-			ensure_root(origin)?;
+			T::ScheduleOrigin::ensure_origin(origin)?;
 			Self::do_cancel_named(id)?;
 		}
 
@@ -314,7 +322,10 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T>
+where
+	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
+{
 	fn do_schedule(
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -390,7 +401,10 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
+impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T>
+where
+	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
+{
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule(
@@ -408,7 +422,10 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrig
 	}
 }
 
-impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
+impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T>
+where
+	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
+{
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule_named(
@@ -444,6 +461,7 @@ mod tests {
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
 	};
+	use frame_system::EnsureRoot;
 	use crate as scheduler;
 
 	mod logger {
@@ -552,6 +570,7 @@ mod tests {
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
+		type ScheduleOrigin = EnsureRoot<u64>;
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;
