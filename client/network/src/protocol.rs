@@ -544,6 +544,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.update_chain_info(&info.best_hash, info.best_number);
 	}
 
+	/// Inform sync about an own imported block.
+	pub fn own_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		self.sync.update_chain_info(&hash, number);
+	}
+
 	fn update_peer_info(&mut self, who: &PeerId) {
 		if let Some(info) = self.sync.peer_info(who) {
 			if let Some(ref mut peer) = self.context_data.peers.get_mut(who) {

@@ -55,7 +55,7 @@ use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, Pee
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
@@ -381,6 +381,13 @@ fn build_network_future<
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
 			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
+			}
+
+			if let sp_consensus::BlockOrigin::Own = notification.origin {
+				network.service().own_block_imported(
+					notification.hash,
+					notification.header.number().clone(),
+				);
 			}
 		}
 
