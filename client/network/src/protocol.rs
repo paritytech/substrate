@@ -960,7 +960,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Called by peer to report status
+	/// Called on receipt of a status message via the legacy protocol on the first connection between two peers.
 	pub fn on_peer_connected(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let _protocol_version = {
