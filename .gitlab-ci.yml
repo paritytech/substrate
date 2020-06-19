@@ -359,6 +359,16 @@ cargo-check-macos:
   tags:
     - osx
 
+test-prometheus-alerting-rules:
+  stage:                           test
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-build
+  script:
+    - curl -L https://github.com/prometheus/prometheus/releases/download/v2.19.0/prometheus-2.19.0.linux-amd64.tar.gz --output prometheus.tar.gz
+    - tar -xzf prometheus.tar.gz
+    - ./prometheus-*/promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | ./prometheus-*/promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
+
 #### stage:                        build
 
 check-polkadot-companion-status:
@@ -721,3 +731,14 @@ validator 4 4:
   <<:                              *validator-deploy
   script:
     - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
+
+#### stage:                       .post
+
+check-labels:
+  stage:                          .post
+  image:                          paritytech/tools:latest
+  <<:                             *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_labels.sh

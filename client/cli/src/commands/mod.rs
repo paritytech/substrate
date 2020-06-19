@@ -285,6 +285,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn rpc_ipc(&self) -> $crate::Result<::std::option::Option<::std::string::String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ipc()),*
+				}
+			}
+
 			fn rpc_http(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_http()),*

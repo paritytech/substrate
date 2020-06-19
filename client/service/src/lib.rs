@@ -33,7 +33,6 @@ mod builder;
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
-mod status_sinks;
 mod task_manager;
 
 use std::{io, pin::Pin};
@@ -58,7 +57,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::Block as BlockT;
 use parity_util_mem::MallocSizeOf;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -510,6 +509,16 @@ mod waiting {
 		}
 	}
 
+	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
+	impl Drop for IpcServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				let _ = server.wait();
+			}
+		}
+	}
+
 	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
 	impl Drop for WsServer {
 		fn drop(&mut self) {
@@ -555,6 +564,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 	}
 
 	Ok(Box::new((
+		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(&*path, gen_handler(sc_rpc::DenyUnsafe::No))),
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(
