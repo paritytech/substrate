@@ -229,7 +229,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
 /// # use frame_system::{self as system, ensure_signed};
-/// pub trait Trait: system::Trait where Self::AccountId: From<u32> {}
+/// it: system::Trait {}
 ///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
