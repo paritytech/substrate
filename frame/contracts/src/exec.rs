@@ -520,40 +520,6 @@ where
 		Ok((dest, output))
 	}
 
-	/// Perform termination of the contract associated with the current context.
-	fn terminate(
-		&mut self,
-		beneficiary: &T::AccountId,
-		gas_meter: &mut GasMeter<T>,
-	) -> Result<(), DispatchError> {
-		let self_id = self.self_account.clone();
-		let value = T::Currency::free_balance(&self_id);
-		if let Some(caller) = self.caller {
-			if caller.is_live(&self_id) {
-				return Err(DispatchError::Other(
-					"Cannot terminate a contract that is present on the call stack",
-				));
-			}
-		}
-		transfer(
-			gas_meter,
-			TransferCause::Terminate,
-			&self_id,
-			beneficiary,
-			value,
-			self,
-		)?;
-		let self_trie_id = self
-			.self_trie_id
-			.as_ref()
-			.expect("this function is only invoked by in the context of a contract;\
-				a contract has a trie id;\
-				this can't be None; qed"
-			);
-		storage::destroy_contract::<T>(&self_id, self_trie_id);
-		Ok(())
-	}
-
 	fn new_call_context<'b>(
 		&'b mut self,
 		caller: T::AccountId,
@@ -767,7 +733,30 @@ where
 		beneficiary: &AccountIdOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 	) -> Result<(), DispatchError> {
-		self.ctx.terminate(beneficiary, gas_meter)
+		let self_id = self.ctx.self_account.clone();
+		let value = T::Currency::free_balance(&self_id);
+		if let Some(caller_ctx) = self.ctx.caller {
+			if caller_ctx.is_live(&self_id) {
+				return Err(DispatchError::Other(
+					"Cannot terminate a contract that is present on the call stack",
+				));
+			}
+		}
+		transfer(
+			gas_meter,
+			TransferCause::Terminate,
+			&self_id,
+			beneficiary,
+			value,
+			self.ctx,
+		)?;
+		let self_trie_id = self.ctx.self_trie_id.as_ref().expect(
+			"this function is only invoked by in the context of a contract;\
+				a contract has a trie id;\
+				this can't be None; qed",
+		);
+		storage::destroy_contract::<T>(&self_id, self_trie_id);
+		Ok(())
 	}
 
 	fn call(
