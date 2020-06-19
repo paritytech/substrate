@@ -16,9 +16,9 @@ error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is 
 27  | | }
     | |_^ the trait `std::convert::From<std::string::String>` is not implemented for `u32`
     | 
-   ::: $WORKSPACE/primitives/api/src/lib.rs:347:35
+   ::: $WORKSPACE/primitives/api/src/lib.rs:350:35
     |
-347 |       type Error: std::fmt::Debug + From<String>;
+350 |       type Error: std::fmt::Debug + From<String>;
     |                                     ------------ required by this bound in `sp_api_hidden_includes_DECL_RUNTIME_APIS::sp_api::ApiErrorExt`
     |
     = help: the following implementations were found:
