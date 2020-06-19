@@ -1328,9 +1328,11 @@ mod tests {
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
+		overlay.start_transaction();
 		overlay.set_storage(b"ccc".to_vec(), Some(b"".to_vec()));
 		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
-		overlay.commit_prospective();
+		overlay.commit_transaction().unwrap();
+		overlay.start_transaction();
 		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
 		assert_eq!(overlay.storage(b"bbb"), None);
 
@@ -1350,7 +1352,7 @@ mod tests {
 			ext.clear_storage(b"ccc");
 			assert_eq!(ext.storage(b"ccc"), None);
 		}
-		overlay.commit_prospective();
+		overlay.commit_transaction().unwrap();
 		assert_eq!(overlay.storage(b"ccc"), Some(None));
 	}
 }
