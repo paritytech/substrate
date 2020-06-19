@@ -229,7 +229,8 @@ impl TaskManager {
 		self.spawn_handle().spawn_blocking(name, task)
 	}
 
-	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
+	/// Get a handle for spawning tasks.
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
