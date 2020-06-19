@@ -45,7 +45,7 @@
 
 mod benchmarking;
 
-use sp_std::{prelude::*, marker::PhantomData};
+use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
 use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
 use frame_support::{
@@ -69,7 +69,7 @@ pub trait Trait: system::Trait {
 	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin> + From<Self::PalletsOrigin>;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone;
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
 
 	/// The aggregated call type.
 	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo + From<system::Call<Self>>;
@@ -194,8 +194,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
-			T::ScheduleOrigin::ensure_origin(origin)?;
-			Self::do_cancel((when, index))?;
+			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
 		}
 
 		/// Schedule a named task.
@@ -232,8 +232,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn cancel_named(origin, id: Vec<u8>) {
-			T::ScheduleOrigin::ensure_origin(origin)?;
-			Self::do_cancel_named(id)?;
+			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
 		}
 
 		/// Execute the scheduled calls
@@ -347,8 +347,21 @@ where
 		(when, index)
 	}
 
-	fn do_cancel((when, index): TaskAddress<T::BlockNumber>) -> Result<(), DispatchError> {
-		if let Some(s) = Agenda::<T>::mutate(when, |agenda| agenda.get_mut(index as usize).and_then(Option::take)) {
+	fn do_cancel(origin: Option<T::PalletsOrigin>, (when, index): TaskAddress<T::BlockNumber>) -> Result<(), DispatchError> {
+		let scheduled = Agenda::<T>::mutate(
+			when,
+			|agenda| {
+				agenda.get_mut(index as usize).and_then(|s| {
+					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
+						if *o != s.origin {
+							return None
+						}
+					};
+					s.take()
+				})
+			},
+		);
+		if let Some(s) = scheduled {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
@@ -389,10 +402,19 @@ where
 		Ok(address)
 	}
 
-	fn do_cancel_named(id: Vec<u8>) -> Result<(), DispatchError> {
+	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: Vec<u8>) -> Result<(), DispatchError> {
 		if let Some((when, index)) = Lookup::<T>::take(id) {
 			let i = index as usize;
-			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });
+			Agenda::<T>::mutate(when, |agenda| {
+				if let Some(s) = agenda.get_mut(i) {
+					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
+						if *o != s.origin {
+							return;
+						}
+					}
+					*s = None;
+				}
+			});
 			Self::deposit_event(RawEvent::Canceled(when, index));
 			Ok(())
 		} else {
@@ -418,7 +440,7 @@ where
 	}
 
 	fn cancel((when, index): Self::Address) -> Result<(), ()> {
-		Self::do_cancel((when, index)).map_err(|_| ())
+		Self::do_cancel(None, (when, index)).map_err(|_| ())
 	}
 }
 
@@ -440,7 +462,7 @@ where
 	}
 
 	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {
-		Self::do_cancel_named(id).map_err(|_| ())
+		Self::do_cancel_named(None, id).map_err(|_| ())
 	}
 }
 
@@ -449,7 +471,8 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
+		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok, ord_parameter_types,
+		assert_noop,
 		traits::{OnInitialize, OnFinalize},
 		weights::constants::RocksDbWeight,
 	};
@@ -459,20 +482,19 @@ mod tests {
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 	};
-	use frame_system::EnsureRoot;
+	use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
 	use crate as scheduler;
 
 	mod logger {
 		use super::*;
 		use std::cell::RefCell;
-		use frame_system::ensure_root;
 
 		thread_local! {
-			static LOG: RefCell<Vec<u32>> = RefCell::new(Vec::new());
+			static LOG: RefCell<Vec<(OriginCaller, u32)>> = RefCell::new(Vec::new());
 		}
-		pub fn log() -> Vec<u32> {
+		pub fn log() -> Vec<(OriginCaller, u32)> {
 			LOG.with(|log| log.borrow().clone())
 		}
 		pub trait Trait: system::Trait {
@@ -488,15 +510,18 @@ mod tests {
 			}
 		}
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+			pub struct Module<T: Trait> for enum Call
+			where
+				origin: <T as system::Trait>::Origin,
+				<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = OriginCaller>
+			{
 				fn deposit_event() = default;
 
 				#[weight = *weight]
 				fn log(origin, i: u32, weight: Weight) {
-					ensure_root(origin)?;
 					Self::deposit_event(Event::Logged(i, weight));
 					LOG.with(|log| {
-						log.borrow_mut().push(i);
+						log.borrow_mut().push((origin.caller().clone(), i));
 					})
 				}
 			}
@@ -564,13 +589,17 @@ mod tests {
 	parameter_types! {
 		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 	}
+	ord_parameter_types! {
+		pub const One: u64 = 1;
+	}
+
 	impl Trait for Test {
 		type Event = ();
 		type Origin = Origin;
 		type PalletsOrigin = OriginCaller;
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
-		type ScheduleOrigin = EnsureRoot<u64>;
+		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;
@@ -604,9 +633,9 @@ mod tests {
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(100);
-			assert_eq!(logger::log(), vec![42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 		});
 	}
 
@@ -620,17 +649,17 @@ mod tests {
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(6);
-			assert_eq!(logger::log(), vec![42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(7);
-			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32)]);
 			run_to_block(9);
-			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32)]);
 			run_to_block(10);
-			assert_eq!(logger::log(), vec![42u32, 42u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32), (root(), 42u32)]);
 			run_to_block(100);
-			assert_eq!(logger::log(), vec![42u32, 42u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 42u32), (root(), 42u32)]);
 		});
 	}
 
@@ -646,8 +675,8 @@ mod tests {
 			);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
-			assert_ok!(Scheduler::do_cancel_named(1u32.encode()));
-			assert_ok!(Scheduler::do_cancel(i));
+			assert_ok!(Scheduler::do_cancel_named(None, 1u32.encode()));
+			assert_ok!(Scheduler::do_cancel(None, i));
 			run_to_block(100);
 			assert!(logger::log().is_empty());
 		});
@@ -671,11 +700,11 @@ mod tests {
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(6);
-			assert_ok!(Scheduler::do_cancel_named(1u32.encode()));
+			assert_ok!(Scheduler::do_cancel_named(None, 1u32.encode()));
 			run_to_block(100);
-			assert_eq!(logger::log(), vec![42u32, 69u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 		});
 	}
 
@@ -690,9 +719,9 @@ mod tests {
 			);
 			// 69 and 42 do not fit together
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![42u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32)]);
 			run_to_block(5);
-			assert_eq!(logger::log(), vec![42u32, 69u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 		});
 	}
 
@@ -707,7 +736,7 @@ mod tests {
 			);
 			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![42u32, 69u32]);
+			assert_eq!(logger::log(), vec![(root(), 42u32), (root(), 69u32)]);
 		});
 	}
 
@@ -721,7 +750,7 @@ mod tests {
 				4, None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![69u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 69u32), (root(), 42u32)]);
 		});
 	}
 
@@ -740,10 +769,10 @@ mod tests {
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
 			run_to_block(4);
-			assert_eq!(logger::log(), vec![2600u32]);
+			assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 			// 69 and 42 fit together
 			run_to_block(5);
-			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
 		});
 	}
 
@@ -777,19 +806,19 @@ mod tests {
 			let actual_weight = Scheduler::on_initialize(1);
 			let call_weight = MaximumSchedulerWeight::get() / 2;
 			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier + named_multiplier + periodic_multiplier);
-			assert_eq!(logger::log(), vec![2600u32]);
+			assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 
 			// Will include anon and anon periodic
 			let actual_weight = Scheduler::on_initialize(2);
 			let call_weight = MaximumSchedulerWeight::get() / 2 + MaximumSchedulerWeight::get() / 3;
 			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier * 2 + periodic_multiplier);
-			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32]);
+			assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32)]);
 
 			// Will include named only
 			let actual_weight = Scheduler::on_initialize(3);
 			let call_weight = MaximumSchedulerWeight::get() / 3;
 			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier + named_multiplier);
-			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32, 3u32]);
+			assert_eq!(logger::log(), vec![(root(), 2600u32), (root(), 69u32), (root(), 42u32), (root(), 3u32)]);
 
 			// Will contain none
 			let actual_weight = Scheduler::on_initialize(4);
@@ -813,6 +842,63 @@ mod tests {
 			// Scheduled calls are made NONE, so should not effect state
 			run_to_block(100);
 			assert!(logger::log().is_empty());
+		});
+	}
+
+	#[test]
+	fn should_use_orign() {
+		new_test_ext().execute_with(|| {
+			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
+			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
+			assert_ok!(
+				Scheduler::schedule_named(system::RawOrigin::Signed(1).into(), 1u32.encode(), 4, None, 127, call)
+			);
+			assert_ok!(Scheduler::schedule(system::RawOrigin::Signed(1).into(), 4, None, 127, call2));
+			run_to_block(3);
+			// Scheduled calls are in the agenda.
+			assert_eq!(Agenda::<Test>::get(4).len(), 2);
+			assert!(logger::log().is_empty());
+			assert_ok!(Scheduler::cancel_named(system::RawOrigin::Signed(1).into(), 1u32.encode()));
+			assert_ok!(Scheduler::cancel(system::RawOrigin::Signed(1).into(), 4, 1));
+			// Scheduled calls are made NONE, so should not effect state
+			run_to_block(100);
+			assert!(logger::log().is_empty());
+		});
+	}
+
+	#[test]
+	fn should_check_orign() {
+		new_test_ext().execute_with(|| {
+			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
+			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
+			assert_noop!(
+				Scheduler::schedule_named(system::RawOrigin::Signed(2).into(), 1u32.encode(), 4, None, 127, call),
+				BadOrigin
+			);
+			assert_noop!(Scheduler::schedule(system::RawOrigin::Signed(2).into(), 4, None, 127, call2), BadOrigin);
+		});
+	}
+
+	#[test]
+	fn should_check_orign_for_cancel() {
+		new_test_ext().execute_with(|| {
+			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
+			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
+			assert_ok!(
+				Scheduler::schedule_named(system::RawOrigin::Signed(1).into(), 1u32.encode(), 4, None, 127, call)
+			);
+			assert_ok!(Scheduler::schedule(system::RawOrigin::Signed(1).into(), 4, None, 127, call2));
+			run_to_block(3);
+			// Scheduled calls are in the agenda.
+			assert_eq!(Agenda::<Test>::get(4).len(), 2);
+			assert!(logger::log().is_empty());
+			assert_noop!(Scheduler::cancel_named(system::RawOrigin::Signed(2).into(), 1u32.encode()), BadOrigin);
+			assert_noop!(Scheduler::cancel(system::RawOrigin::Signed(2).into(), 4, 1), BadOrigin);
+			run_to_block(100);
+			assert_eq!(
+				logger::log(),
+				vec![(system::RawOrigin::Signed(1).into(), 69u32), (system::RawOrigin::Signed(1).into(), 42u32)]
+			);
 		});
 	}
 }
