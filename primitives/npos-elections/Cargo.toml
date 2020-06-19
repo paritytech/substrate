@@ -21,7 +21,6 @@ sp-arithmetic = { version = "2.0.0-rc3", default-features = false, path = "../ar
 [dev-dependencies]
 substrate-test-utils = { version = "2.0.0-rc3", path = "../../test-utils" }
 rand = "0.7.3"
-sp-npos-elections = { version = "2.0.0-rc3", path = "." }
 sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
 
 [features]
