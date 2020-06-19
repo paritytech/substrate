@@ -72,6 +72,7 @@ use sc_network::{
 	ExHashT,
 	Multiaddr,
 	NetworkStateInfo,
+	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
@@ -430,7 +431,7 @@ where
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
-		let local_peer_id = multiaddr::Protocol::P2p(self.network.local_peer_id().into());
+		let local_peer_id = self.network.local_peer_id();
 
 		let remote_addresses: Vec<Multiaddr> = values.into_iter()
 			.map(|(_k, v)| {
@@ -459,9 +460,23 @@ where
 			.into_iter()
 			.flatten()
 			// Ignore own addresses.
-			.filter(|addr| !addr.iter().any(|protocol|
-				protocol == local_peer_id
-			))
+			.filter(|addr| !addr.iter().any(|protocol| {
+				// Parse to PeerId first as Multihashes of old and new PeerId
+				// representation don't equal.
+				//
+				// See https://github.com/libp2p/rust-libp2p/issues/555 for
+				// details.
+				if let multiaddr::Protocol::P2p(hash) = protocol {
+					let peer_id = match PeerId::from_multihash(hash) {
+						Ok(peer_id) => peer_id,
+						Err(_) => return true, // Discard address.
+					};
+
+					return peer_id == local_peer_id;
+				}
+
+				false // Multiaddr does not contain a PeerId.
+			}))
 			.collect();
 
 		if !remote_addresses.is_empty() {
