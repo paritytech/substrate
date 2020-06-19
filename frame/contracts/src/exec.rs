@@ -131,7 +131,8 @@ pub trait Ext {
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
 	/// Since this function removes the self contract eagerly, no further actions should be performed
-	/// on this `Ext` instance.
+	/// on this `Ext` instance. This function will fail if the same contract is present on the contract
+	/// call stack.
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
@@ -153,7 +154,8 @@ pub trait Ext {
 	/// Restores the given destination contract sacrificing the current one.
 	///
 	/// Since this function removes the self contract eagerly, no further actions should be performed
-	/// on this `Ext` instance.
+	/// on this `Ext` instance. This function will fail if the same contract is present on the contract
+	/// call stack.
 	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
@@ -783,6 +785,14 @@ where
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
 	) -> Result<(), &'static str> {
+		if let Some(caller_ctx) = self.ctx.caller {
+			if caller_ctx.is_live(&self.ctx.self_account) {
+				return Err(
+					"Cannot perform restoration of a contract that is present on the call stack",
+				);
+			}
+		}
+
 		let result = crate::rent::restore_to::<T>(
 			self.ctx.self_account.clone(),
 			dest.clone(),
