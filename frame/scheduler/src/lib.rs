@@ -591,11 +591,15 @@ mod tests {
 		}
 	}
 
+	fn root() -> OriginCaller {
+		system::RawOrigin::Root.into()
+	}
+
 	#[test]
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			Scheduler::do_schedule(
-				4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, 1000))
+				4, None, 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -611,7 +615,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
 			Scheduler::do_schedule(
-				4, Some((3, 3)), 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, 1000))
+				4, Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -635,10 +639,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4.
 			Scheduler::do_schedule_named(
-				1u32.encode(), 4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, 1000))
+				1u32.encode(), 4, None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
 			).unwrap();
 			let i = Scheduler::do_schedule(
-				4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, 1000))
+				4, None, 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -654,15 +658,15 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
 			Scheduler::do_schedule_named(
-				1u32.encode(), 4, Some((3, 3)), 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, 1000))
+				1u32.encode(), 4, Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			).unwrap();
 			// same id results in error.
 			assert!(Scheduler::do_schedule_named(
-				1u32.encode(), 4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, 1000))
+				1u32.encode(), 4, None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
 			).is_err());
 			// different id is ok.
 			Scheduler::do_schedule_named(
-				2u32.encode(), 8, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, 1000))
+				2u32.encode(), 8, None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
 			).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -679,10 +683,10 @@ mod tests {
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
 			Scheduler::do_schedule(
-				4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
+				4, None, 127, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			Scheduler::do_schedule(
-				4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				4, None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// 69 and 42 do not fit together
 			run_to_block(4);
@@ -696,10 +700,10 @@ mod tests {
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
 			Scheduler::do_schedule(
-				4, None, 0, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
+				4, None, 0, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			Scheduler::do_schedule(
-				4, None, 0, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				4, None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
 			run_to_block(4);
@@ -711,10 +715,10 @@ mod tests {
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
 			Scheduler::do_schedule(
-				4, None, 1, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
+				4, None, 1, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			Scheduler::do_schedule(
-				4, None, 0, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				4, None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![69u32, 42u32]);
@@ -725,13 +729,13 @@ mod tests {
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
 			Scheduler::do_schedule(
-				4, None, 255, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
+				4, None, 255, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
 			Scheduler::do_schedule(
-				4, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				4, None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			Scheduler::do_schedule(
-				4, None, 126, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
+				4, None, 126, root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
 			);
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
@@ -753,19 +757,19 @@ mod tests {
 
 			// Named
 			assert_ok!(Scheduler::do_schedule_named(
-				1u32.encode(), 1, None, 255, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(3, MaximumSchedulerWeight::get() / 3)))
+				1u32.encode(), 1, None, 255, root(), Call::Logger(logger::Call::log(3, MaximumSchedulerWeight::get() / 3)))
 			);
 			// Anon Periodic
 			Scheduler::do_schedule(
-				1, Some((1000, 3)), 128, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
+				1, Some((1000, 3)), 128, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
 			// Anon
 			Scheduler::do_schedule(
-				1, None, 127, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				1, None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// Named Periodic
 			assert_ok!(Scheduler::do_schedule_named(
-				2u32.encode(), 1, Some((1000, 3)), 126, system::RawOrigin::Root.into(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)))
+				2u32.encode(), 1, Some((1000, 3)), 126, root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)))
 			);
 
 			// Will include the named periodic only

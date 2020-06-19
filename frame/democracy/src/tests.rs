@@ -30,7 +30,7 @@ use sp_runtime::{
 	testing::Header, Perbill,
 };
 use pallet_balances::{BalanceLock, Error as BalancesError};
-use frame_system::EnsureSignedBy;
+use frame_system::{EnsureSignedBy, EnsureRoot};
 
 mod cancellation;
 mod delegation;
@@ -118,6 +118,7 @@ impl pallet_scheduler::Trait for Test {
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type ScheduleOrigin = EnsureRoot<u64>;
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;

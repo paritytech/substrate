@@ -2165,7 +2165,7 @@ mod tests {
 		IntegrityTest,
 	};
 
-	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
+	pub trait Trait: system::Trait + Sized {
 		type BlockNumber: Into<u32>;
 	}
 

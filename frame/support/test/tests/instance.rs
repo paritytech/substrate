@@ -41,7 +41,7 @@ pub trait Currency {}
 mod module1 {
 	use super::*;
 
-	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
+	pub trait Trait<I>: system::Trait {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
@@ -89,7 +89,7 @@ mod module1 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
-	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
+	pub enum Origin<T: Trait<I>, I> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}
