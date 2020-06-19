@@ -48,7 +48,9 @@ pub enum Error {
 		second_id: PeerId,
 	},
 	/// Prometheus metrics error.
-	Prometheus(prometheus_endpoint::PrometheusError)
+	Prometheus(prometheus_endpoint::PrometheusError),
+	/// Invalid configuration
+	InvalidConfiguration(String),
 }
 
 // Make `Debug` use the `Display` implementation.
@@ -65,6 +67,7 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(err),
 			Error::DuplicateBootnode { .. } => None,
 			Error::Prometheus(ref err) => Some(err),
+			Error::InvalidConfiguration(_) => None,
 		}
 	}
 }

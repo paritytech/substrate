@@ -138,6 +138,7 @@ fn build_nodes_one_proto()
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
 		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		listen_addresses: vec![],
 		reserved_nodes: vec![config::MultiaddrWithPeerId {
 			multiaddr: listen_addr,
 			peer_id: node1.local_peer_id().clone(),
@@ -340,5 +341,32 @@ fn lots_of_incoming_peers_works() {
 
 	futures::executor::block_on(async move {
 		future::join_all(background_tasks_to_wait).await
+	});
+}
+
+#[test]
+#[should_panic(expected = "the transport is set on MemoryOnly")]
+fn ensure_listen_addresses_consistent_with_transport_memory() {
+	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		listen_addresses: vec![listen_addr.clone()],
+		in_peers: u32::max_value(),
+		transport: config::TransportConfig::MemoryOnly,
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "the transport is not set on MemoryOnly")]
+fn ensure_listen_addresses_consistent_with_transport_not_memory() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		listen_addresses: vec![listen_addr.clone()],
+		in_peers: u32::max_value(),
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }

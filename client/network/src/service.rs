@@ -107,6 +107,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+		// Ensure the listen addresses are consistent with the transport
+		for addr in &params.network_config.listen_addresses {
+			if addr.iter().any(|x| matches!(x, libp2p::core::multiaddr::Protocol::Memory(_)))
+				&& !matches!(params.network_config.transport, TransportConfig::MemoryOnly) {
+				return Err(Error::InvalidConfiguration(format!(
+					"The network address {} is invalid because the transport is not set on {:?}",
+					addr,
+					TransportConfig::MemoryOnly,
+				)))
+			}
+
+			if !addr.iter().any(|x| matches!(x, libp2p::core::multiaddr::Protocol::Memory(_)))
+				&& matches!(params.network_config.transport, TransportConfig::MemoryOnly) {
+				return Err(Error::InvalidConfiguration(format!(
+					"The network address {} is invalid because the transport is set on {:?}",
+					addr,
+					TransportConfig::MemoryOnly,
+				)))
+			}
+		}
+
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
 		if let Some(path) = params.network_config.net_config_path {
