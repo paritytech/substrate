@@ -347,7 +347,10 @@ where
 		(when, index)
 	}
 
-	fn do_cancel(origin: Option<T::PalletsOrigin>, (when, index): TaskAddress<T::BlockNumber>) -> Result<(), DispatchError> {
+	fn do_cancel(
+		origin: Option<T::PalletsOrigin>,
+		(when, index): TaskAddress<T::BlockNumber>
+	) -> Result<(), DispatchError> {
 		let scheduled = Agenda::<T>::mutate(
 			when,
 			|agenda| {
@@ -785,8 +788,11 @@ mod tests {
 			let periodic_multiplier = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1);
 
 			// Named
-			assert_ok!(Scheduler::do_schedule_named(
-				1u32.encode(), 1, None, 255, root(), Call::Logger(logger::Call::log(3, MaximumSchedulerWeight::get() / 3)))
+			assert_ok!(
+				Scheduler::do_schedule_named(
+					1u32.encode(), 1, None, 255, root(),
+					Call::Logger(logger::Call::log(3, MaximumSchedulerWeight::get() / 3))
+				)
 			);
 			// Anon Periodic
 			Scheduler::do_schedule(
@@ -805,7 +811,9 @@ mod tests {
 			// Will include the named periodic only
 			let actual_weight = Scheduler::on_initialize(1);
 			let call_weight = MaximumSchedulerWeight::get() / 2;
-			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier + named_multiplier + periodic_multiplier);
+			assert_eq!(
+				actual_weight, call_weight + base_weight + base_multiplier + named_multiplier + periodic_multiplier
+			);
 			assert_eq!(logger::log(), vec![(root(), 2600u32)]);
 
 			// Will include anon and anon periodic
