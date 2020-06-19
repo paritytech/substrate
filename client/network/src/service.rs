@@ -116,6 +116,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
 			&params.network_config.transport,
 		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+			&params.network_config.transport,
+		)?;
 
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
