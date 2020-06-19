@@ -769,7 +769,8 @@ mod tests {
 			);
 			// Named Periodic
 			assert_ok!(Scheduler::do_schedule_named(
-				2u32.encode(), 1, Some((1000, 3)), 126, root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)))
+				2u32.encode(), 1, Some((1000, 3)), 126, root(),
+				Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)))
 			);
 
 			// Will include the named periodic only
