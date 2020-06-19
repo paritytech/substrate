@@ -112,7 +112,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+		Dispatchable, DispatchInfoOf, PostDispatchInfoOf, Printable,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
