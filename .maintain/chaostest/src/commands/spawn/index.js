@@ -7,24 +7,33 @@ class SpawnCommand extends Command {
   async run () {
     const { flags } = this.parse(SpawnCommand)
     const { args } = this.parse(SpawnCommand)
-    const imageTag = flags.image || 'parity/substrate:latest'
-    const port = flags.port || 9933
     const namespace = flags.namespace || 'substrate-ci'
-    const validator = flags.validator || 0
-    const node = flags.node || 1
+    const image = flags.image || 'parity/substrate:latest'
+    const chainspec = flags.chainspec
+    const port = flags.port || 9933
 
     const hypervisor = new Hypervisor(CONFIG)
+    let options = {
+        image, port
+    }
     try {
       // Check/Create namespace
       await hypervisor.readOrCreateNamespace(namespace)
-      const chainName = args.chainName
-      if (chainName) {
-        if (chainName === 'dev') {
-          logger.debug('Starting a fullnode in dev mode...')
-          await hypervisor.createDevNode(imageTag, port)
-        } else if (chainName === 'alicebob') {
-          await hypervisor.createAliceBobNodes(imageTag, port)
+      const command = args.customCommand
+      if (command) {
+        if (command === 'dev') {
+          logger.debug('Starting with dev mode...')
+          await hypervisor.createDevNode(options)
+        } else if (command === 'local') {
+          logger.debug('Starting a network with 2 default validators...')
+          await hypervisor.createAliceBobNodes(options)
         } else {
+            const options = {
+                image: image,
+                port,
+                chainSpecFileName: chainspec,
+            }
+            await hypervisor.createCustomChain(options)
           // TODO: customized chain with chainName
         }
       }
@@ -41,12 +50,11 @@ SpawnCommand.flags = {
   image: flags.string({ char: 'i', description: 'image to deploy' }),
   port: flags.integer({ char: 'p', description: 'port to deploy on' }),
   namespace: flags.string({ description: 'desired namespace to deploy to', env: 'NAMESPACE' }),
-  validator: flags.string({ char: 'v', description: 'number of validators' }),
-  node: flags.string({ char: 'n', description: 'number of full nodes, if not set but exists, default to 1' }),
-  key: flags.string({ char: 'k', description: 'number of full nodes, if not set but exists, default to 1' }),
+//   validator: flags.string({ char: 'v', description: 'number of validators' }),
+  number: flags.string({ char: 'n', description: 'number of options[validators, peers]' }),
   chainspec: flags.string({ char: 'c', description: 'number of full nodes, if not set but exists, default to 1' })
 }
 
-SpawnCommand.args = [{ name: 'chainName' }]
+SpawnCommand.args = [{ name: 'customCommand' }]
 
 module.exports = SpawnCommand

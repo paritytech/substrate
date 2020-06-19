@@ -1,5 +1,7 @@
 const CONFIG = require('../config')()
 
+// Mount an instance of configuration or a new instance from config
+// TODO: extend this to namespace based configuration
 function Hypervisor (config) {
   this.config = config || CONFIG
 }

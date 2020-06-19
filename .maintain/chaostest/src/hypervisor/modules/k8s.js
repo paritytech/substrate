@@ -26,8 +26,8 @@ const readNameSpace = async namespace => {
 }
 
 const createPod = async (nodeSpec, namespace) => {
-  const { label, nodeId, image, args, port } = nodeSpec
-  const spec = {
+  const { label, nodeId, image, args, port, chainSpecPath } = nodeSpec
+  let spec = {
     metadata: {
       labels: {
         app: label
@@ -41,10 +41,34 @@ const createPod = async (nodeSpec, namespace) => {
           imagePullPolicy: 'Always',
           name: nodeId,
           ports: [{ containerPort: port }],
-          args: args
+          args: args,
+          volumeMounts:[{
+            name: 'chain',
+            mountPath: '/substrate'
+          }]
+        }
+      ],
+      volumes: [
+        {
+          name: 'chain',
+          emptyDir: {}
         }
       ]
     }
+  }
+  if (chainSpecPath) {
+    let initContainers = [
+      {
+        name: 'getchainspec',
+        image: 'busybox',
+        command: ['wget', '-O', '/chainspecs/custom.json', chainSpecPath],
+        volumeMounts:[{
+          name: 'chain',
+          mountPath: '/chainspecs'
+        }]
+      }
+    ]
+    spec.spec.initContainers = initContainers
   }
   return await k8sCoreApi.createNamespacedPod(namespace, spec)
 }

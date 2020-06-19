@@ -44,6 +44,16 @@ class Config {
     this.update()
   }
 
+  async setImage (image) {
+    this.image = image
+    this.update()
+  }
+
+  async setChainSpec (chainspec) {
+    this.chainspec = chainspec
+    this.update()
+  }
+
   async addNode (node) {
     if (!this.nodes || Array.isArray(this.nodes)) {
       this.nodes = []

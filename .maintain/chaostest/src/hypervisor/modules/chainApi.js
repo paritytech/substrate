@@ -15,4 +15,10 @@ const getChainBlockHeight = async (provider) => {
   return height
 }
 
+const insertKey = async (provider, key) => {
+  const data = await provider.send('author_insertKey', [key.type, key.mnemonic, key.public])
+  console.log(data)
+}
+
 module.exports = { getApi, getChainBlockHeight }
+

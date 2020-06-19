@@ -35,8 +35,6 @@ exports.createAlice = async function (image, port) {
   }
   nodeSpec.extraInfo = {
     nodeType: 'bootnode',
-    privateKey: '',
-    publicKey: '',
     peerId: '12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp'
   }
   await this.createNode(nodeSpec)
@@ -61,27 +59,96 @@ exports.createBob = async function (image, port) {
     args: substrateArgs
   }
   nodeSpec.extraInfo = {
-    nodeType: 'validator',
-    privateKey: '',
-    publicKey: ''
+    nodeType: 'validator'
   }
   await this.createNode(nodeSpec)
 }
 
-exports.createAliceBobNodes = async function (image, port) {
+exports.createAliceBobNodes = async function (options) {
+    const {image, port} = options
   await this.createAlice(image, port)
   await this.createBob(image, port)
 }
 
-exports.createDevNode = async function (image, port) {
+exports.createDevNode = async function (options) {
+    const {image, port} = options
   const substrateArgs = ['--dev', '--rpc-external', '--ws-external']
   const nodeSpec = {
-    nodeId: 'node-1',
+    nodeId: 'node-validator-0',
     image,
     port,
     args: substrateArgs
   }
+  nodeSpec.extraInfo = {
+    nodeType: 'bootnode',
+    peerId: "12D3KooW9pP99jnywoMxnq2qnD8JiYfB2bYodLcEJXNNvB92X4hG"
+  }
   await this.createNode(nodeSpec)
+}
+
+exports.createBootNode = async function(options) {
+    const substrateArgs = [
+        '--chain',
+        options.chainSpec,
+        '--node-key',
+        '0000000000000000000000000000000000000000000000000000000000000001',
+        '--validator',
+        '--no-telemetry',
+        '--rpc-cors',
+        'all',
+        '-d',
+        '/substrate',
+        '--unsafe-ws-external',
+        '--unsafe-rpc-external'
+    ]
+
+    const nodeSpec = {
+        nodeId: 'bootnode',
+        image: options.image,
+        port: options.port,
+        args: substrateArgs,
+        chainSpec: options.chainSpec,
+        extraInfo: {
+            nodeType: 'bootnode',
+            peerId: '12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp'
+          }
+      }
+    await this.createNode(nodeSpec)
+}
+
+exports.addCustomNode = async function(options, type = 'peer') {
+    const substrateArgs = [
+        '--chain',
+        options.chainSpec,
+        '--no-telemetry',
+        '--rpc-cors',
+        'all',
+        '-d',
+        '/substrate',
+        '--unsafe-ws-external',
+        '--unsafe-rpc-external',
+        '--bootnodes',
+        getBootNodeUrl(this.config.bootnode)
+    ]
+    const nodeSpec = {
+        nodeId: options.nodeId,
+        image: options.image,
+        port: options.port,
+        args: substrateArgs,
+        chainSpec: options.chainSpec,
+        extraInfo: {
+            nodeType: type,
+        }
+      }
+    if (type === 'validator') {
+        substrateArgs.push('--validator')
+    }
+}
+
+exports.createCustomChain = async function (options) {
+    const chainSpecPath = `${this.config.fileHoster}/${options.chainSpecFileName}`
+    options.chainSpecPath = chainSpecPath
+    await this.createBootNode(options)
 }
 
 exports.createNode = async function (nodeSpec) {
