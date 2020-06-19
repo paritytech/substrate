@@ -123,7 +123,7 @@ impl<C: SubstrateCli> Runner<C> {
 			match task_type {
 				TaskType::Async => { runtime_handle.spawn(fut); }
 				TaskType::Blocking => {
-					runtime_handle.spawn( async move {
+					runtime_handle.spawn(async move {
 						// `spawn_blocking` is looking for the current runtime, and as such has to
 						// be called from within `spawn`.
 						tokio::task::spawn_blocking(move || futures::executor::block_on(fut))
