@@ -382,7 +382,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 						return
 					}
 
-					let (header, body) = b.deconstruct();
+					let (header, body) = b.0.deconstruct();
 					let header_num = header.number().clone();
 					let pre_hash = header.hash();
 					let parent_hash = header.parent_hash().clone();

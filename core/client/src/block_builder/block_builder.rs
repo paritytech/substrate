@@ -17,7 +17,8 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use parity_codec::Encode;
-use runtime_primitives::ApplyOutcome;
+use runtime_primitives::{ApplyOutcome, ApplyError};
+
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
@@ -76,7 +77,7 @@ where
 	/// Push onto the block's list of extrinsics.
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it);
-	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
+	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<bool> {
 		use crate::runtime_api::ApiExt;
 
 		let block_id = &self.block_id;
@@ -84,9 +85,13 @@ where
 
 		self.api.map_api_result(|api| {
 			match api.apply_extrinsic_with_context(block_id, ExecutionContext::BlockConstruction, xt.clone())? {
-				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
+				Ok(ApplyOutcome::Success) => {
 					extrinsics.push(xt);
-					Ok(())
+					Ok(true)
+				}
+				Ok(ApplyOutcome::Fail) => {
+					extrinsics.push(xt);
+					Ok(false)
 				}
 				Err(e) => {
 					Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())

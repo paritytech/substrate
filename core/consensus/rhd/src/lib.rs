@@ -899,7 +899,7 @@ impl<'a, B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilde
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT
 {
-	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
+	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<bool, Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
 	}
 }

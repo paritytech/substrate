@@ -41,7 +41,7 @@ use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
-	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error>;
+	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<bool, error::Error>;
 }
 
 /// Local client abstraction for the consensus.
@@ -72,7 +72,7 @@ where
 	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
 	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
-	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
+	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<bool, error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
 	}
 }
@@ -100,7 +100,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
 		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
-			.into_iter().try_for_each(|i| block_builder.push(i))?;
+			.into_iter().try_for_each(|i| block_builder.push(i).map(|_|()))?;
 
 		build_ctx(&mut block_builder);
 
@@ -171,11 +171,11 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
-	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
+	type Create = Result<(<C as AuthoringApi>::Block, Vec<bool>), error::Error>;
 	type Error = error::Error;
 
 	fn propose(&self, inherent_data: InherentData, max_duration: time::Duration)
-		-> Result<<C as AuthoringApi>::Block, error::Error>
+		-> Self::Create
 	{
 		// leave some time for evaluation and block finalization (33%)
 		let deadline = (self.now)() + max_duration - max_duration / 3;
@@ -191,7 +191,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
 	fn propose_with(&self, inherent_data: InherentData, deadline: time::Instant)
-		-> Result<<C as AuthoringApi>::Block, error::Error>
+		-> Result<(<C as AuthoringApi>::Block, Vec<bool>), error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
 
@@ -199,6 +199,8 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		/// this number of transactions before quitting for real.
 		/// It allows us to increase block utilization.
 		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
+
+		let mut exe_result = Vec::new();
 
 		let block = self.client.build_block(
 			&self.parent_id,
@@ -229,8 +231,12 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 					trace!("[{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
-						Ok(()) => {
+						Ok(true) => {
+							exe_result.push(true);
 							debug!("[{:?}] Pushed to the block.", pending.hash);
+						}
+						Ok(false) =>{
+							exe_result.push(false);
 						}
 						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
 							if is_first {
@@ -283,7 +289,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			self.parent_number,
 		).is_ok());
 
-		Ok(substrate_block)
+		Ok((substrate_block, exe_result))
 	}
 }
 

@@ -82,7 +82,7 @@ pub trait Proposer<B: Block> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
-	type Create: IntoFuture<Item=B, Error=Self::Error>;
+	type Create: IntoFuture<Item=(B, Vec<bool>), Error=Self::Error>;
 	/// Create a proposal.
 	fn propose(&self, inherent_data: InherentData, max_duration: Duration) -> Self::Create;
 }
