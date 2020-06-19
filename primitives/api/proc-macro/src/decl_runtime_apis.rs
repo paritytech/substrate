@@ -191,7 +191,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 				input: &I, error_desc: &'static str,
 			) -> std::result::Result<R, String>
 		{
-			<R as #crate_::Decode>::decode(
+			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
+				#crate_::MAX_EXTRINSIC_DEPTH,
 				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(|e| format!("{} {}", error_desc, e.what()))
 		}

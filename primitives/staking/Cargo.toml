@@ -12,7 +12,7 @@ description = "A crate which contains primitives that are useful for implementat
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false, features = ["derive"] }
 sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../runtime" }
 sp-std = { version = "2.0.0-rc3", default-features = false, path = "../std" }
 
