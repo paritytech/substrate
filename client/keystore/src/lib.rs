@@ -272,7 +272,7 @@ impl Store {
 	fn raw_public_keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>> {
 		let mut public_keys: Vec<Vec<u8>> = self.additional.keys()
 			.into_iter()
-    		.filter_map(|k| if k.0 == id { Some(k.1.clone()) } else { None })
+			.filter_map(|k| if k.0 == id { Some(k.1.clone()) } else { None })
 			.collect();
 
 		if let Some(path) = &self.path {
@@ -365,7 +365,7 @@ impl BareCryptoStore for Store {
 				 .map(|k| sr25519::Public::from_slice(k.as_slice()))
 				 .collect()
 			})
-    		.unwrap_or_default()
+			.unwrap_or_default()
 	}
 
 	fn sr25519_generate_new(
