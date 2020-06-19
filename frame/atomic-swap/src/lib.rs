@@ -168,6 +168,8 @@ decl_error! {
 		AlreadyClaimed,
 		/// Swap does not exist.
 		NotExist,
+		/// Claim action mismatch.
+		ClaimActionMismatch,
 		/// Duration has not yet passed for the swap to be cancelled.
 		DurationNotPassed,
 	}
@@ -240,13 +242,17 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// - `proof`: Revealed proof of the claim.
-		#[weight = T::DbWeight::get().reads_writes(2, 2)
+		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
+		///   the operation fails. This is used for weight calculation.
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
 		  .saturating_add(40_000_000)
 		  .saturating_add((proof.len() as Weight).saturating_mul(100))
+		  .saturating_add(action.weight())
 		]
 		fn claim_swap(
 			origin,
 			proof: Vec<u8>,
+			action: T::SwapAction,
 		) -> DispatchResult {
 			ensure!(
 				proof.len() <= T::ProofLimit::get() as usize,
@@ -258,6 +264,7 @@ decl_module! {
 
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::InvalidProof)?;
+			ensure!(swap.action == action, Error::<T>::ClaimActionMismatch);
 
 			let succeeded = swap.action.claim(&swap.source, &target);
 

@@ -136,6 +136,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::claim_swap(
 			Origin::signed(A),
 			proof.to_vec(),
+			BalanceSwapAction::new(75),
 		).unwrap();
 
 		assert_eq!(Balances::free_balance(A), 100 + 75);
@@ -147,6 +148,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::claim_swap(
 			Origin::signed(B),
 			proof.to_vec(),
+			BalanceSwapAction::new(50),
 		).unwrap();
 
 		assert_eq!(Balances::free_balance(A), 100 - 50);
