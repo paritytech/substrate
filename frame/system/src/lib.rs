@@ -112,7 +112,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+		Dispatchable, DispatchInfoOf, PostDispatchInfoOf, Printable,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -1591,7 +1591,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
 		// to them actually being useful. Block producers are thus not allowed to include mandatory
 		// extrinsics that result in error.
-		if info.class == DispatchClass::Mandatory && result.is_err() {
+		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
+			"Bad mandantory".print();
+			e.print();
+
 			Err(InvalidTransaction::BadMandatory)?
 		}
 
