@@ -629,7 +629,7 @@ impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_meter: &mut GasMeter<T>,
-		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
+		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult,
 	) -> ExecResult {
 		let cfg = Config::preload();
 		let vm = WasmVm::new(&cfg.schedule);
@@ -637,16 +637,6 @@ impl<T: Trait> Module<T> {
 		let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
 		let result = func(&mut ctx, gas_meter);
-
-		if result.as_ref().map(|output| output.is_success()).unwrap_or(false) {
-			// TODO: Audit this.
-			//
-			// We no longer need to commit now, since all changes are committed eagearly, but
-			// rollbacked on error.
-
-			// Commit all changes that made it thus far into the persistent storage.
-			// DirectAccountDb.commit(ctx.overlay.into_change_set());
-		}
 
 		// Execute deferred actions.
 		ctx.deferred.into_iter().for_each(|deferred| {

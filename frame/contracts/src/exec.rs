@@ -105,8 +105,8 @@ pub trait Ext {
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
-	/// the storage entry is deleted. Returns an Err if the value size is too large.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str>;
+	/// the storage entry is deleted.
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
 
 	/// Instantiate a contract from the given code.
 	///
@@ -409,7 +409,7 @@ where
 			// If code_hash is not none, then the destination account is a live contract, otherwise
 			// it is a regular account since tombstone accounts have already been rejected.
 			match storage::code_hash::<T>(&dest) {
-				Some(dest_code_hash) => {
+				Ok(dest_code_hash) => {
 					let executable = try_or_exec_error!(
 						nested.loader.load_main(&dest_code_hash),
 						input_data
@@ -423,7 +423,7 @@ where
 						)?;
 					Ok(output)
 				}
-				None => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
+				Err(storage::ContractAbsentError) => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
 			}
 		})
 	}
@@ -724,17 +724,23 @@ where
 		}
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {
-		match self.ctx.self_trie_id {
-			Some(ref trie_id) => {
-				storage::write_contract_storage::<T>(&self.ctx.self_account, trie_id, &key, value);
-			}
-			// TODO: My current understanding is that `self.ctx.self_trie_id` can be `None` only
-			// for the top-level account, i.e. EOA. As such, it cannot issue any reads to the
-			// storage, because it has no. Furthermore, EOA cannot have contract storage.
-			None => unimplemented!(),
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+		let trie_id = self.ctx.self_trie_id.as_ref().expect(
+			"`ctx.self_trie_id` points to an alive contract within the `CallContext`;\
+				it cannot be `None`;\
+				expect can't fail;\
+				qed",
+		);
+		if let Err(storage::ContractAbsentError) =
+			storage::write_contract_storage::<T>(&self.ctx.self_account, trie_id, &key, value)
+		{
+			panic!(
+				"the contract must be in the alive state within the `CallContext`;\
+				the contract cannot be absent in storage;
+				write_contract_storage cannot return `None`;
+				qed"
+			);
 		}
-		Ok(())
 	}
 
 	fn instantiate(
@@ -849,12 +855,13 @@ where
 	}
 
 	fn set_rent_allowance(&mut self, rent_allowance: BalanceOf<T>) {
-		match storage::set_rent_allowance::<T>(&self.ctx.self_account, rent_allowance) {
-			Ok(()) => {},
-			Err(storage::AllowanceSetError) => {
-				panic!("`self_account` points to an alive contract within the `CallContext`;
-					set_rent_allowance cannot return `Err`; qed");
-			}
+		if let Err(storage::ContractAbsentError) =
+			storage::set_rent_allowance::<T>(&self.ctx.self_account, rent_allowance)
+		{
+			panic!(
+				"`self_account` points to an alive contract within the `CallContext`;
+					set_rent_allowance cannot return `Err`; qed"
+			);
 		}
 	}
 
@@ -1602,7 +1609,7 @@ mod tests {
 			);
 
 			// Check that the account has not been created.
-			assert!(storage::code_hash::<Test>(&instantiated_contract_address).is_none());
+			assert!(storage::code_hash::<Test>(&instantiated_contract_address).is_err());
 			assert!(events().is_empty());
 		});
 	}

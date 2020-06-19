@@ -23,6 +23,11 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::traits::Bounded;
 use frame_support::{storage::child, StorageMap};
 
+/// An error that means that the account requested either doesn't exist or represents a tombstone
+/// account.
+#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
+pub struct ContractAbsentError;
+
 pub fn read_contract_storage(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
 	child::get_raw(&crate::child_trie_info(&trie_id), &blake2_256(key))
 }
@@ -32,10 +37,10 @@ pub fn write_contract_storage<T: Trait>(
 	trie_id: &TrieId,
 	key: &StorageKey,
 	opt_new_value: Option<Vec<u8>>,
-) {
+) -> Result<(), ContractAbsentError> {
 	let mut new_info = match <ContractInfoOf<T>>::get(account) {
 		Some(ContractInfo::Alive(alive)) => alive,
-		None | Some(ContractInfo::Tombstone(_)) => panic!(), // TODO: Justify this
+		None | Some(ContractInfo::Tombstone(_)) => return Err(ContractAbsentError),
 	};
 
 	let hashed_key = blake2_256(key);
@@ -99,33 +104,38 @@ pub fn write_contract_storage<T: Trait>(
 		Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, &new_value[..]),
 		None => child::kill(&child_trie_info, &hashed_key),
 	}
+
+	Ok(())
 }
 
-pub fn rent_allowance<T: Trait>(account: &AccountIdOf<T>) -> Option<BalanceOf<T>> {
-	<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.rent_allowance))
+pub fn rent_allowance<T: Trait>(
+	account: &AccountIdOf<T>,
+) -> Result<BalanceOf<T>, ContractAbsentError> {
+	<ContractInfoOf<T>>::get(account)
+		.and_then(|i| i.as_alive().map(|i| i.rent_allowance))
+		.ok_or(ContractAbsentError)
 }
-
-/// An error returned if `set_rent_allowance` was called on an account which doesn't have a contract.
-pub struct AllowanceSetError;
 
 /// Set the rent allowance for the contract given by the account id.
 ///
-/// Returns `Err` if the contract is not alive.
+/// Returns `Err` if the contract doesn't exist or is a tombstone.
 pub fn set_rent_allowance<T: Trait>(
 	account: &AccountIdOf<T>,
 	rent_allowance: BalanceOf<T>,
-) -> Result<(), AllowanceSetError> {
+) -> Result<(), ContractAbsentError> {
 	<ContractInfoOf<T>>::mutate(account, |maybe_contract_info| match maybe_contract_info {
 		Some(ContractInfo::Alive(ref mut alive_info)) => {
 			alive_info.rent_allowance = rent_allowance;
 			Ok(())
 		}
-		_ => Err(AllowanceSetError),
+		_ => Err(ContractAbsentError),
 	})
 }
 
-pub fn code_hash<T: Trait>(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
-	<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
+pub fn code_hash<T: Trait>(account: &AccountIdOf<T>) -> Result<CodeHash<T>, ContractAbsentError> {
+	<ContractInfoOf<T>>::get(account)
+		.and_then(|i| i.as_alive().map(|i| i.code_hash))
+		.ok_or(ContractAbsentError)
 }
 
 /// Creates a new contract descriptor in the storage with the given code hash at the given address.

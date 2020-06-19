@@ -395,7 +395,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, value);
 		Ok(())
 	},
 
@@ -407,7 +407,7 @@ define_env!(Env, <E: Ext>,
 	ext_clear_storage(ctx, key_ptr: u32) => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, None);
 		Ok(())
 	},
 

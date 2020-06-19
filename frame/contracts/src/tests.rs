@@ -71,7 +71,7 @@ pub mod test_utils {
 
 	pub fn set_storage(addr: &u64, key: &StorageKey, value: Option<Vec<u8>>) {
 		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
-		write_contract_storage::<Test>(&1, &contract_info.trie_id, key, value);
+		write_contract_storage::<Test>(&1, &contract_info.trie_id, key, value).unwrap();
 	}
 	pub fn get_storage(addr: &u64, key: &StorageKey) -> Option<Vec<u8>> {
 		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
