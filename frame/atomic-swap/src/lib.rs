@@ -19,7 +19,7 @@
 //!
 //! A module for atomically sending funds.
 //!
-//! - [`scheduler::Trait`](./trait.Trait.html)
+//! - [`atomic_swap::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
