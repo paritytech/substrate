@@ -483,7 +483,7 @@ impl<T: Clone> SlotDuration<T> {
 
 		if slot_duration.slot_duration() == 0 {
 			return Err(sp_blockchain::Error::Msg(
-				"Invalid value for slot_duration: the value must be greater than 0.".to_string(),
+				"Invalid value for slot_duration: the value must be greater than 0.".into(),
 			))
 		}
 
