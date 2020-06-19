@@ -22,10 +22,10 @@
 
 mod tests;
 
-use sp_std::prelude::*;
+use sp_std::{prelude::*, marker::PhantomData, ops::{Deref, DerefMut}};
 use sp_io::hashing::blake2_256;
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error, ensure,
+	Parameter, decl_module, decl_storage, decl_event, decl_error, ensure,
 	traits::{Get, Currency, ReservableCurrency, BalanceStatus},
 	weights::Weight,
 	dispatch::DispatchResult,
@@ -35,18 +35,15 @@ use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
 
 /// Pending atomic swap operation.
-#[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode)]
-pub struct PendingSwap<AccountId, Balance, BlockNumber> {
+#[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+pub struct PendingSwap<T: Trait> {
 	/// Source of the swap.
-	pub source: AccountId,
-	/// Balance value of the swap.
-	pub balance: Balance,
+	pub source: AccountIdFor<T>,
+	/// Action of this swap.
+	pub action: T::SwapAction,
 	/// End block of the lock.
-	pub end_block: BlockNumber,
+	pub end_block: BlockNumberFor<T>,
 }
-
-/// Balance type from the pallet's point of view.
-pub type BalanceFor<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 /// AccountId type from the pallet's point of view.
 pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
@@ -54,18 +51,88 @@ pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
 /// BlockNumber type from the pallet's point of view.
 pub type BlockNumberFor<T> = <T as frame_system::Trait>::BlockNumber;
 
-/// PendingSwap type from the pallet's point of view.
-pub type PendingSwapFor<T> = PendingSwap<AccountIdFor<T>, BalanceFor<T>, BlockNumberFor<T>>;
-
 /// Hashed proof type.
 pub type HashedProof = [u8; 32];
+
+/// Definition of a pending atomic swap action. It contains the following three phrases:
+///
+/// - **Reserve**: reserve the resources needed for a swap. This is to make sure that **Claim**
+/// succeeds with best efforts.
+/// - **Claim**: claim any resources reserved in the first phrase.
+/// - **Cancel**: cancel any resources reserved in the first phrase.
+pub trait SwapAction<T: Trait> {
+	/// Reserve the resources needed for the swap, from the given `source`. The reservation is
+	/// allowed to fail. If that is the case, the the full swap creation operation is cancelled.
+	fn reserve(&self, source: &AccountIdFor<T>) -> DispatchResult;
+	/// Claim the reserved resources, with `source` and `target`. Returns whether the claim
+	/// succeeds.
+	fn claim(&self, source: &AccountIdFor<T>, target: &AccountIdFor<T>) -> bool;
+	/// Weight for executing the operation.
+	fn weight(&self) -> Weight;
+	/// Cancel the resources reserved in `source`.
+	fn cancel(&self, source: &AccountIdFor<T>);
+}
+
+/// A swap action that only allows transferring balances.
+#[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode)]
+pub struct BalanceSwapAction<T: Trait, C: ReservableCurrency<T::AccountId>> {
+	value: <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance,
+	_marker: PhantomData<C>,
+}
+
+impl<T: Trait, C> BalanceSwapAction<T, C> where
+	C: ReservableCurrency<T::AccountId>,
+{
+	/// Create a new swap action value of balance.
+	pub fn new(value: <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance) -> Self {
+		Self { value, _marker: PhantomData }
+	}
+}
+
+impl<T: Trait, C> Deref for BalanceSwapAction<T, C> where
+	C: ReservableCurrency<T::AccountId>,
+{
+	type Target = <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+	fn deref(&self) -> &Self::Target {
+		&self.value
+	}
+}
+
+impl<T: Trait, C> DerefMut for BalanceSwapAction<T, C> where
+	C: ReservableCurrency<T::AccountId>,
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.value
+	}
+}
+
+impl<T: Trait, C> SwapAction<T> for BalanceSwapAction<T, C> where
+	C: ReservableCurrency<T::AccountId>,
+{
+	fn reserve(&self, source: &AccountIdFor<T>) -> DispatchResult {
+		C::reserve(&source, self.value)
+	}
+
+	fn claim(&self, source: &AccountIdFor<T>, target: &AccountIdFor<T>) -> bool {
+		C::repatriate_reserved(source, target, self.value, BalanceStatus::Free).is_ok()
+	}
+
+	fn weight(&self) -> Weight {
+		T::DbWeight::get().reads_writes(1, 1)
+	}
+
+	fn cancel(&self, source: &AccountIdFor<T>) {
+		C::unreserve(source, self.value);
+	}
+}
 
 /// Atomic swap's pallet configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-	/// The currency mechanism.
-	type Currency: ReservableCurrency<Self::AccountId>;
+	/// Swap action.
+	type SwapAction: SwapAction<Self> + Parameter;
 	/// Limit of proof size.
 	///
 	/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the proofs
@@ -83,7 +150,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as AtomicSwap {
 		pub PendingSwaps: double_map
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) HashedProof
-			=> Option<PendingSwapFor<T>>;
+			=> Option<PendingSwap<T>>;
 	}
 }
 
@@ -109,14 +176,13 @@ decl_error! {
 decl_event!(
 	/// Event of atomic swap pallet.
 	pub enum Event<T> where
-		Balance = BalanceFor<T>,
 		AccountId = AccountIdFor<T>,
-		PendingSwap = PendingSwapFor<T>,
+		PendingSwap = PendingSwap<T>,
 	{
 		/// Swap created.
 		NewSwap(AccountId, HashedProof, PendingSwap),
 		/// Swap claimed. The last parameter indicates whether the execution succeeds.
-		SwapClaimed(AccountId, HashedProof, Balance, bool),
+		SwapClaimed(AccountId, HashedProof, bool),
 		/// Swap cancelled.
 		SwapCancelled(AccountId, HashedProof),
 	}
@@ -146,7 +212,7 @@ decl_module! {
 			origin,
 			target: AccountIdFor<T>,
 			hashed_proof: HashedProof,
-			balance: BalanceFor<T>,
+			action: T::SwapAction,
 			duration: BlockNumberFor<T>,
 		) {
 			let source = ensure_signed(origin)?;
@@ -155,11 +221,11 @@ decl_module! {
 				Error::<T>::AlreadyExist
 			);
 
-			T::Currency::reserve(&source, balance)?;
+			action.reserve(&source)?;
 
 			let swap = PendingSwap {
 				source,
-				balance,
+				action,
 				end_block: frame_system::Module::<T>::block_number() + duration,
 			};
 			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
@@ -193,17 +259,12 @@ decl_module! {
 			let swap = PendingSwaps::<T>::get(&target, hashed_proof)
 				.ok_or(Error::<T>::InvalidProof)?;
 
-			let succeeded = T::Currency::repatriate_reserved(
-				&swap.source,
-				&target,
-				swap.balance,
-				BalanceStatus::Free,
-			).is_ok();
+			let succeeded = swap.action.claim(&swap.source, &target);
 
 			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
 
 			Self::deposit_event(
-				RawEvent::SwapClaimed(target, hashed_proof, swap.balance, succeeded)
+				RawEvent::SwapClaimed(target, hashed_proof, succeeded)
 			);
 
 			Ok(())
@@ -234,10 +295,7 @@ decl_module! {
 				Error::<T>::DurationNotPassed,
 			);
 
-			T::Currency::unreserve(
-				&swap.source,
-				swap.balance,
-			);
+			swap.action.cancel(&swap.source);
 			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
 
 			Self::deposit_event(
