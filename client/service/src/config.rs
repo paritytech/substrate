@@ -257,6 +257,44 @@ impl std::convert::From<PathBuf> for BasePath {
 type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
 
 /// Callable object that execute tasks.
+///
+/// This struct can be created easily using `Into`.
+///
+/// # Examples
+///
+/// ## Using tokio
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// # mod tokio { pub mod runtime {
+/// # #[derive(Clone)]
+/// # pub struct Runtime;
+/// # impl Runtime {
+/// # pub fn new() -> Result<Self, ()> { Ok(Runtime) }
+/// # pub fn handle(&self) -> &Self { &self }
+/// # pub fn spawn(&self, _: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
+/// # }
+/// # } }
+/// use tokio::runtime::Runtime;
+///
+/// let runtime = Runtime::new().unwrap();
+/// let handle = runtime.handle().clone();
+/// let task_executor: TaskExecutor = (move |future, _task_type| {
+///		handle.spawn(future);
+///	}).into();
+/// ```
+///
+/// ## Using async-std
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// # mod async_std { pub mod task {
+/// # pub fn spawn(_: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
+/// # } }
+/// let task_executor: TaskExecutor = (|future, _task_type| {
+///		async_std::task::spawn(future);
+///	}).into();
+/// ```
 #[derive(Clone)]
 pub struct TaskExecutor(TaskExecutorInner);
 
