@@ -747,6 +747,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
 	}
 
+	/// Inform the network service about an own imported block.
+	pub fn own_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -813,6 +819,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
+	OwnBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1143,6 +1150,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::UpdateChain =>
 					this.network_service.user_protocol_mut().update_chain(),
+				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
+					this.network_service.user_protocol_mut().own_block_imported(hash, number),
 			}
 		}
 
