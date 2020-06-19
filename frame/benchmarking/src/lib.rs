@@ -173,7 +173,7 @@ pub use paste;
 #[macro_export]
 macro_rules! benchmarks {
 	(
-		_ {
+		_ $( where $( $where_ty:ty: $where_bound:path ),* $(,)? )? {
 			$(
 				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
 			)*
@@ -182,6 +182,7 @@ macro_rules! benchmarks {
 	) => {
 		$crate::benchmarks_iter!(
 			NO_INSTANCE
+			{ $( $where_ty: $where_bound )* }
 			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			( )
 			$( $rest )*
@@ -192,7 +193,7 @@ macro_rules! benchmarks {
 #[macro_export]
 macro_rules! benchmarks_instance {
 	(
-		_ {
+		_ $( where $( $where_ty:ty: $where_bound:path ),* $(,)? )? {
 			$(
 				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
 			)*
@@ -201,6 +202,7 @@ macro_rules! benchmarks_instance {
 	) => {
 		$crate::benchmarks_iter!(
 			INSTANCE
+			{ $( $where_ty: $where_bound )* }
 			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			( )
 			$( $rest )*
@@ -214,6 +216,7 @@ macro_rules! benchmarks_iter {
 	// mutation arm:
 	(
 		$instance:ident
+		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
@@ -222,6 +225,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			$instance
+			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
 			$name { $( $code )* }: $name ( $origin $( , $arg )* )
@@ -232,6 +236,7 @@ macro_rules! benchmarks_iter {
 	// no instance mutation arm:
 	(
 		NO_INSTANCE
+		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
@@ -240,6 +245,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			NO_INSTANCE
+			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
 			$name { $( $code )* }: {
@@ -254,6 +260,7 @@ macro_rules! benchmarks_iter {
 	// instance mutation arm:
 	(
 		INSTANCE
+		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
@@ -262,6 +269,7 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			INSTANCE
+			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
 			$name { $( $code )* }: {
@@ -276,6 +284,7 @@ macro_rules! benchmarks_iter {
 	// iteration arm:
 	(
 		$instance:ident
+		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $eval:block
@@ -285,6 +294,7 @@ macro_rules! benchmarks_iter {
 		$crate::benchmark_backend! {
 			$instance
 			$name
+			{ $( $where_clause )* }
 			{ $( $common )* }
 			{ }
 			{ $eval }
@@ -293,13 +303,14 @@ macro_rules! benchmarks_iter {
 		}
 		$crate::benchmarks_iter!(
 			$instance
+			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* $name )
 			$( $rest )*
 		);
 	};
 	// iteration-exit arm
-	( $instance:ident { $( $common:tt )* } ( $( $names:ident )* ) ) => {
+	( $instance:ident { $( $where_clause:tt )* } { $( $common:tt )* } ( $( $names:ident )* ) ) => {
 		$crate::selected_benchmark!( $instance $( $names ),* );
 		$crate::impl_benchmark!( $instance $( $names ),* );
 		#[cfg(test)]
