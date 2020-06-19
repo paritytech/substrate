@@ -285,7 +285,7 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		let config = match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
+		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
 			let has_api_v1 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
 				&b, |v| v == 1,
 			)?;
@@ -310,15 +310,7 @@ impl Config {
 				warn!(target: "babe", "Failed to get slot duration");
 				Err(s)
 			}
-		}?;
-
-		if config.slot_duration == 0 {
-			return Err(sp_blockchain::Error::Msg(
-				"Invalid value for slot_duration: the value must be greater than 0.".to_string(),
-			))
 		}
-
-		Ok(config)
 	}
 }
 
