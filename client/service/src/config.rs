@@ -313,10 +313,9 @@ where
 	}
 }
 
-impl std::ops::Deref for TaskExecutor {
-	type Target = TaskExecutorInner;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
+impl TaskExecutor {
+	/// Spawns a new asynchronous task.
+	pub fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>, task_type: TaskType) {
+		self.0(future, task_type)
 	}
 }

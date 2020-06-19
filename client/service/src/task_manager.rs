@@ -109,7 +109,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		(self.executor)(Box::pin(future), task_type);
+		self.executor.spawn(Box::pin(future), task_type);
 	}
 }
 
