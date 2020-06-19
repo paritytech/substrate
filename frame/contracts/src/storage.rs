@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+//! This module contains routines for accessing and altering a contract related state.
+
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
@@ -28,10 +30,23 @@ use frame_support::{storage::child, StorageMap};
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ContractAbsentError;
 
+/// Reads a storage kv pair of a contract.
+///
+/// The read is performed from the `trie_id` only. The `address` is not necessary. If the contract
+/// doesn't store under the given `key` `None` is returned.
 pub fn read_contract_storage(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
 	child::get_raw(&crate::child_trie_info(&trie_id), &blake2_256(key))
 }
 
+/// Update a storage entry into a contract's kv storage.
+///
+/// If the `opt_new_value` is `None` then the kv pair is removed.
+///
+/// This function also updates the bookkeeping info such as: number of total non-empty pairs a
+/// contract owns, the last block the storage was written to, etc. That's why, in contrast to
+/// `read_contract_storage`, this function also requires the `account` ID.
+///
+/// If the contract specified by the id `account` doesn't exist `Err` is returned.`
 pub fn write_contract_storage<T: Trait>(
 	account: &AccountIdOf<T>,
 	trie_id: &TrieId,
@@ -108,6 +123,7 @@ pub fn write_contract_storage<T: Trait>(
 	Ok(())
 }
 
+/// Returns the rent allowance set for the contract give by the account id.
 pub fn rent_allowance<T: Trait>(
 	account: &AccountIdOf<T>,
 ) -> Result<BalanceOf<T>, ContractAbsentError> {
@@ -132,6 +148,7 @@ pub fn set_rent_allowance<T: Trait>(
 	})
 }
 
+/// Returns the code hash of the contract specified by `account` ID.
 pub fn code_hash<T: Trait>(account: &AccountIdOf<T>) -> Result<CodeHash<T>, ContractAbsentError> {
 	<ContractInfoOf<T>>::get(account)
 		.and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -169,6 +186,9 @@ pub fn place_contract<T: Trait>(
 	})
 }
 
+/// Removes the contract and all the storage associated with it.
+///
+/// This function doesn't affect the account.
 pub fn destroy_contract<T: Trait>(address: &AccountIdOf<T>, trie_id: &TrieId) {
 	<ContractInfoOf<T>>::remove(address);
 	child::kill_storage(&crate::child_trie_info(&trie_id));
