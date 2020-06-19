@@ -108,39 +108,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		// Ensure the listen addresses are consistent with the transport.
-		if !matches!(params.network_config.transport, TransportConfig::MemoryOnly) {
-			let invalid_addresses: Vec<_> = params.network_config.listen_addresses.iter()
-				.filter(|x| x.iter()
-					.any(|y| matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
-				)
-				.map(|x| x.to_string())
-				.collect();
-
-			if !invalid_addresses.is_empty() {
-				return Err(Error::InvalidConfiguration(format!(
-					"The following network listen addresses are invalid because the transport \
-					is not set on {:?}: {}",
-					TransportConfig::MemoryOnly,
-					invalid_addresses.join(", "),
-				)))
-			}
-		} else {
-			let invalid_addresses: Vec<_> = params.network_config.listen_addresses.iter()
-				.filter(|x| x.iter()
-					.any(|y| !matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
-				)
-				.map(|x| x.to_string())
-				.collect();
-
-			if !invalid_addresses.is_empty() {
-				return Err(Error::InvalidConfiguration(format!(
-					"The following network listen addresses are invalid because the transport \
-					is set on {:?}: {}",
-					TransportConfig::MemoryOnly,
-					invalid_addresses.join(", "),
-				)))
-			}
-		}
+		ensure_addresses_consistent_with_transport(
+			params.network_config.listen_addresses.iter(),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
+			&params.network_config.transport,
+		)?;
 
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
@@ -1481,4 +1456,45 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}
 	}
+}
+
+fn ensure_addresses_consistent_with_transport<'a>(
+	addresses: impl Iterator<Item = &'a Multiaddr>,
+	transport: &TransportConfig,
+) -> Result<(), Error> {
+	if matches!(transport, TransportConfig::MemoryOnly) {
+		let invalid_addresses: Vec<_> = addresses
+			.filter(|x| x.iter()
+				.any(|y| !matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
+			)
+			.map(|x| x.to_string())
+			.collect();
+
+		if !invalid_addresses.is_empty() {
+			return Err(Error::InvalidConfiguration(format!(
+				"The following network listen addresses are invalid because the transport \
+				is set on {:?}: {}",
+				TransportConfig::MemoryOnly,
+				invalid_addresses.join(", "),
+			)));
+		}
+	} else {
+		let invalid_addresses: Vec<_> = addresses
+			.filter(|x| x.iter()
+				.any(|y| matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
+			)
+			.map(|x| x.to_string())
+			.collect();
+
+		if !invalid_addresses.is_empty() {
+			return Err(Error::InvalidConfiguration(format!(
+				"The following network listen addresses are invalid because the transport \
+				is not set on {:?}: {}",
+				TransportConfig::MemoryOnly,
+				invalid_addresses.join(", "),
+			)));
+		}
+	}
+
+	Ok(())
 }
