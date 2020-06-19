@@ -332,15 +332,18 @@ macro_rules! impl_outer_origin {
 
 #[cfg(test)]
 mod tests {
+	use codec::{Encode, Decode};
 	use crate::traits::{Filter, OriginTrait};
 	mod system {
+		use super::*;
+
 		pub trait Trait {
 			type AccountId;
 			type Call;
 			type BaseCallFilter;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -360,18 +363,22 @@ mod tests {
 	}
 
 	mod origin_without_generic {
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		use super::*;
+
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub struct Origin;
 	}
 
 	mod origin_with_generic {
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		use super::*;
+
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub struct Origin<T> {
 			t: T
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug)]
+	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 	pub struct TestRuntime;
 
 	pub struct BaseCallFilter;

@@ -115,6 +115,7 @@ parameter_types! {
 impl pallet_scheduler::Trait for Test {
 	type Event = Event;
 	type Origin = Origin;
+	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 }
@@ -188,6 +189,7 @@ impl super::Trait for Test {
 	type Scheduler = Scheduler;
 	type MaxVotes = MaxVotes;
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
+	type PalletsOrigin = OriginCaller;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

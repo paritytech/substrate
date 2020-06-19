@@ -2171,6 +2171,8 @@ mod tests {
 	}
 
 	pub mod system {
+		use codec::{Encode, Decode};
+
 		pub trait Trait {
 			type AccountId;
 			type Call;
@@ -2178,7 +2180,7 @@ mod tests {
 			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
