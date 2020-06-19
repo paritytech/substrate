@@ -1411,7 +1411,10 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			// the space alloted for `Operational` class.
 			DispatchClass::Operational => {
 				let maximum_weight = T::MaximumBlockWeight::get();
-				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
+				let operational_limit =
+					Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
+				let operational_limit =
+					operational_limit.saturating_sub(T::BlockExecutionWeight::get());
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 				if extrinsic_weight > operational_limit {
 					Err(InvalidTransaction::ExhaustsResources.into())
@@ -2474,13 +2477,16 @@ pub(crate) mod tests {
 				DispatchClass::Operational
 			) * <Test as Trait>::MaximumBlockWeight::get();
 			let base_weight = <Test as Trait>::ExtrinsicBaseWeight::get();
+			let block_base = <Test as Trait>::BlockExecutionWeight::get();
+
+			let weight = operational_limit - base_weight - block_base;
 			let okay = DispatchInfo {
-				weight: operational_limit - base_weight,
+				weight,
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
 			let max = DispatchInfo {
-				weight: operational_limit - base_weight + 1,
+				weight: weight + 1,
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
