@@ -109,22 +109,34 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		// Ensure the listen addresses are consistent with the transport.
 		for addr in &params.network_config.listen_addresses {
-			if addr.iter().any(|x| matches!(x, libp2p::core::multiaddr::Protocol::Memory(_)))
-				&& !matches!(params.network_config.transport, TransportConfig::MemoryOnly) {
-				return Err(Error::InvalidConfiguration(format!(
-					"The network address {} is invalid because the transport is not set on {:?}",
-					addr,
-					TransportConfig::MemoryOnly,
-				)))
-			}
+			if !matches!(params.network_config.transport, TransportConfig::MemoryOnly) {
+				let invalid_addresses: Vec<_> = addr.iter()
+					.filter(|x| matches!(x, libp2p::core::multiaddr::Protocol::Memory(_)))
+					.map(|x| x.to_string())
+					.collect();
 
-			if !addr.iter().any(|x| matches!(x, libp2p::core::multiaddr::Protocol::Memory(_)))
-				&& matches!(params.network_config.transport, TransportConfig::MemoryOnly) {
-				return Err(Error::InvalidConfiguration(format!(
-					"The network address {} is invalid because the transport is set on {:?}",
-					addr,
-					TransportConfig::MemoryOnly,
-				)))
+				if !invalid_addresses.is_empty() {
+					return Err(Error::InvalidConfiguration(format!(
+						"The following network addresses are invalid because the transport is \
+						not set on {:?}: {}",
+						TransportConfig::MemoryOnly,
+						invalid_addresses.join(", "),
+					)))
+				}
+			} else {
+				let invalid_addresses: Vec<_> = addr.iter()
+					.filter(|x| !matches!(x, libp2p::core::multiaddr::Protocol::Memory(_)))
+					.map(|x| x.to_string())
+					.collect();
+
+				if !invalid_addresses.is_empty() {
+					return Err(Error::InvalidConfiguration(format!(
+						"The following network addresses are invalid because the transport is \
+						set on {:?}: {}",
+						TransportConfig::MemoryOnly,
+						invalid_addresses.join(", "),
+					)))
+				}
 			}
 		}
 
