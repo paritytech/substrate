@@ -130,8 +130,10 @@ pub trait Ext {
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
-	/// Since this function removes the self contract eagerly, no further actions should be performed
-	/// on this `Ext` instance. This function will fail if the same contract is present on the contract
+	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
+	/// be performed on this `Ext` instance.
+	///
+	/// This function will fail if the same contract is present on the contract
 	/// call stack.
 	fn terminate(
 		&mut self,
@@ -153,9 +155,11 @@ pub trait Ext {
 
 	/// Restores the given destination contract sacrificing the current one.
 	///
-	/// Since this function removes the self contract eagerly, no further actions should be performed
-	/// on this `Ext` instance. This function will fail if the same contract is present on the contract
-	/// call stack.
+	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
+	/// be performed on this `Ext` instance.
+	///
+	/// This function will fail if the same contract is present
+	/// on the contract call stack.
 	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
