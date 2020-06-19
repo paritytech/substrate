@@ -696,7 +696,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 /// Be advised that there are brief time spans where these invariants could be invalidated.
 /// For example, when a contract requests self-termination the contract is removed eagerly. That
 /// implies that the control won't be returned to the contract anymore, but there is still some code
-/// on the path of the return from that call context. Therefore, take must be taken in these
+/// on the path of the return from that call context. Therefore, care must be taken in these
 /// situations.
 struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	ctx: &'a mut ExecutionContext<'b, T, V, L>,
