@@ -173,14 +173,14 @@ impl SpawnEssentialTaskHandle {
 
 	/// Spawns the given task with the given name.
 	///
-	/// See `SpawnTaskHandle::spawn`.
+	/// See also [`SpawnTaskHandle::spawn`].
 	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.spawn_inner(name, task, TaskType::Async)
 	}
 
 	/// Spawns the blocking task with the given name.
 	///
-	/// See also `SpawnTaskHandle::spawn_blocking`.
+	/// See also [`SpawnTaskHandle::spawn_blocking`].
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
