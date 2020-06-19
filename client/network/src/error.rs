@@ -49,7 +49,7 @@ pub enum Error {
 	},
 	/// Prometheus metrics error.
 	Prometheus(prometheus_endpoint::PrometheusError),
-	/// Invalid configuration
+	/// Invalid configuration.
 	InvalidConfiguration(String),
 }
 
