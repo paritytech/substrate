@@ -48,7 +48,7 @@ use sp_runtime::traits::{
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
-use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
+use prometheus_endpoint::{Registry, Gauge, Counter, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -145,6 +145,7 @@ struct Metrics {
 	fork_targets: Gauge<U64>,
 	finality_proofs: GaugeVec<U64>,
 	justifications: GaugeVec<U64>,
+	propagated_extrinsics: Counter<U64>,
 }
 
 impl Metrics {
@@ -190,6 +191,10 @@ impl Metrics {
 				)?;
 				register(g, r)?
 			},
+			propagated_extrinsics: register(Counter::new(
+				"sync_propagated_extrinsics",
+				"Number of transactions propagated to at least one peer",
+			)?, r)?,
 		})
 	}
 }
@@ -1234,6 +1239,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					Some((self.transactions_protocol.clone(), encoded)),
 					GenericMessage::Transactions(to_send)
 				)
+			}
+		}
+
+		if propagated_to.len() > 0 {
+			if let Some(ref metrics) = self.metrics {
+				metrics.propagated_extrinsics.inc();
 			}
 		}
 
