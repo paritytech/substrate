@@ -1394,8 +1394,10 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<(), TransactionValidityError> {
 		match info.class {
-			// Mandatory and Operational transactions does not
-			DispatchClass::Mandatory | DispatchClass::Operational => Ok(()),
+			// Mandatory transactions are included in a block unconditionally, so
+			// we don't verify weight.
+			DispatchClass::Mandatory => Ok(()),
+			// Normal transactions must not exceed `MaximumExtrinsicWeight`.
 			DispatchClass::Normal => {
 				let maximum_weight = T::MaximumExtrinsicWeight::get();
 				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
@@ -1404,7 +1406,19 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 				} else {
 					Ok(())
 				}
-			}
+			},
+			// For operational transactions we make sure it doesn't exceed
+			// the space alloted for `Operational` class.
+			DispatchClass::Operational => {
+				let maximum_weight = T::MaximumBlockWeight::get();
+				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
+				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
+				if extrinsic_weight > operational_limit {
+					Err(InvalidTransaction::ExhaustsResources.into())
+				} else {
+					Ok(())
+				}
+			},
 		}
 	}
 
@@ -1483,9 +1497,11 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
-			DispatchClass::Operational => Bounded::max_value(),
+			// Don't use up the whole priority space, to allow things like `tip`
+			// to be taken into account as well.
+			DispatchClass::Operational => TransactionPriority::max_value() / 2,
 			// Mandatory extrinsics are only for inherents; never transactions.
-			DispatchClass::Mandatory => Bounded::min_value(),
+			DispatchClass::Mandatory => TransactionPriority::min_value(),
 		}
 	}
 
@@ -2449,6 +2465,39 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn operational_extrinsic_limited_by_operational_space_limit() {
+		new_test_ext().execute_with(|| {
+			let operational_limit = CheckWeight::<Test>::get_dispatch_limit_ratio(
+				DispatchClass::Operational
+			) * <Test as Trait>::MaximumBlockWeight::get();
+			let base_weight = <Test as Trait>::ExtrinsicBaseWeight::get();
+			let okay = DispatchInfo {
+				weight: operational_limit - base_weight,
+				class: DispatchClass::Operational,
+				..Default::default()
+			};
+			let max = DispatchInfo {
+				weight: operational_limit - base_weight + 1,
+				class: DispatchClass::Operational,
+				..Default::default()
+			};
+			let len = 0_usize;
+
+			assert_eq!(
+				CheckWeight::<Test>::do_validate(&okay, len),
+				Ok(ValidTransaction {
+					priority: CheckWeight::<Test>::get_priority(&okay),
+					..Default::default()
+				})
+			);
+			assert_noop!(
+				CheckWeight::<Test>::do_validate(&max, len),
+				InvalidTransaction::ExhaustsResources
+			);
+		});
+	}
+
+	#[test]
 	fn register_extra_weight_unchecked_doesnt_care_about_limits() {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Normal);
@@ -2475,6 +2524,8 @@ pub(crate) mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
 			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
 			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+			// Checking single extrinsic should not take current block weight into account.
+			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&rest_operational), Ok(()));
 		});
 	}
 
@@ -2510,6 +2561,8 @@ pub(crate) mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len));
 			// Not too much though
 			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len), InvalidTransaction::ExhaustsResources);
+			// Even with full block, validity of single transaction should be correct.
+			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&dispatch_operational), Ok(()));
 		});
 	}
 
@@ -2555,7 +2608,7 @@ pub(crate) mod tests {
 				.validate(&1, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, u64::max_value());
+			assert_eq!(priority, u64::max_value() / 2);
 		})
 	}
 
