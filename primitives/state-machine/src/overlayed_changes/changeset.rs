@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ use super::{StorageKey, StorageValue};
 use itertools::Itertools;
 use std::collections::{HashSet, BTreeMap, BTreeSet};
 use smallvec::SmallVec;
+use log::warn;
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
@@ -285,8 +286,14 @@ impl OverlayedChangeSet {
 			return Err(NotInRuntime);
 		}
 		self.execution_mode = ExecutionMode::Client;
-		while self.transaction_depth() > self.num_client_transactions {
-			self.commit_transaction()
+		if self.has_open_runtime_transactions() {
+			warn!(
+				"{} storage transactions are left open by the runtime. Those will be rolled back.",
+				self.transaction_depth()
+			);
+		}
+		while self.has_open_runtime_transactions() {
+			self.rollback_transaction()
 				.expect("The loop condition checks that the transaction depth is > 0; qed");
 		}
 		Ok(())
@@ -322,7 +329,7 @@ impl OverlayedChangeSet {
 	fn close_transaction(&mut self, rollback: bool) -> Result<(), NoOpenTransaction> {
 		// runtime is not allowed to close transactions started by the client
 		if let ExecutionMode::Runtime = self.execution_mode {
-			if self.num_client_transactions == self.transaction_depth() {
+			if !self.has_open_runtime_transactions() {
 				return Err(NoOpenTransaction)
 			}
 		}
@@ -350,10 +357,10 @@ impl OverlayedChangeSet {
 					// Last tx: Is there already a value in the committed set?
 					// Check against one rather than empty because the current tx is still
 					// in the list as it is popped later in this function.
-					overlayed.transactions.len() != 1
+					overlayed.transactions.len() > 1
 				};
 
-				// We only need to merge if there is an pre-existing value. It may be avalue from
+				// We only need to merge if there is an pre-existing value. It may be a value from
 				// the previous transaction or a value committed without any open transaction.
 				if has_predecessor {
 					let dropped_tx = overlayed.pop_transaction();
@@ -364,6 +371,10 @@ impl OverlayedChangeSet {
 		}
 
 		Ok(())
+	}
+
+	fn has_open_runtime_transactions(&self) -> bool {
+		self.transaction_depth() > self.num_client_transactions
 	}
 }
 
@@ -725,7 +736,6 @@ mod test {
 
 		assert_drained(changeset, vec![
 			(b"key0", Some(b"val0")),
-			(b"key1", Some(b"val1")),
 		]);
 	}
 

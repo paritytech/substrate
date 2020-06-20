@@ -30,11 +30,11 @@ pub mod generator;
 pub mod migration;
 
 /// Describes whether a storage transaction should be committed or rolled back.
-pub enum TransactionOutcome {
+pub enum TransactionOutcome<T> {
 	/// Transaction should be committed.
-	Commit,
+	Commit(T),
 	/// Transaction should be rolled back.
-	Rollback,
+	Rollback(T),
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -43,19 +43,17 @@ pub enum TransactionOutcome {
 /// outcome is `TransactionOutcome::Rollback`.
 ///
 /// Transactions can be nested to any depth. Commits happen to the parent transaction.
-pub fn with_transaction<R>(f: impl FnOnce() -> (R, TransactionOutcome)) -> R {
+pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 	use sp_io::storage::{
 		start_transaction, commit_transaction, rollback_transaction,
 	};
 	use TransactionOutcome::*;
 
 	start_transaction();
-	let (result, outcome) = f();
-	match outcome {
-		Commit => commit_transaction(),
-		Rollback => rollback_transaction(),
+	match f() {
+		Commit(res) => { commit_transaction(); res },
+		Rollback(res) => { rollback_transaction(); res },
 	}
-	result
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ fn storage_transaction_basic_commit() {
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			((), Commit)
+			Commit(())
 		});
 
 		assert_eq!(Value::get(), 99);
@@ -70,7 +70,7 @@ fn storage_transaction_basic_rollback() {
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			((), Rollback)
+			Rollback(())
 		});
 
 		assert_eq!(Value::get(), 0);
@@ -100,7 +100,7 @@ fn storage_transaction_rollback_then_commit() {
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				((), Rollback)
+				Rollback(())
 			});
 
 			assert_eq!(Value::get(), 2);
@@ -108,7 +108,7 @@ fn storage_transaction_rollback_then_commit() {
 			assert_eq!(Map::get("val2"), 2);
 			assert_eq!(Map::get("val3"), 0);
 
-			((), Commit)
+			Commit(())
 		});
 
 		assert_eq!(Value::get(), 2);
@@ -140,7 +140,7 @@ fn storage_transaction_commit_then_rollback() {
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				((), Commit)
+				Commit(())
 			});
 
 			assert_eq!(Value::get(), 3);
@@ -148,7 +148,7 @@ fn storage_transaction_commit_then_rollback() {
 			assert_eq!(Map::get("val2"), 3);
 			assert_eq!(Map::get("val3"), 3);
 
-			((), Rollback)
+			Rollback(())
 		});
 
 		assert_eq!(Value::get(), 1);
