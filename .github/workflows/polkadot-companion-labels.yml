@@ -1,0 +1,29 @@
+name: Check Polkadot Companion and Label
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  
+jobs:
+  check_status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Monitor the status of the gitlab-check-companion-build job
+        uses: s3krit/await-status-action@4528ebbdf6e29bbec77c41caad1b2dec148ba894
+        id: 'check-companion-status'
+        with:
+          authToken: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
+          timeout: 1800
+          notPresentTimeout: 3600 # It can take quite a while before the job starts...
+      - name: Label success
+        uses: andymckay/labeler@master
+        if: steps.check-companion-status.outputs.result == 'success'
+        with:
+          remove-labels: 'A7-needspolkadotpr'
+      - name: Label failure
+        uses: andymckay/labeler@master
+        if: steps.check-companion-status.outputs.result == 'failure'
+        with:
+          add-labels: 'A7-needspolkadotpr'

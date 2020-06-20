@@ -18,10 +18,11 @@ derive_more = "0.99.2"
 sp-core = { version = "2.0.0-rc3", path = "../../primitives/core" }
 sp-application-crypto = { version = "2.0.0-rc3", path = "../../primitives/application-crypto" }
 hex = "0.4.0"
+merlin = { version = "2.0", default-features = false }
+parking_lot = "0.10.0"
 rand = "0.7.2"
 serde_json = "1.0.41"
 subtle = "2.1.1"
-parking_lot = "0.10.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"

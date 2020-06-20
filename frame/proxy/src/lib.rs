@@ -68,6 +68,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
 	/// The instance filter determines whether a given call may be proxied under this type.
+	///
+	/// IMPORTANT: `Default` must be provided and MUST BE the the *most permissive* value.
 	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>
 		+ Default;
 
@@ -133,6 +135,15 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
+		/// The base amount of currency needed to reserve for creating a proxy.
+		const ProxyDepositBase: BalanceOf<T> = T::ProxyDepositBase::get();
+
+		/// The amount of currency needed per proxy added.
+		const ProxyDepositFactor: BalanceOf<T> = T::ProxyDepositFactor::get();
+
+		/// The maximum amount of proxies allowed for a single account.
+		const MaxProxies: u16 = T::MaxProxies::get();
+
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
 		///
@@ -174,6 +185,8 @@ decl_module! {
 				match c.is_sub_type() {
 					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
 						if !proxy_type.is_superset(&pt) => false,
+					Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
+					    if proxy_type != T::ProxyType::default() => false,
 					_ => proxy_type.filter(c)
 				}
 			});

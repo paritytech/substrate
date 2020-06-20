@@ -224,7 +224,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
-			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -298,8 +297,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
-				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
-				.connection_event_buffer_size(128);
+				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
+				.connection_event_buffer_size(1024);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
@@ -747,6 +746,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
 	}
 
+	/// Inform the network service about an own imported block.
+	pub fn own_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -813,6 +818,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
+	OwnBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1143,6 +1149,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::UpdateChain =>
 					this.network_service.user_protocol_mut().update_chain(),
+				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
+					this.network_service.user_protocol_mut().own_block_imported(hash, number),
 			}
 		}
 
