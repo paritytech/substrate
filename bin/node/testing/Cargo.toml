@@ -17,7 +17,7 @@ pallet-balances = { version = "2.0.0-rc3", path = "../../../frame/balances" }
 sc-service = { version = "0.8.0-rc3", features = ["test-helpers", "db"],  path = "../../../client/service" }
 sc-client-db = { version = "0.8.0-rc3", path = "../../../client/db/", features = ["kvdb-rocksdb", "parity-db"] }
 sc-client-api = { version = "2.0.0-rc3", path = "../../../client/api/" }
-codec = { package = "parity-scale-codec", version = "1.3.0" }
+codec = { package = "parity-scale-codec", version = "1.3.1" }
 pallet-contracts = { version = "2.0.0-rc3", path = "../../../frame/contracts" }
 pallet-grandpa = { version = "2.0.0-rc3", path = "../../../frame/grandpa" }
 pallet-indices = { version = "2.0.0-rc3", path = "../../../frame/indices" }
