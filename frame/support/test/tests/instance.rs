@@ -41,7 +41,7 @@ pub trait Currency {}
 mod module1 {
 	use super::*;
 
-	pub trait Trait<I>: system::Trait {
+	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;

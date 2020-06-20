@@ -51,7 +51,7 @@ use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
-	traits::{Get, schedule, OriginTrait, EnsureOrigin},
+	traits::{Get, schedule, OriginTrait, EnsureOrigin, IsType},
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system};
@@ -66,7 +66,7 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
-	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin> + From<Self::PalletsOrigin>;
+	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Trait>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
@@ -153,11 +153,7 @@ decl_error! {
 
 decl_module! {
 	/// Scheduler module declaration.
-	pub struct Module<T: Trait> for enum Call
-	where
-		origin: <T as system::Trait>::Origin,
-		<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
-	{
+	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		type Error = Error<T>;
 		fn deposit_event() = default;
 
@@ -179,6 +175,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			let origin = <T as Trait>::Origin::from(origin);
 			let _ = Self::do_schedule(when, maybe_periodic, priority, origin.caller().clone(), *call);
 		}
 
@@ -195,6 +192,7 @@ decl_module! {
 		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			let origin = <T as Trait>::Origin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
 		}
 
@@ -217,6 +215,7 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			let origin = <T as Trait>::Origin::from(origin);
 			Self::do_schedule_named(id, when, maybe_periodic, priority, origin.caller().clone(), *call)?;
 		}
 
@@ -233,6 +232,7 @@ decl_module! {
 		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn cancel_named(origin, id: Vec<u8>) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
+			let origin = <T as Trait>::Origin::from(origin);
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
 		}
 
@@ -322,10 +322,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T>
-where
-	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
-{
+impl<T: Trait> Module<T> {
 	fn do_schedule(
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -426,10 +423,7 @@ where
 	}
 }
 
-impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T>
-where
-	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
-{
+impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule(
@@ -447,10 +441,7 @@ where
 	}
 }
 
-impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T>
-where
-	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
-{
+impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule_named(
@@ -502,10 +493,6 @@ mod tests {
 		}
 		pub trait Trait: system::Trait {
 			type Event: From<Event> + Into<<Self as system::Trait>::Event>;
-		}
-		decl_storage! {
-			trait Store for Module<T: Trait> as Logger {
-			}
 		}
 		decl_event! {
 			pub enum Event {

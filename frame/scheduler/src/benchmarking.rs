@@ -31,10 +31,7 @@ use frame_system::Module as System;
 const MAX_SCHEDULED: u32 = 50;
 
 // Add `n` named items to the schedule
-fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static str>
-where
-	<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = T::PalletsOrigin>
-{
+fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
 	// Essentially a no-op call.
 	let call = frame_system::Call::set_storage(vec![]);
 	for i in 0..n {

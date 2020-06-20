@@ -229,7 +229,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
 /// # use frame_system::{self as system, ensure_signed};
-/// it: system::Trait {}
+/// pub trait Trait: system::Trait where Self::AccountId: From<u32> {}
 ///
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
@@ -1452,7 +1452,8 @@ macro_rules! decl_module {
 		pub struct $mod_type<
 			$trait_instance: $trait_name
 			$(<I>, $instance: $instantiable $( = $module_default_instance)?)?
-		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>);
+		>($crate::sp_std::marker::PhantomData<($trait_instance, $( $instance)?)>) where
+			$( $other_where_bounds )*;
 
 		$crate::decl_module! {
 			@impl_on_initialize
@@ -2165,7 +2166,7 @@ mod tests {
 		IntegrityTest,
 	};
 
-	pub trait Trait: system::Trait + Sized {
+	pub trait Trait: system::Trait + Sized where Self::AccountId: From<u32> {
 		type BlockNumber: Into<u32>;
 	}
 
