@@ -582,6 +582,10 @@ where
 	fn reset_read_write_count(&mut self) {
 		self.backend.reset_read_write_count()
 	}
+
+	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+		self.backend.set_whitelist(new)
+	}
 }
 
 

@@ -708,6 +708,7 @@ macro_rules! impl_benchmark {
 				highest_range_values: &[u32],
 				steps: &[u32],
 				repeat: u32,
+				whitelist: &[Vec<u8>]
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic)
@@ -716,6 +717,9 @@ macro_rules! impl_benchmark {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
 					_ => return Err("Could not find extrinsic."),
 				};
+
+				// Add whitelist to DB
+				$crate::benchmarking::set_whitelist(whitelist.to_vec());
 
 				// Warm up the DB
 				$crate::benchmarking::commit_db();
@@ -831,6 +835,7 @@ macro_rules! impl_benchmark {
 				highest_range_values: &[u32],
 				steps: &[u32],
 				repeat: u32,
+				whitelist: &[Vec<u8>]
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic)
@@ -839,6 +844,9 @@ macro_rules! impl_benchmark {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
 					_ => return Err("Could not find extrinsic."),
 				};
+
+				// Add whitelist to DB
+				$crate::benchmarking::set_whitelist(whitelist.to_vec());
 
 				// Warm up the DB
 				$crate::benchmarking::commit_db();
@@ -1074,7 +1082,7 @@ macro_rules! impl_benchmark_tests {
 #[macro_export]
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:literal, $( $location:tt )* ) => (
-		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat) = $params;
+		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist) = $params;
 		if &pallet[..] == &$name[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks().into_iter() {
@@ -1085,6 +1093,7 @@ macro_rules! add_benchmark {
 							&highest_range_values[..],
 							&steps[..],
 							repeat,
+							whitelist,
 						)?,
 						pallet: $name.to_vec(),
 						benchmark: benchmark.to_vec(),
@@ -1098,6 +1107,7 @@ macro_rules! add_benchmark {
 						&highest_range_values[..],
 						&steps[..],
 						repeat,
+						whitelist,
 					)?,
 					pallet: $name.to_vec(),
 					benchmark: benchmark.clone(),

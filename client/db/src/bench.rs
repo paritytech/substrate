@@ -95,6 +95,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	shared_cache: SharedCache<B>, // shared cache is always empty
 	key_tracker: RefCell<HashMap<Vec<u8>, KeyTracker>>,
 	read_write_tracker: RefCell<ReadWriteTracker>,
+	whitelist: RefCell<Vec<Vec<u8>>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -114,7 +115,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 			shared_cache: new_shared_cache(0, (1, 10)),
 			key_tracker: Default::default(),
 			read_write_tracker: Default::default(),
+			whitelist: Default::default(),
 		};
+
+		state.add_whitelist_to_tracker();
 
 		state.reopen()?;
 		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| (
@@ -148,8 +152,24 @@ impl<B: BlockT> BenchmarkingState<B> {
 		Ok(())
 	}
 
+	fn add_whitelist_to_tracker(&self) {
+		let mut key_tracker = self.key_tracker.borrow_mut();
+
+		let whitelisted = KeyTracker {
+			has_been_read: true,
+			has_been_written: true,
+		};
+
+		let whitelist = self.whitelist.borrow_mut();
+
+		whitelist.iter().for_each(|key| {
+			key_tracker.insert(key.to_vec(), whitelisted);
+		});
+	}
+
 	fn wipe_tracker(&self) {
 		*self.key_tracker.borrow_mut() = HashMap::new();
+		self.add_whitelist_to_tracker();
 		*self.read_write_tracker.borrow_mut() = Default::default();
 	}
 
@@ -404,6 +424,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	/// Reset the key tracking information for the state db.
 	fn reset_read_write_count(&self) {
 		self.wipe_tracker()
+	}
+
+	fn set_whitelist(&self, new: Vec<Vec<u8>>) {
+		*self.whitelist.borrow_mut() = new;
 	}
 
 	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {

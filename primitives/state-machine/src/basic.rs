@@ -318,6 +318,10 @@ impl Externalities for BasicExternalities {
 	fn reset_read_write_count(&mut self) {
 		unimplemented!("reset_read_write_count is not supported in Basic")
 	}
+
+	fn set_whitelist(&mut self, _: Vec<Vec<u8>>) {
+		unimplemented!("set_whitelist is not supported in Basic")
+	}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

@@ -225,6 +225,11 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn reset_read_write_count(&self) {
 		unimplemented!()
 	}
+
+	/// Update the whitelist for tracking db reads/writes
+	fn set_whitelist(&self, _: Vec<Vec<u8>>) {
+		unimplemented!()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

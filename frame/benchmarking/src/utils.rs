@@ -102,6 +102,10 @@ pub trait Benchmarking {
 	fn reset_read_write_count(&mut self) {
 		self.reset_read_write_count()
 	}
+
+	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+		self.set_whitelist(new)
+	}
 }
 
 /// The pallet benchmarking trait.
@@ -125,6 +129,7 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
+		whitelist: &[Vec<u8>]
 	) -> Result<Vec<T>, &'static str>;
 }
 
