@@ -120,7 +120,6 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
-	_telemetry: Option<sc_telemetry::Telemetry>,
 	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
@@ -155,9 +154,6 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
-
-	/// return a shared instance of Telemetry (if enabled)
-	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
 	///
@@ -246,10 +242,6 @@ where
 		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
-	}
-
-	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
-		self._telemetry.clone()
 	}
 
 	fn keystore(&self) -> sc_keystore::KeyStorePtr {

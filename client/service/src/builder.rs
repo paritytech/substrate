@@ -1113,8 +1113,8 @@ ServiceBuilder<
 		let telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
-		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let (telemetry, future) = build_telemetry(
+		config.telemetry_endpoints.clone().map(|endpoints| {
+			let future = build_telemetry(
 				&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone()
 			);
 
@@ -1122,8 +1122,6 @@ ServiceBuilder<
 				"telemetry-worker",
 				future,
 			);
-
-			telemetry
 		});
 
 		// Instrumentation
@@ -1156,7 +1154,6 @@ ServiceBuilder<
 			essential_failed_rx,
 			rpc_handlers,
 			_rpc: rpc,
-			_telemetry: telemetry,
 			_offchain_workers: offchain_workers,
 			_telemetry_on_connect_sinks: telemetry_connection_sinks.clone(),
 			keystore,
@@ -1315,7 +1312,7 @@ fn build_telemetry<TBl: BlockT>(
 	endpoints: sc_telemetry::TelemetryEndpoints,
 	telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>
-) -> (sc_telemetry::Telemetry, Pin<Box<dyn Future<Output = ()> + Send>>) {
+) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
 	let name = config.network.node_name.clone();
@@ -1329,7 +1326,7 @@ fn build_telemetry<TBl: BlockT>(
 	let startup_time = SystemTime::UNIX_EPOCH.elapsed()
 		.map(|dur| dur.as_millis())
 		.unwrap_or(0);
-	let future = telemetry.clone()
+	let future = telemetry
 		.for_each(move |event| {
 			// Safe-guard in case we add more events in the future.
 			let sc_telemetry::TelemetryEvent::Connected = event;
@@ -1352,7 +1349,7 @@ fn build_telemetry<TBl: BlockT>(
 		})
 		.boxed();
 
-	(telemetry, future)
+	future
 }
 
 fn gen_handler<TBl, TBackend, TExec, TRtApi, TExPool, TRpc>(

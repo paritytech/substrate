@@ -6825,6 +6825,7 @@ dependencies = [
  "bytes 0.5.4",
  "futures 0.3.4",
  "futures-timer 3.0.2",
+ "lazy_static",
  "libp2p",
  "log",
  "parking_lot 0.10.2",

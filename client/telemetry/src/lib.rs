@@ -67,13 +67,19 @@ use parking_lot::Mutex;
 use serde::{Serialize, Deserialize, Deserializer};
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
+use parking_lot::RwLock;
 
 pub use libp2p::wasm_ext::ExtTransport;
-pub use slog_scope::with_logger;
-pub use slog;
+#[doc(hidden)]
+pub use slog::{slog_info, Drain};
 
 mod async_record;
 mod worker;
+
+lazy_static::lazy_static! {
+	// Logger that will be used to send telemetry messages
+	static ref TELEMETRY_LOGGER: RwLock<Option<slog::Logger<slog::Fuse<TelemetryDrain>>>> = RwLock::new(None);
+}
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
@@ -154,28 +160,21 @@ pub const CONSENSUS_INFO: &str = "1";
 /// Contains an `Arc` and can be cloned and pass around. Only one clone needs to be polled
 /// regularly and should be polled regularly.
 /// Dropping all the clones unregisters the telemetry.
-#[derive(Clone)]
 pub struct Telemetry {
-	inner: Arc<Mutex<TelemetryInner>>,
-	/// Slog guard so that we don't get deregistered.
-	_guard: Arc<slog_scope::GlobalLoggerGuard>,
-}
-
-/// Behind the `Mutex` in `Telemetry`.
-///
-/// Note that ideally we wouldn't have to make the `Telemetry` cloneable, as that would remove the
-/// need for a `Mutex`. However there is currently a weird hack in place in `sc-service`
-/// where we extract the telemetry registration so that it continues running during the shutdown
-/// process.
-struct TelemetryInner {
 	/// Worker for the telemetry. `None` if it failed to initialize.
 	worker: Option<worker::TelemetryWorker>,
 	/// Receives log entries for them to be dispatched to the worker.
 	receiver: mpsc::Receiver<async_record::AsyncRecord>,
 }
 
+impl Drop for Telemetry {
+	fn drop(&mut self) {
+		TELEMETRY_LOGGER.write().take();
+	}
+}
+
 /// Implements `slog::Drain`.
-struct TelemetryDrain {
+pub struct TelemetryDrain {
 	/// Sends log entries.
 	sender: std::panic::AssertUnwindSafe<mpsc::Sender<async_record::AsyncRecord>>,
 }
@@ -189,11 +188,9 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	let (endpoints, wasm_external_transport) = (config.endpoints.0, config.wasm_external_transport);
 
 	let (sender, receiver) = mpsc::channel(16);
-	let guard = {
-		let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
-		let root = slog::Logger::root(slog::Drain::fuse(logger), slog::o!());
-		slog_scope::set_global_logger(root)
-	};
+	let logger = TelemetryDrain { sender: std::panic::AssertUnwindSafe(sender) };
+	let root = slog::Logger::root_typed(slog::Fuse::new(logger), slog::o!());
+	*TELEMETRY_LOGGER.write() = Some(root);
 
 	let worker = match worker::TelemetryWorker::new(endpoints, wasm_external_transport) {
 		Ok(w) => Some(w),
@@ -204,11 +201,8 @@ pub fn init_telemetry(config: TelemetryConfig) -> Telemetry {
 	};
 
 	Telemetry {
-		inner: Arc::new(Mutex::new(TelemetryInner {
-			worker,
-			receiver,
-		})),
-		_guard: Arc::new(guard),
+		worker,
+		receiver,
 	}
 }
 
@@ -223,34 +217,15 @@ pub enum TelemetryEvent {
 impl Stream for Telemetry {
 	type Item = TelemetryEvent;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let before = Instant::now();
-
-		// Because the `Telemetry` is cloneable, we need to put the actual fields behind a `Mutex`.
-		// However, the user is only ever supposed to poll from one instance of `Telemetry`, while
-		// the other instances are used only for RAII purposes.
-		// We assume that the user is following this advice and therefore that the `Mutex` is only
-		// ever locked once at a time.
-		let mut inner = match self.inner.try_lock() {
-			Some(l) => l,
-			None => {
-				warn!(
-					target: "telemetry",
-					"The telemetry seems to be polled multiple times simultaneously"
-				);
-				// Returning `Pending` here means that we may never get polled again, but this is
-				// ok because we're in a situation where something else is actually currently doing
-				// the polling.
-				return Poll::Pending;
-			}
-		};
 
 		let mut has_connected = false;
 
 		// The polling pattern is: poll the worker so that it processes its queue, then add one
 		// message from the receiver (if possible), then poll the worker again, and so on.
 		loop {
-			if let Some(worker) = inner.worker.as_mut() {
+			if let Some(worker) = self.worker.as_mut() {
 				while let Poll::Ready(event) = worker.poll(cx) {
 					// Right now we only have one possible event. This line is here in order to not
 					// forget to handle any possible new event type.
@@ -259,8 +234,8 @@ impl Stream for Telemetry {
 				}
 			}
 
-			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut inner.receiver), cx) {
-				if let Some(worker) = inner.worker.as_mut() {
+			if let Poll::Ready(Some(log_entry)) = Stream::poll_next(Pin::new(&mut self.receiver), cx) {
+				if let Some(worker) = self.worker.as_mut() {
 					log_entry.as_record_values(|rec, val| { let _ = worker.log(rec, val); });
 				}
 			} else {
@@ -302,6 +277,12 @@ impl slog::Drain for TelemetryDrain {
 	}
 }
 
+pub fn with_logger(log: impl FnOnce(&slog::Logger<slog::Fuse<TelemetryDrain>>)) {
+	if let Some(logger) = &*TELEMETRY_LOGGER.read() {
+		log(&logger)
+	}
+}
+
 /// Translates to `slog_scope::info`, but contains an additional verbosity
 /// parameter which the log record is tagged with. Additionally the verbosity
 /// parameter is added to the record as a key-value pair.
@@ -309,7 +290,8 @@ impl slog::Drain for TelemetryDrain {
 macro_rules! telemetry {
 	 ( $a:expr; $b:expr; $( $t:tt )* ) => {
 		$crate::with_logger(|l| {
-			$crate::slog::slog_info!(l, #$a, $b; $($t)* )
+			use $crate::Drain;
+			$crate::slog_info!(l, #$a, $b; $($t)*)
 		})
 	}
 }
