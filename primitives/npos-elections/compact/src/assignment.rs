@@ -18,8 +18,8 @@
 //! Code generation for the ratio assignment type.
 
 use crate::field_name_for;
-use proc_macro2::{TokenStream as TokenStream2};
-use syn::{GenericArgument};
+use proc_macro2::TokenStream as TokenStream2;
+use syn::GenericArgument;
 use quote::quote;
 
 fn from_impl(count: usize) -> TokenStream2 {

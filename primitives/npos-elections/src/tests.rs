@@ -17,8 +17,6 @@
 
 //! Tests for npos-elections.
 
-#![cfg(test)]
-
 use crate::mock::*;
 use crate::{
 	seq_phragmen, balance_solution, build_support_map, is_score_better, helpers::*,
@@ -772,10 +770,12 @@ fn score_comparison_large_value() {
 
 mod compact {
 	use codec::{Decode, Encode};
-	use crate::{generate_compact_solution_type, VoteWeight};
-	use super::{AccountId};
+	use super::AccountId;
 	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
-	use sp_npos_elections::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
+	use crate::{
+		generate_compact_solution_type, VoteWeight, Assignment, StakedAssignment,
+		Error as PhragmenError, ExtendedBalance,
+	};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
 	use sp_arithmetic::Percent;
 
