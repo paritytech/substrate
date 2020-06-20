@@ -38,18 +38,12 @@ use sp_runtime::RuntimeDebug;
 #[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
 pub struct PendingSwap<T: Trait> {
 	/// Source of the swap.
-	pub source: AccountIdFor<T>,
+	pub source: T::AccountId,
 	/// Action of this swap.
 	pub action: T::SwapAction,
 	/// End block of the lock.
-	pub end_block: BlockNumberFor<T>,
+	pub end_block: T::BlockNumber,
 }
-
-/// AccountId type from the pallet's point of view.
-pub type AccountIdFor<T> = <T as frame_system::Trait>::AccountId;
-
-/// BlockNumber type from the pallet's point of view.
-pub type BlockNumberFor<T> = <T as frame_system::Trait>::BlockNumber;
 
 /// Hashed proof type.
 pub type HashedProof = [u8; 32];
@@ -63,14 +57,14 @@ pub type HashedProof = [u8; 32];
 pub trait SwapAction<T: Trait> {
 	/// Reserve the resources needed for the swap, from the given `source`. The reservation is
 	/// allowed to fail. If that is the case, the the full swap creation operation is cancelled.
-	fn reserve(&self, source: &AccountIdFor<T>) -> DispatchResult;
+	fn reserve(&self, source: &T::AccountId) -> DispatchResult;
 	/// Claim the reserved resources, with `source` and `target`. Returns whether the claim
 	/// succeeds.
-	fn claim(&self, source: &AccountIdFor<T>, target: &AccountIdFor<T>) -> bool;
+	fn claim(&self, source: &T::AccountId, target: &T::AccountId) -> bool;
 	/// Weight for executing the operation.
 	fn weight(&self) -> Weight;
 	/// Cancel the resources reserved in `source`.
-	fn cancel(&self, source: &AccountIdFor<T>);
+	fn cancel(&self, source: &T::AccountId);
 }
 
 /// A swap action that only allows transferring balances.
@@ -110,11 +104,11 @@ impl<T: Trait, C> DerefMut for BalanceSwapAction<T, C> where
 impl<T: Trait, C> SwapAction<T> for BalanceSwapAction<T, C> where
 	C: ReservableCurrency<T::AccountId>,
 {
-	fn reserve(&self, source: &AccountIdFor<T>) -> DispatchResult {
+	fn reserve(&self, source: &T::AccountId) -> DispatchResult {
 		C::reserve(&source, self.value)
 	}
 
-	fn claim(&self, source: &AccountIdFor<T>, target: &AccountIdFor<T>) -> bool {
+	fn claim(&self, source: &T::AccountId, target: &T::AccountId) -> bool {
 		C::repatriate_reserved(source, target, self.value, BalanceStatus::Free).is_ok()
 	}
 
@@ -122,7 +116,7 @@ impl<T: Trait, C> SwapAction<T> for BalanceSwapAction<T, C> where
 		T::DbWeight::get().reads_writes(1, 1)
 	}
 
-	fn cancel(&self, source: &AccountIdFor<T>) {
+	fn cancel(&self, source: &T::AccountId) {
 		C::unreserve(source, self.value);
 	}
 }
@@ -178,7 +172,7 @@ decl_error! {
 decl_event!(
 	/// Event of atomic swap pallet.
 	pub enum Event<T> where
-		AccountId = AccountIdFor<T>,
+		AccountId = <T as system::Trait>::AccountId,
 		PendingSwap = PendingSwap<T>,
 	{
 		/// Swap created.
@@ -212,10 +206,10 @@ decl_module! {
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn create_swap(
 			origin,
-			target: AccountIdFor<T>,
+			target: T::AccountId,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
-			duration: BlockNumberFor<T>,
+			duration: T::BlockNumber,
 		) {
 			let source = ensure_signed(origin)?;
 			ensure!(
@@ -286,7 +280,7 @@ decl_module! {
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn cancel_swap(
 			origin,
-			target: AccountIdFor<T>,
+			target: T::AccountId,
 			hashed_proof: HashedProof,
 		) {
 			let source = ensure_signed(origin)?;
