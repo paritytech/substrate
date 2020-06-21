@@ -711,8 +711,53 @@ fn award_and_claim_bounty_works() {
 
 #[test]
 fn create_sub_bounty() {
-	// TODO
-	assert!(false);
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, 50, b"12345".to_vec()));
+
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 5, 40, b"123".to_vec()), Error::<Test>::UnexpectedStatus);
+
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
+
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 5, 40, b"123".to_vec()), Error::<Test>::UnexpectedStatus);
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(1), 10, 5, 5, 40, b"123".to_vec()), Error::<Test>::InvalidIndex);
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(2), 0, 5, 5, 40, b"123".to_vec()), Error::<Test>::RequireCurator);
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 10, 40, b"123".to_vec()), Error::<Test>::InvalidFee);
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 5, 50, b"123".to_vec()), Error::<Test>::InvalidValue);
+		assert_noop!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 0, 1, b"123".to_vec()), Error::<Test>::InvalidValue);
+
+		System::set_block_number(3);
+		<Treasury as OnInitialize<u64>>::on_initialize(3);
+
+		assert_ok!(Treasury::create_sub_bounty(Origin::signed(1), 0, 5, 4, 20, b"123".to_vec()));
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			curator: 1,
+			fee: 6,
+			value: 30,
+			bond: 85,
+			status: BountyStatus::Active { expires: 22 },
+		});
+
+		assert_eq!(Treasury::bounties(1).unwrap(), Bounty {
+			proposer: 1,
+			curator: 5,
+			fee: 4,
+			value: 20,
+			bond: 0,
+			status: BountyStatus::Active { expires: 23 },
+		});
+
+		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 30);
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(1)), 20);
+	});
 }
 
 #[test]

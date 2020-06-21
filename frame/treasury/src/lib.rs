@@ -907,7 +907,9 @@ impl<T: Trait> Module<T> {
 
 	/// The account ID of a bounty account
 	pub fn bounty_account_id(id: BountyIndex) -> T::AccountId {
-		MODULE_ID.into_sub_account(("bounty", id))
+		// only use two byte prefix to support 16 byte account id (used by test)
+		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
+		MODULE_ID.into_sub_account(("bt", id))
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
@@ -1108,6 +1110,7 @@ impl<T: Trait> Module<T> {
 			Bounties::<T>::try_mutate_exists(parent_bounty_id, |bounty| -> DispatchResult {
 				let parent = bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 
+				ensure!(parent.status.is_active(), Error::<T>::UnexpectedStatus);
 				ensure!(proposer == parent.curator, Error::<T>::RequireCurator);
 				ensure!(fee < parent.fee, Error::<T>::InvalidFee);
 				ensure!(value < parent.value, Error::<T>::InvalidValue);
