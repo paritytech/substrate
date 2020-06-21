@@ -47,7 +47,7 @@ mod benchmarking;
 
 use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
-use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
+use sp_runtime::{RuntimeDebug, traits::{Zero, One, BadOrigin}};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
@@ -348,19 +348,19 @@ impl<T: Trait> Module<T> {
 		origin: Option<T::PalletsOrigin>,
 		(when, index): TaskAddress<T::BlockNumber>
 	) -> Result<(), DispatchError> {
-		let scheduled = Agenda::<T>::mutate(
+		let scheduled = Agenda::<T>::try_mutate(
 			when,
 			|agenda| {
-				agenda.get_mut(index as usize).and_then(|s| {
+				agenda.get_mut(index as usize).map_or(Ok(None), |s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
 						if *o != s.origin {
-							return None
+							return Err(BadOrigin.into());
 						}
 					};
-					s.take()
+					Ok(s.take())
 				})
 			},
-		);
+		)?;
 		if let Some(s) = scheduled {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
@@ -402,24 +402,27 @@ impl<T: Trait> Module<T> {
 		Ok(address)
 	}
 
-	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: Vec<u8>) -> Result<(), DispatchError> {
-		if let Some((when, index)) = Lookup::<T>::take(id) {
-			let i = index as usize;
-			Agenda::<T>::mutate(when, |agenda| {
-				if let Some(s) = agenda.get_mut(i) {
-					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-						if *o != s.origin {
-							return;
+	fn do_cancel_named(origin: Option<T::PalletsOrigin>, id: Vec<u8>) -> DispatchResult {
+		Lookup::<T>::try_mutate_exists(id, |lookup| -> DispatchResult {
+			if let Some((when, index)) = lookup.take() {
+				let i = index as usize;
+				Agenda::<T>::try_mutate(when, |agenda| -> DispatchResult {
+					if let Some(s) = agenda.get_mut(i) {
+						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
+							if *o != s.origin {
+								return Err(BadOrigin.into());
+							}
 						}
+						*s = None;
 					}
-					*s = None;
-				}
-			});
-			Self::deposit_event(RawEvent::Canceled(when, index));
-			Ok(())
-		} else {
-			Err(Error::<T>::FailedToCancel)?
-		}
+					Ok(())
+				})?;
+				Self::deposit_event(RawEvent::Canceled(when, index));
+				Ok(())
+			} else {
+				Err(Error::<T>::FailedToCancel)?
+			}
+		})
 	}
 }
 
@@ -476,7 +479,7 @@ mod tests {
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup, BadOrigin},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
 	use crate as scheduler;
@@ -514,6 +517,14 @@ mod tests {
 						log.borrow_mut().push((origin.caller().clone(), i));
 					})
 				}
+
+				#[weight = *weight]
+				fn log_without_filter(origin, i: u32, weight: Weight) {
+					Self::deposit_event(Event::Logged(i, weight));
+					LOG.with(|log| {
+						log.borrow_mut().push((origin.caller().clone(), i));
+					})
+				}
 			}
 		}
 	}
@@ -541,7 +552,7 @@ mod tests {
 	pub struct BaseFilter;
 	impl Filter<Call> for BaseFilter {
 		fn filter(call: &Call) -> bool {
-			!matches!(call, Call::Logger(_))
+			!matches!(call, Call::Logger(logger::Call::log(_, _)))
 		}
 	}
 
@@ -886,8 +897,8 @@ mod tests {
 	#[test]
 	fn should_check_orign_for_cancel() {
 		new_test_ext().execute_with(|| {
-			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
-			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
+			let call = Box::new(Call::Logger(logger::Call::log_without_filter(69, 1000)));
+			let call2 = Box::new(Call::Logger(logger::Call::log_without_filter(42, 1000)));
 			assert_ok!(
 				Scheduler::schedule_named(system::RawOrigin::Signed(1).into(), 1u32.encode(), 4, None, 127, call)
 			);
@@ -898,7 +909,9 @@ mod tests {
 			assert!(logger::log().is_empty());
 			assert_noop!(Scheduler::cancel_named(system::RawOrigin::Signed(2).into(), 1u32.encode()), BadOrigin);
 			assert_noop!(Scheduler::cancel(system::RawOrigin::Signed(2).into(), 4, 1), BadOrigin);
-			run_to_block(100);
+			assert_noop!(Scheduler::cancel_named(system::RawOrigin::Root.into(), 1u32.encode()), BadOrigin);
+			assert_noop!(Scheduler::cancel(system::RawOrigin::Root.into(), 4, 1), BadOrigin);
+			run_to_block(5);
 			assert_eq!(
 				logger::log(),
 				vec![(system::RawOrigin::Signed(1).into(), 69u32), (system::RawOrigin::Signed(1).into(), 42u32)]
