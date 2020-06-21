@@ -727,9 +727,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 100_000_000]
 		fn reject_bounty(origin, #[compact] bounty_id: BountyIndex) {
-			T::RejectOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::RejectOrigin::ensure_origin(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
@@ -759,9 +757,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 100_000_000]
 		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
-			T::ApproveOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ApproveOrigin::ensure_origin(origin)?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
@@ -805,12 +801,15 @@ decl_module! {
 					ensure!(system::Module::<T>::block_number() >= unlock_at, Error::<T>::Premature);
 					let bounty_account = Self::bounty_account_id(bounty_id);
 					let balance = T::Currency::free_balance(&bounty_account);
-					let _ = T::Currency::transfer(&bounty_account, &beneficiary, balance, AllowDeath); // should not fail
+					let fee = bounty.fee;
+					let payout = balance.saturating_sub(fee);
+					let _ = T::Currency::transfer(&bounty_account, &bounty.curator, fee, AllowDeath); // should not fail
+					let _ = T::Currency::transfer(&bounty_account, &beneficiary, payout, AllowDeath); // should not fail
 					*maybe_bounty = None;
 
 					BountyDescriptions::remove(bounty_id);
 
-					Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, balance, beneficiary));
+					Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, payout, beneficiary));
 					Ok(())
 				} else {
 					Err(Error::<T>::UnexpectedStatus.into())

@@ -546,6 +546,8 @@ parameter_types! {
 	pub const BountyDepositPerByte: Balance = 1 * CENTS;
 	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const BountyValueMinimum: Balance = 10 * DOLLARS;
+	pub const BountyDuration: BlockNumber = 14 * DAYS;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -575,6 +577,8 @@ impl pallet_treasury::Trait for Runtime {
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPerByte = BountyDepositPerByte;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
+	type BountyValueMinimum = BountyValueMinimum;
+	type BountyDuration = BountyDuration;
 }
 
 parameter_types! {

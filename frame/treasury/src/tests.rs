@@ -132,6 +132,8 @@ parameter_types! {
 	pub const BountyDepositBase: u64 = 80;
 	pub const BountyDepositPayoutDelay: u64 = 3;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const BountyValueMinimum: u64 = 5;
+	pub const BountyDuration: u32 = 20;
 }
 impl Trait for Test {
 	type ModuleId = TreasuryModuleId;
@@ -151,6 +153,8 @@ impl Trait for Test {
 	type Burn = Burn;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
+	type BountyValueMinimum = BountyValueMinimum;
+	type BountyDuration = BountyDuration;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -413,21 +417,21 @@ fn reject_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidProposalIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
 #[test]
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidProposalIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
 #[test]
 fn accept_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidProposalIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
@@ -438,7 +442,7 @@ fn accept_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidProposalIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
 	});
 }
 
@@ -542,12 +546,7 @@ fn propose_bounty_works() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
-		assert_noop!(
-			Treasury::propose_bounty(Origin::signed(1), 1, 10, b"12345678901234567890".to_vec()),
-			Error::<Test>::InsufficientProposersBalance
-		);
-
-		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, b"1234567890".to_vec()));
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 3, 10, b"1234567890".to_vec()));
 
 		assert_eq!(last_event(), RawEvent::BountyProposed(0));
 
@@ -558,6 +557,7 @@ fn propose_bounty_works() {
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			curator: 1,
+			fee: 3,
 			value: 10,
 			bond: deposit,
 			status: BountyStatus::Proposed,
@@ -570,13 +570,38 @@ fn propose_bounty_works() {
 }
 
 #[test]
+fn propose_bounty_validation_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_eq!(Treasury::pot(), 100);
+
+		assert_noop!(
+			Treasury::propose_bounty(Origin::signed(1), 1, 3, 10, b"12345678901234567890".to_vec()),
+			Error::<Test>::InsufficientProposersBalance
+		);
+
+		assert_noop!(
+			Treasury::propose_bounty(Origin::signed(1), 1, 3, 4, b"12345678901234567890".to_vec()),
+			Error::<Test>::InvalidValue
+		);
+
+		assert_noop!(
+			Treasury::propose_bounty(Origin::signed(1), 1, 10, 10, b"12345678901234567890".to_vec()),
+			Error::<Test>::InvalidFee
+		);
+	});
+}
+
+#[test]
 fn reject_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, b"12345".to_vec()));
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 3, 10, b"12345".to_vec()));
 
-		assert_ok!(Treasury::reject_bounty(Origin::ROOT, 0));
+		assert_ok!(Treasury::reject_bounty(Origin::root(), 0));
 
 		let deposit: u64 = 80 + 5;
 
@@ -595,22 +620,23 @@ fn approve_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 50, b"12345".to_vec()));
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 3, 50, b"12345".to_vec()));
 
-		assert_ok!(Treasury::approve_bounty(Origin::ROOT, 0));
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
 
 		let deposit: u64 = 80 + 5;
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			curator: 1,
+			fee: 3,
 			value: 50,
 			bond: deposit,
 			status: BountyStatus::Approved,
 		});
 		assert_eq!(Treasury::bounty_approvals(), vec![0]);
 
-		assert_noop!(Treasury::reject_bounty(Origin::ROOT, 0), Error::<Test>::UnexpectedStatus);
+		assert_noop!(Treasury::reject_bounty(Origin::root(), 0), Error::<Test>::UnexpectedStatus);
 
 		// deposit not return yet
 		assert_eq!(Balances::reserved_balance(0), deposit);
@@ -625,9 +651,10 @@ fn approve_bounty_works() {
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
 			curator: 1,
+			fee: 3,
 			value: 50,
 			bond: deposit,
-			status: BountyStatus::Active,
+			status: BountyStatus::Active { expires: 21 },
 		});
 		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 50);
@@ -639,20 +666,23 @@ fn award_and_claim_bounty_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
-		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 50, b"12345".to_vec()));
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 4, 3, 50, b"12345".to_vec()));
 
-		assert_ok!(Treasury::approve_bounty(Origin::ROOT, 0));
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
 
 		assert_noop!(Treasury::award_bounty(Origin::signed(1), 0, 3), Error::<Test>::UnexpectedStatus);
 
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Treasury::award_bounty(Origin::signed(1), 0, 3));
+		assert_noop!(Treasury::award_bounty(Origin::signed(1), 0, 3), Error::<Test>::RequireCurator);
+
+		assert_ok!(Treasury::award_bounty(Origin::signed(4), 0, 3));
 
 		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
 			proposer: 0,
-			curator: 1,
+			curator: 4,
+			fee: 3,
 			value: 50,
 			bond: 85,
 			status: BountyStatus::PendingPayout {
@@ -668,9 +698,10 @@ fn award_and_claim_bounty_works() {
 
 		assert_ok!(Treasury::claim_bounty(Origin::signed(1), 0));
 
-		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 50, 3));
+		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 47, 3));
 
-		assert_eq!(Balances::free_balance(3), 50);
+		assert_eq!(Balances::free_balance(4), 3);
+		assert_eq!(Balances::free_balance(3), 47);
 		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
 
 		assert_eq!(Treasury::bounties(0), None);
