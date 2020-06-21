@@ -260,7 +260,7 @@ impl AsyncApi {
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-	) -> (Api<S>, AsyncApi) {
+	) -> (Api<S>, Self) {
 		let (http_api, http_worker) = http::http();
 
 		let api = Api {
@@ -270,7 +270,7 @@ impl AsyncApi {
 			http: http_api,
 		};
 
-		let async_api = AsyncApi {
+		let async_api = Self {
 			http: Some(http_worker),
 		};
 
