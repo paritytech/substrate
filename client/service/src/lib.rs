@@ -33,7 +33,6 @@ mod builder;
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
-mod status_sinks;
 mod task_manager;
 
 use std::{io, pin::Pin};
@@ -52,13 +51,13 @@ use futures::{
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
 };
-use sc_network::{NetworkService, network_state::NetworkState, PeerId};
+use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -66,7 +65,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
 };
-pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
+pub use config::{BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -110,14 +109,14 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	task_manager: TaskManager,
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
-	/// Sinks to propagate network status updates.
-	/// For each element, every time the `Interval` fires we push an element on the sender.
+	// Sinks to propagate network status updates.
+	// For each element, every time the `Interval` fires we push an element on the sender.
 	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
 	transaction_pool: Arc<TTxPool>,
-	/// Send a signal when a spawned essential task has concluded. The next time
-	/// the service future is polled it should complete with an error.
+	// Send a signal when a spawned essential task has concluded. The next time
+	// the service future is polled it should complete with an error.
 	essential_failed_tx: TracingUnboundedSender<()>,
-	/// A receiver for spawned essential-tasks concluding.
+	// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
@@ -127,6 +126,9 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
+	// The base path is kept here because it can be a temporary directory which will be deleted
+	// when dropped
+	_base_path: Option<Arc<BasePath>>,
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
@@ -210,6 +212,9 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
+
+	/// Get a clone of the base_path
+	fn base_path(&self) -> Option<Arc<BasePath>>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -244,7 +249,7 @@ where
 	}
 
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
+		self._telemetry.clone()
 	}
 
 	fn keystore(&self) -> sc_keystore::KeyStorePtr {
@@ -310,6 +315,10 @@ where
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
 	}
+
+	fn base_path(&self) -> Option<Arc<BasePath>> {
+		self._base_path.clone()
+	}
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
@@ -372,6 +381,13 @@ fn build_network_future<
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
 			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
+			}
+
+			if let sp_consensus::BlockOrigin::Own = notification.origin {
+				network.service().own_block_imported(
+					notification.hash,
+					notification.header.number().clone(),
+				);
 			}
 		}
 
@@ -487,25 +503,6 @@ fn build_network_future<
 	})
 }
 
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: sc_network::SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
-}
-
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.
 mod waiting {
@@ -515,6 +512,16 @@ mod waiting {
 			if let Some(server) = self.0.take() {
 				server.close_handle().close();
 				server.wait();
+			}
+		}
+	}
+
+	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
+	impl Drop for IpcServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				let _ = server.wait();
 			}
 		}
 	}
@@ -564,6 +571,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 	}
 
 	Ok(Box::new((
+		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(&*path, gen_handler(sc_rpc::DenyUnsafe::No))),
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(

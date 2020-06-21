@@ -70,7 +70,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 /// Instantiate the import queue for the manual seal consensus engine.
 pub fn import_queue<Block, Transaction>(
 	block_import: BoxBlockImport<Block, Transaction>,
-	spawner: &impl sp_core::traits::SpawnBlocking,
+	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 ) -> BasicQueue<Block, Transaction>
 	where
@@ -413,9 +413,10 @@ mod tests {
 		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
+		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
 		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
-			id: BlockId::Number(1),
-			header: client.header(&BlockId::Number(1)).expect("db error").expect("imported above"),
+			hash: header.hash(),
+			header,
 			is_new_best: true,
 			tree_route: None,
 		}).await;

@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::pin::Pin;
 use std::task::{Poll, Context};
 use futures_timer::Delay;
-use sp_utils::mpsc::TracingUnboundedSender;
+use crate::mpsc::TracingUnboundedSender;
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
@@ -109,7 +109,7 @@ impl<T> futures::Future for YieldAfter<T> {
 mod tests {
 	use super::StatusSinks;
 	use futures::prelude::*;
-	use futures::channel::mpsc;
+	use crate::mpsc::tracing_unbounded;
 	use std::time::Duration;
 	use std::task::Poll;
 
@@ -120,7 +120,7 @@ mod tests {
 
 		let mut status_sinks = StatusSinks::new();
 
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("status_sink_test");
 		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut val_order = 5;

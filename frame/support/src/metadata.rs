@@ -290,6 +290,7 @@ mod tests {
 		use super::*;
 
 		pub trait Trait: 'static {
+			type BaseCallFilter;
 			const ASSOCIATED_CONST: u64 = 500;
 			type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 				+ From<RawOrigin<Self::AccountId>>;
@@ -297,6 +298,7 @@ mod tests {
 			type BlockNumber: From<u32> + Encode;
 			type SomeValue: Get<u32>;
 			type ModuleToIndex: crate::traits::ModuleToIndex;
+			type Call;
 		}
 
 		decl_module! {
@@ -436,11 +438,13 @@ mod tests {
 	}
 
 	impl system::Trait for TestRuntime {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type AccountId = u32;
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
 		type ModuleToIndex = ();
+		type Call = Call;
 	}
 
 	impl_runtime_metadata!(

@@ -26,7 +26,7 @@ use std::io::{self, Write};
 use structopt::StructOpt;
 
 /// The `purge-chain` command used to remove the whole chain.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct PurgeChainCmd {
 	/// Skip interactive prompt by answering yes automatically.
 	#[structopt(short = "y")]

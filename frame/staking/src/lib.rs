@@ -303,7 +303,7 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
+	Percent, Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
@@ -1794,6 +1794,34 @@ decl_module! {
 			ValidatorCount::put(new);
 		}
 
+		/// Increments the ideal number of validators.
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Base Weight: 1.717 µs
+		/// Read/Write: Validator Count
+		/// # </weight>
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 1)]
+		fn increase_validator_count(origin, #[compact] additional: u32) {
+			ensure_root(origin)?;
+			ValidatorCount::mutate(|n| *n += additional);
+		}
+
+		/// Scale up the ideal number of validators by a factor.
+		///
+		/// The dispatch origin must be Root.
+		///
+		/// # <weight>
+		/// Base Weight: 1.717 µs
+		/// Read/Write: Validator Count
+		/// # </weight>
+		#[weight = 2 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(1, 1)]
+		fn scale_validator_count(origin, factor: Percent) {
+			ensure_root(origin)?;
+			ValidatorCount::mutate(|n| *n += factor * *n);
+		}
+
 		/// Force there to be no new eras indefinitely.
 		///
 		/// The dispatch origin must be Root.
@@ -1906,9 +1934,7 @@ decl_module! {
 			.saturating_add((35 * WEIGHT_PER_MICROS).saturating_mul(slash_indices.len() as Weight))
 		]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
-			T::SlashCancelOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::SlashCancelOrigin::ensure_origin(origin)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);

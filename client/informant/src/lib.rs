@@ -19,33 +19,63 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use ansi_term::Colour;
-use sc_client_api::{BlockchainEvents, UsageProvider};
 use futures::prelude::*;
-use log::{info, warn, trace};
-use sp_runtime::traits::Header;
-use sc_service::AbstractService;
-use std::time::Duration;
+use log::{info, trace, warn};
+use parity_util_mem::MallocSizeOf;
+use sc_client_api::{BlockchainEvents, UsageProvider};
+use sc_network::{network_state::NetworkState, NetworkStatus};
+use sp_blockchain::HeaderMetadata;
+use sp_runtime::traits::{Block as BlockT, Header};
+use sp_transaction_pool::TransactionPool;
+use sp_utils::{status_sinks, mpsc::tracing_unbounded};
+use std::{fmt::Display, sync::Arc, time::Duration, collections::VecDeque};
+use parking_lot::Mutex;
 
 mod display;
 
 /// The format to print telemetry output in.
-#[derive(PartialEq)]
-pub enum OutputFormat {
-	Coloured,
-	Plain,
+#[derive(Clone)]
+pub struct OutputFormat {
+	/// Enable color output in logs.
+	pub enable_color: bool,
+	/// Add a prefix before every log line
+	pub prefix: String,
 }
 
-/// Creates an informant in the form of a `Future` that must be polled regularly.
-pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futures::Future<Output = ()> {
-	let client = service.client();
-	let pool = service.transaction_pool();
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+#[cfg(target_os = "unknown")]
+pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool {}
 
-	let mut display = display::InformantDisplay::new(format);
+/// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
+#[cfg(not(target_os = "unknown"))]
+pub trait TransactionPoolAndMaybeMallogSizeOf: TransactionPool + MallocSizeOf {}
 
-	let display_notifications = service
-		.network_status(Duration::from_millis(5000))
+#[cfg(target_os = "unknown")]
+impl<T: TransactionPool> TransactionPoolAndMaybeMallogSizeOf for T {}
+
+#[cfg(not(target_os = "unknown"))]
+impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for T {}
+
+/// Builds the informant and returns a `Future` that drives the informant.
+pub fn build<B: BlockT, C>(
+	client: Arc<C>,
+	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
+	pool: Arc<impl TransactionPoolAndMaybeMallogSizeOf>,
+	format: OutputFormat,
+) -> impl futures::Future<Output = ()>
+where
+	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
+	<C as HeaderMetadata<B>>::Error: Display,
+{
+	let mut display = display::InformantDisplay::new(format.clone());
+
+	let client_1 = client.clone();
+	let (network_status_sink, network_status_stream) = tracing_unbounded("mpsc_network_status");
+	network_status_sinks.lock().push(Duration::from_millis(5000), network_status_sink);
+
+	let display_notifications = network_status_stream
 		.for_each(move |(net_status, _)| {
-			let info = client.usage_info();
+			let info = client_1.usage_info();
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);
 			} else {
@@ -64,13 +94,30 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			future::ready(())
 		});
 
-	let client = service.client();
+	future::join(
+		display_notifications,
+		display_block_import(client, format.prefix),
+	).map(|_| ())
+}
+
+fn display_block_import<B: BlockT, C>(
+	client: Arc<C>,
+	prefix: String,
+) -> impl Future<Output = ()>
+where
+	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
+	<C as HeaderMetadata<B>>::Error: Display,
+{
 	let mut last_best = {
 		let info = client.usage_info();
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 
-	let display_block_import = client.import_notification_stream().for_each(move |n| {
+	// Hashes of the last blocks we have seen at import.
+	let mut last_blocks = VecDeque::new();
+	let max_blocks_to_track = 100;
+
+	client.import_notification_stream().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
@@ -82,7 +129,8 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
-						"♻️  Reorg on #{},{} to #{},{}, common ancestor #{},{}",
+						"♻️  {}Reorg on #{},{} to #{},{}, common ancestor #{},{}",
+						prefix,
 						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
 						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
 						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
@@ -97,12 +145,25 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(target: "substrate", "✨ Imported #{} ({})", Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
-		future::ready(())
-	});
 
-	future::join(
-		display_notifications,
-		display_block_import
-	).map(|_| ())
+		// If we already printed a message for a given block recently,
+		// we should not print it again.
+		if !last_blocks.contains(&n.hash) {
+			last_blocks.push_back(n.hash.clone());
+
+			if last_blocks.len() > max_blocks_to_track {
+				last_blocks.pop_front();
+			}
+
+			info!(
+				target: "substrate",
+				"✨ {}Imported #{} ({})",
+				prefix,
+				Colour::White.bold().paint(format!("{}", n.header.number())),
+				n.hash,
+			);
+		}
+
+		future::ready(())
+	})
 }

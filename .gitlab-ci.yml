@@ -56,9 +56,10 @@ default:
     - kubernetes-parity-build
   environment:
     name: parity-build
+  interruptible:                   true
 
 .docker-env:                       &docker-env
-  image:                           parity/rust-builder:latest
+  image:                           paritytech/ci-linux:production
   before_script:
     - rustup show
     - cargo --version
@@ -358,6 +359,14 @@ cargo-check-macos:
     - sccache -s
   tags:
     - osx
+
+test-prometheus-alerting-rules:
+  stage:                           test
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-build
+  script:
+    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        build
 
@@ -721,3 +730,14 @@ validator 4 4:
   <<:                              *validator-deploy
   script:
     - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
+
+#### stage:                       .post
+
+check-labels:
+  stage:                          .post
+  image:                          paritytech/tools:latest
+  <<:                             *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_labels.sh
