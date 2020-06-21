@@ -628,7 +628,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
-			Scheduler::do_schedule(4, None, root(), 127, call);
+			Scheduler::do_schedule(4, None, 127, root(), call);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);

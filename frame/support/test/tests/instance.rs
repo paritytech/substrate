@@ -89,7 +89,7 @@ mod module1 {
 	}
 
 	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
-	pub enum Origin<T: Trait<I>, I> {
+	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
 	}

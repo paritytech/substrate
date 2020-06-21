@@ -269,17 +269,8 @@ macro_rules! impl_outer_origin {
 			/// * root origin is built with no filter
 			/// * others use `frame-system::Trait::BaseCallFilter`
 			fn from(x: $system::Origin<$runtime>) -> Self {
-				let mut o = $name {
-					caller: $caller_name::system(x),
-					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
-				};
-
-				// Root has no filter
-				if !matches!(o.caller, $caller_name::system($system::Origin::<$runtime>::Root)) {
-					$crate::traits::OriginTrait::reset_filter(&mut o);
-				}
-
-				o
+				let o: $caller_name = x.into();
+				o.into()
 			}
 		}
 
@@ -299,12 +290,6 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
-		impl From<$system::Origin<$runtime>> for $name {
-			fn from(x: $system::Origin<$runtime>) -> Self {
-				let x: $caller_name = x.into();
-				x.into()
-			}
-		}
 		impl Into<$crate::sp_std::result::Result<$system::Origin<$runtime>, $name>> for $name {
 			/// NOTE: converting to pallet origin loses the origin filter information.
 			fn into(self) -> $crate::sp_std::result::Result<$system::Origin<$runtime>, Self> {
