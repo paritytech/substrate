@@ -79,6 +79,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		0.into(),
 		None,
 		63,
+		system::RawOrigin::Root.into(),
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
 	);
 	Ok(referendum_index)
