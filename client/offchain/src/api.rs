@@ -292,6 +292,8 @@ mod tests {
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::PeerId;
+	use hyper_rustls::HttpsConnector;
+	use hyper::{Client as HyperClient};
 
 	struct MockNetworkStateInfo();
 
@@ -309,11 +311,14 @@ mod tests {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let mock = Arc::new(MockNetworkStateInfo());
+		let hyper_client = Arc::new(HyperClient::builder().build(HttpsConnector::new()));
+
 
 		AsyncApi::new(
 			db,
 			mock,
 			false,
+			hyper_client,
 		)
 	}
 
