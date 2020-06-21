@@ -66,7 +66,8 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
-	type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Trait>::Origin>;
+	type Origin: OriginTrait<PalletsOrigin =
+		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Trait>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
@@ -351,14 +352,15 @@ impl<T: Trait> Module<T> {
 		let scheduled = Agenda::<T>::try_mutate(
 			when,
 			|agenda| {
-				agenda.get_mut(index as usize).map_or(Ok(None), |s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
-					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
-						if *o != s.origin {
-							return Err(BadOrigin.into());
-						}
-					};
-					Ok(s.take())
-				})
+				agenda.get_mut(index as usize)
+					.map_or(Ok(None), |s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
+						if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
+							if *o != s.origin {
+								return Err(BadOrigin.into());
+							}
+						};
+						Ok(s.take())
+					})
 			},
 		)?;
 		if let Some(s) = scheduled {
