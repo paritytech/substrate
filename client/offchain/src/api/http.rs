@@ -33,9 +33,12 @@ use log::error;
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{convert::TryFrom, fmt, io::Read as _, pin::Pin, task::{Context, Poll}};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use std::sync::Arc;
+use hyper::{Client, Body, client};
+use hyper_rustls::HttpsConnector;
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
-pub fn http() -> (HttpApi, HttpWorker) {
+pub fn http(hyper_client: Arc<Client<HttpsConnector<client::HttpConnector>, Body>>) -> (HttpApi, HttpWorker) {
 	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_to_worker");
 	let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_to_api");
 
@@ -51,7 +54,7 @@ pub fn http() -> (HttpApi, HttpWorker) {
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		http_client: hyper::Client::builder().build(hyper_rustls::HttpsConnector::new()),
+		http_client: hyper_client,
 		requests: Vec::new(),
 	};
 
@@ -551,7 +554,7 @@ pub struct HttpWorker {
 	/// Used to receive messages from the `HttpApi`.
 	from_api: TracingUnboundedReceiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
-	http_client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>,
+	http_client: Arc<Client<HttpsConnector<client::HttpConnector>, Body>>,
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
 }

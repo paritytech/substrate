@@ -260,8 +260,9 @@ impl AsyncApi {
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
+		hyper_client: Arc<hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>>,
 	) -> (Api<S>, Self) {
-		let (http_api, http_worker) = http::http();
+		let (http_api, http_worker) = http::http(hyper_client);
 
 		let api = Api {
 			db,
