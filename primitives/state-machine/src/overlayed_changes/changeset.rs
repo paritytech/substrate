@@ -289,7 +289,7 @@ impl OverlayedChangeSet {
 		if self.has_open_runtime_transactions() {
 			warn!(
 				"{} storage transactions are left open by the runtime. Those will be rolled back.",
-				self.transaction_depth()
+				self.transaction_depth() - self.num_client_transactions,
 			);
 		}
 		while self.has_open_runtime_transactions() {
