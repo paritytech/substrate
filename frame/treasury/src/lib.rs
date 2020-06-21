@@ -827,7 +827,7 @@ decl_module! {
 				match bounty.status {
 					BountyStatus::Active { expires } => {
 						let now = system::Module::<T>::block_number();
-						if expires < now {
+						if expires > now {
 							// only curator can cancel unexpired bounty
 							ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
 						}
