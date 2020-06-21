@@ -19,7 +19,7 @@
 //! The offchain workers is a special function of the runtime that
 //! gets executed after block is imported. During execution
 //! it's able to asynchronously submit extrinsics that will either
-//! be propagated to other nodes added to the next block
+//! be propagated to other nodes or added to the next block
 //! produced by the node as unsigned transactions.
 //!
 //! Offchain workers can be used for computation-heavy tasks
