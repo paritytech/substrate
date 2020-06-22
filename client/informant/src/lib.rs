@@ -36,7 +36,7 @@ mod display;
 /// The format to print telemetry output in.
 #[derive(Clone)]
 pub struct OutputFormat {
-	/// Enable color output in logs.
+	/// Enable color output in logs. True by default.
 	pub enable_color: bool,
 	/// Defines the informant's prefix for the logs. An empty string by default.
 	///
@@ -47,13 +47,7 @@ pub struct OutputFormat {
 	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
 	/// ```
 	///
-	/// But you can define a prefix by using this function. Example:
-	///
-	/// ```rust,ignore
-	/// service.with_informant_prefix("[Prefix] ".to_string());
-	/// ```
-	///
-	/// This will output:
+	/// But you can define a prefix by setting this string. This will output:
 	///
 	/// ```text
 	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
