@@ -46,9 +46,9 @@ macro_rules! new_full_start {
 		let mut rpc_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-		let builder = sc_service::ServiceBuilder::new_full::<
+		let builder = sc_service::ServiceBuilder::new_full_with_executor_fallback::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
-		>($config)?
+		>($config, node_executor::initialize_older_runtimes())?
 			.with_select_chain(|_config, backend| {
 				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?

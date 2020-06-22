@@ -16,22 +16,31 @@
 // limitations under the License.
 
 //! A `CodeExecutor` specialization which uses natively compiled runtime when the wasm to be
-//! executed is equivalent to the natively compiled code.
+//! executed is equivalent to the natively compiled code for the older runtimes
 
-pub use sc_executor::NativeExecutor;
-use sc_executor::native_executor_instance;
+use sc_executor::{NativeExecutor, FallbackDispatch, FallbackDispatchHolder, native_executor_instance};
 
-#[cfg(feature="multiversion")]
-mod old_versions;
+pub fn initialize_older_runtimes() -> Vec<Box<dyn FallbackDispatch>> {
+    vec![
+        Box::new(FallbackDispatchRc1::new()),
+        Box::new(FallbackDispatchRc2::new())
+    ]
+}
 
-#[cfg(feature="multiversion")]
-pub use old_versions::*;
-
-// Declare an instance of the native executor named `Executor`. Include the wasm binary as the
-// equivalent wasm code.
 native_executor_instance!(
-	pub Executor,
-	node_runtime::api::dispatch,
-	node_runtime::native_version,
+	pub ExecutorRc1,
+	node_runtime_rc1::api::dispatch,
+	node_runtime_rc1::native_version,
 	frame_benchmarking::benchmarking::HostFunctions,
 );
+
+pub type FallbackDispatchRc1 = FallbackDispatchHolder<ExecutorRc1>;
+
+native_executor_instance!(
+	pub ExecutorRc2,
+	node_runtime_rc2::api::dispatch,
+	node_runtime_rc2::native_version,
+	frame_benchmarking::benchmarking::HostFunctions,
+);
+pub type FallbackDispatchRc2 = FallbackDispatchHolder<ExecutorRc2>;
+

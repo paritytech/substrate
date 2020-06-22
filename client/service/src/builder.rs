@@ -50,8 +50,7 @@ use sp_runtime::traits::{
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{
-	NativeExecutor, NativeExecutionDispatch, RuntimeInfo,
-	FallbackDispatch, FallbackDispatchHolder,
+	NativeExecutor, NativeExecutionDispatch, RuntimeInfo, FallbackDispatch, 
 };
 use std::{
 	collections::HashMap,

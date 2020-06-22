@@ -106,7 +106,7 @@ wasm-bindgen-futures = { version = "0.4.7", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0-rc3"}
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
-node-executor = { version = "2.0.0-rc3", path = "../executor", features = [ "wasmtime" ] }
+node-executor = { version = "2.0.0-rc3", path = "../executor", features = [ "wasmtime", "multiversion" ] }
 sc-cli = { version = "0.8.0-rc3", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
 sc-service = { version = "0.8.0-rc3", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
 
