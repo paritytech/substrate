@@ -35,6 +35,7 @@ fn main() {
 	loop {
 		fuzz!(|data: (Vec<u32>, u32)| {
 			let (data, norm) = data;
+			if data.len() == 0 { return; }
 			let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
 
 			let normalized = data.normalize(norm);
@@ -43,19 +44,17 @@ fn main() {
 				assert!(normalized.is_err())
 			} else {
 				if let Ok(normalized) = normalized {
-					// if this function returns Ok(), then it will ALWAYS be accurate.
-					if data.len() > 0 {
+					// if sum goes beyond u128, panic.
+					let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
 
-						// if sum goes beyond u128, panic.
-						let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
-						assert_eq!(
-							sum,
-							norm as u128,
-							"sums don't match {:?}, {}",
-							normalized,
-							norm,
-						);
-					}
+					// if this function returns Ok(), then it will ALWAYS be accurate.
+					assert_eq!(
+						sum,
+						norm as u128,
+						"sums don't match {:?}, {}",
+						normalized,
+						norm,
+					);
 				}
 			}
 		})

@@ -45,7 +45,7 @@ pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbi
 pub use rational128::Rational128;
 
 use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
-use traits::{BaseArithmetic, One, Zero, SaturatedConversion};
+use traits::{BaseArithmetic, One, Zero, SaturatedConversion, Unsigned};
 
 /// Trait for comparing two numbers with an threshold.
 ///
@@ -125,26 +125,38 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 ///
 /// 1. We prefer storing original indices, and sorting the `input` only once. This will save the
 ///    cost of sorting per round at the cost of a little bit of memory.
-/// 2. The granularity of increment/decrements is determined by the difference and the number of
-///    elements in `input` and their sum difference with `targeted_sum`. In short, the
-///    implementation is very likely to over-increment/decrement in case the `diff / input.len()` is
-///    rather small.
+/// 2. The granularity of increment/decrements is determined by the number of elements in `input`
+///    and their sum difference with `targeted_sum`, namely `diff = diff(abs(sum(input),
+///    target_sum))`. This value is then distributed into `per_round = diff / input.len()` and
+///    `leftover = diff % round`. First, per_round is applied to all elements of input, and then we
+///    move to leftover, in which we add/subtract 1 by 1 until `leftover` is depleted.
 ///
-/// This function can return an error is if `T` cannot be built from the size of `input`, or if
-/// `sum(input)` cannot fit inside `T`. Moreover, if any of the internal operations saturate, it
-/// will also return en `Err`.
+/// In case where the sum is less than the target, the above approach always holds. If sum is less
+/// than target, then each individual element is also less than target. Thus, by adding `per_round`
+/// to each item, neither of them can overflow the numeric bound of `T`. In fact, neither of the can
+/// go beyond `target_sum`*.
 ///
-/// Based on the above, the best use case of the function will be only to correct small rounding
-/// errors. If the difference of the elements is vert large, then the subtraction/addition of one
-/// element with `diff / input.len()` might easily saturate and results will be `Err`.
+/// In the case of sum is more than target, there is small twist. The subtraction of `per_round`
+/// form each element might go below zero. In this case, we saturate and add the error to the
+/// `leftover` value. This ensures that the result will always stay accurate, yet it might cause the
+/// execution to become increasingly slow, since leftovers are applied one by one.
+///
+/// All in all, the complicated case above is rare to happen in all substrate use cases, hence we
+/// opt for it due to its simplicity.
+///
+/// This function will return an error is if length of `input` cannot fit in `T`, or if `sum(input)`
+/// cannot fit inside `T`.
+///
+/// * This proof is used in the implementation as well.
 pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str>
-	where T: Clone + Copy + Ord + BaseArithmetic + Debug,
+	where T: Clone + Copy + Ord + BaseArithmetic + Unsigned + Debug,
 {
 	let mut sum = T::zero();
 	for t in input.iter() {
 		sum = sum.checked_add(t).ok_or("sum of input cannot fit in `T`")?;
 	}
 	let count = input.len();
+	let count_t: T = count.try_into().map_err(|_| "length of `inputs` cannot fit in `T`")?;
 
 	// early exit if needed.
 	if count.is_zero() {
@@ -157,8 +169,8 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 	}
 
 	let needs_bump = targeted_sum > sum;
-	let per_round = diff / count.try_into().map_err(|_| "failed to build T from usize")?;
-	let mut leftover = diff % count.try_into().map_err(|_| "failed to build T from usize")?;
+	let per_round = diff / count_t;
+	let mut leftover = diff % count_t;
 
 	let mut output_with_idx = input.iter().cloned().enumerate().collect::<Vec<(usize, T)>>();
 	// sort output once based on diff. This will require more data transfer and saving original
@@ -179,7 +191,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 			for _ in 0..count {
 				output_with_idx[min_index].1 = output_with_idx[min_index].1
 					.checked_add(&per_round)
-					.ok_or("Failed to add.")?;
+					.expect("Proof provided in the module doc; qed.");
 				if output_with_idx[min_index].1 >= threshold {
 					min_index += 1;
 					min_index = min_index % count;
@@ -190,8 +202,8 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 		// continue with the previous min_index
 		while !leftover.is_zero() {
 			output_with_idx[min_index].1 = output_with_idx[min_index].1
-				.checked_add(&One::one())
-				.ok_or("Failed to add.")?;
+				.checked_add(&T::one())
+				.expect("Proof provided in the module doc; qed.");
 			if output_with_idx[min_index].1 >= threshold {
 				min_index += 1;
 				min_index = min_index % count;
@@ -212,7 +224,11 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 			for _ in 0..count {
 				output_with_idx[max_index].1 = output_with_idx[max_index].1
 					.checked_sub(&per_round)
-					.ok_or("Failed to subtract.")?;
+					.unwrap_or_else(|| {
+						let remainder = per_round - output_with_idx[max_index].1;
+						leftover += remainder;
+						output_with_idx[max_index].1.saturating_sub(per_round)
+					});
 				if output_with_idx[max_index].1 <= threshold {
 					max_index = max_index.checked_sub(1).unwrap_or(count - 1);
 				}
@@ -221,13 +237,15 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 
 		// continue with the previous max_index
 		while !leftover.is_zero() {
-			output_with_idx[max_index].1 = output_with_idx[max_index].1
-				.checked_sub(&One::one())
-				.ok_or("Failed to subtract.")?;
-			if output_with_idx[max_index].1 <= threshold {
+			if let Some(next) = output_with_idx[max_index].1.checked_sub(&One::one()) {
+				output_with_idx[max_index].1 = next;
+				if output_with_idx[max_index].1 <= threshold {
+					max_index = max_index.checked_sub(1).unwrap_or(count - 1);
+				}
+				leftover -= One::one()
+			} else {
 				max_index = max_index.checked_sub(1).unwrap_or(count - 1);
 			}
-			leftover -= One::one()
 		}
 	}
 
@@ -267,9 +285,24 @@ mod normalize_tests {
 	}
 
 	#[test]
-	fn fails_on_large_input() {
+	fn fails_on_if_input_sum_large() {
 		assert!(normalize(vec![1u8; 255].as_ref(), 10).is_ok());
-		assert!(normalize(vec![10u8; 256].as_ref(), 10).is_err());
+		assert_eq!(
+			normalize(vec![1u8; 256].as_ref(), 10),
+			Err("sum of input cannot fit in `T`"),
+		);
+	}
+
+	#[test]
+	fn does_not_fail_on_subtraction_overflow() {
+		assert_eq!(
+			normalize(vec![1u8, 100, 100].as_ref(), 10).unwrap(),
+			vec![1, 9, 0],
+		);
+		assert_eq!(
+			normalize(vec![1u8, 8, 9].as_ref(), 1).unwrap(),
+			vec![0, 1, 0],
+		);
 	}
 
 	#[test]

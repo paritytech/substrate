@@ -21,7 +21,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero,
+	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned,
 };
 use sp_debug_derive::RuntimeDebug;
 
@@ -37,13 +37,13 @@ pub trait PerThing:
 	Sized + Saturating + Copy + Default + Eq + PartialEq + Ord + PartialOrd + Bounded + fmt::Debug
 {
 	/// The data type used to build this per-thingy.
-	type Inner: BaseArithmetic + Copy + fmt::Debug;
+	type Inner: BaseArithmetic + Unsigned + Copy + fmt::Debug;
 
 	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
 	/// It must be able to compute `ACCURACY^2`.
 	type Upper:
 		BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner> +
-		UniqueSaturatedInto<Self::Inner> + fmt::Debug;
+		UniqueSaturatedInto<Self::Inner> + Unsigned + fmt::Debug;
 
 	/// The accuracy of this type.
 	const ACCURACY: Self::Inner;
