@@ -88,6 +88,8 @@ pub use paste;
 ///   // common parameter; just one for this example.
 ///   // will be `1`, `MAX_LENGTH` or any value inbetween
 ///   _ {
+///   // Or optionally: `_ where T::A: From<u32>, ..., ... {`
+///   // Allow to put additional bound on the generic `T: Trait`
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }
 ///
