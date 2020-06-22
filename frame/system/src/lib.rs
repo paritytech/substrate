@@ -102,17 +102,12 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchError, DispatchResult, Either,
-	generic::{self, Era},
-	transaction_validity::{
-		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
-		InvalidTransaction, TransactionValidity,
-	},
+	RuntimeDebug, Perbill, DispatchError, Either, generic,
 	traits::{
-		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
-		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
+		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
+		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, DispatchInfoOf, PostDispatchInfoOf, Printable,
+		Dispatchable,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -126,7 +121,7 @@ use frame_support::{
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
-		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
+		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
 		extract_actual_weight,
 	},
 	dispatch::DispatchResultWithPostInfo,
@@ -137,6 +132,21 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+
+mod check_era;
+mod check_genesis;
+mod check_nonce;
+mod check_spec_version;
+mod check_tx_version;
+mod check_weight;
+mod weight;
+
+pub use check_era::CheckEra;
+pub use check_genesis::CheckGenesis;
+pub use check_nonce::CheckNonce;
+pub use check_spec_version::CheckSpecVersion;
+pub use check_tx_version::CheckTxVersion;
+pub use check_weight::CheckWeight;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -372,60 +382,6 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 	}
 }
 
-/// An object to track the currently used extrinsic weight in a block.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-pub struct ExtrinsicsWeight {
-	normal: Weight,
-	operational: Weight,
-}
-
-impl ExtrinsicsWeight {
-	/// Returns the total weight consumed by all extrinsics in the block.
-	pub fn total(&self) -> Weight {
-		self.normal.saturating_add(self.operational)
-	}
-
-	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_add(weight);
-	}
-
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
-		Ok(())
-	}
-
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_sub(weight);
-	}
-
-	/// Get the current weight of a specific dispatch class.
-	pub fn get(&self, class: DispatchClass) -> Weight {
-		match class {
-			DispatchClass::Operational => self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => self.normal,
-		}
-	}
-
-	/// Get a mutable reference to the current weight of a specific dispatch class.
-	fn get_mut(&mut self, class: DispatchClass) -> &mut Weight {
-		match class {
-			DispatchClass::Operational => &mut self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => &mut self.normal,
-		}
-	}
-
-	/// Set the weight of a specific dispatch class.
-	pub fn put(&mut self, new: Weight, class: DispatchClass) {
-		*self.get_mut(class) = new;
-	}
-}
-
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
@@ -436,7 +392,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): weight::ExtrinsicsWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -1372,525 +1328,10 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 	}
 }
 
-/// resource limit check.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
-
-impl<T: Trait + Send + Sync> CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
-{
-	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
-	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
-	/// a portion.
-	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		match class {
-			DispatchClass::Operational | DispatchClass::Mandatory
-				=> <Perbill as sp_runtime::PerThing>::one(),
-			DispatchClass::Normal => T::AvailableBlockRatio::get(),
-		}
-	}
-
-	/// Checks if the current extrinsic does not exceed `MaximumExtrinsicWeight` limit.
-	fn check_extrinsic_weight(
-		info: &DispatchInfoOf<T::Call>,
-	) -> Result<(), TransactionValidityError> {
-		match info.class {
-			// Mandatory transactions are included in a block unconditionally, so
-			// we don't verify weight.
-			DispatchClass::Mandatory => Ok(()),
-			// Normal transactions must not exceed `MaximumExtrinsicWeight`.
-			DispatchClass::Normal => {
-				let maximum_weight = T::MaximumExtrinsicWeight::get();
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				if extrinsic_weight > maximum_weight {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(())
-				}
-			},
-			// For operational transactions we make sure it doesn't exceed
-			// the space alloted for `Operational` class.
-			DispatchClass::Operational => {
-				let maximum_weight = T::MaximumBlockWeight::get();
-				let operational_limit =
-					Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
-				let operational_limit =
-					operational_limit.saturating_sub(T::BlockExecutionWeight::get());
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				if extrinsic_weight > operational_limit {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(())
-				}
-			},
-		}
-	}
-
-	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
-	///
-	/// Upon successes, it returns the new block weight as a `Result`.
-	fn check_block_weight(
-		info: &DispatchInfoOf<T::Call>,
-	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
-		let maximum_weight = T::MaximumBlockWeight::get();
-		let mut all_weight = Module::<T>::block_weight();
-		match info.class {
-			// If we have a dispatch that must be included in the block, it ignores all the limits.
-			DispatchClass::Mandatory => {
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				all_weight.add(extrinsic_weight, DispatchClass::Mandatory);
-				Ok(all_weight)
-			},
-			// If we have a normal dispatch, we follow all the normal rules and limits.
-			DispatchClass::Normal => {
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Normal)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				if all_weight.get(DispatchClass::Normal) > normal_limit {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(all_weight)
-				}
-			},
-			// If we have an operational dispatch, allow it if we have not used our full
-			// "operational space" (independent of existing fullness).
-			DispatchClass::Operational => {
-				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let operational_space = operational_limit.saturating_sub(normal_limit);
-
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Operational)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-
-				// If it would fit in normally, its okay
-				if all_weight.total() <= maximum_weight ||
-				// If we have not used our operational space
-				all_weight.get(DispatchClass::Operational) <= operational_space {
-					Ok(all_weight)
-				} else {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				}
-			}
-		}
-	}
-
-	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
-	///
-	/// Upon successes, it returns the new block length as a `Result`.
-	fn check_block_length(
-		info: &DispatchInfoOf<T::Call>,
-		len: usize,
-	) -> Result<u32, TransactionValidityError> {
-		let current_len = Module::<T>::all_extrinsics_len();
-		let maximum_len = T::MaximumBlockLength::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
-		let added_len = len as u32;
-		let next_len = current_len.saturating_add(added_len);
-		if next_len > limit {
-			Err(InvalidTransaction::ExhaustsResources.into())
-		} else {
-			Ok(next_len)
-		}
-	}
-
-	/// get the priority of an extrinsic denoted by `info`.
-	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
-		match info.class {
-			DispatchClass::Normal => info.weight.into(),
-			// Don't use up the whole priority space, to allow things like `tip`
-			// to be taken into account as well.
-			DispatchClass::Operational => TransactionPriority::max_value() / 2,
-			// Mandatory extrinsics are only for inherents; never transactions.
-			DispatchClass::Mandatory => TransactionPriority::min_value(),
-		}
-	}
-
-	/// Creates new `SignedExtension` to check weight of the extrinsic.
-	pub fn new() -> Self {
-		Self(PhantomData)
-	}
-
-	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
-	///
-	/// It checks and notes the new weight and length.
-	fn do_pre_dispatch(
-		info: &DispatchInfoOf<T::Call>,
-		len: usize,
-	) -> Result<(), TransactionValidityError> {
-		let next_len = Self::check_block_length(info, len)?;
-		let next_weight = Self::check_block_weight(info)?;
-		Self::check_extrinsic_weight(info)?;
-
-		AllExtrinsicsLen::put(next_len);
-		BlockWeight::put(next_weight);
-		Ok(())
-	}
-
-	/// Do the validate checks. This can be applied to both signed and unsigned.
-	///
-	/// It only checks that the block weight and length limit will not exceed.
-	fn do_validate(
-		info: &DispatchInfoOf<T::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		// ignore the next length. If they return `Ok`, then it is below the limit.
-		let _ = Self::check_block_length(info, len)?;
-		// during validation we skip block limit check. Since the `validate_transaction`
-		// call runs on an empty block anyway, by this we prevent `on_initialize` weight
-		// consumption from causing false negatives.
-		Self::check_extrinsic_weight(info)?;
-
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
-{
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckWeight";
-
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
-
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> Result<(), TransactionValidityError> {
-		if info.class == DispatchClass::Mandatory {
-			Err(InvalidTransaction::MandatoryDispatch)?
-		}
-		Self::do_pre_dispatch(info, len)
-	}
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		if info.class == DispatchClass::Mandatory {
-			Err(InvalidTransaction::MandatoryDispatch)?
-		}
-		Self::do_validate(info, len)
-	}
-
-	fn pre_dispatch_unsigned(
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> Result<(), TransactionValidityError> {
-		Self::do_pre_dispatch(info, len)
-	}
-
-	fn validate_unsigned(
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		len: usize,
-	) -> TransactionValidity {
-		Self::do_validate(info, len)
-	}
-
-	fn post_dispatch(
-		_pre: Self::Pre,
-		info: &DispatchInfoOf<Self::Call>,
-		post_info: &PostDispatchInfoOf<Self::Call>,
-		_len: usize,
-		result: &DispatchResult,
-	) -> Result<(), TransactionValidityError> {
-		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
-		// to them actually being useful. Block producers are thus not allowed to include mandatory
-		// extrinsics that result in error.
-		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
-			"Bad mandantory".print();
-			e.print();
-
-			Err(InvalidTransaction::BadMandatory)?
-		}
-
-		let unspent = post_info.calc_unspent(info);
-		if unspent > 0 {
-			BlockWeight::mutate(|current_weight| {
-				current_weight.sub(unspent, info.class);
-			})
-		}
-
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> Debug for CheckWeight<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckWeight")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-/// Nonce check and increment to give replay protection for transactions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckNonce<T: Trait>(#[codec(compact)] T::Index);
-
-impl<T: Trait> CheckNonce<T> {
-	/// utility constructor. Used only in client/factory code.
-	pub fn from(nonce: T::Index) -> Self {
-		Self(nonce)
-	}
-}
-
-impl<T: Trait> Debug for CheckNonce<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckNonce({})", self.0)
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait> SignedExtension for CheckNonce<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>
-{
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = ();
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckNonce";
-
-	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
-
-	fn pre_dispatch(
-		self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> Result<(), TransactionValidityError> {
-		let mut account = Account::<T>::get(who);
-		if self.0 != account.nonce {
-			return Err(
-				if self.0 < account.nonce {
-					InvalidTransaction::Stale
-				} else {
-					InvalidTransaction::Future
-				}.into()
-			)
-		}
-		account.nonce += T::Index::one();
-		Account::<T>::insert(who, account);
-		Ok(())
-	}
-
-	fn validate(
-		&self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		// check index
-		let account = Account::<T>::get(who);
-		if self.0 < account.nonce {
-			return InvalidTransaction::Stale.into()
-		}
-
-		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if account.nonce < self.0 {
-			vec![Encode::encode(&(who, self.0 - One::one()))]
-		} else {
-			vec![]
-		};
-
-		Ok(ValidTransaction {
-			priority: info.weight as TransactionPriority,
-			requires,
-			provides,
-			longevity: TransactionLongevity::max_value(),
-			propagate: true,
-		})
-	}
-}
 
 impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		!Account::<T>::contains_key(who)
-	}
-}
-
-/// Check for transaction mortality.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> CheckEra<T> {
-	/// utility constructor. Used only in client/factory code.
-	pub fn from(era: Era) -> Self {
-		Self(era, sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckEra({:?})", self.0)
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = T::Hash;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckEra";
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = self.0.death(current_u64);
-		Ok(ValidTransaction {
-			longevity: valid_till.saturating_sub(current_u64),
-			..Default::default()
-		})
-	}
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
-		if !<BlockHash<T>>::contains_key(n) {
-			Err(InvalidTransaction::AncientBirthBlock.into())
-		} else {
-			Ok(<Module<T>>::block_hash(n))
-		}
-	}
-}
-
-/// Nonce check and increment to give replay protection for transactions.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckGenesis<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> Debug for CheckGenesis<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckGenesis")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> CheckGenesis<T> {
-	/// Creates new `SignedExtension` to check genesis hash.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = T::Hash;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckGenesis";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
-	}
-}
-
-/// Ensure the transaction version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckTxVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> Debug for CheckTxVersion<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckTxVersion")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> CheckTxVersion<T> {
-	/// Create new `SignedExtension` to check transaction version.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckTxVersion<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = u32;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckTxVersion";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().transaction_version)
-	}
-}
-
-/// Ensure the runtime version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckSpecVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> Debug for CheckSpecVersion<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckSpecVersion")
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: Trait + Send + Sync> CheckSpecVersion<T> {
-	/// Create new `SignedExtension` to check runtime version.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for CheckSpecVersion<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = u32;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckSpecVersion";
-
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().spec_version)
 	}
 }
 
