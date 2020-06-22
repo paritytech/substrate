@@ -179,7 +179,7 @@ mod tests {
 			let voter_id_1 = AuthorityId::from_slice(&[1; 32]);
 			let voters_best: HashSet<_> = vec![voter_id_1].into_iter().collect();
 
-			let best_round_state = report::RoundState {
+			let best_round_state = sc_finality_grandpa::report::RoundState {
 				total_weight: 100_u64.try_into().unwrap(),
 				threshold_weight: 67_u64.try_into().unwrap(),
 				prevote_current_weight: 50.into(),
@@ -188,7 +188,7 @@ mod tests {
 				precommit_ids: HashSet::new(),
 			};
 
-			let past_round_state = report::RoundState {
+			let past_round_state = sc_finality_grandpa::report::RoundState {
 				total_weight: 100_u64.try_into().unwrap(),
 				threshold_weight: 67_u64.try_into().unwrap(),
 				prevote_current_weight: 100.into(),
