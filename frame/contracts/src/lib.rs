@@ -109,16 +109,13 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use frame_support::dispatch::{
-	PostDispatchInfo, DispatchResult, Dispatchable, DispatchResultWithPostInfo
-};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, decl_error,
-	parameter_types, IsSubType, storage::child::{self, ChildInfo},
+	decl_module, decl_event, decl_storage, decl_error,
+	parameter_types, storage::child::{self, ChildInfo},
+	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
-use frame_support::weights::GetDispatchInfo;
-use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
@@ -127,11 +124,6 @@ pub type TrieId = Vec<u8>;
 /// A function that generates an `AccountId` for a contract upon instantiation.
 pub trait ContractAddressFor<CodeHash, AccountId> {
 	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
-}
-
-/// A function that returns the fee for dispatching a `Call`.
-pub trait ComputeDispatchFee<Call, Balance> {
-	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
 /// Information for managing an account and its sub trie abstraction.
@@ -317,12 +309,6 @@ parameter_types! {
 pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 	type Time: Time;
 	type Randomness: Randomness<Self::Hash>;
-
-	/// The outer call dispatch type.
-	type Call:
-		Parameter +
-		Dispatchable<PostInfo=PostDispatchInfo, Origin=<Self as frame_system::Trait>::Origin> +
-		IsSubType<Module<Self>, Self> + GetDispatchInfo;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -661,19 +647,6 @@ impl<T: Trait> Module<T> {
 					&*topics,
 					<T as Trait>::Event::from(event).into(),
 				),
-				DispatchRuntimeCall {
-					origin: who,
-					call,
-				} => {
-					let info = call.get_dispatch_info();
-					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
-					let post_info = match result {
-						Ok(post_info) => post_info,
-						Err(err) => err.post_info,
-					};
-					gas_meter.refund(post_info.calc_unspent(&info));
-					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
-				}
 				RestoreTo {
 					donor,
 					dest,

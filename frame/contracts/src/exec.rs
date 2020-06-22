@@ -28,7 +28,6 @@ use frame_support::{
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
-pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as frame_system::Trait>::Hash;
 pub type BlockNumberOf<T> = <T as frame_system::Trait>::BlockNumber;
@@ -143,9 +142,6 @@ pub trait Ext {
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
 	) -> ExecResult;
-
-	/// Notes a call dispatch.
-	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
 
 	/// Notes a restoration request.
 	fn note_restore_to(
@@ -269,12 +265,6 @@ pub enum DeferredAction<T: Trait> {
 		topics: Vec<T::Hash>,
 		/// The event to deposit.
 		event: Event<T>,
-	},
-	DispatchRuntimeCall {
-		/// The account id of the contract who dispatched this call.
-		origin: T::AccountId,
-		/// The call to dispatch.
-		call: <T as Trait>::Call,
 	},
 	RestoreTo {
 		/// The account id of the contract which is removed during the restoration and transfers
@@ -786,13 +776,6 @@ where
 		input_data: Vec<u8>,
 	) -> ExecResult {
 		self.ctx.call(to.clone(), value, gas_meter, input_data)
-	}
-
-	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
-		self.ctx.deferred.push(DeferredAction::DispatchRuntimeCall {
-			origin: self.ctx.self_account.clone(),
-			call,
-		});
 	}
 
 	fn note_restore_to(

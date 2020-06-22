@@ -154,7 +154,6 @@ impl pallet_transaction_payment::Trait for Test {
 impl Trait for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
-	type Call = Call;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type TrieIdGenerator = DummyTrieIdGenerator;
@@ -423,229 +422,6 @@ fn instantiate_and_call_and_deposit_event() {
 
 			assert_ok!(creation);
 			assert!(ContractInfoOf::<Test>::contains_key(BOB));
-		});
-}
-
-#[test]
-fn dispatch_call() {
-	// This test can fail due to the encoding changes. In case it becomes too annoying
-	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
-	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
-
-	let (wasm, code_hash) = compile_module::<Test>("dispatch_call").unwrap();
-
-	ExtBuilder::default()
-		.existential_deposit(50)
-		.build()
-		.execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-
-			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
-
-			// Let's keep this assert even though it's redundant. If you ever need to update the
-			// wasm source this test will fail and will show you the actual hash.
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
-					topics: vec![],
-				},
-			]);
-
-			assert_ok!(Contracts::instantiate(
-				Origin::signed(ALICE),
-				100,
-				GAS_LIMIT,
-				code_hash.into(),
-				vec![],
-			));
-
-			assert_ok!(Contracts::call(
-				Origin::signed(ALICE),
-				BOB, // newly created account
-				0,
-				GAS_LIMIT,
-				vec![],
-			));
-
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(BOB, 100)
-					),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
-					topics: vec![],
-				},
-
-				// Dispatching the call.
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(CHARLIE, 50)
-					),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Transfer(BOB, CHARLIE, 50)
-					),
-					topics: vec![],
-				},
-
-				// Event emitted as a result of dispatch.
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
-					topics: vec![],
-				}
-			]);
-		});
-}
-
-#[test]
-fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
-	// This test can fail due to the encoding changes. In case it becomes too annoying
-	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
-	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
-
-	let (wasm, code_hash) = compile_module::<Test>("dispatch_call_then_trap").unwrap();
-
-	ExtBuilder::default()
-		.existential_deposit(50)
-		.build()
-		.execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-
-			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
-
-			// Let's keep this assert even though it's redundant. If you ever need to update the
-			// wasm source this test will fail and will show you the actual hash.
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
-					topics: vec![],
-				},
-			]);
-
-			assert_ok!(Contracts::instantiate(
-				Origin::signed(ALICE),
-				100,
-				GAS_LIMIT,
-				code_hash.into(),
-				vec![],
-			));
-
-			// Call the newly instantiated contract. The contract is expected to dispatch a call
-			// and then trap.
-			assert_err_ignore_postinfo!(
-				Contracts::call(
-					Origin::signed(ALICE),
-					BOB, // newly created account
-					0,
-					GAS_LIMIT,
-					vec![],
-				),
-				"contract trapped during execution"
-			);
-			assert_eq!(System::events(), vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(BOB, 100)
-					),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
-					topics: vec![],
-				},
-				// ABSENCE of events which would be caused by dispatched Balances::transfer call
-			]);
 		});
 }
 
@@ -1326,6 +1102,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			// Preserve `BOB`'s code hash for later introspection.
 			let bob_code_hash = ContractInfoOf::<Test>::get(BOB).unwrap()
 				.get_alive().unwrap().code_hash;
+			assert_eq!(bob_code_hash, set_rent_code_hash);
 			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 			// we expect that it will get removed leaving tombstone.
 			assert_err_ignore_postinfo!(
@@ -1756,38 +1533,6 @@ fn cannot_self_destruct_in_constructor() {
 				),
 				"contract trapped during execution"
 			);
-		});
-}
-
-#[test]
-fn get_runtime_storage() {
-	let (wasm, code_hash) = compile_module::<Test>("get_runtime_storage").unwrap();
-	ExtBuilder::default()
-		.existential_deposit(50)
-		.build()
-		.execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-
-			frame_support::storage::unhashed::put_raw(
-				&[1, 2, 3, 4],
-				0x14144020u32.to_le_bytes().to_vec().as_ref()
-			);
-
-			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
-			assert_ok!(Contracts::instantiate(
-				Origin::signed(ALICE),
-				100,
-				GAS_LIMIT,
-				code_hash.into(),
-				vec![],
-			));
-			assert_ok!(Contracts::call(
-				Origin::signed(ALICE),
-				BOB,
-				0,
-				GAS_LIMIT,
-				vec![],
-			));
 		});
 }
 
