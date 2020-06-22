@@ -281,4 +281,29 @@ mod tests {
 		let meta = sc_rpc::Metadata::default();
 		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
+
+	#[test]
+	fn subscribe_to_justifications_not_available() {
+		let finality_notifiers = Arc::new(Mutex::new(vec![]));
+		let justification_receiver =
+			GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
+		let manager = SubscriptionManager::new(Arc::new(TestTaskExecutor));
+
+		let handler = GrandpaRpcHandler::new(
+			TestAuthoritySet,
+			EmptyVoterState,
+			justification_receiver,
+			manager,
+		);
+
+		let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
+		io.extend_with(GrandpaApi::to_delegate(handler));
+
+		let request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","error":{"code":-32090,"message":"Subscriptions are not available on this transport."},"id":1}"#;
+
+		let meta = sc_rpc::Metadata::default();
+
+		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
+	}
 }
