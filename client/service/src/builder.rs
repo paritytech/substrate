@@ -49,7 +49,10 @@ use sp_runtime::traits::{
 	Block as BlockT, NumberFor, SaturatedConversion, HashFor,
 };
 use sp_api::ProvideRuntimeApi;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
+use sc_executor::{
+	NativeExecutor, NativeExecutionDispatch, RuntimeInfo,
+	FallbackDispatch, FallbackDispatchHolder,
+};
 use std::{
 	collections::HashMap,
 	io::{Read, Write, Seek},
@@ -223,6 +226,16 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
 {
+	new_full_parts_with_fallback_executors(config, Default::default())
+}
+
+fn new_full_parts_with_fallback_executors<TBl, TRtApi, TExecDisp>(
+	config: &Configuration,
+	fallback_executors:  Vec<Box<dyn FallbackDispatch>>,
+) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
+	TBl: BlockT,
+	TExecDisp: NativeExecutionDispatch + 'static,
+{
 	let keystore = match &config.keystore {
 		KeystoreConfig::Path { path, password } => Keystore::open(
 			path.clone(),
@@ -236,10 +249,11 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
-	let executor = NativeExecutor::<TExecDisp>::new(
+	let executor = NativeExecutor::<TExecDisp>::new_with_fallback_executors(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
+		fallback_executors,
 	);
 
 	let chain_spec = &config.chain_spec;
@@ -347,7 +361,27 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let (client, backend, keystore, task_manager) = new_full_parts(&config)?;
+		Self::new_full_with_fallback_executors(config, Default::default())
+	}
+	
+	pub fn new_full_with_fallback_executors<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
+		config: Configuration,
+		fallback_executors:  Vec<Box<dyn FallbackDispatch>>,
+	) -> Result<ServiceBuilder<
+		TBl,
+		TRtApi,
+		TFullClient<TBl, TRtApi, TExecDisp>,
+		Arc<OnDemand<TBl>>,
+		(),
+		(),
+		BoxFinalityProofRequestBuilder<TBl>,
+		Arc<dyn FinalityProofProvider<TBl>>,
+		(),
+		(),
+		TFullBackend<TBl>,
+	>, Error> {
+		let (client, backend, keystore, task_manager) = 
+			new_full_parts_with_fallback_executors(&config, fallback_executors)?;
 
 		let client = Arc::new(client);
 

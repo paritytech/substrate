@@ -61,7 +61,7 @@ pub fn with_externalities_safe<F, U>(ext: &mut dyn Externalities, f: F) -> Resul
 /// Delegate for dispatching a CodeExecutor call.
 ///
 /// By dispatching we mean that we execute a runtime function specified by it's name.
-pub trait NativeExecutionDispatch: Send + Sync {
+pub trait NativeExecutionDispatch: Send + Sync + Sized {
 	/// Host functions for custom runtime interfaces that should be callable from within the runtime
 	/// besides the default Substrate runtime interfaces.
 	type ExtendHostFunctions: HostFunctions;
@@ -73,6 +73,41 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Provide native runtime version.
 	fn native_version() -> NativeVersion;
+}
+
+/// Delegate for dispatching a CodeExecutor call as Fallback
+///
+/// By dispatching we mean that we execute a runtime function specified by it's name.
+pub trait FallbackDispatch: Send + Sync {
+
+	/// Dispatch a method in the runtime.
+	///
+	/// If the method with the specified name doesn't exist then `Err` is returned.
+	fn dispatch(&self, ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+
+	/// Provide native runtime version.
+	fn native_version(&self) -> NativeVersion;
+}
+
+pub struct FallbackDispatchHolder<T:NativeExecutionDispatch>(std::marker::PhantomData<T>);
+
+impl<T: NativeExecutionDispatch> FallbackDispatchHolder<T> {
+	fn dispatch(&self, ext: &mut dyn Externalities, method: &str, data: &[u8])
+		-> Result<Vec<u8>>
+	{
+		T::dispatch(ext, method, data)
+	}
+
+	fn native_version(&self) -> NativeVersion {
+		T::native_version()
+	}
+}
+
+impl<T: NativeExecutionDispatch> FallbackDispatchHolder<T> {
+	/// Create a Holder
+	pub fn new() -> Self {
+		Self(Default::default())
+	}
 }
 
 /// An abstraction over Wasm code executor. Supports selecting execution backend and
@@ -220,6 +255,8 @@ pub struct NativeExecutor<D> {
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
 	wasm: WasmExecutor,
+	// fallback native executors for older versions
+	fallback_executors: Arc<Vec<Box<dyn FallbackDispatch>>>,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
@@ -236,6 +273,31 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 	) -> Self {
+		Self::new_with_fallback_executors(
+			fallback_method,
+			default_heap_pages,
+			max_runtime_instances,
+			Default::default()
+		)
+	}
+
+	/// Create new instance wiht fallback native executors
+	///
+	/// # Parameters
+	///
+	/// `fallback_method` - Method used to execute fallback Wasm code.
+	///
+	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `fallback_executors` – Other instances of Native Runtimes to try for a 
+	///		matching version (in order as provided – first match wins)
+	pub fn new_with_fallback_executors(
+		fallback_method: WasmExecutionMethod,
+		default_heap_pages: Option<u64>,
+		max_runtime_instances: usize,
+		fallback_executors: Vec<Box<dyn FallbackDispatch>>,
+	) -> Self {
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
 		// Add the custom host functions provided by the user.
@@ -248,9 +310,10 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		);
 
 		NativeExecutor {
-			_dummy: Default::default(),
 			native_version: D::native_version(),
+			fallback_executors: Arc::new(fallback_executors),
 			wasm: wasm_executor,
+			_dummy: Default::default(),
 		}
 	}
 }
@@ -299,60 +362,64 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 				let onchain_version = onchain_version.ok_or_else(
 					|| Error::ApiError("Unknown version".into())
 				)?;
-				match (
-					use_native,
-					onchain_version.can_call_with(&self.native_version.runtime_version),
-					native_call,
-				) {
-					(_, false, _) => {
-						trace!(
-							target: "executor",
-							"Request for native execution failed (native: {}, chain: {})",
-							self.native_version.runtime_version,
-							onchain_version,
-						);
 
-						with_externalities_safe(
-							&mut **ext,
-							move || instance.call(method, data).map(NativeOrEncoded::Encoded)
-						)
-					}
-					(false, _, _) => {
-						with_externalities_safe(
-							&mut **ext,
-							move || instance.call(method, data).map(NativeOrEncoded::Encoded)
-						)
-					},
-					(true, true, Some(call)) => {
-						trace!(
-							target: "executor",
-							"Request for native execution with native call succeeded \
-							(native: {}, chain: {}).",
-							self.native_version.runtime_version,
-							onchain_version,
-						);
-
-						used_native = true;
-						let res = with_externalities_safe(&mut **ext, move || (call)())
-							.and_then(|r| r
-								.map(NativeOrEncoded::Native)
-								.map_err(|s| Error::ApiError(s.to_string()))
+				if use_native {
+					if onchain_version.can_call_with(&self.native_version.runtime_version) {
+						if let Some(call) = native_call {
+							trace!(
+								target: "executor",
+								"Request for native execution with native call succeeded \
+								(native: {}, chain: {}).",
+								self.native_version.runtime_version,
+								onchain_version,
 							);
 
-						Ok(res)
-					}
-					_ => {
-						trace!(
-							target: "executor",
-							"Request for native execution succeeded (native: {}, chain: {})",
-							self.native_version.runtime_version,
-							onchain_version
-						);
+							used_native = true;
+							let res = with_externalities_safe(&mut **ext, move || (call)())
+								.and_then(|r| r
+									.map(NativeOrEncoded::Native)
+									.map_err(|s| Error::ApiError(s.to_string()))
+								);
 
-						used_native = true;
-						Ok(D::dispatch(&mut **ext, method, data).map(NativeOrEncoded::Encoded))
+							return Ok(res)
+						} else {
+							trace!(
+								target: "executor",
+								"Request for native execution succeeded (native: {}, chain: {})",
+								self.native_version.runtime_version,
+								onchain_version
+							);
+
+							used_native = true;
+							return Ok(D::dispatch(&mut **ext, method, data)
+								.map(NativeOrEncoded::Encoded))
+						}
+					}
+
+					for executor in self.fallback_executors.iter() {
+						let runtime_version = executor.native_version().runtime_version;
+						if onchain_version.can_call_with(&runtime_version) {
+
+							trace!(
+								target: "executor",
+								"Request for native execution succeeded for fallback (native: {}, chain: {})",
+								runtime_version,
+								onchain_version
+							);
+
+							used_native = true;
+							return Ok(executor.dispatch(&mut **ext, method, data)
+								.map(NativeOrEncoded::Encoded))
+						}
 					}
 				}
+
+				// all other failed, either because of bad matches or because native
+				// shouldn't even run. Let's WASM.
+				with_externalities_safe(
+					&mut **ext,
+					move || instance.call(method, data).map(NativeOrEncoded::Encoded)
+				)
 			}
 		);
 		(result, used_native)
@@ -365,6 +432,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
 			wasm: self.wasm.clone(),
+			fallback_executors: self.fallback_executors.clone(),
 		}
 	}
 }
@@ -382,6 +450,7 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext, missing_host_functions)
 	}
 }
+
 
 /// Implements a `NativeExecutionDispatch` for provided parameters.
 ///
