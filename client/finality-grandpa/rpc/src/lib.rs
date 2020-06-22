@@ -166,7 +166,7 @@ mod tests {
 	use super::*;
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 	use futures::{compat::Future01CompatExt, executor};
-	use jsonrpc_core::futures::future as future01;
+	use jsonrpc_core::{Output, futures::future as future01};
 	use parking_lot::Mutex;
 
 	use sc_finality_grandpa::{report, AuthorityId};
@@ -233,7 +233,7 @@ mod tests {
 			.expect("Failed to create thread pool executor for tests");
 	}
 
-	// These are lifted from thye jsonrpc_pubsub crate tests
+	// These are lifted from the jsonrpc_pubsub crate tests
 	pub struct TestTaskExecutor;
 	type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
 
@@ -308,7 +308,7 @@ mod tests {
 	}
 
 	#[test]
-	fn subscribe_to_justifications_not_available() {
+	fn subscribe_and_unsubscribe_to_justifications() {
 		let finality_notifiers = Arc::new(Mutex::new(vec![]));
 		let justification_receiver =
 			GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
@@ -324,10 +324,35 @@ mod tests {
 		let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
-		let request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","error":{"code":-32090,"message":"Subscriptions are not available on this transport."},"id":1}"#;
+		let (tx, _rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
+		let meta = sc_rpc::Metadata::new(tx);
 
-		let meta = sc_rpc::Metadata::default();
-		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
+		// Subscribe
+		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
+
+		let sub_id = match resp {
+			Output::Success(success) => success.result,
+			_ => panic!(),
+		};
+
+		// Unsubscribe with wrong ID
+		let invalid_unsub_req= r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#;
+		let resp = io.handle_request_sync(&invalid_unsub_req, meta.clone());
+		assert_eq!(resp, Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()));
+
+		let unsub_req = format!(
+			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
+			sub_id
+		);
+
+		// Unsubscribe
+		let resp = io.handle_request_sync(&unsub_req, meta.clone());
+		assert_eq!(resp, Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()));
+
+		// Unsubscribe again and fail
+		let resp = io.handle_request_sync(&unsub_req, meta);
+		assert_eq!(resp, Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()));
 	}
 }
