@@ -160,7 +160,6 @@ use sp_runtime::{
 use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	storage::IterableStorageMap,
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
