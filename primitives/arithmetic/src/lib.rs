@@ -130,7 +130,7 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 ///    implementation is very likely to over-increment/decrement in case the `diff / input.len()` is
 ///    rather small.
 ///
-/// This function can return an error is if `T` cannot be built from the size of `input`, or if
+/// This function can return an error is if size of `input` doesn't fit inside `T`, or if
 /// `sum(input)` cannot fit inside `T`. Moreover, if any of the internal operations saturate, it
 /// will also return en `Err`.
 ///
