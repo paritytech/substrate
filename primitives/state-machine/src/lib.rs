@@ -1306,4 +1306,40 @@ mod tests {
 		}
 		assert!(!duplicate);
 	}
+
+	#[test]
+	fn set_storage_empty_allowed() {
+		let initial: BTreeMap<_, _> = map![
+			b"aaa".to_vec() => b"0".to_vec(),
+			b"bbb".to_vec() => b"".to_vec()
+		];
+		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let backend = state.as_trie_backend().unwrap();
+
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_storage(b"ccc".to_vec(), Some(b"".to_vec()));
+		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
+		overlay.commit_prospective();
+		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
+		assert_eq!(overlay.storage(b"bbb"), None);
+
+		{
+			let mut offchain_overlay = Default::default();
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(ext.storage(b"bbb"), Some(vec![]));
+			assert_eq!(ext.storage(b"ccc"), Some(vec![]));
+			ext.clear_storage(b"ccc");
+			assert_eq!(ext.storage(b"ccc"), None);
+		}
+		overlay.commit_prospective();
+		assert_eq!(overlay.storage(b"ccc"), Some(None));
+	}
 }
