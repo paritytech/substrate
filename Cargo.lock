@@ -7615,7 +7615,6 @@ dependencies = [
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
- "wasm-timer",
 ]
 
 [[package]]
