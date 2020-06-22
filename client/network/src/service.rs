@@ -224,7 +224,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
-			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -304,8 +303,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
-				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
-				.connection_event_buffer_size(128);
+				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
+				.connection_event_buffer_size(1024);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
@@ -594,15 +593,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// All transactions will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration and propagated to peers.
 	pub fn trigger_repropagate(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsics);
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransactions);
 	}
 
 	/// You must call when new transaction is imported by the transaction pool.
 	///
 	/// This transaction will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration and propagated to peers.
-	pub fn propagate_extrinsic(&self, hash: H) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsic(hash));
+	pub fn propagate_transaction(&self, hash: H) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -753,6 +752,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
 	}
 
+	/// Inform the network service about an own imported block.
+	pub fn own_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -799,8 +804,8 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 ///
 /// Each entry corresponds to a method of `NetworkService`.
 enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
-	PropagateExtrinsic(H),
-	PropagateExtrinsics,
+	PropagateTransaction(H),
+	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash, Vec<u8>),
 	GetValue(record::Key),
@@ -819,6 +824,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
+	OwnBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1119,10 +1125,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().announce_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.user_protocol_mut().request_justification(&hash, number),
-				ServiceToWorkerMsg::PropagateExtrinsic(hash) =>
-					this.network_service.user_protocol_mut().propagate_extrinsic(&hash),
-				ServiceToWorkerMsg::PropagateExtrinsics =>
-					this.network_service.user_protocol_mut().propagate_extrinsics(),
+				ServiceToWorkerMsg::PropagateTransaction(hash) =>
+					this.network_service.user_protocol_mut().propagate_transaction(&hash),
+				ServiceToWorkerMsg::PropagateTransactions =>
+					this.network_service.user_protocol_mut().propagate_transactions(),
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.get_value(&key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1149,6 +1155,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::UpdateChain =>
 					this.network_service.user_protocol_mut().update_chain(),
+				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
+					this.network_service.user_protocol_mut().own_block_imported(hash, number),
 			}
 		}
 

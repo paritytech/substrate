@@ -107,11 +107,6 @@ pub struct NetworkParams {
 	#[structopt(long)]
 	pub discover_local: bool,
 
-	/// Use the legacy "pre-mainnet-launch" networking protocol. Enable if things seem broken.
-	/// This option will be removed in the future.
-	#[structopt(long)]
-	pub legacy_network_protocol: bool,
-
 	/// Disable experimental support for the QUIC protocol. This option is provided in case a
 	/// critical bug is found in the QUIC implementation and we need to urgently shut down the
 	/// UDP socket.
@@ -177,12 +172,15 @@ impl NetworkParams {
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht: self.discover_local || is_dev,
+<<<<<<< HEAD
 			use_new_block_requests_protocol: !self.legacy_network_protocol,
 			quic_socket: if self.disable_quic {
 				None
 			} else {
 				Some(From::from(([0, 0, 0, 0], quic_port)))
 			},
+=======
+>>>>>>> upstream/master
 		}
 	}
 }

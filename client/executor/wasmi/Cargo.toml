@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4.8"
 wasmi = "0.6.2"
-codec = { package = "parity-scale-codec", version = "1.3.0" }
+codec = { package = "parity-scale-codec", version = "1.3.1" }
 sc-executor-common = { version = "0.8.0-rc3", path = "../common" }
 sp-wasm-interface = { version = "2.0.0-rc3", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0-rc3", path = "../../../primitives/runtime-interface" }
