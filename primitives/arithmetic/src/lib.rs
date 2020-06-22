@@ -45,7 +45,7 @@ pub use per_things::{PerThing, InnerOf, UpperOf, Percent, PerU16, Permill, Perbi
 pub use rational128::Rational128;
 
 use sp_std::{prelude::*, cmp::Ordering, fmt::Debug, convert::TryInto};
-use traits::{BaseArithmetic, One, Zero};
+use traits::{BaseArithmetic, One, Zero, SaturatedConversion};
 
 /// Trait for comparing two numbers with an threshold.
 ///
@@ -96,11 +96,28 @@ pub trait Normalizable<T> {
 	fn normalize(&self, t_max: T) -> Result<Vec<T>, &'static str>;
 }
 
-impl<T: Clone + Copy + Ord + BaseArithmetic + Debug> Normalizable<T> for Vec<T> {
-	fn normalize(&self, t_max: T) -> Result<Vec<T>, &'static str> {
-		normalize(self.as_ref(), t_max)
+macro_rules! impl_normalize_for_numeric {
+	($numeric:ty) => {
+		impl Normalizable<$numeric> for Vec<$numeric> {
+			fn normalize(&self, t_max: $numeric) -> Result<Vec<$numeric>, &'static str> {
+				normalize(self.as_ref(), t_max)
+			}
+		}
+	};
+}
+
+impl_normalize_for_numeric!(u32);
+impl_normalize_for_numeric!(u64);
+impl_normalize_for_numeric!(u128);
+
+impl<P: PerThing> Normalizable<P> for Vec<P> {
+	fn normalize(&self, t_max: P) -> Result<Vec<P>, &'static str> {
+		let inners = self.iter().map(|p| p.clone().deconstruct().into()).collect::<Vec<_>>();
+		let normalized = normalize(inners.as_ref(), t_max.deconstruct().into())?;
+		Ok(normalized.into_iter().map(|i: UpperOf<P>| P::from_parts(i.saturated_into())).collect())
 	}
 }
+
 
 /// Normalize `input` so that the sum of all elements reaches `t_max`.
 ///
@@ -256,7 +273,6 @@ mod normalize_tests {
 
 	#[test]
 	fn works_for_vec() {
-		use super::Normalizable;
 		assert_eq!(vec![8u32, 9, 7, 10].normalize(40).unwrap(), vec![10u32, 10, 10, 10]);
 	}
 

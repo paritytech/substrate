@@ -30,7 +30,7 @@
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
 use sp_arithmetic::{
-	PerThing, Rational128, ThresholdOrd, InnerOf, UpperOf, Normalizable,
+	PerThing, Rational128, ThresholdOrd, InnerOf, Normalizable,
 	helpers_128bit::multiply_by_rational,
 	traits::{Zero, Saturating, Bounded, SaturatedConversion},
 };
@@ -206,26 +206,16 @@ where
 	///
 	/// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to 100%.
 	pub fn try_normalize(&mut self) -> Result<(), &'static str> {
-		// NOTE: sadly we cannot use the impl for Vec<PerThing> here. Nonetheless, we use the same
-		// technique to prevent errors, do the calculation in the upper type.
-		let inners = self.distribution
+		self.distribution
 			.iter()
-			.map(|(_, p)| p)
-			.cloned()
-			.map(|p| p.deconstruct().into())
-			.collect::<Vec<UpperOf<P>>>();
-
-		let center: UpperOf<P> = P::one().deconstruct().into();
-		inners.normalize(center)
-			.map(|corrected|
-				corrected.into_iter().map(|i|
-					P::from_parts(i.saturated_into())
-				).collect::<Vec<_>>()
-			)
-			.map(|corrected|
-				for ((_, ratio), normalized) in self.distribution.iter_mut().zip(corrected.into_iter()) {
-					*ratio = normalized;
-				}
+			.map(|(_, p)| *p)
+			.collect::<Vec<_>>()
+			.normalize(P::one())
+			.map(|normalized_ratios|
+				self.distribution
+					.iter_mut()
+					.zip(normalized_ratios)
+					.for_each(|((_, old), corrected)| { *old = corrected; })
 			)
 	}
 }
@@ -292,9 +282,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 				self.distribution
 					.iter_mut()
 					.zip(normalized_weights.into_iter())
-					.for_each(|((_, weight), corrected)| {
-						*weight = corrected;
-					})
+					.for_each(|((_, weight), corrected)| { *weight = corrected; })
 			)
 	}
 

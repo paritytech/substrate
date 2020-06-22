@@ -23,7 +23,6 @@ use codec::{Encode, CompactAs};
 use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero,
 };
-use crate::{Normalizable, normalize};
 use sp_debug_derive::RuntimeDebug;
 
 /// Get the inner type of a `PerThing`.
@@ -591,14 +590,6 @@ macro_rules! implement_per_thing {
 			type Output = N;
 			fn mul(self, b: N) -> Self::Output {
 				overflow_prune_mul::<N, Self>(b, self.deconstruct(), Rounding::Nearest)
-			}
-		}
-
-		impl Normalizable<$name> for Vec<$name> {
-			fn normalize(&self, t_max: $name) -> Result<Vec<$name>, &'static str> {
-				let inner = self.iter().map(|p| p.clone().deconstruct() as $upper_type).collect::<Vec<_>>();
-				let normalized = normalize(inner.as_ref(), t_max.deconstruct() as $upper_type)?;
-				Ok(normalized.into_iter().map(|i| <$name>::from_parts(i.saturated_into())).collect())
 			}
 		}
 
