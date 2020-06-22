@@ -461,11 +461,7 @@ impl NetworkConfiguration {
 			},
 			max_parallel_downloads: 5,
 			allow_non_globals_in_dht: false,
-<<<<<<< HEAD
-			use_new_block_requests_protocol: true,
 			quic_socket: Some(From::from(([0, 0, 0, 0], 30333))),
-=======
->>>>>>> upstream/master
 		}
 	}
 }
