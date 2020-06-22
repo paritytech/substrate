@@ -30,13 +30,17 @@ use frame_support::{
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Test {
+	trait Store for Module<T: Trait> as Test where
+		<T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event>
+	{
 		Value get(fn value): Option<u32>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where
+		origin: T::Origin, <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event>
+	{
 		#[weight = 0]
 		fn set_value(origin, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
@@ -56,7 +60,11 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-pub trait Trait {
+pub trait OtherTrait {
+	type OtherEvent;
+}
+
+pub trait Trait: OtherTrait where Self::OtherEvent: Into<Self::Event> {
 	type Event;
 	type BlockNumber;
 	type AccountId: 'static + Default + Decode;
@@ -100,6 +108,10 @@ impl Trait for Test {
 	type AccountId = u64;
 }
 
+impl OtherTrait for Test {
+	type OtherEvent = ();
+}
+
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -107,7 +119,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 benchmarks!{
-	_ {
+	_ where <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event> {
 		// Define a common range for `b`.
 		let b in 1 .. 1000 => ();
 	}
