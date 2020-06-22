@@ -865,9 +865,10 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// Number of eras that staked funds must remain bonded for.
 	type BondingDuration: Get<EraIndex>;
 
-	/// Number of eras that slashes are deferred by, after computation. This should be less than the
-	/// bonding duration. Set to 0 if slashes should be applied immediately, without opportunity for
-	/// intervention.
+	/// Number of eras that slashes are deferred by, after computation.
+	///
+	/// This should be less than the bonding duration. Set to 0 if slashes
+	/// should be applied immediately, without opportunity for intervention.
 	type SlashDeferDuration: Get<EraIndex>;
 
 	/// The origin which can cancel a deferred slash. Root can always do this.
@@ -884,6 +885,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
 
 	/// The number of blocks before the end of the era from which election submissions are allowed.
+	///
 	/// Setting this to zero will disable the offchain compute and only on-chain seq-phragmen will
 	/// be used.
 	///
@@ -894,14 +896,15 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// The overarching call type.
 	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
 
-	/// Maximum number of balancing iterations to run in the offchain submission. If set to 0,
-	/// balance_solution will not be executed at all.
+	/// Maximum number of balancing iterations to run in the offchain submission.
+	///
+	/// If set to 0, balance_solution will not be executed at all.
 	type MaxIterations: Get<u32>;
 
 	/// The threshold of improvement that should be provided for a new solution to be accepted.
 	type MinSolutionScoreBump: Get<Perbill>;
 
-	/// The maximum number of nominator rewarded for each validator.
+	/// The maximum number of nominators rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
@@ -1274,6 +1277,36 @@ decl_module! {
 
 		/// Number of eras that staked funds must remain bonded for.
 		const BondingDuration: EraIndex = T::BondingDuration::get();
+
+		/// Number of eras that slashes are deferred by, after computation. 
+		///
+		/// This should be less than the bonding duration. 
+		/// Set to 0 if slashes should be applied immediately, without opportunity for
+		/// intervention.
+		const SlashDeferDuration: EraIndex = T::SlashDeferDuration::get();
+
+		/// The number of blocks before the end of the era from which election submissions are allowed.
+		///
+		/// Setting this to zero will disable the offchain compute and only on-chain seq-phragmen will
+		/// be used.
+		///
+		/// This is bounded by being within the last session. Hence, setting it to a value more than the
+		/// length of a session will be pointless.
+		const ElectionLookahead: T::BlockNumber = T::ElectionLookahead::get();
+
+		/// Maximum number of balancing iterations to run in the offchain submission. 
+		///
+		/// If set to 0, balance_solution will not be executed at all.
+		const MaxIterations: u32 = T::MaxIterations::get();
+
+		/// The threshold of improvement that should be provided for a new solution to be accepted.
+		const MinSolutionScoreBump: Perbill = T::MinSolutionScoreBump::get();
+
+		/// The maximum number of nominators rewarded for each validator.
+		///
+		/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
+		/// their reward. This used to limit the i/o cost for the nominator payout.
+		const MaxNominatorRewardedPerValidator: u32 = T::MaxNominatorRewardedPerValidator::get();
 
 		type Error = Error<T>;
 
