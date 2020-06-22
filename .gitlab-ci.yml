@@ -56,6 +56,7 @@ default:
     - kubernetes-parity-build
   environment:
     name: parity-build
+  interruptible:                   true
 
 .docker-env:                       &docker-env
   image:                           paritytech/ci-linux:production
@@ -364,10 +365,8 @@ test-prometheus-alerting-rules:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   script:
-    - curl -L https://github.com/prometheus/prometheus/releases/download/v2.19.0/prometheus-2.19.0.linux-amd64.tar.gz --output prometheus.tar.gz
-    - tar -xzf prometheus.tar.gz
-    - ./prometheus-*/promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
-    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | ./prometheus-*/promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
+    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        build
 

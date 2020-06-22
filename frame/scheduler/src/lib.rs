@@ -399,7 +399,7 @@ mod tests {
 
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
-		traits::{OnInitialize, OnFinalize},
+		traits::{OnInitialize, OnFinalize, Filter},
 		weights::constants::RocksDbWeight,
 	};
 	use sp_core::H256;
@@ -469,6 +469,15 @@ mod tests {
 			scheduler<T>,
 		}
 	}
+
+	// Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
+	pub struct BaseFilter;
+	impl Filter<Call> for BaseFilter {
+		fn filter(call: &Call) -> bool {
+			!matches!(call, Call::Logger(_))
+		}
+	}
+
 	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
 	// configuration traits of pallets we want to use.
@@ -481,7 +490,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl system::Trait for Test {
-		type BaseCallFilter = ();
+		type BaseCallFilter = BaseFilter;
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
@@ -540,7 +549,9 @@ mod tests {
 	#[test]
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
+			let call = Call::Logger(logger::Call::log(42, 1000));
+			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			Scheduler::do_schedule(4, None, 127, call);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);

@@ -1068,7 +1068,7 @@ ServiceBuilder<
 
 		spawn_handle.spawn(
 			"on-transaction-imported",
-			extrinsic_notifications(transaction_pool.clone(), network.clone()),
+			transaction_notifications(transaction_pool.clone(), network.clone()),
 		);
 
 		// Prometheus metrics.
@@ -1246,7 +1246,7 @@ ServiceBuilder<
 	}
 }
 
-async fn extrinsic_notifications<TBl, TExPool>(
+async fn transaction_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>
 )
@@ -1254,10 +1254,10 @@ async fn extrinsic_notifications<TBl, TExPool>(
 		TBl: BlockT,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 {
-	// extrinsic notifications
+	// transaction notifications
 	transaction_pool.import_notification_stream()
 		.for_each(move |hash| {
-			network.propagate_extrinsic(hash);
+			network.propagate_transaction(hash);
 			let status = transaction_pool.status();
 			telemetry!(SUBSTRATE_INFO; "txpool.import";
 				"ready" => status.ready,
