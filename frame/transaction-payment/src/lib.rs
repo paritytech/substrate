@@ -709,37 +709,6 @@ mod tests {
 	}
 
 	#[test]
-	fn migration_to_v2_works() {
-		use sp_runtime::FixedI128;
-		use frame_support::traits::OnRuntimeUpgrade;
-
-		let with_old_multiplier = |mul: FixedI128, expected: FixedU128| {
-			ExtBuilder::default().build().execute_with(|| {
-				frame_support::migration::put_storage_value(
-					b"TransactionPayment",
-					b"NextFeeMultiplier",
-					&[],
-					mul,
-				);
-
-				assert_eq!(StorageVersion::get(), Releases::V1Ancient);
-
-				TransactionPayment::on_runtime_upgrade();
-
-				assert_eq!(StorageVersion::get(), Releases::V2);
-				assert_eq!(NextFeeMultiplier::get(), expected);
-			})
-		};
-
-		with_old_multiplier(FixedI128::saturating_from_integer(-1), FixedU128::zero());
-		with_old_multiplier(FixedI128::saturating_from_rational(-1, 2), FixedU128::zero());
-		with_old_multiplier(
-			FixedI128::saturating_from_rational(1, 2),
-			FixedU128::saturating_from_rational(1, 2),
-		);
-	}
-
-	#[test]
 	fn signed_extension_transaction_payment_work() {
 		ExtBuilder::default()
 			.balance_factor(10)
