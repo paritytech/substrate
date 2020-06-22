@@ -83,7 +83,10 @@ fn generate_impl_call(
 	Ok(
 		quote!(
 			#(
-				let #pnames : #ptypes = match #c_iter::Decode::decode(&mut #input) {
+				let #pnames : #ptypes = match #c_iter::DecodeLimit::decode_all_with_depth_limit(
+					#c_iter::MAX_EXTRINSIC_DEPTH,
+					&mut #input
+				) {
 					Ok(input) => input,
 					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
 				};
