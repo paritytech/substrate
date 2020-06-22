@@ -17,7 +17,7 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -130,13 +130,27 @@ impl BenchmarkCmd {
 
 				// Conduct analysis.
 				if !self.no_median_slopes {
-					if let Some(analysis) = Analysis::median_slopes(&batch.results) {
-						println!("Median Slopes Analysis\n========\n{}", analysis);
+					println!("Median Slopes Analysis\n========");
+					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+						println!("-- Extrinsic Time --\n{}", analysis);
+					}
+					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+						println!("Reads = {:?}", analysis);
+					}
+					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+						println!("Writes = {:?}", analysis);
 					}
 				}
 				if !self.no_min_squares {
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results) {
-						println!("Min Squares Analysis\n========\n{}", analysis);
+					println!("Min Squares Analysis\n========");
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+						println!("-- Extrinsic Time --\n{}", analysis);
+					}
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+						println!("Reads = {:?}", analysis);
+					}
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+						println!("Writes = {:?}", analysis);
 					}
 				}
 			},
