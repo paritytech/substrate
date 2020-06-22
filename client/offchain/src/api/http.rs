@@ -709,12 +709,6 @@ mod tests {
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
 		() => {{
-			// We spawn quite a bit of HTTP servers here due to how async API
-			// works for offchain workers, so be sure to raise the FD limit
-			// (particularly useful for macOS where the default soft limit may
-			// not be enough).
-			fdlimit::raise_fd_limit();
-
 			let hyper_client = Arc::new(HyperClient::builder().build(HttpsConnector::new()));
 			let (api, worker) = http(hyper_client.clone());
 

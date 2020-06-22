@@ -44,11 +44,17 @@ use sc_network::NetworkStateInfo;
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
 use futures::{prelude::*, future::ready};
+use lazy_static::lazy_static;
 
 mod api;
 use api::SharedClient;
 
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
+
+lazy_static! {
+	// Using lazy_static to have the `SharedClient` shared amongst the different OffchainWorkers.
+	static ref SHARED_CLIENT: SharedClient = SharedClient::new();
+}
 
 /// An offchain workers manager.
 pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
@@ -62,7 +68,7 @@ pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(client: Arc<Client>, db: Storage) -> Self {
-		let shared_client = SharedClient::new();
+		let shared_client = SHARED_CLIENT.clone();
 		Self {
 			client,
 			db,
