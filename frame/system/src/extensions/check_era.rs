@@ -83,3 +83,42 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	}
 }
 
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::{Test, new_test_ext, System, CALL};
+	use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
+	use sp_core::H256;
+
+	#[test]
+	fn signed_ext_check_era_should_work() {
+		new_test_ext().execute_with(|| {
+			// future
+			assert_eq!(
+				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				InvalidTransaction::AncientBirthBlock.into(),
+			);
+
+			// correct
+			System::set_block_number(13);
+			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
+			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_era_should_change_longevity() {
+		new_test_ext().execute_with(|| {
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let len = 0_usize;
+			let ext = (
+				crate::CheckWeight::<Test>::default(),
+				CheckEra::<Test>::from(Era::mortal(16, 256)),
+			);
+			System::set_block_number(17);
+			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
+
+			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
+		})
+	}
+}

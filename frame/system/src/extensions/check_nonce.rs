@@ -115,3 +115,31 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::{Test, new_test_ext, CALL};
+
+	#[test]
+	fn signed_ext_check_nonce_works() {
+		new_test_ext().execute_with(|| {
+			crate::Account::<Test>::insert(1, crate::AccountInfo {
+				nonce: 1,
+				refcount: 0,
+				data: 0,
+			});
+			let info = DispatchInfo::default();
+			let len = 0_usize;
+			// stale
+			assert!(CheckNonce::<Test>(0).validate(&1, CALL, &info, len).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len).is_err());
+			// correct
+			assert!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len).is_ok());
+			// future
+			assert!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len).is_err());
+		})
+	}
+}
