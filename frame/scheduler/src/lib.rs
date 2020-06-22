@@ -49,7 +49,7 @@ use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
 use sp_runtime::{RuntimeDebug, traits::{Zero, One, BadOrigin}};
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error,
+	decl_module, decl_storage, decl_event, decl_error, IterableStorageMap,
 	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
 	traits::{Get, schedule, OriginTrait, EnsureOrigin, IsType},
 	weights::{GetDispatchInfo, Weight},
@@ -88,9 +88,17 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
+struct ScheduledLegacy<Call, BlockNumber> {
+	maybe_id: Option<Vec<u8>>,
+	priority: schedule::Priority,
+	call: Call,
+	maybe_periodic: Option<schedule::Period<BlockNumber>>,
+}
+
 /// Information regarding an item to be executed in the future.
-#[derive(Clone, RuntimeDebug, Encode)]
-pub struct Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> {
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
+pub struct ScheduledV1<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
 	maybe_id: Option<Vec<u8>>,
 	/// This task's priority.
@@ -104,24 +112,15 @@ pub struct Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> {
 	_phantom: PhantomData<AccountId>,
 }
 
-impl<Call, BlockNumber, PalletsOrigin, AccountId> Decode for Scheduled<Call, BlockNumber, PalletsOrigin, AccountId>
-where
-	Call: Decode,
-	BlockNumber: Decode,
-	PalletsOrigin: Decode + From<system::RawOrigin<AccountId>>
-{
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		// Implement decode manually to keep backwards compatibility.
-		// Old version does not have origin field and default to ROOT.
-		Ok(Scheduled {
-			maybe_id: Decode::decode(input)?,
-			priority: Decode::decode(input)?,
-			call: Decode::decode(input)?,
-			maybe_periodic: Decode::decode(input)?,
-			origin: Decode::decode(input).unwrap_or_else(|_| system::RawOrigin::Root.into()),
-			_phantom: Default::default(),
-		})
-	}
+/// The current version of Scheduled struct.
+pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> = ScheduledV1<Call, BlockNumber, PalletsOrigin, AccountId>;
+
+// A value placed in storage that represents the current version of the Scheduler storage.
+// This value is used by the `on_runtime_upgrade` logic to determine whether we run
+// storage migration logic.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	V1,
 }
 
 decl_storage! {
@@ -132,6 +131,11 @@ decl_storage! {
 
 		/// Lookup from identity to the block number and index of the task.
 		Lookup: map hasher(twox_64_concat) Vec<u8> => Option<TaskAddress<T::BlockNumber>>;
+
+		/// Storage version of the pallet.
+		///
+		/// New networks start with last version.
+		StorageVersion build(|_| Some(Releases::V1)): Option<Releases>;
 	}
 }
 
@@ -157,6 +161,34 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		type Error = Error<T>;
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			if let None = StorageVersion::get() {
+				StorageVersion::put(Releases::V1);
+
+				Agenda::<T>::translate::<
+					Vec<Option<ScheduledLegacy<<T as Trait>::Call, T::BlockNumber>>>, _
+				>(|_, agenda| {
+					Some(
+						agenda
+						.into_iter()
+						.map(|schedule| schedule.map(|schedule| ScheduledV1 {
+							maybe_id: schedule.maybe_id,
+							priority: schedule.priority,
+							call: schedule.call,
+							maybe_periodic: schedule.maybe_periodic,
+							origin: system::RawOrigin::Root.into(),
+							_phantom: Default::default(),
+						}))
+						.collect::<Vec<_>>()
+					)
+				});
+
+				T::MaximumBlockWeight::get()
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
 
 		/// Anonymously schedule a task.
 		///
