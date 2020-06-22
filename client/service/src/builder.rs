@@ -102,7 +102,6 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
-	informant_prefix: String,
 }
 
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
@@ -366,7 +365,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: None,
 			block_announce_validator_builder: None,
-			informant_prefix: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -450,7 +448,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions_builder: Box::new(|_| ()),
 			remote_backend: Some(remote_blockchain),
 			block_announce_validator_builder: None,
-			informant_prefix: Default::default(),
 			marker: PhantomData,
 		})
 	}
@@ -545,7 +542,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -591,7 +587,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -630,7 +625,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -697,7 +691,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -754,7 +747,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -792,7 +784,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: Box::new(rpc_extensions_builder),
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
 		})
 	}
@@ -838,41 +829,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
-			informant_prefix: self.informant_prefix,
 			marker: self.marker,
-		})
-	}
-
-	/// Defines the informant's prefix for the logs. An empty string by default.
-	///
-	/// By default substrate will show logs without a prefix. Example:
-	///
-	/// ```text
-	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
-	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
-	/// ```
-	///
-	/// But you can define a prefix by using this function. Example:
-	///
-	/// ```rust,ignore
-	/// service.with_informant_prefix("[Prefix] ".to_string());
-	/// ```
-	///
-	/// This will output:
-	///
-	/// ```text
-	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
-	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
-	/// ```
-	pub fn with_informant_prefix(
-		self,
-		informant_prefix: String,
-	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
-		TExPool, TRpc, Backend>, Error>
-	where TSc: Clone, TFchr: Clone {
-		Ok(ServiceBuilder {
-			informant_prefix: informant_prefix,
-			..self
 		})
 	}
 }
@@ -990,7 +947,6 @@ ServiceBuilder<
 			rpc_extensions_builder,
 			remote_backend,
 			block_announce_validator_builder,
-			informant_prefix,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -1142,7 +1098,7 @@ ServiceBuilder<
 			client.clone(),
 			network_status_sinks.clone(),
 			transaction_pool.clone(),
-			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
+			config.informant_output_format,
 		));
 
 		Ok(Service {

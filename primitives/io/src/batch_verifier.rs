@@ -160,7 +160,7 @@ impl BatchVerifier {
 	#[must_use]
 	pub fn verify_and_clear(&mut self) -> bool {
 		let pending = std::mem::take(&mut self.pending_tasks);
-		let started = std::time::Instant::now();
+		let started = wasm_timer::Instant::now();
 
 		log::trace!(
 			target: "runtime",
