@@ -12,7 +12,8 @@ groups:
     labels:
       severity: warning
     annotations:
-      message: 'The node {{ $labels.instance }} has a CPU usage higher than 100% for more than 5 minutes'
+      message: 'The node {{ $labels.instance }} has a CPU usage higher than 100%
+      for more than 5 minutes'
 
   ##############################################################################
   # Block production
@@ -20,14 +21,16 @@ groups:
 
   - alert: LowNumberOfNewBlocks
     annotations:
-      message: 'Less than one new block per minute on instance {{ $labels.instance }}.'
+      message: 'Less than one new block per minute on instance {{
+      $labels.instance }}.'
     expr: increase(polkadot_block_height{status="best"}[1m]) < 1
     for: 3m
     labels:
       severity: warning
   - alert: LowNumberOfNewBlocks
     annotations:
-      message: 'Less than one new block per minute on instance {{ $labels.instance }}.'
+      message: 'Less than one new block per minute on instance {{
+      $labels.instance }}.'
     expr: increase(polkadot_block_height{status="best"}[1m]) < 1
     for: 10m
     labels:
@@ -43,43 +46,51 @@ groups:
     labels:
       severity: warning
     annotations:
-      message: 'Finalized block on instance {{ $labels.instance }} increases by less than 1 per minute.'
+      message: 'Finalized block on instance {{ $labels.instance }} increases by
+      less than 1 per minute.'
   - alert: BlockFinalizationSlow
     expr: increase(polkadot_block_height{status="finalized"}[1m]) < 1
     for: 10m
     labels:
       severity: critical
     annotations:
-      message: 'Finalized block on instance {{ $labels.instance }} increases by less than 1 per minute.'
+      message: 'Finalized block on instance {{ $labels.instance }} increases by
+      less than 1 per minute.'
   - alert: BlockFinalizationLaggingBehind
     # Under the assumption of an average block production of 6 seconds,
     # "best" and "finalized" being more than 10 blocks apart would imply
     # more than a 1 minute delay between block production and finalization.
-    expr: (polkadot_block_height_number{status="best"} - ignoring(status) polkadot_block_height_number{status="finalized"}) > 10
+    expr: '(polkadot_block_height_number{status="best"} - ignoring(status)
+    polkadot_block_height_number{status="finalized"}) > 10'
     for: 8m
     labels:
       severity: critical
     annotations:
-      message: "Block finalization on instance {{ $labels.instance }} is behind block production by {{ $value }} for more than 8m"
+      message: "Block finalization on instance {{ $labels.instance }} is behind
+      block production by {{ $value }} for more than 8m"
 
   ##############################################################################
   # Transaction queue
   ##############################################################################
 
   - alert: TransactionQueueSize
-    expr: polkadot_sub_txpool_validations_scheduled - polkadot_sub_txpool_validations_finished > 10
+    expr: 'polkadot_sub_txpool_validations_scheduled -
+    polkadot_sub_txpool_validations_finished > 10'
     for: 10m
     labels:
       severity: warning
     annotations:
-      message: 'The node {{ $labels.instance }} has more than 10 transactions in the queue for more than 10 minutes'
+      message: 'The node {{ $labels.instance }} has more than 10 transactions in
+      the queue for more than 10 minutes'
   - alert: TransactionQueueSize
-    expr: polkadot_sub_txpool_validations_scheduled - polkadot_sub_txpool_validations_finished > 10
+    expr: 'polkadot_sub_txpool_validations_scheduled -
+    polkadot_sub_txpool_validations_finished > 10'
     for: 30m
     labels:
       severity: critical
     annotations:
-      message: 'The node {{ $labels.instance }} has more than 10 transactions in the queue for more than 30 minutes'
+      message: 'The node {{ $labels.instance }} has more than 10 transactions in
+      the queue for more than 30 minutes'
 
   ##############################################################################
   # Networking
@@ -91,23 +102,28 @@ groups:
     labels:
       severity: warning
     annotations:
-      message: 'The node {{ $labels.instance }} has less than 3 peers for more than 3 minutes'
+      message: 'The node {{ $labels.instance }} has less than 3 peers for more
+      than 3 minutes'
   - alert: LowNumberOfPeers
     expr: polkadot_sub_libp2p_peers_count < 3
     for: 15m
     labels:
       severity: critical
     annotations:
-      message: 'The node {{ $labels.instance }} has less than 3 peers for more than 15 minutes'
+      message: 'The node {{ $labels.instance }} has less than 3 peers for more
+      than 15 minutes'
 
   ##############################################################################
   # Others
   ##############################################################################
 
   - alert: AuthorityDiscoveryHighDiscoveryFailure
-    expr: polkadot_authority_discovery_handle_value_found_event_failure / ignoring(name) polkadot_authority_discovery_dht_event_received{name="value_found"} > 0.5
+    expr: 'polkadot_authority_discovery_handle_value_found_event_failure /
+    ignoring(name)
+    polkadot_authority_discovery_dht_event_received{name="value_found"} > 0.5'
     for: 2h
     labels:
       severity: warning
     annotations:
-      message: "Authority discovery on node {{ $labels.instance }} fails to process more than 50 % of the values found on the DHT."
+      message: "Authority discovery on node {{ $labels.instance }} fails to
+      process more than 50 % of the values found on the DHT."

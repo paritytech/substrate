@@ -28,9 +28,7 @@ use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
 use sp_transaction_pool::TransactionPool;
 use sp_utils::{status_sinks, mpsc::tracing_unbounded};
-use std::fmt::Display;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{fmt::Display, sync::Arc, time::Duration, collections::VecDeque};
 use parking_lot::Mutex;
 
 mod display;
@@ -96,12 +94,30 @@ where
 			future::ready(())
 		});
 
+	future::join(
+		display_notifications,
+		display_block_import(client, format.prefix),
+	).map(|_| ())
+}
+
+fn display_block_import<B: BlockT, C>(
+	client: Arc<C>,
+	prefix: String,
+) -> impl Future<Output = ()>
+where
+	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
+	<C as HeaderMetadata<B>>::Error: Display,
+{
 	let mut last_best = {
 		let info = client.usage_info();
 		Some((info.chain.best_number, info.chain.best_hash))
 	};
 
-	let display_block_import = client.import_notification_stream().for_each(move |n| {
+	// Hashes of the last blocks we have seen at import.
+	let mut last_blocks = VecDeque::new();
+	let max_blocks_to_track = 100;
+
+	client.import_notification_stream().for_each(move |n| {
 		// detect and log reorganizations.
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best  {
@@ -114,7 +130,7 @@ where
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
 						"♻️  {}Reorg on #{},{} to #{},{}, common ancestor #{},{}",
-						format.prefix,
+						prefix,
 						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
 						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
 						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
@@ -129,18 +145,25 @@ where
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(
-			target: "substrate",
-			"✨ {}Imported #{} ({})",
-			format.prefix,
-			Colour::White.bold().paint(format!("{}", n.header.number())), 
-			n.hash,
-		);
-		future::ready(())
-	});
 
-	future::join(
-		display_notifications,
-		display_block_import
-	).map(|_| ())
+		// If we already printed a message for a given block recently,
+		// we should not print it again.
+		if !last_blocks.contains(&n.hash) {
+			last_blocks.push_back(n.hash.clone());
+
+			if last_blocks.len() > max_blocks_to_track {
+				last_blocks.pop_front();
+			}
+
+			info!(
+				target: "substrate",
+				"✨ {}Imported #{} ({})",
+				prefix,
+				Colour::White.bold().paint(format!("{}", n.header.number())),
+				n.hash,
+			);
+		}
+
+		future::ready(())
+	})
 }

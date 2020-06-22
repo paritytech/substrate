@@ -55,7 +55,7 @@ use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, Pee
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
@@ -82,7 +82,7 @@ pub use sc_network::config::{
 	TransactionImportFuture,
 };
 pub use sc_tracing::TracingReceiver;
-pub use task_manager::SpawnTaskHandle;
+pub use task_manager::{SpawnEssentialTaskHandle, SpawnTaskHandle};
 use task_manager::TaskManager;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_api::{ApiExt, ConstructRuntimeApi, ApiErrorExt};
@@ -166,12 +166,18 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	/// The task name is a `&'static str` as opposed to a `String`. The reason for that is that
 	/// in order to avoid memory consumption issues with the Prometheus metrics, the set of
 	/// possible task names has to be bounded.
+	#[deprecated(note = "Use `spawn_task_handle().spawn() instead.")]
 	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Spawns a task in the background that runs the future passed as
 	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
+	#[deprecated(note = "Use `spawn_essential_task_handle().spawn() instead.")]
 	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
+
+	/// Returns a handle for spawning essential tasks. Any task spawned through this handle is
+	/// considered essential, i.e. if it errors we trigger a service exit.
+	fn spawn_essential_task_handle(&self) -> SpawnEssentialTaskHandle;
 
 	/// Returns a handle for spawning tasks.
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
@@ -269,11 +275,18 @@ where
 				let _ = essential_failed.send(());
 			});
 
-		let _ = self.spawn_task(name, essential_task);
+		let _ = self.spawn_task_handle().spawn(name, essential_task);
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
 		self.task_manager.spawn_handle()
+	}
+
+	fn spawn_essential_task_handle(&self) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle::new(
+			self.essential_failed_tx.clone(),
+			self.task_manager.spawn_handle(),
+		)
 	}
 
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
@@ -381,6 +394,13 @@ fn build_network_future<
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
 			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
+			}
+
+			if let sp_consensus::BlockOrigin::Own = notification.origin {
+				network.service().own_block_imported(
+					notification.hash,
+					notification.header.number().clone(),
+				);
 			}
 		}
 

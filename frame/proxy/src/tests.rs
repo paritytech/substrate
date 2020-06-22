@@ -154,6 +154,7 @@ type Proxy = Module<Test>;
 use frame_system::Call as SystemCall;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
+use pallet_balances::Event as BalancesEvent;
 use pallet_utility::Call as UtilityCall;
 use pallet_utility::Event as UtilityEvent;
 use super::Call as ProxyCall;
@@ -242,6 +243,14 @@ fn filtering_works() {
 			UtilityEvent::BatchInterrupted(0, DispatchError::BadOrigin).into(),
 			RawEvent::ProxyExecuted(Ok(())).into(),
 		]);
+
+		let call = Box::new(Call::Proxy(ProxyCall::remove_proxies()));
+		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
+		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
+		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
+		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
+		expect_events(vec![BalancesEvent::<Test>::Unreserved(1, 5).into(), RawEvent::ProxyExecuted(Ok(())).into()]);
 	});
 }
 
