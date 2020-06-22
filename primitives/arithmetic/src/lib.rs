@@ -89,18 +89,18 @@ where
 /// A collection-like object that is made of values of type `T` and can normalize its individual
 /// values around a centric point.
 pub trait Normalizable<T> {
-	/// Normalize self around `t_max`.
+	/// Normalize self around `targeted_sum`.
 	///
-	/// Only returns `Ok` if the new sum of results is guaranteed to be equal to `t_max`. Else,
-	/// returns an error explaining why it failed to do so.
-	fn normalize(&self, t_max: T) -> Result<Vec<T>, &'static str>;
+	/// Only returns `Ok` if the new sum of results is guaranteed to be equal to `targeted_sum`.
+	/// Else, returns an error explaining why it failed to do so.
+	fn normalize(&self, targeted_sum: T) -> Result<Vec<T>, &'static str>;
 }
 
 macro_rules! impl_normalize_for_numeric {
 	($numeric:ty) => {
 		impl Normalizable<$numeric> for Vec<$numeric> {
-			fn normalize(&self, t_max: $numeric) -> Result<Vec<$numeric>, &'static str> {
-				normalize(self.as_ref(), t_max)
+			fn normalize(&self, targeted_sum: $numeric) -> Result<Vec<$numeric>, &'static str> {
+				normalize(self.as_ref(), targeted_sum)
 			}
 		}
 	};
@@ -111,23 +111,24 @@ impl_normalize_for_numeric!(u64);
 impl_normalize_for_numeric!(u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
-	fn normalize(&self, t_max: P) -> Result<Vec<P>, &'static str> {
+	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
 		let inners = self.iter().map(|p| p.clone().deconstruct().into()).collect::<Vec<_>>();
-		let normalized = normalize(inners.as_ref(), t_max.deconstruct().into())?;
+		let normalized = normalize(inners.as_ref(), targeted_sum.deconstruct().into())?;
 		Ok(normalized.into_iter().map(|i: UpperOf<P>| P::from_parts(i.saturated_into())).collect())
 	}
 }
 
 
-/// Normalize `input` so that the sum of all elements reaches `t_max`.
+/// Normalize `input` so that the sum of all elements reaches `targeted_sum`.
 ///
 /// This implementation is currently in a balanced position between being performant and accurate.
 ///
 /// 1. We prefer storing original indices, and sorting the `input` only once. This will save the
 ///    cost of sorting per round at the cost of a little bit of memory.
 /// 2. The granularity of increment/decrements is determined by the difference and the number of
-///    elements in `input` and their sum difference with `t_max`. In short, the implementation is
-///    very likely to over-increment/decrement in case the `diff / input.len()` is rather small.
+///    elements in `input` and their sum difference with `targeted_sum`. In short, the
+///    implementation is very likely to over-increment/decrement in case the `diff / input.len()` is
+///    rather small.
 ///
 /// This function can return an error is if `T` cannot be built from the size of `input`, or if
 /// `sum(input)` cannot fit inside `T`. Moreover, if any of the internal operations saturate, it
@@ -136,7 +137,7 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 /// Based on the above, the best use case of the function will be only to correct small rounding
 /// errors. If the difference of the elements is vert large, then the subtraction/addition of one
 /// element with `diff / input.len()` might easily saturate and results will be `Err`.
-pub fn normalize<T>(input: &[T], t_max: T) -> Result<Vec<T>, &'static str>
+pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str>
 	where T: Clone + Copy + Ord + BaseArithmetic + Debug,
 {
 	let mut sum = T::zero();
@@ -150,12 +151,12 @@ pub fn normalize<T>(input: &[T], t_max: T) -> Result<Vec<T>, &'static str>
 		return Ok(Vec::<T>::new());
 	}
 
-	let diff = t_max.max(sum) - t_max.min(sum);
+	let diff = targeted_sum.max(sum) - targeted_sum.min(sum);
 	if diff.is_zero() {
 		return Ok(input.to_vec());
 	}
 
-	let needs_bump = t_max > sum;
+	let needs_bump = targeted_sum > sum;
 	let per_round = diff / count.try_into().map_err(|_| "failed to build T from usize")?;
 	let mut leftover = diff % count.try_into().map_err(|_| "failed to build T from usize")?;
 
@@ -195,7 +196,7 @@ pub fn normalize<T>(input: &[T], t_max: T) -> Result<Vec<T>, &'static str>
 				min_index += 1;
 				min_index = min_index % count;
 			}
-			leftover = leftover.saturating_sub(One::one());
+			leftover -= One::one()
 		}
 	} else {
 		// must decrease the stakes a bit. decrement from the max element. index of maximum is now
@@ -226,16 +227,16 @@ pub fn normalize<T>(input: &[T], t_max: T) -> Result<Vec<T>, &'static str>
 			if output_with_idx[max_index].1 <= threshold {
 				max_index = max_index.checked_sub(1).unwrap_or(count - 1);
 			}
-			leftover = leftover.saturating_sub(One::one());
+			leftover -= One::one()
 		}
 	}
 
 	debug_assert_eq!(
 		output_with_idx.iter().fold(T::zero(), |acc, (_, x)| acc + *x),
-		t_max,
+		targeted_sum,
 		"sum({:?}) != {:?}",
 		output_with_idx,
-		t_max,
+		targeted_sum,
 	);
 
 	// sort again based on the original index.

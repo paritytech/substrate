@@ -35,7 +35,7 @@ fn main() {
 	loop {
 		fuzz!(|data: (Vec<u32>, u32)| {
 			let (data, norm) = data;
-			let pre_sum = data.iter().fold(0u128, |acc, x| acc + *x as u128);
+			let pre_sum: u128 = data.iter().map(|x| *x as u128).sum();
 
 			let normalized = data.normalize(norm);
 			// error cases.
@@ -47,7 +47,7 @@ fn main() {
 					if data.len() > 0 {
 
 						// if sum goes beyond u128, panic.
-						let sum = normalized.iter().fold(0u128, |acc, x| acc + *x as u128);
+						let sum: u128 = normalized.iter().map(|x| *x as u128).sum();
 						assert_eq!(
 							sum,
 							norm as u128,
