@@ -239,6 +239,16 @@ impl std::fmt::Display for Analysis {
 	}
 }
 
+impl std::fmt::Debug for Analysis {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{}", self.base)?;
+		for (&m, n) in self.slopes.iter().zip(self.names.iter()) {
+			write!(f, " + ({} * {})", m, n)?;
+		}
+		write!(f,"")
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
