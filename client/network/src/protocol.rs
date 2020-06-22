@@ -596,7 +596,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		match message {
 			GenericMessage::Status(_) =>
-				warn!(target: "sub-libp2p", "Received unexpected Status"),
+				debug!(target: "sub-libp2p", "Received unexpected Status"),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				let outcome = self.on_block_response(who.clone(), r);
