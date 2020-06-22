@@ -24,7 +24,7 @@ class SingleNodeHeightCommand extends Command {
       await hypervisor.startForwardServer(namespace, pod, port)
       JsonRpcCallTestHeight(url, port)
     } else {
-      errorExit('Not enough resources if provided')
+      errorExit('Not enough parameters provided. Either specify url and port or pod and namespace.')
     }
 
     async function JsonRpcCallTestHeight (url, port) {
