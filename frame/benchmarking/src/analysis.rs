@@ -29,8 +29,15 @@ pub struct Analysis {
 	model: Option<RegressionModel>,
 }
 
+pub enum BenchmarkSelector {
+	ExtrinsicTime,
+	StorageRootTime,
+	Reads,
+	Writes,
+}
+
 impl Analysis {
-	pub fn median_slopes(r: &Vec<BenchmarkResults>) -> Option<Self> {
+	pub fn median_slopes(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
 		let results = r[0].components.iter().enumerate().map(|(i, &(param, _))| {
 			let mut counted = BTreeMap::<Vec<u32>, usize>::new();
 			for result in r.iter() {
@@ -46,7 +53,16 @@ impl Analysis {
 						.zip(others.iter())
 						.enumerate()
 						.all(|(j, (v1, v2))| j == i || v1 == *v2)
-				).map(|result| (result.components[i].1, result.extrinsic_time))
+				).map(|result| {
+					// Extract the data we are interested in analyzing
+					let data = match selector {
+						BenchmarkSelector::ExtrinsicTime => result.extrinsic_time,
+						BenchmarkSelector::StorageRootTime => result.storage_root_time,
+						BenchmarkSelector::Reads => result.reads.into(),
+						BenchmarkSelector::Writes => result.writes.into(),
+					};
+					(result.components[i].1, data)
+				})
 				.collect::<Vec<_>>();
 			(format!("{:?}", param), i, others, values)
 		}).collect::<Vec<_>>();
@@ -97,12 +113,18 @@ impl Analysis {
 		})
 	}
 
-	pub fn min_squares_iqr(r: &Vec<BenchmarkResults>) -> Option<Self> {
+	pub fn min_squares_iqr(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
 		let mut results = BTreeMap::<Vec<u32>, Vec<u128>>::new();
 		for result in r.iter() {
 			let p = result.components.iter().map(|x| x.1).collect::<Vec<_>>();
-			results.entry(p).or_default().push(result.extrinsic_time);
+			results.entry(p).or_default().push(match selector {
+					BenchmarkSelector::ExtrinsicTime => result.extrinsic_time,
+					BenchmarkSelector::StorageRootTime => result.storage_root_time,
+					BenchmarkSelector::Reads => result.reads.into(),
+					BenchmarkSelector::Writes => result.writes.into(),
+				})
 		}
+
 		for (_, rs) in results.iter_mut() {
 			rs.sort();
 			let ql = rs.len() / 4;
@@ -249,7 +271,7 @@ mod tests {
 			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0),
 			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0),
 			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0),
-		]).unwrap();
+		], BenchmarkSelector::ExtrinsicTime).unwrap();
 		assert_eq!(a.base, 10_000_000);
 		assert_eq!(a.slopes, vec![1_000_000, 100_000]);
 	}
@@ -265,7 +287,7 @@ mod tests {
 			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0),
 			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0),
 			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0),
-		]).unwrap();
+		], BenchmarkSelector::ExtrinsicTime).unwrap();
 		assert_eq!(a.base, 10_000_000);
 		assert_eq!(a.slopes, vec![1_000_000, 100_000]);
 	}
