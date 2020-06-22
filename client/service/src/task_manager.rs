@@ -265,17 +265,6 @@ impl TaskManager {
 	}
 }
 
-impl sp_core::traits::SpawnNamed for TaskManager {
-	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn_blocking(name, future);
-	}
-
-	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
-		self.spawn(name, future);
-	}
-}
-
-
 impl Future for TaskManager {
 	type Output = Result<(), crate::Error>;
 
