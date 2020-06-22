@@ -31,6 +31,7 @@ use sp_core::offchain::{
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 pub use sp_offchain::STORAGE_PREFIX;
+pub use http::SharedClient;
 
 #[cfg(not(target_os = "unknown"))]
 mod http;
@@ -260,7 +261,7 @@ impl AsyncApi {
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-		hyper_client: Arc<hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>>,
+		hyper_client: SharedClient,
 	) -> (Api<S>, Self) {
 		let (http_api, http_worker) = http::http(hyper_client);
 

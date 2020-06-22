@@ -44,10 +44,9 @@ use sc_network::NetworkStateInfo;
 use sp_core::{offchain::{self, OffchainStorage}, ExecutionContext, traits::SpawnNamed};
 use sp_runtime::{generic::BlockId, traits::{self, Header}};
 use futures::{prelude::*, future::ready};
-use hyper_rustls::HttpsConnector;
-use hyper::{Client as HyperClient, Body, client};
 
 mod api;
+use api::SharedClient;
 
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 
@@ -57,19 +56,19 @@ pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	db: Storage,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
-	hyper_client: Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>,
+	shared_client: SharedClient,
 }
 
 impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(client: Arc<Client>, db: Storage) -> Self {
-		let hyper_client = Arc::new(HyperClient::builder().build(HttpsConnector::new()));
+		let shared_client = SharedClient::new();
 		Self {
 			client,
 			db,
 			_block: PhantomData,
 			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
-			hyper_client,
+			shared_client,
 		}
 	}
 }
@@ -125,7 +124,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				self.db.clone(),
 				network_state.clone(),
 				is_validator,
-				self.hyper_client.clone(),
+				self.shared_client.clone(),
 			);
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();

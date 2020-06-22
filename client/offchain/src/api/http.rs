@@ -37,8 +37,18 @@ use std::sync::Arc;
 use hyper::{Client as HyperClient, Body, client};
 use hyper_rustls::HttpsConnector;
 
+/// Wrapper struct used for keeping the hyper_rustls client running.
+#[derive(Clone)]
+pub struct SharedClient(Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>);
+
+impl SharedClient {
+	pub fn new() -> Self {
+		Self(Arc::new(HyperClient::builder().build(HttpsConnector::new())))
+	}
+}
+
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
-pub fn http(hyper_client: Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>) -> (HttpApi, HttpWorker) {
+pub fn http(shared_client: SharedClient) -> (HttpApi, HttpWorker) {
 	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_to_worker");
 	let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_to_api");
 
@@ -54,7 +64,7 @@ pub fn http(hyper_client: Arc<HyperClient<HttpsConnector<client::HttpConnector>,
 	let engine = HttpWorker {
 		to_api,
 		from_api,
-		http_client: hyper_client,
+		http_client: shared_client.0,
 		requests: Vec::new(),
 	};
 
