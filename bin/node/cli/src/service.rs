@@ -26,8 +26,6 @@ use grandpa::{
 	self,
 	FinalityProofProvider as GrandpaFinalityProofProvider,
 	StorageAndProofProvider,
-	GrandpaJustificationSender,
-	GrandpaJustificationReceiver,
 };
 use node_executor;
 use node_primitives::Block;
@@ -37,8 +35,6 @@ use sc_service::{
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
-
-use parking_lot::Mutex;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///

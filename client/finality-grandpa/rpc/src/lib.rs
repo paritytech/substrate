@@ -19,24 +19,28 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{FutureExt, TryFutureExt, stream, TryStreamExt, future, StreamExt};
+use futures::{FutureExt, TryFutureExt, TryStreamExt, StreamExt};
+use log::warn;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId, manager::SubscriptionManager};
-
-use jsonrpc_core::futures::sink::Sink as Sink01;
-use jsonrpc_core::futures::stream::Stream as Stream01;
-use jsonrpc_core::futures::future::Future as Future01;
+use jsonrpc_core::futures::{
+	sink::Sink as Sink01,
+	stream::Stream as Stream01,
+	future::Future as Future01,
+};
 
 mod error;
 mod report;
 
-use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
-
 use sc_finality_grandpa::{JustificationNotification , GrandpaJustificationReceiver};
 use sp_runtime::traits::Block as BlockT;
 
+use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
+/// Returned when unsubscribing to finality notifications fail.
+pub const UNSUBSCRIBE_ERROR_CODE: i64 = 2;
 
 type FutureResult<T> =
 	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
@@ -54,12 +58,28 @@ pub trait GrandpaApi<Notification> {
 
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
-	#[pubsub(subscription = "grandpa_justifications", subscribe, name = "grandpa_subscribeJustifications")]
-	fn subscribe_justifications(&self, metadata: Self::Metadata, subscriber: Subscriber<Notification>);
+	#[pubsub(
+		subscription = "grandpa_justifications",
+		subscribe,
+		name = "grandpa_subscribeJustifications"
+	)]
+	fn subscribe_justifications(
+		&self,
+		metadata: Self::Metadata,
+		subscriber: Subscriber<Notification>
+	);
 
 	/// Unsubscribe from receiving notifications about recently finalized blocks.
-	#[pubsub(subscription = "grandpa_justifications", unsubscribe, name = "grandpa_unsubscribeJustifications")]
-	fn unsubscribe_justifications(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool>;
+	#[pubsub(
+		subscription = "grandpa_justifications",
+		unsubscribe,
+		name = "grandpa_unsubscribeJustifications"
+	)]
+	fn unsubscribe_justifications(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId
+	) -> FutureResult<bool>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -85,13 +105,10 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 			manager,
 		}
 	}
-
-	fn manager(&self) -> &SubscriptionManager {
-		&self.manager
-	}
 }
 
-impl<AuthoritySet, VoterState, Block> GrandpaApi<JustificationNotification<Block>> for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
+impl<AuthoritySet, VoterState, Block> GrandpaApi<JustificationNotification<Block>>
+	for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -105,28 +122,38 @@ where
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
 	}
 
-	fn subscribe_justifications(&self, _metadata: Self::Metadata, subscriber: Subscriber<JustificationNotification<Block>>) {
+	fn subscribe_justifications(
+		&self,
+		_metadata: Self::Metadata,
+		subscriber: Subscriber<JustificationNotification<Block>>
+	) {
 		let stream = self.justification_receiver.subscribe()
 			.map(|x| Ok::<_,()>(x))
+			.map_err(|e| warn!("Notification stream error: {:?}", e))
 			.compat();
 
-		let _id = self.manager.add(subscriber, |sink| {
+		self.manager.add(subscriber, |sink| {
 			let stream = stream.map(|res| Ok(res));
-			sink.sink_map_err(|e| ())
+			sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
 				.send_all(stream)
 				.map(|_| ())
 		});
 	}
 
-	fn unsubscribe_justifications(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> FutureResult<bool> {
+	fn unsubscribe_justifications(
+		&self,
+		_metadata: Option<Self::Metadata>,
+		id: SubscriptionId
+	) -> FutureResult<bool> {
 		let cancel = self.manager.cancel(id);
 		let future = async move { cancel }
 			.boxed()
 			.unit_error()
-			.map_err(|_| {
+			.map_err(|e| {
+				warn!("Error unsubscribing: {:?}", &e);
 				jsonrpc_core::Error {
-					message: "WIP: JON".to_string(),
-					code: jsonrpc_core::ErrorCode::ServerError(0), // WIP: change me
+					message: format!("Error unsubscribing: {:?}", e),
+					code: jsonrpc_core::ErrorCode::ServerError(UNSUBSCRIBE_ERROR_CODE),
 					data: None,
 				}
 			});
@@ -137,19 +164,14 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpc_core::IoHandler;
-	use sc_finality_grandpa::{report, AuthorityId};
-	use sp_core::crypto::Public;
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
+	use futures::{compat::Future01CompatExt, executor};
+	use jsonrpc_core::futures::future as future01;
 	use parking_lot::Mutex;
 
+	use sc_finality_grandpa::{report, AuthorityId};
+	use sp_core::crypto::Public;
 	use sc_network_test::Block;
-
-	use jsonrpc_core::futures::sink::Sink as Sink01;
-	use jsonrpc_core::futures::stream::Stream as Stream01;
-	use jsonrpc_core::futures::{future as future01, Future as Future01};
-
-	use futures::{compat::Future01CompatExt, executor, FutureExt};
 
 	struct TestAuthoritySet;
 	struct TestVoterState;
@@ -211,11 +233,15 @@ mod tests {
 			.expect("Failed to create thread pool executor for tests");
 	}
 
+	// These are lifted from thye jsonrpc_pubsub crate tests
 	pub struct TestTaskExecutor;
 	type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
 
 	impl future01::Executor<Boxed01Future01> for TestTaskExecutor {
-		fn execute(&self, future: Boxed01Future01) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>> {
+		fn execute(
+			&self,
+			future: Boxed01Future01
+		) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>> {
 			EXECUTOR.spawn_ok(future.compat().map(drop));
 			Ok(())
 		}
@@ -234,23 +260,22 @@ mod tests {
 			justification_receiver,
 			manager,
 		);
-		// let mut io = IoHandler::new();
+
 		let mut io = jsonrpc_core::MetaIoHandler::default();
-		// let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
 
 		let meta = sc_rpc::Metadata::default();
-
 		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
 	}
 
 	#[test]
 	fn working_rpc_handler() {
 		let finality_notifiers = Arc::new(Mutex::new(vec![]));
-		let justification_receiver = GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
+		let justification_receiver =
+			GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
 		let manager = SubscriptionManager::new(Arc::new(TestTaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(
@@ -259,7 +284,7 @@ mod tests {
 			justification_receiver,
 			manager,
 		);
-		// let mut io = IoHandler::new();
+
 		let mut io = jsonrpc_core::MetaIoHandler::default();
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
@@ -303,7 +328,6 @@ mod tests {
 		let response = r#"{"jsonrpc":"2.0","error":{"code":-32090,"message":"Subscriptions are not available on this transport."},"id":1}"#;
 
 		let meta = sc_rpc::Metadata::default();
-
 		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
 	}
 }

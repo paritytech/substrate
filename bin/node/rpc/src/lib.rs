@@ -48,8 +48,6 @@ use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::manager::SubscriptionManager;
 
-use jsonrpc_core::IoHandlerExtension;
-
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
 	/// The client instance to use.
@@ -80,7 +78,7 @@ pub struct GrandpaDeps {
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 	/// Receives notifications about justification events from Grandpa.
 	pub justification_receiver: GrandpaJustificationReceiver<Block>,
-	/// WIP
+	/// Subscription manager to keep track of pubsub subscribers.
 	pub subscriptions: SubscriptionManager,
 }
 

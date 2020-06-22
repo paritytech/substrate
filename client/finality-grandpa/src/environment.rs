@@ -1192,7 +1192,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 				justification,
 			};
 
-			justification_sender.notify(notification);
+			let _ = justification_sender.notify(notification);
 		}
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
