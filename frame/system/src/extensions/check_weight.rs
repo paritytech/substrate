@@ -454,11 +454,17 @@ mod tests {
 			let dispatch_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
 			let len = 0_usize;
 
-			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_normal, len), InvalidTransaction::ExhaustsResources);
+			assert_noop!(
+				CheckWeight::<Test>::do_pre_dispatch(&dispatch_normal, len),
+				InvalidTransaction::ExhaustsResources
+			);
 			// Thank goodness we can still do an operational transaction to possibly save the blockchain.
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len));
 			// Not too much though
-			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len), InvalidTransaction::ExhaustsResources);
+			assert_noop!(
+				CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len),
+				InvalidTransaction::ExhaustsResources
+			);
 			// Even with full block, validity of single transaction should be correct.
 			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&dispatch_operational), Ok(()));
 		});

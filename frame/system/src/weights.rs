@@ -38,14 +38,16 @@ impl ExtrinsicsWeight {
 		*value = value.saturating_add(weight);
 	}
 
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would occur.
+	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
+	/// occur.
 	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
 		let value = self.get_mut(class);
 		*value = value.checked_add(weight).ok_or(())?;
 		Ok(())
 	}
 
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
+	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
+	/// `Weight`.
 	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_sub(weight);
