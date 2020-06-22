@@ -607,15 +607,15 @@ impl<T: Trait> Module<T> {
 		let slot_number = equivocation_proof.slot_number;
 
 		// validate the equivocation proof
-		sp_consensus_babe::check_equivocation_proof(equivocation_proof)
-			.ok_or(Error::InvalidEquivocationProof)?;
+		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::InvalidEquivocationProof.into());
+		}
 
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) /
-			T::EpochDuration::get())
-		.saturated_into::<u32>();
+		let epoch_index = (slot_number.saturating_sub(GenesisSlot::get()) / T::EpochDuration::get())
+			.saturated_into::<u32>();
 
 		// check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)

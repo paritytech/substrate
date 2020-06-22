@@ -247,17 +247,12 @@ pub struct BabeEpochConfiguration {
 /// Verifies the equivocation proof by making sure that: both headers have
 /// different hashes, are targetting the same slot, and have valid signatures by
 /// the same authority.
-pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> Option<()>
+pub fn check_equivocation_proof<H>(proof: EquivocationProof<H>) -> bool
 where
 	H: Header,
 {
 	use digests::*;
 	use sp_application_crypto::RuntimeAppPublic;
-
-	// we must have different headers for the equivocation to be valid
-	if proof.first_header.hash() == proof.second_header.hash() {
-		return None;
-	}
 
 	let find_pre_digest = |header: &H| {
 		header
@@ -267,24 +262,7 @@ where
 			.find_map(|log| log.as_babe_pre_digest())
 	};
 
-	let first_pre_digest = find_pre_digest(&proof.first_header)?;
-	let second_pre_digest = find_pre_digest(&proof.second_header)?;
-
-	// both headers must be targetting the same slot and it must
-	// be the same as the one in the proof.
-	if proof.slot_number != first_pre_digest.slot_number() ||
-		first_pre_digest.slot_number() != second_pre_digest.slot_number()
-	{
-		return None;
-	}
-
-	// both headers must have been authored by the same authority
-	if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
-		return None;
-	}
-
-	let offender = proof.offender;
-	let verify_seal_signature = |mut header: H| {
+	let verify_seal_signature = |mut header: H, offender: &AuthorityId| {
 		let seal = header.digest_mut().pop()?.as_babe_seal()?;
 		let pre_hash = header.hash();
 
@@ -295,12 +273,40 @@ where
 		Some(())
 	};
 
-	// we finally verify that the expected authority has signed both headers and
-	// that the signature is valid.
-	verify_seal_signature(proof.first_header)?;
-	verify_seal_signature(proof.second_header)?;
+	let verify_proof = || {
+		// we must have different headers for the equivocation to be valid
+		if proof.first_header.hash() == proof.second_header.hash() {
+			return None;
+		}
 
-	Some(())
+		let first_pre_digest = find_pre_digest(&proof.first_header)?;
+		let second_pre_digest = find_pre_digest(&proof.second_header)?;
+
+		// both headers must be targetting the same slot and it must
+		// be the same as the one in the proof.
+		if proof.slot_number != first_pre_digest.slot_number() ||
+			first_pre_digest.slot_number() != second_pre_digest.slot_number()
+		{
+			return None;
+		}
+
+		// both headers must have been authored by the same authority
+		if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
+			return None;
+		}
+
+		// we finally verify that the expected authority has signed both headers and
+		// that the signature is valid.
+		verify_seal_signature(proof.first_header, &proof.offender)?;
+		verify_seal_signature(proof.second_header, &proof.offender)?;
+
+		Some(())
+	};
+
+	// NOTE: we isolate the verification code into an helper function that
+	// returns `Option<()>` so that we can use `?` to deal with any intermediate
+	// errors and discard the proof as invalid.
+	verify_proof().is_some()
 }
 
 /// An opaque type used to represent the key ownership proof at the runtime API
