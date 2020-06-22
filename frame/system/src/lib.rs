@@ -133,20 +133,14 @@ use sp_io::TestExternalities;
 
 pub mod offchain;
 
-mod check_era;
-mod check_genesis;
-mod check_nonce;
-mod check_spec_version;
-mod check_tx_version;
-mod check_weight;
-mod weight;
+mod extensions;
+mod weights;
 
-pub use check_era::CheckEra;
-pub use check_genesis::CheckGenesis;
-pub use check_nonce::CheckNonce;
-pub use check_spec_version::CheckSpecVersion;
-pub use check_tx_version::CheckTxVersion;
-pub use check_weight::CheckWeight;
+pub use extensions::{
+	check_era::CheckEra, check_genesis::CheckGenesis, check_nonce::CheckNonce,
+	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
+	check_weight::CheckWeight,
+};
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
