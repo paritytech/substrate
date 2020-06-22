@@ -1790,7 +1790,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "avg(increase(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__interval])) by (reason)",
+          "expr": "avg(sum(rate(${metric_namespace}_sub_libp2p_connections_closed_total{instance=~\"${nodename}\"}[$__interval])) by (instance, reason)) by (reason)",
           "interval": "",
           "legendFormat": "{{reason}}",
           "refId": "A"
