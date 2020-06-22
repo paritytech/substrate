@@ -106,8 +106,16 @@ impl<T: Zeroize> std::fmt::Debug for Protected<T> {
 	}
 }
 
-impl<T: Zeroize> From<T> for Protected<T> {
-	fn from(t: T) -> Self {
+#[cfg(feature = "std")]
+impl From<String> for Protected<String> {
+	fn from(t: String) -> Self {
+		Protected(t)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<Vec<u8>> for Protected<Vec<u8>> {
+	fn from(t: Vec<u8>) -> Self {
 		Protected(t)
 	}
 }
