@@ -405,6 +405,13 @@ pub trait CliConfiguration: Sized {
 		Ok(true)
 	}
 
+	/// Get the format for the informant
+	///
+	/// By default this enables colour and does not use a prefix.
+	fn informant_output_format(&self) -> sc_informant::OutputFormat {
+		Default::default()
+	}
+
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCli>(
 		&self,
@@ -477,7 +484,7 @@ pub trait CliConfiguration: Sized {
 			announce_block: self.announce_block()?,
 			role,
 			base_path: Some(base_path),
-			informant_output_format: sc_informant::OutputFormat::default(),
+			informant_output_format: self.informant_output_format(),
 		})
 	}
 
