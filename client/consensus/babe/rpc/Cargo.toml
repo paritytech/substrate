@@ -27,12 +27,12 @@ derive_more = "0.99.2"
 sp-api = { version = "2.0.0-rc3", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.8.0-rc3", path = "../../../../primitives/consensus/common" }
 sp-core = { version = "2.0.0-rc3", path = "../../../../primitives/core" }
+sp-application-crypto = { version = "2.0.0-rc3", path = "../../../../primitives/application-crypto" }
 sc-keystore = { version = "2.0.0-rc3", path = "../../../keystore" }
 
 [dev-dependencies]
 sc-consensus = { version = "0.8.0-rc3", path = "../../../consensus/common" }
 serde_json = "1.0.50"
-sp-application-crypto = { version = "2.0.0-rc3", path = "../../../../primitives/application-crypto" }
 sp-keyring = { version = "2.0.0-rc3", path = "../../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0-rc3", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"

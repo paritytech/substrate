@@ -231,7 +231,7 @@ pub fn new_full_base(
 		};
 
 		let babe = sc_consensus_babe::start_babe(babe_config)?;
-		task_manager.spawn_essential("babe-proposer", babe);
+		task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", babe);
 	}
 
 	// Spawn authority discovery module.
@@ -263,7 +263,7 @@ pub fn new_full_base(
 			prometheus_registry.clone(),
 		);
 
-		task_manager.spawn("authority-discovery", authority_discovery);
+		task_manager.spawn_handle().spawn("authority-discovery", authority_discovery);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -305,7 +305,7 @@ pub fn new_full_base(
 
 		// the GRANDPA voter task is considered infallible, i.e.
 		// if it fails we take down the service with it.
-		task_manager.spawn_essential(
+		task_manager.spawn_essential_handle().spawn_blocking(
 			"grandpa-voter",
 			grandpa::run_grandpa_voter(grandpa_config)?
 		);

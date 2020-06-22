@@ -149,7 +149,7 @@ pub fn new_full(config: Configuration)
 
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
-		task_manager.spawn_essential("aura", aura);
+		task_manager.spawn_essential_handle().spawn_blocking("aura", aura);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -191,7 +191,7 @@ pub fn new_full(config: Configuration)
 
 		// the GRANDPA voter task is considered infallible, i.e.
 		// if it fails we take down the service with it.
-		task_manager.spawn_essential(
+		task_manager.spawn_essential_handle().spawn_blocking(
 			"grandpa-voter",
 			sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
 		);

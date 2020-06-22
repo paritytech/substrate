@@ -1006,6 +1006,8 @@ ServiceBuilder<
 			finality_proof_provider, system_rpc_rx, import_queue
 		)?;
 
+		let spawn_handle = task_manager.spawn_handle();
+
 		// The network worker is responsible for gathering all network messages and processing
 		// them. This is quite a heavy task, and at the time of the writing of this comment it
 		// frequently happens that this future takes several seconds or in some situations
@@ -1013,7 +1015,7 @@ ServiceBuilder<
 		// issue, and ideally we would like to fix the network future to take as little time as
 		// possible, but we also take the extra harm-prevention measure to execute the networking
 		// future using `spawn_blocking`.
-		task_manager.spawn_blocking(
+		spawn_handle.spawn_blocking(
 			"network-worker",
 			network_future
 		);
@@ -1031,14 +1033,14 @@ ServiceBuilder<
 		};
 
 		// Inform the tx pool about imported and finalized blocks.
-		task_manager.spawn(
+		spawn_handle.spawn(
 			"txpool-notifications",
 			sc_transaction_pool::notification_future(client.clone(), transaction_pool.clone()),
 		);
 
 		// Inform the offchain worker about new imported blocks
 		if let Some(offchain) = offchain_workers.clone() {
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"offchain-notifications",
 				sc_offchain::notification_future(
 					config.role.is_authority(),
@@ -1050,9 +1052,9 @@ ServiceBuilder<
 			);
 		}
 
-		task_manager.spawn(
+		spawn_handle.spawn(
 			"on-transaction-imported",
-			extrinsic_notifications(transaction_pool.clone(), network.clone()),
+			transaction_notifications(transaction_pool.clone(), network.clone()),
 		);
 
 		// Prometheus metrics.
@@ -1064,7 +1066,7 @@ ServiceBuilder<
 				&config.impl_version,
 				&config.role,
 			)?;
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"prometheus-endpoint",
 				prometheus_endpoint::init_prometheus(port, registry).map(drop)
 			);
@@ -1075,12 +1077,12 @@ ServiceBuilder<
 		};
 
 		// Periodically notify the telemetry.
-		task_manager.spawn("telemetry-periodic-send", telemetry_periodic_send(
+		spawn_handle.spawn("telemetry-periodic-send", telemetry_periodic_send(
 			client.clone(), transaction_pool.clone(), metrics_service, network_status_sinks.clone()
 		));
 
 		// Periodically send the network state to the telemetry.
-		task_manager.spawn(
+		spawn_handle.spawn(
 			"telemetry-periodic-network-state",
 			telemetry_periodic_network_state(network_status_sinks.clone()),
 		);
@@ -1103,7 +1105,7 @@ ServiceBuilder<
 				&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone()
 			);
 
-			task_manager.spawn(
+			spawn_handle.spawn(
 				"telemetry-worker",
 				future,
 			);
@@ -1123,7 +1125,7 @@ ServiceBuilder<
 		}
 
 		// Spawn informant task
-		task_manager.spawn("informant", sc_informant::build(
+		spawn_handle.spawn("informant", sc_informant::build(
 			client.clone(),
 			network_status_sinks.clone(),
 			transaction_pool.clone(),
@@ -1203,7 +1205,7 @@ ServiceBuilder<
 	}
 }
 
-async fn extrinsic_notifications<TBl, TExPool>(
+async fn transaction_notifications<TBl, TExPool>(
 	transaction_pool: Arc<TExPool>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>
 )
@@ -1211,10 +1213,10 @@ async fn extrinsic_notifications<TBl, TExPool>(
 		TBl: BlockT,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 {
-	// extrinsic notifications
+	// transaction notifications
 	transaction_pool.import_notification_stream()
 		.for_each(move |hash| {
-			network.propagate_extrinsic(hash);
+			network.propagate_transaction(hash);
 			let status = transaction_pool.status();
 			telemetry!(SUBSTRATE_INFO; "txpool.import";
 				"ready" => status.ready,

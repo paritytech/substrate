@@ -15,7 +15,7 @@
 
 use std::{panic, pin::Pin, result::Result, sync::Arc, task::{Poll, Context}};
 use exit_future::Signal;
-use log::{debug, error};
+use log::debug;
 use futures::{
 	Future, FutureExt, Stream,
 	future::{select, Either, BoxFuture},
@@ -43,7 +43,6 @@ pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
 	executor: ServiceTaskExecutor,
 	metrics: Option<Metrics>,
-	essential_failed_tx: TracingUnboundedSender<()>,
 }
 
 impl SpawnTaskHandle {
@@ -62,21 +61,6 @@ impl SpawnTaskHandle {
 	/// Spawns the blocking task with the given name. See also `spawn`.
 	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.spawn_inner(name, task, TaskType::Blocking)
-	}
-
-	/// Spawns a task in the background that runs the future passed as
-	/// parameter. The given task is considered essential, i.e. if it errors we
-	/// trigger a service exit.
-	pub fn spawn_essential(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		let mut essential_failed = self.essential_failed_tx.clone();
-		let essential_task = std::panic::AssertUnwindSafe(task)
-			.catch_unwind()
-			.map(move |_| {
-				error!("Essential task `{}` failed. Shutting down service.", name);
-				let _ = essential_failed.send(());
-			});
-
-		self.spawn(name, essential_task)
 	}
 
 	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
@@ -167,6 +151,63 @@ impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
 	}
 }
 
+/// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any
+/// task spawned through it fails. The service should be on the receiver side
+/// and will shut itself down whenever it receives any message, i.e. an
+/// essential task has failed.
+pub struct SpawnEssentialTaskHandle {
+	essential_failed_tx: TracingUnboundedSender<()>,
+	inner: SpawnTaskHandle,
+}
+
+impl SpawnEssentialTaskHandle {
+	/// Creates a new `SpawnEssentialTaskHandle`.
+	pub fn new(
+		essential_failed_tx: TracingUnboundedSender<()>,
+		spawn_task_handle: SpawnTaskHandle,
+	) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle {
+			essential_failed_tx,
+			inner: spawn_task_handle,
+		}
+	}
+
+	/// Spawns the given task with the given name.
+	///
+	/// See also [`SpawnTaskHandle::spawn`].
+	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_inner(name, task, TaskType::Async)
+	}
+
+	/// Spawns the blocking task with the given name.
+	///
+	/// See also [`SpawnTaskHandle::spawn_blocking`].
+	pub fn spawn_blocking(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, task, TaskType::Blocking)
+	}
+
+	fn spawn_inner(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+		task_type: TaskType,
+	) {
+		let mut essential_failed = self.essential_failed_tx.clone();
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.map(move |_| {
+				log::error!("Essential task `{}` failed. Shutting down service.", name);
+				let _ = essential_failed.send(());
+			});
+
+		let _ = self.inner.spawn_inner(name, essential_task, task_type);
+	}
+}
+
 /// Helper struct to manage background/async tasks in Service.
 pub struct TaskManager {
 	/// A future that resolves when the service has exited, this is useful to
@@ -190,7 +231,7 @@ impl TaskManager {
  	/// service tasks.
 	pub(super) fn new(
 		executor: ServiceTaskExecutor,
-		prometheus_registry: Option<&Registry>,
+		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
 		// A side-channel for essential tasks to communicate shutdown.
@@ -208,26 +249,6 @@ impl TaskManager {
 		})
 	}
 
-	/// Spawns a task in the background that runs the future passed as
-	/// parameter. The given task is considered essential, i.e. if it errors we
-	/// trigger a service exit.
-	pub fn spawn_essential(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_handle().spawn_essential(name, task)
-	}
-
-	/// Spawn background/async task, which will be aware on exit signal.
-	///
-	/// See also the documentation of [`SpawnTaskHandler::spawn`].
-	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_handle().spawn(name, task)
-	}
-
-	/// Spawns the blocking task with the given name.
-	///
-	/// See also the documentation of [`SpawnTaskHandler::spawn_blocking`].
-	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_handle().spawn_blocking(name, task)
-	}
 
 	/// Get a handle for spawning tasks.
 	pub fn spawn_handle(&self) -> SpawnTaskHandle {
@@ -235,8 +256,12 @@ impl TaskManager {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
-			essential_failed_tx: self.essential_failed_tx.clone(),
 		}
+	}
+
+	/// Get a handle for spawning essential tasks.
+	pub fn spawn_essential_handle(&self) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
 	}
 }
 

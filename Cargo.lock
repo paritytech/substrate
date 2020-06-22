@@ -2776,9 +2776,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-ping"
-version = "0.19.1"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c189cf1dfe4b3f01e2c0fe5e97a6f5df8aeb6f3569e26981015eb7c08015ce5f"
+checksum = "ffb3c4f9273313357d4977799aec69f581cfe9568854919c5b8066018ccf59f5"
 dependencies = [
  "futures 0.3.4",
  "libp2p-core",
@@ -4759,9 +4759,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "1.3.0"
+version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "329c8f7f4244ddb5c37c103641027a76c530e65e8e4b8240b29f81ea40508b17"
+checksum = "a74f02beb35d47e0706155c9eac554b50c671e0d868fe8296bcdf44a9a4847bf"
 dependencies = [
  "arrayvec 0.5.1",
  "bitvec",
@@ -6092,6 +6092,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "pdqselect",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus-epochs",
@@ -6425,6 +6426,7 @@ version = "2.0.0-rc3"
 dependencies = [
  "derive_more",
  "hex",
+ "merlin",
  "parking_lot 0.10.2",
  "rand 0.7.3",
  "serde_json",
@@ -7456,6 +7458,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-consensus",
  "sp-consensus-vrf",
+ "sp-core",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
@@ -7511,6 +7514,7 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "regex",
  "schnorrkel",
  "serde",
@@ -7630,7 +7634,6 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "sp-arithmetic",
- "sp-npos-elections",
  "sp-npos-elections-compact",
  "sp-runtime",
  "sp-std",
