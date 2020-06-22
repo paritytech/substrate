@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Monitor the status of the gitlab-check-companion-build job
-        uses: s3krit/await-status-action@4528ebbdf6e29bbec77c41caad1b2dec148ba894
+        uses: s3krit/await-status-action@v1.0.1
         id: 'check-companion-status'
         with:
           authToken: ${{ secrets.GITHUB_TOKEN }}
@@ -17,6 +17,8 @@ jobs:
           contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
           timeout: 1800
           notPresentTimeout: 3600 # It can take quite a while before the job starts...
+          failedStates: failure
+          interruptedStates: error # Error = job was probably cancelled. We don't want to label the PR in that case
       - name: Label success
         uses: andymckay/labeler@master
         if: steps.check-companion-status.outputs.result == 'success'
