@@ -248,47 +248,69 @@ mod tests {
 		components: Vec<(BenchmarkParameter, u32)>,
 		extrinsic_time: u128,
 		storage_root_time: u128,
+		reads: u32,
+		writes: u32,
 	) -> BenchmarkResults {
 		BenchmarkResults {
 			components,
 			extrinsic_time,
 			storage_root_time,
-			reads: 0,
+			reads,
 			repeat_reads: 0,
-			writes: 0,
+			writes,
 			repeat_writes: 0,
 		}
 	}
 
 	#[test]
 	fn analysis_median_slopes_should_work() {
-		let a = Analysis::median_slopes(&vec![
-			benchmark_result(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0),
-		], BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(a.base, 10_000_000);
-		assert_eq!(a.slopes, vec![1_000_000, 100_000]);
+		let data = vec![
+			benchmark_result(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0, 3, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0, 4, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0, 5, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0, 6, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0, 5, 2),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0, 5, 6),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0, 5, 14),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0, 5, 20),
+		];
+
+		let extrinsic_time = Analysis::median_slopes(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
+		assert_eq!(extrinsic_time.base, 10_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![1_000_000, 100_000]);
+
+		let reads = Analysis::median_slopes(&data, BenchmarkSelector::Reads).unwrap();
+		assert_eq!(reads.base, 2);
+		assert_eq!(reads.slopes, vec![1, 0]);
+
+		let writes = Analysis::median_slopes(&data, BenchmarkSelector::Writes).unwrap();
+		assert_eq!(writes.base, 0);
+		assert_eq!(writes.slopes, vec![0, 2]);
 	}
 
 	#[test]
 	fn analysis_median_min_squares_should_work() {
-		let a = Analysis::min_squares_iqr(&vec![
-			benchmark_result(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0),
-			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0),
-		], BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(a.base, 10_000_000);
-		assert_eq!(a.slopes, vec![1_000_000, 100_000]);
+		let data = vec![
+			benchmark_result(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0, 3, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0, 4, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0, 5, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0, 6, 10),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0, 5, 2),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0, 5, 6),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0, 5, 14),
+			benchmark_result(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0, 5, 20),
+		];
+
+		let extrinsic_time = Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
+		assert_eq!(extrinsic_time.base, 10_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![1_000_000, 100_000]);
+
+		let reads = Analysis::min_squares_iqr(&data, BenchmarkSelector::Reads).unwrap();
+		assert_eq!(reads.base, 2);
+		assert_eq!(reads.slopes, vec![1, 0]);
+
+		let writes = Analysis::min_squares_iqr(&data, BenchmarkSelector::Writes).unwrap();
+		assert_eq!(writes.base, 0);
+		assert_eq!(writes.slopes, vec![0, 2]);
 	}
 }
