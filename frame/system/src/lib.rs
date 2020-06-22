@@ -112,7 +112,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+		Dispatchable, DispatchInfoOf, PostDispatchInfoOf, Printable,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -123,7 +123,7 @@ use frame_support::{
 	storage,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap, EnsureOrigin,
+		StoredMap, EnsureOrigin, OriginTrait, Filter,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
@@ -149,11 +149,16 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: 'static + Eq + Clone {
-	/// The aggregated `Origin` type used by dispatchable calls.
+	/// The basic call filter to use in Origin. All origins are built with this filter as base,
+	/// except Root.
+	type BaseCallFilter: Filter<Self::Call>;
+
+	/// The `Origin` type used by dispatchable calls.
 	type Origin:
 		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>
-		+ Clone;
+		+ Clone
+		+ OriginTrait<Call = Self::Call>;
 
 	/// The aggregated `Call` type.
 	type Call: Dispatchable + Debug;
@@ -566,7 +571,7 @@ decl_module! {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = (*_ratio * T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = *_ratio * T::MaximumBlockWeight::get()]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -1587,7 +1592,10 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
 		// to them actually being useful. Block producers are thus not allowed to include mandatory
 		// extrinsics that result in error.
-		if info.class == DispatchClass::Mandatory && result.is_err() {
+		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
+			"Bad mandantory".print();
+			e.print();
+
 			Err(InvalidTransaction::BadMandatory)?
 		}
 
@@ -1890,7 +1898,7 @@ pub(crate) mod tests {
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
 	use frame_support::{
-		impl_outer_origin, parameter_types, assert_ok, assert_noop, assert_err,
+		impl_outer_origin, parameter_types, assert_ok, assert_noop,
 		weights::{WithPostDispatchInfo, Pays},
 	};
 
@@ -1937,7 +1945,7 @@ pub(crate) mod tests {
 	pub struct Call;
 
 	impl Dispatchable for Call {
-		type Origin = ();
+		type Origin = Origin;
 		type Trait = ();
 		type Info = DispatchInfo;
 		type PostInfo = PostDispatchInfo;
@@ -1948,6 +1956,7 @@ pub(crate) mod tests {
 	}
 
 	impl Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
@@ -1997,7 +2006,7 @@ pub(crate) mod tests {
 	fn origin_works() {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
 		let x: Result<RawOrigin<u64>, Origin> = o.into();
-		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+		assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
 	}
 
 	#[test]
@@ -2719,8 +2728,8 @@ pub(crate) mod tests {
 			EnsureOneOf::<u64, EnsureRoot<u64>, EnsureSigned<u64>>::try_origin(o.into())
 		}
 
-		assert_ok!(ensure_root_or_signed(RawOrigin::Root), Either::Left(()));
-		assert_ok!(ensure_root_or_signed(RawOrigin::Signed(0)), Either::Right(0));
-		assert_err!(ensure_root_or_signed(RawOrigin::None), Origin::from(RawOrigin::None));
+		assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
+		assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
+		assert!(ensure_root_or_signed(RawOrigin::None).is_err())
 	}
 }

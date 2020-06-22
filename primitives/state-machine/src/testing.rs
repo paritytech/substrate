@@ -31,7 +31,10 @@ use crate::{
 	},
 };
 use sp_core::{
-	offchain::storage::OffchainOverlayedChanges,
+	offchain::{
+		testing::TestPersistentOffchainDB,
+		storage::OffchainOverlayedChanges
+	},
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
@@ -47,6 +50,7 @@ where
 {
 	overlay: OverlayedChanges,
 	offchain_overlay: OffchainOverlayedChanges,
+	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache: StorageTransactionCache<
 		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
 	>,
@@ -108,15 +112,28 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
 
 
+		let offchain_db = TestPersistentOffchainDB::new();
+
 		TestExternalities {
 			overlay,
 			offchain_overlay,
+			offchain_db,
 			changes_trie_config,
 			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
 			storage_transaction_cache: Default::default(),
 		}
+	}
+
+	/// Move offchain changes from overlay to the persistent store.
+	pub fn persist_offchain_overlay(&mut self) {
+		self.offchain_db.apply_offchain_changes(&mut self.offchain_overlay);
+	}
+
+	/// A shared reference type around the offchain worker storage.
+	pub fn offchain_db(&self) -> TestPersistentOffchainDB {
+		self.offchain_db.clone()
 	}
 
 	/// Insert key/value into backend
@@ -225,7 +242,7 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::traits::Externalities;
+	use sp_core::{H256, traits::Externalities};
 	use sp_runtime::traits::BlakeTwo256;
 	use hex_literal::hex;
 
@@ -236,8 +253,8 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("555d4777b52e9196e3f6373c556cc661e79cd463f881ab9e921e70fc30144bf4");
-		assert_eq!(&ext.storage_root()[..], &ROOT);
+		let root = H256::from(hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8"));
+		assert_eq!(H256::from_slice(ext.storage_root().as_slice()), root);
 	}
 
 	#[test]

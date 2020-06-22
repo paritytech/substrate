@@ -214,12 +214,12 @@ pub trait FixedPointNumber:
 		self.into_inner() == Self::Inner::one()
 	}
 
-	/// Checks if the number is positive.
+	/// Returns `true` if `self` is positive and `false` if the number is zero or negative.
 	fn is_positive(self) -> bool {
-		self.into_inner() >= Self::Inner::zero()
+		self.into_inner() > Self::Inner::zero()
 	}
 
-	/// Checks if the number is negative.
+	/// Returns `true` if `self` is negative and `false` if the number is zero or positive.
 	fn is_negative(self) -> bool {
 		self.into_inner() < Self::Inner::zero()
 	}
@@ -369,6 +369,23 @@ macro_rules! implement_fixed {
 
 			fn into_inner(self) -> Self::Inner {
 				self.0
+			}
+		}
+
+		impl $name {
+			/// const version of `FixedPointNumber::from_inner`.
+			pub const fn from_inner(inner: $inner_type) -> Self {
+				Self(inner)
+			}
+
+			#[cfg(any(feature = "std", test))]
+			pub fn from_fraction(x: f64) -> Self {
+				Self((x * (<Self as FixedPointNumber>::DIV as f64)) as $inner_type)
+			}
+
+			#[cfg(any(feature = "std", test))]
+			pub fn to_fraction(self) -> f64 {
+				self.0 as f64 / <Self as FixedPointNumber>::DIV as f64
 			}
 		}
 
@@ -1374,6 +1391,23 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_div(&$name::zero()), None);
 				assert_eq!(c.checked_div(&$name::zero()), None);
 				assert_eq!(d.checked_div(&$name::zero()), None);
+			}
+
+			#[test]
+			fn is_positive_negative_works() {
+				let one = $name::one();
+				assert!(one.is_positive());
+				assert!(!one.is_negative());
+
+				let zero = $name::zero();
+				assert!(!zero.is_positive());
+				assert!(!zero.is_negative());
+
+				if $signed {
+					let minus_one = $name::saturating_from_integer(-1);
+					assert!(minus_one.is_negative());
+					assert!(!minus_one.is_positive());
+				}
 			}
 
 			#[test]

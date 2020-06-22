@@ -194,6 +194,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
+		rpc_ipc: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
 		rpc_cors: None,
