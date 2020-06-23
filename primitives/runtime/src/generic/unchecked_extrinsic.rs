@@ -232,7 +232,12 @@ where
 
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
+		#[cfg(feature = "std")]
+		{
+			println!("versions: {:?} vs {:?}", version, TRANSACTION_VERSION);
+		}
 		if version != TRANSACTION_VERSION {
+			panic!("boo");
 			return Err("Invalid transaction version".into());
 		}
 
