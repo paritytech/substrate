@@ -120,6 +120,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.network_config.reserved_nodes.iter().map(|x| &x.multiaddr),
 			&params.network_config.transport,
 		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.public_addresses.iter(),
+			&params.network_config.transport,
+		)?;
 
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
@@ -1467,36 +1471,32 @@ fn ensure_addresses_consistent_with_transport<'a>(
 	transport: &TransportConfig,
 ) -> Result<(), Error> {
 	if matches!(transport, TransportConfig::MemoryOnly) {
-		let invalid_addresses: Vec<_> = addresses
+		let addresses: Vec<_> = addresses
 			.filter(|x| x.iter()
 				.any(|y| !matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
 			)
-			.map(|x| x.to_string())
+			.cloned()
 			.collect();
 
-		if !invalid_addresses.is_empty() {
-			return Err(Error::InvalidConfiguration(format!(
-				"The following network listen addresses are invalid because the transport \
-				is set on {:?}: {}",
-				TransportConfig::MemoryOnly,
-				invalid_addresses.join(", "),
-			)));
+		if !addresses.is_empty() {
+			return Err(Error::AddressesForAnotherTransport {
+				transport: transport.clone(),
+				addresses,
+			});
 		}
 	} else {
-		let invalid_addresses: Vec<_> = addresses
+		let addresses: Vec<_> = addresses
 			.filter(|x| x.iter()
 				.any(|y| matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
 			)
-			.map(|x| x.to_string())
+			.cloned()
 			.collect();
 
-		if !invalid_addresses.is_empty() {
-			return Err(Error::InvalidConfiguration(format!(
-				"The following network listen addresses are invalid because the transport \
-				is not set on {:?}: {}",
-				TransportConfig::MemoryOnly,
-				invalid_addresses.join(", "),
-			)));
+		if !addresses.is_empty() {
+			return Err(Error::AddressesForAnotherTransport {
+				transport: transport.clone(),
+				addresses,
+			});
 		}
 	}
 

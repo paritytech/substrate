@@ -346,7 +346,7 @@ fn lots_of_incoming_peers_works() {
 }
 
 #[test]
-#[should_panic(expected = "the transport is set on MemoryOnly")]
+#[should_panic(expected = "don't match the transport")]
 fn ensure_listen_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 
@@ -358,7 +358,7 @@ fn ensure_listen_addresses_consistent_with_transport_memory() {
 }
 
 #[test]
-#[should_panic(expected = "the transport is not set on MemoryOnly")]
+#[should_panic(expected = "don't match the transport")]
 fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
@@ -369,7 +369,7 @@ fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 }
 
 #[test]
-#[should_panic(expected = "the transport is set on MemoryOnly")]
+#[should_panic(expected = "don't match the transport")]
 fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let boot_node = config::MultiaddrWithPeerId {
@@ -386,7 +386,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 }
 
 #[test]
-#[should_panic(expected = "the transport is not set on MemoryOnly")]
+#[should_panic(expected = "don't match the transport")]
 fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 	let boot_node = config::MultiaddrWithPeerId {
@@ -402,7 +402,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 }
 
 #[test]
-#[should_panic(expected = "the transport is set on MemoryOnly")]
+#[should_panic(expected = "don't match the transport")]
 fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 	let reserved_node = config::MultiaddrWithPeerId {
@@ -419,7 +419,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 }
 
 #[test]
-#[should_panic(expected = "the transport is not set on MemoryOnly")]
+#[should_panic(expected = "don't match the transport")]
 fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
 	let reserved_node = config::MultiaddrWithPeerId {
@@ -430,6 +430,33 @@ fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
 		reserved_nodes: vec![reserved_node],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_public_addresses_consistent_with_transport_memory() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+	let public_address = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		transport: config::TransportConfig::MemoryOnly,
+		public_addresses: vec![public_address],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_public_addresses_consistent_with_transport_not_memory() {
+	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+	let public_address = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		public_addresses: vec![public_address],
 		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
