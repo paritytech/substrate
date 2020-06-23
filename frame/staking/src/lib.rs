@@ -2202,10 +2202,12 @@ decl_module! {
 				era,
 				size,
 			)
-			// TODO: instead of returning an error, panic. This makes the entire produced block
-			// invalid.
-			// This ensures that block authors will not ever try and submit a solution which is not
-			// an improvement, since they will lose their authoring points/rewards.
+			.expect(
+				"An unsigned solution can only be submitted by validators; A validator should \
+				always produce correct solutions, else this block should not be imported, thus \
+				effectively depriving the validators from their authoring reward. Hence, this panic
+				is expected."
+			)
 		}
 	}
 }
