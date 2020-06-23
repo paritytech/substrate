@@ -172,25 +172,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::get() == Releases::V1 {
-				StorageVersion::put(Releases::V2);
-
-				Agenda::<T>::translate::<
-					Vec<Option<ScheduledV1<<T as Trait>::Call, T::BlockNumber>>>, _
-				>(|_, agenda| Some(
-					agenda
-						.into_iter()
-						.map(|schedule| schedule.map(|schedule| ScheduledV2 {
-							maybe_id: schedule.maybe_id,
-							priority: schedule.priority,
-							call: schedule.call,
-							maybe_periodic: schedule.maybe_periodic,
-							origin: system::RawOrigin::Root.into(),
-							_phantom: Default::default(),
-						}))
-						.collect::<Vec<_>>()
-				));
-
+			if Self::migrate_v1_to_t2() {
 				T::MaximumBlockWeight::get()
 			} else {
 				T::DbWeight::get().reads(1)
@@ -363,6 +345,34 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Migrate storage format from V1 to V2.
+	/// Return true if migration is performed.
+	pub fn migrate_v1_to_t2() -> bool {
+		if StorageVersion::get() == Releases::V1 {
+			StorageVersion::put(Releases::V2);
+
+			Agenda::<T>::translate::<
+				Vec<Option<ScheduledV1<<T as Trait>::Call, T::BlockNumber>>>, _
+			>(|_, agenda| Some(
+				agenda
+					.into_iter()
+					.map(|schedule| schedule.map(|schedule| ScheduledV2 {
+						maybe_id: schedule.maybe_id,
+						priority: schedule.priority,
+						call: schedule.call,
+						maybe_periodic: schedule.maybe_periodic,
+						origin: system::RawOrigin::Root.into(),
+						_phantom: Default::default(),
+					}))
+					.collect::<Vec<_>>()
+			));
+
+			true
+		} else {
+			false
+		}
+	}
+
 	fn do_schedule(
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
