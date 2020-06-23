@@ -80,6 +80,11 @@ impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 }
 
 /// A store for sensitive data.
+/// Current API restricts instantiation to
+/// `String` and `Vec<u8>`, but generally
+/// this could be use for any content that
+/// is using a fix location on memory (please
+/// refer to `zeroize` crate documentation).
 ///
 /// Calls `Zeroize::zeroize` upon `Drop`.
 #[derive(Clone)]
