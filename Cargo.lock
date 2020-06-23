@@ -4413,6 +4413,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "substrate-test-utils",
 ]
 
 [[package]]

@@ -88,8 +88,9 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
+#[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-struct ScheduledLegacy<Call, BlockNumber> {
+struct ScheduledV1<Call, BlockNumber> {
 	maybe_id: Option<Vec<u8>>,
 	priority: schedule::Priority,
 	call: Call,
@@ -97,8 +98,9 @@ struct ScheduledLegacy<Call, BlockNumber> {
 }
 
 /// Information regarding an item to be executed in the future.
+#[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-pub struct ScheduledV1<Call, BlockNumber, PalletsOrigin, AccountId> {
+pub struct ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
 	maybe_id: Option<Vec<u8>>,
 	/// This task's priority.
@@ -113,7 +115,7 @@ pub struct ScheduledV1<Call, BlockNumber, PalletsOrigin, AccountId> {
 }
 
 /// The current version of Scheduled struct.
-pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> = ScheduledV1<Call, BlockNumber, PalletsOrigin, AccountId>;
+pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> = ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId>;
 
 // A value placed in storage that represents the current version of the Scheduler storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
@@ -121,6 +123,13 @@ pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> = ScheduledV1<Ca
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
 enum Releases {
 	V1,
+	V2,
+}
+
+impl Default for Releases {
+	fn default() -> Self {
+		Releases::V1
+	}
 }
 
 decl_storage! {
@@ -135,7 +144,7 @@ decl_storage! {
 		/// Storage version of the pallet.
 		///
 		/// New networks start with last version.
-		StorageVersion build(|_| Some(Releases::V1)): Option<Releases>;
+		StorageVersion build(|_| Releases::V2): Releases;
 	}
 }
 
@@ -163,16 +172,16 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			if let None = StorageVersion::get() {
-				StorageVersion::put(Releases::V1);
+			if StorageVersion::get() == Releases::V1 {
+				StorageVersion::put(Releases::V2);
 
 				Agenda::<T>::translate::<
-					Vec<Option<ScheduledLegacy<<T as Trait>::Call, T::BlockNumber>>>, _
+					Vec<Option<ScheduledV1<<T as Trait>::Call, T::BlockNumber>>>, _
 				>(|_, agenda| {
 					Some(
 						agenda
 						.into_iter()
-						.map(|schedule| schedule.map(|schedule| ScheduledV1 {
+						.map(|schedule| schedule.map(|schedule| ScheduledV2 {
 							maybe_id: schedule.maybe_id,
 							priority: schedule.priority,
 							call: schedule.call,
@@ -503,7 +512,7 @@ mod tests {
 
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok, ord_parameter_types,
-		assert_noop,
+		assert_noop, Hashable,
 		traits::{OnInitialize, OnFinalize, Filter},
 		weights::constants::RocksDbWeight,
 	};
@@ -950,6 +959,113 @@ mod tests {
 				logger::log(),
 				vec![(system::RawOrigin::Signed(1).into(), 69u32), (system::RawOrigin::Signed(1).into(), 42u32)]
 			);
+		});
+	}
+
+	#[test]
+	fn migration_to_v2_works() {
+		use frame_support::traits::OnRuntimeUpgrade;
+		use substrate_test_utils::assert_eq_uvec;
+
+		new_test_ext().execute_with(|| {
+			for i in 0..3u64 {
+				let k = i.twox_64_concat();
+				let old = vec![
+					Some(ScheduledV1 {
+						maybe_id: None,
+						priority: i as u8 + 10,
+						call: Call::Logger(logger::Call::log(96, 100)),
+						maybe_periodic: None,
+					}),
+					None,
+					Some(ScheduledV1 {
+						maybe_id: Some(b"test".to_vec()),
+						priority: 123,
+						call: Call::Logger(logger::Call::log(69, 1000)),
+						maybe_periodic: Some((456u64, 10)),
+					}),
+				];
+				frame_support::migration::put_storage_value(
+					b"Scheduler",
+					b"Agenda",
+					&k,
+					old,
+				);
+			}
+
+			assert_eq!(StorageVersion::get(), Releases::V1);
+
+			Scheduler::on_runtime_upgrade();
+
+			assert_eq_uvec!(Agenda::<Test>::iter().collect::<Vec<_>>(), vec![
+				(
+					0,
+					vec![
+					Some(ScheduledV2 {
+						maybe_id: None,
+						priority: 10,
+						call: Call::Logger(logger::Call::log(96, 100)),
+						maybe_periodic: None,
+						origin: root(),
+						_phantom: PhantomData::<u64>::default(),
+					}),
+					None,
+					Some(ScheduledV2 {
+						maybe_id: Some(b"test".to_vec()),
+						priority: 123,
+						call: Call::Logger(logger::Call::log(69, 1000)),
+						maybe_periodic: Some((456u64, 10)),
+						origin: root(),
+						_phantom: PhantomData::<u64>::default(),
+					}),
+				]),
+				(
+					1,
+					vec![
+						Some(ScheduledV2 {
+							maybe_id: None,
+							priority: 11,
+							call: Call::Logger(logger::Call::log(96, 100)),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV2 {
+							maybe_id: Some(b"test".to_vec()),
+							priority: 123,
+							call: Call::Logger(logger::Call::log(69, 1000)),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					]
+				),
+				(
+					2,
+					vec![
+						Some(ScheduledV2 {
+							maybe_id: None,
+							priority: 12,
+							call: Call::Logger(logger::Call::log(96, 100)),
+							maybe_periodic: None,
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+						None,
+						Some(ScheduledV2 {
+							maybe_id: Some(b"test".to_vec()),
+							priority: 123,
+							call: Call::Logger(logger::Call::log(69, 1000)),
+							maybe_periodic: Some((456u64, 10)),
+							origin: root(),
+							_phantom: PhantomData::<u64>::default(),
+						}),
+					]
+				)
+			]);
+
+			assert_eq!(StorageVersion::get(), Releases::V2);
 		});
 	}
 }
