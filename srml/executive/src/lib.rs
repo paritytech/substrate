@@ -51,7 +51,7 @@ mod internal {
 /// Something that can be used to execute a block.
 pub trait ExecuteBlock<Block: BlockT> {
 	/// Actually execute all transitioning for `block`.
-	fn execute_block(block: Block);
+	fn execute_block(block: Block, extra: Option<Vec<u8>>);
 }
 
 pub struct Executive<System, Block, Context, Payment, AllModules>(
@@ -70,8 +70,8 @@ impl<
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
-	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block);
+	fn execute_block(block: Block, extra: Option<Vec<u8>>) {
+		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block, extra);
 	}
 }
 
@@ -114,7 +114,7 @@ impl<
 	}
 
 	/// Actually execute all transitioning for `block`.
-	pub fn execute_block(block: Block) {
+	pub fn execute_block(block: Block, extra: Option<Vec<u8>>) {
 		Self::initialize_block(block.header());
 
 		// any initial checks

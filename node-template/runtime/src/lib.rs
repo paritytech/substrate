@@ -234,8 +234,8 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn execute_block(block: Block) {
-			Executive::execute_block(block)
+		fn execute_block(block: Block, extra: Option<Vec<u8>>) {
+			Executive::execute_block(block, extra)
 		}
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {

@@ -120,7 +120,7 @@ decl_runtime_apis! {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
-		fn execute_block(block: Block);
+		fn execute_block(block: Block, extra: Option<Vec<u8>>);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
 		fn initialize_block(header: &<Block as BlockT>::Header);
