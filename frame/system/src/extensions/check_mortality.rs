@@ -54,7 +54,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckMortality<T> {
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckEra";
+	const IDENTIFIER: &'static str = "CheckMortality";
 
 	fn validate(
 		&self,
