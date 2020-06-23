@@ -1278,9 +1278,9 @@ decl_module! {
 		/// Number of eras that staked funds must remain bonded for.
 		const BondingDuration: EraIndex = T::BondingDuration::get();
 
-		/// Number of eras that slashes are deferred by, after computation. 
+		/// Number of eras that slashes are deferred by, after computation.
 		///
-		/// This should be less than the bonding duration. 
+		/// This should be less than the bonding duration.
 		/// Set to 0 if slashes should be applied immediately, without opportunity for
 		/// intervention.
 		const SlashDeferDuration: EraIndex = T::SlashDeferDuration::get();
@@ -1294,7 +1294,7 @@ decl_module! {
 		/// length of a session will be pointless.
 		const ElectionLookahead: T::BlockNumber = T::ElectionLookahead::get();
 
-		/// Maximum number of balancing iterations to run in the offchain submission. 
+		/// Maximum number of balancing iterations to run in the offchain submission.
 		///
 		/// If set to 0, balance_solution will not be executed at all.
 		const MaxIterations: u32 = T::MaxIterations::get();
@@ -1311,28 +1311,6 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> Weight {
-			#[allow(dead_code)]
-			mod inner {
-				pub struct Module<T>(sp_std::marker::PhantomData<T>);
-				frame_support::decl_storage! {
-					trait Store for Module<T: super::Trait> as Staking {
-						pub MigrateEra: Option<super::EraIndex>;
-					}
-				}
-			}
-
-			if let Releases::V3_0_0 = StorageVersion::get() {
-				StorageVersion::put(Releases::V4_0_0);
-				inner::MigrateEra::kill();
-
-				T::DbWeight::get().reads_writes(1, 1)
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
 
 		/// sets `ElectionStatus` to `Open(now)` where `now` is the block number at which the
 		/// election window has opened, if we are at the last session and less blocks than

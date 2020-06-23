@@ -1502,7 +1502,7 @@ pub mod schedule {
 			priority: Priority,
 			origin: Origin,
 			call: Call
-		) -> Self::Address;
+		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
 		/// also.

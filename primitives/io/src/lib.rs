@@ -155,6 +155,46 @@ pub trait Storage {
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)
 	}
+
+	/// Start a new nested transaction.
+	///
+	/// This allows to either commit or roll back all changes that are made after this call.
+	/// For every transaction there must be a matching call to either `rollback_transaction`
+	/// or `commit_transaction`. This is also effective for all values manipulated using the
+	/// `DefaultChildStorage` API.
+	///
+	/// # Warning
+	///
+	/// This is a low level API that is potentially dangerous as it can easily result
+	/// in unbalanced transactions. For example, FRAME users should use high level storage
+	/// abstractions.
+	fn start_transaction(&mut self) {
+		self.storage_start_transaction();
+	}
+
+	/// Rollback the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are discarded.
+	///
+	/// # Panics
+	///
+	/// Will panic if there is no open transaction.
+	fn rollback_transaction(&mut self) {
+		self.storage_rollback_transaction()
+			.expect("No open transaction that can be rolled back.");
+	}
+
+	/// Commit the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are committed.
+	///
+	/// # Panics
+	///
+	/// Will panic if there is no open transaction.
+	fn commit_transaction(&mut self) {
+		self.storage_commit_transaction()
+			.expect("No open transaction that can be committed.");
+	}
 }
 
 /// Interface for accessing the child storage for default child trie,

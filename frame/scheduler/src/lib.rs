@@ -162,6 +162,8 @@ decl_error! {
 		FailedToSchedule,
 		/// Failed to cancel a scheduled call
 		FailedToCancel,
+		/// Given target block number is in the past.
+		TargetBlockNumberInPast,
 	}
 }
 
@@ -198,7 +200,7 @@ decl_module! {
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
-			let _ = Self::do_schedule(when, maybe_periodic, priority, origin.caller().clone(), *call);
+			Self::do_schedule(when, maybe_periodic, priority, origin.caller().clone(), *call)?;
 		}
 
 		/// Cancel an anonymously scheduled task.
@@ -379,7 +381,11 @@ impl<T: Trait> Module<T> {
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
 		call: <T as Trait>::Call
-	) -> TaskAddress<T::BlockNumber> {
+	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
+		if when <= frame_system::Module::<T>::block_number() {
+			return Err(Error::<T>::TargetBlockNumberInPast.into())
+		}
+
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -391,7 +397,8 @@ impl<T: Trait> Module<T> {
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		Self::deposit_event(RawEvent::Scheduled(when, index));
-		(when, index)
+
+		Ok((when, index))
 	}
 
 	fn do_cancel(
@@ -436,6 +443,10 @@ impl<T: Trait> Module<T> {
 			return Err(Error::<T>::FailedToSchedule)?
 		}
 
+		if when <= frame_system::Module::<T>::block_number() {
+			return Err(Error::<T>::TargetBlockNumberInPast.into())
+		}
+
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -450,6 +461,7 @@ impl<T: Trait> Module<T> {
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
 		Self::deposit_event(RawEvent::Scheduled(when, index));
+
 		Ok(address)
 	}
 
@@ -486,7 +498,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrig
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
 		call: <T as Trait>::Call
-	) -> Self::Address {
+	) -> Result<Self::Address, DispatchError> {
 		Self::do_schedule(when, maybe_periodic, priority, origin, call)
 	}
 
@@ -520,7 +532,7 @@ mod tests {
 
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok, ord_parameter_types,
-		assert_noop, Hashable,
+		assert_noop, assert_err, Hashable,
 		traits::{OnInitialize, OnFinalize, Filter},
 		weights::constants::RocksDbWeight,
 	};
@@ -690,7 +702,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
-			Scheduler::do_schedule(4, None, 127, root(), call);
+			let _ = Scheduler::do_schedule(4, None, 127, root(), call);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -704,7 +716,7 @@ mod tests {
 	fn periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			);
 			run_to_block(3);
@@ -733,7 +745,7 @@ mod tests {
 			).unwrap();
 			let i = Scheduler::do_schedule(
 				4, None, 127, root(), Call::Logger(logger::Call::log(42, 1000))
-			);
+			).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			assert_ok!(Scheduler::do_cancel_named(None, 1u32.encode()));
@@ -772,10 +784,10 @@ mod tests {
 	#[test]
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 127, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// 69 and 42 do not fit together
@@ -789,10 +801,10 @@ mod tests {
 	#[test]
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 0, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
@@ -804,10 +816,10 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 1, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			run_to_block(4);
@@ -818,13 +830,13 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 255, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				4, None, 126, root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
 			);
 
@@ -853,11 +865,11 @@ mod tests {
 				)
 			);
 			// Anon Periodic
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				1, Some((1000, 3)), 128, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
 			// Anon
-			Scheduler::do_schedule(
+			let _ = Scheduler::do_schedule(
 				1, None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// Named Periodic
@@ -908,6 +920,31 @@ mod tests {
 			// Scheduled calls are made NONE, so should not effect state
 			run_to_block(100);
 			assert!(logger::log().is_empty());
+		});
+	}
+
+	#[test]
+	fn fails_to_schedule_task_in_the_past() {
+		new_test_ext().execute_with(|| {
+			run_to_block(3);
+
+			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
+			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
+
+			assert_err!(
+				Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call),
+				Error::<Test>::TargetBlockNumberInPast,
+			);
+
+			assert_err!(
+				Scheduler::schedule(Origin::root(), 2, None, 127, call2.clone()),
+				Error::<Test>::TargetBlockNumberInPast,
+			);
+
+			assert_err!(
+				Scheduler::schedule(Origin::root(), 3, None, 127, call2),
+				Error::<Test>::TargetBlockNumberInPast,
+			);
 		});
 	}
 

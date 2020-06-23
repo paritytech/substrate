@@ -42,7 +42,6 @@ mod preimage;
 mod public_proposals;
 mod scheduling;
 mod voting;
-mod migration;
 mod decoders;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };

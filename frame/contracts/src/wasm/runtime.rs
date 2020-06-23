@@ -51,6 +51,8 @@ enum SpecialTrap {
 	/// Signals that a trap was generated in response to a succesful call to the
 	/// `ext_terminate` host function.
 	Termination,
+	/// Signals that a trap was generated because of a successful restoration.
+	Restoration,
 }
 
 /// Can only be used for one call.
@@ -100,6 +102,12 @@ pub(crate) fn to_execution_result<E: Ext>(
 				data: Vec::new(),
 			})
 		},
+		Some(SpecialTrap::Restoration) => {
+			return Ok(ExecReturnValue {
+				status: STATUS_SUCCESS,
+				data: Vec::new(),
+			})
+		}
 		Some(SpecialTrap::OutOfGas) => {
 			return Err(ExecError {
 				reason: "ran out of gas during contract execution".into(),
@@ -387,7 +395,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		let value = Some(read_sandbox_memory(ctx, value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, value);
 		Ok(())
 	},
 
@@ -399,7 +407,7 @@ define_env!(Env, <E: Ext>,
 	ext_clear_storage(ctx, key_ptr: u32) => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None).map_err(|_| sp_sandbox::HostError)?;
+		ctx.ext.set_storage(key, None);
 		Ok(())
 	},
 
@@ -799,17 +807,18 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Record a request to restore the caller contract to the specified contract.
+	// Try to restore the given destination contract sacrificing the caller.
 	//
-	// At the finalization stage, i.e. when all changes from the extrinsic that invoked this
-	// contract are committed, this function will compute a tombstone hash from the caller's
-	// storage and the given code hash and if the hash matches the hash found in the tombstone at
-	// the specified address - kill the caller contract and restore the destination contract and set
-	// the specified `rent_allowance`. All caller's funds are transferred to the destination.
+	// This function will compute a tombstone hash from the caller's storage and the given code hash
+	// and if the hash matches the hash found in the tombstone at the specified address - kill
+	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
+	// All caller's funds are transfered to the destination.
 	//
-	// This function doesn't perform restoration right away but defers it to the end of the
-	// transaction. If there is no tombstone in the destination address or if the hashes don't match
-	// then restoration is cancelled and no changes are made.
+	// If there is no tombstone at the destination address, the hashes don't match or this contract
+	// instance is already present on the contract call stack, a trap is generated.
+	//
+	// Otherwise, the destination contract is restored. This function is diverging and stops execution
+	// even on success.
 	//
 	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
 	// with the address of the to be restored contract.
@@ -857,14 +866,15 @@ define_env!(Env, <E: Ext>,
 			delta
 		};
 
-		ctx.ext.note_restore_to(
+		if let Ok(()) = ctx.ext.restore_to(
 			dest,
 			code_hash,
 			rent_allowance,
 			delta,
-		);
-
-		Ok(())
+		) {
+			ctx.special_trap = Some(SpecialTrap::Restoration);
+		}
+		Err(sp_sandbox::HostError)
 	},
 
 	// Returns the size of the scratch buffer.
