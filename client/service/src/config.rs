@@ -109,6 +109,8 @@ pub struct Configuration {
 	pub announce_block: bool,
 	/// Base path of the configuration
 	pub base_path: Option<BasePath>,
+	/// Configuration of the output format that the informant uses.
+	pub informant_output_format: sc_informant::OutputFormat,
 }
 
 /// Type for tasks spawned by the executor.

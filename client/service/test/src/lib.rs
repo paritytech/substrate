@@ -212,6 +212,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		max_runtime_instances: 8,
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
+		informant_output_format: Default::default(),
 	}
 }
 
