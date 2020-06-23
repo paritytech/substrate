@@ -119,7 +119,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 benchmarks!{
-	_ where <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event> {
+	where_clause { where <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event> }
+
+	_ {
 		// Define a common range for `b`.
 		let b in 1 .. 1000 => ();
 	}

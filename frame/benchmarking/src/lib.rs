@@ -85,11 +85,11 @@ pub use paste;
 /// Example:
 /// ```ignore
 /// benchmarks! {
+///   where_clause {  where T::A: From<u32> } // Optional line to give additional bound on `T`.
+///
 ///   // common parameter; just one for this example.
 ///   // will be `1`, `MAX_LENGTH` or any value inbetween
 ///   _ {
-///   // Or optionally: `_ where T::A: From<u32>, ..., ... {`
-///   // Allow to put additional bound on the generic `T: Trait`
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
 ///   }
 ///
@@ -175,7 +175,8 @@ pub use paste;
 #[macro_export]
 macro_rules! benchmarks {
 	(
-		_ $( where $( $where_ty:ty: $where_bound:path ),* $(,)? )? {
+		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
+		_ {
 			$(
 				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
 			)*
@@ -196,7 +197,8 @@ macro_rules! benchmarks {
 #[macro_export]
 macro_rules! benchmarks_instance {
 	(
-		_ $( where $( $where_ty:ty: $where_bound:path ),* $(,)? )? {
+		$( where_clause { where $( $where_ty:ty: $where_bound:path ),* $(,)? } )?
+		_ {
 			$(
 				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
 			)*
