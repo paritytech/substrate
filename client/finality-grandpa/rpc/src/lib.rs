@@ -338,21 +338,28 @@ mod tests {
 		};
 
 		// Unsubscribe with wrong ID
-		let invalid_unsub_req= r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#;
-		let resp = io.handle_request_sync(&invalid_unsub_req, meta.clone());
-		assert_eq!(resp, Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()));
+		assert_eq!(
+			io.handle_request_sync(
+				r#"{"jsonrpc":"2.0","method":"grandpa_unsubscribeJustifications","params":["FOO"],"id":1}"#,
+				meta.clone()
+			),
+			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into())
+		);
 
+		// Unsubscribe
 		let unsub_req = format!(
 			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
 			sub_id
 		);
-
-		// Unsubscribe
-		let resp = io.handle_request_sync(&unsub_req, meta.clone());
-		assert_eq!(resp, Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()));
+		assert_eq!(
+			io.handle_request_sync(&unsub_req, meta.clone()),
+			Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
+		);
 
 		// Unsubscribe again and fail
-		let resp = io.handle_request_sync(&unsub_req, meta);
-		assert_eq!(resp, Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()));
+		assert_eq!(
+			io.handle_request_sync(&unsub_req, meta),
+			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into()),
+		);
 	}
 }
