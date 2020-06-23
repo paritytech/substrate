@@ -109,8 +109,8 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	let ServiceComponents {
-		client, transaction_pool, mut task_manager, keystore, network, telemetry, base_path,
-		select_chain, prometheus_registry, telemetry_on_connect_sinks, rpc, ..
+		client, transaction_pool, task_manager, keystore, network, select_chain,
+		prometheus_registry, telemetry_on_connect_sinks, ..
 	 } = builder
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
@@ -201,8 +201,6 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		)?;
 	}
 
-	task_manager.keep_alive((telemetry, base_path, rpc));
-
 	Ok(task_manager)
 }
 
@@ -272,8 +270,5 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
 		.build_light()
-		.map(|ServiceComponents { mut task_manager, telemetry, base_path, rpc, .. }| {
-			task_manager.keep_alive((telemetry, base_path, rpc));
-			task_manager
-		})
+		.map(|ServiceComponents { task_manager, .. }| task_manager)
 }

@@ -163,10 +163,6 @@ pub struct ServiceComponents<
 	pub keystore: sc_keystore::KeyStorePtr,
 	/// A shared network instance.
 	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	/// A shared instance of Telemetry (if enabled).
-	pub telemetry: Option<sc_telemetry::Telemetry>,
-	/// The base path.
-	pub base_path: Option<Arc<BasePath>>,
 	/// RPC handlers that can perform RPC queries.
 	pub rpc_handlers: RpcHandlers,
 	/// A shared instance of the chain selection algorithm.
@@ -175,8 +171,6 @@ pub struct ServiceComponents<
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
 	/// A prometheus metrics registry, (if enabled).
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
-	/// A RPC instance.
-	pub rpc: Box<dyn std::any::Any + Send + Sync>,
 	/// Shared Telemetry connection sinks,
 	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
 	/// A shared offchain workers instance.

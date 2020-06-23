@@ -186,8 +186,8 @@ pub fn new_full_base(
 		new_full_start!(config);
 
 	let ServiceComponents {
-		client, transaction_pool, mut task_manager, keystore, network, telemetry, base_path,
-		select_chain, prometheus_registry, rpc, telemetry_on_connect_sinks, rpc_handlers, ..
+		client, transaction_pool, task_manager, keystore, network, select_chain,
+		prometheus_registry, telemetry_on_connect_sinks, rpc_handlers, ..
 	} = builder
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
@@ -317,8 +317,6 @@ pub fn new_full_base(
 		)?;
 	}
 
-	task_manager.keep_alive((telemetry, base_path, rpc));
-
 	Ok((task_manager, inherent_data_providers, rpc_handlers, client, network, transaction_pool))
 }
 
@@ -342,8 +340,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let ServiceComponents {
-		mut task_manager, telemetry, base_path, rpc_handlers, rpc, client, network,
-		transaction_pool, ..
+		task_manager, rpc_handlers, client, network, transaction_pool, ..
 	} = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
@@ -427,8 +424,6 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			Ok(node_rpc::create_light(light_deps))
 		})?
 		.build_light()?;
-
-	task_manager.keep_alive((telemetry, base_path, rpc));
 	
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }

@@ -225,7 +225,7 @@ pub struct TaskManager {
 	/// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	/// Things to keep alive until the task manager is dropped.
-	keep_alive: Box<dyn std::any::Any + Send>,
+	keep_alive: Arc<dyn std::any::Any + Send + Sync>,
 }
 
 impl TaskManager {
@@ -248,7 +248,7 @@ impl TaskManager {
 			metrics,
 			essential_failed_tx,
 			essential_failed_rx,
-			keep_alive: Box::new(()),
+			keep_alive: Arc::new(()),
 		})
 	}
 
@@ -284,9 +284,8 @@ impl TaskManager {
 	}
 
 	/// Move a struct into the task manager to be kept alive.
-	pub fn keep_alive<T: 'static + Send>(&mut self, to_keep_alive: T) {
-		let keeping_alive = std::mem::replace(&mut self.keep_alive, Box::new(()));
-		self.keep_alive = Box::new((keeping_alive, to_keep_alive));
+	pub fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+		self.keep_alive = Arc::new((self.keep_alive.clone(), to_keep_alive));
 	}
 }
 

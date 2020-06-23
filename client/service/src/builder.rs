@@ -967,7 +967,7 @@ ServiceBuilder<
 			marker: _,
 			mut config,
 			client,
-			task_manager,
+			mut task_manager,
 			fetcher: on_demand,
 			backend,
 			keystore,
@@ -1132,6 +1132,8 @@ ServiceBuilder<
 			sc_informant::OutputFormat { enable_color: true, prefix: informant_prefix },
 		));
 
+		task_manager.keep_alive((telemetry, config.base_path, rpc));
+
 		Ok(ServiceComponents {
 			client,
 			task_manager,
@@ -1139,12 +1141,9 @@ ServiceBuilder<
 			select_chain,
 			transaction_pool,
 			rpc_handlers,
-			rpc,
-			telemetry,
 			keystore,
 			offchain_workers,
 			telemetry_on_connect_sinks: TelemetryOnConnectSinks(telemetry_connection_sinks),
-			base_path: config.base_path.map(Arc::new),
 			network_status_sinks: NetworkStatusSinks::new(network_status_sinks),
 			prometheus_registry: config.prometheus_config.map(|config| config.registry),
 		})
