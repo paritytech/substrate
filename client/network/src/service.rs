@@ -854,6 +854,8 @@ struct Metrics {
 	// This list is ordered alphabetically
 	connections_closed_total: CounterVec<U64>,
 	connections_opened_total: CounterVec<U64>,
+	distinct_peers_connections_closed_total: CounterVec<U64>,
+	distinct_peers_connections_opened_total: CounterVec<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
@@ -889,16 +891,30 @@ impl Metrics {
 			connections_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by direction, reason and by being the first or not"
+					"Total number of connections closed, by direction and reason"
 				),
-				&["direction", "reason", "was_first"]
+				&["direction", "reason"]
 			)?, registry)?,
 			connections_opened_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_opened_total",
-					"Total number of connections opened by direction and by being the first or not"
+					"Total number of connections opened by direction"
 				),
-				&["direction", "is_first"]
+				&["direction"]
+			)?, registry)?,
+			distinct_peers_connections_closed_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_distinct_peers_connections_closed_total",
+					"Total number of connections closed with distinct peers, by direction and reason"
+				),
+				&["direction", "reason"]
+			)?, registry)?,
+			distinct_peers_connections_opened_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_distinct_peers_connections_opened_total",
+					"Total number of connections opened with distinct peers by direction"
+				),
+				&["direction"]
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -1222,9 +1238,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectedPoint::Dialer { .. } => "out",
 							ConnectedPoint::Listener { .. } => "in",
 						};
-						let is_first = if num_established.get() == 1 { "true" } else { "false" };
 
-						metrics.connections_opened_total.with_label_values(&[direction, is_first]).inc();
+						metrics.connections_opened_total.with_label_values(&[direction]).inc();
+
+						if num_established.get() == 1 {
+							metrics.distinct_peers_connections_opened_total.with_label_values(&[direction]).inc();
+						}
 					}
 				},
 				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, num_established }) => {
@@ -1247,10 +1266,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};
 
-						// `num_established` represents the number of *remaining* connections.
-						let was_first = if num_established == 0 { "true" } else { "false" };
+						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
 
-						metrics.connections_closed_total.with_label_values(&[direction, reason, was_first]).inc();
+						// `num_established` represents the number of *remaining* connections.
+						if num_established == 0 {
+							metrics.distinct_peers_connections_closed_total.with_label_values(&[direction, reason]).inc();
+						}
 					}
 				},
 				Poll::Ready(SwarmEvent::NewListenAddr(addr)) => {
