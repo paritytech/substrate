@@ -50,7 +50,7 @@ pub enum Error {
 	},
 	/// Prometheus metrics error.
 	Prometheus(prometheus_endpoint::PrometheusError),
-	/// The network addresses are invalid because they don't matche the transport.
+	/// The network addresses are invalid because they don't match the transport.
 	#[display(
 		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
 		addresses,
