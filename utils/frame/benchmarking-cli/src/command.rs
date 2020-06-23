@@ -98,7 +98,7 @@ impl BenchmarkCmd {
 				println!(
 					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
 					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-					String::from_utf8(batch.benchmark.clone()).expect("Encoded from String; qed"),
+					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
 					self.lowest_range_values,
 					self.highest_range_values,
 					self.steps,

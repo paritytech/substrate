@@ -159,6 +159,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
+	weights::Weight,
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
@@ -188,6 +189,16 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+
+	type Weight: BalancesWeight<Self>;
+}
+
+pub trait BalancesWeight<T: frame_system::Trait> {
+	fn balances_transfer(u: u32, e: u32, ) -> Weight;
+	fn balances_transfer_best_case(u: u32, e: u32, ) -> Weight;
+	fn balances_transfer_keep_alive(u: u32, e: u32, ) -> Weight;
+	fn balances_set_balance(u: u32, e: u32, ) -> Weight;
+	fn balances_set_balance_killing(u: u32, e: u32, ) -> Weight;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
@@ -206,12 +217,15 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+
+	type Weight: BalancesWeight<Self>;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type Weight = T::Weight;
 }
 
 decl_event!(
@@ -879,6 +893,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type Weight = T::Weight;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where

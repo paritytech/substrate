@@ -84,6 +84,8 @@ use impls::{CurrencyToVoteHandler, Author};
 pub mod constants;
 use constants::{time::*, currency::*};
 
+pub mod benchmarks;
+
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -291,6 +293,7 @@ impl pallet_balances::Trait for Runtime {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Module<Runtime>;
+	type Weights = benchmarks::WeightForBalances<Runtime>;
 }
 
 parameter_types! {

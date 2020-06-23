@@ -10,8 +10,9 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 	let batches = batches.unwrap();
 	//let f = &mut std::fmt::Formatter::new();
 	batches.iter().for_each(|batch| {
+
 		// function name
-		write!(file, "pub fn {}_{}(",
+		write!(file, "pub fn {}_{}<T: frame_system::Trait>(",
 			String::from_utf8(batch.pallet.clone()).unwrap(),
 			String::from_utf8(batch.benchmark.clone()).unwrap()
 		).unwrap();
@@ -25,27 +26,27 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		write!(file, ") -> Weight {{\n").unwrap();
 
 		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-		write!(file, "	({} as Weight)\n", extrinsic_time.base).unwrap();
-		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(name, slope)| {
+		write!(file, "	({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
+		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
 			write!(file, "		.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
 				name,
-				slope,
+				slope.saturating_mul(1000),
 			).unwrap();
 		});
 
 		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		write!(file, "		.saturating_add(T::DbWeight::get().reads({}))\n", reads.base).unwrap();
-		reads.slopes.iter().zip(reads.names.iter()).for_each(|(name, slope)| {
-			write!(file, "		.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight))\n",
+		write!(file, "		.saturating_add(T::DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
+		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
+			write!(file, "		.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
 				name,
 				slope,
 			).unwrap();
 		});
 
 		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-		write!(file, "		.saturating_add(T::DbWeight::get().writes({}))\n", writes.base).unwrap();
-		writes.slopes.iter().zip(writes.names.iter()).for_each(|(name, slope)| {
-			write!(file, "		.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight))\n",
+		write!(file, "		.saturating_add(T::DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
+		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
+			write!(file, "		.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
 				name,
 				slope,
 			).unwrap();
