@@ -267,7 +267,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
 
-		assert!(block.extrinsics().len() == exe_result.len(), "Extrinsics len should be equal to exe_result len");
+		assert!(block.extrinsics().len() == exe_result.len(), "Extrinsics len should be equal to exe_result len: {}, {}", block.extrinsics().len(), exe_result.len());
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
