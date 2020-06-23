@@ -6570,7 +6570,6 @@ dependencies = [
  "futures-timer 3.0.2",
  "hyper 0.13.4",
  "hyper-rustls",
- "lazy_static",
  "log",
  "num_cpus",
  "parity-scale-codec",
