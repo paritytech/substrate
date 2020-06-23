@@ -28,11 +28,11 @@ use frame_support::{
 	construct_runtime, parameter_types, debug, RuntimeDebug,
 	weights::{
 		Weight, IdentityFee,
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND}, DispatchClass,
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
-use frame_system::{EnsureRoot, EnsureOneOf};
+use frame_system::{EnsureRoot, EnsureOneOf, Weights, ExtrinsicDispatchClass};
 use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
 use sp_core::{
@@ -142,12 +142,25 @@ parameter_types! {
 		* MaximumBlockWeight::get();
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
+
+	pub RuntimeWeights: Weights = Weights::builder()
+		.base_block(BlockExecutionWeight::get())
+		.base_extrinsic(ExtrinsicBaseWeight::get(), ExtrinsicDispatchClass::All)
+		.max_total(AvailableBlockRatio::get() * MaximumBlockWeight::get(), DispatchClass::Normal)
+		.max_total(MaximumBlockWeight::get(), DispatchClass::Operational)
+		.reserved(
+			Perbill::one().saturating_sub(AvailableBlockRatio::get()) * MaximumBlockWeight::get(),
+			DispatchClass::Operational
+		)
+		.avg_block_initialization(AVERAGE_ON_INITIALIZE_WEIGHT)
+		.build();
 }
 
 const_assert!(AvailableBlockRatio::get().deconstruct() >= AVERAGE_ON_INITIALIZE_WEIGHT.deconstruct());
 
 impl frame_system::Trait for Runtime {
 	type BaseCallFilter = ();
+	type Weights = RuntimeWeights;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = Index;
@@ -1114,5 +1127,10 @@ mod tests {
 		{}
 
 		is_submit_signed_transaction::<Runtime>();
+	}
+
+	#[test]
+	fn weights_are_valid() {
+		RuntimeWeights::get().validate()
 	}
 }

@@ -58,6 +58,7 @@ pub struct Test;
 
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
+	type Weights = ();
 	type Origin = Origin;
 	type DbWeight = ();
 	type BlockExecutionWeight = ();

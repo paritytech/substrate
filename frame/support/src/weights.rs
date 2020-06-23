@@ -589,7 +589,7 @@ pub trait WeightToFeePolynomial {
 		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
 			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
 
-			// The sum could get negative. Therefore we only sum with the accumulator. 
+			// The sum could get negative. Therefore we only sum with the accumulator.
 			// The Perbill Mul implementation is non overflowing.
 			let frac = args.coeff_frac * w;
 			let integer = args.coeff_integer.saturating_mul(w);
