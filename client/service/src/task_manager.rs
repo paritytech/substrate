@@ -28,6 +28,7 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
+use sp_utils::mpsc::TracingUnboundedSender;
 use crate::config::TaskType;
 
 mod prometheus_future;
@@ -146,6 +147,64 @@ impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
 	fn execute(&self, future: Boxed01Future01) -> Result<(), futures01::future::ExecuteError<Boxed01Future01>>{
 		self.spawn("unnamed", future.compat().map(drop));
 		Ok(())
+	}
+}
+
+/// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any
+/// task spawned through it fails. The service should be on the receiver side
+/// and will shut itself down whenever it receives any message, i.e. an
+/// essential task has failed.
+pub struct SpawnEssentialTaskHandle {
+	essential_failed_tx: TracingUnboundedSender<()>,
+	inner: SpawnTaskHandle,
+}
+
+impl SpawnEssentialTaskHandle {
+	/// Creates a new `SpawnEssentialTaskHandle`.
+	pub fn new(
+		essential_failed_tx: TracingUnboundedSender<()>,
+		spawn_task_handle: SpawnTaskHandle,
+	) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle {
+			essential_failed_tx,
+			inner: spawn_task_handle,
+		}
+	}
+
+	/// Spawns the given task with the given name.
+	///
+	/// See also [`SpawnTaskHandle::spawn`].
+	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_inner(name, task, TaskType::Async)
+	}
+
+	/// Spawns the blocking task with the given name.
+	///
+	/// See also [`SpawnTaskHandle::spawn_blocking`].
+	pub fn spawn_blocking(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, task, TaskType::Blocking)
+	}
+
+	fn spawn_inner(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+		task_type: TaskType,
+	) {
+		use futures::sink::SinkExt;
+		let mut essential_failed = self.essential_failed_tx.clone();
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.map(move |_| {
+				log::error!("Essential task `{}` failed. Shutting down service.", name);
+				let _ = essential_failed.send(());
+			});
+
+		let _ = self.inner.spawn_inner(name, essential_task, task_type);
 	}
 }
 

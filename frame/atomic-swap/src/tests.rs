@@ -21,7 +21,7 @@ impl_outer_origin! {
 // For testing the pallet, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
 // configuration traits of pallets we want to use.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Debug, PartialEq)]
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -71,7 +71,7 @@ parameter_types! {
 }
 impl Trait for Test {
 	type Event = ();
-	type Currency = Balances;
+	type SwapAction = BalanceSwapAction<Test, Balances>;
 	type ProofLimit = ProofLimit;
 }
 type System = frame_system::Module<Test>;
@@ -109,7 +109,7 @@ fn two_party_successful_swap() {
 			Origin::signed(A),
 			B,
 			hashed_proof.clone(),
-			50,
+			BalanceSwapAction::new(50),
 			1000,
 		).unwrap();
 
@@ -123,7 +123,7 @@ fn two_party_successful_swap() {
 			Origin::signed(B),
 			A,
 			hashed_proof.clone(),
-			75,
+			BalanceSwapAction::new(75),
 			1000,
 		).unwrap();
 
@@ -136,6 +136,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::claim_swap(
 			Origin::signed(A),
 			proof.to_vec(),
+			BalanceSwapAction::new(75),
 		).unwrap();
 
 		assert_eq!(Balances::free_balance(A), 100 + 75);
@@ -147,6 +148,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::claim_swap(
 			Origin::signed(B),
 			proof.to_vec(),
+			BalanceSwapAction::new(50),
 		).unwrap();
 
 		assert_eq!(Balances::free_balance(A), 100 - 50);
