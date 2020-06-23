@@ -24,7 +24,7 @@ use sp_runtime::Fixed64;
 type OldMultiplier = Fixed64;
 
 pub fn on_runtime_upgrade<T: Trait>() -> Weight {
-	change_name_balances_to_transaction_payment::<T>()
+	rename_and_convert::<T>()
 }
 
 // Change the storage name used by this pallet from `Balances` to `TransactionPayment`.
@@ -33,7 +33,7 @@ pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 // need to keep track of a storage version. If the runtime does not need to be
 // upgraded, nothing here will happen anyway.
 
-fn change_name_balances_to_transaction_payment<T: Trait>() -> Weight {
+fn rename_and_convert<T: Trait>() -> Weight {
 	sp_runtime::print("Migrating Transaction Payment.");
 
 	let mut reads = 0;
@@ -41,7 +41,10 @@ fn change_name_balances_to_transaction_payment<T: Trait>() -> Weight {
 	if let Some(next_fee_multiplier) =
 		take_storage_value::<OldMultiplier>(b"Balances", b"NextFeeMultiplier", &[])
 	{
-		let mult = Multiplier::from(next_fee_multiplier.into_inner() as i128);
+		let raw_multiplier = next_fee_multiplier.into_inner() as i128;
+		// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
+		let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
+		let mult = Multiplier::from(new_raw_multiplier);
 		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], mult);
 		writes += 2;
 	}
