@@ -230,38 +230,6 @@ decl_module! {
 				).unwrap(),
 			);
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			use frame_support::migration::take_storage_value;
-			use sp_std::convert::TryInto;
-			use frame_support::debug::native::error;
-
-			type OldMultiplier = sp_runtime::FixedI128;
-			type OldInner = <OldMultiplier as FixedPointNumber>::Inner;
-			type Inner = <Multiplier as FixedPointNumber>::Inner;
-
-			if let Releases::V1Ancient = StorageVersion::get() {
-				StorageVersion::put(Releases::V2);
-
-				if let Some(old) = take_storage_value::<OldMultiplier>(
-					b"TransactionPayment",
-					b"NextFeeMultiplier",
-					&[],
-				) {
-					let inner = old.into_inner();
-					let new_inner = <OldInner as TryInto<Inner>>::try_into(inner)
-						.unwrap_or_default();
-					let new = Multiplier::from_inner(new_inner);
-					NextFeeMultiplier::put(new);
-					T::DbWeight::get().reads_writes(1, 1)
-				} else {
-					error!("transaction-payment migration failed.");
-					T::DbWeight::get().reads(1)
-				}
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
 	}
 }
 
@@ -738,37 +706,6 @@ mod tests {
 
 	fn default_post_info() -> PostDispatchInfo {
 		PostDispatchInfo { actual_weight: None, }
-	}
-
-	#[test]
-	fn migration_to_v2_works() {
-		use sp_runtime::FixedI128;
-		use frame_support::traits::OnRuntimeUpgrade;
-
-		let with_old_multiplier = |mul: FixedI128, expected: FixedU128| {
-			ExtBuilder::default().build().execute_with(|| {
-				frame_support::migration::put_storage_value(
-					b"TransactionPayment",
-					b"NextFeeMultiplier",
-					&[],
-					mul,
-				);
-
-				assert_eq!(StorageVersion::get(), Releases::V1Ancient);
-
-				TransactionPayment::on_runtime_upgrade();
-
-				assert_eq!(StorageVersion::get(), Releases::V2);
-				assert_eq!(NextFeeMultiplier::get(), expected);
-			})
-		};
-
-		with_old_multiplier(FixedI128::saturating_from_integer(-1), FixedU128::zero());
-		with_old_multiplier(FixedI128::saturating_from_rational(-1, 2), FixedU128::zero());
-		with_old_multiplier(
-			FixedI128::saturating_from_rational(1, 2),
-			FixedU128::saturating_from_rational(1, 2),
-		);
 	}
 
 	#[test]

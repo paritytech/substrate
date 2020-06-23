@@ -13,7 +13,7 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, pin::Pin, result::Result, sync::Arc};
+use std::{panic, result::Result, sync::Arc, pin::Pin};
 use exit_future::Signal;
 use log::debug;
 use futures::{
@@ -29,19 +29,16 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
-use crate::{config::TaskType, Error};
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use crate::{config::{TaskExecutor, TaskType}, Error};
 
 mod prometheus_future;
-
-/// Type alias for service task executor (usually runtime).
-pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
-	executor: ServiceTaskExecutor,
+	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 }
 
@@ -114,7 +111,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		(self.executor)(Box::pin(future), task_type);
+		self.executor.spawn(Box::pin(future), task_type);
 	}
 }
 
@@ -216,7 +213,7 @@ pub struct TaskManager {
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
 	/// How to spawn background tasks.
-	executor: ServiceTaskExecutor,
+	executor: TaskExecutor,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
 	/// Send a signal when a spawned essential task has concluded. The next time
@@ -232,7 +229,7 @@ impl TaskManager {
  	/// If a Prometheus registry is passed, it will be used to report statistics about the
  	/// service tasks.
 	pub(super) fn new(
-		executor: ServiceTaskExecutor,
+		executor: TaskExecutor,
 		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();

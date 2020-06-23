@@ -651,7 +651,6 @@ impl<B: BlockT> ChainSync<B> {
 		let blocks = &mut self.blocks;
 		let attrs = &self.required_block_attributes;
 		let fork_targets = &mut self.fork_targets;
-		let mut have_requests = false;
 		let last_finalized = self.client.info().finalized_number;
 		let best_queued = self.best_queued_number;
 		let client = &self.client;
@@ -681,7 +680,6 @@ impl<B: BlockT> ChainSync<B> {
 					peer.common_number,
 					req,
 				);
-				have_requests = true;
 				Some((id, req))
 			} else if let Some((hash, req)) = fork_sync_request(
 				id,
@@ -697,7 +695,6 @@ impl<B: BlockT> ChainSync<B> {
 			) {
 				trace!(target: "sync", "Downloading fork {:?} from {}", hash, id);
 				peer.state = PeerSyncState::DownloadingStale(hash);
-				have_requests = true;
 				Some((id, req))
 			} else {
 				None

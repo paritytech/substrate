@@ -158,3 +158,9 @@ pub trait ChainSpec: BuildStorage + Send {
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
 }
+
+impl std::fmt::Debug for dyn ChainSpec {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "ChainSpec(name = {:?}, id = {:?})", self.name(), self.id())
+	}
+}
