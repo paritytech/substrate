@@ -300,14 +300,19 @@ mod tests {
 		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
 
-	#[test]
-	fn subscribe_and_unsubscribe_to_justifications() {
+	fn setup_pubsub_handler() -> (sc_rpc::Metadata, jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata>) {
 		let handler = setup_rpc_handler(TestVoterState);
 		let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
 		let (tx, _rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
 		let meta = sc_rpc::Metadata::new(tx);
+		(meta, io)
+	}
+
+	#[test]
+	fn subscribe_and_unsubscribe_to_justifications() {
+		let (meta, io) = setup_pubsub_handler();
 
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
@@ -338,17 +343,13 @@ mod tests {
 
 	#[test]
 	fn subscribe_and_unsubscribe_with_wrong_id() {
-		let handler = setup_rpc_handler(TestVoterState);
-		let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
-		io.extend_with(GrandpaApi::to_delegate(handler));
-
-		let (tx, _rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
-		let meta = sc_rpc::Metadata::new(tx);
+		let (meta, io) = setup_pubsub_handler();
 
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
 		let resp = io.handle_request_sync(sub_request, meta.clone());
 		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
+		assert!(matches!(resp, Output::Success(_)));
 
 		// Unsubscribe with wrong ID
 		assert_eq!(
