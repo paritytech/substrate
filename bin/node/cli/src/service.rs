@@ -21,7 +21,6 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-
 use sc_consensus_babe;
 use grandpa::{
 	self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
@@ -157,6 +156,7 @@ macro_rules! new_full {
 		use futures::prelude::*;
 		use sc_network::Event;
 		use sc_client_api::ExecutorProvider;
+		use sp_core::traits::BareCryptoStorePtr;
 
 		let (
 			role,
@@ -179,7 +179,7 @@ macro_rules! new_full {
 				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
 				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
 			})?
-			.build()?;
+			.build_full()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
@@ -217,7 +217,7 @@ macro_rules! new_full {
 			};
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
-			service.spawn_essential_task("babe-proposer", babe);
+			service.spawn_essential_task_handle().spawn_blocking("babe-proposer", babe);
 		}
 
 		// Spawn authority discovery module.
@@ -250,13 +250,13 @@ macro_rules! new_full {
 				service.prometheus_registry(),
 			);
 
-			service.spawn_task("authority-discovery", authority_discovery);
+			service.spawn_task_handle().spawn("authority-discovery", authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
 		// need a keystore, regardless of which protocol we use below.
 		let keystore = if role.is_authority() {
-			Some(service.keystore())
+			Some(service.keystore() as BareCryptoStorePtr)
 		} else {
 			None
 		};
@@ -292,7 +292,7 @@ macro_rules! new_full {
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(
+			service.spawn_essential_task_handle().spawn_blocking(
 				"grandpa-voter",
 				grandpa::run_grandpa_voter(grandpa_config)?
 			);
@@ -405,7 +405,7 @@ pub fn new_light(config: Configuration)
 
 			Ok(node_rpc::create_light(light_deps))
 		})?
-		.build()?;
+		.build_light()?;
 
 	Ok(service)
 }

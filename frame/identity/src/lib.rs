@@ -75,11 +75,10 @@ use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	dispatch::DispatchResultWithPostInfo,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
+	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin, MigrateAccount},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::traits::MigrateAccount;
+use frame_system::{self as system, ensure_signed};
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
@@ -639,9 +638,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = weight_for::add_registrar::<T>(T::MaxRegistrars::get().into()) ]
 		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
-			T::RegistrarOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::RegistrarOrigin::ensure_origin(origin)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
@@ -1112,9 +1109,7 @@ decl_module! {
 			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
@@ -1198,6 +1193,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -1219,7 +1215,8 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type MigrateAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
@@ -1455,7 +1452,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
-			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
+			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert!(Identity::super_of(20).is_none());
 		});

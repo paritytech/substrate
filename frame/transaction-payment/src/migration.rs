@@ -44,8 +44,7 @@ fn rename_and_convert<T: Trait>() -> Weight {
 		let raw_multiplier = next_fee_multiplier.into_inner() as i128;
 		// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
 		let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
-		let mult = Multiplier::from(new_raw_multiplier);
-		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], mult);
+		put_storage_value(b"TransactionPayment", b"NextFeeMultiplier", &[], new_raw_multiplier);
 		writes += 2;
 	}
 	reads += 1;

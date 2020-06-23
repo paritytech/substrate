@@ -281,6 +281,25 @@ fn should_resubmit_from_retracted_during_maintenance() {
 	assert_eq!(pool.status().ready, 1);
 }
 
+
+#[test]
+fn should_not_resubmit_from_retracted_during_maintenance_if_tx_is_also_in_enacted() {
+	let xt = uxt(Alice, 209);
+
+	let (pool, _guard, _notifier) = maintained_pool();
+
+	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	let header = pool.api.push_block(1, vec![xt.clone()]);
+	let fork_header = pool.api.push_block(1, vec![xt]);
+
+	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api);
+
+	block_on(pool.maintain(event));
+	assert_eq!(pool.status().ready, 0);
+}
+
 #[test]
 fn should_not_retain_invalid_hashes_from_retracted() {
 	let xt = uxt(Alice, 209);
@@ -658,6 +677,66 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), None);
 	}
 }
+
+/// Tests that when pruning and retracing a tx by the same event, we generate
+/// the correct events in the correct order.
+#[test]
+fn prune_and_retract_tx_at_same_time() {
+	let api = TestApi::empty();
+	// starting block A1 (last finalized.)
+	api.push_block(1, vec![]);
+
+	let (pool, _background, _) = BasicPool::new_test(api.into());
+
+	let from_alice = uxt(Alice, 1);
+	pool.api.increment_nonce(Alice.into());
+
+	let watcher = block_on(
+		pool.submit_and_watch(&BlockId::number(1), SOURCE, from_alice.clone())
+	).expect("1. Imported");
+
+	// Block B1
+	let b1 = {
+		let header = pool.api.push_block(2, vec![from_alice.clone()]);
+		assert_eq!(pool.status().ready, 1);
+
+		let event = ChainEvent::NewBlock {
+			hash: header.hash(),
+			is_new_best: true,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+		header.hash()
+	};
+
+	// Block B2
+	let b2 = {
+		let header = pool.api.push_block(2, vec![from_alice.clone()]);
+		assert_eq!(pool.status().ready, 0);
+
+		let event = block_event_with_retracted(header.clone(), b1, &*pool.api);
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+
+		let event = ChainEvent::Finalized { hash: header.hash() };
+		block_on(pool.maintain(event));
+
+		header.hash()
+	};
+
+	{
+		let mut stream = futures::executor::block_on_stream(watcher);
+		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2)));
+		assert_eq!(stream.next(), None);
+	}
+}
+
 
 /// This test ensures that transactions from a fork are re-submitted if
 /// the forked block is not part of the retracted blocks. This happens as the

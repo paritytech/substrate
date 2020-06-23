@@ -54,6 +54,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = ();
 	type Index = u64;
@@ -75,7 +76,8 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type MigrateAccount = (); type OnNewAccount = ();
+	type MigrateAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 

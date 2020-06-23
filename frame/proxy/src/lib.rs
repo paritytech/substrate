@@ -41,8 +41,8 @@ use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
 use sp_runtime::traits::Member;
 use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, traits::{
-		Get, ReservableCurrency, Currency, Filter, FilterStack, FilterStackGuard,
-		ClearFilterGuard, InstanceFilter
+		Get, ReservableCurrency, Currency, InstanceFilter,
+		OriginTrait, IsType,
 	}, weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
@@ -60,16 +60,16 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>;
+		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>
+		+ IsType<<Self as frame_system::Trait>::Call>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
 
-	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: FilterStack<<Self as Trait>::Call>;
-
 	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
 	/// The instance filter determines whether a given call may be proxied under this type.
+	///
+	/// IMPORTANT: `Default` must be provided and MUST BE the the *most permissive* value.
 	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>
 		+ Default;
 
@@ -105,8 +105,6 @@ decl_error! {
 		NotFound,
 		/// Sender is not a proxy of the account to be proxied.
 		NotProxy,
-		/// A call with a `false` `IsCallable` filter was attempted.
-		Uncallable,
 		/// A call which is incompatible with the proxy type's filter was attempted.
 		Unproxyable,
 		/// Account is already a proxy.
@@ -136,6 +134,15 @@ decl_module! {
 
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
+
+		/// The base amount of currency needed to reserve for creating a proxy.
+		const ProxyDepositBase: BalanceOf<T> = T::ProxyDepositBase::get();
+
+		/// The amount of currency needed per proxy added.
+		const ProxyDepositFactor: BalanceOf<T> = T::ProxyDepositFactor::get();
+
+		/// The maximum amount of proxies allowed for a single account.
+		const MaxProxies: u16 = T::MaxProxies::get();
 
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
@@ -171,19 +178,19 @@ decl_module! {
 				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
 				.ok_or(Error::<T>::NotProxy)?;
 
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _clear_guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			let _filter_guard = FilterStackGuard::<T::IsCallable, <T as Trait>::Call>::new(
-				move |c| match c.is_sub_type() {
+			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
+			let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
+			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
+				let c = <T as Trait>::Call::from_ref(c);
+				match c.is_sub_type() {
 					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
 						if !proxy_type.is_superset(&pt) => false,
-					_ => proxy_type.filter(&c)
+					Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
+					    if proxy_type != T::ProxyType::default() => false,
+					_ => proxy_type.filter(c)
 				}
-			);
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-
-			let e = call.dispatch(frame_system::RawOrigin::Signed(real).into());
+			});
+			let e = call.dispatch(origin);
 			Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 		}
 

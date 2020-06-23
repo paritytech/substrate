@@ -12,7 +12,7 @@ description = "FRAME module that tracks the last finalized block, as perceived b
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
 sp-inherents = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/inherents" }
 sp-std = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/std" }
 

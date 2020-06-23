@@ -51,6 +51,7 @@ pub struct Layout<H>(sp_std::marker::PhantomData<H>);
 
 impl<H: Hasher> TrieLayout for Layout<H> {
 	const USE_EXTENSION: bool = false;
+	const ALLOW_EMPTY: bool = true;
 	type Hash = H;
 	type Codec = NodeCodec<Self::Hash>;
 }

@@ -141,6 +141,8 @@ pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
 pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
 /// Type of transactions event stream for a pool.
 pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
+/// Transaction type for a local pool.
+pub type LocalTransactionFor<P> = <<P as LocalTransactionPool>::Block as BlockT>::Extrinsic;
 
 /// Typical future type used in transaction pool api.
 pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output=Result<T, E>> + Send>>;
@@ -273,6 +275,28 @@ pub trait MaintainedTransactionPool: TransactionPool {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
 }
 
+/// Transaction pool interface for submitting local transactions that exposes a
+/// blocking interface for submission.
+pub trait LocalTransactionPool: Send + Sync {
+	/// Block type.
+	type Block: BlockT;
+	/// Transaction hash type.
+	type Hash: Hash + Eq + Member + Serialize;
+	/// Error type.
+	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
+
+	/// Submits the given local unverified transaction to the pool blocking the
+	/// current thread for any necessary pre-verification.
+	/// NOTE: It MUST NOT be used for transactions that originate from the
+	/// network or RPC, since the validation is performed with
+	/// `TransactionSource::Local`.
+	fn submit_local(
+		&self,
+		at: &BlockId<Self::Block>,
+		xt: LocalTransactionFor<Self>,
+	) -> Result<Self::Hash, Self::Error>;
+}
+
 /// An abstraction for transaction pool.
 ///
 /// This trait is used by offchain calls to be able to submit transactions.
@@ -291,7 +315,7 @@ pub trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 	) -> Result<(), ()>;
 }
 
-impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
+impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 	fn submit_at(
 		&self,
 		at: &BlockId<TPool::Block>,
@@ -303,15 +327,14 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(
-				&at, TransactionSource::Local, extrinsic,
-		));
+		let result = self.submit_local(&at, extrinsic);
 
-		result.map(|_| ())
-			.map_err(|e| log::warn!(
+		result.map(|_| ()).map_err(|e| {
+			log::warn!(
 				target: "txpool",
 				"(offchain call) Error submitting a transaction to the pool: {:?}",
 				e
-			))
+			)
+		})
 	}
 }

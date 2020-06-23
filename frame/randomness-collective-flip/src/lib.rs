@@ -158,6 +158,7 @@ mod tests {
 	}
 
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -179,7 +180,8 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type MigrateAccount = (); type OnNewAccount = ();
+		type MigrateAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 

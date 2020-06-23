@@ -64,6 +64,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -85,7 +86,8 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u128>;
-	type MigrateAccount = (); type OnNewAccount = ();
+	type MigrateAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 

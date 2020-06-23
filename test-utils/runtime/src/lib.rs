@@ -184,7 +184,7 @@ impl ExtrinsicT for Extrinsic {
 }
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
-	type Origin = ();
+	type Origin = Origin;
 	type Trait = ();
 	type Info = ();
 	type PostInfo = ();
@@ -313,6 +313,9 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Test that ensures that we can call a function that takes multiple
+				/// arguments.
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 			}
 		}
 	} else {
@@ -359,6 +362,9 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Test that ensures that we can call a function that takes multiple
+				/// arguments.
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 			}
 		}
 	}
@@ -401,6 +407,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Extrinsic;
 	type Index = u64;
@@ -422,7 +429,8 @@ impl frame_system::Trait for Runtime {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type MigrateAccount = (); type OnNewAccount = ();
+	type MigrateAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 
@@ -639,6 +647,11 @@ cfg_if! {
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
+				}
+
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
+					assert_eq!(&data[..], &other[..]);
+					assert_eq!(data.len(), num as usize);
 				}
 			}
 
@@ -860,6 +873,11 @@ cfg_if! {
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
+				}
+
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
+					assert_eq!(&data[..], &other[..]);
+					assert_eq!(data.len(), num as usize);
 				}
 			}
 
