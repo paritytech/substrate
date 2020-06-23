@@ -24,24 +24,23 @@ use sp_runtime::{
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
-
 };
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
+pub struct CheckMortality<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> CheckEra<T> {
+impl<T: Trait + Send + Sync> CheckMortality<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
 		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckEra<T> {
+impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckEra({:?})", self.0)
+		write!(f, "CheckMortality({:?})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -50,7 +49,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckEra<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
@@ -95,14 +94,14 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// future
 			assert_eq!(
-				CheckEra::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				CheckMortality::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
 				InvalidTransaction::AncientBirthBlock.into(),
 			);
 
 			// correct
 			System::set_block_number(13);
 			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
-			assert!(CheckEra::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
+			assert!(CheckMortality::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
 		})
 	}
 
@@ -113,7 +112,7 @@ mod tests {
 			let len = 0_usize;
 			let ext = (
 				crate::CheckWeight::<Test>::default(),
-				CheckEra::<Test>::from(Era::mortal(16, 256)),
+				CheckMortality::<Test>::from(Era::mortal(16, 256)),
 			);
 			System::set_block_number(17);
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));

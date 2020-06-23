@@ -141,10 +141,12 @@ mod weights;
 mod tests;
 
 pub use extensions::{
-	check_era::CheckEra, check_genesis::CheckGenesis, check_nonce::CheckNonce,
+	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
 	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
 	check_weight::CheckWeight,
 };
+// Backward compatible re-export.
+pub use extensions::check_mortality::CheckMortality as CheckEra;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
