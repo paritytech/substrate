@@ -671,13 +671,13 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
-		match self.ctx.self_trie_id {
-			Some(ref trie_id) => storage::read_contract_storage(trie_id, key),
-			// TODO: My current understanding is that `self.ctx.self_trie_id` can be `None` only
-			// for the top-level account, i.e. EOA. As such, it cannot issue any reads to the
-			// storage, because it has no. Furthermore, EOA cannot have contract storage.
-			None => unimplemented!(),
-		}
+		let trie_id = self.ctx.self_trie_id.as_ref().expect(
+			"`ctx.self_trie_id` points to an alive contract within the `CallContext`;\
+				it cannot be `None`;\
+				expect can't fail;\
+				qed",
+		);
+		storage::read_contract_storage(trie_id, key)
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
