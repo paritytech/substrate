@@ -666,9 +666,24 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
-			let _ = Scheduler::do_schedule(4, None, 255, Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3)));
-			let _ = Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2)));
-			let _ = Scheduler::do_schedule(4, None, 126, Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)));
+			let _ = Scheduler::do_schedule(
+				4,
+				None,
+				255,
+				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3)),
+			);
+			let _ = Scheduler::do_schedule(
+				4,
+				None,
+				127,
+				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2)),
+			);
+			let _ = Scheduler::do_schedule(
+				4,
+				None,
+				126,
+				Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)),
+			);
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
 			run_to_block(4);
@@ -690,11 +705,27 @@ mod tests {
 			// Named
 			assert_ok!(Scheduler::do_schedule_named(1u32.encode(), 1, None, 255, Call::Logger(logger::Call::log(3, MaximumSchedulerWeight::get() / 3))));
 			// Anon Periodic
-			let _ = Scheduler::do_schedule(1, Some((1000, 3)), 128, Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3)));
+			let _ = Scheduler::do_schedule(
+				1,
+				Some((1000, 3)),
+				128,
+				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3)),
+			);
 			// Anon
-			let _ = Scheduler::do_schedule(1, None, 127, Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2)));
+			let _ = Scheduler::do_schedule(
+				1,
+				None,
+				127,
+				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2)),
+			);
 			// Named Periodic
-			assert_ok!(Scheduler::do_schedule_named(2u32.encode(), 1, Some((1000, 3)), 126, Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))));
+			assert_ok!(Scheduler::do_schedule_named(
+				2u32.encode(),
+				1,
+				Some((1000, 3)),
+				126,
+				Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)),
+			));
 
 			// Will include the named periodic only
 			let actual_weight = Scheduler::on_initialize(1);
