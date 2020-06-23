@@ -698,24 +698,22 @@ impl fmt::Debug for HttpWorkerRequest {
 mod tests {
 	use core::convert::Infallible;
 	use crate::api::timestamp;
-	use super::http;
+	use super::{http, SharedClient};
 	use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Duration};
 	use futures::future;
-	use std::sync::Arc;
-	use hyper::{Client as HyperClient};
-	use hyper_rustls::HttpsConnector;
+	use lazy_static::lazy_static;
+	
+	// Using lazy_static to avoid spawning lots of different SharedClients,
+	// as spawning a SharedClient is CPU-intensive and opens lots of fds.
+	lazy_static! {
+		static ref SHARED_CLIENT: SharedClient = SharedClient::new();
+	}
 
 	// Returns an `HttpApi` whose worker is ran in the background, and a `SocketAddr` to an HTTP
 	// server that runs in the background as well.
 	macro_rules! build_api_server {
 		() => {{
-			// We spawn quite a bit of HTTP servers here due to how async API
-			// works for offchain workers, so be sure to raise the FD limit
-			// (particularly useful for macOS where the default soft limit may
-			// not be enough).
-			fdlimit::raise_fd_limit();
-
-			let hyper_client = Arc::new(HyperClient::builder().build(HttpsConnector::new()));
+			let hyper_client = SHARED_CLIENT.clone();
 			let (api, worker) = http(hyper_client.clone());
 
 			let (addr_tx, addr_rx) = std::sync::mpsc::channel();

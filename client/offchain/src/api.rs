@@ -261,9 +261,9 @@ impl AsyncApi {
 		db: S,
 		network_state: Arc<dyn NetworkStateInfo + Send + Sync>,
 		is_validator: bool,
-		hyper_client: SharedClient,
+		shared_client: SharedClient,
 	) -> (Api<S>, Self) {
-		let (http_api, http_worker) = http::http(hyper_client);
+		let (http_api, http_worker) = http::http(shared_client);
 
 		let api = Api {
 			db,
@@ -293,8 +293,6 @@ mod tests {
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::PeerId;
-	use hyper_rustls::HttpsConnector;
-	use hyper::{Client as HyperClient};
 
 	struct MockNetworkStateInfo();
 
@@ -312,14 +310,14 @@ mod tests {
 		let _ = env_logger::try_init();
 		let db = LocalStorage::new_test();
 		let mock = Arc::new(MockNetworkStateInfo());
-		let hyper_client = Arc::new(HyperClient::builder().build(HttpsConnector::new()));
+		let shared_client = SharedClient::new();
 
 
 		AsyncApi::new(
 			db,
 			mock,
 			false,
-			hyper_client,
+			shared_client,
 		)
 	}
 
