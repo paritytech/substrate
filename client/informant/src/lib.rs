@@ -34,7 +34,7 @@ use parking_lot::Mutex;
 mod display;
 
 /// The format to print telemetry output in.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OutputFormat {
 	/// Enable color output in logs. True by default.
 	pub enable_color: bool,
