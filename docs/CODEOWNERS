@@ -63,7 +63,7 @@
 # EVM
 /frame/evm/ @sorpaas
 
-# NPoS and Governance and Phragmén
+# NPoS and election 
 /frame/staking/ @kianenigma
 /frame/elections/ @kianenigma
 /frame/elections-phragmen/ @kianenigma
@@ -72,14 +72,8 @@
 # Fixed point arithmetic
 /primitives/sp-arithmetic/ @kianenigma
 
-# End to end testing of substrate node
-/bin/node/executor/ @kianenigma
-
 # Transaction weight stuff
-/frame/support/src/weights.rs @kianenigma
-
-# Support crates
-/frame/support/ @kianenigma
+/frame/support/src/weights.rs @shawntabrizi
 
 # Authority discovery
 /client/authority-discovery/ @mxinden
