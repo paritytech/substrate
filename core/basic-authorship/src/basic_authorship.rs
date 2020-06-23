@@ -211,8 +211,13 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				let inherents = self.inherents_pool.drain();
 				debug!("Pushing {} queued inherents.", inherents.len());
 				for i in inherents {
-					if let Err(e) = block_builder.push_extrinsic(i) {
-						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
+					match block_builder.push_extrinsic(i) {
+						Ok(result) => {
+							exe_result.push(result);
+						},
+						Err(e) => {
+							warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
+						}
 					}
 				}
 
@@ -231,12 +236,9 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 					trace!("[{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
-						Ok(true) => {
-							exe_result.push(true);
-							debug!("[{:?}] Pushed to the block.", pending.hash);
-						}
-						Ok(false) =>{
-							exe_result.push(false);
+						Ok(result) => {
+							exe_result.push(result);
+							debug!("[{:?}] Pushed to the block: {}", pending.hash, result);
 						}
 						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
 							if is_first {
@@ -264,6 +266,8 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
+
+		assert!(block.extrinsics().len() == exe_result.len(), "Extrinsics len should be equal to exe_result len");
 
 		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
 			block.header().number(),
