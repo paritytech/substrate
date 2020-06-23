@@ -854,8 +854,8 @@ struct Metrics {
 	// This list is ordered alphabetically
 	connections_closed_total: CounterVec<U64>,
 	connections_opened_total: CounterVec<U64>,
-	distinct_peers_connections_closed_total: CounterVec<U64>,
-	distinct_peers_connections_opened_total: CounterVec<U64>,
+	distinct_peers_connections_closed_total: Counter<U64>,
+	distinct_peers_connections_opened_total: Counter<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
@@ -902,19 +902,13 @@ impl Metrics {
 				),
 				&["direction"]
 			)?, registry)?,
-			distinct_peers_connections_closed_total: register(CounterVec::new(
-				Opts::new(
+			distinct_peers_connections_closed_total: register(Counter::new(
 					"sub_libp2p_distinct_peers_connections_closed_total",
-					"Total number of connections closed with distinct peers, by direction and reason"
-				),
-				&["direction", "reason"]
+					"Total number of connections closed with distinct peers"
 			)?, registry)?,
-			distinct_peers_connections_opened_total: register(CounterVec::new(
-				Opts::new(
+			distinct_peers_connections_opened_total: register(Counter::new(
 					"sub_libp2p_distinct_peers_connections_opened_total",
-					"Total number of connections opened with distinct peers by direction"
-				),
-				&["direction"]
+					"Total number of connections opened with distinct peers"
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -1238,11 +1232,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectedPoint::Dialer { .. } => "out",
 							ConnectedPoint::Listener { .. } => "in",
 						};
-
 						metrics.connections_opened_total.with_label_values(&[direction]).inc();
 
 						if num_established.get() == 1 {
-							metrics.distinct_peers_connections_opened_total.with_label_values(&[direction]).inc();
+							metrics.distinct_peers_connections_opened_total.inc();
 						}
 					}
 				},
@@ -1253,7 +1246,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectedPoint::Dialer { .. } => "out",
 							ConnectedPoint::Listener { .. } => "in",
 						};
-
 						let reason = match cause {
 							ConnectionError::IO(_) => "transport-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
@@ -1265,12 +1257,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};
-
 						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
 
 						// `num_established` represents the number of *remaining* connections.
 						if num_established == 0 {
-							metrics.distinct_peers_connections_closed_total.with_label_values(&[direction, reason]).inc();
+							metrics.distinct_peers_connections_closed_total.inc();
 						}
 					}
 				},
