@@ -260,6 +260,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				map_call: F,
 			) -> std::result::Result<R, E> where Self: Sized {
+				self.changes.borrow_mut().start_transaction();
 				*self.commit_on_success.borrow_mut() = false;
 				let res = map_call(self);
 				*self.commit_on_success.borrow_mut() = true;
@@ -369,6 +370,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				call_api_at: F,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
+				if *self.commit_on_success.borrow() {
+					self.changes.borrow_mut().start_transaction();
+				}
 				let res = call_api_at(
 					&self.call,
 					self,
@@ -384,11 +388,16 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn commit_on_ok<R, E>(&self, res: &std::result::Result<R, E>) {
+				let proof = "\
+					We only close a transaction when we opened one ourself.
+					Other parts of the runtime that make use of transactions (state-machine)
+					also balance their transactions. The runtime cannot close client initiated
+					transactions. qed";
 				if *self.commit_on_success.borrow() {
 					if res.is_err() {
-						self.changes.borrow_mut().discard_prospective();
+						self.changes.borrow_mut().rollback_transaction().expect(proof);
 					} else {
-						self.changes.borrow_mut().commit_prospective();
+						self.changes.borrow_mut().commit_transaction().expect(proof);
 					}
 				}
 			}
