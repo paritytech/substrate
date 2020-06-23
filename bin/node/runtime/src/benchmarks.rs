@@ -1,64 +1,60 @@
-use frame_support::weights::Weight;
-use frame_support::traits::Get;
-
+use frame_support::weights::{Weight, constants::RocksDbWeight};
 use pallet_balances::BalancesWeight;
-
 pub struct WeightForBalances;
-
-impl<T: frame_system::Trait> BalancesWeight<T> for WeightForBalances {
-	fn balances_transfer(u: u32, e: u32, ) -> Weight {
-		(998433000 as Weight)
-			.saturating_add((u as Weight).saturating_mul(0 as Weight))
+impl BalancesWeight for WeightForBalances {
+	fn transfer(u: u32, e: u32, ) -> Weight {
+		(574875000 as Weight)
+			.saturating_add((u as Weight).saturating_mul(7000 as Weight))
 			.saturating_add((e as Weight).saturating_mul(0 as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
 	}
-	fn balances_transfer_best_case(u: u32, e: u32, ) -> Weight {
-		(553917000 as Weight)
-			.saturating_add((u as Weight).saturating_mul(0 as Weight))
+	fn transfer_best_case(u: u32, e: u32, ) -> Weight {
+		(368265000 as Weight)
+			.saturating_add((u as Weight).saturating_mul(26000 as Weight))
 			.saturating_add((e as Weight).saturating_mul(0 as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
 	}
-	fn balances_transfer_keep_alive(u: u32, e: u32, ) -> Weight {
-		(483036000 as Weight)
+	fn transfer_keep_alive(u: u32, e: u32, ) -> Weight {
+		(402076000 as Weight)
+			.saturating_add((u as Weight).saturating_mul(7000 as Weight))
+			.saturating_add((e as Weight).saturating_mul(14000 as Weight))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
+	}
+	fn set_balance(u: u32, e: u32, ) -> Weight {
+		(341092000 as Weight)
 			.saturating_add((u as Weight).saturating_mul(0 as Weight))
-			.saturating_add((e as Weight).saturating_mul(23000 as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add((e as Weight).saturating_mul(12000 as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
 	}
-	fn balances_set_balance(u: u32, e: u32, ) -> Weight {
-		(332225000 as Weight)
-			.saturating_add((u as Weight).saturating_mul(5000 as Weight))
-			.saturating_add((e as Weight).saturating_mul(11000 as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
-	}
-	fn balances_set_balance_killing(u: u32, e: u32, ) -> Weight {
-		(434352000 as Weight)
-			.saturating_add((u as Weight).saturating_mul(0 as Weight))
+	fn set_balance_killing(u: u32, e: u32, ) -> Weight {
+		(412116000 as Weight)
+			.saturating_add((u as Weight).saturating_mul(28000 as Weight))
 			.saturating_add((e as Weight).saturating_mul(0 as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
-			.saturating_add(T::DbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((e as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((u as Weight).saturating_mul(0 as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((e as Weight).saturating_mul(0 as Weight)))
 	}
 }

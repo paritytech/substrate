@@ -190,15 +190,15 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
-	type Weight: BalancesWeight<Self>;
+	type Weight: BalancesWeight;
 }
 
-pub trait BalancesWeight<T: frame_system::Trait> {
-	fn balances_transfer(u: u32, e: u32, ) -> Weight;
-	fn balances_transfer_best_case(u: u32, e: u32, ) -> Weight;
-	fn balances_transfer_keep_alive(u: u32, e: u32, ) -> Weight;
-	fn balances_set_balance(u: u32, e: u32, ) -> Weight;
-	fn balances_set_balance_killing(u: u32, e: u32, ) -> Weight;
+pub trait BalancesWeight {
+	fn transfer(u: u32, e: u32, ) -> Weight;
+	fn transfer_best_case(u: u32, e: u32, ) -> Weight;
+	fn transfer_keep_alive(u: u32, e: u32, ) -> Weight;
+	fn set_balance(u: u32, e: u32, ) -> Weight;
+	fn set_balance_killing(u: u32, e: u32, ) -> Weight;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
@@ -218,7 +218,7 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
-	type Weight: BalancesWeight<Self>;
+	type Weight: BalancesWeight;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
@@ -451,7 +451,7 @@ decl_module! {
 		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 70_000_000]
+		#[weight = T::Weight::transfer(0,0)]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -480,7 +480,7 @@ decl_module! {
 		///     - Killing: 35.11 µs
 		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 35_000_000]
+		#[weight = T::Weight::set_balance(0, 0)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -522,7 +522,8 @@ decl_module! {
 		/// - Same as transfer, but additional read and write because the source account is
 		///   not assumed to be in the overlay.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(2, 2) + 70_000_000]
+		// TODO: ADD NEW BENCHMARK
+		#[weight = T::Weight::transfer(0,0)]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -546,7 +547,7 @@ decl_module! {
 		/// - Base Weight: 51.4 µs
 		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
 		/// #</weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 50_000_000]
+		#[weight = T::Weight::transfer_keep_alive(0,0)]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,

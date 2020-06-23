@@ -293,7 +293,7 @@ impl pallet_balances::Trait for Runtime {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Module<Runtime>;
-	type Weights = benchmarks::WeightForBalances<Runtime>;
+	type Weight = benchmarks::WeightForBalances;
 }
 
 parameter_types! {
