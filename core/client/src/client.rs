@@ -869,11 +869,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
+				let logs = import_headers.post().digest().logs();
+				let extra = Some(logs.encode());
 				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					&(<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()), extra).encode(),
 					match origin {
 						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies().syncing),
 						_ => get_execution_manager(self.execution_strategies().importing),
