@@ -54,10 +54,11 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 	type Error: std::error::Error;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>, &mut Vec<bool>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
+		ctx_result : &mut Vec<bool>,
 		build_ctx: F,
 	) -> Result<Self::Block, error::Error>;
 }
@@ -88,10 +89,11 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	type Block = Block;
 	type Error = client::error::Error;
 
-	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>, &mut Vec<bool>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
 		inherent_data: InherentData,
+		ctx_result : &mut Vec<bool>,
 		mut build_ctx: F,
 	) -> Result<Self::Block, error::Error> {
 		let mut block_builder = self.new_block_at(at)?;
@@ -100,9 +102,13 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
 		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
-			.into_iter().try_for_each(|i| block_builder.push(i).map(|_|()))?;
+			.into_iter().try_for_each(|i| {
+			block_builder.push(i).map(|result| {
+				ctx_result.push(result);
+			})
+		})?;
 
-		build_ctx(&mut block_builder);
+		build_ctx(&mut block_builder, ctx_result);
 
 		block_builder.bake().map_err(Into::into)
 	}
@@ -205,7 +211,8 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 		let block = self.client.build_block(
 			&self.parent_id,
 			inherent_data,
-			|block_builder| {
+			&mut exe_result,
+			|block_builder, ctx_result| {
 				// Add inherents from the internal pool
 
 				let inherents = self.inherents_pool.drain();
@@ -213,7 +220,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				for i in inherents {
 					match block_builder.push_extrinsic(i) {
 						Ok(result) => {
-							exe_result.push(result);
+							ctx_result.push(result);
 						},
 						Err(e) => {
 							warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
@@ -237,7 +244,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 					trace!("[{:?}] Pushing to the block.", pending.hash);
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(result) => {
-							exe_result.push(result);
+							ctx_result.push(result);
 							debug!("[{:?}] Pushed to the block: {}", pending.hash, result);
 						}
 						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
