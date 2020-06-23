@@ -22,13 +22,14 @@ use codec::{Decode, Encode};
 use frame_support::{
 	debug, decl_module, decl_storage, decl_event, decl_error,
 	dispatch::DispatchResult,
+	storage::IterableStorageMap,
 	weights::Pays
 };
 use frame_system::{self as system, offchain, ensure_signed};
 use frame_system::offchain::{SendSignedTransaction, Signer};
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
-	RuntimeDebug, print,
+	RuntimeDebug,
 	offchain::http,
 	transaction_validity::{TransactionValidity, TransactionSource}
 };
@@ -150,7 +151,7 @@ decl_error! {
 decl_storage! {
 	trait Store for Module<T: Trait> as SgxHelloWorld {
 		/// Enclaves that are verified (i.e, verified via remote attestation)
-		VerifiedEnclaves get(fn verified_enclaves): map hasher(twox_64_concat) T::AccountId => Enclave;
+		VerifiedEnclaves get(fn verified_enclaves): map hasher(blake2_128_concat) T::AccountId => Enclave;
 		/// Enclaves that are waiting to be verified
 		UnverifiedEnclaves get(fn unverified_enclaves): Vec<(T::AccountId, EnclaveAddress)>;
 		/// Waiting enclave calls
@@ -175,18 +176,16 @@ decl_module! {
 		/// The transaction has to be signed with the enclave's signing key to work
 		#[weight = (100, Pays::No)]
 		pub fn register_enclave(origin, url: Vec<u8>) -> DispatchResult {
-			print("register_enclave");
-			let sender = ensure_signed(origin)?;
-
+			let enclave = ensure_signed(origin)?;
 			let mut unverified_enclaves = UnverifiedEnclaves::<T>::get();
-			if <VerifiedEnclaves<T>>::contains_key(&sender) {
+			if <VerifiedEnclaves<T>>::contains_key(&enclave) {
 				Err(Error::<T>::EnclaveAlreadyRegistered.into())
 			} else {
-				match unverified_enclaves.binary_search_by(|(s, _)| s.cmp(&sender)) {
+				match unverified_enclaves.binary_search_by(|(s, _)| s.cmp(&enclave)) {
 					Ok(_) => Err(Error::<T>::EnclaveAlreadyRegistered.into()),
 					Err(idx) => {
-						debug::info!("[intel sgx]: register unverified_encalve; who={:?} at address={:?}", sender, url);
-						unverified_enclaves.insert(idx, (sender.clone(), url));
+						debug::info!("[intel sgx]: register unverified_encalve; who={:?} at address={:?}", enclave, url);
+						unverified_enclaves.insert(idx, (enclave, url));
 						UnverifiedEnclaves::<T>::put(unverified_enclaves);
 						Ok(())
 					}
@@ -210,9 +209,7 @@ decl_module! {
 			}
 		}
 
-		// TODO: This should pay fee workaround in `substrate-subxt` because
-		// `TreasuryEvents` are not decoded properly
-		#[weight = (100, Pays::No)]
+		#[weight = 100]
 		pub fn call_enclave(
 			origin,
 			enclave: T::AccountId,
@@ -220,6 +217,7 @@ decl_module! {
 		) -> DispatchResult {
 			let _who = ensure_signed(origin)?;
 			if <VerifiedEnclaves<T>>::contains_key(&enclave) {
+				debug::info!("[intel sgx]: call_enclave; who={:?} with payload={:?}", enclave, xt);
 				let mut waiting_calls = <WaitingEnclaveCalls<T>>::get();
 				waiting_calls.push((enclave, xt));
 				<WaitingEnclaveCalls<T>>::put(waiting_calls);
@@ -233,9 +231,9 @@ decl_module! {
 		fn enclave_call_dispatched(origin, waiting_call: (T::AccountId, Vec<u8>)) -> DispatchResult {
 			let _who = ensure_signed(origin)?;
 			let mut waiting_calls = <WaitingEnclaveCalls<T>>::get();
-			debug::info!("[intel sgx]: attempt to dispatch enclave call who={:?} with payload={:?}", waiting_call.0, waiting_call.1);
 			match waiting_calls.binary_search(&waiting_call) {
 				Ok(idx) => {
+					debug::info!("[intel sgx]: dispatched enclave call who={:?} with payload={:?}", waiting_call.0, waiting_call.1);
 					waiting_calls.remove(idx);
 					<WaitingEnclaveCalls<T>>::put(waiting_calls);
 					Self::deposit_event(RawEvent::EnclaveCallDispatched(waiting_call.0));
@@ -287,6 +285,10 @@ decl_module! {
 			if block_number % 2000.into() == 0.into() {
 				// TODO: implement me
 			}
+
+			// for enclave in <VerifiedEnclaves<T>>::iter() {
+			//     debug::info!("verified enclave={:?}", enclave);
+			// }
 		}
 	}
 }
@@ -327,7 +329,6 @@ impl<T: Trait> Module<T> {
 			debug::warn!("[intel sgx] ias_verification_report is not used yet");
 			verified.push((enclave_sign, enclave))
 		}
-
 
 		signer.send_signed_transaction(|_account| {
 			Call::prune_unverified_enclaves()
