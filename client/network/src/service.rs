@@ -107,6 +107,24 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+		// Ensure the listen addresses are consistent with the transport.
+		ensure_addresses_consistent_with_transport(
+			params.network_config.listen_addresses.iter(),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.public_addresses.iter(),
+			&params.network_config.transport,
+		)?;
+
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
 		if let Some(path) = params.network_config.net_config_path {
@@ -1468,4 +1486,41 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}
 	}
+}
+
+fn ensure_addresses_consistent_with_transport<'a>(
+	addresses: impl Iterator<Item = &'a Multiaddr>,
+	transport: &TransportConfig,
+) -> Result<(), Error> {
+	if matches!(transport, TransportConfig::MemoryOnly) {
+		let addresses: Vec<_> = addresses
+			.filter(|x| x.iter()
+				.any(|y| !matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
+			)
+			.cloned()
+			.collect();
+
+		if !addresses.is_empty() {
+			return Err(Error::AddressesForAnotherTransport {
+				transport: transport.clone(),
+				addresses,
+			});
+		}
+	} else {
+		let addresses: Vec<_> = addresses
+			.filter(|x| x.iter()
+				.any(|y| matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
+			)
+			.cloned()
+			.collect();
+
+		if !addresses.is_empty() {
+			return Err(Error::AddressesForAnotherTransport {
+				transport: transport.clone(),
+				addresses,
+			});
+		}
+	}
+
+	Ok(())
 }
