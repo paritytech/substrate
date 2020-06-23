@@ -177,9 +177,8 @@ decl_module! {
 
 				Agenda::<T>::translate::<
 					Vec<Option<ScheduledV1<<T as Trait>::Call, T::BlockNumber>>>, _
-				>(|_, agenda| {
-					Some(
-						agenda
+				>(|_, agenda| Some(
+					agenda
 						.into_iter()
 						.map(|schedule| schedule.map(|schedule| ScheduledV2 {
 							maybe_id: schedule.maybe_id,
@@ -190,8 +189,7 @@ decl_module! {
 							_phantom: Default::default(),
 						}))
 						.collect::<Vec<_>>()
-					)
-				});
+				));
 
 				T::MaximumBlockWeight::get()
 			} else {
