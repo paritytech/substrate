@@ -165,6 +165,12 @@ pub trait Database<H: Clone>: Send + Sync {
 	}
 }
 
+impl<H> std::fmt::Debug for dyn Database<H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "Database")
+	}
+}
+
 /// Call `f` with the value previously stored against `key` and return the result, or `None` if
 /// `key` is not currently in the database.
 ///
