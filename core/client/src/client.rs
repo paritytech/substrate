@@ -873,7 +873,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					&<Block as BlockT>::new(import_headers.post().clone(), body.unwrap_or_default()).encode(),
 					match origin {
 						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies().syncing),
 						_ => get_execution_manager(self.execution_strategies().importing),
