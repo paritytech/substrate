@@ -34,12 +34,35 @@ use parking_lot::Mutex;
 mod display;
 
 /// The format to print telemetry output in.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OutputFormat {
-	/// Enable color output in logs.
+	/// Enable color output in logs. True by default.
 	pub enable_color: bool,
-	/// Add a prefix before every log line
+	/// Defines the informant's prefix for the logs. An empty string by default.
+	///
+	/// By default substrate will show logs without a prefix. Example:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	///
+	/// But you can define a prefix by setting this string. This will output:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
 	pub prefix: String,
+}
+
+impl Default for OutputFormat {
+	fn default() -> Self {
+		Self {
+			enable_color: true,
+			prefix: String::new(),
+		}
+	}
 }
 
 /// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.

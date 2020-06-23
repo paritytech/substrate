@@ -259,7 +259,7 @@ pub(crate) fn import_single_block_metered<B: BlockT, V: Verifier<B>, Transaction
 		r => return Ok(r), // Any other successful result means that the block is already imported.
 	}
 
-	let started = std::time::Instant::now();
+	let started = wasm_timer::Instant::now();
 	let (mut import_block, maybe_keys) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
 			if let Some(ref peer) = peer {

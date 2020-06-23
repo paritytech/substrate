@@ -474,6 +474,7 @@ pub trait CliConfiguration: Sized {
 			announce_block: self.announce_block()?,
 			role,
 			base_path: Some(base_path),
+			informant_output_format: Default::default(),
 		})
 	}
 
