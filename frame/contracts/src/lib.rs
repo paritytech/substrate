@@ -379,8 +379,8 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum size of a storage value in bytes.
 	type MaxValueSize: Get<u32>;
 
-	/// Used to supply contracts with the current gas price. This is **not** used to
-	/// calculate the actual fee and is only for informational purposes.
+	/// Used to answer contracts's queries regarding the current weight price. This is **not**
+	/// used to calculate the actual fee and is only for informational purposes.
 	type WeightPrice: Convert<Weight, BalanceOf<Self>>;
 }
 

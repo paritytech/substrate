@@ -205,7 +205,7 @@ pub trait Ext {
 	/// Returns `None` if the value doesn't exist.
 	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Returns the price of one weight unit.
+	/// Returns the price for the specified amount of weight.
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T>;
 }
 
