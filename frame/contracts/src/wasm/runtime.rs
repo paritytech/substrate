@@ -815,10 +815,11 @@ define_env!(Env, <E: Ext>,
 	// All caller's funds are transfered to the destination.
 	//
 	// If there is no tombstone at the destination address or if the hashes don't match
-	// then restoration is cancelled and no changes are made. In this case this function
-	// will return non-zero code.
+	// then restoration is cancelled and no changes are made. Additionally, this contract instance
+	// should be not present on the contract call stack. If any of these preconditions are not held,
+	// then a trap is generated.
 	//
-	// Otherwise, If the restoration was performed correctly, 0 is returned.
+	// Otherwise, the contract execution is terminated and the destination contract is restored.
 	//
 	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
 	// with the address of the to be restored contract.
