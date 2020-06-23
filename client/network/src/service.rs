@@ -854,6 +854,8 @@ struct Metrics {
 	// This list is ordered alphabetically
 	connections_closed_total: CounterVec<U64>,
 	connections_opened_total: CounterVec<U64>,
+	distinct_peers_connections_closed_total: Counter<U64>,
+	distinct_peers_connections_opened_total: Counter<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
@@ -889,16 +891,24 @@ impl Metrics {
 			connections_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by reason and direction"
+					"Total number of connections closed, by direction and reason"
 				),
 				&["direction", "reason"]
 			)?, registry)?,
 			connections_opened_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_opened_total",
-					"Total number of connections opened"
+					"Total number of connections opened by direction"
 				),
 				&["direction"]
+			)?, registry)?,
+			distinct_peers_connections_closed_total: register(Counter::new(
+					"sub_libp2p_distinct_peers_connections_closed_total",
+					"Total number of connections closed with distinct peers"
+			)?, registry)?,
+			distinct_peers_connections_opened_total: register(Counter::new(
+					"sub_libp2p_distinct_peers_connections_opened_total",
+					"Total number of connections opened with distinct peers"
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -1214,40 +1224,44 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.event_streams.send(ev);
 				},
-				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. }) => {
+				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+
 					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections_opened_total.with_label_values(&["out"]).inc(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections_opened_total.with_label_values(&["in"]).inc(),
-						}
-					}
-				},
-				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
-					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
-					if let Some(metrics) = this.metrics.as_ref() {
-						let dir = match endpoint {
+						let direction = match endpoint {
 							ConnectedPoint::Dialer { .. } => "out",
 							ConnectedPoint::Listener { .. } => "in",
 						};
+						metrics.connections_opened_total.with_label_values(&[direction]).inc();
 
-						match cause {
-							ConnectionError::IO(_) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
+						if num_established.get() == 1 {
+							metrics.distinct_peers_connections_opened_total.inc();
+						}
+					}
+				},
+				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, num_established }) => {
+					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
+					if let Some(metrics) = this.metrics.as_ref() {
+						let direction = match endpoint {
+							ConnectedPoint::Dialer { .. } => "out",
+							ConnectedPoint::Listener { .. } => "in",
+						};
+						let reason = match cause {
+							ConnectionError::IO(_) => "transport-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
+								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								EitherError::B(LegacyConnectionKillError)))))))) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
+								EitherError::B(LegacyConnectionKillError)))))))) =>	"force-closed",
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
+							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
+						};
+						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
+
+						// `num_established` represents the number of *remaining* connections.
+						if num_established == 0 {
+							metrics.distinct_peers_connections_closed_total.inc();
 						}
 					}
 				},
