@@ -19,8 +19,7 @@
 # - The latest matching rule, if multiple, takes precedence.
 
 # Wasm execution and the wasm side of Substrate Runtime Interface
-/client/executor/ @pepyakin
-/primitives/io/ @pepyakin @NikVolf
+/primitives/io/ @NikVolf
 
 # Crypto, execution extensions, etc.
 /primitives/core/ @NikVolf
@@ -58,7 +57,6 @@
 
 # Contracts
 /frame/contracts/ @pepyakin
-/frame/contracts/src/wasm/runtime.rs @Robbepop
 
 # EVM
 /frame/evm/ @sorpaas
