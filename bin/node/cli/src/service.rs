@@ -217,7 +217,7 @@ macro_rules! new_full {
 			};
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
-			service.spawn_essential_task("babe-proposer", babe);
+			service.spawn_essential_task_handle().spawn_blocking("babe-proposer", babe);
 		}
 
 		// Spawn authority discovery module.
@@ -250,7 +250,7 @@ macro_rules! new_full {
 				service.prometheus_registry(),
 			);
 
-			service.spawn_task("authority-discovery", authority_discovery);
+			service.spawn_task_handle().spawn("authority-discovery", authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
@@ -292,7 +292,7 @@ macro_rules! new_full {
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(
+			service.spawn_essential_task_handle().spawn_blocking(
 				"grandpa-voter",
 				grandpa::run_grandpa_voter(grandpa_config)?
 			);
