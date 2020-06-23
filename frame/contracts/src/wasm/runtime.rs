@@ -814,12 +814,11 @@ define_env!(Env, <E: Ext>,
 	// the caller contract and restore the destination contract and set the specified `rent_allowance`.
 	// All caller's funds are transfered to the destination.
 	//
-	// If there is no tombstone at the destination address or if the hashes don't match
-	// then restoration is cancelled and no changes are made. Additionally, this contract instance
-	// should be not present on the contract call stack. If any of these preconditions are not held,
-	// then a trap is generated.
+	// If there is no tombstone at the destination address, the hashes don't match or this contract
+	// instance is already present on the contract call stack, a trap is generated.
 	//
-	// Otherwise, the contract execution is terminated and the destination contract is restored.
+	// Otherwise, the destination contract is restored. This function is diverging and stops execution
+	// even on success.
 	//
 	// `dest_ptr`, `dest_len` - the pointer and the length of a buffer that encodes `T::AccountId`
 	// with the address of the to be restored contract.
