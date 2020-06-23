@@ -17,7 +17,6 @@
 
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
-use std::sync::Arc;
 use sc_network::config::TransportConfig;
 use sc_service::{
 	AbstractService, RpcSession, Role, Configuration,
@@ -64,7 +63,7 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: Arc::new(move |fut, _| wasm_bindgen_futures::spawn_local(fut)),
+		task_executor: (|fut, _| wasm_bindgen_futures::spawn_local(fut)).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {

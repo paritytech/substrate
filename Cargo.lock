@@ -6573,12 +6573,12 @@ version = "2.0.0-rc3"
 dependencies = [
  "bytes 0.5.4",
  "env_logger 0.7.1",
- "fdlimit",
  "fnv",
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "hyper 0.13.4",
  "hyper-rustls",
+ "lazy_static",
  "log",
  "num_cpus",
  "parity-scale-codec",
