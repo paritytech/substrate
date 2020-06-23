@@ -34,7 +34,7 @@ use syn::{
 	fold::{self, Fold}, parse_quote,
 };
 
-use std::{collections::HashSet, iter};
+use std::collections::HashSet;
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
@@ -71,10 +71,8 @@ fn generate_impl_call(
 	let params = extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let c_iter = iter::repeat(&c);
 	let fn_name = &signature.ident;
-	let fn_name_str = iter::repeat(fn_name.to_string());
-	let input = iter::repeat(input);
+	let fn_name_str = fn_name.to_string();
 	let pnames = params.iter().map(|v| &v.0);
 	let pnames2 = params.iter().map(|v| &v.0);
 	let ptypes = params.iter().map(|v| &v.1);
@@ -82,15 +80,14 @@ fn generate_impl_call(
 
 	Ok(
 		quote!(
-			#(
-				let #pnames : #ptypes = match #c_iter::DecodeLimit::decode_all_with_depth_limit(
-					#c_iter::MAX_EXTRINSIC_DEPTH,
-					&mut #input
+			let (#( #pnames ),*) : ( #( #ptypes ),* ) =
+				match #c::DecodeLimit::decode_all_with_depth_limit(
+					#c::MAX_EXTRINSIC_DEPTH,
+					&mut #input,
 				) {
-					Ok(input) => input,
+					Ok(res) => res,
 					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
 				};
-			)*
 
 			#[allow(deprecated)]
 			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
@@ -138,7 +135,7 @@ fn generate_impl_calls(
 
 /// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
-	let data = Ident::new("data", Span::call_site());
+	let data = Ident::new("__sp_api__input_data", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &data)?
 		.into_iter()
