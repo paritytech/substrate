@@ -298,7 +298,7 @@ use frame_support::{
 	},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin,
+		UnixTime, EstimateNextNewSession, EnsureOrigin, IsDeadAccount,
 	}
 };
 use pallet_session::historical;
@@ -1267,6 +1267,8 @@ decl_error! {
 		IncorrectHistoryDepth,
 		/// Incorrect number of slashing spans provided.
 		IncorrectSlashingSpans,
+		/// The account is dead and cannot be used.
+		DeadAccount,
 	}
 }
 
@@ -1428,6 +1430,10 @@ decl_module! {
 
 			let controller = T::Lookup::lookup(controller)?;
 
+			if frame_system::Module::<T>::is_dead_account(&controller) {
+				Err(Error::<T>::DeadAccount)?
+			}
+
 			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
@@ -1443,6 +1449,7 @@ decl_module! {
 			<Payee<T>>::insert(&stash, payee);
 
 			system::Module::<T>::inc_ref(&stash);
+			system::Module::<T>::inc_ref(&controller);
 
 			let current_era = CurrentEra::get().unwrap_or(0);
 			let history_depth = Self::history_depth();
@@ -1783,11 +1790,16 @@ decl_module! {
 			if <Ledger<T>>::contains_key(&controller) {
 				Err(Error::<T>::AlreadyPaired)?
 			}
+			if frame_system::Module::<T>::is_dead_account(&controller) {
+				Err(Error::<T>::DeadAccount)?
+			}
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
 				if let Some(l) = <Ledger<T>>::take(&old_controller) {
 					<Ledger<T>>::insert(&controller, l);
 				}
+				system::Module::<T>::dec_ref(&old_controller);
+				system::Module::<T>::inc_ref(&controller);
 			}
 		}
 
@@ -3013,6 +3025,7 @@ impl<T: Trait> Module<T> {
 		<Nominators<T>>::remove(stash);
 
 		system::Module::<T>::dec_ref(stash);
+		system::Module::<T>::dec_ref(&controller);
 
 		Ok(())
 	}

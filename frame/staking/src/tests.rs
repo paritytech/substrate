@@ -155,9 +155,11 @@ fn change_controller_works() {
 		// 10 can control 11 who is initially a validator.
 		assert_ok!(Staking::chill(Origin::signed(10)));
 
-		// change controller
-		assert_ok!(Staking::set_controller(Origin::signed(11), 5));
-		assert_eq!(Staking::bonded(&11), Some(5));
+		// controller cannot be dead
+		assert_noop!(Staking::set_controller(Origin::signed(11), 5), Error::<Test>::DeadAccount);
+		// change controller when alive
+		assert_ok!(Staking::set_controller(Origin::signed(11), 4));
+		assert_eq!(Staking::bonded(&11), Some(4));
 		mock::start_era(1);
 
 		// 10 is no longer in control.
@@ -165,7 +167,7 @@ fn change_controller_works() {
 			Staking::validate(Origin::signed(10), ValidatorPrefs::default()),
 			Error::<Test>::NotController,
 		);
-		assert_ok!(Staking::validate(Origin::signed(5), ValidatorPrefs::default()));
+		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
 	})
 }
 
@@ -1790,7 +1792,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 		// only slashes out of bonded stake are applied. without this line,
 		// it is 0.
-		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardDestination::default()).unwrap();
+		Staking::bond(Origin::signed(2), 3, stake - 1, RewardDestination::default()).unwrap();
 		// Override exposure of 11
 		ErasStakers::<Test>::insert(0, 11, Exposure {
 			total: stake,
@@ -4206,6 +4208,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 			let controller = 20_000 + i as AccountId;
 			let balance = 10_000 + i as Balance;
 			Balances::make_free_balance_be(&stash, balance);
+			Balances::make_free_balance_be(&controller, balance);
 			assert_ok!(
 				Staking::bond(
 					Origin::signed(stash),
@@ -4500,4 +4503,35 @@ fn on_initialize_weight_is_correct() {
 		let final_weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(4 + 9, 3);
 		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
 	});
+}
+
+#[test]
+fn controller_must_be_alive() {
+	// This tests that:
+	// 	* bond/set_contoller check that the account is alive, and stays alive with a ref_counter
+	// 	* kill_stash/set_controller de-references the old controller
+	ExtBuilder::default().build_and_execute(|| {
+		// cannot bond a dead account
+		assert_noop!(Staking::bond(Origin::signed(3), 1337, 1500, RewardDestination::Controller), Error::<Test>::DeadAccount);
+		Balances::make_free_balance_be(&1337, 100);
+		assert_ok!(Staking::bond(Origin::signed(3), 1337, 1500, RewardDestination::Controller));
+
+		// cannot kill a controller
+		assert_noop!(Balances::transfer(Origin::signed(1337), 3, 100), BalancesError::<Test, _>::KeepAlive);
+
+		// cannot set to dead controller
+		assert_noop!(Staking::set_controller(Origin::signed(3), 1234), Error::<Test>::DeadAccount);
+		Balances::make_free_balance_be(&1234, 100);
+		assert_ok!(Staking::set_controller(Origin::signed(3), 1234));
+
+		// we can now kill the old controller
+		assert_ok!(Balances::transfer(Origin::signed(1337), 3, 100));
+
+		// we unbond, and can kill the new controller
+		assert_ok!(Staking::force_unstake(Origin::root(), 3, 0));
+		assert_ok!(Balances::transfer(Origin::signed(1234), 3, 100));
+
+		assert!(System::is_dead_account(&1234));
+		assert!(System::is_dead_account(&1337));
+	})
 }
