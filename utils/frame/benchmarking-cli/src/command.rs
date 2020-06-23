@@ -89,13 +89,16 @@ impl BenchmarkCmd {
 		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
+		let mut file = crate::writer::open_file()?;
+		crate::writer::write_results(&mut file, results.clone())?;
+
 		match results {
 			Ok(batches) => for batch in batches.into_iter() {
 				// Print benchmark metadata
 				println!(
 					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
 					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
+					String::from_utf8(batch.benchmark.clone()).expect("Encoded from String; qed"),
 					self.lowest_range_values,
 					self.highest_range_values,
 					self.steps,
