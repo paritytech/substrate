@@ -56,24 +56,37 @@ pub struct KeystoreParams {
 	pub password_filename: Option<PathBuf>,
 }
 
+impl Drop for KeystoreParams {
+	fn drop(&mut self) {
+		use sp_core::crypto::Zeroize;
+		self.password.zeroize();
+	}
+}
+
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
 	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
-				Some(input_keystore_password()?.into())
+				let mut password = input_keystore_password()?;
+				let secret = std::str::FromStr::from_str(password.as_str())?;
+				use sp_core::crypto::Zeroize;
+				password.zeroize();
+				Some(secret)
 			}
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			Some(
-				fs::read_to_string(file)
-					.map_err(|e| format!("{}", e))?
-					.into(),
-			)
+			let mut password = fs::read_to_string(file)
+				.map_err(|e| format!("{}", e))?;
+			let secret = std::str::FromStr::from_str(password.as_str())?;
+			use sp_core::crypto::Zeroize;
+			password.zeroize();
+			Some(secret)
 		} else if let Some(ref password) = self.password {
-			Some(password.clone().into())
+			let secret = std::str::FromStr::from_str(password.as_str())?;
+			Some(secret)
 		} else {
 			None
 		};
