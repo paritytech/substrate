@@ -34,6 +34,7 @@ use prometheus_endpoint::Registry;
 use tempfile::TempDir;
 
 /// Service configuration.
+#[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
 	pub impl_name: &'static str,
@@ -42,7 +43,7 @@ pub struct Configuration {
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+	pub task_executor: TaskExecutor,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -120,7 +121,7 @@ pub enum TaskType {
 }
 
 /// Configuration of the client keystore.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum KeystoreConfig {
 	/// Keystore at a path on-disk. Recommended for native nodes.
 	Path {
@@ -143,7 +144,7 @@ impl KeystoreConfig {
 	}
 }
 /// Configuration of the database of the client.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OffchainWorkerConfig {
 	/// If this is allowed.
 	pub enabled: bool,
@@ -152,7 +153,7 @@ pub struct OffchainWorkerConfig {
 }
 
 /// Configuration of the Prometheus endpoint.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PrometheusConfig {
 	/// Port to use.
 	pub port: SocketAddr,
@@ -199,6 +200,7 @@ impl Default for RpcMethods {
 }
 
 /// The base path that is used for everything that needs to be write on disk to run a node.
+#[derive(Debug)]
 pub enum BasePath {
 	/// A temporary directory is used as base path and will be deleted when dropped.
 	#[cfg(not(target_os = "unknown"))]
@@ -251,5 +253,71 @@ impl BasePath {
 impl std::convert::From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
+	}
+}
+
+type TaskExecutorInner = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
+
+/// Callable object that execute tasks.
+///
+/// This struct can be created easily using `Into`.
+///
+/// # Examples
+///
+/// ## Using tokio
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// # mod tokio { pub mod runtime {
+/// # #[derive(Clone)]
+/// # pub struct Runtime;
+/// # impl Runtime {
+/// # pub fn new() -> Result<Self, ()> { Ok(Runtime) }
+/// # pub fn handle(&self) -> &Self { &self }
+/// # pub fn spawn(&self, _: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
+/// # }
+/// # } }
+/// use tokio::runtime::Runtime;
+///
+/// let runtime = Runtime::new().unwrap();
+/// let handle = runtime.handle().clone();
+/// let task_executor: TaskExecutor = (move |future, _task_type| {
+///		handle.spawn(future);
+///	}).into();
+/// ```
+///
+/// ## Using async-std
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// # mod async_std { pub mod task {
+/// # pub fn spawn(_: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>) {}
+/// # } }
+/// let task_executor: TaskExecutor = (|future, _task_type| {
+///		async_std::task::spawn(future);
+///	}).into();
+/// ```
+#[derive(Clone)]
+pub struct TaskExecutor(TaskExecutorInner);
+
+impl std::fmt::Debug for TaskExecutor {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "TaskExecutor")
+	}
+}
+
+impl<F> std::convert::From<F> for TaskExecutor
+where
+	F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync + 'static,
+{
+	fn from(x: F) -> Self {
+		Self(Arc::new(x))
+	}
+}
+
+impl TaskExecutor {
+	/// Spawns a new asynchronous task.
+	pub fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send>>, task_type: TaskType) {
+		self.0(future, task_type)
 	}
 }

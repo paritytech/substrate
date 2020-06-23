@@ -38,7 +38,7 @@ use sc_service::{
 	RuntimeGenesis,
 	Role,
 	Error,
-	TaskType,
+	TaskExecutor,
 };
 use sp_blockchain::HeaderBackend;
 use sc_network::{multiaddr, Multiaddr};
@@ -142,7 +142,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Role,
-	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+	task_executor: TaskExecutor,
 	key_seed: Option<String>,
 	base_port: u16,
 	root: &TempDir,
@@ -256,17 +256,19 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		authorities: impl Iterator<Item = (String, impl FnOnce(Configuration) -> Result<(F, U), Error>)>
 	) {
 		let executor = self.runtime.executor();
+		let task_executor: TaskExecutor = {
+			let executor = executor.clone();
+			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
+				executor.spawn(fut.unit_error().compat());
+			}).into()
+		};
 
 		for (key, authority) in authorities {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| executor.spawn(fut.unit_error().compat()))
-			};
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
 				Role::Authority { sentry_nodes: Vec::new() },
-				task_executor,
+				task_executor.clone(),
 				Some(key),
 				self.base_port,
 				&temp,
@@ -282,11 +284,15 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for full in full {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| executor.spawn(fut.unit_error().compat()))
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Role::Full, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Role::Full,
+				task_executor.clone(),
+				None,
+				self.base_port,
+				&temp,
+			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
@@ -298,11 +304,15 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 		}
 
 		for light in light {
-			let task_executor = {
-				let executor = executor.clone();
-				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| executor.spawn(fut.unit_error().compat()))
-			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Role::Light, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(
+				self.nodes,
+				&self.chain_spec,
+				Role::Light,
+				task_executor.clone(),
+				None,
+				self.base_port,
+				&temp,
+			);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
