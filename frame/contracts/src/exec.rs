@@ -530,13 +530,14 @@ where
 		-> ExecResult
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
+		use frame_support::storage::TransactionOutcome::*;
 		let (output, deferred) = {
 			let mut nested = self.nested(dest, trie_id);
 			let output = frame_support::storage::with_transaction(|| {
 				let output = func(&mut nested);
 				match output {
-					Ok(ref rv) if rv.is_success() => (output, frame_support::storage::TransactionOutcome::Commit),
-					_ => (output, frame_support::storage::TransactionOutcome::Rollback),
+					Ok(ref rv) if rv.is_success() => Commit(output),
+					_ => Rollback(output),
 				}
 			})?;
 			(output, nested.deferred)
