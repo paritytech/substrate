@@ -151,7 +151,7 @@ decl_error! {
 decl_storage! {
 	trait Store for Module<T: Trait> as SgxHelloWorld {
 		/// Enclaves that are verified (i.e, verified via remote attestation)
-		VerifiedEnclaves get(fn verified_enclaves): map hasher(twox_64_concat) T::AccountId => Enclave;
+		VerifiedEnclaves get(fn verified_enclaves): map hasher(blake2_128_concat) T::AccountId => Enclave;
 		/// Enclaves that are waiting to be verified
 		UnverifiedEnclaves get(fn unverified_enclaves): Vec<(T::AccountId, EnclaveAddress)>;
 		/// Waiting enclave calls
