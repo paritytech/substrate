@@ -2194,7 +2194,7 @@ decl_module! {
 			size: ElectionSize,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-			Self::check_and_replace_solution(
+			let adjustments = Self::check_and_replace_solution(
 				winners,
 				compact,
 				ElectionCompute::Unsigned,
@@ -2207,8 +2207,7 @@ decl_module! {
 				effectively depriving the validators from their authoring reward. Hence, this panic
 				is expected."
 			);
-
-			Ok(None.into())
+			Ok(adjustments)
 		}
 	}
 }
