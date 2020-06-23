@@ -19,6 +19,9 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 
 	let mut current_pallet = Vec::<u8>::new();
 
+	// general imports
+	write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight}};\n").unwrap();
+
 	batches.iter().for_each(|batch| {
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
@@ -31,12 +34,13 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 				write!(file, "}}\n").unwrap();
 			}
 
-			// imports
-			write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight}};\n").unwrap();
+			// pallet trait import
 			write!(file, "use pallet_{}::{}Weight;\n",
 				pallet_string,
 				uppercase_first_letter(&pallet_string),
 			).unwrap();
+
+			// struct for weights
 			write!(file, "pub struct WeightFor{};\n",
 				uppercase_first_letter(&pallet_string),
 			).unwrap();
