@@ -889,16 +889,16 @@ impl Metrics {
 			connections_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by direction, reason and by being primary or not"
+					"Total number of connections closed, by direction, reason and by being the first or not"
 				),
-				&["direction", "reason", "was_primary"]
+				&["direction", "reason", "was_first"]
 			)?, registry)?,
 			connections_opened_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_opened_total",
-					"Total number of connections opened by direction and by being primary or not"
+					"Total number of connections opened by direction and by being the first or not"
 				),
-				&["direction", "is_primary"]
+				&["direction", "is_first"]
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -1217,15 +1217,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
 
-					let is_primary = if num_established.get() == 1 { "true" } else { "false" };
-
 					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections_opened_total.with_label_values(&["out", is_primary]).inc(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections_opened_total.with_label_values(&["in", is_primary]).inc(),
-						}
+						let direction = match endpoint {
+							ConnectedPoint::Dialer { .. } => "out",
+							ConnectedPoint::Listener { .. } => "in",
+						};
+						let is_first = if num_established.get() == 1 { "true" } else { "false" };
+
+						metrics.connections_opened_total.with_label_values(&[direction, is_first]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, num_established }) => {
@@ -1249,9 +1248,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						};
 
 						// `num_established` represents the number of *remaining* connections.
-						let was_primary = if num_established == 0 { "true" } else { "false" };
+						let was_first = if num_established == 0 { "true" } else { "false" };
 
-						metrics.connections_closed_total.with_label_values(&[direction, reason, was_primary]).inc();
+						metrics.connections_closed_total.with_label_values(&[direction, reason, was_first]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::NewListenAddr(addr)) => {
