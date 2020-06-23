@@ -2201,13 +2201,14 @@ decl_module! {
 				score,
 				era,
 				size,
-			)
-			.expect(
+			).expect(
 				"An unsigned solution can only be submitted by validators; A validator should \
 				always produce correct solutions, else this block should not be imported, thus \
 				effectively depriving the validators from their authoring reward. Hence, this panic
 				is expected."
-			)
+			);
+
+			Ok(None.into())
 		}
 	}
 }
