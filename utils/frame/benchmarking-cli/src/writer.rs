@@ -19,19 +19,33 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		// params
 		let components = &batch.results[0].components;
 		for component in components {
-			write!(file, "{:?}: u32,", component.0).unwrap();
+			write!(file, "{:?}: u32, ", component.0).unwrap();
 		}
 		// return value
 		write!(file, ") -> Weight {{\n").unwrap();
 
 		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-
-		// return value
 		write!(file, "	({} as Weight)\n", extrinsic_time.base).unwrap();
 		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(name, slope)| {
 			write!(file, "		.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
+				name,
+				slope,
+			).unwrap();
+		});
+
+		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
+		write!(file, "		.saturating_add(T::DbWeight::get().reads({}))\n", reads.base).unwrap();
+		reads.slopes.iter().zip(reads.names.iter()).for_each(|(name, slope)| {
+			write!(file, "		.saturating_add(T::DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight))\n",
+				name,
+				slope,
+			).unwrap();
+		});
+
+		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
+		write!(file, "		.saturating_add(T::DbWeight::get().writes({}))\n", writes.base).unwrap();
+		writes.slopes.iter().zip(writes.names.iter()).for_each(|(name, slope)| {
+			write!(file, "		.saturating_add(T::DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight))\n",
 				name,
 				slope,
 			).unwrap();
