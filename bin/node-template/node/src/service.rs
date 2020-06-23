@@ -7,7 +7,7 @@ use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{
 	error::{Error as ServiceError}, Configuration, ServiceBuilder, ServiceComponents,
-	KeepAliveServiceComponents,
+	TaskManager,
 };
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
@@ -96,9 +96,7 @@ macro_rules! new_full_start {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration)
--> Result<KeepAliveServiceComponents, ServiceError>
-{
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
@@ -111,7 +109,7 @@ pub fn new_full(config: Configuration)
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	let ServiceComponents {
-		client, transaction_pool, task_manager, keystore, network, telemetry, base_path,
+		client, transaction_pool, mut task_manager, keystore, network, telemetry, base_path,
 		select_chain, prometheus_registry, telemetry_on_connect_sinks, rpc, ..
 	 } = builder
 		.with_finality_proof_provider(|client, backend| {
@@ -203,13 +201,13 @@ pub fn new_full(config: Configuration)
 		)?;
 	}
 
-	Ok(KeepAliveServiceComponents {
-		task_manager, other: Box::new((telemetry, base_path, rpc)),
-	})
+	task_manager.keep_alive((telemetry, base_path, rpc));
+
+	Ok(task_manager)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<KeepAliveServiceComponents, ServiceError> {
+pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
@@ -274,9 +272,8 @@ pub fn new_light(config: Configuration) -> Result<KeepAliveServiceComponents, Se
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
 		.build_light()
-		.map(|ServiceComponents { task_manager, telemetry, base_path, rpc, .. }| {
-			KeepAliveServiceComponents {
-				task_manager, other: Box::new((telemetry, base_path, rpc)),
-			}
+		.map(|ServiceComponents { mut task_manager, telemetry, base_path, rpc, .. }| {
+			task_manager.keep_alive((telemetry, base_path, rpc));
+			task_manager
 		})
 }

@@ -30,7 +30,7 @@ use tempfile::TempDir;
 use tokio::{runtime::Runtime, prelude::FutureExt};
 use tokio::timer::Interval;
 use sc_service::{
-	KeepAliveServiceComponents,
+	TaskManager,
 	GenericChainSpec,
 	ChainSpecExtension,
 	Configuration,
@@ -79,7 +79,7 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 }
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
-	keep_alive: Arc<Mutex<KeepAliveServiceComponents>>,
+	task_manager: Arc<Mutex<TaskManager>>,
 	rpc_handlers: Arc<RpcHandlers>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
@@ -89,7 +89,7 @@ pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
 TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	pub fn new(
-		keep_alive: KeepAliveServiceComponents,
+		task_manager: TaskManager,
 		rpc_handlers: RpcHandlers,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -98,7 +98,7 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 		Self {
 			client, transaction_pool, network,
 			rpc_handlers: Arc::new(rpc_handlers),
-			keep_alive: Arc::new(Mutex::new(keep_alive)),
+			task_manager: Arc::new(Mutex::new(task_manager)),
 		}
 	}
 }
@@ -108,7 +108,7 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Clone for
 TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	fn clone(&self) -> Self {
 		Self {
-			keep_alive: self.keep_alive.clone(),
+			task_manager: self.task_manager.clone(),
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			network: self.network.clone(),
@@ -122,7 +122,7 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future for TestNetComponents
 	type Error = sc_service::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		futures::compat::Compat::new(&mut self.keep_alive.lock().task_manager).poll()
+		futures::compat::Compat::new(&mut self.task_manager.lock().future()).poll()
 	}
 }
 

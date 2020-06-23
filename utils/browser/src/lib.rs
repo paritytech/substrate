@@ -138,7 +138,7 @@ pub fn start_client(mut task_manager: TaskManager, rpc_handlers: RpcHandlers) ->
 			}
 		}
 
-		Pin::new(&mut task_manager)
+		Pin::new(&mut task_manager.future())
 			.poll(cx)
 			.map(drop)
 	}));

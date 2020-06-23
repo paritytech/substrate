@@ -25,7 +25,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{Configuration, Role, ServiceBuilderCommand, TaskType, KeepAliveServiceComponents};
+use sc_service::{Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
@@ -179,8 +179,8 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the node's configuration.
 	pub fn run_node(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		match self.config.role {
@@ -194,7 +194,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the node's configuration uses a "light" role.
 	pub fn run_full_node(
 		self,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
+		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		if matches!(self.config.role, Role::Light) {
@@ -210,7 +210,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// the node's configuration uses a "full" role.
 	pub fn run_light_node(
 		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
+		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
 		runtime_version: RuntimeVersion,
 	) -> Result<()> {
 		if !matches!(self.config.role, Role::Light) {
@@ -251,26 +251,13 @@ impl<C: SubstrateCli> Runner<C> {
 
 	fn run_service_until_exit(
 		mut self,
-		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<KeepAliveServiceComponents>,
+		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
 	) -> Result<()> {
-		let KeepAliveServiceComponents {
-			task_manager,
-			// We need to keep a hold of these until the tasks are finished.
-			other: _other,
-		} = initialise(self.config)?;
-
-		{
-			let f = task_manager.fuse();
-			self.tokio_runtime
-				.block_on(main(f))
-				.map_err(|e| e.to_string())?;
-		}
-
-		// The `service` **must** have been destroyed here for the shutdown signal to propagate
-		// to all the tasks. Dropping `tokio_runtime` will block the thread until all tasks have
-		// shut down.
-		drop(self.tokio_runtime);
-
+		let mut task_manager = initialise(self.config)?;
+		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
+			.map_err(|e| e.to_string())?;
+		task_manager.terminate();
+		drop(task_manager);
 		Ok(())
 	}
 

@@ -30,7 +30,7 @@ use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
 	ServiceBuilder, config::Configuration, error::{Error as ServiceError},
-	RpcHandlers, ServiceComponents, KeepAliveServiceComponents,
+	RpcHandlers, ServiceComponents, TaskManager,
 };
 use sp_inherents::InherentDataProviders;
 use sc_consensus::LongestChain;
@@ -165,7 +165,7 @@ pub fn new_full_base(
 	config: Configuration,
 	with_startup_data: impl FnOnce(&BabeBlockImport, &sc_consensus_babe::BabeLink<Block>)
 ) -> Result<(
-	KeepAliveServiceComponents,
+	TaskManager,
 	InherentDataProviders,
 	RpcHandlers, Arc<FullClient>, Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::FullChainApi<FullClient, Block>, Block>>
@@ -186,7 +186,7 @@ pub fn new_full_base(
 		new_full_start!(config);
 
 	let ServiceComponents {
-		client, transaction_pool, task_manager, keystore, network, telemetry, base_path,
+		client, transaction_pool, mut task_manager, keystore, network, telemetry, base_path,
 		select_chain, prometheus_registry, rpc, telemetry_on_connect_sinks, rpc_handlers, ..
 	} = builder
 		.with_finality_proof_provider(|client, backend| {
@@ -317,23 +317,17 @@ pub fn new_full_base(
 		)?;
 	}
 
-	Ok((
-		KeepAliveServiceComponents {
-			task_manager, other: Box::new((
-				telemetry, base_path, rpc,				
-			))
-		},
-		inherent_data_providers,
-		rpc_handlers, client, network, transaction_pool
-	))
+	task_manager.keep_alive((telemetry, base_path, rpc));
+
+	Ok((task_manager, inherent_data_providers, rpc_handlers, client, network, transaction_pool))
 }
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<KeepAliveServiceComponents, ServiceError> {
-	new_full_base(config, |_, _| ()).map(|(mut keep_alive, rpc_handlers, _, _, _, _)| {
-		keep_alive.other = Box::new((keep_alive.other, rpc_handlers));
-		keep_alive
+-> Result<TaskManager, ServiceError> {
+	new_full_base(config, |_, _| ()).map(|(mut task_manager, rpc_handlers, _, _, _, _)| {
+		task_manager.keep_alive(rpc_handlers);
+		task_manager
 	})
 }
 
@@ -341,14 +335,15 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, node_executor::Ex
 type LightFetcher = sc_network::config::OnDemand<Block>;
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	KeepAliveServiceComponents, RpcHandlers, Arc<LightClient>,
+	TaskManager, RpcHandlers, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block>>
 ), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	let ServiceComponents {
-		task_manager, telemetry, base_path, rpc_handlers, rpc, client, network, transaction_pool, ..
+		mut task_manager, telemetry, base_path, rpc_handlers, rpc, client, network,
+		transaction_pool, ..
 	} = ServiceBuilder::new_light::<Block, RuntimeApi, node_executor::Executor>(config)?
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
@@ -433,19 +428,16 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		})?
 		.build_light()?;
 
-	Ok((
-		KeepAliveServiceComponents {
-			task_manager, other: Box::new((telemetry, base_path, rpc)),
-		},
-		rpc_handlers, client, network, transaction_pool
-	))
+	task_manager.keep_alive((telemetry, base_path, rpc));
+	
+	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<KeepAliveServiceComponents, ServiceError> {	
-	new_light_base(config).map(|(mut keep_alive, rpc_handlers, _, _, _)| {
-		keep_alive.other = Box::new((keep_alive.other, rpc_handlers));
-		keep_alive
+pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {	
+	new_light_base(config).map(|(mut task_manager, rpc_handlers, _, _, _)| {
+		task_manager.keep_alive(rpc_handlers);
+		task_manager
 	})
 }
 

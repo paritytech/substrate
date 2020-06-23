@@ -13,11 +13,11 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, pin::Pin, result::Result, sync::Arc, task::{Poll, Context}};
+use std::{panic, pin::Pin, result::Result, sync::Arc};
 use exit_future::Signal;
 use log::debug;
 use futures::{
-	Future, FutureExt, Stream,
+	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture},
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
@@ -29,7 +29,7 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
-use crate::config::TaskType;
+use crate::{config::TaskType, Error};
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 
 mod prometheus_future;
@@ -224,6 +224,8 @@ pub struct TaskManager {
 	essential_failed_tx: TracingUnboundedSender<()>,
 	/// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
+	/// Things to keep alive until the task manager is dropped.
+	keep_alive: Box<dyn std::any::Any + Send>,
 }
 
 impl TaskManager {
@@ -246,6 +248,7 @@ impl TaskManager {
 			metrics,
 			essential_failed_tx,
 			essential_failed_rx,
+			keep_alive: Box::new(()),
 		})
 	}
 
@@ -263,34 +266,34 @@ impl TaskManager {
 	pub fn spawn_essential_handle(&self) -> SpawnEssentialTaskHandle {
 		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
 	}
-}
 
-impl Future for TaskManager {
-	type Output = Result<(), crate::Error>;
+	/// Return a future that will end if an essential task fails.
+	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+		Box::pin(async move {
+			self.essential_failed_rx.next().await;
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
+			Err(Error::Other("Essential task failed.".into()))
+		})
+	}
 
-		match Pin::new(&mut this.essential_failed_rx).poll_next(cx) {
-			Poll::Pending => {},
-			Poll::Ready(_) => {
-				// Ready(None) should not be possible since we hold a live
-				// sender.
-				return Poll::Ready(Err(crate::Error::Other("Essential task failed.".into())));
-			}
+	/// Signal to terminate all the running tasks.
+	pub fn terminate(&mut self) {
+		if let Some(signal) = self.signal.take() {
+			let _ = signal.fire();
 		}
+	}
 
-		// The task manager future never ends.
-		Poll::Pending
+	/// Move a struct into the task manager to be kept alive.
+	pub fn keep_alive<T: 'static + Send>(&mut self, to_keep_alive: T) {
+		let keeping_alive = std::mem::replace(&mut self.keep_alive, Box::new(()));
+		self.keep_alive = Box::new((keeping_alive, to_keep_alive));
 	}
 }
 
 impl Drop for TaskManager {
 	fn drop(&mut self) {
 		debug!(target: "service", "Tasks manager shutdown");
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-		}
+		self.terminate();
 	}
 }
 
