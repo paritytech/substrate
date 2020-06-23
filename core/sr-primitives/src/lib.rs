@@ -384,8 +384,6 @@ pub enum ApplyError {
 	Future = 2,
 	/// Sending account had too low a balance.
 	CantPay = 3,
-	// Execute module failed
-	ExeFailed = 4,
 	/// Block is full, no more extrinsics can be applied.
 	FullBlock = 255,
 }
