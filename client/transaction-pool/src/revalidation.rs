@@ -20,7 +20,7 @@
 
 use std::{sync::Arc, pin::Pin, collections::{HashMap, HashSet, BTreeMap}};
 
-use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransaction};
+use sc_transaction_graph::{ChainApi, Pool, ExtrinsicHash, NumberFor, ValidatedTransaction};
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
@@ -39,7 +39,7 @@ const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 /// Payload from queue to worker.
 struct WorkerPayload<Api: ChainApi> {
 	at: NumberFor<Api>,
-	transactions: Vec<ExHash<Api>>,
+	transactions: Vec<ExtrinsicHash<Api>>,
 }
 
 /// Async revalidation worker.
@@ -49,8 +49,8 @@ struct RevalidationWorker<Api: ChainApi> {
 	api: Arc<Api>,
 	pool: Arc<Pool<Api>>,
 	best_block: NumberFor<Api>,
-	block_ordered: BTreeMap<NumberFor<Api>, HashSet<ExHash<Api>>>,
-	members: HashMap<ExHash<Api>, NumberFor<Api>>,
+	block_ordered: BTreeMap<NumberFor<Api>, HashSet<ExtrinsicHash<Api>>>,
+	members: HashMap<ExtrinsicHash<Api>, NumberFor<Api>>,
 }
 
 impl<Api: ChainApi> Unpin for RevalidationWorker<Api> {}
@@ -63,7 +63,7 @@ async fn batch_revalidate<Api: ChainApi>(
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
 	at: NumberFor<Api>,
-	batch: impl IntoIterator<Item=ExHash<Api>>,
+	batch: impl IntoIterator<Item=ExtrinsicHash<Api>>,
 ) {
 	let mut invalid_hashes = Vec::new();
 	let mut revalidated = HashMap::new();
@@ -129,7 +129,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		}
 	}
 
-	fn prepare_batch(&mut self) -> Vec<ExHash<Api>> {
+	fn prepare_batch(&mut self) -> Vec<ExtrinsicHash<Api>> {
 		let mut queued_exts = Vec::new();
 		let mut left = BACKGROUND_REVALIDATION_BATCH_SIZE;
 
@@ -178,7 +178,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 		for ext_hash in transactions {
 			// we don't add something that already scheduled for revalidation
 			if self.members.contains_key(&ext_hash) {
-				log::debug!(
+				log::trace!(
 					target: "txpool",
 					"[{:?}] Skipped adding for revalidation: Already there.",
 					ext_hash,
@@ -245,6 +245,16 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 						Some(worker_payload) => {
 							this.best_block = worker_payload.at;
 							this.push(worker_payload);
+
+							if this.members.len() > 0 {
+								log::debug!(
+									target: "txpool",
+									"Updated revalidation queue at {}. Transactions: {:?}",
+									this.best_block,
+									this.members,
+								);
+							}
+
 							continue;
 						},
 						// R.I.P. worker!
@@ -324,9 +334,9 @@ where
 	/// If queue configured with background worker, this will return immediately.
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
-	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
+	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExtrinsicHash<Api>>) {
 		if transactions.len() > 0 {
-			log::debug!(target: "txpool", "Added {} transactions to revalidation queue", transactions.len());
+			log::debug!(target: "txpool", "Sent {} transactions to revalidation queue", transactions.len());
 		}
 
 		if let Some(ref to_worker) = self.background {
@@ -349,9 +359,7 @@ mod tests {
 	use sp_transaction_pool::TransactionSource;
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use futures::executor::block_on;
-	use substrate_test_runtime_client::{
-		AccountKeyring::*,
-	};
+	use substrate_test_runtime_client::AccountKeyring::*;
 
 	fn setup() -> (Arc<TestApi>, Pool<TestApi>) {
 		let test_api = Arc::new(TestApi::empty());

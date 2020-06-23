@@ -177,6 +177,7 @@ impl pallet_staking::Trait for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 	type MaxIterations = ();
+	type MinSolutionScoreBump = ();
 }
 
 impl pallet_im_online::Trait for Test {

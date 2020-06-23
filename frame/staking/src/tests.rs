@@ -406,41 +406,6 @@ fn no_candidate_emergency_condition() {
 
 #[test]
 fn nominating_and_rewards_should_work() {
-	// PHRAGMEN OUTPUT: running this test with the reference impl gives:
-	//
-	// Sequential Phragmén gives
-	// 10  is elected with stake  2200.0 and score  0.0003333333333333333
-	// 20  is elected with stake  1800.0 and score  0.0005555555555555556
-
-	// 10  has load  0.0003333333333333333 and supported
-	// 10  with stake  1000.0
-	// 20  has load  0.0005555555555555556 and supported
-	// 20  with stake  1000.0
-	// 30  has load  0 and supported
-	// 30  with stake  0
-	// 40  has load  0 and supported
-	// 40  with stake  0
-	// 2  has load  0.0005555555555555556 and supported
-	// 10  with stake  600.0 20  with stake  400.0 30  with stake  0.0
-	// 4  has load  0.0005555555555555556 and supported
-	// 10  with stake  600.0 20  with stake  400.0 40  with stake  0.0
-
-	// Sequential Phragmén with post processing gives
-	// 10  is elected with stake  2000.0 and score  0.0003333333333333333
-	// 20  is elected with stake  2000.0 and score  0.0005555555555555556
-
-	// 10  has load  0.0003333333333333333 and supported
-	// 10  with stake  1000.0
-	// 20  has load  0.0005555555555555556 and supported
-	// 20  with stake  1000.0
-	// 30  has load  0 and supported
-	// 30  with stake  0
-	// 40  has load  0 and supported
-	// 40  with stake  0
-	// 2  has load  0.0005555555555555556 and supported
-	// 10  with stake  400.0 20  with stake  600.0 30  with stake  0
-	// 4  has load  0.0005555555555555556 and supported
-	// 10  with stake  600.0 20  with stake  400.0 40  with stake  0.0
 	ExtBuilder::default()
 		.nominate(false)
 		.validator_pool(true)
@@ -477,7 +442,7 @@ fn nominating_and_rewards_should_work() {
 
 			mock::start_era(1);
 
-			// 10 and 20 have more votes, they will be chosen by phragmen.
+			// 10 and 20 have more votes, they will be chosen.
 			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
 			// OLD validators must have already received some rewards.
@@ -2765,7 +2730,7 @@ mod offchain_phragmen {
 		OffchainExt, TransactionPoolExt,
 	};
 	use sp_io::TestExternalities;
-	use sp_phragmen::StakedAssignment;
+	use sp_npos_elections::StakedAssignment;
 	use frame_support::traits::OffchainWorker;
 	use std::sync::Arc;
 	use substrate_test_utils::assert_eq_uvec;
@@ -2822,7 +2787,7 @@ mod offchain_phragmen {
 		origin: Origin,
 		winners: Vec<ValidatorIndex>,
 		compact: CompactAssignments,
-		score: PhragmenScore,
+		score: ElectionScore,
 	) -> DispatchResultWithPostInfo {
 		Staking::submit_election_solution(
 			origin,
@@ -2859,7 +2824,7 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_election_flag_is_triggered() {
+	fn offchain_window_is_triggered() {
 		ExtBuilder::default()
 			.session_per_era(5)
 			.session_length(10)
@@ -2919,16 +2884,13 @@ mod offchain_phragmen {
 	}
 
 	#[test]
-	fn offchain_election_flag_is_triggered_when_forcing() {
+	fn offchain_window_is_triggered_when_forcing() {
 		ExtBuilder::default()
 			.session_per_era(5)
 			.session_length(10)
 			.election_lookahead(3)
 			.build()
 			.execute_with(|| {
-				run_to_block(7);
-				assert_session_era!(0, 0);
-
 				run_to_block(12);
 				ForceEra::put(Forcing::ForceNew);
 				run_to_block(13);
@@ -2936,11 +2898,90 @@ mod offchain_phragmen {
 
 				run_to_block(17); // instead of 47
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(17));
+
+				run_to_block(20);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			})
 	}
 
 	#[test]
-	fn election_on_chain_fallback_works() {
+	fn offchain_window_is_triggered_when_force_always() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(10)
+			.election_lookahead(3)
+			.build()
+			.execute_with(|| {
+
+				ForceEra::put(Forcing::ForceAlways);
+				run_to_block(16);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(17); // instead of 37
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(17));
+
+				run_to_block(20);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(26);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(27); // next one again
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(27));
+			})
+	}
+
+	#[test]
+	fn offchain_window_closes_when_forcenone() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(10)
+			.election_lookahead(3)
+			.build()
+			.execute_with(|| {
+				ForceEra::put(Forcing::ForceNone);
+
+				run_to_block(36);
+				assert_session_era!(3, 0);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				// opens
+				run_to_block(37);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(37));
+				assert!(Staking::is_current_session_final());
+				assert!(Staking::snapshot_validators().is_some());
+
+				// closes normally
+				run_to_block(40);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert!(!Staking::is_current_session_final());
+				assert!(Staking::snapshot_validators().is_none());
+				assert_session_era!(4, 0);
+
+				run_to_block(47);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(4, 0);
+
+				run_to_block(57);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(5, 0);
+
+				run_to_block(67);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				// Will not open again as scheduled
+				run_to_block(87);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(8, 0);
+
+				run_to_block(90);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+				assert_session_era!(9, 0);
+			})
+	}
+
+	#[test]
+	fn offchain_window_on_chain_fallback_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			start_session(1);
 			start_session(2);
@@ -3279,7 +3320,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					// the proposed slot stake, with equalize.
+					// the proposed slot stake, with balance_solution.
 					priority: UnsignedPriority::get() + 1250,
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],
@@ -4382,330 +4423,6 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				claimed_rewards: (15..99).collect(),
 			})
 		);
-	});
-}
-
-/* These migration tests below can be removed once migration code is removed */
-
-#[test]
-fn rewards_should_work_before_migration() {
-	// should check that before migration:
-	// * rewards get recorded per session
-	// * rewards get paid per Era
-	// * Check that nominators are also rewarded
-	ExtBuilder::default().nominate(true).build_and_execute(|| {
-		MigrateEra::put(10);
-		let init_balance_10 = Balances::total_balance(&10);
-		let init_balance_11 = Balances::total_balance(&11);
-		let init_balance_20 = Balances::total_balance(&20);
-		let init_balance_21 = Balances::total_balance(&21);
-		let init_balance_100 = Balances::total_balance(&100);
-		let init_balance_101 = Balances::total_balance(&101);
-
-		// Check state
-		Payee::<Test>::insert(11, RewardDestination::Controller);
-		Payee::<Test>::insert(21, RewardDestination::Controller);
-		Payee::<Test>::insert(101, RewardDestination::Controller);
-
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		// This is the second validator of the current elected set.
-		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_0 > 10); // Test is meaningful if reward something
-
-		start_session(1);
-
-		assert_eq!(Balances::total_balance(&10), init_balance_10);
-		assert_eq!(Balances::total_balance(&11), init_balance_11);
-		assert_eq!(Balances::total_balance(&20), init_balance_20);
-		assert_eq!(Balances::total_balance(&21), init_balance_21);
-		assert_eq!(Balances::total_balance(&100), init_balance_100);
-		assert_eq!(Balances::total_balance(&101), init_balance_101);
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
-			total: 50*3,
-			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
-		});
-		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
-		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
-		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
-		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
-
-		start_session(2);
-		start_session(3);
-
-		assert_eq!(Staking::active_era().unwrap().index, 1);
-		mock::make_all_reward_payment_before_migration(0);
-
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * total_payout_0 * 2/3
-				+ part_for_100_from_20 * total_payout_0 * 1/3,
-			2
-		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
-
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_1 > 10); // Test is meaningful if reward something
-
-		mock::start_era(2);
-		mock::make_all_reward_payment_before_migration(1);
-
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
-				+ part_for_100_from_20 * total_payout_0 * 1/3,
-			2
-		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
-	});
-}
-
-#[test]
-fn migrate_era_should_work() {
-	// should check that before and after migration:
-	// * rewards get recorded per session
-	// * rewards get paid per Era
-	// * Check that nominators are also rewarded
-	ExtBuilder::default().nominate(true).build_and_execute(|| {
-		MigrateEra::put(1);
-		let init_balance_10 = Balances::total_balance(&10);
-		let init_balance_11 = Balances::total_balance(&11);
-		let init_balance_20 = Balances::total_balance(&20);
-		let init_balance_21 = Balances::total_balance(&21);
-		let init_balance_100 = Balances::total_balance(&100);
-		let init_balance_101 = Balances::total_balance(&101);
-
-		// Check state
-		Payee::<Test>::insert(11, RewardDestination::Controller);
-		Payee::<Test>::insert(21, RewardDestination::Controller);
-		Payee::<Test>::insert(101, RewardDestination::Controller);
-
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		// This is the second validator of the current elected set.
-		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_0 > 10); // Test is meaningful if reward something
-
-		start_session(1);
-
-		assert_eq!(Balances::total_balance(&10), init_balance_10);
-		assert_eq!(Balances::total_balance(&11), init_balance_11);
-		assert_eq!(Balances::total_balance(&20), init_balance_20);
-		assert_eq!(Balances::total_balance(&21), init_balance_21);
-		assert_eq!(Balances::total_balance(&100), init_balance_100);
-		assert_eq!(Balances::total_balance(&101), init_balance_101);
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
-			total: 50*3,
-			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
-		});
-		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
-		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
-		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
-		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
-
-		start_session(2);
-		start_session(3);
-
-		assert_eq!(Staking::active_era().unwrap().index, 1);
-		mock::make_all_reward_payment_before_migration(0);
-
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * total_payout_0 * 2/3
-				+ part_for_100_from_20 * total_payout_0 * 1/3,
-			2
-		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
-
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_1 > 10); // Test is meaningful if reward something
-
-		mock::start_era(2);
-		mock::make_all_reward_payment(1);
-
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
-				+ part_for_100_from_20 * total_payout_0 * 1/3,
-			2
-		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
-	});
-}
-
-#[test]
-#[should_panic]
-fn migrate_era_should_handle_error() {
-	ExtBuilder::default().nominate(true).build_and_execute(|| {
-		MigrateEra::put(1);
-		let init_balance_10 = Balances::total_balance(&10);
-		let init_balance_11 = Balances::total_balance(&11);
-		let init_balance_20 = Balances::total_balance(&20);
-		let init_balance_21 = Balances::total_balance(&21);
-		let init_balance_100 = Balances::total_balance(&100);
-		let init_balance_101 = Balances::total_balance(&101);
-
-		// Check state
-		Payee::<Test>::insert(11, RewardDestination::Controller);
-		Payee::<Test>::insert(21, RewardDestination::Controller);
-		Payee::<Test>::insert(101, RewardDestination::Controller);
-
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		// This is the second validator of the current elected set.
-		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_0 > 10); // Test is meaningful if reward something
-
-		start_session(1);
-
-		assert_eq!(Balances::total_balance(&10), init_balance_10);
-		assert_eq!(Balances::total_balance(&11), init_balance_11);
-		assert_eq!(Balances::total_balance(&20), init_balance_20);
-		assert_eq!(Balances::total_balance(&21), init_balance_21);
-		assert_eq!(Balances::total_balance(&100), init_balance_100);
-		assert_eq!(Balances::total_balance(&101), init_balance_101);
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
-			total: 50*3,
-			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
-		});
-
-		start_session(2);
-		start_session(3);
-
-		assert_eq!(Staking::active_era().unwrap().index, 1);
-		mock::make_all_reward_payment(0);
-	});
-}
-
-#[test]
-#[should_panic]
-fn migrate_era_should_handle_errors_2() {
-	// should check that before and after migration:
-	// * rewards get recorded per session
-	// * rewards get paid per Era
-	// * Check that nominators are also rewarded
-	ExtBuilder::default().nominate(true).build_and_execute(|| {
-		MigrateEra::put(1);
-		let init_balance_10 = Balances::total_balance(&10);
-		let init_balance_11 = Balances::total_balance(&11);
-		let init_balance_20 = Balances::total_balance(&20);
-		let init_balance_21 = Balances::total_balance(&21);
-		let init_balance_100 = Balances::total_balance(&100);
-		let init_balance_101 = Balances::total_balance(&101);
-
-		// Check state
-		Payee::<Test>::insert(11, RewardDestination::Controller);
-		Payee::<Test>::insert(21, RewardDestination::Controller);
-		Payee::<Test>::insert(101, RewardDestination::Controller);
-
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
-		// This is the second validator of the current elected set.
-		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_0 > 10); // Test is meaningful if reward something
-
-		start_session(1);
-
-		assert_eq!(Balances::total_balance(&10), init_balance_10);
-		assert_eq!(Balances::total_balance(&11), init_balance_11);
-		assert_eq!(Balances::total_balance(&20), init_balance_20);
-		assert_eq!(Balances::total_balance(&21), init_balance_21);
-		assert_eq!(Balances::total_balance(&100), init_balance_100);
-		assert_eq!(Balances::total_balance(&101), init_balance_101);
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
-			total: 50*3,
-			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
-		});
-		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
-		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
-		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
-		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
-
-		start_session(2);
-		start_session(3);
-
-		assert_eq!(Staking::active_era().unwrap().index, 1);
-		mock::make_all_reward_payment_before_migration(0);
-
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * total_payout_0 * 2/3
-				+ part_for_100_from_20 * total_payout_0 * 1/3,
-			2
-		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
-
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
-
-		// Compute total payout now for whole duration as other parameter won't change
-		let total_payout_1 = current_total_payout_for_duration(3 * 1000);
-		assert!(total_payout_1 > 10); // Test is meaningful if reward something
-
-		mock::start_era(2);
-		mock::make_all_reward_payment_before_migration(1);
-
-		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
-		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
-		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
-		assert_eq_error_rate!(
-			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
-				+ part_for_100_from_20 * total_payout_0 * 1/3,
-			2
-		);
-		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 	});
 }
 

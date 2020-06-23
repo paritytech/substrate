@@ -19,9 +19,9 @@
 use super::*;
 use frame_support::storage::migration::{put_storage_value, take_storage_value};
 use frame_support::weights::Weight;
-use sp_runtime::Fixed64;
+use sp_runtime::FixedI64;
 
-type OldMultiplier = Fixed64;
+type OldMultiplier = FixedI64;
 
 pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 	rename_and_convert::<T>()

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Phragmen Election Module.
+//! # Phragmén Election Module.
 //!
 //! An election module based on sequential phragmen.
 //!
@@ -100,7 +100,7 @@ use frame_support::{
 		ContainsLengthBound,
 	}
 };
-use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
+use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
 use frame_support::traits::MigrateAccount;
 
@@ -246,7 +246,6 @@ decl_storage! {
 }
 
 decl_error! {
-	/// Error for the elections-phragmen module.
 	pub enum Error for Module<T: Trait> {
 		/// Cannot vote when no candidates or members exist.
 		UnableToVote,
@@ -611,7 +610,7 @@ decl_module! {
 		/// the outgoing member is slashed.
 		///
 		/// If a runner-up is available, then the best runner-up will be removed and replaces the
-		/// outgoing member. Otherwise, a new phragmen round is started.
+		/// outgoing member. Otherwise, a new phragmen election is started.
 		///
 		/// Note that this does not affect the designated block number of the next election.
 		///
@@ -866,13 +865,10 @@ impl<T: Trait> Module<T> {
 
 	/// Run the phragmen election with all required side processes and state updates.
 	///
-	/// Calls the appropriate `ChangeMembers` function variant internally.
+	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	///
-	/// # <weight>
-	/// #### State
 	/// Reads: O(C + V*E) where C = candidates, V voters and E votes per voter exits.
 	/// Writes: O(M + R) with M desired members and R runners_up.
-	/// # </weight>
 	fn do_phragmen() {
 		let desired_seats = Self::desired_members() as usize;
 		let desired_runners_up = Self::desired_runners_up() as usize;
@@ -902,14 +898,14 @@ impl<T: Trait> Module<T> {
 		let voters_and_votes = Voting::<T>::iter()
 			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
 			.collect::<Vec<_>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<T::AccountId, Perbill>(
+		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
 			voters_and_votes.clone(),
 		);
 
-		if let Some(PhragmenResult { winners, assignments }) = maybe_phragmen_result {
+		if let Some(ElectionResult { winners, assignments }) = maybe_phragmen_result {
 			let old_members_ids = <Members<T>>::take().into_iter()
 				.map(|(m, _)| m)
 				.collect::<Vec<T::AccountId>>();
@@ -933,7 +929,7 @@ impl<T: Trait> Module<T> {
 			// exposed candidates, cleaning any previous members, and so on. For now, in favour of
 			// readability and veracity, we keep it simple.
 
-			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
+			let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
 				assignments,
 				stake_of,
 			);
