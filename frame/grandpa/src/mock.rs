@@ -386,6 +386,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		.collect();
 
 	let balances: Vec<_> = (0..authorities.len())
+		.chain(1000..authorities.len()+1000)
 		.map(|i| (i as u64, 10_000_000))
 		.collect();
 
