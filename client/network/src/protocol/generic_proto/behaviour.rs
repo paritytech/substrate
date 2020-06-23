@@ -1301,11 +1301,11 @@ impl NetworkBehaviour for GenericProto {
 						source
 					);
 					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-					let ev = GenericProtoOut::LegacyMessage {
+					let event = GenericProtoOut::LegacyMessage {
 						peer_id: source,
 						message: From::from(&received_handshake[..]),
 					};
-					self.events.push_back(NetworkBehaviourAction::GenerateEvent(ev));
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				}
 			}
 
