@@ -819,7 +819,7 @@ dependencies = [
  "clap",
  "criterion-plot 0.3.1",
  "csv",
- "itertools",
+ "itertools 0.8.2",
  "lazy_static",
  "libc",
  "num-traits 0.2.11",
@@ -846,7 +846,7 @@ dependencies = [
  "clap",
  "criterion-plot 0.4.1",
  "csv",
- "itertools",
+ "itertools 0.8.2",
  "lazy_static",
  "num-traits 0.2.11",
  "oorandom",
@@ -868,7 +868,7 @@ checksum = "76f9212ddf2f4a9eb2d401635190600656a1f88a932ef53d06e7fa4c7e02fb8e"
 dependencies = [
  "byteorder",
  "cast",
- "itertools",
+ "itertools 0.8.2",
 ]
 
 [[package]]
@@ -878,7 +878,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a01e15e0ea58e8234f96146b1f91fa9d0e4dd7a38da93ff7a75d42c0b9d3a545"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.8.2",
 ]
 
 [[package]]
@@ -2290,6 +2290,15 @@ name = "itertools"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
 dependencies = [
  "either",
 ]
@@ -5186,7 +5195,7 @@ checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
 dependencies = [
  "bytes 0.5.4",
  "heck",
- "itertools",
+ "itertools 0.8.2",
  "log",
  "multimap",
  "petgraph",
@@ -5203,7 +5212,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.8.2",
  "proc-macro2",
  "quote 1.0.6",
  "syn 1.0.17",
@@ -7828,11 +7837,14 @@ version = "0.8.0-rc3"
 dependencies = [
  "hash-db",
  "hex-literal",
+ "itertools 0.9.0",
  "log",
  "num-traits 0.2.11",
  "parity-scale-codec",
  "parking_lot 0.10.2",
+ "pretty_assertions",
  "rand 0.7.3",
+ "smallvec 1.4.0",
  "sp-core",
  "sp-externalities",
  "sp-panic-handler",
@@ -8072,7 +8084,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "hyper 0.12.35",
- "itertools",
+ "itertools 0.8.2",
  "jsonrpc-core-client",
  "libp2p",
  "node-primitives",
@@ -8301,7 +8313,7 @@ dependencies = [
  "build-helper",
  "cargo_metadata",
  "fs2",
- "itertools",
+ "itertools 0.8.2",
  "tempfile",
  "toml",
  "walkdir",
