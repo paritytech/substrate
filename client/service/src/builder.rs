@@ -1076,7 +1076,11 @@ ServiceBuilder<
 			};
 
 			let (telemetry, future) = build_telemetry(
-				&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone(), genesis_hash,
+				&mut config,
+				endpoints,
+				telemetry_connection_sinks.clone(),
+				network.clone(),
+				genesis_hash,
 			);
 
 			spawn_handle.spawn(
