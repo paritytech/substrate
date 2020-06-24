@@ -555,7 +555,9 @@ macro_rules! benchmark_backend {
 				)*
 				$(
 					// Prepare instance
-					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+					let $param = components.iter()
+						.find(|&c| c.0 == $crate::BenchmarkParameter::$param)
+						.unwrap().1;
 				)*
 				$(
 					let $pre_id : $pre_ty = $pre_ex;
@@ -574,7 +576,9 @@ macro_rules! benchmark_backend {
 				)*
 				$(
 					// Prepare instance
-					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+					let $param = components.iter()
+						.find(|&c| c.0 == $crate::BenchmarkParameter::$param)
+						.unwrap().1;
 				)*
 				$(
 					let $pre_id : $pre_ty = $pre_ex;
@@ -617,7 +621,9 @@ macro_rules! benchmark_backend {
 				)*
 				$(
 					// Prepare instance
-					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+					let $param = components.iter()
+						.find(|&c| c.0 == $crate::BenchmarkParameter::$param)
+						.unwrap().1;
 				)*
 				$(
 					let $pre_id : $pre_ty = $pre_ex;
@@ -636,7 +642,9 @@ macro_rules! benchmark_backend {
 				)*
 				$(
 					// Prepare instance
-					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+					let $param = components.iter()
+						.find(|&c| c.0 == $crate::BenchmarkParameter::$param)
+						.unwrap().1;
 				)*
 				$(
 					let $pre_id : $pre_ty = $pre_ex;
@@ -818,8 +826,11 @@ macro_rules! impl_benchmark {
 
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
-							// Set up the externalities environment for the setup we want to benchmark.
-							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
+							// Set up the externalities environment for the setup we want to
+							// benchmark.
+							let closure_to_benchmark = <
+								SelectedBenchmark as $crate::BenchmarkingSetup<T>
+							>::instance(&selected_benchmark, &c)?;
 
 							// Set the block number to at least 1 so events are deposited.
 							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
@@ -831,12 +842,20 @@ macro_rules! impl_benchmark {
 							$crate::benchmarking::commit_db();
 
 							// Time the extrinsic logic.
-							frame_support::debug::trace!(target: "benchmark", "Start Benchmark: {:?} {:?}", name, component_value);
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"Start Benchmark: {:?} {:?}", name, component_value
+							);
+
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
+
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"End Benchmark: {} ns", elapsed_extrinsic
+							);
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -859,7 +878,8 @@ macro_rules! impl_benchmark {
 		{ $( $where_clause:tt )* }
 		INSTANCE $( $name:ident ),*
 	) => {
-		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I>
+		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults>
+			for Module<T, I>
 			where T: frame_system::Trait, $( $where_clause )*
 		{
 			fn benchmarks() -> Vec<&'static [u8]> {
@@ -885,7 +905,9 @@ macro_rules! impl_benchmark {
 				$crate::benchmarking::commit_db();
 				$crate::benchmarking::wipe_db();
 
-				let components = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::components(&selected_benchmark);
+				let components = <
+					SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>
+				>::components(&selected_benchmark);
 				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
 
 				// Default number of steps for a component.
@@ -928,7 +950,9 @@ macro_rules! impl_benchmark {
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
 							// Set up the externalities environment for the setup we want to benchmark.
-							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::instance(&selected_benchmark, &c)?;
+							let closure_to_benchmark = <
+								SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>
+							>::instance(&selected_benchmark, &c)?;
 
 							// Set the block number to at least 1 so events are deposited.
 							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
@@ -940,12 +964,20 @@ macro_rules! impl_benchmark {
 							$crate::benchmarking::commit_db();
 
 							// Time the extrinsic logic.
-							frame_support::debug::trace!(target: "benchmark", "Start Benchmark: {:?} {:?}", name, component_value);
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"Start Benchmark: {:?} {:?}", name, component_value
+							);
+
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
+
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"End Benchmark: {} ns", elapsed_extrinsic
+							);
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -982,7 +1014,9 @@ macro_rules! impl_benchmark_test {
 				where T: frame_system::Trait, $( $where_clause )*
 			{
 				let selected_benchmark = SelectedBenchmark::$name;
-				let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
+				let components = <
+					SelectedBenchmark as $crate::BenchmarkingSetup<T>
+				>::components(&selected_benchmark);
 
 				assert!(
 					components.len() != 0,
@@ -1004,7 +1038,9 @@ macro_rules! impl_benchmark_test {
 							.collect();
 
 						// Set up the verification state
-						let closure_to_verify = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
+						let closure_to_verify = <
+							SelectedBenchmark as $crate::BenchmarkingSetup<T>
+						>::verify(&selected_benchmark, &c)?;
 
 						// Set the block number to at least 1 so events are deposited.
 						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
@@ -1032,7 +1068,9 @@ macro_rules! impl_benchmark_test {
 				where T: frame_system::Trait, $( $where_clause )*
 			{
 				let selected_benchmark = SelectedBenchmark::$name;
-				let components = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>>::components(&selected_benchmark);
+				let components = <
+					SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>
+				>::components(&selected_benchmark);
 
 				for (_, (name, low, high)) in components.iter().enumerate() {
 					// Test only the low and high value, assuming values in the middle won't break
@@ -1050,7 +1088,9 @@ macro_rules! impl_benchmark_test {
 							.collect();
 
 						// Set up the verification state
-						let closure_to_verify = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>>::verify(&selected_benchmark, &c)?;
+						let closure_to_verify = <
+							SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>
+						>::verify(&selected_benchmark, &c)?;
 
 						// Set the block number to at least 1 so events are deposited.
 						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {

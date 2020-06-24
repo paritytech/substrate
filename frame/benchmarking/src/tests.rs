@@ -68,7 +68,8 @@ pub trait Trait: OtherTrait where Self::OtherEvent: Into<Self::Event> {
 	type Event;
 	type BlockNumber;
 	type AccountId: 'static + Default + Decode;
-	type Origin: From<frame_system::RawOrigin<Self::AccountId>> + Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
+	type Origin: From<frame_system::RawOrigin<Self::AccountId>> +
+		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -170,13 +171,13 @@ benchmarks!{
 #[test]
 fn benchmarks_macro_works() {
 	// Check benchmark creation for `set_value`.
-	let selected_benchmark = SelectedBenchmark::set_value;
+	let selected = SelectedBenchmark::set_value;
 
-	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected);
 	assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::b, 1)],
 	).expect("failed to create closure");
 
@@ -188,12 +189,12 @@ fn benchmarks_macro_works() {
 #[test]
 fn benchmarks_macro_rename_works() {
 	// Check benchmark creation for `other_dummy`.
-	let selected_benchmark = SelectedBenchmark::other_name;
-	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+	let selected = SelectedBenchmark::other_name;
+	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected);
 	assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::b, 1)],
 	).expect("failed to create closure");
 
@@ -204,13 +205,13 @@ fn benchmarks_macro_rename_works() {
 
 #[test]
 fn benchmarks_macro_works_for_non_dispatchable() {
-	let selected_benchmark = SelectedBenchmark::sort_vector;
+	let selected = SelectedBenchmark::sort_vector;
 
-	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected);
 	assert_eq!(components, vec![(BenchmarkParameter::x, 1, 10000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::x, 1)],
 	).expect("failed to create closure");
 
@@ -220,10 +221,10 @@ fn benchmarks_macro_works_for_non_dispatchable() {
 #[test]
 fn benchmarks_macro_verify_works() {
 	// Check postcondition for benchmark `set_value` is valid.
-	let selected_benchmark = SelectedBenchmark::set_value;
+	let selected = SelectedBenchmark::set_value;
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::b, 1)],
 	).expect("failed to create closure");
 
