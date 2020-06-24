@@ -221,7 +221,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 		// at this threshold we move to next index.
 		let threshold = output_with_idx
 			.first()
-			.expect("length of input is greater than zero; it must have a fist; qed")
+			.expect("length of input is greater than zero; it must have a first; qed")
 			.1;
 
 		if !per_round.is_zero() {
