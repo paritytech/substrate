@@ -18,9 +18,7 @@
 use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
-use sc_cli::SubstrateCli;
-use sc_service::Role;
-use sp_version::RuntimeVersion;
+use sc_cli::{SubstrateCli, RuntimeVersion, Role};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {

@@ -38,7 +38,8 @@ pub use params::*;
 use regex::Regex;
 pub use runner::*;
 use sc_service::{ChainSpec, Configuration, TaskExecutor};
-use sp_version::RuntimeVersion;
+pub use sc_service::Role;
+pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
 use structopt::{
