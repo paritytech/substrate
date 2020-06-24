@@ -206,7 +206,6 @@ mod tests {
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
 		transfers: Vec<TransferEntry>,
-		dispatches: Vec<DispatchEntry>,
 		restores: Vec<RestoreEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
@@ -298,9 +297,6 @@ mod tests {
 				gas_left: gas_meter.gas_left(),
 			});
 			Ok(())
-		}
-		fn note_dispatch_call(&mut self, call: Call) {
-			self.dispatches.push(DispatchEntry(call));
 		}
 		fn restore_to(
 			&mut self,
@@ -420,9 +416,6 @@ mod tests {
 			input_data: Vec<u8>,
 		) -> ExecResult {
 			(**self).call(to, value, gas_meter, input_data)
-		}
-		fn note_dispatch_call(&mut self, call: Call) {
-			(**self).note_dispatch_call(call)
 		}
 		fn restore_to(
 			&mut self,
@@ -1238,44 +1231,6 @@ mod tests {
 		).unwrap();
 	}
 
-	const CODE_DISPATCH_CALL: &str = r#"
-(module
-	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func (export "call")
-		(call $ext_dispatch_call
-			(i32.const 8) ;; Pointer to the start of encoded call buffer
-			(i32.const 13) ;; Length of the buffer
-		)
-	)
-	(func (export "deploy"))
-
-	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
-)
-"#;
-
-	#[test]
-	fn dispatch_call() {
-		// This test can fail due to the encoding changes. In case it becomes too annoying
-		// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-
-		let mut mock_ext = MockExt::default();
-		let _ = execute(
-			CODE_DISPATCH_CALL,
-			vec![],
-			&mut mock_ext,
-			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
-
-		assert_eq!(
-			&mock_ext.dispatches,
-			&[DispatchEntry(
-				Call::Balances(pallet_balances::Call::set_balance(42, 1337, 0)),
-			)]
-		);
-	}
-
 	const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
@@ -1882,104 +1837,5 @@ mod tests {
 
 		assert_eq!(output, ExecReturnValue { status: 17, data: hex!("5566778899").to_vec() });
 		assert!(!output.is_success());
-	}
-
-	const CODE_GET_RUNTIME_STORAGE: &str = r#"
-(module
-	(import "env" "ext_get_runtime_storage"
-		(func $ext_get_runtime_storage (param i32 i32) (result i32))
-	)
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
-	(import "env" "ext_scratch_write" (func $ext_scratch_write (param i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(func (export "deploy"))
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
-
-	(func $call (export "call")
-		;; Load runtime storage for the first key and assert that it exists.
-		(call $assert
-			(i32.eq
-				(call $ext_get_runtime_storage
-					(i32.const 16)
-					(i32.const 4)
-				)
-				(i32.const 0)
-			)
-		)
-
-		;; assert $ext_scratch_size == 4
-		(call $assert
-			(i32.eq
-				(call $ext_scratch_size)
-				(i32.const 4)
-			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 4)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 4)		;; Count of bytes to copy.
-		)
-
-		;; assert that contents of the buffer is equal to the i32 value of 0x14144020.
-		(call $assert
-			(i32.eq
-				(i32.load
-					(i32.const 4)
-				)
-				(i32.const 0x14144020)
-			)
-		)
-
-		;; Load the second key and assert that it doesn't exist.
-		(call $assert
-			(i32.eq
-				(call $ext_get_runtime_storage
-					(i32.const 20)
-					(i32.const 4)
-				)
-				(i32.const 1)
-			)
-		)
-	)
-
-	;; The first key, 4 bytes long.
-	(data (i32.const 16) "\01\02\03\04")
-	;; The second key, 4 bytes long.
-	(data (i32.const 20) "\02\03\04\05")
-)
-"#;
-
-	#[test]
-	fn get_runtime_storage() {
-		let mut gas_meter = GasMeter::new(GAS_LIMIT);
-		let mock_ext = MockExt::default();
-
-		// "\01\02\03\04" - Some(0x14144020)
-		// "\02\03\04\05" - None
-		*mock_ext.runtime_storage_keys.borrow_mut() = [
-			([1, 2, 3, 4].to_vec(), Some(0x14144020u32.to_le_bytes().to_vec())),
-			([2, 3, 4, 5].to_vec().to_vec(), None),
-		]
-		.iter()
-		.cloned()
-		.collect();
-		let _ = execute(
-			CODE_GET_RUNTIME_STORAGE,
-			vec![],
-			mock_ext,
-			&mut gas_meter,
-		).unwrap();
 	}
 }

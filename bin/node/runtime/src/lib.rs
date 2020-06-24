@@ -582,7 +582,6 @@ impl pallet_contracts::Trait for Runtime {
 	type Time = Timestamp;
 	type Randomness = RandomnessCollectiveFlip;
 	type Currency = Balances;
-	type Call = Call;
 	type Event = Event;
 	type DetermineContractAddress = pallet_contracts::SimpleAddressDeterminer<Runtime>;
 	type TrieIdGenerator = pallet_contracts::TrieIdFromParentCounter<Runtime>;
