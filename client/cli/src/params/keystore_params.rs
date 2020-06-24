@@ -21,6 +21,7 @@ use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use sp_core::crypto::{SecretString, secrety_string_from_str};
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -42,9 +43,10 @@ pub struct KeystoreParams {
 	/// Password used by the keystore.
 	#[structopt(
 		long = "password",
+		parse(try_from_str = secrety_string_from_str),
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
-	pub password: Option<String>,
+	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
 	#[structopt(
@@ -54,13 +56,6 @@ pub struct KeystoreParams {
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
 	pub password_filename: Option<PathBuf>,
-}
-
-impl Drop for KeystoreParams {
-	fn drop(&mut self) {
-		use sp_core::crypto::Zeroize;
-		self.password.zeroize();
-	}
 }
 
 impl KeystoreParams {
@@ -84,11 +79,8 @@ impl KeystoreParams {
 			use sp_core::crypto::Zeroize;
 			password.zeroize();
 			Some(secret)
-		} else if let Some(ref password) = self.password {
-			let secret = std::str::FromStr::from_str(password.as_str())?;
-			Some(secret)
 		} else {
-			None
+			self.password.clone()
 		};
 
 		let path = self

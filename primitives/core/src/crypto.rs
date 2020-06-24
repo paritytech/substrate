@@ -40,13 +40,20 @@ use crate::hexdisplay::HexDisplay;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
 use sp_runtime_interface::pass_by::PassByInner;
-#[doc(hidden)]
+/// Trait to zeroize a memory buffer.
 pub use zeroize::Zeroize;
-#[doc(hidden)]
+/// Trait for accessing reference to `SecretString`.
 pub use secrecy::ExposeSecret;
 /// A store for sensitive data.
 #[cfg(feature = "std")]
 pub use secrecy::SecretString;
+
+#[cfg(feature = "std")]
+/// Parse a sercret string, returning a displayable error.
+pub fn secrety_string_from_str(s: &str) -> Result<SecretString, String> {
+	Ok(std::str::FromStr::from_str(s)
+		.map_err(|_e| "Could not get SecretString".to_string())?)
+}
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
