@@ -248,7 +248,7 @@ where
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
-			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
+			.saturating_add(<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block);
 		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 
 		frame_system::Module::<System>::note_finished_initialize();

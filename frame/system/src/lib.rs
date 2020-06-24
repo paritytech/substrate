@@ -160,8 +160,17 @@ pub struct ForDispatchClass<T> {
 }
 
 impl<T: Copy> ForDispatchClass<T> {
-	/// Set the same value for all classes.
-	pub fn set(&mut self, value: T, class: ExtrinsicDispatchClass) {
+	/// Create new `ForDispatchClass` with the same value for every class.
+	pub fn new(val: T) -> Self {
+		Self {
+			normal: val,
+			operational: val,
+			mandatory: val,
+		}
+	}
+
+	/// Set the value to given class.
+	pub(crate) fn set(&mut self, value: T, class: ExtrinsicDispatchClass) {
 		match class {
 			ExtrinsicDispatchClass::All => {
 				self.normal = value;
@@ -179,19 +188,58 @@ impl<T: Copy> ForDispatchClass<T> {
 			},
 		}
 	}
+
+	/// Get value for given class.
+	pub fn get(&self, class: DispatchClass) -> T {
+		match class {
+			DispatchClass::Normal => self.normal,
+			DispatchClass::Operational => self.operational,
+			DispatchClass::Mandatory => self.mandatory,
+		}
+	}
 }
 
-struct Verified;
-struct Unverified;
-
-/// Weights configuration.
+/// Block length limit configuration.
 #[derive(RuntimeDebug, Clone)]
-pub struct Weights {
+pub struct BlockLength {
+	/// Maximal total length in bytes for each extrinsic class.
+	///
+	/// In the worst case, the total block length is going to be:
+	/// `MAX(max)`
+	pub max: ForDispatchClass<u32>,
+}
+
+impl Default for BlockLength {
+	fn default() -> Self {
+		BlockLength::new(5 * 1024 * 1024)
+	}
+}
+
+impl BlockLength {
+	/// Create new `BlockLength` with `max` for every class.
+	pub fn new(max: u32) -> Self {
+		Self {
+			max: ForDispatchClass::new(max),
+		}
+	}
+
+	/// Create new `BlockLength` with `max` for `Operational` & `Mandatory`
+	/// and `normal * max` for `Normal`.
+	pub fn max_with_normal_ratio(max: u32, normal: Perbill) -> Self {
+		let mut len = BlockLength::new(max);
+		len.max.normal = normal * max;
+		len
+	}
+}
+
+/// Block weight limits configuration.
+#[derive(RuntimeDebug, Clone)]
+pub struct BlockWeights {
 	/// Base weight of block execution.
 	pub base_block: Weight,
 	/// Base weight of single extrinsic of given class.
 	pub base_extrinsic: ForDispatchClass<Weight>,
-	/// Maximal weight of single extrinsic of given class.
+	/// Maximal weight of single extrinsic of given class. Should NOT include `base_extrinsic` cost.
 	///
 	/// `None` indicates that this class of extrinsics doesn't have a limit.
 	pub max_extrinsic: ForDispatchClass<Option<Weight>>,
@@ -209,69 +257,69 @@ pub struct Weights {
 	/// blocks.
 	///
 	/// In the worst case, the total weight consumed by a block is going to be:
-	/// `MAX(max_total) + MAX(reserved)`.
-	pub max_total: ForDispatchClass<Option<Weight>>,
+	/// `MAX(max_for_class) + MAX(reserved)`.
+	pub max_for_class: ForDispatchClass<Option<Weight>>,
+	/// Maximal total weight consumed by all kinds of extrinsics.
+	pub max_block: Weight,
 }
 
-impl Weights {
-	/// Verifies correctness of this `Weights` object.
+impl Default for BlockWeights {
+	fn default() -> Self {
+		Self::builder()
+			.max_for_class(
+				frame_support::weights::constants::WEIGHT_PER_SECOND,
+				DispatchClass::Normal
+			)
+			.build()
+	}
+}
+
+impl BlockWeights {
+	/// Verifies correctness of this `BlockWeights` object.
 	pub fn validate(&self) {
 		fn or_max(w: Option<Weight>) -> Weight {
 			w.unwrap_or_else(|| Weight::max_value())
 		}
-		// Base cost must not be greater than max cost.
-		assert!(self.base_extrinsic.normal < or_max(self.max_extrinsic.normal));
-		assert!(self.base_extrinsic.operational < or_max(self.max_extrinsic.operational));
-		assert!(self.base_extrinsic.mandatory < or_max(self.max_extrinsic.mandatory));
-		// Max extrinsic can't be greater than max_total.
-		assert!(or_max(self.max_extrinsic.normal) <= or_max(self.max_total.normal));
-		assert!(or_max(self.max_extrinsic.operational) <= or_max(self.max_total.operational));
-		assert!(or_max(self.max_extrinsic.mandatory) <= or_max(self.max_total.mandatory));
-		// Make sure that if reserved is set it's greater than base_extrinsic.
-		assert!(
-			or_max(self.reserved.normal) > self.base_extrinsic.normal
-			|| or_max(self.reserved.normal) == 0
-		);
-		assert!(
-			or_max(self.reserved.operational) > self.base_extrinsic.operational
-			|| or_max(self.reserved.operational) == 0
-		);
-		assert!(
-			or_max(self.reserved.mandatory) > self.base_extrinsic.mandatory
-			|| or_max(self.reserved.mandatory) == 0
-		);
-		// Make sure that if total is set it's greater than base_block && base_extrinsic
-		assert!((
-				or_max(self.max_total.normal) > self.base_block
-				&& or_max(self.max_total.normal) > self.base_extrinsic.normal
-		) || or_max(self.max_total.normal) == 0);
-		assert!((
-			or_max(self.max_total.operational) > self.base_block
-			&& or_max(self.max_total.operational) > self.base_extrinsic.operational
-		) || or_max(self.max_total.operational) == 0);
-		assert!((
-			or_max(self.max_total.mandatory) > self.base_block
-			&& or_max(self.max_total.mandatory) > self.base_extrinsic.mandatory
-		) || or_max(self.max_total.mandatory) == 0);
 
+		// TODO [ToDr] Return a Result but only in std
+		for class in &DispatchClass::all() {
+			let class = *class;
+			let max_for_class = or_max(self.max_for_class.get(class));
+			let base_extrinsic = self.base_extrinsic.get(class);
+			let reserved = or_max(self.reserved.get(class));
+			// Make sure that if total is set it's greater than base_block && base_extrinsic
+			assert!(
+				(max_for_class > self.base_block && max_for_class > base_extrinsic)
+				|| max_for_class == 0
+			);
+			// Max extrinsic can't be greater than max_for_class.
+			assert!(or_max(self.max_extrinsic.get(class)) < max_for_class - base_extrinsic);
+			// Make sure that if reserved is set it's greater than base_extrinsic.
+			assert!(reserved > base_extrinsic || reserved == 0);
+			// Make sure max block is greater than max_for_class if it's set.
+			assert!(self.max_block >= self.max_for_class.get(class).unwrap_or_default());
+			// Make sure we can fit at least one extrinsic.
+			assert!(self.max_block > base_extrinsic + self.base_block);
+		}
 	}
 
-	/// Start constructing new `Weights` object.
+	/// Start constructing new `BlockWeights` object.
 	///
 	/// By default all kinds except of `Mandatory` extrinsics are disallowed.
-	pub fn builder() -> WeightsBuilder {
-		let max_total = ForDispatchClass {
+	pub fn builder() -> BlockWeightsBuilder {
+		let max_for_class = ForDispatchClass {
 			normal: Some(0),
 			operational: Some(0),
 			mandatory: None,
 		};
-		WeightsBuilder {
-			weights: Weights {
+		BlockWeightsBuilder {
+			weights: BlockWeights {
 				base_block: 0,
 				base_extrinsic: Default::default(),
-				max_extrinsic: max_total.clone(),
-				reserved: max_total.clone(),
-				max_total,
+				max_extrinsic: max_for_class.clone(),
+				reserved: max_for_class.clone(),
+				max_for_class,
+				max_block: 0,
 			},
 			init_cost: Perbill::zero(),
 		}
@@ -292,12 +340,12 @@ impl From<DispatchClass> for ExtrinsicDispatchClass {
 	}
 }
 
-pub struct WeightsBuilder {
-	weights: Weights,
+pub struct BlockWeightsBuilder {
+	weights: BlockWeights,
 	init_cost: Perbill,
 }
 
-impl WeightsBuilder {
+impl BlockWeightsBuilder {
 	/// Set base block weight.
 	pub fn base_block(mut self, base_block: Weight) -> Self {
 		self.weights.base_block = base_block;
@@ -315,12 +363,12 @@ impl WeightsBuilder {
 	}
 
 	/// Set maximal block total weight for given dispatch class.
-	pub fn max_total(
+	pub fn max_for_class(
 		mut self,
 		max_allowance: Weight,
 		class: impl Into<ExtrinsicDispatchClass>,
 	) -> Self {
-		self.weights.max_total.set(max_allowance.into(), class.into());
+		self.weights.max_for_class.set(max_allowance.into(), class.into());
  		self
 	}
 
@@ -343,18 +391,29 @@ impl WeightsBuilder {
 		self
 	}
 
-	/// Construct the `Weights` object.
-	pub fn build(self) -> Weights {
+	/// Construct the `BlockWeights` object.
+	// TODO [ToDr] Return a Result here
+	pub fn build(self) -> BlockWeights {
 		use sp_runtime::traits::Saturating;
 		// compute max extrinsic size
 		let Self { mut weights, init_cost } = self;
 
-		// compute max weight of single extrinsic
 		let max_rate = Perbill::one().saturating_sub(init_cost);
-		weights.max_extrinsic.normal = weights.max_total.normal.map(|x| max_rate * x);
-		weights.max_extrinsic.operational = weights.max_total.operational.map(|x| max_rate * x);
-		weights.max_extrinsic.mandatory = weights.max_total.mandatory.map(|x| max_rate * x);
+		for class in &DispatchClass::all() {
+			let class = *class;
+			// compute max weight of single extrinsic
+			let max_for_class = weights.max_for_class.get(class);
+			let max_extrinsic = max_for_class.map(|x| max_rate * x)
+				.map(|x| x.saturating_sub(weights.base_extrinsic.get(class)));
+			weights.max_extrinsic.set(max_extrinsic, class.into());
+			// Compute max block
+			weights.max_block = match max_for_class {
+				Some(max) if max > weights.max_block => max,
+				_ => weights.max_block,
+			};
+		}
 
+		// Validate the result
 		weights.validate();
 
 		weights
@@ -366,8 +425,11 @@ pub trait Trait: 'static + Eq + Clone {
 	/// except Root.
 	type BaseCallFilter: Filter<Self::Call>;
 
-	/// Block, Extrinsics & DB weights configuration.
-	type Weights: Get<Weights>;
+	/// Block & extrinsics weights: base values and limits.
+	type BlockWeights: Get<BlockWeights>;
+
+	/// The maximum length of a block (in bytes).
+	type BlockLength: Get<BlockLength>;
 
 	/// The `Origin` type used by dispatchable calls.
 	type Origin:
@@ -422,30 +484,8 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
 
-	/// The maximum weight of a block.
-	type MaximumBlockWeight: Get<Weight>;
-
 	/// The weight of runtime database operations the runtime can invoke.
 	type DbWeight: Get<RuntimeDbWeight>;
-
-	/// The base weight of executing a block, independent of the transactions in the block.
-	type BlockExecutionWeight: Get<Weight>;
-
-	/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
-	type ExtrinsicBaseWeight: Get<Weight>;
-
-	/// The maximal weight of a single Extrinsic. This should be set to at most
-	/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
-	/// containing `Normal` dispatch class calls.
-	type MaximumExtrinsicWeight: Get<Weight>;
-
-	/// The maximum length of a block (in bytes).
-	type MaximumBlockLength: Get<u32>;
-
-	/// The portion of the block that is available to normal transaction. The rest can only be used
-	/// by operational transactions. This can be applied to any resource limit managed by the system
-	/// module, including weight and length.
-	type AvailableBlockRatio: Get<Perbill>;
 
 	/// Get the chain's current version.
 	type Version: Get<RuntimeVersion>;
@@ -467,6 +507,11 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	/// Return block weights object.
+	fn block_weights() -> Self::BlockWeights {
+		Self::BlockWeights::get()
+	}
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -769,25 +814,13 @@ decl_module! {
 		/// The maximum number of blocks to allow in mortal eras.
 		const BlockHashCount: T::BlockNumber = T::BlockHashCount::get();
 
-		/// The maximum weight of a block.
-		const MaximumBlockWeight: Weight = T::MaximumBlockWeight::get();
-
 		/// The weight of runtime database operations the runtime can invoke.
 		const DbWeight: RuntimeDbWeight = T::DbWeight::get();
-
-		/// The base weight of executing a block, independent of the transactions in the block.
-		const BlockExecutionWeight: Weight = T::BlockExecutionWeight::get();
-
-		/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
-		const ExtrinsicBaseWeight: Weight = T::ExtrinsicBaseWeight::get();
-
-		/// The maximum length of a block (in bytes).
-		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
 
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = *_ratio * T::MaximumBlockWeight::get()]
+		#[weight = *_ratio * T::BlockWeights::get().max_block]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -828,7 +861,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -844,7 +877,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -1595,50 +1628,17 @@ pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 impl<T: Trait + Send + Sync> CheckWeight<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
 {
-	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
-	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
-	/// a portion.
-	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		match class {
-			DispatchClass::Operational | DispatchClass::Mandatory
-				=> <Perbill as sp_runtime::PerThing>::one(),
-			DispatchClass::Normal => T::AvailableBlockRatio::get(),
-		}
-	}
 
 	/// Checks if the current extrinsic does not exceed `MaximumExtrinsicWeight` limit.
 	fn check_extrinsic_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<(), TransactionValidityError> {
-		match info.class {
-			// Mandatory transactions are included in a block unconditionally, so
-			// we don't verify weight.
-			DispatchClass::Mandatory => Ok(()),
-			// Normal transactions must not exceed `MaximumExtrinsicWeight`.
-			DispatchClass::Normal => {
-				let maximum_weight = T::MaximumExtrinsicWeight::get();
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				if extrinsic_weight > maximum_weight {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(())
-				}
+		let max = T::BlockWeights::get().max_extrinsic.get(info.class);
+		match max {
+			Some(max) if info.weight > max => {
+				Err(InvalidTransaction::ExhaustsResources.into())
 			},
-			// For operational transactions we make sure it doesn't exceed
-			// the space alloted for `Operational` class.
-			DispatchClass::Operational => {
-				let maximum_weight = T::MaximumBlockWeight::get();
-				let operational_limit =
-					Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
-				let operational_limit =
-					operational_limit.saturating_sub(T::BlockExecutionWeight::get());
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				if extrinsic_weight > operational_limit {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(())
-				}
-			},
+			_ => Ok(()),
 		}
 	}
 
@@ -1648,50 +1648,35 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
-		let maximum_weight = T::MaximumBlockWeight::get();
+		let weights = T::BlockWeights::get();
 		let mut all_weight = Module::<T>::block_weight();
-		match info.class {
-			// If we have a dispatch that must be included in the block, it ignores all the limits.
-			DispatchClass::Mandatory => {
-				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-				all_weight.add(extrinsic_weight, DispatchClass::Mandatory);
-				Ok(all_weight)
-			},
-			// If we have a normal dispatch, we follow all the normal rules and limits.
-			DispatchClass::Normal => {
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Normal)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-				if all_weight.get(DispatchClass::Normal) > normal_limit {
-					Err(InvalidTransaction::ExhaustsResources.into())
-				} else {
-					Ok(all_weight)
-				}
-			},
-			// If we have an operational dispatch, allow it if we have not used our full
-			// "operational space" (independent of existing fullness).
-			DispatchClass::Operational => {
-				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
-				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
-				let operational_space = operational_limit.saturating_sub(normal_limit);
+		let extrinsic_weight = info.weight.saturating_add(weights.base_extrinsic.get(info.class));
 
-				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-					.ok_or(InvalidTransaction::ExhaustsResources)?;
-				all_weight.checked_add(extrinsic_weight, DispatchClass::Operational)
-					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
+		if let Some(max) = weights.max_for_class.get(info.class) {
+			all_weight.checked_add(extrinsic_weight, info.class)
+				.map_err(|_| InvalidTransaction::ExhaustsResources)?;
+			let per_class = all_weight.get(info.class);
 
-				// If it would fit in normally, its okay
-				if all_weight.total() <= maximum_weight ||
-				// If we have not used our operational space
-				all_weight.get(DispatchClass::Operational) <= operational_space {
-					Ok(all_weight)
-				} else {
-					Err(InvalidTransaction::ExhaustsResources.into())
+			// Class allowance exceeded
+			if per_class > max {
+				return Err(InvalidTransaction::ExhaustsResources.into());
+			}
+
+			// Total block weight exceeded.
+			if all_weight.total() > weights.max_block {
+				// Check if we can use reserved pool though.
+				match weights.reserved.get(info.class) {
+					Some(reserved) if per_class > reserved => {
+						return Err(InvalidTransaction::ExhaustsResources.into());
+					}
+					_ => {},
 				}
 			}
+		} else {
+			all_weight.add(extrinsic_weight, info.class);
 		}
+
+		Ok(all_weight)
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
@@ -1701,12 +1686,11 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<u32, TransactionValidityError> {
+		let length_limit = T::BlockLength::get();
 		let current_len = Module::<T>::all_extrinsics_len();
-		let maximum_len = T::MaximumBlockLength::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_len;
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
-		if next_len > limit {
+		if next_len > length_limit.max.get(info.class) {
 			Err(InvalidTransaction::ExhaustsResources.into())
 		} else {
 			Ok(next_len)
@@ -1828,7 +1812,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		// to them actually being useful. Block producers are thus not allowed to include mandatory
 		// extrinsics that result in error.
 		if let (DispatchClass::Mandatory, Err(e)) = (info.class, result) {
-			"Bad mandantory".print();
+			"Bad mandatory".print();
 			e.print();
 
 			Err(InvalidTransaction::BadMandatory)?
@@ -3006,5 +2990,10 @@ pub(crate) mod tests {
 		assert_eq!(ensure_root_or_signed(RawOrigin::Root).unwrap(), Either::Left(()));
 		assert_eq!(ensure_root_or_signed(RawOrigin::Signed(0)).unwrap(), Either::Right(0));
 		assert!(ensure_root_or_signed(RawOrigin::None).is_err())
+	}
+
+	#[test]
+	fn default_weights_are_valid() {
+		BlockWeights::default().validate()
 	}
 }

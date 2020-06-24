@@ -242,6 +242,13 @@ impl Default for DispatchClass {
 	}
 }
 
+impl DispatchClass {
+	/// Returns an array containing all dispatch classes.
+	pub fn all() -> [DispatchClass; 3] {
+		[DispatchClass::Normal, DispatchClass::Operational, DispatchClass::Mandatory]
+	}
+}
+
 /// A bundle of static information collected from the `#[weight = $x]` attributes.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct DispatchInfo {

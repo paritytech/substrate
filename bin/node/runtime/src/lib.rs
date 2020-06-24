@@ -135,21 +135,23 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
 	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
+	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	/// Assume 10% of weight for average on_initialize calls.
 	pub MaximumExtrinsicWeight: Weight =
 		AvailableBlockRatio::get().saturating_sub(AVERAGE_ON_INITIALIZE_WEIGHT)
 		* MaximumBlockWeight::get();
-	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
+
+	pub NormalTransactionsAllowance: Weight = AvailableBlockRatio::get() * MaximumBlockWeight::get();
 
 	pub RuntimeWeights: Weights = Weights::builder()
 		.base_block(BlockExecutionWeight::get())
 		.base_extrinsic(ExtrinsicBaseWeight::get(), ExtrinsicDispatchClass::All)
-		.max_total(AvailableBlockRatio::get() * MaximumBlockWeight::get(), DispatchClass::Normal)
+		.max_total(NormalTransactionsAllowance::get(), DispatchClass::Normal)
 		.max_total(MaximumBlockWeight::get(), DispatchClass::Operational)
 		.reserved(
-			Perbill::one().saturating_sub(AvailableBlockRatio::get()) * MaximumBlockWeight::get(),
+			MaximumBlockWeight::get() - NormalTransactionsAllowance::get(),
 			DispatchClass::Operational
 		)
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_WEIGHT)
