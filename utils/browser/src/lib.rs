@@ -25,8 +25,7 @@ use sc_service::{
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
-use std::task::Poll;
-use std::pin::Pin;
+use std::{sync::Arc, task::Poll, pin::Pin};
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
 
@@ -116,7 +115,7 @@ struct RpcMessage {
 }
 
 /// Create a Client object that connects to a service.
-pub fn start_client(mut task_manager: TaskManager, rpc_handlers: RpcHandlers) -> Client {
+pub fn start_client(mut task_manager: TaskManager, rpc_handlers: Arc<RpcHandlers>) -> Client {
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with

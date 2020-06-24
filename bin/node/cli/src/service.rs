@@ -167,7 +167,7 @@ pub fn new_full_base(
 ) -> Result<(
 	TaskManager,
 	InherentDataProviders,
-	RpcHandlers, Arc<FullClient>, Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	Arc<FullClient>, Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::FullChainApi<FullClient, Block>, Block>>
 ), ServiceError> {
 	let (
@@ -187,7 +187,7 @@ pub fn new_full_base(
 
 	let ServiceComponents {
 		client, transaction_pool, task_manager, keystore, network, select_chain,
-		prometheus_registry, telemetry_on_connect_sinks, rpc_handlers, ..
+		prometheus_registry, telemetry_on_connect_sinks, ..
 	} = builder
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
@@ -317,14 +317,13 @@ pub fn new_full_base(
 		)?;
 	}
 
-	Ok((task_manager, inherent_data_providers, rpc_handlers, client, network, transaction_pool))
+	Ok((task_manager, inherent_data_providers, client, network, transaction_pool))
 }
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
 -> Result<TaskManager, ServiceError> {
-	new_full_base(config, |_, _| ()).map(|(mut task_manager, rpc_handlers, _, _, _, _)| {
-		task_manager.keep_alive(rpc_handlers);
+	new_full_base(config, |_, _| ()).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})
 }
@@ -333,7 +332,7 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, node_executor::Ex
 type LightFetcher = sc_network::config::OnDemand<Block>;
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, RpcHandlers, Arc<LightClient>,
+	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block>>
 ), ServiceError> {
@@ -430,8 +429,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {	
-	new_light_base(config).map(|(mut task_manager, rpc_handlers, _, _, _)| {
-		task_manager.keep_alive(rpc_handlers);
+	new_light_base(config).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})
 }
@@ -493,19 +491,19 @@ mod tests {
 			chain_spec,
 			|config| {
 				let mut setup_handles = None;
-				let (keep_alive, inherent_data_providers, rpc_handlers, client, network, transaction_pool) = new_full_base(config, |
+				let (keep_alive, inherent_data_providers, client, network, transaction_pool) = new_full_base(config, |
 					block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
 					babe_link: &sc_consensus_babe::BabeLink<Block>,
 				| {
 					setup_handles = Some((block_import.clone(), babe_link.clone()));
 				})?;
 				
-				let node = sc_service_test::TestNetComponents::new(keep_alive, rpc_handlers, client, network, transaction_pool);
+				let node = sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool);
 				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
 			},
 			|config| {
-				let (keep_alive, rpc_handlers, client, network, transaction_pool) = new_light_base(config)?;
-				Ok(sc_service_test::TestNetComponents::new(keep_alive, rpc_handlers, client, network, transaction_pool))
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			|service, &mut (ref inherent_data_providers, (ref mut block_import, ref babe_link))| {
 				let mut inherent_data = inherent_data_providers
@@ -657,12 +655,12 @@ mod tests {
 		sc_service_test::consensus(
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| {
-				let (keep_alive, _, rpc_handlers, client, network, transaction_pool) = new_full_base(config, |_, _| ())?;
-				Ok(sc_service_test::TestNetComponents::new(keep_alive, rpc_handlers, client, network, transaction_pool))
+				let (keep_alive, _, client, network, transaction_pool) = new_full_base(config, |_, _| ())?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			|config| {
-				let (keep_alive, rpc_handlers, client, network, transaction_pool) = new_light_base(config)?;
-				Ok(sc_service_test::TestNetComponents::new(keep_alive, rpc_handlers, client, network, transaction_pool))
+				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
+				Ok(sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool))
 			},
 			vec![
 				"//Alice".into(),

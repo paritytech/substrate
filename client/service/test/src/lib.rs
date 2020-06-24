@@ -40,7 +40,6 @@ use sc_service::{
 	Error,
 	TaskExecutor,
 	client::Client,
-	RpcHandlers,
 };
 use sp_blockchain::HeaderBackend;
 use sc_network::{multiaddr, Multiaddr};
@@ -80,7 +79,6 @@ pub trait TestNetNode: Clone + Future<Item = (), Error = sc_service::Error> + Se
 
 pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 	task_manager: Arc<Mutex<TaskManager>>,
-	rpc_handlers: Arc<RpcHandlers>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
 	network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -90,14 +88,12 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
 TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	pub fn new(
 		task_manager: TaskManager,
-		rpc_handlers: RpcHandlers,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 		network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		transaction_pool: Arc<TExPool>,
 	) -> Self {
 		Self {
 			client, transaction_pool, network,
-			rpc_handlers: Arc::new(rpc_handlers),
 			task_manager: Arc::new(Mutex::new(task_manager)),
 		}
 	}
@@ -112,7 +108,6 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			network: self.network.clone(),
-			rpc_handlers: self.rpc_handlers.clone()
 		}
 	}
 }

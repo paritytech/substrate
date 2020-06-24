@@ -166,7 +166,7 @@ pub struct ServiceComponents<
 	/// A shared network instance.
 	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// RPC handlers that can perform RPC queries.
-	pub rpc_handlers: RpcHandlers,
+	pub rpc_handlers: Arc<RpcHandlers>,
 	/// A shared instance of the chain selection algorithm.
 	pub select_chain: Option<TSc>,
 	/// Sinks to propagate network status updates.

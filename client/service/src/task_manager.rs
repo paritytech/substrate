@@ -13,7 +13,7 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, result::Result, sync::Arc, pin::Pin};
+use std::{panic, result::Result, pin::Pin};
 use exit_future::Signal;
 use log::debug;
 use futures::{
@@ -222,7 +222,7 @@ pub struct TaskManager {
 	/// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	/// Things to keep alive until the task manager is dropped.
-	keep_alive: Arc<dyn std::any::Any + Send + Sync>,
+	keep_alive: Box<dyn std::any::Any + Send + Sync>,
 }
 
 impl TaskManager {
@@ -245,7 +245,7 @@ impl TaskManager {
 			metrics,
 			essential_failed_tx,
 			essential_failed_rx,
-			keep_alive: Arc::new(()),
+			keep_alive: Box::new(()),
 		})
 	}
 
@@ -280,9 +280,9 @@ impl TaskManager {
 		}
 	}
 
-	/// Move a struct into the task manager to be kept alive.
-	pub fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
-		self.keep_alive = Arc::new((self.keep_alive.clone(), to_keep_alive));
+	/// Set what the task manager should keep alivei
+	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+		self.keep_alive = Box::new(to_keep_alive);
 	}
 }
 
