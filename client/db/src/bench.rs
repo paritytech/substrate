@@ -160,7 +160,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			has_been_written: true,
 		};
 
-		let whitelist = self.whitelist.borrow_mut();
+		let whitelist = self.whitelist.borrow();
 
 		whitelist.iter().for_each(|key| {
 			key_tracker.insert(key.to_vec(), whitelisted);
