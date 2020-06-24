@@ -26,7 +26,7 @@ mod analysis;
 
 pub use utils::*;
 #[cfg(feature = "std")]
-pub use analysis::Analysis;
+pub use analysis::{Analysis, BenchmarkSelector};
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Zero;
@@ -771,6 +771,7 @@ macro_rules! impl_benchmark {
 				highest_range_values: &[u32],
 				steps: &[u32],
 				repeat: u32,
+				whitelist: &[Vec<u8>]
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic)
@@ -779,6 +780,9 @@ macro_rules! impl_benchmark {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
 					_ => return Err("Could not find extrinsic."),
 				};
+
+				// Add whitelist to DB
+				$crate::benchmarking::set_whitelist(whitelist.to_vec());
 
 				// Warm up the DB
 				$crate::benchmarking::commit_db();
@@ -841,6 +845,9 @@ macro_rules! impl_benchmark {
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 
+							// Reset the read/write counter so we don't count operations in the setup process.
+							$crate::benchmarking::reset_read_write_count();
+
 							// Time the extrinsic logic.
 							frame_support::debug::trace!(
 								target: "benchmark",
@@ -851,10 +858,16 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-
+							// Commit the changes to get proper write count
+							$crate::benchmarking::commit_db();
 							frame_support::debug::trace!(
 								target: "benchmark",
 								"End Benchmark: {} ns", elapsed_extrinsic
+							);
+							let read_write_count = $crate::benchmarking::read_write_count();
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"Read/Write Count {:?}", read_write_count
 							);
 
 							// Time the storage root recalculation.
@@ -863,7 +876,15 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+							results.push($crate::BenchmarkResults {
+								components: c.clone(),
+								extrinsic_time: elapsed_extrinsic,
+								storage_root_time: elapsed_storage_root,
+								reads: read_write_count.0,
+								repeat_reads: read_write_count.1,
+								writes: read_write_count.2,
+								repeat_writes: read_write_count.3,
+							});
 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
@@ -892,6 +913,7 @@ macro_rules! impl_benchmark {
 				highest_range_values: &[u32],
 				steps: &[u32],
 				repeat: u32,
+				whitelist: &[Vec<u8>]
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
 				let extrinsic = sp_std::str::from_utf8(extrinsic)
@@ -900,6 +922,9 @@ macro_rules! impl_benchmark {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
 					_ => return Err("Could not find extrinsic."),
 				};
+
+				// Add whitelist to DB
+				$crate::benchmarking::set_whitelist(whitelist.to_vec());
 
 				// Warm up the DB
 				$crate::benchmarking::commit_db();
@@ -963,6 +988,9 @@ macro_rules! impl_benchmark {
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 
+							// Reset the read/write counter so we don't count operations in the setup process.
+							$crate::benchmarking::reset_read_write_count();
+
 							// Time the extrinsic logic.
 							frame_support::debug::trace!(
 								target: "benchmark",
@@ -973,10 +1001,16 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-
+							// Commit the changes to get proper write count
+							$crate::benchmarking::commit_db();
 							frame_support::debug::trace!(
 								target: "benchmark",
 								"End Benchmark: {} ns", elapsed_extrinsic
+							);
+							let read_write_count = $crate::benchmarking::read_write_count();
+							frame_support::debug::trace!(
+								target: "benchmark",
+								"Read/Write Count {:?}", read_write_count
 							);
 
 							// Time the storage root recalculation.
@@ -985,7 +1019,15 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+							results.push($crate::BenchmarkResults {
+								components: c.clone(),
+								extrinsic_time: elapsed_extrinsic,
+								storage_root_time: elapsed_storage_root,
+								reads: read_write_count.0,
+								repeat_reads: read_write_count.1,
+								writes: read_write_count.2,
+								repeat_writes: read_write_count.3,
+							});
 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
@@ -1139,7 +1181,7 @@ macro_rules! impl_benchmark_test {
 #[macro_export]
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:literal, $( $location:tt )* ) => (
-		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat) = $params;
+		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist) = $params;
 		if &pallet[..] == &$name[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks().into_iter() {
@@ -1150,6 +1192,7 @@ macro_rules! add_benchmark {
 							&highest_range_values[..],
 							&steps[..],
 							repeat,
+							whitelist,
 						)?,
 						pallet: $name.to_vec(),
 						benchmark: benchmark.to_vec(),
@@ -1163,6 +1206,7 @@ macro_rules! add_benchmark {
 						&highest_range_values[..],
 						&steps[..],
 						repeat,
+						whitelist,
 					)?,
 					pallet: $name.to_vec(),
 					benchmark: benchmark.clone(),
