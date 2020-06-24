@@ -1501,7 +1501,7 @@ pub mod schedule {
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			call: Call
-		) -> Self::Address;
+		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
 		/// also.
