@@ -51,6 +51,21 @@ pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
 	return Ok((stash, controller))
 }
 
+/// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
+/// This is used to test worst case payout scenarios.
+pub fn create_stash_and_dead_controller<T: Trait>(n: u32, balance_factor: u32)
+	-> Result<(T::AccountId, T::AccountId), &'static str>
+{
+	let stash = create_funded_user::<T>("stash", n, balance_factor);
+	// controller has no funds
+	let controller = create_funded_user::<T>("controller", n, 0);
+	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let reward_destination = RewardDestination::Controller;
+	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	return Ok((stash, controller))
+}
+
 /// create `max` validators.
 pub fn create_validators<T: Trait>(
 	max: u32,
