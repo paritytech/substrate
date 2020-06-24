@@ -188,9 +188,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 		// we move to the next minimum.
 		let mut min_index = 0;
 		// at this threshold we move to next index.
-		let threshold = output_with_idx
-			.last()
-			.expect("length of input is greater than zero; it must have a last; qed").1;
+		let threshold = targeted_sum / count_t;
 
 		if !per_round.is_zero() {
 			for _ in 0..count {
@@ -223,7 +221,8 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 		// at this threshold we move to next index.
 		let threshold = output_with_idx
 			.first()
-			.expect("length of input is greater than zero; it must have a fist; qed").1;
+			.expect("length of input is greater than zero; it must have a fist; qed")
+			.1;
 
 		if !per_round.is_zero() {
 			for _ in 0..count {
@@ -337,9 +336,9 @@ mod normalize_tests {
 				Perbill::from_percent(30)
 			].normalize(Perbill::one()).unwrap(),
 			vec![
-				Perbill::from_parts(316666666),
-				Perbill::from_parts(383333333),
-				Perbill::from_parts(300000001),
+				Perbill::from_parts(316666668),
+				Perbill::from_parts(383333332),
+				Perbill::from_parts(300000000),
 			]
 		);
 	}
