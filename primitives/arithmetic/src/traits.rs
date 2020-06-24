@@ -22,7 +22,7 @@ use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
-	CheckedShl, CheckedShr, checked_pow, Signed
+	CheckedShl, CheckedShr, checked_pow, Signed, Unsigned,
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
