@@ -102,7 +102,7 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_runtime::{
 	traits::{
-		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member,
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, Convert,
 	},
 	RuntimeDebug,
 };
@@ -117,6 +117,7 @@ use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_support::weights::GetDispatchInfo;
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
+use frame_support::weights::Weight;
 
 pub type CodeHash<T> = <T as frame_system::Trait>::Hash;
 pub type TrieId = Vec<u8>;
@@ -289,9 +290,10 @@ where
 	}
 }
 
-pub type BalanceOf<T> = <<T as pallet_transaction_payment::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 pub type NegativeImbalanceOf<T> =
-	<<T as pallet_transaction_payment::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 parameter_types! {
 	/// A reasonable default value for [`Trait::SignedClaimedHandicap`].
@@ -312,9 +314,12 @@ parameter_types! {
 	pub const DefaultMaxValueSize: u32 = 16_384;
 }
 
-pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
+pub trait Trait: frame_system::Trait {
 	type Time: Time;
 	type Randomness: Randomness<Self::Hash>;
+
+	/// The currency in which fees are paid and contract balances are held.
+	type Currency: Currency<Self::AccountId>;
 
 	/// The outer call dispatch type.
 	type Call:
@@ -371,6 +376,10 @@ pub trait Trait: frame_system::Trait + pallet_transaction_payment::Trait {
 
 	/// The maximum size of a storage value in bytes.
 	type MaxValueSize: Get<u32>;
+
+	/// Used to answer contracts's queries regarding the current weight price. This is **not**
+	/// used to calculate the actual fee and is only for informational purposes.
+	type WeightPrice: Convert<Weight, BalanceOf<Self>>;
 }
 
 /// Simple contract address determiner.

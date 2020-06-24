@@ -51,7 +51,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf, UniqueSaturatedFrom, UniqueSaturatedInto,
+		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -340,29 +340,26 @@ impl<T: Trait> Module<T> where
 			tip
 		}
 	}
-}
-
-impl<T: Trait> Module<T> {
-	/// Compute the fee for the specified weight.
-	///
-	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
-	/// share that the weight contributes to the overall fee of a transaction.
-	///
-	/// This function is generic in order to supply the contracts module with a way to calculate the
-	/// gas price. The contracts module is not able to put the necessary `BalanceOf<T>` constraints
-	/// on its trait. This function is not to be used by this module.
-	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
-		Balance: UniqueSaturatedFrom<u128>
-	{
-		let fee: u128 = Self::weight_to_fee(weight).unique_saturated_into();
-		Balance::unique_saturated_from(NextFeeMultiplier::get().saturating_mul_acc_int(fee))
-	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 		T::WeightToFee::calc(&capped_weight)
+	}
+}
+
+impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
+	T: Trait,
+	BalanceOf<T>: FixedPointOperand,
+{
+	/// Compute the fee for the specified weight.
+	///
+	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
+	/// share that the weight contributes to the overall fee of a transaction. It is mainly
+	/// for informational purposes and not used in the actual fee calculation.
+	fn convert(weight: Weight) -> BalanceOf<T> {
+		NextFeeMultiplier::get().saturating_mul_int(Self::weight_to_fee(weight))
 	}
 }
 

@@ -162,6 +162,7 @@ mod tests {
 	use hex_literal::hex;
 	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
+	use frame_support::weights::Weight;
 
 	const GAS_LIMIT: Gas = 10_000_000_000;
 
@@ -373,8 +374,8 @@ mod tests {
 				)
 			)
 		}
-		fn get_weight_price(&self) -> BalanceOf<Self::T> {
-			1312_u32.into()
+		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
 	}
 
@@ -479,8 +480,8 @@ mod tests {
 		fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 			(**self).get_runtime_storage(key)
 		}
-		fn get_weight_price(&self) -> BalanceOf<Self::T> {
-			(**self).get_weight_price()
+		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
+			(**self).get_weight_price(weight)
 		}
 	}
 
@@ -1056,7 +1057,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "env" "ext_gas_price" (func $ext_gas_price))
+	(import "env" "ext_gas_price" (func $ext_gas_price (param i64)))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -1072,7 +1073,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the scratch buffer
-		(call $ext_gas_price)
+		(call $ext_gas_price (i64.const 1))
 
 		;; assert $ext_scratch_size == 8
 		(call $assert

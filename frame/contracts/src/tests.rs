@@ -30,7 +30,7 @@ use frame_support::{
 	assert_ok, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
 	impl_outer_origin, parameter_types, StorageMap, StorageValue,
 	traits::{Currency, Get},
-	weights::{Weight, PostDispatchInfo, IdentityFee},
+	weights::{Weight, PostDispatchInfo},
 };
 use std::cell::RefCell;
 use frame_system::{self as system, EventRecord, Phase};
@@ -169,17 +169,10 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 	}
 }
 
-impl pallet_transaction_payment::Trait for Test {
-	type Currency = Balances;
-	type OnTransactionPayment = ();
-	type TransactionByteFee = TransactionByteFee;
-	type WeightToFee = IdentityFee<BalanceOf<Self>>;
-	type FeeMultiplierUpdate = ();
-}
-
 impl Trait for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
+	type Currency = Balances;
 	type Call = Call;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
@@ -193,6 +186,7 @@ impl Trait for Test {
 	type SurchargeReward = SurchargeReward;
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
+	type WeightPrice = Self;
 }
 
 type Balances = pallet_balances::Module<Test>;
