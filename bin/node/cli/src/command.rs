@@ -21,6 +21,7 @@ use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{Result, SubstrateCli};
 use sc_service::Role;
+use sp_version::RuntimeVersion;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -62,6 +63,10 @@ impl SubstrateCli for Cli {
 			)?),
 		})
 	}
+
+	fn runtime_version() -> &'static RuntimeVersion {
+		&node_runtime::VERSION
+	}
 }
 
 /// Parse command line arguments into service configuration.
@@ -71,13 +76,10 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_exit(
-				|config| match config.role {
-					Role::Light => service::new_light(config),
-					_ => service::new_full(config),
-				},
-				node_runtime::VERSION,
-			)
+			runner.run_node_until_exit(|config| match config.role {
+				Role::Light => service::new_light(config),
+				_ => service::new_full(config),
+			})
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;

@@ -28,7 +28,6 @@ use log::info;
 use sc_service::{Configuration, ServiceBuilderCommand, TaskType, TaskManager};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use sp_version::RuntimeVersion;
 use std::{fmt::Debug, marker::PhantomData, str::FromStr};
 
 #[cfg(target_family = "unix")]
@@ -153,7 +152,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
 	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
 	/// ```
-	fn print_node_infos(&self, runtime_version: RuntimeVersion) {
+	fn print_node_infos(&self) {
 		info!("{}", C::impl_name());
 		info!("✌️  version {}", C::impl_version());
 		info!(
@@ -169,7 +168,7 @@ impl<C: SubstrateCli> Runner<C> {
 			self.config.database,
 			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 		);
-		info!("⛓  Native runtime: {}", runtime_version);
+		info!("⛓  Native runtime: {}", C::runtime_version());
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
@@ -205,9 +204,8 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn run_node_until_exit(
 		mut self,
 		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
-		runtime_version: RuntimeVersion,
 	) -> Result<()> {
-		self.print_node_infos(runtime_version);
+		self.print_node_infos();
 		let mut task_manager = initialise(self.config)?;
 		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
 			.map_err(|e| e.to_string())?;

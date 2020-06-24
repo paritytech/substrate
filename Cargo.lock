@@ -3396,6 +3396,7 @@ dependencies = [
  "sp-runtime",
  "sp-timestamp",
  "sp-transaction-pool",
+ "sp-version",
  "structopt",
  "substrate-browser-utils",
  "substrate-build-script-utils",
@@ -3601,6 +3602,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-transaction-pool",
+ "sp-version",
  "structopt",
  "substrate-build-script-utils",
 ]

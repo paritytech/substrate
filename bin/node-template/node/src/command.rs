@@ -20,6 +20,7 @@ use crate::cli::Cli;
 use crate::service;
 use sc_cli::SubstrateCli;
 use sc_service::Role;
+use sp_version::RuntimeVersion;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -59,6 +60,10 @@ impl SubstrateCli for Cli {
 			)?),
 		})
 	}
+
+	fn runtime_version() -> &'static RuntimeVersion {
+		&node_template_runtime::VERSION
+	}
 }
 
 /// Parse and run command line arguments
@@ -72,13 +77,10 @@ pub fn run() -> sc_cli::Result<()> {
 		}
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node_until_exit(
-				|config| match config.role {
-					Role::Light => service::new_light(config),
-					_ => service::new_full(config),
-				},
-				node_template_runtime::VERSION,
-			)
+			runner.run_node_until_exit(|config| match config.role {
+				Role::Light => service::new_light(config),
+				_ => service::new_full(config),
+			})
 		}
 	}
 }

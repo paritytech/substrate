@@ -38,6 +38,7 @@ pub use params::*;
 use regex::Regex;
 pub use runner::*;
 use sc_service::{ChainSpec, Configuration, TaskExecutor};
+use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
 use structopt::{
@@ -207,6 +208,9 @@ pub trait SubstrateCli: Sized {
 		command.init::<Self>()?;
 		Runner::new(self, command)
 	}
+
+	/// Runtime version.
+	fn runtime_version() -> &'static RuntimeVersion;
 }
 
 /// Initialize the logger
