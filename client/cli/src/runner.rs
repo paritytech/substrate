@@ -25,7 +25,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{Configuration, Role, ServiceBuilderCommand, TaskType, TaskManager};
+use sc_service::{Configuration, ServiceBuilderCommand, TaskType, TaskManager};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
@@ -172,53 +172,6 @@ impl<C: SubstrateCli> Runner<C> {
 		info!("⛓  Native runtime: {}", runtime_version);
 	}
 
-	/// A helper function that runs a node with tokio and stops if the process
-	/// receives the signal `SIGTERM` or `SIGINT`. It can run a full or a light node depending on
-	/// the node's configuration.
-	pub fn run_node(
-		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
-		runtime_version: RuntimeVersion,
-	) -> Result<()> {
-		match self.config.role {
-			Role::Light => self.run_light_node(new_light, runtime_version),
-			_ => self.run_full_node(new_full, runtime_version),
-		}
-	}
-
-	/// A helper function that runs a node with tokio and stops if the process
-	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "full" node and will fail if
-	/// the node's configuration uses a "light" role.
-	pub fn run_full_node(
-		self,
-		new_full: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
-		runtime_version: RuntimeVersion,
-	) -> Result<()> {
-		if matches!(self.config.role, Role::Light) {
-			return Err("Light node has been requested but this is not implemented".into());
-		}
-
-		self.print_node_infos(runtime_version);
-		self.run_service_until_exit(new_full)
-	}
-
-	/// A helper function that runs a node with tokio and stops if the process
-	/// receives the signal `SIGTERM` or `SIGINT`. It can only run a "light" node and will fail if
-	/// the node's configuration uses a "full" role.
-	pub fn run_light_node(
-		self,
-		new_light: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
-		runtime_version: RuntimeVersion,
-	) -> Result<()> {
-		if !matches!(self.config.role, Role::Light) {
-			return Err("Full node has been requested but this is not implemented".into());
-		}
-
-		self.print_node_infos(runtime_version);
-		self.run_service_until_exit(new_light)
-	}
-
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
 	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
@@ -247,7 +200,9 @@ impl<C: SubstrateCli> Runner<C> {
 		}
 	}
 
-	fn run_service_until_exit(
+	/// A helper function that runs a node with tokio and stops if the process receives the signal
+	/// `SIGTERM` or `SIGINT`.
+	pub fn run_node_until_exit(
 		mut self,
 		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
 	) -> Result<()> {

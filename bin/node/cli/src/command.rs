@@ -20,6 +20,7 @@ use crate::{chain_spec, service, Cli, Subcommand};
 use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{Result, SubstrateCli};
+use sc_service::Role;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -70,11 +71,12 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node(
-				service::new_light,
-				service::new_full,
-				node_runtime::VERSION
-			)
+			runner.print_node_infos(node_runtime::VERSION);
+			let service_fn = match runner.config().role {
+				Role::Light => service::new_light,
+				_ => service::new_full,
+			};
+			runner.run_node_until_exit(service_fn)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
