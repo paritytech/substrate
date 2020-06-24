@@ -59,6 +59,10 @@ pub trait Authorities<B: Block> {
 	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
 }
 
+pub trait Filter<T> {
+	fn accept(&self, extrinsic: &T) -> bool;
+}
+
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: Block> {
 	/// The proposer type this creates.
@@ -68,7 +72,7 @@ pub trait Environment<B: Block> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>])
+	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>], filter: Option<Arc<dyn Filter<B::Extrinsic>>>,)
 		-> Result<Self::Proposer, Self::Error>;
 }
 

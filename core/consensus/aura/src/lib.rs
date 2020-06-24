@@ -342,7 +342,7 @@ impl<B: Block, C, E, I, P, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, P, S
 				);
 
 				// we are the slot author. make a block and sign it.
-				let proposer = match env.init(&chain_head, &authorities) {
+				let proposer = match env.init(&chain_head, &authorities, None) {
 					Ok(p) => p,
 					Err(e) => {
 						warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);

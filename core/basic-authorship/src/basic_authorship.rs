@@ -27,14 +27,14 @@ use client::{
 	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core,
 };
 use codec::Decode;
-use consensus_common::{self, evaluation};
+use consensus_common::{self, evaluation, Filter};
 use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
 };
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
-use transaction_pool::txpool::{self, Pool as TransactionPool};
+use transaction_pool::txpool::{self, Pool as TransactionPool, ExtrinsicFor};
 use inherents::{InherentData, pool::InherentsPool};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
@@ -138,6 +138,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 		&self,
 		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
 		_: &[AuthorityIdFor<<C as AuthoringApi>::Block>],
+		filter: Option<Arc<dyn Filter<ExtrinsicFor<A>>>>,
 	) -> Result<Self::Proposer, error::Error> {
 		let parent_hash = parent_header.hash();
 
@@ -153,6 +154,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			transaction_pool: self.transaction_pool.clone(),
 			inherents_pool: self.inherents_pool.clone(),
 			now: Box::new(time::Instant::now),
+			filter,
 		};
 
 		Ok(proposer)
@@ -168,6 +170,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	transaction_pool: Arc<TransactionPool<A>>,
 	inherents_pool: Arc<InherentsPool<<Block as BlockT>::Extrinsic>>,
 	now: Box<Fn() -> time::Instant>,
+	filter: Option<Arc<dyn Filter<<Block as BlockT>::Extrinsic>>>,
 }
 
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
@@ -239,6 +242,14 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 					if (self.now)() > deadline {
 						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
 						break;
+					}
+
+					if let Some(filter) = &self.filter {
+						if !filter.accept(&pending.data) {
+							debug!("[{:?}] Unacceptable transaction", pending.hash);
+							unqueue_invalid.push(pending.hash.clone());
+							continue;
+						}
 					}
 
 					trace!("[{:?}] Pushing to the block.", pending.hash);
