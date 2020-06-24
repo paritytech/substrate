@@ -1,6 +1,10 @@
 (module
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
-	(import "env" "ext_restore_to" (func $ext_restore_to (param i32 i32 i32 i32 i32 i32 i32 i32)))
+	(import "env" "ext_restore_to"
+		(func $ext_restore_to
+			(param i32 i32 i32 i32 i32 i32 i32 i32)
+		)
+	)
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")

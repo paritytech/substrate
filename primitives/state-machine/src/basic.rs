@@ -307,6 +307,18 @@ impl Externalities for BasicExternalities {
 		Ok(None)
 	}
 
+	fn storage_start_transaction(&mut self) {
+		unimplemented!("Transactions are not supported by BasicExternalities");
+	}
+
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+		unimplemented!("Transactions are not supported by BasicExternalities");
+	}
+
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+		unimplemented!("Transactions are not supported by BasicExternalities");
+	}
+
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
