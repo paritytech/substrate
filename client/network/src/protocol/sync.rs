@@ -1131,7 +1131,6 @@ impl<B: BlockT> ChainSync<B> {
 			trace!(target: "sync", "Completed fork sync {:?}", hash);
 		}
 		if number > self.best_queued_number {
-			println!("BEST QUEUED NUMBER!!! {}", number);
 			self.best_queued_number = number;
 			self.best_queued_hash = *hash;
 			// Update common blocks
