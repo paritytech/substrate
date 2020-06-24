@@ -21,10 +21,11 @@ use crate::rent;
 use crate::storage;
 
 use sp_std::prelude::*;
-use sp_runtime::traits::{Bounded, Zero};
+use sp_runtime::traits::{Bounded, Zero, Convert};
 use frame_support::{
 	storage::unhashed, dispatch::DispatchError,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
+	weights::Weight,
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
@@ -216,8 +217,8 @@ pub trait Ext {
 	/// Returns `None` if the value doesn't exist.
 	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Returns the price of one weight unit.
-	fn get_weight_price(&self) -> BalanceOf<Self::T>;
+	/// Returns the price for the specified amount of weight.
+	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -874,11 +875,8 @@ where
 		unhashed::get_raw(&key)
 	}
 
-	fn get_weight_price(&self) -> BalanceOf<Self::T> {
-		use pallet_transaction_payment::Module as Payment;
-		use sp_runtime::SaturatedConversion;
-		let price = Payment::<T>::weight_to_fee_with_adjustment::<u128>(1);
-		price.saturated_into()
+	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
+		T::WeightPrice::convert(weight)
 	}
 }
 

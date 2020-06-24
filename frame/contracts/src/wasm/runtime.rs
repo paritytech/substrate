@@ -696,12 +696,14 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
-	// Stores the gas price for the current transaction into the scratch buffer.
+	// Stores the price for the specified amount of gas in scratch buffer.
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_gas_price(ctx) => {
+	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
+	// gas can be smaller than one.
+	ext_gas_price(ctx, gas: u64) => {
 		ctx.scratch_buf.clear();
-		ctx.ext.get_weight_price().encode_to(&mut ctx.scratch_buf);
+		ctx.ext.get_weight_price(gas).encode_to(&mut ctx.scratch_buf);
 		Ok(())
 	},
 
