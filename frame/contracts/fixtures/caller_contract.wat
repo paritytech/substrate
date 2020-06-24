@@ -1,7 +1,7 @@
 (module
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
-	(import "env" "ext_balance" (func $ext_balance))
+	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_println" (func $ext_println (param i32 i32)))
@@ -17,14 +17,12 @@
 	)
 
 	(func $current_balance (param $sp i32) (result i64)
-		(call $ext_balance)
-		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 8))
-		)
-		(call $ext_scratch_read
+		(call $ext_balance
 			(i32.sub (get_local $sp) (i32.const 8))
-			(i32.const 0)
-			(i32.const 8)
+			(i32.const 2048)
+		)
+		(call $assert
+			(i32.eq (i32.load (i32.const 2048)) (i32.const 8))
 		)
 		(i64.load (i32.sub (get_local $sp) (i32.const 8)))
 	)
@@ -272,4 +270,6 @@
 	(data (i32.const 0) "\00\80")		;; The value to transfer on instantiation and calls.
 										;; Chosen to be greater than existential deposit.
 	(data (i32.const 8) "\00\11\22\33\44\55\66\77")		;; The input data to instantiations and calls.
+
+	(data (i32.const 2048) "\08") ;; size of our $ext_balance output buffer
 )

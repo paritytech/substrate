@@ -52,6 +52,8 @@ enum SpecialTrap {
 	Termination,
 	/// Signals that a trap was generated because of a successful restoration.
 	Restoration,
+	/// Signals that a buffer supplied by the caller is too small to fit the output.
+	OutputBufferTooSmall,
 }
 
 /// Can only be used for one call.
@@ -110,6 +112,12 @@ pub(crate) fn to_execution_result<E: Ext>(
 		Some(SpecialTrap::OutOfGas) => {
 			return Err(ExecError {
 				reason: "ran out of gas during contract execution".into(),
+				buffer: runtime.scratch_buf,
+			})
+		},
+		Some(SpecialTrap::OutputBufferTooSmall) => {
+			return Err(ExecError {
+				reason: "output buffer too small".into(),
 				buffer: runtime.scratch_buf,
 			})
 		},
@@ -340,6 +348,37 @@ fn write_sandbox_memory<T: Trait>(
 	)?;
 
 	memory.set(ptr, buf)?;
+
+	Ok(())
+}
+
+fn write_sandbox_output<E: Ext>(
+	ctx: &mut Runtime<E>,
+	out_ptr: u32,
+	out_len_ptr: u32,
+	buf: &[u8],
+) -> Result<(), sp_sandbox::HostError> {
+	if out_ptr == u32::max_value() {
+		return Ok(());
+	}
+
+	let buf_len = buf.len() as u32;
+	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
+
+	if len < buf_len {
+		ctx.special_trap = Some(SpecialTrap::OutputBufferTooSmall);
+		return Err(sp_sandbox::HostError);
+	}
+
+	charge_gas(
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.special_trap,
+		RuntimeToken::WriteMemory(buf_len.saturating_add(4)),
+	)?;
+
+	ctx.memory.set(out_ptr, buf)?;
+	ctx.memory.set(out_len_ptr, &buf_len.encode())?;
 
 	Ok(())
 }
@@ -679,17 +718,13 @@ define_env!(Env, <E: Ext>,
 	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the
 	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
 	// address of the contract will be returned.
-	ext_caller(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.caller().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode())
 	},
 
 	// Stores the address of the current contract into the scratch buffer.
-	ext_address(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.address().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode())
 	},
 
 	// Stores the price for the specified amount of gas in scratch buffer.
@@ -697,37 +732,29 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
 	// gas can be smaller than one.
-	ext_gas_price(ctx, gas: u64) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.get_weight_price(gas).encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_gas_price(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode())
 	},
 
 	// Stores the amount of gas left into the scratch buffer.
 	//
 	// The data is encoded as Gas. The current contents of the scratch buffer are overwritten.
-	ext_gas_left(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.gas_meter.gas_left().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode())
 	},
 
 	// Stores the balance of the current account into the scratch buffer.
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_balance(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.balance().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode())
 	},
 
 	// Stores the value transferred along with this call or as endowment into the scratch buffer.
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_value_transferred(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.value_transferred().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode())
 	},
 
 	// Stores the random number for the current block for the given subject into the scratch
@@ -735,33 +762,26 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Hash. The current contents of the scratch buffer are
 	// overwritten.
-	ext_random(ctx, subject_ptr: u32, subject_len: u32) => {
+	ext_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		// The length of a subject can't exceed `max_subject_len`.
 		if subject_len > ctx.schedule.max_subject_len {
 			return Err(sp_sandbox::HostError);
 		}
-
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
-		ctx.scratch_buf.clear();
-		ctx.ext.random(&subject_buf).encode_to(&mut ctx.scratch_buf);
-		Ok(())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).encode())
 	},
 
 	// Load the latest block timestamp into the scratch buffer
-	ext_now(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.now().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode())
 	},
 
 	// Stores the minimum balance (a.k.a. existential deposit) into the scratch buffer.
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are
 	// overwritten.
-	ext_minimum_balance(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.minimum_balance().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode())
 	},
 
 	// Stores the tombstone deposit into the scratch buffer.
@@ -775,10 +795,8 @@ define_env!(Env, <E: Ext>,
 	// a contract to leave a tombstone the balance of the contract must not go
 	// below the sum of existential deposit and the tombstone deposit. The sum
 	// is commonly referred as subsistence threshold in code.
-	ext_tombstone_deposit(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.tombstone_deposit().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode())
 	},
 
 	// Try to restore the given destination contract sacrificing the caller.
@@ -952,11 +970,8 @@ define_env!(Env, <E: Ext>,
 	// Stores the rent allowance into the scratch buffer.
 	//
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
-	ext_rent_allowance(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.rent_allowance().encode_to(&mut ctx.scratch_buf);
-
-		Ok(())
+	ext_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode())
 	},
 
 	// Prints utf8 encoded string from the data buffer.
@@ -971,10 +986,8 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Stores the current block number of the current contract into the scratch buffer.
-	ext_block_number(ctx) => {
-		ctx.scratch_buf.clear();
-		ctx.ext.block_number().encode_to(&mut ctx.scratch_buf);
-		Ok(())
+	ext_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode())
 	},
 
 	// Computes the SHA2 256-bit hash on the given input buffer.

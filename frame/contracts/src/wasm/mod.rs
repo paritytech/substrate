@@ -868,10 +868,11 @@ mod tests {
 	/// compares it with the constant 42.
 	const CODE_CALLER: &str = r#"
 (module
-	(import "env" "ext_caller" (func $ext_caller))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_caller" (func $ext_caller (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -883,30 +884,21 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; fill the scratch buffer with the caller.
-		(call $ext_caller)
+		;; fill the buffer with the caller.
+		(call $ext_caller (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 42.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 42)
 			)
 		)
@@ -930,10 +922,11 @@ mod tests {
 	/// compares it with the constant 69.
 	const CODE_ADDRESS: &str = r#"
 (module
-	(import "env" "ext_address" (func $ext_address))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_address" (func $ext_address (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -945,30 +938,21 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; fill the scratch buffer with the self address.
-		(call $ext_address)
+		;; fill the buffer with the self address.
+		(call $ext_address (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert size == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 69.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 69)
 			)
 		)
@@ -990,10 +974,11 @@ mod tests {
 
 	const CODE_BALANCE: &str = r#"
 (module
-	(import "env" "ext_balance" (func $ext_balance))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1005,30 +990,21 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the balance in the scratch buffer
-		(call $ext_balance)
+		;; This stores the balance in the buffer
+		(call $ext_balance (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 228.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 228)
 			)
 		)
@@ -1050,10 +1026,11 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "env" "ext_gas_price" (func $ext_gas_price (param i64)))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_gas_price" (func $ext_gas_price (param i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1065,31 +1042,22 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the gas price in the scratch buffer
-		(call $ext_gas_price (i64.const 1))
+		;; This stores the gas price in the buffer
+		(call $ext_gas_price (i64.const 2) (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
 		)
 
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
-		)
-
-		;; assert that contents of the buffer is equal to the i64 value of 1312.
+		;; assert that contents of the buffer is equal to the i64 value of 2 * 1312.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
-				(i64.const 1312)
+				(i64.load (i32.const 0))
+				(i64.const 2624)
 			)
 		)
 	)
@@ -1110,11 +1078,12 @@ mod tests {
 
 	const CODE_GAS_LEFT: &str = r#"
 (module
-	(import "env" "ext_gas_left" (func $ext_gas_left))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_gas_left" (func $ext_gas_left (param i32 i32)))
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1126,28 +1095,19 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the gas left in the scratch buffer
-		(call $ext_gas_left)
+		;; This stores the gas left in the buffer
+		(call $ext_gas_left (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
 		)
 
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
-		)
-
-		(call $ext_return
-			(i32.const 8)
-			(i32.const 8)
-		)
+		;; return gas left
+		(call $ext_return (i32.const 0) (i32.const 8))
 
 		(unreachable)
 	)
@@ -1173,10 +1133,11 @@ mod tests {
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
 (module
-	(import "env" "ext_value_transferred" (func $ext_value_transferred))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_value_transferred" (func $ext_value_transferred (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1188,30 +1149,21 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the value transferred in the scratch buffer
-		(call $ext_value_transferred)
+		;; This stores the value transferred in the buffer
+		(call $ext_value_transferred (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 1337.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 1337)
 			)
 		)
@@ -1268,10 +1220,11 @@ mod tests {
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
 (module
-	(import "env" "ext_now" (func $ext_now))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_now" (func $ext_now (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1283,30 +1236,21 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the block timestamp in the scratch buffer
-		(call $ext_now)
+		;; This stores the block timestamp in the buffer
+		(call $ext_now (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 1111.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 1111)
 			)
 		)
@@ -1328,10 +1272,11 @@ mod tests {
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
 (module
-	(import "env" "ext_minimum_balance" (func $ext_minimum_balance))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_minimum_balance" (func $ext_minimum_balance (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1343,29 +1288,20 @@ mod tests {
 	)
 
 	(func (export "call")
-		(call $ext_minimum_balance)
+		(call $ext_minimum_balance (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 666.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 666)
 			)
 		)
@@ -1387,10 +1323,11 @@ mod tests {
 
 	const CODE_TOMBSTONE_DEPOSIT: &str = r#"
 (module
-	(import "env" "ext_tombstone_deposit" (func $ext_tombstone_deposit))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_tombstone_deposit" (func $ext_tombstone_deposit (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1402,29 +1339,20 @@ mod tests {
 	)
 
 	(func (export "call")
-		(call $ext_tombstone_deposit)
+		(call $ext_tombstone_deposit (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 16.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 16)
 			)
 		)
@@ -1446,12 +1374,21 @@ mod tests {
 
 	const CODE_RANDOM: &str = r#"
 (module
-	(import "env" "ext_random" (func $ext_random (param i32 i32)))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_random" (func $ext_random (param i32 i32 i32 i32)))
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
+	;; [0,128) is reserved for the result of PRNG.
+
+	;; the subject used for the PRNG. [128,160)
+	(data (i32.const 128)
+		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
+		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
+	)
+
+	;; size of our buffer is 128 bytes
+	(data (i32.const 160) "\80")
+	
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -1462,42 +1399,29 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the block random seed in the scratch buffer
+		;; This stores the block random seed in the buffer
 		(call $ext_random
-			(i32.const 40) ;; Pointer in memory to the start of the subject buffer
+			(i32.const 128) ;; Pointer in memory to the start of the subject buffer
 			(i32.const 32) ;; The subject buffer's length
+			(i32.const 0) ;; Pointer to the output buffer
+			(i32.const 160) ;; Pointer to the output buffer length
 		)
 
-		;; assert $ext_scratch_size == 32
+		;; assert len == 32
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 160))
 				(i32.const 32)
 			)
 		)
 
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 32)		;; Count of bytes to copy.
-		)
-
-		;; return the data from the contract
+		;; return the random data
 		(call $ext_return
-			(i32.const 8)
+			(i32.const 0)
 			(i32.const 32)
 		)
 	)
 	(func (export "deploy"))
-
-	;; [8,40) is reserved for the result of PRNG.
-
-	;; the subject used for the PRNG. [40,72)
-	(data (i32.const 40)
-		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
-		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
-	)
 )
 "#;
 
@@ -1655,10 +1579,11 @@ mod tests {
 	/// compares it with the constant 121.
 	const CODE_BLOCK_NUMBER: &str = r#"
 (module
-	(import "env" "ext_block_number" (func $ext_block_number))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_block_number" (func $ext_block_number (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1670,30 +1595,21 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; This stores the block height in the scratch buffer
-		(call $ext_block_number)
+		;; This stores the block height in the buffer
+		(call $ext_block_number (i32.const 0) (i32.const 32))
 
-		;; assert $ext_scratch_size == 8
+		;; assert len == 8
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 32))
 				(i32.const 8)
 			)
-		)
-
-		;; copy contents of the scratch buffer into the contract's memory.
-		(call $ext_scratch_read
-			(i32.const 8)		;; Pointer in memory to the place where to copy.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; assert that contents of the buffer is equal to the i64 value of 121.
 		(call $assert
 			(i64.eq
-				(i64.load
-					(i32.const 8)
-				)
+				(i64.load (i32.const 0))
 				(i64.const 121)
 			)
 		)
