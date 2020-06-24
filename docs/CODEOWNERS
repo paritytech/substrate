@@ -18,14 +18,7 @@
 #   are more recognizable on GitHub, you can use them for mentioning unlike an email.
 # - The latest matching rule, if multiple, takes precedence.
 
-# Wasm execution and the wasm side of Substrate Runtime Interface
-/primitives/io/ @NikVolf
-
-# Crypto, execution extensions, etc.
-/primitives/core/ @NikVolf
-
 # Block production
-/primitives/authorship/ @NikVolf
 /client/basic-authorship/ @NikVolf
 
 # Sandboxing capability of Substrate Runtime
