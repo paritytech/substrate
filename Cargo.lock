@@ -3518,6 +3518,7 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
+ "hex-literal",
  "integer-sqrt",
  "node-primitives",
  "pallet-authority-discovery",

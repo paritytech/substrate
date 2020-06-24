@@ -185,6 +185,18 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		unimplemented!("read_write_count is not supported in ReadOnlyExternalities")
+	}
+
+	fn reset_read_write_count(&mut self) {
+		unimplemented!("reset_read_write_count is not supported in ReadOnlyExternalities")
+	}
+
+	fn set_whitelist(&mut self, _: Vec<Vec<u8>>) {
+		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
+	}
 }
 
 impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for ReadOnlyExternalities<'a, H, B> {
