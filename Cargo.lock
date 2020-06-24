@@ -4006,7 +4006,6 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
- "pallet-transaction-payment",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "pretty_assertions",
