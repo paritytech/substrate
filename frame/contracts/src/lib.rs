@@ -81,8 +81,7 @@
 
 #[macro_use]
 mod gas;
-
-mod account_db;
+mod storage;
 mod exec;
 mod wasm;
 mod rent;
@@ -91,7 +90,6 @@ mod rent;
 mod tests;
 
 use crate::exec::ExecutionContext;
-use crate::account_db::{AccountDb, DirectAccountDb};
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
@@ -102,7 +100,6 @@ use serde::{Serialize, Deserialize};
 use sp_core::crypto::UncheckedFrom;
 use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
-use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{
 		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member,
@@ -114,7 +111,7 @@ use frame_support::dispatch::{
 };
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error,
-	parameter_types, IsSubType, storage::child::{self, ChildInfo},
+	parameter_types, IsSubType, storage::child::ChildInfo,
 };
 use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_support::weights::GetDispatchInfo;
@@ -127,11 +124,6 @@ pub type TrieId = Vec<u8>;
 /// A function that generates an `AccountId` for a contract upon instantiation.
 pub trait ContractAddressFor<CodeHash, AccountId> {
 	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
-}
-
-/// A function that returns the fee for dispatching a `Call`.
-pub trait ComputeDispatchFee<Call, Balance> {
-	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
 /// Information for managing an account and its sub trie abstraction.
@@ -252,6 +244,12 @@ where
 		storage_root.using_encoded(|encoded| buf.extend_from_slice(encoded));
 		buf.extend_from_slice(code_hash.as_ref());
 		RawTombstoneContractInfo(<Hasher as Hash>::hash(&buf[..]), PhantomData)
+	}
+}
+
+impl<T: Trait> From<AliveContractInfo<T>> for ContractInfo<T> {
+	fn from(alive_info: AliveContractInfo<T>) -> Self {
+		Self::Alive(alive_info)
 	}
 }
 
@@ -612,12 +610,7 @@ impl<T: Trait> Module<T> {
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
 
-		let maybe_value = AccountDb::<T>::get_storage(
-			&DirectAccountDb,
-			&address,
-			Some(&contract_info.trie_id),
-			&key,
-		);
+		let maybe_value = storage::read_contract_storage(&contract_info.trie_id, &key);
 		Ok(maybe_value)
 	}
 
@@ -636,7 +629,7 @@ impl<T: Trait> Module<T> {
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_meter: &mut GasMeter<T>,
-		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult
+		func: impl FnOnce(&mut ExecutionContext<T, WasmVm, WasmLoader>, &mut GasMeter<T>) -> ExecResult,
 	) -> ExecResult {
 		let cfg = Config::preload();
 		let vm = WasmVm::new(&cfg.schedule);
@@ -645,22 +638,10 @@ impl<T: Trait> Module<T> {
 
 		let result = func(&mut ctx, gas_meter);
 
-		if result.as_ref().map(|output| output.is_success()).unwrap_or(false) {
-			// Commit all changes that made it thus far into the persistent storage.
-			DirectAccountDb.commit(ctx.overlay.into_change_set());
-		}
-
 		// Execute deferred actions.
 		ctx.deferred.into_iter().for_each(|deferred| {
 			use self::exec::DeferredAction::*;
 			match deferred {
-				DepositEvent {
-					topics,
-					event,
-				} => <frame_system::Module<T>>::deposit_event_indexed(
-					&*topics,
-					<T as Trait>::Event::from(event).into(),
-				),
 				DispatchRuntimeCall {
 					origin: who,
 					call,
@@ -674,111 +655,10 @@ impl<T: Trait> Module<T> {
 					gas_meter.refund(post_info.calc_unspent(&info));
 					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
 				}
-				RestoreTo {
-					donor,
-					dest,
-					code_hash,
-					rent_allowance,
-					delta,
-				} => {
-					let result = Self::restore_to(
-						donor.clone(), dest.clone(), code_hash.clone(), rent_allowance.clone(), delta
-					);
-					Self::deposit_event(
-						RawEvent::Restored(donor, dest, code_hash, rent_allowance, result.is_ok())
-					);
-				}
 			}
 		});
 
 		result
-	}
-
-	fn restore_to(
-		origin: T::AccountId,
-		dest: T::AccountId,
-		code_hash: CodeHash<T>,
-		rent_allowance: BalanceOf<T>,
-		delta: Vec<exec::StorageKey>,
-	) -> DispatchResult {
-		let mut origin_contract = <ContractInfoOf<T>>::get(&origin)
-			.and_then(|c| c.get_alive())
-			.ok_or(Error::<T>::InvalidSourceContract)?;
-
-		let current_block = <frame_system::Module<T>>::block_number();
-
-		if origin_contract.last_write == Some(current_block) {
-			Err(Error::<T>::InvalidContractOrigin)?
-		}
-
-		let dest_tombstone = <ContractInfoOf<T>>::get(&dest)
-			.and_then(|c| c.get_tombstone())
-			.ok_or(Error::<T>::InvalidDestinationContract)?;
-
-		let last_write = if !delta.is_empty() {
-			Some(current_block)
-		} else {
-			origin_contract.last_write
-		};
-
-		let key_values_taken = delta.iter()
-			.filter_map(|key| {
-				child::get_raw(
-					&origin_contract.child_trie_info(),
-					&blake2_256(key),
-				).map(|value| {
-					child::kill(
-						&origin_contract.child_trie_info(),
-						&blake2_256(key),
-					);
-
-					(key, value)
-				})
-			})
-			.collect::<Vec<_>>();
-
-		let tombstone = <TombstoneContractInfo<T>>::new(
-			// This operation is cheap enough because last_write (delta not included)
-			// is not this block as it has been checked earlier.
-			&child::root(
-				&origin_contract.child_trie_info(),
-			)[..],
-			code_hash,
-		);
-
-		if tombstone != dest_tombstone {
-			for (key, value) in key_values_taken {
-				child::put_raw(
-					&origin_contract.child_trie_info(),
-					&blake2_256(key),
-					&value,
-				);
-			}
-
-			return Err(Error::<T>::InvalidTombstone.into());
-		}
-
-		origin_contract.storage_size -= key_values_taken.iter()
-			.map(|(_, value)| value.len() as u32)
-			.sum::<u32>();
-
-		<ContractInfoOf<T>>::remove(&origin);
-		<ContractInfoOf<T>>::insert(&dest, ContractInfo::Alive(RawAliveContractInfo {
-			trie_id: origin_contract.trie_id,
-			storage_size: origin_contract.storage_size,
-			empty_pair_count: origin_contract.empty_pair_count,
-			total_pair_count: origin_contract.total_pair_count,
-			code_hash,
-			rent_allowance,
-			deduct_block: current_block,
-			last_write,
-		}));
-
-		let origin_free_balance = T::Currency::free_balance(&origin);
-		T::Currency::make_free_balance_be(&origin, <BalanceOf<T>>::zero());
-		T::Currency::deposit_creating(&dest, origin_free_balance);
-
-		Ok(())
 	}
 }
 
@@ -789,9 +669,6 @@ decl_event! {
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash
 	{
-		/// Transfer happened `from` to `to` with given `value` as part of a `call` or `instantiate`.
-		Transfer(AccountId, AccountId, Balance),
-
 		/// Contract deployed by address at the specified address.
 		Instantiated(AccountId, AccountId),
 
@@ -803,7 +680,7 @@ decl_event! {
 		/// - `tombstone`: `bool`: True if the evicted contract left behind a tombstone.
 		Evicted(AccountId, bool),
 
-		/// Restoration for a contract has been initiated.
+		/// Restoration for a contract has been successful.
 		///
 		/// # Params
 		///
@@ -811,8 +688,7 @@ decl_event! {
 		/// - `dest`: `AccountId`: Account ID of the restored contract
 		/// - `code_hash`: `Hash`: Code hash of the restored contract
 		/// - `rent_allowance: `Balance`: Rent allowance of the restored contract
-		/// - `success`: `bool`: True if the restoration was successful
-		Restored(AccountId, AccountId, Hash, Balance, bool),
+		Restored(AccountId, AccountId, Hash, Balance),
 
 		/// Code with the specified hash has been stored.
 		CodeStored(Hash),

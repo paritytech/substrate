@@ -4009,6 +4009,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
+ "pretty_assertions",
  "pwasm-utils",
  "serde",
  "sp-core",
@@ -7442,6 +7443,7 @@ dependencies = [
  "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
+ "wasm-timer",
 ]
 
 [[package]]

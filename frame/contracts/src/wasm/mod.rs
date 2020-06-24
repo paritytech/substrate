@@ -229,11 +229,8 @@ mod tests {
 		fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>)
-			-> Result<(), &'static str>
-		{
+		fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
 			*self.storage.entry(key).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
-			Ok(())
 		}
 		fn instantiate(
 			&mut self,
@@ -304,19 +301,20 @@ mod tests {
 		fn note_dispatch_call(&mut self, call: Call) {
 			self.dispatches.push(DispatchEntry(call));
 		}
-		fn note_restore_to(
+		fn restore_to(
 			&mut self,
 			dest: u64,
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) {
+		) -> Result<(), &'static str> {
 			self.restores.push(RestoreEntry {
 				dest,
 				code_hash,
 				rent_allowance,
 				delta,
 			});
+			Ok(())
 		}
 		fn caller(&self) -> &u64 {
 			&42
@@ -386,9 +384,7 @@ mod tests {
 		fn get_storage(&self, key: &[u8; 32]) -> Option<Vec<u8>> {
 			(**self).get_storage(key)
 		}
-		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>)
-			-> Result<(), &'static str>
-		{
+		fn set_storage(&mut self, key: [u8; 32], value: Option<Vec<u8>>) {
 			(**self).set_storage(key, value)
 		}
 		fn instantiate(
@@ -427,14 +423,14 @@ mod tests {
 		fn note_dispatch_call(&mut self, call: Call) {
 			(**self).note_dispatch_call(call)
 		}
-		fn note_restore_to(
+		fn restore_to(
 			&mut self,
 			dest: u64,
 			code_hash: H256,
 			rent_allowance: u64,
 			delta: Vec<StorageKey>,
-		) {
-			(**self).note_restore_to(
+		) -> Result<(), &'static str> {
+			(**self).restore_to(
 				dest,
 				code_hash,
 				rent_allowance,
