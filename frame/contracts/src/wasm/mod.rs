@@ -375,7 +375,7 @@ mod tests {
 			)
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			(weight * 1312).into()
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
 	}
 
