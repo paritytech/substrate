@@ -29,7 +29,7 @@ use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, Ta
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use sp_version::RuntimeVersion;
-use std::{fmt::Debug, marker::PhantomData, str::FromStr, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, str::FromStr};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -119,23 +119,21 @@ impl<C: SubstrateCli> Runner<C> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
 
-		let task_executor = Arc::new(
-			move |fut, task_type| {
-				match task_type {
-					TaskType::Async => { runtime_handle.spawn(fut); }
-					TaskType::Blocking => {
-						runtime_handle.spawn( async move {
-							// `spawn_blocking` is looking for the current runtime, and as such has to be called
-							// from within `spawn`.
-							tokio::task::spawn_blocking(move || futures::executor::block_on(fut))
-						});
-					}
+		let task_executor = move |fut, task_type| {
+			match task_type {
+				TaskType::Async => { runtime_handle.spawn(fut); }
+				TaskType::Blocking => {
+					runtime_handle.spawn(async move {
+						// `spawn_blocking` is looking for the current runtime, and as such has to
+						// be called from within `spawn`.
+						tokio::task::spawn_blocking(move || futures::executor::block_on(fut))
+					});
 				}
 			}
-		);
+		};
 
 		Ok(Runner {
-			config: command.create_configuration(cli, task_executor)?,
+			config: command.create_configuration(cli, task_executor.into())?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})

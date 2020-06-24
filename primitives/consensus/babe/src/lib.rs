@@ -31,6 +31,8 @@ pub use merlin::Transcript;
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+#[cfg(feature = "std")]
+use sp_core::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use crate::digests::{NextEpochDescriptor, NextConfigDescriptor};
 
 mod app {
@@ -92,6 +94,23 @@ pub fn make_transcript(
 	transcript.append_u64(b"current epoch", epoch);
 	transcript.append_message(b"chain randomness", &randomness[..]);
 	transcript
+}
+
+/// Make a VRF transcript data container
+#[cfg(feature = "std")]
+pub fn make_transcript_data(
+	randomness: &Randomness,
+	slot_number: u64,
+	epoch: u64,
+) -> VRFTranscriptData {
+	VRFTranscriptData {
+		label: &BABE_ENGINE_ID,
+		items: vec![
+			("slot number", VRFTranscriptValue::U64(slot_number)),
+			("current epoch", VRFTranscriptValue::U64(epoch)),
+			("chain randomness", VRFTranscriptValue::Bytes(&randomness[..])),
+		]
+	}
 }
 
 /// An consensus log item for BABE.

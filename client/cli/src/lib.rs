@@ -37,11 +37,8 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration, TaskType};
-use std::future::Future;
+use sc_service::{ChainSpec, Configuration, TaskExecutor};
 use std::io::Write;
-use std::pin::Pin;
-use std::sync::Arc;
 pub use structopt;
 use structopt::{
 	clap::{self, AppSettings},
@@ -199,7 +196,7 @@ pub trait SubstrateCli: Sized {
 	fn create_configuration<T: CliConfiguration>(
 		&self,
 		command: &T,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+		task_executor: TaskExecutor,
 	) -> error::Result<Configuration> {
 		command.create_configuration(self, task_executor)
 	}

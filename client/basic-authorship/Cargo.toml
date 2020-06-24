@@ -12,7 +12,7 @@ description = "Basic implementation of block-authoring logic."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0" }
+codec = { package = "parity-scale-codec", version = "1.3.1" }
 futures = "0.3.4"
 futures-timer = "3.0.1"
 log = "0.4.8"
