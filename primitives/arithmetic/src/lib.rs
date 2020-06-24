@@ -88,6 +88,8 @@ where
 
 /// A collection-like object that is made of values of type `T` and can normalize its individual
 /// values around a centric point.
+///
+/// Note that the order of items in the collection may affect the result.
 pub trait Normalizable<T> {
 	/// Normalize self around `targeted_sum`.
 	///
@@ -97,18 +99,18 @@ pub trait Normalizable<T> {
 }
 
 macro_rules! impl_normalize_for_numeric {
-	($numeric:ty) => {
-		impl Normalizable<$numeric> for Vec<$numeric> {
-			fn normalize(&self, targeted_sum: $numeric) -> Result<Vec<$numeric>, &'static str> {
-				normalize(self.as_ref(), targeted_sum)
+	($($numeric:ty),*) => {
+		$(
+			impl Normalizable<$numeric> for Vec<$numeric> {
+				fn normalize(&self, targeted_sum: $numeric) -> Result<Vec<$numeric>, &'static str> {
+					normalize(self.as_ref(), targeted_sum)
+				}
 			}
-		}
+		)*
 	};
 }
 
-impl_normalize_for_numeric!(u32);
-impl_normalize_for_numeric!(u64);
-impl_normalize_for_numeric!(u128);
+impl_normalize_for_numeric!(u8, u16, u32, u64, u128);
 
 impl<P: PerThing> Normalizable<P> for Vec<P> {
 	fn normalize(&self, targeted_sum: P) -> Result<Vec<P>, &'static str> {
@@ -126,17 +128,17 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 /// 1. We prefer storing original indices, and sorting the `input` only once. This will save the
 ///    cost of sorting per round at the cost of a little bit of memory.
 /// 2. The granularity of increment/decrements is determined by the number of elements in `input`
-///    and their sum difference with `targeted_sum`, namely `diff = diff(abs(sum(input),
-///    target_sum))`. This value is then distributed into `per_round = diff / input.len()` and
-///    `leftover = diff % round`. First, per_round is applied to all elements of input, and then we
-///    move to leftover, in which we add/subtract 1 by 1 until `leftover` is depleted.
+///    and their sum difference with `targeted_sum`, namely `diff = diff(sum(input), target_sum)`.
+///    This value is then distributed into `per_round = diff / input.len()` and `leftover = diff %
+///    round`. First, per_round is applied to all elements of input, and then we move to leftover,
+///    in which case we add/subtract 1 by 1 until `leftover` is depleted.
 ///
-/// In case where the sum is less than the target, the above approach always holds. If sum is less
-/// than target, then each individual element is also less than target. Thus, by adding `per_round`
-/// to each item, neither of them can overflow the numeric bound of `T`. In fact, neither of the can
-/// go beyond `target_sum`*.
+/// When the sum is less than the target, the above approach always holds. In this case, then each
+/// individual element is also less than target. Thus, by adding `per_round` to each item, neither
+/// of them can overflow the numeric bound of `T`. In fact, neither of the can go beyond
+/// `target_sum`*.
 ///
-/// In the case of sum is more than target, there is small twist. The subtraction of `per_round`
+/// If sum is more than target, there is small twist. The subtraction of `per_round`
 /// form each element might go below zero. In this case, we saturate and add the error to the
 /// `leftover` value. This ensures that the result will always stay accurate, yet it might cause the
 /// execution to become increasingly slow, since leftovers are applied one by one.
@@ -151,14 +153,17 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str>
 	where T: Clone + Copy + Ord + BaseArithmetic + Unsigned + Debug,
 {
+	// compute sum and return error if failed.
 	let mut sum = T::zero();
 	for t in input.iter() {
 		sum = sum.checked_add(t).ok_or("sum of input cannot fit in `T`")?;
 	}
+
+	// convert count and return error if failed.
 	let count = input.len();
 	let count_t: T = count.try_into().map_err(|_| "length of `inputs` cannot fit in `T`")?;
 
-	// early exit if needed.
+	// Nothing to do here.
 	if count.is_zero() {
 		return Ok(Vec::<T>::new());
 	}
@@ -172,9 +177,9 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 	let per_round = diff / count_t;
 	let mut leftover = diff % count_t;
 
-	let mut output_with_idx = input.iter().cloned().enumerate().collect::<Vec<(usize, T)>>();
 	// sort output once based on diff. This will require more data transfer and saving original
 	// index, but we sort only twice instead: once now and once at the very end.
+	let mut output_with_idx = input.iter().cloned().enumerate().collect::<Vec<(usize, T)>>();
 	output_with_idx.sort_unstable_by_key(|x| x.1);
 
 	if needs_bump {

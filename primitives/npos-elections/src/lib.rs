@@ -272,6 +272,12 @@ impl<AccountId> StakedAssignment<AccountId> {
 	///
 	/// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to
 	/// `stake`.
+	///
+	/// NOTE: current implementation of `.normalize` is almost safe to `expect()` upon. The only
+	/// error case is when the input cannot fit in `T`, or the sum of input cannot fit in `T`.
+	/// Sadly, both of these are dependent upon the implementation of `VoteLimit`, i.e. the limit
+	/// of edges per voter which is enforced from upstream. Hence, at this crate, we prefer
+	/// returning a result and a use the name prefix `try_`.
 	pub fn try_normalize(&mut self, stake: ExtendedBalance) -> Result<(), &'static str> {
 		self.distribution
 			.iter()
