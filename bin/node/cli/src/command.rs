@@ -71,12 +71,13 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.print_node_infos(node_runtime::VERSION);
-			let service_fn = match runner.config().role {
-				Role::Light => service::new_light,
-				_ => service::new_full,
-			};
-			runner.run_node_until_exit(service_fn)
+			runner.run_node_until_exit(
+				|config| match config.role {
+					Role::Light => service::new_light(config),
+					_ => service::new_full(config),
+				},
+				node_runtime::VERSION,
+			)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;

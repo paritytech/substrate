@@ -153,7 +153,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// 2020-06-03 16:14:21 💾 Database: RocksDb at /tmp/c/chains/flamingfir7/db
 	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
 	/// ```
-	pub fn print_node_infos(&self, runtime_version: RuntimeVersion) {
+	fn print_node_infos(&self, runtime_version: RuntimeVersion) {
 		info!("{}", C::impl_name());
 		info!("✌️  version {}", C::impl_version());
 		info!(
@@ -205,7 +205,9 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn run_node_until_exit(
 		mut self,
 		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
+		runtime_version: RuntimeVersion,
 	) -> Result<()> {
+		self.print_node_infos(runtime_version);
 		let mut task_manager = initialise(self.config)?;
 		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
 			.map_err(|e| e.to_string())?;
