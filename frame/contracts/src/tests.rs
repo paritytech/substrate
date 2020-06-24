@@ -16,9 +16,7 @@
 
 use crate::{
 	BalanceOf, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
-	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator,
-	account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
-	gas::Gas,
+	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator, gas::Gas,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -61,6 +59,34 @@ impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
 		balances::Balances,
 		contracts::Contracts,
+	}
+}
+
+pub mod test_utils {
+	use super::{Test, Balances};
+	use crate::{ContractInfoOf, TrieIdGenerator, CodeHash};
+	use crate::storage::{write_contract_storage, read_contract_storage};
+	use crate::exec::StorageKey;
+	use frame_support::{StorageMap, traits::Currency};
+
+	pub fn set_storage(addr: &u64, key: &StorageKey, value: Option<Vec<u8>>) {
+		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		write_contract_storage::<Test>(&1, &contract_info.trie_id, key, value).unwrap();
+	}
+	pub fn get_storage(addr: &u64, key: &StorageKey) -> Option<Vec<u8>> {
+		let contract_info = <ContractInfoOf::<Test>>::get(&addr).unwrap().get_alive().unwrap();
+		read_contract_storage(&contract_info.trie_id, key)
+	}
+	pub fn place_contract(address: &u64, code_hash: CodeHash<Test>) {
+		let trie_id = <Test as crate::Trait>::TrieIdGenerator::trie_id(address);
+		crate::storage::place_contract::<Test>(&address, trie_id, code_hash).unwrap()
+	}
+	pub fn set_balance(who: &u64, amount: u64) {
+		let imbalance = Balances::deposit_creating(who, amount);
+		drop(imbalance);
+	}
+	pub fn get_balance(who: &u64) -> u64 {
+		Balances::free_balance(who)
 	}
 }
 
@@ -280,6 +306,8 @@ fn returns_base_call_cost() {
 
 #[test]
 fn account_removal_does_not_remove_storage() {
+	use self::test_utils::{set_storage, get_storage};
+
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
@@ -288,8 +316,7 @@ fn account_removal_does_not_remove_storage() {
 
 		// Set up two accounts with free balance above the existential threshold.
 		{
-			let _ = Balances::deposit_creating(&1, 110);
-			ContractInfoOf::<Test>::insert(1, &ContractInfo::Alive(RawAliveContractInfo {
+			let alice_contract_info = ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id1.clone(),
 				storage_size: 0,
 				empty_pair_count: 0,
@@ -298,15 +325,13 @@ fn account_removal_does_not_remove_storage() {
 				code_hash: H256::repeat_byte(1),
 				rent_allowance: 40,
 				last_write: None,
-			}));
+			});
+			let _ = Balances::deposit_creating(&ALICE, 110);
+			ContractInfoOf::<Test>::insert(ALICE, &alice_contract_info);
+			set_storage(&ALICE, &key1, Some(b"1".to_vec()));
+			set_storage(&ALICE, &key2, Some(b"2".to_vec()));
 
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_storage(&1, key1.clone(), Some(b"1".to_vec()));
-			overlay.set_storage(&1, key2.clone(), Some(b"2".to_vec()));
-			DirectAccountDb.commit(overlay.into_change_set());
-
-			let _ = Balances::deposit_creating(&2, 110);
-			ContractInfoOf::<Test>::insert(2, &ContractInfo::Alive(RawAliveContractInfo {
+			let bob_contract_info = ContractInfo::Alive(RawAliveContractInfo {
 				trie_id: trie_id2.clone(),
 				storage_size: 0,
 				empty_pair_count: 0,
@@ -315,40 +340,39 @@ fn account_removal_does_not_remove_storage() {
 				code_hash: H256::repeat_byte(2),
 				rent_allowance: 40,
 				last_write: None,
-			}));
-
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_storage(&2, key1.clone(), Some(b"3".to_vec()));
-			overlay.set_storage(&2, key2.clone(), Some(b"4".to_vec()));
-			DirectAccountDb.commit(overlay.into_change_set());
+			});
+			let _ = Balances::deposit_creating(&BOB, 110);
+			ContractInfoOf::<Test>::insert(BOB, &bob_contract_info);
+			set_storage(&BOB, &key1, Some(b"3".to_vec()));
+			set_storage(&BOB, &key2, Some(b"4".to_vec()));
 		}
 
-		// Transfer funds from account 1 of such amount that after this transfer
-		// the balance of account 1 will be below the existential threshold.
+		// Transfer funds from ALICE account of such amount that after this transfer
+		// the balance of the ALICE account will be below the existential threshold.
 		//
 		// This does not remove the contract storage as we are not notified about a
 		// account removal. This cannot happen in reality because a contract can only
 		// remove itself by `ext_terminate`. There is no external event that can remove
 		// the account appart from that.
-		assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
+		assert_ok!(Balances::transfer(Origin::signed(ALICE), BOB, 20));
 
 		// Verify that no entries are removed.
 		{
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1),
+				get_storage(&ALICE, key1),
 				Some(b"1".to_vec())
 			);
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2),
+				get_storage(&ALICE, key2),
 				Some(b"2".to_vec())
 			);
 
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
+				get_storage(&BOB, key1),
 				Some(b"3".to_vec())
 			);
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key2),
+				get_storage(&BOB, key2),
 				Some(b"4".to_vec())
 			);
 		}
@@ -376,7 +400,7 @@ fn instantiate_and_call_and_deposit_event() {
 				vec![],
 			);
 
-			assert_eq!(System::events(), vec![
+			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -406,7 +430,9 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
+					),
 					topics: vec![],
 				},
 				EventRecord {
@@ -479,7 +505,7 @@ fn dispatch_call() {
 				vec![],
 			));
 
-			assert_eq!(System::events(), vec![
+			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -509,7 +535,9 @@ fn dispatch_call() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
+					),
 					topics: vec![],
 				},
 				EventRecord {
@@ -606,7 +634,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				),
 				"contract trapped during execution"
 			);
-			assert_eq!(System::events(), vec![
+			pretty_assertions::assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -636,7 +664,9 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
+					event: MetaEvent::balances(
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
+					),
 					topics: vec![],
 				},
 				EventRecord {
@@ -1323,9 +1353,6 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			// Advance 4 blocks, to the 5th.
 			initialize_block(5);
 
-			// Preserve `BOB`'s code hash for later introspection.
-			let bob_code_hash = ContractInfoOf::<Test>::get(BOB).unwrap()
-				.get_alive().unwrap().code_hash;
 			// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 			// we expect that it will get removed leaving tombstone.
 			assert_err_ignore_postinfo!(
@@ -1367,17 +1394,25 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 			// Perform a call to `DJANGO`. This should either perform restoration successfully or
 			// fail depending on the test parameters.
-			assert_ok!(Contracts::call(
-				Origin::signed(ALICE),
-				DJANGO,
-				0,
-				GAS_LIMIT,
-				vec![],
-			));
+			let perform_the_restoration = || {
+				Contracts::call(
+					Origin::signed(ALICE),
+					DJANGO,
+					0,
+					GAS_LIMIT,
+					vec![],
+				)
+			};
 
 			if test_different_storage || test_restore_to_with_dirty_storage {
 				// Parametrization of the test imply restoration failure. Check that `DJANGO` aka
 				// restoration contract is still in place and also that `BOB` doesn't exist.
+
+				assert_err_ignore_postinfo!(
+					perform_the_restoration(),
+					"contract trapped during execution"
+				);
+
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 				let django_contract = ContractInfoOf::<Test>::get(DJANGO).unwrap()
 					.get_alive().unwrap();
@@ -1386,18 +1421,10 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				assert_eq!(django_contract.deduct_block, System::block_number());
 				match (test_different_storage, test_restore_to_with_dirty_storage) {
 					(true, false) => {
-						assert_eq!(System::events(), vec![
-							EventRecord {
-								phase: Phase::Initialization,
-								event: MetaEvent::contracts(
-									RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
-								),
-								topics: vec![],
-							},
-						]);
+						assert_eq!(System::events(), vec![]);
 					}
 					(_, true) => {
-						assert_eq!(System::events(), vec![
+						pretty_assertions::assert_eq!(System::events(), vec![
 							EventRecord {
 								phase: Phase::Initialization,
 								event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
@@ -1425,7 +1452,9 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 							},
 							EventRecord {
 								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
+								event: MetaEvent::balances(
+									pallet_balances::RawEvent::Transfer(CHARLIE, DJANGO, 30_000)
+								),
 								topics: vec![],
 							},
 							EventRecord {
@@ -1433,22 +1462,13 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 								event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, DJANGO)),
 								topics: vec![],
 							},
-							EventRecord {
-								phase: Phase::Initialization,
-								event: MetaEvent::contracts(RawEvent::Restored(
-									DJANGO,
-									BOB,
-									bob_code_hash,
-									50,
-									false,
-								)),
-								topics: vec![],
-							},
 						]);
 					}
 					_ => unreachable!(),
 				}
 			} else {
+				assert_ok!(perform_the_restoration());
+
 				// Here we expect that the restoration is succeeded. Check that the restoration
 				// contract `DJANGO` ceased to exist and that `BOB` returned back.
 				println!("{:?}", ContractInfoOf::<Test>::get(BOB));
@@ -1468,7 +1488,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					EventRecord {
 						phase: Phase::Initialization,
 						event: MetaEvent::contracts(
-							RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
+							RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50)
 						),
 						topics: vec![],
 					},

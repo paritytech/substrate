@@ -31,3 +31,4 @@ sp-blockchain = { version = "2.0.0-rc3", path = "../../../primitives/blockchain"
 sc-finality-grandpa = { version = "0.8.0-rc3", path = "../../../client/finality-grandpa" }
 sc-finality-grandpa-rpc = { version = "0.8.0-rc3", path = "../../../client/finality-grandpa/rpc" }
 sc-rpc-api = { version = "0.8.0-rc3", path = "../../../client/rpc-api" }
+sp-block-builder = { version = "2.0.0-rc3", path = "../../../primitives/block-builder" }
