@@ -294,7 +294,7 @@ benchmarks! {
 		let current_era = CurrentEra::get().unwrap();
 		let caller = account("caller", 0, SEED);
 		let balance_before = T::Currency::free_balance(&validator);
-	}: _(RawOrigin::Signed(caller), validator.clone(), current_era)
+	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
 		// Validator has been paid!
 		let balance_after = T::Currency::free_balance(&validator);
