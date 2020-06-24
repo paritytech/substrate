@@ -1299,7 +1299,6 @@ fn build_telemetry<TBl: BlockT>(
 		.for_each(move |event| {
 			// Safe-guard in case we add more events in the future.
 			let sc_telemetry::TelemetryEvent::Connected = event;
-			// let genesis_hash = genesis_hash.map(|hash| hash.as_ref()).unwrap_or(&[]);
 
 			telemetry!(SUBSTRATE_INFO; "system.connected";
 				"name" => name.clone(),
