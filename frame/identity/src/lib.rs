@@ -622,7 +622,7 @@ decl_module! {
 
 		/// Add a registrar to the system.
 		///
-		/// The dispatch origin for this call must be `RegistrarOrigin`.
+		/// The dispatch origin for this call must be `T::RegistrarOrigin`.
 		///
 		/// - `account`: the account of the registrar.
 		///
