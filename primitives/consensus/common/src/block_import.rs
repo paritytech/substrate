@@ -269,7 +269,7 @@ pub trait BlockImport<B: BlockT> {
 
 	/// Check block preconditions.
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error>;
 
@@ -277,7 +277,7 @@ pub trait BlockImport<B: BlockT> {
 	///
 	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
-		&mut self,
+		&self,
 		block: BlockImportParams<B, Self::Transaction>,
 		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
@@ -289,7 +289,7 @@ impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImp
 
 	/// Check block preconditions.
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
 		(**self).check_block(block)
@@ -299,7 +299,7 @@ impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImp
 	///
 	/// Cached data can be accessed through the blockchain cache.
 	fn import_block(
-		&mut self,
+		&self,
 		block: BlockImportParams<B, Transaction>,
 		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -314,14 +314,14 @@ impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImpo
 	type Transaction = Transaction;
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
 		(&**self).check_block(block)
 	}
 
 	fn import_block(
-		&mut self,
+		&self,
 		block: BlockImportParams<B, Transaction>,
 		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {

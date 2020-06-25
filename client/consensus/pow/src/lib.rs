@@ -284,14 +284,14 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 	type Transaction = sp_api::TransactionFor<C, B>;
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<B>,
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.check_block(block).map_err(Into::into)
 	}
 
 	fn import_block(
-		&mut self,
+		&self,
 		mut block: BlockImportParams<B, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {

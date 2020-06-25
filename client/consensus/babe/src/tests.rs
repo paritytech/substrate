@@ -181,7 +181,7 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 	type Transaction = B::Transaction;
 
 	fn import_block(
-		&mut self,
+		&self,
 		block: BlockImportParams<TestBlock, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -189,7 +189,7 @@ impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<
 	}
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<TestBlock>,
 	) -> Result<ImportResult, Self::Error> {
 		Ok(self.0.check_block(block).expect("checking block failed"))

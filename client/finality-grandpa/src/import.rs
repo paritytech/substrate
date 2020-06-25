@@ -414,7 +414,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 	type Transaction = TransactionFor<Client, Block>;
 
 	fn import_block(
-		&mut self,
+		&self,
 		mut block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -437,7 +437,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
 		let enacts_consensus_change = !new_cache.is_empty();
-		let import_result = (&*self.inner).import_block(block, new_cache);
+		let import_result = self.inner.import_block(block, new_cache);
 
 		let mut imported_aux = {
 			match import_result {
@@ -545,7 +545,7 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 	}
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.check_block(block)
@@ -620,7 +620,7 @@ where
 	/// If `enacts_change` is set to true, then finalizing this block *must*
 	/// enact an authority set change, the function will panic otherwise.
 	fn import_justification(
-		&mut self,
+		&self,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		justification: Justification,

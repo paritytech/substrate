@@ -466,7 +466,7 @@ impl<Transaction> BlockImport<Block> for BlockImportAdapter<Transaction> {
 	type Transaction = Transaction;
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		match self {
@@ -476,7 +476,7 @@ impl<Transaction> BlockImport<Block> for BlockImportAdapter<Transaction> {
 	}
 
 	fn import_block(
-		&mut self,
+		&self,
 		block: BlockImportParams<Block, Transaction>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {

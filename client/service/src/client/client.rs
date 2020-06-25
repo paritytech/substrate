@@ -1661,7 +1661,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 /// NOTE: only use this implementation when you are sure there are NO consensus-level BlockImport
 /// objects. Otherwise, importing blocks directly into the client would be bypassing
 /// important verification work.
-impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, RA> where
+impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
 	Block: BlockT,
@@ -1682,7 +1682,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	/// If you are not sure that there are no BlockImport objects provided by the consensus
 	/// algorithm, don't use this function.
 	fn import_block(
-		&mut self,
+		&self,
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -1706,7 +1706,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 
 	/// Check block preconditions.
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let BlockCheckParams { hash, number, parent_hash, allow_missing_state, import_existing } = block;
@@ -1761,6 +1761,7 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 	}
 }
 
+/*
 impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block> + Send + Sync,
@@ -1773,20 +1774,21 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	type Transaction = backend::TransactionFor<B, Block>;
 
 	fn import_block(
-		&mut self,
+		&self,
 		import_block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).import_block(import_block, new_cache)
+		self.import_block(import_block, new_cache)
 	}
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).check_block(block)
+		&Client::check_block(self, block)
 	}
 }
+*/
 
 impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,

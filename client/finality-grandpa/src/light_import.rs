@@ -130,7 +130,7 @@ impl<BE, Block: BlockT, Client> BlockImport<Block>
 	type Transaction = TransactionFor<BE, Block>;
 
 	fn import_block(
-		&mut self,
+		&self,
 		block: BlockImportParams<Block, Self::Transaction>,
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
@@ -140,7 +140,7 @@ impl<BE, Block: BlockT, Client> BlockImport<Block>
 	}
 
 	fn check_block(
-		&mut self,
+		&self,
 		block: BlockCheckParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		self.client.check_block(block)
@@ -152,7 +152,7 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block> + 'static,
-		for<'a> &'a Client:
+		Client:
 			HeaderBackend<Block>
 			+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
 			+ Finalizer<Block, BE>
@@ -236,7 +236,7 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for GrandpaFinalityProofRequestBu
 
 /// Try to import new block.
 fn do_import_block<B, C, Block: BlockT, J>(
-	mut client: C,
+	client: C,
 	data: &mut LightImportData<Block>,
 	mut block: BlockImportParams<Block, TransactionFor<B, Block>>,
 	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
@@ -627,7 +627,7 @@ pub mod tests {
 		type Transaction = TransactionFor<BE, Block>;
 
 		fn import_block(
-			&mut self,
+			&self,
 			mut block: BlockImportParams<Block, Self::Transaction>,
 			new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 		) -> Result<ImportResult, Self::Error> {
@@ -636,7 +636,7 @@ pub mod tests {
 		}
 
 		fn check_block(
-			&mut self,
+			&self,
 			block: BlockCheckParams<Block>,
 		) -> Result<ImportResult, Self::Error> {
 			self.0.check_block(block)
@@ -834,7 +834,7 @@ pub mod tests {
 		let initial_set = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
 		let updated_set = vec![(AuthorityId::from_slice(&[2; 32]), 2)];
 		let babe_set_signal = vec![AuthorityId::from_slice(&[42; 32])].encode();
-		
+
 		// import block #1 without justification
 		let mut cache = HashMap::new();
 		cache.insert(well_known_cache_keys::AUTHORITIES, babe_set_signal);
