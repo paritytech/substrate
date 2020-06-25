@@ -155,6 +155,9 @@ decl_error! {
 		NotApproved,
 		/// Call information is missing.
 		MissingCall,
+		/// The wrong call was provided.
+		WrongCall,
+
 	}
 }
 
@@ -368,6 +371,7 @@ decl_module! {
 			other_signatories: Vec<T::AccountId>,
 			timepoint: Timepoint<T::BlockNumber>,
 			call_hash: [u8; 32],
+			maybe_call: Option<<T as Trait>::Call>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::ensure_valid_input(threshold, &other_signatories)?;
@@ -379,8 +383,14 @@ decl_module! {
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 			ensure!(m.approvals.len() as u16 >= threshold, Error::<T>::NotApproved);
 
-			// TODO: Do we need to revalidate call is callable?
-			let call = Self::take_call(&call_hash).ok_or(Error::<T>::MissingCall)?;
+			let call = maybe_call.map_or(
+				Self::take_call(&call_hash).ok_or(Error::<T>::MissingCall)?,
+				|c| {
+					let c_hash = c.using_encoded(blake2_256);
+					ensure!(c_hash == call_hash, Error::<T>::WrongCall);
+					c
+				}
+			);
 
 			let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
