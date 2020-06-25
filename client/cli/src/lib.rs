@@ -37,8 +37,8 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration, TaskExecutor};
-pub use sc_service::Role;
+use sc_service::{Configuration, TaskExecutor};
+pub use sc_service::{ChainSpec, Role};
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
@@ -210,8 +210,8 @@ pub trait SubstrateCli: Sized {
 		Runner::new(self, command)
 	}
 
-	/// Runtime version.
-	fn native_runtime_version() -> &'static RuntimeVersion;
+	/// Native runtime version.
+	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
 /// Initialize the logger

@@ -18,7 +18,7 @@
 use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
-use sc_cli::{SubstrateCli, RuntimeVersion, Role};
+use sc_cli::{SubstrateCli, RuntimeVersion, Role, ChainSpec};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -59,7 +59,7 @@ impl SubstrateCli for Cli {
 		})
 	}
 
-	fn native_runtime_version() -> &'static RuntimeVersion {
+	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
 		&node_template_runtime::VERSION
 	}
 }
