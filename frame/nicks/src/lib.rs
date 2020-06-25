@@ -187,7 +187,7 @@ decl_module! {
 		/// Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`
 		/// imbalance handler.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -213,7 +213,7 @@ decl_module! {
 		///
 		/// No length checking is done on the name.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).

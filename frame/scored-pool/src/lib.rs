@@ -308,7 +308,7 @@ decl_module! {
 
 		/// Kick a member `who` from the set.
 		///
-		/// May only be called from `KickOrigin` or root.
+		/// May only be called from `T::KickOrigin`.
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
@@ -331,7 +331,7 @@ decl_module! {
 
 		/// Score a member `who` with `score`.
 		///
-		/// May only be called from `ScoreOrigin` or root.
+		/// May only be called from `T::ScoreOrigin`.
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.

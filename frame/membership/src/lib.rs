@@ -117,7 +117,7 @@ decl_module! {
 
 		/// Add a member `who` to the set.
 		///
-		/// May only be called from `AddOrigin` or root.
+		/// May only be called from `T::AddOrigin`.
 		#[weight = 50_000_000]
 		pub fn add_member(origin, who: T::AccountId) {
 			T::AddOrigin::ensure_origin(origin)?;
@@ -134,7 +134,7 @@ decl_module! {
 
 		/// Remove a member `who` from the set.
 		///
-		/// May only be called from `RemoveOrigin` or root.
+		/// May only be called from `T::RemoveOrigin`.
 		#[weight = 50_000_000]
 		pub fn remove_member(origin, who: T::AccountId) {
 			T::RemoveOrigin::ensure_origin(origin)?;
@@ -152,7 +152,7 @@ decl_module! {
 
 		/// Swap out one member `remove` for another `add`.
 		///
-		/// May only be called from `SwapOrigin` or root.
+		/// May only be called from `T::SwapOrigin`.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
 		#[weight = 50_000_000]
@@ -181,7 +181,7 @@ decl_module! {
 		/// Change the membership to a new set, disregarding the existing membership. Be nice and
 		/// pass `members` pre-sorted.
 		///
-		/// May only be called from `ResetOrigin` or root.
+		/// May only be called from `T::ResetOrigin`.
 		#[weight = 50_000_000]
 		pub fn reset_members(origin, members: Vec<T::AccountId>) {
 			T::ResetOrigin::ensure_origin(origin)?;
@@ -231,6 +231,8 @@ decl_module! {
 		}
 
 		/// Set the prime member. Must be a current member.
+		///
+		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
 		pub fn set_prime(origin, who: T::AccountId) {
 			T::PrimeOrigin::ensure_origin(origin)?;
@@ -240,6 +242,8 @@ decl_module! {
 		}
 
 		/// Remove the prime member if it exists.
+		///
+		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
 		pub fn clear_prime(origin) {
 			T::PrimeOrigin::ensure_origin(origin)?;

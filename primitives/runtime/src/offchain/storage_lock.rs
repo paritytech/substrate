@@ -61,7 +61,7 @@
 //! ```
 
 use crate::offchain::storage::StorageValueRef;
-use crate::traits::AtLeast32Bit;
+use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Decode, Encode};
 use sp_core::offchain::{Duration, Timestamp};
 use sp_io::offchain;
@@ -430,7 +430,7 @@ where
 /// used with [`BlockAndTime<BlockNumberProvider>`](BlockAndTime).
 pub trait BlockNumberProvider {
 	/// Type of `BlockNumber` to provide.
-	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32Bit;
+	type BlockNumber: Codec + Clone + Ord + Eq + AtLeast32BitUnsigned;
 	/// Returns the current block number.
 	///
 	/// Provides an abstraction over an arbitrary way of providing the
