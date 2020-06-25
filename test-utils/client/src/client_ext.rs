@@ -82,10 +82,9 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 	}
 }
 
-use std::sync::Arc;
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
-impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for T
-	where T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
+impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
+	where for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
 {
 	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
@@ -93,7 +92,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for T
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
@@ -102,7 +101,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for T
 		import.body = Some(extrinsics);
 		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
@@ -112,7 +111,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for T
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::Custom(true));
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
 	fn import_justified(
@@ -128,11 +127,10 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for T
 		import.finalized = true;
 		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-		self.import_block(import, HashMap::new()).map(|_| ())
+		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 }
 
-/*
 impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
 	where
 		Self: BlockImport<Block, Error = ConsensusError>,
@@ -181,4 +179,3 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 }
-*/
