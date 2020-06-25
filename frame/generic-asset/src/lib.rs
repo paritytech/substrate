@@ -165,8 +165,9 @@ use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
-		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
+		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency,
+		ReservableCurrency, SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop,
+		BalanceStatus,
 	},
 	Parameter, StorageMap,
 };
@@ -178,15 +179,15 @@ mod tests;
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 
 pub trait Trait: frame_system::Trait {
-	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+		MaybeSerializeDeserialize;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 pub trait Subtrait: frame_system::Trait {
-	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+		MaybeSerializeDeserialize;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 }
 
