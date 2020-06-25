@@ -122,8 +122,7 @@ fn setup_enclave_and_ias_responses(state: &mut testing::OffchainState) {
 		uri: "https://myenclave_runs_here.example.com/quoting_report".into(),
 		response: Some(br#"123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here 123 whatever goes here "#.to_vec()),
 		sent: true,
-		// TODO: figure out what goes here
-		body: vec![114, 101, 109, 111, 116, 101, 95, 97, 116, 116, 101, 115, 116, 13, 10],
+		body: b"remote_attest\r\n".to_vec(),
 		headers: vec![("substrate_sgx".into(), "1.0".into())],
 		..Default::default()
 	};
