@@ -29,10 +29,14 @@
 //!   corresponding `set_storage`s, for efficient multiple payouts with just a single signature
 //!   verify, or in combination with one of the other two dispatch functionality.
 //! - Pseudonymal dispatch: A stateless operation, allowing a signed origin to execute a call from
-//!   an alternative signed origin. Each account has 2**16 possible "pseudonyms" (alternative
+//!   an alternative signed origin. Each account has 2 * 2**16 possible "pseudonyms" (alternative
 //!   account IDs) and these can be stacked. This can be useful as a key management tool, where you
 //!   need multiple distinct accounts (e.g. as controllers for many staking accounts), but where
-//!   it's perfectly fine to have each of them controlled by the same underlying keypair.
+//!   it's perfectly fine to have each of them controlled by the same underlying keypair. There
+//!   exist two sets of these pseudonymous accounts: *alternative* IDs (`as_alternative`) and *sub
+//!   account* IDs (`as_derivative`). The only difference between then is that *alternative*
+//!   accounts are, for the purposes of proxy filtering, considered a re-authentication and not a
+//!   direct "derivative" and thus are *not* hampered with the origin's filters.
 //!
 //! ## Interface
 //!
@@ -42,7 +46,8 @@
 //! * `batch` - Dispatch multiple calls from the sender's origin.
 //!
 //! #### For pseudonymal dispatch
-//! * `as_sub` - Dispatch a call from a secondary ("sub") signed origin.
+//! * `as_derivative` - Dispatch a call from a derivative signed origin.
+//! * `as_alternative` - Dispatch a call from a alternative signed origin.
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Trait`]: ./trait.Trait.html
@@ -159,7 +164,9 @@ decl_module! {
 		///
 		/// NOTE: If you need to ensure that any account-based filtering is honored (i.e. because
 		/// you expect `proxy` to have been used prior in the call stack and you want it to apply to
-		/// any sub-accounts), then use `as_limited_sub` instead.
+		/// any sub-accounts), then use `as_derivative` instead.
+		///
+		/// NOTE: Prior to version *12, this was called `as_derivative`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -171,11 +178,11 @@ decl_module! {
 			call.get_dispatch_info().weight.saturating_add(3_000_000),
 			call.get_dispatch_info().class,
 		)]
-		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
+		fn as_alternative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
-			let pseudonym = Self::sub_account_id(who, index);
+			let pseudonym = Self::alt_account_id(who, index);
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
 				.map(|_| ()).map_err(|e| e.error)
 		}
@@ -187,7 +194,9 @@ decl_module! {
 		///
 		/// NOTE: If you need to ensure that any account-based filtering is not honored (i.e.
 		/// because you expect `proxy` to have been used prior in the call stack and you do not want
-		/// the call restrictions to apply to any sub-accounts), then use `as_sub` instead.
+		/// the call restrictions to apply to any sub-accounts), then use `as_alternative` instead.
+		///
+		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -199,7 +208,7 @@ decl_module! {
 			call.get_dispatch_info().weight.saturating_add(3_000_000),
 			call.get_dispatch_info().class,
 		)]
-		fn as_limited_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
+		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
 			let pseudonym = Self::sub_account_id(who, index);
@@ -211,8 +220,14 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Derive a sub-account ID from the owner account and the sub-account index.
-	pub fn sub_account_id(who: T::AccountId, index: u16) -> T::AccountId {
+	pub fn alt_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
+		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	/// Derive an alt-account ID from the owner account and the sub-account index.
+	pub fn sub_account_id(who: T::AccountId, index: u16) -> T::AccountId {
+		let entropy = (b"modlpy/utililsba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 }
