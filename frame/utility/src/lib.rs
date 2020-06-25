@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! # Utility Module
-//! A stateless module with helpers for dispatch management.
+//! A stateless module with helpers for dispatch management which does no re-authentication.
 //!
 //! - [`utility::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
@@ -34,7 +34,10 @@
 //!   need multiple distinct accounts (e.g. as controllers for many staking accounts), but where
 //!   it's perfectly fine to have each of them controlled by the same underlying keypair.
 //!   Derivative accounts are, for the purposes of proxy filtering considered exactly the same as
-//!   the oigin and are thus hampered with the origin's filters, much like `batch`.
+//!   the oigin and are thus hampered with the origin's filters.
+//!
+//! Since proxy filters are respected in all dispatches of this module, it should never need to be
+//! filtered by any proxy.
 //!
 //! ## Interface
 //!
