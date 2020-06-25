@@ -23,6 +23,9 @@ sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../../pr
 sp-std = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/std" }
 lite-json = { version = "0.1", default-features = false }
 
+[dev-dependencies]
+env_logger = "0.7.1"
+
 [features]
 default = ["std"]
 std = [
