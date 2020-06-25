@@ -25,6 +25,10 @@ name = "biguint"
 path = "src/biguint.rs"
 
 [[bin]]
+name = "normalize"
+path = "src/normalize.rs"
+
+[[bin]]
 name = "per_thing_rational"
 path = "src/per_thing_rational.rs"
 

@@ -13,7 +13,7 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, pin::Pin, result::Result, sync::Arc};
+use std::{panic, result::Result};
 use exit_future::Signal;
 use log::debug;
 use futures::{
@@ -29,18 +29,15 @@ use prometheus_endpoint::{
 };
 use sc_client_api::CloneableSpawn;
 use sp_utils::mpsc::TracingUnboundedSender;
-use crate::config::TaskType;
+use crate::config::{TaskExecutor, TaskType};
 
 mod prometheus_future;
-
-/// Type alias for service task executor (usually runtime).
-pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
-	executor: ServiceTaskExecutor,
+	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 }
 
@@ -113,7 +110,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		(self.executor)(Box::pin(future), task_type);
+		self.executor.spawn(Box::pin(future), task_type);
 	}
 }
 
@@ -216,7 +213,7 @@ pub struct TaskManager {
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
 	/// How to spawn background tasks.
-	executor: ServiceTaskExecutor,
+	executor: TaskExecutor,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
 }
@@ -225,7 +222,7 @@ impl TaskManager {
  	/// If a Prometheus registry is passed, it will be used to report statistics about the
  	/// service tasks.
 	pub(super) fn new(
-		executor: ServiceTaskExecutor,
+		executor: TaskExecutor,
 		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();

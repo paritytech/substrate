@@ -1,6 +1,10 @@
 (module
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
-	(import "env" "ext_restore_to" (func $ext_restore_to (param i32 i32 i32 i32 i32 i32 i32 i32)))
+	(import "env" "ext_restore_to"
+		(func $ext_restore_to
+			(param i32 i32 i32 i32 i32 i32 i32 i32)
+		)
+	)
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
@@ -47,8 +51,8 @@
 
 	;; Code hash of SET_RENT
 	(data (i32.const 264)
-		"\c2\1c\41\10\a5\22\d8\59\1c\4c\77\35\dd\2d\bf\a1"
-		"\13\0b\50\93\76\9b\92\31\97\b7\c5\74\26\aa\38\2a"
+		"\ab\d6\58\65\1e\83\6e\4a\18\0d\f2\6d\bc\42\ba\e9"
+		"\3d\64\76\e5\30\5b\33\46\bb\4d\43\99\38\21\ee\32"
 	)
 
 	;; Rent allowance
