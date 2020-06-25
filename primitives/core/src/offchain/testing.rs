@@ -120,6 +120,8 @@ impl OffchainStorage for TestPersistentOffchainDB {
 pub struct OffchainState {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
+	/// Request counter
+	pub request_ctr: u16,
 	expected_requests: BTreeMap<RequestId, PendingRequest>,
 	/// Persistent local storage
 	pub persistent_storage: TestPersistentOffchainDB,
@@ -156,10 +158,12 @@ impl OffchainState {
 	}
 
 	fn fulfill_expected(&mut self, id: u16) {
-		if let Some(mut req) = self.expected_requests.remove(&RequestId(id)) {
-			let response = req.response.take().expect("Response checked while added.");
+		if let Some(mut req) = self.expected_requests.remove(&RequestId(self.request_ctr)) {
+			let response = req.response.take().expect("Response checked when added.");
 			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
+
+			self.request_ctr = self.request_ctr.saturating_add(1);
 		}
 	}
 
