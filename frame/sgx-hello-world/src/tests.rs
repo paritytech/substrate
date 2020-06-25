@@ -19,7 +19,7 @@ use crate::*;
 
 use codec::{Encode, Decode};
 use frame_support::{
-	assert_ok, impl_outer_origin, parameter_types,
+	impl_outer_origin, parameter_types,
 	weights::Weight,
 };
 use sp_core::{
