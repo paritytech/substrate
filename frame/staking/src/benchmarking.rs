@@ -47,7 +47,11 @@ fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
 
 // This function generates one validator being nominated by n nominators, and returns the validator
 // stash account. It also starts an era and creates pending payouts.
-pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32, dead: bool) -> Result<T::AccountId, &'static str> {
+pub fn create_validator_with_nominators<T: Trait>(
+	n: u32,
+	upper_bound: u32,
+	dead: bool,
+) -> Result<T::AccountId, &'static str> {
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
