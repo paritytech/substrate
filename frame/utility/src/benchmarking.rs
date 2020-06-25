@@ -43,12 +43,6 @@ benchmarks! {
 		let caller = account("caller", u, SEED);
 		let call = Box::new(frame_system::Call::remark(vec![]).into());
 	}: _(RawOrigin::Signed(caller), u as u16, call)
-
-	as_alternative {
-		let u in 0 .. 1000;
-		let caller = account("caller", u, SEED);
-		let call = Box::new(frame_system::Call::remark(vec![]).into());
-	}: _(RawOrigin::Signed(caller), u as u16, call)
 }
 
 #[cfg(test)]
@@ -62,7 +56,6 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_batch::<Test>());
 			assert_ok!(test_benchmark_as_derivative::<Test>());
-			assert_ok!(test_benchmark_as_alternative::<Test>());
 		});
 	}
 }

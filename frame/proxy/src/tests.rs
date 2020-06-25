@@ -201,19 +201,9 @@ fn filtering_works() {
 		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
 		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
 
-		let alternative_id = Utility::alternative_account_id(1, 0);
-		Balances::mutate_account(&alternative_id, |a| a.free = 1000);
 		let derivative_id = Utility::derivative_account_id(1, 0);
 		Balances::mutate_account(&derivative_id, |a| a.free = 1000);
 		let inner = Box::new(Call::Balances(BalancesCall::transfer(6, 1)));
-
-		let call = Box::new(Call::Utility(UtilityCall::as_alternative(0, inner.clone())));
-		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
-		assert_ok!(Proxy::proxy(Origin::signed(3), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Err(DispatchError::BadOrigin)));
-		assert_ok!(Proxy::proxy(Origin::signed(4), 1, None, call.clone()));
-		expect_event(RawEvent::ProxyExecuted(Ok(())));
 
 		let call = Box::new(Call::Utility(UtilityCall::as_derivative(0, inner.clone())));
 		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, call.clone()));
