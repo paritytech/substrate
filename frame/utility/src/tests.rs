@@ -25,7 +25,6 @@ use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
 	weights::Weight, impl_outer_event, dispatch::DispatchError, traits::Filter, storage,
 };
-use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as utility;
@@ -35,7 +34,7 @@ impl_outer_origin! {
 }
 impl_outer_event! {
 	pub enum TestEvent for Test {
-		system<T>,
+		frame_system<T>,
 		pallet_balances<T>,
 		utility,
 	}
@@ -131,7 +130,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> TestEvent {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<TestEvent>>(e: E) {
