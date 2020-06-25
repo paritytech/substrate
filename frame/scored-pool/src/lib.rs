@@ -55,7 +55,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //! use pallet_scored_pool::{self as scored_pool};
 //!
 //! pub trait Trait: scored_pool::Trait {}
@@ -100,7 +100,7 @@ use frame_support::{
 	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_root, ensure_signed};
+use frame_system::{ensure_root, ensure_signed};
 use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;

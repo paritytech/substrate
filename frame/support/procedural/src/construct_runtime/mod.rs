@@ -59,7 +59,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 			return Err(syn::Error::new(
 				modules_token.span,
 				"`System` module declaration is missing. \
-				 Please add this line: `System: system::{Module, Call, Storage, Config, Event<T>},`",
+				 Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`",
 			))
 		}
 	};
