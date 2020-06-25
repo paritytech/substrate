@@ -121,7 +121,7 @@ pub struct OffchainState {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
 	/// Request counter
-	pub request_ctr: u16,
+	pub request_counter: u16,
 	expected_requests: BTreeMap<RequestId, PendingRequest>,
 	/// Persistent local storage
 	pub persistent_storage: TestPersistentOffchainDB,
