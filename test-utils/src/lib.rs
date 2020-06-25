@@ -38,7 +38,7 @@
 /// ```
 #[macro_export]
 macro_rules! assert_eq_uvec {
-	( $x:expr, $y:expr ) => {
+	( $x:expr, $y:expr $(,)? ) => {
 		$crate::__assert_eq_uvec!($x, $y);
 		$crate::__assert_eq_uvec!($y, $x);
 	}
