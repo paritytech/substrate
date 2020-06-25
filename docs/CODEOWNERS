@@ -33,12 +33,6 @@
 /client/offchain/ @tomusdrw
 /primitives/offchain/ @tomusdrw
 
-# Everything that has RPC in it
-/bin/node/rpc/ @tomusdrw
-/bin/node/rpc-client/ @tomusdrw
-/client/rpc/ @tomusdrw
-/primitives/rpc/ @tomusdrw
-
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
@@ -54,7 +48,7 @@
 # EVM
 /frame/evm/ @sorpaas
 
-# NPoS and election 
+# NPoS and election
 /frame/staking/ @kianenigma
 /frame/elections/ @kianenigma
 /frame/elections-phragmen/ @kianenigma
