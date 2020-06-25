@@ -32,7 +32,7 @@ use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::Weight;
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 use sp_runtime::ModuleId;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
@@ -159,7 +159,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
 		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
 		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
-		AccountStorages get(fn account_storages): 
+		AccountStorages get(fn account_storages):
 			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
 	}
 

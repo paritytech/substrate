@@ -70,7 +70,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -112,7 +112,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -147,7 +147,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
@@ -175,7 +175,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
+/// # use frame_system::{Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]

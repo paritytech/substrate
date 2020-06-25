@@ -47,7 +47,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
