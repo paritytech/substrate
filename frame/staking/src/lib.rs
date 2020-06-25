@@ -1928,7 +1928,7 @@ decl_module! {
 
 		/// Cancel enactment of a deferred slash.
 		///
-		/// Can be called by either the root origin or the `T::SlashCancelOrigin`.
+		/// Can be called by the `T::SlashCancelOrigin`.
 		///
 		/// Parameters: era and indices of the slashes for that era to kill.
 		///
