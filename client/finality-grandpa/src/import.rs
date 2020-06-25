@@ -23,9 +23,9 @@ use parity_scale_codec::Encode;
 use parking_lot::RwLockWriteGuard;
 
 use sp_blockchain::{BlockStatus, well_known_cache_keys};
-use sc_client_api::{backend::Backend, utils::is_descendent_of};
+use sc_client_api::{backend::Backend, utils::is_descendent_of, TransactionFor};
 use sp_utils::mpsc::TracingUnboundedSender;
-use sp_api::{TransactionFor};
+//use sp_api::{TransactionFor};
 
 use sp_consensus::{
 	BlockImport, Error as ConsensusError,
@@ -255,7 +255,7 @@ where
 
 	fn make_authorities_changes(
 		&self,
-		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
+		block: &mut BlockImportParams<Block, TransactionFor<BE, Block>>,
 		hash: Block::Hash,
 		initial_sync: bool,
 	) -> Result<PendingSetChanges<Block>, ConsensusError> {
@@ -406,12 +406,11 @@ impl<BE, Block: BlockT, Client, SC> BlockImport<Block>
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE>,
-		for<'a> &'a Client:
-			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
+		Client: crate::ClientForGrandpa<Block, BE> +
+			BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<Client, Block>;
+	type Transaction = TransactionFor<BE, Block>;
 
 	fn import_block(
 		&self,

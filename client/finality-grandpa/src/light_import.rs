@@ -120,7 +120,7 @@ impl<BE, Block: BlockT, Client> BlockImport<Block>
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		BE: Backend<Block> + 'static,
-		for<'a> &'a Client:
+		Client:
 			HeaderBackend<Block>
 			+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
 			+ Finalizer<Block, BE>
@@ -135,7 +135,7 @@ impl<BE, Block: BlockT, Client> BlockImport<Block>
 		new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		do_import_block::<_, _, _, GrandpaJustification<Block>>(
-			&*self.client, &mut *self.data.write(), block, new_cache
+			self.client.clone(), &mut *self.data.write(), block, new_cache
 		)
 	}
 
@@ -184,7 +184,7 @@ impl<BE, Block: BlockT, Client> FinalityProofImport<Block>
 		verifier: &mut dyn Verifier<Block>,
 	) -> Result<(Block::Hash, NumberFor<Block>), Self::Error> {
 		do_import_finality_proof::<_, _, _, GrandpaJustification<Block>>(
-			&*self.client,
+			self.client.clone(),
 			self.backend.clone(),
 			&*self.authority_set_provider,
 			&mut *self.data.write(),
@@ -236,7 +236,7 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for GrandpaFinalityProofRequestBu
 
 /// Try to import new block.
 fn do_import_block<B, C, Block: BlockT, J>(
-	client: C,
+	client: Arc<C>,
 	data: &mut LightImportData<Block>,
 	mut block: BlockImportParams<Block, TransactionFor<B, Block>>,
 	new_cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
@@ -245,8 +245,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 		C: HeaderBackend<Block>
 			+ AuxStore
 			+ Finalizer<Block, B>
-			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>
-			+ Clone,
+			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>,
 		B: Backend<Block> + 'static,
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
@@ -295,7 +294,7 @@ fn do_import_block<B, C, Block: BlockT, J>(
 
 /// Try to import finality proof.
 fn do_import_finality_proof<B, C, Block: BlockT, J>(
-	client: C,
+	client: Arc<C>,
 	backend: Arc<B>,
 	authority_set_provider: &dyn AuthoritySetForFinalityChecker<Block>,
 	data: &mut LightImportData<Block>,
@@ -308,8 +307,8 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 		C: HeaderBackend<Block>
 			+ AuxStore
 			+ Finalizer<Block, B>
-			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>
-			+ Clone,
+			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>,
+			//+ Clone,
 		B: Backend<Block> + 'static,
 		DigestFor<Block>: Encode,
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
@@ -372,7 +371,7 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 
 	// store new authorities set
 	require_insert_aux(
-		&client,
+		&*client,
 		LIGHT_AUTHORITY_SET_KEY,
 		&data.authority_set,
 		"authority set",
@@ -383,7 +382,7 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 
 /// Try to import justification.
 fn do_import_justification<B, C, Block: BlockT, J>(
-	client: C,
+	client: Arc<C>,
 	data: &mut LightImportData<Block>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
@@ -392,8 +391,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 	where
 		C: HeaderBackend<Block>
 			+ AuxStore
-			+ Finalizer<Block, B>
-			+ Clone,
+			+ Finalizer<Block, B>,
 		B: Backend<Block> + 'static,
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 		J: ProvableJustification<Block::Header>,
@@ -454,7 +452,7 @@ fn do_import_justification<B, C, Block: BlockT, J>(
 
 /// Finalize the block.
 fn do_finalize_block<B, C, Block: BlockT>(
-	client: C,
+	client: Arc<C>,
 	data: &mut LightImportData<Block>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
@@ -463,8 +461,8 @@ fn do_finalize_block<B, C, Block: BlockT>(
 	where
 		C: HeaderBackend<Block>
 			+ AuxStore
-			+ Finalizer<Block, B>
-			+ Clone,
+			+ Finalizer<Block, B>,
+			//+ Clone,
 		B: Backend<Block> + 'static,
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
@@ -478,11 +476,11 @@ fn do_finalize_block<B, C, Block: BlockT>(
 	let consensus_finalization_res = data.consensus_changes
 		.finalize(
 			(number, hash),
-			|at_height| canonical_at_height(&client, (hash, number), true, at_height)
+			|at_height| canonical_at_height(&*client, (hash, number), true, at_height)
 		);
 	match consensus_finalization_res {
 		Ok((true, _)) => require_insert_aux(
-			&client,
+			&*client,
 			LIGHT_CONSENSUS_CHANGES_KEY,
 			&data.consensus_changes,
 			"consensus changes",

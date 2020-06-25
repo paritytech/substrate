@@ -46,7 +46,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
+	let client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
 	let genesis_hash = client.chain_info().genesis_hash;
@@ -215,7 +215,7 @@ pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
+	let client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
 	// G -> A1
@@ -344,7 +344,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	//		A1 -> B2 -> B3 -> B4
 	//			  B2 -> C3
 	//		A1 -> D2
-	let mut client = TestClientBuilder::with_backend(backend.clone()).build();
+	let client = TestClientBuilder::with_backend(backend.clone()).build();
 	let blockchain = backend.blockchain();
 
 	// G -> A1

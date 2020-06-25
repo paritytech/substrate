@@ -44,18 +44,18 @@ pub trait ClientExt<Block: BlockT>: Sized {
 /// Extension trait for a test client around block importing.
 pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 	/// Import block to the chain. No finality.
-	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
+	fn import(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and make it our best block if possible.
-	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
+	fn import_as_best(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError>;
 
 	/// Import a block and finalize it.
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block)
+	fn import_as_final(&self, origin: BlockOrigin, block: Block)
 		-> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
 	fn import_justified(
-		&mut self,
+		&self,
 		origin: BlockOrigin,
 		block: Block,
 		justification: Justification
@@ -86,7 +86,7 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
 	where for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
 {
-	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	fn import(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -95,7 +95,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	fn import_as_best(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -104,7 +104,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	fn import_as_final(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -115,7 +115,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 	}
 
 	fn import_justified(
-		&mut self,
+		&self,
 		origin: BlockOrigin,
 		block: Block,
 		justification: Justification,
@@ -135,7 +135,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 	where
 		Self: BlockImport<Block, Error = ConsensusError>,
 {
-	fn import(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	fn import(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -144,7 +144,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_as_best(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	fn import_as_best(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -153,7 +153,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 
-	fn import_as_final(&mut self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
+	fn import_as_final(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
 		let mut import = BlockImportParams::new(origin, header);
 		import.body = Some(extrinsics);
@@ -164,7 +164,7 @@ impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block
 	}
 
 	fn import_justified(
-		&mut self,
+		&self,
 		origin: BlockOrigin,
 		block: Block,
 		justification: Justification,
