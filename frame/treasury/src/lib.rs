@@ -192,13 +192,17 @@ pub struct OpenTip<
 	reason: Hash,
 	/// The account to be tipped.
 	who: AccountId,
-	/// The account who began this tip and the amount held on deposit.
-	finder: Option<(AccountId, Balance)>,
+	/// The account who began this tip.
+	finder: AccountId,
+	/// The amount held on deposit for this tip.
+	deposit: Balance,
 	/// The block number at which this tip will close if `Some`. If `None`, then no closing is
 	/// scheduled.
 	closes: Option<BlockNumber>,
 	/// The members who have voted for this tip. Sorted by AccountId.
 	tips: Vec<(AccountId, Balance)>,
+	/// Whether this tip should result in the finder taking a fee.
+	finders_fee: bool,
 }
 
 decl_storage! {
@@ -428,8 +432,15 @@ decl_module! {
 			T::Currency::reserve(&finder, deposit)?;
 
 			Reasons::<T>::insert(&reason_hash, &reason);
-			let finder = Some((finder, deposit));
-			let tip = OpenTip { reason: reason_hash, who, finder, closes: None, tips: vec![] };
+			let tip = OpenTip {
+				reason: reason_hash,
+				who,
+				finder,
+				deposit,
+				closes: None,
+				tips: vec![],
+				finders_fee: true
+			};
 			Tips::<T>::insert(&hash, tip);
 			Self::deposit_event(RawEvent::NewTip(hash));
 		}
@@ -457,12 +468,13 @@ decl_module! {
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
-			let (finder, deposit) = tip.finder.ok_or(Error::<T>::NotFinder)?;
-			ensure!(finder == who, Error::<T>::NotFinder);
+			ensure!(tip.finder == who, Error::<T>::NotFinder);
 
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(&hash);
-			let _ = T::Currency::unreserve(&who, deposit);
+			if !tip.deposit.is_zero() {
+				let _ = T::Currency::unreserve(&who, tip.deposit);
+			}
 			Self::deposit_event(RawEvent::TipRetracted(hash));
 		}
 
@@ -501,8 +513,16 @@ decl_module! {
 
 			Reasons::<T>::insert(&reason_hash, &reason);
 			Self::deposit_event(RawEvent::NewTip(hash.clone()));
-			let tips = vec![(tipper, tip_value)];
-			let tip = OpenTip { reason: reason_hash, who, finder: None, closes: None, tips };
+			let tips = vec![(tipper.clone(), tip_value)];
+			let tip = OpenTip {
+				reason: reason_hash,
+				who,
+				finder: tipper,
+				deposit: Zero::zero(),
+				closes: None,
+				tips,
+				finders_fee: false,
+			};
 			Tips::<T>::insert(&hash, tip);
 		}
 
@@ -667,15 +687,17 @@ impl<T: Trait> Module<T> {
 		let treasury = Self::account_id();
 		let max_payout = Self::pot();
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
-		if let Some((finder, deposit)) = tip.finder {
-			let _ = T::Currency::unreserve(&finder, deposit);
-			if finder != tip.who {
+		if !tip.deposit.is_zero() {
+			let _ = T::Currency::unreserve(&tip.finder, tip.deposit);
+		}
+		if tip.finders_fee {
+			if tip.finder != tip.who {
 				// pay out the finder's fee.
 				let finders_fee = T::TipFindersFee::get() * payout;
 				payout -= finders_fee;
 				// this should go through given we checked it's at most the free balance, but still
 				// we only make a best-effort.
-				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, KeepAlive);
+				let _ = T::Currency::transfer(&treasury, &tip.finder, finders_fee, KeepAlive);
 			}
 		}
 		// same as above: best-effort only.

@@ -293,6 +293,7 @@ fn close_tip_works() {
 #[test]
 fn retract_tip_works() {
 	new_test_ext().execute_with(|| {
+		// with report awesome
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 		let h = tip_hash();
@@ -303,6 +304,17 @@ fn retract_tip_works() {
 		assert_ok!(Treasury::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
+
+		// with tip new
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+		let h = tip_hash();
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Treasury::retract_tip(Origin::signed(0), h.clone()), Error::<Test>::NotFinder);
+		assert_ok!(Treasury::retract_tip(Origin::signed(10), h.clone()));
+		System::set_block_number(2);
+		assert_noop!(Treasury::close_tip(Origin::signed(10), h.into()), Error::<Test>::UnknownTip);
 	});
 }
 
