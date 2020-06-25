@@ -1978,7 +1978,9 @@ decl_module! {
 		/// - Contains a limited number of reads and writes.
 		/// -----------
 		/// N is the Number of payouts for the validator (including the validator)
-		/// Base Weight: 110 + 54.2 * N µs (Median Slopes)
+		/// Base Weight:
+		/// - Reward Destination Staked: 110 + 54.2 * N µs (Median Slopes)
+		/// - Reward Destination Controller (Creating): 120 + 41.95 * N µs (Median Slopes)
 		/// DB Weight:
 		/// - Read: EraElectionStatus, CurrentEra, HistoryDepth, ErasValidatorReward,
 		///         ErasStakersClipped, ErasRewardPoints, ErasValidatorPrefs (8 items)
@@ -1986,7 +1988,7 @@ decl_module! {
 		/// - Write Each: System Account, Locks, Ledger (3 items)
 		/// # </weight>
 		#[weight =
-			110 * WEIGHT_PER_MICROS
+			120 * WEIGHT_PER_MICROS
 			+ 54 * WEIGHT_PER_MICROS * Weight::from(T::MaxNominatorRewardedPerValidator::get())
 			+ T::DbWeight::get().reads(7)
 			+ T::DbWeight::get().reads(5)  * Weight::from(T::MaxNominatorRewardedPerValidator::get() + 1)
@@ -2395,7 +2397,7 @@ impl<T: Trait> Module<T> {
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
 				.and_then(|controller|
-					T::Currency::deposit_into_existing(&controller, amount).ok()
+					Some(T::Currency::deposit_creating(&controller, amount))
 				),
 			RewardDestination::Stash =>
 				T::Currency::deposit_into_existing(stash, amount).ok(),

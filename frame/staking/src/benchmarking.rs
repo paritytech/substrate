@@ -47,7 +47,11 @@ fn add_slashing_spans<T: Trait>(who: &T::AccountId, spans: u32) {
 
 // This function generates one validator being nominated by n nominators, and returns the validator
 // stash account. It also starts an era and creates pending payouts.
-pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> Result<T::AccountId, &'static str> {
+pub fn create_validator_with_nominators<T: Trait>(
+	n: u32,
+	upper_bound: u32,
+	dead: bool,
+) -> Result<T::AccountId, &'static str> {
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
 
@@ -65,7 +69,11 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0 .. upper_bound {
-		let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value() - i, 100)?;
+		let (_n_stash, n_controller) = if !dead {
+			create_stash_controller::<T>(u32::max_value() - i, 100)?
+		} else {
+			create_stash_and_dead_controller::<T>(u32::max_value() - i, 100)?
+		};
 		if i < n {
 			Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), vec![stash_lookup.clone()])?;
 		}
@@ -271,11 +279,26 @@ benchmarks! {
 
 	payout_stakers {
 		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
-		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32)?;
+		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32, true)?;
+
 		let current_era = CurrentEra::get().unwrap();
 		let caller = account("caller", 0, SEED);
 		let balance_before = T::Currency::free_balance(&validator);
 	}: _(RawOrigin::Signed(caller), validator.clone(), current_era)
+	verify {
+		// Validator has been paid!
+		let balance_after = T::Currency::free_balance(&validator);
+		assert!(balance_before < balance_after);
+	}
+
+	payout_stakers_alive_controller {
+		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let validator = create_validator_with_nominators::<T>(n, T::MaxNominatorRewardedPerValidator::get() as u32, false)?;
+
+		let current_era = CurrentEra::get().unwrap();
+		let caller = account("caller", 0, SEED);
+		let balance_before = T::Currency::free_balance(&validator);
+	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
 		// Validator has been paid!
 		let balance_after = T::Currency::free_balance(&validator);
@@ -630,6 +653,7 @@ mod tests {
 			let validator_stash = create_validator_with_nominators::<Test>(
 				n,
 				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+				false,
 			).unwrap();
 
 			let current_era = CurrentEra::get().unwrap();
@@ -650,6 +674,7 @@ mod tests {
 			let validator_stash = create_validator_with_nominators::<Test>(
 				n,
 				<Test as Trait>::MaxNominatorRewardedPerValidator::get() as u32,
+				false,
 			).unwrap();
 
 			// Add 20 slashing spans
@@ -710,6 +735,7 @@ mod tests {
 			assert_ok!(test_benchmark_force_unstake::<Test>());
 			assert_ok!(test_benchmark_cancel_deferred_slash::<Test>());
 			assert_ok!(test_benchmark_payout_stakers::<Test>());
+			assert_ok!(test_benchmark_payout_stakers_alive_controller::<Test>());
 			assert_ok!(test_benchmark_rebond::<Test>());
 			assert_ok!(test_benchmark_set_history_depth::<Test>());
 			assert_ok!(test_benchmark_reap_stash::<Test>());
