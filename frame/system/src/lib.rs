@@ -107,7 +107,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable,
+		Dispatchable, AtLeast32BitUnsigned
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
@@ -181,8 +181,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The block number type used by the runtime.
 	type BlockNumber:
-		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + AtLeast32Bit
-		+ Default + Bounded + Copy + sp_std::hash::Hash + sp_std::str::FromStr + MaybeMallocSizeOf;
+		Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
+		AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
+		sp_std::str::FromStr + MaybeMallocSizeOf;
 
 	/// The output of the `Hashing` function.
 	type Hash:
