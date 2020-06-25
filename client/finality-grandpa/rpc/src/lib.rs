@@ -153,8 +153,7 @@ where
 mod tests {
 	use super::*;
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
-	use futures::{compat::Future01CompatExt, executor};
-	use jsonrpc_core::{Output, futures::future as future01};
+	use jsonrpc_core::Output;
 	use parking_lot::Mutex;
 
 	use sc_finality_grandpa::{report, AuthorityId};
@@ -216,30 +215,11 @@ mod tests {
 		}
 	}
 
-	lazy_static::lazy_static! {
-		static ref EXECUTOR: executor::ThreadPool = executor::ThreadPool::new()
-			.expect("Failed to create thread pool executor for tests");
-	}
-
-	// These are lifted from the jsonrpc_pubsub crate tests
-	pub struct TestTaskExecutor;
-	type Boxed01Future01 = Box<dyn future01::Future<Item = (), Error = ()> + Send + 'static>;
-
-	impl future01::Executor<Boxed01Future01> for TestTaskExecutor {
-		fn execute(
-			&self,
-			future: Boxed01Future01
-		) -> std::result::Result<(), future01::ExecuteError<Boxed01Future01>> {
-			EXECUTOR.spawn_ok(future.compat().map(drop));
-			Ok(())
-		}
-	}
-
 	fn setup_rpc_handler<VoterState>(voter_state: VoterState) -> GrandpaRpcHandler<TestAuthoritySet, VoterState, Block> {
 		let finality_notifiers = Arc::new(Mutex::new(vec![]));
 		let justification_receiver =
 			GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
-		let manager = SubscriptionManager::new(Arc::new(TestTaskExecutor));
+		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
