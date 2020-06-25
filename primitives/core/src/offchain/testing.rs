@@ -163,7 +163,7 @@ impl OffchainState {
 			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
 
-			self.request_counter = self.request_counter.checked_add(1).expect("The max number of mocked requests is u16::MAX");
+			self.request_counter += 1;
 		}
 	}
 
