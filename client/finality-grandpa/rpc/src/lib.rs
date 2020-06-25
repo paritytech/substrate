@@ -79,7 +79,7 @@ pub trait GrandpaApi<Notification> {
 		&self,
 		metadata: Option<Self::Metadata>,
 		id: SubscriptionId
-	) -> FutureResult<bool>;
+	) -> jsonrpc_core::Result<bool>;
 }
 
 /// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
@@ -144,20 +144,8 @@ where
 		&self,
 		_metadata: Option<Self::Metadata>,
 		id: SubscriptionId
-	) -> FutureResult<bool> {
-		let cancel = self.manager.cancel(id);
-		let future = async move { cancel }
-			.boxed()
-			.unit_error()
-			.map_err(|e| {
-				warn!("Error unsubscribing: {:?}", &e);
-				jsonrpc_core::Error {
-					message: format!("Error unsubscribing: {:?}", e),
-					code: jsonrpc_core::ErrorCode::ServerError(UNSUBSCRIBE_ERROR_CODE),
-					data: None,
-				}
-			});
-		Box::new(future.compat())
+	) -> jsonrpc_core::Result<bool> {
+		Ok(self.manager.cancel(id))
 	}
 }
 
