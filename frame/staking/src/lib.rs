@@ -306,8 +306,8 @@ use sp_runtime::{
 	Percent, Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
 	curve::PiecewiseLinear,
 	traits::{
-		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		Dispatchable,
+		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
+		AtLeast32BitUnsigned, Dispatchable,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -493,7 +493,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 
 impl<
 	AccountId,
-	Balance: HasCompact + Copy + Saturating + AtLeast32Bit,
+	Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned,
 > StakingLedger<AccountId, Balance> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
@@ -544,7 +544,7 @@ impl<
 }
 
 impl<AccountId, Balance> StakingLedger<AccountId, Balance> where
-	Balance: AtLeast32Bit + Saturating + Copy,
+	Balance: AtLeast32BitUnsigned + Saturating + Copy,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`
