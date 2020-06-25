@@ -182,7 +182,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
-			let pseudonym = Self::alt_account_id(who, index);
+			let pseudonym = Self::alternative_account_id(who, index);
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
 				.map(|_| ()).map_err(|e| e.error)
 		}
@@ -211,7 +211,7 @@ decl_module! {
 		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
-			let pseudonym = Self::sub_account_id(who, index);
+			let pseudonym = Self::derivative_account_id(who, index);
 			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
 			call.dispatch(origin).map(|_| ()).map_err(|e| e.error)
 		}
@@ -220,13 +220,13 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Derive a sub-account ID from the owner account and the sub-account index.
-	pub fn alt_account_id(who: T::AccountId, index: u16) -> T::AccountId {
+	pub fn alternative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
 
 	/// Derive an alt-account ID from the owner account and the sub-account index.
-	pub fn sub_account_id(who: T::AccountId, index: u16) -> T::AccountId {
+	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utililsba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}
