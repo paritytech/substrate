@@ -1573,7 +1573,7 @@ mod test {
 
 		let client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
-		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator::new(client.clone()));
+		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 		let peer_id = PeerId::random();
 
 		let mut sync = ChainSync::new(
