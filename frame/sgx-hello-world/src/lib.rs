@@ -88,6 +88,7 @@ impl QuotingReport {
 	/// Poor man's deserialization based on
 	/// https://api.trustedservices.intel.com/documents/sgx-attestation-api-spec.pdf 4.3.1
 	pub fn from_bytes(bytes: &[u8]) -> Self {
+		debug::trace!(target: "sgx", "[QuotingReport::from_bytes] bytes: {:?}", bytes);
 		let mut cpusvn = [0_u8; 16];
 		let mut miscselect = [0_u8; 4];
 		let mut attributes = [0_u8; 16];
@@ -170,20 +171,23 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		/// Try to register an enclave.
+		/// Try to register an enclave. Enqueues the candidate enclave in the `UnverifiedEnclaves` storage item. At a later
+		/// time the worker will perform RA on the enclave and, if successful, add it to the `VerifiedEnclaves` storage item.
 		///
 		/// The transaction has to be signed with the enclave's signing key to work
 		#[weight = (100, Pays::No)]
 		pub fn register_enclave(origin, url: Vec<u8>) -> DispatchResult {
+			debug::info!(target: "sgx", "[register_enclave] START, url: {:?}", url);
 			let enclave = ensure_signed(origin)?;
-			let mut unverified_enclaves = UnverifiedEnclaves::<T>::get();
 			if <VerifiedEnclaves<T>>::contains_key(&enclave) {
 				Err(Error::<T>::EnclaveAlreadyRegistered.into())
 			} else {
+				let mut unverified_enclaves = UnverifiedEnclaves::<T>::get();
+				debug::trace!(target: "sgx", "[register_enclave] Unverified enclaves: {:?}; trying to register a new one: {:?}", unverified_enclaves.len(), enclave);
 				match unverified_enclaves.binary_search_by(|(s, _)| s.cmp(&enclave)) {
 					Ok(_) => Err(Error::<T>::EnclaveAlreadyRegistered.into()),
 					Err(idx) => {
-						debug::info!("[intel sgx]: register unverified_encalve; who={:?} at address={:?}", enclave, url);
+						debug::trace!(target: "sgx", "[register_enclave] register unverified_encalve; who={:?} at address={:?}", enclave, url);
 						unverified_enclaves.insert(idx, (enclave, url));
 						UnverifiedEnclaves::<T>::put(unverified_enclaves);
 						Ok(())
@@ -267,13 +271,16 @@ decl_module! {
 		// TODO: use the offchain worker to re-verify the "trusted enclaves"
 		// every x block or maybe could be done in `on_initialize` or `on_finalize`
 		fn offchain_worker(block_number: T::BlockNumber) {
+			debug::trace!(target: "sgx", "[offchain_worker] START");
 			let waiting_enclaves = <UnverifiedEnclaves<T>>::get();
 			if !waiting_enclaves.is_empty() {
+				debug::trace!(target: "sgx", "[offchain_worker] {} unverified enclaves. Doing RA.", waiting_enclaves.len());
 				Self::remote_attest_unverified_enclaves().unwrap();
 			}
 
 			let waiting_calls = <WaitingEnclaveCalls<T>>::get();
 			if !waiting_calls.is_empty() {
+				debug::trace!(target: "sgx", "[offchain_worker] {} calls in queue. Dispatching.", waiting_calls.len());
 				Self::dispatch_waiting_calls().unwrap();
 			}
 
@@ -294,6 +301,7 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	fn remote_attest_unverified_enclaves() -> Result<(), &'static str> {
+		debug::trace!(target: "sgx", "[remote_attest_unverified_enclaves] START");
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
 		if !signer.can_sign() {
 			return Err("No local accounts available. Consider adding one via `author_insertKey` RPC with keytype \"sgx!\"");
@@ -302,10 +310,11 @@ impl<T: Trait> Module<T> {
 		let mut verified = Vec::new();
 
 		for (enclave_sign, enclave_addr) in <UnverifiedEnclaves<T>>::get() {
+			debug::trace!(target: "sgx", "[remote_attest_unverified_enclaves] Sending RA for {:?}/{:?}", enclave_sign, enclave_addr);
 			let qe = match Self::send_ra_request(&enclave_sign, &enclave_addr) {
 				Ok(qe) => qe,
 				Err(e) => {
-					debug::warn!("[enclave]; request failed: {}. Enclave might be down; ignoring", e);
+					debug::warn!(target: "sgx", "[remote_attest_unverified_enclaves] request failed: {}. Enclave might be down; ignoring", e);
 					continue
 				}
 			};
@@ -315,17 +324,17 @@ impl<T: Trait> Module<T> {
 				quote: QuotingReport::from_bytes(&qe),
 				timestamp: sp_io::offchain::timestamp().unix_millis()
 			};
-			debug::info!("[intel sgx] received quoting_report: {:?}", enclave.quote);
+			debug::info!(target: "sgx", "[remote_attest_unverified_enclaves] received quoting_report: {:?}", enclave.quote);
 			let vr = match Self::get_ias_verification_report(&qe) {
 				Ok(vr) => vr,
 				Err(e) => {
-					debug::warn!("[IAS]; request failed with error: {}", e);
+					debug::warn!(target: "sgx", "[remote_attest_unverified_enclaves] IAS request failed with error: {}", e);
 					continue
 				}
 			};
 
-			debug::info!("[intel sgx] received ias_verification_report: {:?}", vr);
-			debug::warn!("[intel sgx] ias_verification_report is not used yet");
+			debug::info!(target: "sgx", "[remote_attest_unverified_enclaves] received ias_verification_report: {:?}", sp_std::str::from_utf8(&vr).unwrap());
+			debug::warn!(target: "sgx", "[remote_attest_unverified_enclaves] ias_verification_report is not used yet");
 			verified.push((enclave_sign, enclave))
 		}
 
@@ -334,6 +343,7 @@ impl<T: Trait> Module<T> {
 		});
 
 		for (enclave_sign, enclave) in verified {
+			debug::trace!(target: "sgx", "Sending signed transaction to register enclave with AccountId={} on chain", enclave_sign);
 			signer.send_signed_transaction(|_account| {
 				Call::register_verified_enclave(enclave_sign.clone(), enclave.clone())
 			});
@@ -343,6 +353,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn dispatch_waiting_calls() -> Result<(), &'static str> {
+		debug::trace!(target: "sgx", "[dispatch_waiting_calls] START");
 		let signer = Signer::<T, T::AuthorityId>::all_accounts();
 		if !signer.can_sign() {
 			return Err("No local accounts available. Consider adding one via `author_insertKey` RPC with keytype \"sgx!\"");
@@ -355,18 +366,19 @@ impl<T: Trait> Module<T> {
 				continue;
 			}
 			let enclave = <VerifiedEnclaves<T>>::get(&enclave_id);
+			debug::trace!(target: "sgx", "[dispatch_waiting_calls] Enclave: {:?}, enclave id: {:?}", enclave, enclave_id);
 			let mut full_address = Vec::new();
 			full_address.extend(&enclave.address);
 			full_address.extend("/enclave_call".as_bytes());
 			let enclave_addr = sp_std::str::from_utf8(&full_address).unwrap();
-			debug::info!("[intel sgx]: sending enclave_call to={:?} at address={:?}", enclave_id, enclave_addr);
+			debug::info!(target: "sgx", "[intel sgx]: sending enclave_call to={:?} at address={:?}", enclave_id, enclave_addr);
 			if let Ok(Ok(response)) = http::Request::post(&enclave_addr, vec![&xt])
 				.add_header("substrate_sgx", "1.0")
 				.send()
 				.and_then(|r| Ok(r.wait())) {
 					dispatched.push((enclave_id, xt));
 					let body: Vec<u8> = response.body().collect();
-					debug::info!("dispatch_waiting_call response: {:?}", body);
+					debug::info!(target: "sgx", "dispatch_waiting_call response: {:?}", body);
 				}
 		}
 
@@ -378,13 +390,14 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	/// Request a QUOTE from the enclave (proxied by the client)
 	fn send_ra_request(signer: &T::AccountId, enclave_addr: &[u8]) -> Result<Vec<u8>, &'static str> {
 		let mut full_address: Vec<u8> = Vec::new();
 		full_address.extend(enclave_addr);
 		full_address.extend("/quoting_report".as_bytes());
 		let enclave_addr = sp_std::str::from_utf8(&full_address).map_err(|_e| "enclave address must be valid utf8")?;
 		let body = vec![b"remote_attest\r\n"];
-		debug::info!("[intel sgx]: sending remote attestion request to enclave={:?} at address={:?}", signer, enclave_addr);
+		debug::debug!(target: "sgx","[send_ra_request]: sending remote attestion request to enclave={:?} at address={:?}", signer, enclave_addr);
 		let pending = http::Request::post(&enclave_addr, body)
 			.add_header("substrate_sgx", "1.0")
 			.send()
@@ -394,7 +407,9 @@ impl<T: Trait> Module<T> {
 	}
 
 	// https://api.trustedservices.intel.com/documents/sgx-attestation-api-spec.pdf
+	/// Send the QUOTE obtained from the enclave to Intel
 	fn get_ias_verification_report(quote: &[u8]) -> Result<Vec<u8>, &'static str> {
+		debug::trace!(target: "sgx", "[get_ias_verification_report] START");
 		const IAS_REPORT_URL: &str = "https://api.trustedservices.intel.com/sgx/dev/attestation/v4/report";
 		const API_KEY: &str = "e9589de0dfe5482588600a73d08b70f6";
 
@@ -411,7 +426,7 @@ impl<T: Trait> Module<T> {
 			.add_header("Ocp-Apim-Subscription-Key", API_KEY)
 			.send()
 			.unwrap();
-
+		debug::trace!(target: "sgx", "[get_ias_verification_report] waiting for request to complete");
 		let response = pending.wait().expect("http IO error");
 		if response.code == 200 {
 			Ok(response.body().collect())
