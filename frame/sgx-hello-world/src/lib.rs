@@ -343,7 +343,7 @@ impl<T: Trait> Module<T> {
 		});
 
 		for (enclave_sign, enclave) in verified {
-			debug::trace!(target: "sgx", "Sending signed transaction to register enclave with AccountId={} on chain", enclave_sign);
+			debug::trace!(target: "sgx", "Sending signed transaction to register enclave with AccountId={:?} on chain", enclave_sign);
 			signer.send_signed_transaction(|_account| {
 				Call::register_verified_enclave(enclave_sign.clone(), enclave.clone())
 			});
