@@ -268,9 +268,9 @@ mod tests {
 		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
 
-	fn setup_pubsub_handler() -> (sc_rpc::Metadata, jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata>) {
+	fn setup_io_handler() -> (sc_rpc::Metadata, jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>) {
 		let handler = setup_rpc_handler(TestVoterState);
-		let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
+		let mut io = jsonrpc_core::MetaIoHandler::default();
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
 		let (tx, _rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
@@ -280,7 +280,7 @@ mod tests {
 
 	#[test]
 	fn subscribe_and_unsubscribe_to_justifications() {
-		let (meta, io) = setup_pubsub_handler();
+		let (meta, io) = setup_io_handler();
 
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
@@ -311,7 +311,7 @@ mod tests {
 
 	#[test]
 	fn subscribe_and_unsubscribe_with_wrong_id() {
-		let (meta, io) = setup_pubsub_handler();
+		let (meta, io) = setup_io_handler();
 
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
