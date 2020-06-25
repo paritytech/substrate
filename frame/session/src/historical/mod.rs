@@ -37,6 +37,10 @@ use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
 use sp_trie::trie_types::{TrieDBMut, TrieDB};
 use super::{SessionIndex, Module as SessionModule};
 
+mod shared;
+pub mod offchain;
+pub mod onchain;
+
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
 	/// Full identification of the validator.
@@ -116,6 +120,7 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 	where I: SessionManager<T::ValidatorId, T::FullIdentification>
 {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (new_index, new_index)).1 = new_index + 1;
 		});
@@ -143,10 +148,13 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 
 		new_validators
 	}
+
 	fn start_session(start_index: SessionIndex) {
 		<I as SessionManager<_, _>>::start_session(start_index)
 	}
+
 	fn end_session(end_index: SessionIndex) {
+		onchain::store_session_validator_set_to_offchain::<T>(end_index);
 		<I as SessionManager<_, _>>::end_session(end_index)
 	}
 }
@@ -154,7 +162,7 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 /// A tuple of the validator's ID and their full identification.
 pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
 
-/// a trie instance for checking and generating proofs.
+/// A trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
 	db: MemoryDB<T::Hashing>,
 	root: T::Hash,
@@ -250,7 +258,6 @@ impl<T: Trait> ProvingTrie<T> {
 			.ok()?
 			.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
 	}
-
 }
 
 impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
@@ -311,9 +318,9 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
-	use sp_core::crypto::key_types::DUMMY;
+	use sp_runtime::key_types::DUMMY;
 	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
@@ -323,7 +330,7 @@ mod tests {
 
 	type Historical = Module<Test>;
 
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|

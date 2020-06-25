@@ -638,7 +638,7 @@ pub trait SignedPayload<T: SigningTypes>: Encode {
 mod tests {
 	use super::*;
 	use codec::Decode;
-	use crate::tests::{Test as TestRuntime, Call};
+	use crate::mock::{Test as TestRuntime, Call};
 	use sp_core::offchain::{testing, TransactionPoolExt};
 	use sp_runtime::testing::{UintAuthorityId, TestSignature, TestXt};
 

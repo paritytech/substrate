@@ -88,12 +88,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
+use sp_runtime::{DispatchResult, traits::StaticLookup};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{Weight, GetDispatchInfo};
+use frame_support::{weights::{Weight, GetDispatchInfo}, traits::UnfilteredDispatchable};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
@@ -106,7 +106,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A sudo-able call.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + UnfilteredDispatchable<Origin=Self::Origin> + GetDispatchInfo;
 }
 
 decl_module! {
@@ -132,7 +132,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
 		}
 
@@ -152,7 +152,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
 		}
 
@@ -195,7 +195,7 @@ decl_module! {
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
+			let res = match call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
 					sp_runtime::print(e);

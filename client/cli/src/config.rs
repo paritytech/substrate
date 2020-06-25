@@ -28,15 +28,12 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods, TaskType,
-	TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+	TaskExecutor, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
-use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::Arc;
 
 /// The maximum number of characters for a node name.
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
@@ -264,6 +261,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
+	/// Get the RPC IPC path (`None` if disabled).
+	///
+	/// By default this is `None`.
+	fn rpc_ipc(&self) -> Result<Option<String>> {
+		Ok(Default::default())
+	}
+
 	/// Get the RPC websocket address (`None` if disabled).
 	///
 	/// By default this is `None`.
@@ -402,7 +406,7 @@ pub trait CliConfiguration: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+		task_executor: TaskExecutor,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -451,6 +455,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
+			rpc_ipc: self.rpc_ipc()?,
 			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
@@ -469,6 +474,7 @@ pub trait CliConfiguration: Sized {
 			announce_block: self.announce_block()?,
 			role,
 			base_path: Some(base_path),
+			informant_output_format: Default::default(),
 		})
 	}
 

@@ -192,6 +192,17 @@ macro_rules! impl_filter_stack {
 	}
 }
 
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[impl_for_tuples(30)]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
+}
+
 #[cfg(test)]
 mod test_impl_filter_stack {
 	use super::*;
@@ -1491,7 +1502,7 @@ pub mod schedule {
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			call: Call
-		) -> Self::Address;
+		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
 		/// also.
