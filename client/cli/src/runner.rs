@@ -168,7 +168,7 @@ impl<C: SubstrateCli> Runner<C> {
 			self.config.database,
 			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 		);
-		info!("⛓  Native runtime: {}", C::runtime_version());
+		info!("⛓  Native runtime: {}", C::native_runtime_version());
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal

@@ -62,7 +62,7 @@ impl SubstrateCli for Cli {
 		})
 	}
 
-	fn runtime_version() -> &'static RuntimeVersion {
+	fn native_runtime_version() -> &'static RuntimeVersion {
 		&node_runtime::VERSION
 	}
 }

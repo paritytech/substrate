@@ -211,7 +211,7 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Runtime version.
-	fn runtime_version() -> &'static RuntimeVersion;
+	fn native_runtime_version() -> &'static RuntimeVersion;
 }
 
 /// Initialize the logger
