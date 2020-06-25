@@ -474,6 +474,8 @@ decl_module! {
 
 		/// Reject a proposed spend. The original deposit will be slashed.
 		///
+		/// May only be called from `T::RejectOrigin`.
+		///
 		/// # <weight>
 		/// - Complexity: O(1)
 		/// - DbReads: `Proposals`, `rejected proposer account`
@@ -493,6 +495,8 @@ decl_module! {
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		/// and the original deposit will be returned.
+		///
+		/// May only be called from `T::ApproveOrigin`.
 		///
 		/// # <weight>
 		/// - Complexity: O(1).
