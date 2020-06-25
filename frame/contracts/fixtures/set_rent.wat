@@ -1,5 +1,5 @@
 (module
-	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_clear_storage" (func $ext_clear_storage (param i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
@@ -23,11 +23,13 @@
 		)
 	)
 
-	;; transfer 50 to ALICE
+	;; transfer 50 to CHARLIE
 	(func $call_2
-		(call $ext_dispatch_call
-			(i32.const 68)
-			(i32.const 11)
+		(call $assert
+			(i32.eq
+				(call $ext_transfer (i32.const 68) (i32.const 8) (i32.const 76) (i32.const 8))
+				(i32.const 0)
+			)
 		)
 	)
 
@@ -96,6 +98,9 @@
 	;; Encoding of 10 in balance
 	(data (i32.const 0) "\28")
 
-	;; Encoding of call transfer 50 to CHARLIE
-	(data (i32.const 68) "\00\00\03\00\00\00\00\00\00\00\C8")
+	;; encoding of Charlies's account id
+	(data (i32.const 68) "\03")
+
+	;; encoding of 50 balance
+	(data (i32.const 76) "\32")
 )

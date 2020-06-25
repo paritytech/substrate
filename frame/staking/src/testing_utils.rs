@@ -201,11 +201,8 @@ pub fn get_weak_solution<T: Trait>(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> =
-		staked_assignments
-			.into_iter()
-			.map(|sa| sa.into_assignment(true))
-			.collect();
+	let low_accuracy_assignment = assignment_staked_to_ratio_normalized(staked_assignments)
+		.expect("Failed to normalize");
 
 	// re-calculate score based on what the chain will decode.
 	let score = {

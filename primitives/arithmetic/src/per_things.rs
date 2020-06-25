@@ -21,12 +21,15 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero,
+	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero, Unsigned,
 };
 use sp_debug_derive::RuntimeDebug;
 
 /// Get the inner type of a `PerThing`.
 pub type InnerOf<P> = <P as PerThing>::Inner;
+
+/// Get the upper type of a `PerThing`.
+pub type UpperOf<P> = <P as PerThing>::Upper;
 
 /// Something that implements a fixed point ration with an arbitrary granularity `X`, as _parts per
 /// `X`_.
@@ -34,11 +37,13 @@ pub trait PerThing:
 	Sized + Saturating + Copy + Default + Eq + PartialEq + Ord + PartialOrd + Bounded + fmt::Debug
 {
 	/// The data type used to build this per-thingy.
-	type Inner: BaseArithmetic + Copy + fmt::Debug;
+	type Inner: BaseArithmetic + Unsigned + Copy + fmt::Debug;
 
 	/// A data type larger than `Self::Inner`, used to avoid overflow in some computations.
 	/// It must be able to compute `ACCURACY^2`.
-	type Upper: BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner> + fmt::Debug;
+	type Upper:
+		BaseArithmetic + Copy + From<Self::Inner> + TryInto<Self::Inner> +
+		UniqueSaturatedInto<Self::Inner> + Unsigned + fmt::Debug;
 
 	/// The accuracy of this type.
 	const ACCURACY: Self::Inner;
