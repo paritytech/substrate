@@ -83,8 +83,9 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 }
 
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
+/*
 impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
-	where for<'r> &'r T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
+	where T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
 {
 	fn import(&self, origin: BlockOrigin, block: Block) -> Result<(), ConsensusError> {
 		let (header, extrinsics) = block.deconstruct();
@@ -130,6 +131,7 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 }
+*/
 
 impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
 	where

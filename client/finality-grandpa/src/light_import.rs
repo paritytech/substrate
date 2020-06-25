@@ -613,7 +613,7 @@ pub mod tests {
 			NumberFor<Block>: finality_grandpa::BlockNumberOps,
 			DigestFor<Block>: Encode,
 			BE: Backend<Block> + 'static,
-			for <'a > &'a Client:
+			Client:
 				HeaderBackend<Block>
 				+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
 				+ Finalizer<Block, BE>
@@ -646,7 +646,7 @@ pub mod tests {
 			NumberFor<Block>: finality_grandpa::BlockNumberOps,
 			BE: Backend<Block> + 'static,
 			DigestFor<Block>: Encode,
-			for <'a > &'a Client:
+			Client:
 				HeaderBackend<Block>
 				+ BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<BE, Block>>
 				+ Finalizer<Block, BE>
@@ -689,7 +689,7 @@ pub mod tests {
 		justification: Option<Justification>,
 	) -> (
 		ImportResult,
-		substrate_test_runtime_client::client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>,
+		Arc<substrate_test_runtime_client::client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>>,
 		Arc<substrate_test_runtime_client::LightBackend>,
 	) {
 		let (client, backend) = substrate_test_runtime_client::new_light();
@@ -713,7 +713,7 @@ pub mod tests {
 
 		(
 			do_import_block::<_, _, _, TestJustification>(
-				&client,
+				client.clone(),
 				&mut import_data,
 				block,
 				new_cache,
@@ -849,7 +849,7 @@ pub mod tests {
 
 		// import finality proof
 		do_import_finality_proof::<_, _, _, TestJustification>(
-			&client,
+			client.clone(),
 			backend,
 			&ClosureAuthoritySetForFinalityChecker(
 				|_, _, _| Ok(updated_set.clone())
@@ -872,7 +872,7 @@ pub mod tests {
 		).unwrap();
 
 		// verify that new authorities set has been saved to the aux storage
-		let data = load_aux_import_data(Default::default(), &client, &TestApi::new(initial_set)).unwrap();
+		let data = load_aux_import_data(Default::default(), &*client, &TestApi::new(initial_set)).unwrap();
 		assert_eq!(data.authority_set.authorities(), updated_set);
 	}
 }

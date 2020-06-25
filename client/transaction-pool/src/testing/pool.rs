@@ -1041,7 +1041,7 @@ fn should_not_accept_old_signatures() {
 
 #[test]
 fn import_notification_to_pool_maintain_works() {
-	let:client = Arc::new(substrate_test_runtime_client::new());
+	let client = Arc::new(substrate_test_runtime_client::new());
 
 	let pool = Arc::new(
 		BasicPool::new_test(Arc::new(FullChainApi::new(client.clone()))).0

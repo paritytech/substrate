@@ -151,7 +151,7 @@ impl TestNetFactory for GrandpaTestNet {
 				(
 					BlockImportAdapter::new_light(import),
 					None,
-					Some(proof_import),
+					Some(proof_import.clone()),
 					Some(finality_proof_req_builder),
 					Mutex::new(None),
 				)

@@ -307,9 +307,8 @@ impl<B: BlockT, Transaction> BlockImport<B> for crate::import_queue::BoxBlockImp
 	}
 }
 
-/*
 impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImport<B> for Arc<T>
-	where for<'r> &'r T: BlockImport<B, Error = E, Transaction = Transaction>
+	where T: BlockImport<B, Error = E, Transaction = Transaction>
 {
 	type Error = E;
 	type Transaction = Transaction;
@@ -329,7 +328,6 @@ impl<B: BlockT, T, E: std::error::Error + Send + 'static, Transaction> BlockImpo
 		(&**self).import_block(block, cache)
 	}
 }
-*/
 
 /// Justification import trait
 pub trait JustificationImport<B: BlockT> {
