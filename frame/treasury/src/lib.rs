@@ -775,6 +775,55 @@ impl<T: Trait> Module<T> {
 			// Must never be less than 0 but better be safe.
 			.saturating_sub(T::Currency::minimum_balance())
 	}
+
+	fn migrate_retract_tip_for_tip_new() {
+		/// An open tipping "motion". Retains all details of a tip including information on the finder
+		/// and the members who have voted.
+		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+		pub struct OpenTipOld<
+			AccountId: Parameter,
+			Balance: Parameter,
+			BlockNumber: Parameter,
+			Hash: Parameter,
+		> {
+			/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
+			/// sensible.
+			reason: Hash,
+			/// The account to be tipped.
+			who: AccountId,
+			/// The account who began this tip and the amount held on deposit.
+			finder: Option<(AccountId, Balance)>,
+			/// The block number at which this tip will close if `Some`. If `None`, then no closing is
+			/// scheduled.
+			closes: Option<BlockNumber>,
+			/// The members who have voted for this tip. Sorted by AccountId.
+			tips: Vec<(AccountId, Balance)>,
+		}
+
+		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
+
+		for (hash, old_tip) in StorageKeyIterator::<
+			T::Hash,
+			OpenTipOld<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+			Twox64Concat,
+		>::new(b"Treasury", b"Tips").drain()
+		{
+			let (finder, deposit, finders_fee) = match old_tip.finder {
+				Some((finder, deposit)) => (finder, deposit, true),
+				None => (T::AccountId::default(), Zero::zero(), false),
+			};
+			let new_tip = OpenTip {
+				reason: old_tip.reason,
+				who: old_tip.who,
+				finder,
+				deposit,
+				closes: old_tip.closes,
+				tips: old_tip.tips,
+				finders_fee
+			};
+			Tips::<T>::insert(hash, new_tip)
+		}
+	}
 }
 
 impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
