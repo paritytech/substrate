@@ -342,7 +342,12 @@ pub fn new() -> Client<Backend> {
 
 /// Creates new light client instance used for tests.
 pub fn new_light() -> (
-	Arc<client::Client<LightBackend, LightExecutor, substrate_test_runtime::Block, substrate_test_runtime::RuntimeApi>>,
+	Arc<client::Client<
+		LightBackend,
+		LightExecutor,
+		substrate_test_runtime::Block,
+		substrate_test_runtime::RuntimeApi,
+	>>,
 	Arc<LightBackend>,
 ) {
 

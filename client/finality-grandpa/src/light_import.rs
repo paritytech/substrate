@@ -687,7 +687,12 @@ pub mod tests {
 		justification: Option<Justification>,
 	) -> (
 		ImportResult,
-		Arc<substrate_test_runtime_client::client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>>,
+		Arc<substrate_test_runtime_client::client::Client<
+			substrate_test_runtime_client::LightBackend,
+			substrate_test_runtime_client::LightExecutor,
+			Block,
+			substrate_test_runtime_client::runtime::RuntimeApi,
+		>>,
 		Arc<substrate_test_runtime_client::LightBackend>,
 	) {
 		let (client, backend) = substrate_test_runtime_client::new_light();
