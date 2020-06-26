@@ -70,7 +70,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
-	justification_sender: &GrandpaJustificationSender<Block>,
+	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
@@ -198,7 +198,7 @@ where
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
-		justification_sender,
+		Some(justification_sender),
 	);
 
 	let observer_work = observer_work
@@ -219,7 +219,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	persistent_data: PersistentData<B>,
 	keystore: Option<BareCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
-	justification_sender: GrandpaJustificationSender<B>,
+	justification_sender: Option<GrandpaJustificationSender<B>>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -237,7 +237,7 @@ where
 		persistent_data: PersistentData<B>,
 		keystore: Option<BareCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
-		justification_sender: GrandpaJustificationSender<B>,
+		justification_sender: Option<GrandpaJustificationSender<B>>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -433,16 +433,13 @@ mod tests {
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");
 
-		let finality_notifiers = Arc::new(parking_lot::Mutex::new(vec![]));
-		let justification_sender = GrandpaJustificationSender::new(finality_notifiers.clone());
-
 		let observer = ObserverWork::new(
 			client,
 			tester.net_handle.clone(),
 			persistent_data,
 			None,
 			voter_command_rx,
-			justification_sender,
+			None,
 		);
 
 		// Trigger a reputation change through the gossip validator.

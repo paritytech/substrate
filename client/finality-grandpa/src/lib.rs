@@ -875,7 +875,7 @@ where
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state,
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
-			justification_sender,
+			justification_sender: Some(justification_sender),
 			_phantom: PhantomData,
 		});
 

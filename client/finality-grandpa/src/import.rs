@@ -653,7 +653,7 @@ where
 			number,
 			justification.into(),
 			initial_sync,
-			&self.justification_sender,
+			&Some(self.justification_sender.clone()),
 		);
 
 		match result {

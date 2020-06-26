@@ -404,7 +404,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
-	pub(crate) justification_sender: GrandpaJustificationSender<Block>,
+	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -1075,7 +1075,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
-	justification_sender: &GrandpaJustificationSender<Block>,
+	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
@@ -1189,7 +1189,9 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 						header,
 						justification,
 					};
-					let _ = justification_sender.notify(notification);
+					if let Some(sender) = justification_sender {
+						sender.notify(notification);
+					}
 				},
 				Ok(None) => debug!(target: "afg", "Expected a header for sending a justification notification."),
 				Err(err) => debug!(target: "afg", "Getting header failed: {}", err),

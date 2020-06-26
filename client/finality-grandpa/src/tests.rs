@@ -1558,9 +1558,6 @@ fn grandpa_environment_respects_voting_rules() {
 			None,
 		);
 
-		let finality_notifiers = Arc::new(parking_lot::Mutex::new(vec![]));
-		let justification_sender = GrandpaJustificationSender::new(finality_notifiers.clone());
-
 		Environment {
 			authority_set: authority_set.clone(),
 			config: config.clone(),
@@ -1573,7 +1570,7 @@ fn grandpa_environment_respects_voting_rules() {
 			network,
 			voting_rule,
 			metrics: None,
-			justification_sender,
+			justification_sender: None,
 			_phantom: PhantomData,
 		}
 	};
