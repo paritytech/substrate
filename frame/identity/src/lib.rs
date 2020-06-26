@@ -622,7 +622,7 @@ decl_module! {
 
 		/// Add a registrar to the system.
 		///
-		/// The dispatch origin for this call must be `RegistrarOrigin` or `Root`.
+		/// The dispatch origin for this call must be `T::RegistrarOrigin`.
 		///
 		/// - `account`: the account of the registrar.
 		///
@@ -1087,7 +1087,7 @@ decl_module! {
 		/// `Slash`. Verification request deposits are not returned; they should be cancelled
 		/// manually using `cancel_request`.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// - `target`: the account whose identity the judgement is upon. This must be an account
 		///   with a registered identity.
