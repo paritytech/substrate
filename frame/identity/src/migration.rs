@@ -31,7 +31,7 @@ pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 // upgraded, nothing here will happen anyway.
 
 fn change_name_sudo_to_identity<T: Trait>() -> Weight {
-	sp_runtime::print("Migrating Identity.");
+	sp_runtime::print("🕊️  Migrating Identity.");
 
 	let mut weight = 0;
 	let db = T::DbWeight::get();
@@ -56,6 +56,6 @@ fn change_name_sudo_to_identity<T: Trait>() -> Weight {
 	}
 	weight += db.reads(1);
 
-	sp_runtime::print("Done Identity.");
+	sp_runtime::print("🕊️  Done Identity.");
 	weight
 }

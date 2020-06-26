@@ -34,7 +34,7 @@ pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 // upgraded, nothing here will happen anyway.
 
 fn rename_and_convert<T: Trait>() -> Weight {
-	sp_runtime::print("Migrating Transaction Payment.");
+	sp_runtime::print("🕊️  Migrating Transaction Payment.");
 
 	let mut reads = 0;
 	let mut writes = 0;
@@ -49,6 +49,6 @@ fn rename_and_convert<T: Trait>() -> Weight {
 	}
 	reads += 1;
 
-	sp_runtime::print("Done Transaction Payment.");
+	sp_runtime::print("🕊️  Done Transaction Payment.");
 	T::DbWeight::get().reads_writes(reads, writes)
 }
