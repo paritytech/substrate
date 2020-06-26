@@ -280,6 +280,8 @@ pub mod slashing;
 pub mod offchain_election;
 pub mod inflation;
 
+pub mod migration;
+
 use sp_std::{
 	result,
 	prelude::*,
@@ -1380,7 +1382,7 @@ decl_module! {
 		}
 		
 		fn on_runtime_upgrade() -> Weight {
-			migrate::<T>();
+			migrate_hasher::<T>();
 			// TODO: determine actual weight
 			0
 		}
@@ -2228,7 +2230,7 @@ impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 	}
 }
 
-fn migrate<T: Trait>() {
+fn migrate_hasher<T: Trait>() {
 	if let Some(current_era) = CurrentEra::get() {
 		let history_depth = HistoryDepth::get();
 		for era in current_era.saturating_sub(history_depth)..=current_era {
@@ -2237,27 +2239,6 @@ fn migrate<T: Trait>() {
 			ErasRewardPoints::<T>::migrate_key_from_blake(era);
 			ErasTotalStake::<T>::migrate_key_from_blake(era);
 		}
-	}
-}
-
-fn remove_migrate_era<T: Trait>() -> Weight {
-	#[allow(dead_code)]
-	mod inner {
-		pub struct Module<T>(sp_std::marker::PhantomData<T>);
-		frame_support::decl_storage! {
-			trait Store for Module<T: super::Trait> as Staking {
-				pub MigrateEra: Option<super::EraIndex>;
-			}
-		}
-	}
-
-	if let Releases::V3_0_0 = StorageVersion::get() {
-		StorageVersion::put(Releases::V4_0_0);
-		inner::MigrateEra::kill();
-
-		T::DbWeight::get().reads_writes(1, 1)
-	} else {
-		T::DbWeight::get().reads(1)
 	}
 }
 

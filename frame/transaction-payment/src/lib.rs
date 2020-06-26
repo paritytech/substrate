@@ -232,6 +232,10 @@ decl_module! {
 				).unwrap(),
 			);
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::on_runtime_upgrade::<T>()
+		}
 	}
 }
 
