@@ -556,3 +556,97 @@ fn inexistent_account_works() {
 		assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed
 	});
 }
+
+#[test]
+fn test_last_reward_migration() {
+	use sp_storage::Storage;
+
+	let mut s = Storage::default();
+
+	#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+	pub struct OldOpenTip<
+		AccountId: Parameter,
+		Balance: Parameter,
+		BlockNumber: Parameter,
+		Hash: Parameter,
+	> {
+		/// The hash of the reason for the tip. The reason should be a human-readable UTF-8 encoded string. A URL would be
+		/// sensible.
+		reason: Hash,
+		/// The account to be tipped.
+		who: AccountId,
+		/// The account who began this tip and the amount held on deposit.
+		finder: Option<(AccountId, Balance)>,
+		/// The block number at which this tip will close if `Some`. If `None`, then no closing is
+		/// scheduled.
+		closes: Option<BlockNumber>,
+		/// The members who have voted for this tip. Sorted by AccountId.
+		tips: Vec<(AccountId, Balance)>,
+	}
+
+	let reason1 = BlakeTwo256::hash(b"reason1");
+	let hash1 = BlakeTwo256::hash_of(&(reason1, 10u64));
+
+	let old_tip_finder = OldOpenTip::<u64, u64, u64, H256> {
+		reason: reason1,
+		who: 10,
+		finder: Some((20, 30)),
+		closes: Some(13),
+		tips: vec![(40, 50), (60, 70)]
+	};
+
+	let reason2 = BlakeTwo256::hash(b"reason2");
+	let hash2 = BlakeTwo256::hash_of(&(reason2, 20u64));
+
+	let old_tip_no_finder = OldOpenTip::<u64, u64, u64, H256> {
+		reason: reason2,
+		who: 20,
+		finder: None,
+		closes: Some(13),
+		tips: vec![(40, 50), (60, 70)]
+	};
+
+	let data = vec![
+		(
+			Tips::<Test>::hashed_key_for(hash1),
+			old_tip_finder.encode().to_vec()
+		),
+		(
+			Tips::<Test>::hashed_key_for(hash2),
+			old_tip_no_finder.encode().to_vec()
+		),
+	];
+
+	s.top = data.into_iter().collect();
+	sp_io::TestExternalities::new(s).execute_with(|| {
+		Treasury::migrate_retract_tip_for_tip_new();
+
+		// Test w/ finder
+		assert_eq!(
+			Tips::<Test>::get(hash1),
+			Some(OpenTip {
+				reason: reason1,
+				who: 10,
+				finder: 20,
+				deposit: 30,
+				closes: Some(13),
+				tips: vec![(40, 50), (60, 70)],
+				finders_fee: true,
+			})
+		);
+
+		// Test w/o finder
+		assert_eq!(
+			Tips::<Test>::get(hash2),
+			Some(OpenTip {
+				reason: reason2,
+				who: 20,
+				finder: Default::default(),
+				deposit: 0,
+				closes: Some(13),
+				tips: vec![(40, 50), (60, 70)],
+				finders_fee: false,
+			})
+		);
+	});
+}

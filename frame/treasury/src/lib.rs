@@ -780,7 +780,7 @@ impl<T: Trait> Module<T> {
 		/// An open tipping "motion". Retains all details of a tip including information on the finder
 		/// and the members who have voted.
 		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-		pub struct OpenTipOld<
+		pub struct OldOpenTip<
 			AccountId: Parameter,
 			Balance: Parameter,
 			BlockNumber: Parameter,
@@ -804,7 +804,7 @@ impl<T: Trait> Module<T> {
 
 		for (hash, old_tip) in StorageKeyIterator::<
 			T::Hash,
-			OpenTipOld<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
+			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
 		>::new(b"Treasury", b"Tips").drain()
 		{
