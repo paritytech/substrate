@@ -1,7 +1,10 @@
 name: Notify devops when burn-in label applied
 on:
   pull_request:
-    type: [labelled]
+    type: [labeled]
+
+jobs:
+  notify-devops:
     runs-on: ubuntu-latest
     steps:
       - name: Notify devops
