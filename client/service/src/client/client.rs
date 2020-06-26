@@ -1761,35 +1761,6 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, R
 	}
 }
 
-/*
-impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block>,
-	E: CallExecutor<Block> + Send + Sync,
-	Block: BlockT,
-	Self: ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api: CoreApi<Block, Error = Error> +
-		ApiExt<Block, StateBackend = B::State>,
-{
-	type Error = ConsensusError;
-	type Transaction = backend::TransactionFor<B, Block>;
-
-	fn import_block(
-		&self,
-		import_block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
-	) -> Result<ImportResult, Self::Error> {
-		self.import_block(import_block, new_cache)
-	}
-
-	fn check_block(
-		&self,
-		block: BlockCheckParams<Block>,
-	) -> Result<ImportResult, Self::Error> {
-		&Client::check_block(self, block)
-	}
-}
-*/
-
 impl<B, E, Block, RA> Finalizer<Block, B> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,

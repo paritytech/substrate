@@ -308,7 +308,6 @@ fn do_import_finality_proof<B, C, Block: BlockT, J>(
 			+ AuxStore
 			+ Finalizer<Block, B>
 			+ BlockImport<Block, Transaction = TransactionFor<B, Block>>,
-			//+ Clone,
 		B: Backend<Block> + 'static,
 		DigestFor<Block>: Encode,
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
@@ -462,7 +461,6 @@ fn do_finalize_block<B, C, Block: BlockT>(
 		C: HeaderBackend<Block>
 			+ AuxStore
 			+ Finalizer<Block, B>,
-			//+ Clone,
 		B: Backend<Block> + 'static,
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
