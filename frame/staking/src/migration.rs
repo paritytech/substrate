@@ -145,7 +145,7 @@ pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
     deprecated::CurrentEraStartSessionIndex::kill();
     deprecated::CurrentEraPointsEarned::kill();
 
-    sp_runtime::print("🕊️  Done Account Balances.");
+    sp_runtime::print("🕊️  Done Staking.");
     // TODO: determine actual weight?
     T::MaximumBlockWeight::get()
 }
