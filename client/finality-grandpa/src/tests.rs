@@ -913,7 +913,7 @@ fn allows_reimporting_change_blocks() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
+	let (block_import, ..) = net.make_block_import::<
 		TransactionFor<substrate_test_runtime_client::Backend, Block>
 	>(
 		client.clone(),
@@ -963,7 +963,7 @@ fn test_bad_justification() {
 	let mut net = GrandpaTestNet::new(api.clone(), 3);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
+	let (block_import, ..) = net.make_block_import::<
 		TransactionFor<substrate_test_runtime_client::Backend, Block>
 	>(
 		client.clone(),
@@ -1660,7 +1660,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let mut net = GrandpaTestNet::new(api.clone(), 1);
 
 	let client = net.peer(0).client().clone();
-	let (mut block_import, ..) = net.make_block_import::<
+	let (block_import, ..) = net.make_block_import::<
 		TransactionFor<substrate_test_runtime_client::Backend, Block>
 	>(client.clone());
 

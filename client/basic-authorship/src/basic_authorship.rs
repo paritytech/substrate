@@ -516,7 +516,7 @@ mod tests {
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),

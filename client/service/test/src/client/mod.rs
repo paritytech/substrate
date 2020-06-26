@@ -91,7 +91,7 @@ pub fn prepare_client_with_key_changes() -> (
 	// prepare client ang import blocks
 	let mut local_roots = Vec::new();
 	let config = Some(ChangesTrieConfiguration::new(4, 2));
-	let mut remote_client = TestClientBuilder::new().changes_trie_config(config).build();
+	let remote_client = TestClientBuilder::new().changes_trie_config(config).build();
 	let mut nonces: HashMap<_, u64> = Default::default();
 	for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
 		let mut builder = remote_client.new_block(Default::default()).unwrap();
@@ -364,7 +364,7 @@ fn client_initializes_from_genesis_ok() {
 
 #[test]
 fn block_builder_works_with_no_transactions() {
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 
@@ -375,7 +375,7 @@ fn block_builder_works_with_no_transactions() {
 
 #[test]
 fn block_builder_works_with_transactions() {
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -412,7 +412,7 @@ fn block_builder_works_with_transactions() {
 
 #[test]
 fn block_builder_does_not_include_invalid() {
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	let mut builder = client.new_block(Default::default()).unwrap();
 
@@ -477,7 +477,7 @@ fn best_containing_with_hash_not_found() {
 fn uncles_with_only_ancestors() {
 	// block tree:
 	// G -> A1 -> A2
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -497,7 +497,7 @@ fn uncles_with_multiple_forks() {
 	//      A1 -> B2 -> B3 -> B4
 	//	          B2 -> C3
 	//	    A1 -> D2
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -625,7 +625,7 @@ fn best_containing_on_longest_chain_with_single_chain_3_blocks() {
 	// block tree:
 	// G -> A1 -> A2
 
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -649,7 +649,7 @@ fn best_containing_on_longest_chain_with_multiple_forks() {
 	//      A1 -> B2 -> B3 -> B4
 	//	          B2 -> C3
 	//	    A1 -> D2
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -969,7 +969,7 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 	// block tree:
 	// G -> A1 -> A2
 
-	let (mut client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
+	let (client, longest_chain_select) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1006,7 +1006,7 @@ fn key_changes_works() {
 
 #[test]
 fn import_with_justification() {
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -1052,7 +1052,7 @@ fn import_with_justification() {
 
 #[test]
 fn importing_diverged_finalized_block_should_trigger_reorg() {
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	// G -> A1 -> A2
 	//   \
@@ -1109,7 +1109,7 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 
 #[test]
 fn finalizing_diverged_block_should_trigger_reorg() {
-	let (mut client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
+	let (client, select_chain) = TestClientBuilder::new().build_with_longest_chain();
 
 	// G -> A1 -> A2
 	//   \
@@ -1207,7 +1207,7 @@ fn get_header_by_block_number_doesnt_panic() {
 #[test]
 fn state_reverted_on_reorg() {
 	let _ = env_logger::try_init();
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 
 	let current_balance = |client: &substrate_test_runtime_client::TestClient|
 		client.runtime_api().balance_of(
@@ -1284,7 +1284,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		u64::max_value(),
 	).unwrap());
 
-	let mut client = TestClientBuilder::with_backend(backend).build();
+	let client = TestClientBuilder::with_backend(backend).build();
 
 	//    -> C1
 	//   /
@@ -1373,7 +1373,7 @@ fn respects_block_rules() {
 		known_bad: &mut HashSet<H256>,
 		fork_rules: &mut Vec<(u64, H256)>,
 	) {
-		let mut client = if record_only {
+		let client = if record_only {
 			TestClientBuilder::new().build()
 		} else {
 			TestClientBuilder::new()
@@ -1485,7 +1485,7 @@ fn returns_status_for_pruned_blocks() {
 		u64::max_value(),
 	).unwrap());
 
-	let mut client = TestClientBuilder::with_backend(backend).build();
+	let client = TestClientBuilder::with_backend(backend).build();
 
 	let a1 = client.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap().build().unwrap().block;
@@ -1571,7 +1571,7 @@ fn returns_status_for_pruned_blocks() {
 #[test]
 fn imports_blocks_with_changes_tries_config_change() {
 	// create client with initial 4^2 configuration
-	let mut client = TestClientBuilder::with_default_backend()
+	let client = TestClientBuilder::with_default_backend()
 		.changes_trie_config(Some(ChangesTrieConfiguration {
 			digest_interval: 4,
 			digest_levels: 2,

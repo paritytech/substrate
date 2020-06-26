@@ -1034,7 +1034,7 @@ mod tests {
 		// This tests that the on-chain HEAP_PAGES parameter is respected.
 
 		// Create a client devoting only 8 pages of wasm memory. This gives us ~512k of heap memory.
-		let mut client = TestClientBuilder::new()
+		let client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();

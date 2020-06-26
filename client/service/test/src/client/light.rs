@@ -363,7 +363,7 @@ fn execution_proof_is_generated_and_checked() {
 	}
 
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new();
+	let remote_client = substrate_test_runtime_client::new();
 	for i in 1u32..3u32 {
 		let mut digest = Digest::default();
 		digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
@@ -528,7 +528,7 @@ fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, V
 
 fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, StorageProof) {
 	// prepare remote client
-	let mut remote_client = substrate_test_runtime_client::new();
+	let remote_client = substrate_test_runtime_client::new();
 	let mut local_headers_hashes = Vec::new();
 	for i in 0..4 {
 		let block = remote_client.new_block(Default::default()).unwrap().build().unwrap().block;

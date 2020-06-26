@@ -29,7 +29,7 @@ use sc_block_builder::BlockBuilderProvider;
 use super::*;
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
-	let mut client = substrate_test_runtime_client::new();
+	let client = substrate_test_runtime_client::new();
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	client.import(BlockOrigin::File, block).unwrap();
 

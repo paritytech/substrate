@@ -138,7 +138,7 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
@@ -172,7 +172,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
-		let mut client = Arc::new(substrate_test_runtime_client::new());
+		let client = Arc::new(substrate_test_runtime_client::new());
 		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
@@ -210,7 +210,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+	fn run_tests(client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		let mut add_block = |nonce| {
