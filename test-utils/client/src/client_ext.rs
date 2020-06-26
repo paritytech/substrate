@@ -83,7 +83,6 @@ impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 }
 
 /// This implementation is required, because of the weird api requirements around `BlockImport`.
-/*
 impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::Arc<T>
 	where T: BlockImport<Block, Error = ConsensusError, Transaction = Transaction>
 {
@@ -131,7 +130,6 @@ impl<Block: BlockT, T, Transaction> ClientBlockImportExt<Block> for std::sync::A
 		BlockImport::import_block(self, import, HashMap::new()).map(|_| ())
 	}
 }
-*/
 
 impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
 	where
