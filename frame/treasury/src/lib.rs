@@ -776,7 +776,7 @@ impl<T: Trait> Module<T> {
 			.saturating_sub(T::Currency::minimum_balance())
 	}
 
-	fn migrate_retract_tip_for_tip_new() {
+	pub fn migrate_retract_tip_for_tip_new() {
 		/// An open tipping "motion". Retains all details of a tip including information on the finder
 		/// and the members who have voted.
 		#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
