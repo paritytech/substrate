@@ -1,7 +1,7 @@
 name: Notify devops when burn-in label applied
 on:
   pull_request:
-    type: [labeled]
+    types: [labeled]
 
 jobs:
   notify-devops:
