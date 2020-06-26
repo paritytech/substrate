@@ -51,7 +51,7 @@ use sp_core::{
 #[cfg(feature = "std")]
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
-use sp_runtime_interface::{runtime_interface, Pointer};
+use sp_runtime_interface::{runtime_interface, Pointer, pass_by::PassByInner};
 
 use codec::{Encode, Decode};
 
@@ -326,6 +326,54 @@ pub trait DefaultChildStorage {
 	) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.next_child_storage_key(&child_info, key)
+	}
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u32)]
+pub enum PollableKind {
+	Http = 1,
+	Unknown,
+}
+
+impl From<u32> for PollableKind {
+	fn from(value: u32) -> Self {
+		match value {
+			1 => PollableKind::Http,
+			_ => PollableKind::Unknown,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PassByInner)]
+pub struct PollableId(u64);
+
+impl PollableId {
+	pub fn kind(self) -> PollableKind {
+		PollableKind::from((self.0 >> 32) as u32)
+	}
+}
+
+impl From<u64> for PollableId {
+	fn from(value: u64) -> PollableId {
+		PollableId(value)
+	}
+}
+
+impl Into<u64> for PollableId {
+	fn into(self) -> u64 {
+		self.0
+	}
+}
+
+/// Interface that provides async execution related functionality.
+#[runtime_interface]
+pub trait Pollable {
+	fn is_ready(msg: PollableId) -> bool {
+		false
+	}
+	fn wait_for(msg: PollableId) {
+		unimplemented!()
 	}
 }
 
@@ -1198,6 +1246,7 @@ pub type SubstrateHostFunctions = (
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,
+	pollable::HostFunctions,
 	allocator::HostFunctions,
 	logging::HostFunctions,
 	sandbox::HostFunctions,

@@ -248,6 +248,10 @@ sp_core::wasm_export_functions! {
 		run().is_some()
 	}
 
+	fn test_pollable() -> bool {
+		sp_io::pollable::is_ready(sp_io::PollableId::from(0))
+	}
+
 	// Just some test to make sure that `sp-allocator` compiles on `no_std`.
 	fn test_sp_allocator_compiles() {
 		sp_allocator::FreeingBumpHeapAllocator::new(0);
