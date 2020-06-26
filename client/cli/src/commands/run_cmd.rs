@@ -325,7 +325,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-			));
+		))
 		})?;
 
 		Ok(name)
