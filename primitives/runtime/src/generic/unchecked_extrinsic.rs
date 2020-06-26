@@ -327,7 +327,10 @@ where
 {
 	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {
 		OpaqueExtrinsic::decode(&mut extrinsic.encode().as_slice())
-			.expect("decoding from something we have encoded cannot fail; qed")
+			.expect(
+				"both OpaqueExtrinsic and UncheckedExtrinsic have encoding that is compatible with \
+				raw Vec<u8> encoding; qed"
+			)
 	}
 }
 
