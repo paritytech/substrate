@@ -117,7 +117,7 @@ pub fn create_full<C, P, SC>(
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
-	let mut io = jsonrpc_pubsub::PubSubHandler::new(jsonrpc_core::MetaIoHandler::default());
+	let mut io = jsonrpc_core::MetaIoHandler::default();
 	let FullDeps {
 		client,
 		pool,
@@ -169,7 +169,7 @@ pub fn create_full<C, P, SC>(
 		)
 	);
 
-	io.into()
+	io
 }
 
 /// Instantiate all Light RPC extensions.
