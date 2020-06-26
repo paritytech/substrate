@@ -216,9 +216,7 @@ mod tests {
 	}
 
 	fn setup_rpc_handler<VoterState>(voter_state: VoterState) -> GrandpaRpcHandler<TestAuthoritySet, VoterState, Block> {
-		let finality_notifiers = Arc::new(Mutex::new(vec![]));
-		let justification_receiver =
-			GrandpaJustificationReceiver::<Block>::new(finality_notifiers.clone());
+		let (_, justification_receiver) = GrandpaJustificationReceiver::channel();
 		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(

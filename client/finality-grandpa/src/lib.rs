@@ -568,12 +568,8 @@ where
 
 	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
 
-	// Q: Is there any way to enforce that they point to the same set of notifiers?
-	let finality_notifiers = Arc::new(Mutex::new(vec![]));
-	let justification_receiver =
-		GrandpaJustificationReceiver::new(finality_notifiers.clone());
-	let justification_sender =
-		GrandpaJustificationSender::new(finality_notifiers.clone());
+	let (justification_sender, justification_receiver) =
+		GrandpaJustificationReceiver::channel();
 
 	// create pending change objects with 0 delay and enacted on finality
 	// (i.e. standard changes) for each authority set hard fork.

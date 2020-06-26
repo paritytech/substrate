@@ -160,8 +160,14 @@ pub struct JustificationNotification<Block: BlockT> {
 	pub justification: Vec<u8>,
 }
 
+// Stream of justifications returned when subscribing.
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
+
+// Sending endpoint for notifying about justifications.
 type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
+
+// Collection of channel sending endpoints shared with the receiver side so they can register
+// themselves.
 type SharedFinalityNotifiers<T> = Arc<Mutex<Vec<FinalityNotifier<T>>>>;
 
 /// The sending half of the Grandpa justification channel.
@@ -176,7 +182,7 @@ pub struct GrandpaJustificationSender<Block: BlockT> {
 impl<Block: BlockT> GrandpaJustificationSender<Block> {
 	/// The `notifiers` should be shared with a corresponding
 	/// `GrandpaJustificationReceiver`.
-	pub fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
+	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
 		Self {
 			notifiers,
 		}
@@ -204,11 +210,19 @@ pub struct GrandpaJustificationReceiver<Block: BlockT> {
 }
 
 impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
+	/// Creates a new pair of receiver and sender of justification notifications.
+	pub fn channel() -> (GrandpaJustificationSender<Block>, Self) {
+		let finality_notifiers = Arc::new(Mutex::new(vec![]));
+		let receiver = GrandpaJustificationReceiver::new(finality_notifiers.clone());
+		let sender = GrandpaJustificationSender::new(finality_notifiers.clone());
+		(sender, receiver)
+	}
+
 	/// Create a new receiver of justification notifications.
 	///
 	/// The `notifiers` should be shared with a corresponding
 	/// `GrandpaJustificationSender`.
-	pub fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
+	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
 		Self {
 			notifiers,
 		}
@@ -222,8 +236,6 @@ impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
 		receiver
 	}
 }
-
-
 
 /// Finality proof provider for serving network requests.
 pub struct FinalityProofProvider<B, Block: BlockT> {
