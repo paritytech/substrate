@@ -213,7 +213,7 @@ fn should_query_storage() {
 	fn run_tests(client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let (api, _child) = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
-		let mut add_block = |nonce| {
+		let add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
 			builder.push_storage_change(vec![1], None).unwrap();
