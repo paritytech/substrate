@@ -46,7 +46,7 @@ use sc_network::NetworkService;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HashFor,
+	Block as BlockT, NumberFor, SaturatedConversion, HashFor, Zero,
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
@@ -1070,8 +1070,17 @@ ServiceBuilder<
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
+			let genesis_hash = match client.block_hash(Zero::zero()) {
+				Ok(Some(hash)) => hash,
+				_ => Default::default(),
+			};
+
 			let (telemetry, future) = build_telemetry(
-				&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone()
+				&mut config,
+				endpoints,
+				telemetry_connection_sinks.clone(),
+				network.clone(),
+				genesis_hash,
 			);
 
 			spawn_handle.spawn(
@@ -1270,7 +1279,8 @@ fn build_telemetry<TBl: BlockT>(
 	config: &mut Configuration,
 	endpoints: sc_telemetry::TelemetryEndpoints,
 	telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>
+	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	genesis_hash: <TBl as BlockT>::Hash,
 ) -> (sc_telemetry::Telemetry, Pin<Box<dyn Future<Output = ()> + Send>>) {
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
@@ -1296,6 +1306,7 @@ fn build_telemetry<TBl: BlockT>(
 				"version" => version,
 				"config" => "",
 				"chain" => chain_name.clone(),
+				"genesis_hash" => ?genesis_hash,
 				"authority" => is_authority,
 				"startup_time" => startup_time,
 				"network_id" => network_id.clone()

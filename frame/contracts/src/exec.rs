@@ -21,14 +21,14 @@ use crate::rent;
 use crate::storage;
 
 use sp_std::prelude::*;
-use sp_runtime::traits::{Bounded, Zero};
+use sp_runtime::traits::{Bounded, Zero, Convert};
 use frame_support::{
 	storage::unhashed, dispatch::DispatchError,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
+	weights::Weight,
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
-pub type CallOf<T> = <T as Trait>::Call;
 pub type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as frame_system::Trait>::Hash;
 pub type BlockNumberOf<T> = <T as frame_system::Trait>::BlockNumber;
@@ -150,9 +150,6 @@ pub trait Ext {
 		input_data: Vec<u8>,
 	) -> ExecResult;
 
-	/// Notes a call dispatch.
-	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
-
 	/// Restores the given destination contract sacrificing the current one.
 	///
 	/// Since this function removes the self contract eagerly, if succeeded, no further actions should
@@ -216,8 +213,8 @@ pub trait Ext {
 	/// Returns `None` if the value doesn't exist.
 	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Returns the price of one weight unit.
-	fn get_weight_price(&self) -> BalanceOf<Self::T>;
+	/// Returns the price for the specified amount of weight.
+	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -273,23 +270,11 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	}
 }
 
-#[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq, Clone))]
-#[derive(sp_runtime::RuntimeDebug)]
-pub enum DeferredAction<T: Trait> {
-	DispatchRuntimeCall {
-		/// The account id of the contract who dispatched this call.
-		origin: T::AccountId,
-		/// The call to dispatch.
-		call: <T as Trait>::Call,
-	},
-}
-
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub depth: usize,
-	pub deferred: Vec<DeferredAction<T>>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
@@ -313,7 +298,6 @@ where
 			self_trie_id: None,
 			self_account: origin,
 			depth: 0,
-			deferred: Vec::new(),
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
@@ -330,7 +314,6 @@ where
 			self_trie_id: trie_id,
 			self_account: dest,
 			depth: self.depth + 1,
-			deferred: Vec::new(),
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
@@ -531,21 +514,14 @@ where
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
 		use frame_support::storage::TransactionOutcome::*;
-		let (output, deferred) = {
-			let mut nested = self.nested(dest, trie_id);
-			let output = frame_support::storage::with_transaction(|| {
-				let output = func(&mut nested);
-				match output {
-					Ok(ref rv) if rv.is_success() => Commit(output),
-					_ => Rollback(output),
-				}
-			})?;
-			(output, nested.deferred)
-		};
-		if output.is_success() {
-			self.deferred.extend(deferred);
-		}
-		Ok(output)
+		let mut nested = self.nested(dest, trie_id);
+		frame_support::storage::with_transaction(|| {
+			let output = func(&mut nested);
+			match output {
+				Ok(ref rv) if rv.is_success() => Commit(output),
+				_ => Rollback(output),
+			}
+		})
 	}
 
 	/// Returns whether a contract, identified by address, is currently live in the execution
@@ -766,13 +742,6 @@ where
 		self.ctx.call(to.clone(), value, gas_meter, input_data)
 	}
 
-	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
-		self.ctx.deferred.push(DeferredAction::DispatchRuntimeCall {
-			origin: self.ctx.self_account.clone(),
-			call,
-		});
-	}
-
 	fn restore_to(
 		&mut self,
 		dest: AccountIdOf<Self::T>,
@@ -874,11 +843,8 @@ where
 		unhashed::get_raw(&key)
 	}
 
-	fn get_weight_price(&self) -> BalanceOf<Self::T> {
-		use pallet_transaction_payment::Module as Payment;
-		use sp_runtime::SaturatedConversion;
-		let price = Payment::<T>::weight_to_fee_with_adjustment::<u128>(1);
-		price.saturated_into()
+	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
+		T::WeightPrice::convert(weight)
 	}
 }
 
