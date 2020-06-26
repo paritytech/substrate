@@ -424,13 +424,12 @@ mod tests {
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
-	use codec::{Encode, Decode};
+	use codec::Encode;
 	use sp_core::{crypto::Pair as CryptoPair, H256};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},
 		traits::Verify,
-		OpaqueExtrinsic,
 	};
 	use sp_timestamp;
 	use sp_finality_tracker;
@@ -605,16 +604,13 @@ mod tests {
 					signer.sign(payload)
 				});
 				let (function, extra, _) = raw_payload.deconstruct();
-				let xt = UncheckedExtrinsic::new_signed(
+				index += 1;
+				UncheckedExtrinsic::new_signed(
 					function,
 					from.into(),
 					signature.into(),
 					extra,
-				).encode();
-				let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
-
-				index += 1;
-				OpaqueExtrinsic(v)
+				).into()
 			},
 		);
 	}
