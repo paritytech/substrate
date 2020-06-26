@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! # Utility Module
-//! A stateless module with helpers for dispatch management.
+//! A stateless module with helpers for dispatch management which does no re-authentication.
 //!
 //! - [`utility::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
@@ -29,10 +29,15 @@
 //!   corresponding `set_storage`s, for efficient multiple payouts with just a single signature
 //!   verify, or in combination with one of the other two dispatch functionality.
 //! - Pseudonymal dispatch: A stateless operation, allowing a signed origin to execute a call from
-//!   an alternative signed origin. Each account has 2**16 possible "pseudonyms" (alternative
+//!   an alternative signed origin. Each account has 2 * 2**16 possible "pseudonyms" (alternative
 //!   account IDs) and these can be stacked. This can be useful as a key management tool, where you
 //!   need multiple distinct accounts (e.g. as controllers for many staking accounts), but where
 //!   it's perfectly fine to have each of them controlled by the same underlying keypair.
+//!   Derivative accounts are, for the purposes of proxy filtering considered exactly the same as
+//!   the oigin and are thus hampered with the origin's filters.
+//!
+//! Since proxy filters are respected in all dispatches of this module, it should never need to be
+//! filtered by any proxy.
 //!
 //! ## Interface
 //!
@@ -42,7 +47,7 @@
 //! * `batch` - Dispatch multiple calls from the sender's origin.
 //!
 //! #### For pseudonymal dispatch
-//! * `as_sub` - Dispatch a call from a secondary ("sub") signed origin.
+//! * `as_derivative` - Dispatch a call from a derivative signed origin.
 //!
 //! [`Call`]: ./enum.Call.html
 //! [`Trait`]: ./trait.Trait.html
@@ -54,8 +59,9 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure};
-use frame_support::{traits::{Filter, FilterStack, ClearFilterGuard},
+use frame_support::{decl_module, decl_event, decl_storage, Parameter};
+use frame_support::{
+	traits::{OriginTrait, UnfilteredDispatchable},
 	weights::{Weight, GetDispatchInfo, DispatchClass}, dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -71,21 +77,12 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>>;
-
-	/// Is a given call compatible with the proxying subsystem?
-	type IsCallable: FilterStack<<Self as Trait>::Call>;
+		+ GetDispatchInfo + From<frame_system::Call<Self>>
+		+ UnfilteredDispatchable<Origin=Self::Origin>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Utility {}
-}
-
-decl_error! {
-	pub enum Error for Module<T: Trait> {
-		/// A call with a `false` `IsCallable` filter was attempted.
-		Uncallable,
-	}
 }
 
 decl_event! {
@@ -96,8 +93,6 @@ decl_event! {
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
-		/// A call with a `false` IsCallable filter was attempted.
-		Uncallable(u32),
 	}
 }
 
@@ -111,19 +106,17 @@ impl TypeId for IndexedUtilityModuleId {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		type Error = Error<T>;
-
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
 		/// Send a batch of dispatch calls.
 		///
-		/// This will execute until the first one fails and then stop. Calls must fulfil the
-		/// `IsCallable` filter unless the origin is `Root`.
-		///
 		/// May be called from any origin.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin.
+		///
+		/// If origin is root then call are dispatch without checking origin filter. (This includes
+		/// bypassing `frame_system::Trait::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Base weight: 14.39 + .987 * c µs
@@ -154,11 +147,11 @@ decl_module! {
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			for (index, call) in calls.into_iter().enumerate() {
-				if !is_root && !T::IsCallable::filter(&call) {
-					Self::deposit_event(Event::Uncallable(index as u32));
-					return Ok(())
-				}
-				let result = call.dispatch(origin.clone());
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					call.dispatch(origin.clone())
+				};
 				if let Err(e) = result {
 					Self::deposit_event(Event::BatchInterrupted(index as u32, e.error));
 					return Ok(());
@@ -169,41 +162,15 @@ decl_module! {
 
 		/// Send a call through an indexed pseudonym of the sender.
 		///
-		/// The call must fulfil only the pre-cleared `IsCallable` filter (i.e. only the level of
-		/// filtering that remains after calling `take()`).
-		///
-		/// NOTE: If you need to ensure that any account-based filtering is honored (i.e. because
-		/// you expect `proxy` to have been used prior in the call stack and you want it to apply to
-		/// any sub-accounts), then use `as_limited_sub` instead.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// # <weight>
-		/// - Base weight: 2.861 µs
-		/// - Plus the weight of the `call`
-		/// # </weight>
-		#[weight = (
-			call.get_dispatch_info().weight.saturating_add(3_000_000),
-			call.get_dispatch_info().class,
-		)]
-		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			// We're now executing as a freshly authenticated new account, so the previous call
-			// restrictions no longer apply.
-			let _guard = ClearFilterGuard::<T::IsCallable, <T as Trait>::Call>::new();
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-			let pseudonym = Self::sub_account_id(who, index);
-			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
-				.map(|_| ()).map_err(|e| e.error)
-		}
-
-		/// Send a call through an indexed pseudonym of the sender.
-		///
-		/// Calls must each fulfil the `IsCallable` filter; it is not cleared before.
+		/// Filter from origin are passed along. The call will be dispatched with an origin which
+		/// use the same filter as the origin of this call.
 		///
 		/// NOTE: If you need to ensure that any account-based filtering is not honored (i.e.
 		/// because you expect `proxy` to have been used prior in the call stack and you do not want
-		/// the call restrictions to apply to any sub-accounts), then use `as_sub` instead.
+		/// the call restrictions to apply to any sub-accounts), then use `as_multi_threshold_1`
+		/// in the Multisig pallet instead.
+		///
+		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -215,19 +182,19 @@ decl_module! {
 			call.get_dispatch_info().weight.saturating_add(3_000_000),
 			call.get_dispatch_info().class,
 		)]
-		fn as_limited_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(T::IsCallable::filter(&call), Error::<T>::Uncallable);
-			let pseudonym = Self::sub_account_id(who, index);
-			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
-				.map(|_| ()).map_err(|e| e.error)
+		fn as_derivative(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
+			let mut origin = origin;
+			let who = ensure_signed(origin.clone())?;
+			let pseudonym = Self::derivative_account_id(who, index);
+			origin.set_caller_from(frame_system::RawOrigin::Signed(pseudonym));
+			call.dispatch(origin).map(|_| ()).map_err(|e| e.error)
 		}
 	}
 }
 
 impl<T: Trait> Module<T> {
-	/// Derive a sub-account ID from the owner account and the sub-account index.
-	pub fn sub_account_id(who: T::AccountId, index: u16) -> T::AccountId {
+	/// Derive a derivative account ID from the owner account and the sub-account index.
+	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 	}

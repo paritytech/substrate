@@ -58,19 +58,27 @@ use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, ready, Stream, StreamExt};
 use futures_timer::Delay;
 
+use addr_cache::AddrCache;
 use codec::Decode;
 use error::{Error, Result};
+use libp2p::core::multiaddr;
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{Multiaddr, config::MultiaddrWithPeerId, DhtEvent, ExHashT, NetworkStateInfo};
+use sc_network::{
+	config::MultiaddrWithPeerId,
+	DhtEvent,
+	ExHashT,
+	Multiaddr,
+	NetworkStateInfo,
+	PeerId,
+};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
-use addr_cache::AddrCache;
 
 #[cfg(test)]
 mod tests;
@@ -233,7 +241,7 @@ where
 				.collect(),
 			None => self.network.external_addresses()
 				.into_iter()
-				.map(|a| a.with(libp2p::core::multiaddr::Protocol::P2p(
+				.map(|a| a.with(multiaddr::Protocol::P2p(
 					self.network.local_peer_id().into(),
 				)))
 				.map(|a| a.to_vec())
@@ -423,6 +431,8 @@ where
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
+		let local_peer_id = self.network.local_peer_id();
+
 		let remote_addresses: Vec<Multiaddr> = values.into_iter()
 			.map(|(_k, v)| {
 				let schema::SignedAuthorityAddresses { signature, addresses } =
@@ -447,7 +457,27 @@ where
 				Ok(addresses)
 			})
 			.collect::<Result<Vec<Vec<Multiaddr>>>>()?
-			.into_iter().flatten().collect();
+			.into_iter()
+			.flatten()
+			// Ignore own addresses.
+			.filter(|addr| !addr.iter().any(|protocol| {
+				// Parse to PeerId first as Multihashes of old and new PeerId
+				// representation don't equal.
+				//
+				// See https://github.com/libp2p/rust-libp2p/issues/555 for
+				// details.
+				if let multiaddr::Protocol::P2p(hash) = protocol {
+					let peer_id = match PeerId::from_multihash(hash) {
+						Ok(peer_id) => peer_id,
+						Err(_) => return true, // Discard address.
+					};
+
+					return peer_id == local_peer_id;
+				}
+
+				false // Multiaddr does not contain a PeerId.
+			}))
+			.collect();
 
 		if !remote_addresses.is_empty() {
 			self.addr_cache.insert(authority_id.clone(), remote_addresses);

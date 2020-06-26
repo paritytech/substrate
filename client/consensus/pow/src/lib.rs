@@ -466,7 +466,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
-	spawner: &impl sp_core::traits::SpawnBlocking,
+	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
 ) -> Result<
 	PowImportQueue<B, Transaction>,

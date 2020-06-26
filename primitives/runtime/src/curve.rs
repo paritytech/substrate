@@ -17,7 +17,7 @@
 
 //! Provides some utilities to define a piecewise linear function.
 
-use crate::{Perbill, traits::{AtLeast32Bit, SaturatedConversion}};
+use crate::{Perbill, traits::{AtLeast32BitUnsigned, SaturatedConversion}};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
@@ -36,7 +36,7 @@ fn abs_sub<N: Ord + Sub<Output=N> + Clone>(a: N, b: N) -> N where {
 impl<'a> PiecewiseLinear<'a> {
 	/// Compute `f(n/d)*d` with `n <= d`. This is useful to avoid loss of precision.
 	pub fn calculate_for_fraction_times_denominator<N>(&self, n: N, d: N) -> N where
-		N: AtLeast32Bit + Clone
+		N: AtLeast32BitUnsigned + Clone
 	{
 		let n = n.min(d.clone());
 
@@ -80,7 +80,7 @@ impl<'a> PiecewiseLinear<'a> {
 // This is guaranteed not to overflow on whatever values nor lose precision.
 // `q` must be superior to zero.
 fn multiply_by_rational_saturating<N>(value: N, p: u32, q: u32) -> N
-	where N: AtLeast32Bit + Clone
+	where N: AtLeast32BitUnsigned + Clone
 {
 	let q = q.max(1);
 

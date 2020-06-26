@@ -25,7 +25,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin
+		BadOrigin, AtLeast32BitUnsigned
 	},
 };
 use crate::dispatch::Parameter;
@@ -190,6 +190,17 @@ macro_rules! impl_filter_stack {
 			}
 		}
 	}
+}
+
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[impl_for_tuples(30)]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
 }
 
 #[cfg(test)]
@@ -777,7 +788,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -840,7 +851,8 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug +
+		Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -1490,7 +1502,7 @@ pub mod schedule {
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			call: Call
-		) -> Self::Address;
+		) -> Result<Self::Address, DispatchError>;
 
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
 		/// also.
@@ -1548,6 +1560,63 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
+}
+
+/// Type that can be dispatched with an origin but without checking the origin filter.
+///
+/// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
+/// `construct_runtime` and `impl_outer_dispatch`.
+pub trait UnfilteredDispatchable {
+	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	type Origin;
+
+	/// Dispatch this call but do not check the filter in origin.
+	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
+}
+
+/// Methods available on `frame_system::Trait::Origin`.
+pub trait OriginTrait: Sized {
+	/// Runtime call type, as in `frame_system::Trait::Call`
+	type Call;
+
+	/// The caller origin, overarching type of all pallets origins.
+	type PalletsOrigin;
+
+	/// Add a filter to the origin.
+	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
+
+	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	fn reset_filter(&mut self);
+
+	/// Replace the caller with caller from the other origin
+	fn set_caller_from(&mut self, other: impl Into<Self>);
+
+	/// Filter the call, if false then call is filtered out.
+	fn filter_call(&self, call: &Self::Call) -> bool;
+}
+
+/// Trait to be used when types are exactly same.
+///
+/// This allow to convert back and forth from type, a reference and a mutable reference.
+pub trait IsType<T>: Into<T> + From<T> {
+	/// Cast reference.
+	fn from_ref(t: &T) -> &Self;
+
+	/// Cast reference.
+	fn into_ref(&self) -> &T;
+
+	/// Cast mutable reference.
+	fn from_mut(t: &mut T) -> &mut Self;
+
+	/// Cast mutable reference.
+	fn into_mut(&mut self) -> &mut T;
+}
+
+impl<T> IsType<T> for T {
+	fn from_ref(t: &T) -> &Self { t }
+	fn into_ref(&self) -> &T { self }
+	fn from_mut(t: &mut T) -> &mut Self { t }
+	fn into_mut(&mut self) -> &mut T { self }
 }
 
 #[cfg(test)]
