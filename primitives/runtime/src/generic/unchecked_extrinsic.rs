@@ -27,6 +27,7 @@ use crate::{
 	},
 	generic::CheckedExtrinsic,
 	transaction_validity::{TransactionValidityError, InvalidTransaction},
+	OpaqueExtrinsic,
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -316,6 +317,20 @@ where
 	}
 }
 
+impl<Address, Call, Signature, Extra> From<UncheckedExtrinsic<Address, Call, Signature, Extra>>
+	for OpaqueExtrinsic
+where
+	Address: Encode,
+	Signature: Encode,
+	Call: Encode,
+	Extra: SignedExtension,
+{
+	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {
+		OpaqueExtrinsic::decode(&mut extrinsic.encode().as_slice())
+			.expect("decoding from something we have encoded cannot fail; qed")
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -423,5 +438,14 @@ mod tests {
 		assert_eq!(decoded, ex);
 		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(as_vec.encode(), encoded);
+	}
+
+	#[test]
+	fn conversion_to_opaque() {
+		let ux = Ex::new_unsigned(vec![0u8; 0]);
+		let encoded = ux.encode();
+		let opaque: OpaqueExtrinsic = ux.into();
+		let opaque_encoded = opaque.encode();
+		assert_eq!(opaque_encoded, encoded);
 	}
 }
