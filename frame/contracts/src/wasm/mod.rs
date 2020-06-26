@@ -781,11 +781,20 @@ mod tests {
 
 	const CODE_GET_STORAGE: &str = r#"
 (module
-	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; [0, 32) key for get storage
+	(data (i32.const 0)
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+	)
+
+	;; [32, 36) buffer size = 128 bytes
+	(data (i32.const 32) "\80")
+
+	;; [36; inf) buffer where the result is copied
 
 	(func $assert (param i32)
 		(block $ok
@@ -799,12 +808,13 @@ mod tests {
 	(func (export "call")
 		(local $buf_size i32)
 
-
 		;; Load a storage value into the scratch buf.
 		(call $assert
 			(i32.eq
 				(call $ext_get_storage
-					(i32.const 4)		;; The pointer to the storage key to fetch
+					(i32.const 0)		;; The pointer to the storage key to fetch
+					(i32.const 36)		;; Pointer to the output buffer
+					(i32.const 32)		;; Pointer to the size of the buffer
 				)
 
 				;; Return value 0 means that the value is found and there were
@@ -813,19 +823,9 @@ mod tests {
 			)
 		)
 
-		;; Find out the size of the scratch buffer
+		;; Find out the size of the buffer
 		(set_local $buf_size
-			(call $ext_scratch_size)
-		)
-
-		;; Copy scratch buffer into this contract memory.
-		(call $ext_scratch_read
-			(i32.const 36)		;; The pointer where to store the scratch buffer contents,
-								;; 36 = 4 + 32
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(get_local			;; Count of bytes to copy.
-				$buf_size
-			)
+			(i32.load (i32.const 32))
 		)
 
 		;; Return the contents of the buffer
@@ -839,16 +839,11 @@ mod tests {
 	)
 
 	(func (export "deploy"))
-
-	(data (i32.const 4)
-		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
-		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
-	)
 )
 "#;
 
 	#[test]
-	fn get_storage_puts_data_into_scratch_buf() {
+	fn get_storage_puts_data_into_buf() {
 		let mut mock_ext = MockExt::default();
 		mock_ext
 			.storage

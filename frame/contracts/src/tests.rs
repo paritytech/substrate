@@ -1291,7 +1291,7 @@ fn storage_max_value_limit() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				GAS_LIMIT,
+				GAS_LIMIT * 2, // we are copying a huge buffer
 				Encode::encode(&self::MaxValueSize::get()),
 			));
 

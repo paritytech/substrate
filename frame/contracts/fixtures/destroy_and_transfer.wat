@@ -1,11 +1,25 @@
 (module
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
-	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
+	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
+
+	;; [0, 8) Endowment to send when creating contract.
+	(data (i32.const 0) "\00\00\01")
+
+	;; [8, 16) Value to send when calling contract.
+
+	;; [16, 48) The key to store the contract address under.
+
+	;; [48, 80) Buffer where to store the input to the contract
+
+	;; [80, 88) Buffer where to store the address of the instantiated contract
+
+	;; [88, 96) Size of the buffer
+	(data (i32.const 88) "\08")
 
 	(func $assert (param i32)
 		(block $ok
@@ -75,20 +89,17 @@
 			(i32.eq
 				(call $ext_get_storage
 					(i32.const 16)	;; Pointer to the key
+					(i32.const 80)	;; Pointer to the value
+					(i32.const 88)	;; Pointer to the len of the value
 				)
 				(i32.const 0)
 			)
 		)
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 88))
 				(i32.const 8)
 			)
-		)
-		(call $ext_scratch_read
-			(i32.const 80)		;; The pointer where to store the contract address.
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; Calling the destination contract with non-empty input data should fail.
@@ -141,8 +152,4 @@
 			)
 		)
 	)
-
-	(data (i32.const 0) "\00\00\01")		;; Endowment to send when creating contract.
-	(data (i32.const 8) "")		;; Value to send when calling contract.
-	(data (i32.const 16) "")	;; The key to store the contract address under.
 )
