@@ -522,6 +522,22 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn pollable_smoke_test(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+
+	assert_eq!(
+		call_in_wasm(
+			"test_pollable",
+			&[0],
+			wasm_method,
+			&mut ext.ext(),
+		).unwrap(),
+		false.encode(),
+	);
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 #[should_panic(expected = "Allocator ran out of space")]
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
