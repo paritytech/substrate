@@ -1182,17 +1182,18 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			},
 		};
 
-		// Q: We `finalized()` this at L37, so can I be sure
-		// that it's fine to unwrap here?
 		if let Some(justification) = justification.clone() {
-			let header = client.header(BlockId::Hash(hash))?
-				.expect("");
-			let notification = JustificationNotification {
-				header,
-				justification,
+			match client.header(BlockId::Hash(hash)) {
+				Ok(Some(header)) => {
+					let notification = JustificationNotification {
+						header,
+						justification,
+					};
+					let _ = justification_sender.notify(notification);
+				},
+				Ok(None) => debug!(target: "afg", "Expected a header for sending a justification notification."),
+				Err(err) => debug!(target: "afg", "Getting header failed: {}", err),
 			};
-
-			let _ = justification_sender.notify(notification);
 		}
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
