@@ -326,7 +326,7 @@ where
 	Extra: SignedExtension,
 {
 	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {
-		OpaqueExtrinsic::decode(&mut extrinsic.encode().as_slice())
+		OpaqueExtrinsic::from_bytes(extrinsic.encode().as_slice())
 			.expect(
 				"both OpaqueExtrinsic and UncheckedExtrinsic have encoding that is compatible with \
 				raw Vec<u8> encoding; qed"
