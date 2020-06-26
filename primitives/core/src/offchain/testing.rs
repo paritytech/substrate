@@ -21,7 +21,7 @@
 //! the extra APIs.
 
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, VecDeque},
 	sync::Arc,
 };
 use crate::offchain::{
@@ -120,9 +120,8 @@ impl OffchainStorage for TestPersistentOffchainDB {
 pub struct OffchainState {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
-	/// Request counter
-	pub request_counter: u16,
-	expected_requests: BTreeMap<RequestId, PendingRequest>,
+	// Queue of requests that the test is expected to perform (in order).
+	expected_requests: VecDeque<PendingRequest>,
 	/// Persistent local storage
 	pub persistent_storage: TestPersistentOffchainDB,
 	/// Local storage
@@ -158,12 +157,10 @@ impl OffchainState {
 	}
 
 	fn fulfill_expected(&mut self, id: u16) {
-		if let Some(mut req) = self.expected_requests.remove(&RequestId(self.request_counter)) {
+		if let Some(mut req) = self.expected_requests.pop_back() {
 			let response = req.response.take().expect("Response checked when added.");
 			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
-
-			self.request_counter = self.request_counter.checked_add(1).expect("The max number of mocked requests is u16::MAX");
 		}
 	}
 
@@ -173,11 +170,12 @@ impl OffchainState {
 	/// before running the actual code that utilizes them (for instance before calling into runtime).
 	/// Expected request has to be fulfilled before this struct is dropped,
 	/// the `response` and `response_headers` fields will be used to return results to the callers.
-	pub fn expect_request(&mut self, id: u16, expected: PendingRequest) {
+	/// Requests are expected to be performed in the insertion order.
+	pub fn expect_request(&mut self, expected: PendingRequest) {
 		if expected.response.is_none() {
 			panic!("Expected request needs to have a response.");
 		}
-		self.expected_requests.insert(RequestId(id), expected);
+		self.expected_requests.push_front(expected);
 	}
 }
 
