@@ -1009,7 +1009,6 @@ mod tests {
 
 	#[test]
 	fn migration_to_v2_works() {
-		use frame_support::traits::OnRuntimeUpgrade;
 		use substrate_test_utils::assert_eq_uvec;
 
 		new_test_ext().execute_with(|| {
@@ -1040,7 +1039,7 @@ mod tests {
 
 			assert_eq!(StorageVersion::get(), Releases::V1);
 
-			Scheduler::on_runtime_upgrade();
+			assert!(Scheduler::migrate_v1_to_t2());
 
 			assert_eq_uvec!(Agenda::<Test>::iter().collect::<Vec<_>>(), vec![
 				(
