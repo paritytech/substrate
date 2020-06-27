@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
-use frame_support::storage::{StorageMap, StorageDoubleMap};
+use frame_support::{debug,storage::{StorageMap, StorageDoubleMap}};
 use sha3::{Keccak256, Digest};
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
 use crate::{Trait, Accounts, AccountStorages, AccountCodes, Module, Event};
@@ -140,12 +140,25 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 				Apply::Modify {
 					address, basic, code, storage, reset_storage,
 				} => {
+					debug::debug!(
+						target: "evm",
+						"Updating state of {:?} [value: {:?}, nonce: {}]",
+						address,
+						basic.balance,
+						basic.nonce
+					);
 					Accounts::mutate(&address, |account| {
 						account.balance = basic.balance;
 						account.nonce = basic.nonce;
 					});
 
 					if let Some(code) = code {
+						debug::debug!(
+							target: "evm",
+							"Inserting code ({} bytes) at {:?}",
+							code.len(),
+							address
+						);
 						AccountCodes::insert(address, code);
 					}
 
@@ -155,8 +168,21 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 
 					for (index, value) in storage {
 						if value == H256::default() {
+							debug::debug!(
+								target: "evm",
+								"Removing storage for {:?} [index: {:?}]",
+								address,
+								index
+							);
 							AccountStorages::remove(address, index);
 						} else {
+							debug::debug!(
+								target: "evm",
+								"Updating storage for {:?} [index: {:?}, value: {:?}]",
+								address,
+								index,
+								value
+							);
 							AccountStorages::insert(address, index, value);
 						}
 					}
@@ -166,12 +192,26 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 					}
 				},
 				Apply::Delete { address } => {
+					debug::debug!(
+						target: "evm",
+						"Deleting account at {:?}",
+						address
+					);
 					Module::<T>::remove_account(&address)
 				},
 			}
 		}
 
 		for log in logs {
+			debug::trace!(
+				target: "evm",
+				"Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
+				log.address,
+				log.topics.len(),
+				log.topics,
+				log.data.len(),
+				log.data
+			);
 			Module::<T>::deposit_event(Event::<T>::Log(Log {
 				address: log.address,
 				topics: log.topics,
