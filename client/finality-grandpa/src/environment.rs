@@ -51,7 +51,7 @@ use sp_consensus::SelectChain;
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::notification::GrandpaJustificationSender;
+use crate::notification::GrandpaJustificationSubscribers;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
@@ -404,7 +404,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
-	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
+	pub(crate) justification_sender: Option<GrandpaJustificationSubscribers<Block>>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -1075,7 +1075,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
-	justification_sender: &Option<GrandpaJustificationSender<Block>>,
+	justification_sender: &Option<GrandpaJustificationSubscribers<Block>>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,

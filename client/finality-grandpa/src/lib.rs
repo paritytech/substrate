@@ -125,7 +125,7 @@ mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
-pub use notification::{GrandpaJustificationSender, GrandpaJustificationReceiver};
+pub use notification::{GrandpaJustificationSubscribers, GrandpaJustifications};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
@@ -449,8 +449,8 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
-	justification_sender: GrandpaJustificationSender<Block>,
-	justification_receiver: GrandpaJustificationReceiver<Block>,
+	justification_sender: GrandpaJustificationSubscribers<Block>,
+	justification_receiver: GrandpaJustifications<Block>,
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
@@ -460,12 +460,12 @@ impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
 	}
 
 	/// Get the sender end of justification notifications.
-	pub fn justification_sender(&self) -> GrandpaJustificationSender<Block> {
+	pub fn justification_sender(&self) -> GrandpaJustificationSubscribers<Block> {
 		self.justification_sender.clone()
 	}
 
 	/// Get the receiving end of justification notifications.
-	pub fn justification_receiver(&self) -> GrandpaJustificationReceiver<Block> {
+	pub fn justification_receiver(&self) -> GrandpaJustifications<Block> {
 		self.justification_receiver.clone()
 	}
 }
@@ -567,7 +567,7 @@ where
 	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
 
 	let (justification_sender, justification_receiver) =
-		GrandpaJustificationReceiver::channel();
+		GrandpaJustifications::channel();
 
 	// create pending change objects with 0 delay and enacted on finality
 	// (i.e. standard changes) for each authority set hard fork.
@@ -849,7 +849,7 @@ where
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
-		justification_sender: GrandpaJustificationSender<Block>,
+		justification_sender: GrandpaJustificationSubscribers<Block>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),

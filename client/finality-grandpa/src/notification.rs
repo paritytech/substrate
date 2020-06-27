@@ -35,16 +35,16 @@ type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
 // themselves.
 type SharedFinalityNotifiers<T> = Arc<Mutex<Vec<FinalityNotifier<T>>>>;
 
-/// The sending half of the Grandpa justification channel.
+/// The sending half of the Grandpa justification channel(s).
 ///
 /// Used to send notifictions about justifications generated
 /// at the end of a Grandpa round.
 #[derive(Clone)]
-pub struct GrandpaJustificationSender<Block: BlockT> {
+pub struct GrandpaJustificationSubscribers<Block: BlockT> {
 	notifiers: SharedFinalityNotifiers<Block>
 }
 
-impl<Block: BlockT> GrandpaJustificationSender<Block> {
+impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
 	/// The `notifiers` should be shared with a corresponding
 	/// `GrandpaJustificationReceiver`.
 	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
@@ -70,16 +70,16 @@ impl<Block: BlockT> GrandpaJustificationSender<Block> {
 /// Used to recieve notifictions about justifications generated
 /// at the end of a Grandpa round.
 #[derive(Clone)]
-pub struct GrandpaJustificationReceiver<Block: BlockT> {
+pub struct GrandpaJustifications<Block: BlockT> {
 	notifiers: SharedFinalityNotifiers<Block>
 }
 
-impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
+impl<Block: BlockT> GrandpaJustifications<Block> {
 	/// Creates a new pair of receiver and sender of justification notifications.
-	pub fn channel() -> (GrandpaJustificationSender<Block>, Self) {
+	pub fn channel() -> (GrandpaJustificationSubscribers<Block>, Self) {
 		let finality_notifiers = Arc::new(Mutex::new(vec![]));
-		let receiver = GrandpaJustificationReceiver::new(finality_notifiers.clone());
-		let sender = GrandpaJustificationSender::new(finality_notifiers.clone());
+		let receiver = GrandpaJustifications::new(finality_notifiers.clone());
+		let sender = GrandpaJustificationSubscribers::new(finality_notifiers.clone());
 		(sender, receiver)
 	}
 

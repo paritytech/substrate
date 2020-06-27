@@ -33,7 +33,7 @@ mod error;
 mod notification;
 mod report;
 
-use sc_finality_grandpa::GrandpaJustificationReceiver;
+use sc_finality_grandpa::GrandpaJustifications;
 use sp_runtime::traits::Block as BlockT;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
@@ -88,7 +88,7 @@ pub trait GrandpaApi<Notification> {
 pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
-	justification_receiver: GrandpaJustificationReceiver<Block>,
+	justification_receiver: GrandpaJustifications<Block>,
 	manager: SubscriptionManager,
 }
 
@@ -97,7 +97,7 @@ impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, Vo
 	pub fn new(
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
-		justification_receiver: GrandpaJustificationReceiver<Block>,
+		justification_receiver: GrandpaJustifications<Block>,
 		manager: SubscriptionManager,
 	) -> Self {
 		Self {
@@ -217,7 +217,7 @@ mod tests {
 	}
 
 	fn setup_rpc_handler<VoterState>(voter_state: VoterState) -> GrandpaRpcHandler<TestAuthoritySet, VoterState, Block> {
-		let (_, justification_receiver) = GrandpaJustificationReceiver::channel();
+		let (_, justification_receiver) = GrandpaJustifications::channel();
 		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(

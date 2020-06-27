@@ -43,7 +43,7 @@ use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
-use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustificationReceiver};
+use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustifications};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc_api::DenyUnsafe;
 use jsonrpc_pubsub::manager::SubscriptionManager;
@@ -77,7 +77,7 @@ pub struct GrandpaDeps {
 	/// Authority set info.
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 	/// Receives notifications about justification events from Grandpa.
-	pub justification_receiver: GrandpaJustificationReceiver<Block>,
+	pub justification_receiver: GrandpaJustifications<Block>,
 	/// Subscription manager to keep track of pubsub subscribers.
 	pub subscriptions: SubscriptionManager,
 }
