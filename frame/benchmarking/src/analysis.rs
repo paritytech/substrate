@@ -36,6 +36,13 @@ pub enum BenchmarkSelector {
 	Writes,
 }
 
+pub enum BenchmarkSelector {
+	ExtrinsicTime,
+	StorageRootTime,
+	Reads,
+	Writes,
+}
+
 impl Analysis {
 	pub fn median_slopes(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
 		let results = r[0].components.iter().enumerate().map(|(i, &(param, _))| {

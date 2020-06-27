@@ -171,7 +171,7 @@ use frame_support::{
 use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
-		Zero, AtLeast32Bit, StaticLookup, Member, CheckedAdd, CheckedSub,
+		Zero, AtLeast32BitUnsigned, StaticLookup, Member, CheckedAdd, CheckedSub,
 		MaybeSerializeDeserialize, Saturating, Bounded,
 	},
 };
@@ -181,7 +181,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// The minimum amount required to keep an account open.
@@ -203,7 +203,7 @@ pub trait BalancesWeight {
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
 		MaybeSerializeDeserialize + Debug;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
@@ -877,8 +877,8 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type DbWeight = T::DbWeight;
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
+	type BlockExecutionWeight = T::BlockExecutionWeight;
+	type ExtrinsicBaseWeight = T::ExtrinsicBaseWeight;
 	type MaximumExtrinsicWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;

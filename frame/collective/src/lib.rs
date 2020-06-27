@@ -165,11 +165,11 @@ decl_event! {
 		Approved(Hash),
 		/// A motion was not approved by the required threshold.
 		Disapproved(Hash),
-		/// A motion was executed; `bool` is true if returned without error.
+		/// A motion was executed; result will be `Ok` if it returned without error.
 		Executed(Hash, DispatchResult),
-		/// A single member did some action; `bool` is true if returned without error.
+		/// A single member did some action; result will be `Ok` if it returned without error.
 		MemberExecuted(Hash, DispatchResult),
-		/// A proposal was closed after its duration was up.
+		/// A proposal was closed because its threshold was reached or after its duration was up.
 		Closed(Hash, MemberCount, MemberCount),
 	}
 }
@@ -188,7 +188,7 @@ decl_error! {
 		DuplicateVote,
 		/// Members are already initialized!
 		AlreadyInitialized,
-		/// The close call is made too early, before the end of the voting.
+		/// The close call was made too early, before the end of the voting.
 		TooEarly,
 		/// There can only be a maximum of `MaxProposals` active proposals.
 		TooManyProposals,
