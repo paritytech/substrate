@@ -69,8 +69,8 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		write!(file, "		({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
 		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
 			write!(file, "			.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
-				name,
 				slope.saturating_mul(1000),
+				name,
 			).unwrap();
 		});
 
@@ -78,8 +78,8 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		write!(file, "			.saturating_add(RocksDbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
 		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
 			write!(file, "			.saturating_add(RocksDbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
-				name,
 				slope,
+				name,
 			).unwrap();
 		});
 
@@ -87,8 +87,8 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		write!(file, "			.saturating_add(RocksDbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
 		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
 			write!(file, "			.saturating_add(RocksDbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
-				name,
 				slope,
+				name,
 			).unwrap();
 		});
 
