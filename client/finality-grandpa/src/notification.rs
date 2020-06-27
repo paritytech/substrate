@@ -18,19 +18,12 @@
 
 use std::sync::Arc;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 
 use sp_runtime::traits::Block as BlockT;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Justification for a finalized block.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct JustificationNotification<Block: BlockT> {
-	/// Highest finalized block header
-	pub header: Block::Header,
-	/// An encoded justification proving that the given header has been finalized
-	pub justification: Vec<u8>,
-}
+type JustificationNotification<Block> = (<Block as BlockT>::Header, Vec<u8>);
 
 // Stream of justifications returned when subscribing.
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;

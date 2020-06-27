@@ -51,7 +51,7 @@ use sp_consensus::SelectChain;
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::notification::{GrandpaJustificationSender, JustificationNotification};
+use crate::notification::GrandpaJustificationSender;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
@@ -1185,10 +1185,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 		if let Some(justification) = justification.clone() {
 			match client.header(BlockId::Hash(hash)) {
 				Ok(Some(header)) => {
-					let notification = JustificationNotification {
-						header,
-						justification,
-					};
+					let notification = (header, justification);
 					if let Some(sender) = justification_sender {
 						let _ = sender.notify(notification);
 					}

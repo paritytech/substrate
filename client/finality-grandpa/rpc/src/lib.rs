@@ -28,11 +28,12 @@ use jsonrpc_core::futures::{
 	stream::Stream as Stream01,
 	future::Future as Future01,
 };
+use serde::{Serialize, Deserialize};
 
 mod error;
 mod report;
 
-use sc_finality_grandpa::{JustificationNotification , GrandpaJustificationReceiver};
+use sc_finality_grandpa::GrandpaJustificationReceiver;
 use sp_runtime::traits::Block as BlockT;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
@@ -128,7 +129,7 @@ where
 		subscriber: Subscriber<JustificationNotification<Block>>
 	) {
 		let stream = self.justification_receiver.subscribe()
-			.map(|x| Ok::<_,()>(x))
+			.map(|x| Ok::<_,()>(JustificationNotification::from(x)))
 			.map_err(|e| warn!("Notification stream error: {:?}", e))
 			.compat();
 
@@ -146,6 +147,24 @@ where
 		id: SubscriptionId
 	) -> jsonrpc_core::Result<bool> {
 		Ok(self.manager.cancel(id))
+	}
+}
+
+/// Justification for a finalized block.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct JustificationNotification<Block: BlockT> {
+	/// Highest finalized block header
+	pub header: Block::Header,
+	/// An encoded justification proving that the given header has been finalized
+	pub justification: Vec<u8>,
+}
+
+impl<Block: BlockT> From<(Block::Header, Vec<u8>)> for JustificationNotification<Block> {
+	fn from(notification: (Block::Header, Vec<u8>)) -> Self {
+		JustificationNotification {
+			header: notification.0,
+			justification: notification.1,
+		}
 	}
 }
 
