@@ -27,7 +27,7 @@ use log::error;
 use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
-	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
+	self, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
 	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
 };
 pub use sp_offchain::STORAGE_PREFIX;
@@ -67,7 +67,7 @@ fn unavailable_yet<R: Default>(name: &str) -> R {
 
 const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
 
-impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
+impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 	fn is_validator(&self) -> bool {
 		self.is_validator
 	}
@@ -291,6 +291,7 @@ impl AsyncApi {
 mod tests {
 	use super::*;
 	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
+	use sp_core::offchain::Externalities;
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::PeerId;
 
