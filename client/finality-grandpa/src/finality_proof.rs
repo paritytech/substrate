@@ -38,8 +38,6 @@
 
 use std::sync::Arc;
 use log::{trace, warn};
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -56,7 +54,6 @@ use sp_runtime::{
 use sp_core::storage::StorageKey;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 use crate::justification::GrandpaJustification;
 use crate::VoterSet;
@@ -148,92 +145,6 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 					.map(|versioned| versioned.into())
 					.ok_or(ClientError::InvalidAuthoritiesSet)
 			})
-	}
-}
-
-/// Justification for a finalized block.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct JustificationNotification<Block: BlockT> {
-	/// Highest finalized block header
-	pub header: Block::Header,
-	/// An encoded justification proving that the given header has been finalized
-	pub justification: Vec<u8>,
-}
-
-// Stream of justifications returned when subscribing.
-type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
-
-// Sending endpoint for notifying about justifications.
-type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
-
-// Collection of channel sending endpoints shared with the receiver side so they can register
-// themselves.
-type SharedFinalityNotifiers<T> = Arc<Mutex<Vec<FinalityNotifier<T>>>>;
-
-/// The sending half of the Grandpa justification channel.
-///
-/// Used to send notifictions about justifications generated
-/// at the end of a Grandpa round.
-#[derive(Clone)]
-pub struct GrandpaJustificationSender<Block: BlockT> {
-	notifiers: SharedFinalityNotifiers<Block>
-}
-
-impl<Block: BlockT> GrandpaJustificationSender<Block> {
-	/// The `notifiers` should be shared with a corresponding
-	/// `GrandpaJustificationReceiver`.
-	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
-		Self {
-			notifiers,
-		}
-	}
-
-	/// Send out a notification to all subscribers that a new justification
-	/// is available for a block.
-	pub fn notify(&self, notification: JustificationNotification<Block>) -> Result<(), ()> {
-		self.notifiers.lock()
-			.retain(|n| {
-				!n.is_closed() || n.unbounded_send(notification.clone()).is_ok()
-			});
-
-		Ok(())
-	}
-}
-
-/// The receiving half of the Grandpa justification channel.
-///
-/// Used to recieve notifictions about justifications generated
-/// at the end of a Grandpa round.
-#[derive(Clone)]
-pub struct GrandpaJustificationReceiver<Block: BlockT> {
-	notifiers: SharedFinalityNotifiers<Block>
-}
-
-impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
-	/// Creates a new pair of receiver and sender of justification notifications.
-	pub fn channel() -> (GrandpaJustificationSender<Block>, Self) {
-		let finality_notifiers = Arc::new(Mutex::new(vec![]));
-		let receiver = GrandpaJustificationReceiver::new(finality_notifiers.clone());
-		let sender = GrandpaJustificationSender::new(finality_notifiers.clone());
-		(sender, receiver)
-	}
-
-	/// Create a new receiver of justification notifications.
-	///
-	/// The `notifiers` should be shared with a corresponding
-	/// `GrandpaJustificationSender`.
-	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
-		Self {
-			notifiers,
-		}
-	}
-
-	/// Subscribe to a channel through which justifications are sent
-	/// at the end of each Grandpa voting round.
-	pub fn subscribe(&self) -> JustificationStream<Block> {
-		let (sender, receiver) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.notifiers.lock().push(sender);
-		receiver
 	}
 }
 

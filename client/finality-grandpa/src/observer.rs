@@ -40,7 +40,7 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::finality_proof::GrandpaJustificationSender;
+use crate::notification::GrandpaJustificationSender;
 use sp_finality_grandpa::AuthorityId;
 use std::marker::{PhantomData, Unpin};
 

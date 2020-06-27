@@ -118,15 +118,15 @@ mod finality_proof;
 mod import;
 mod justification;
 mod light_import;
+mod notification;
 mod observer;
 mod until_imported;
 mod voting_rule;
 
 pub use authorities::SharedAuthoritySet;
-pub use finality_proof::{
-	FinalityProofProvider, StorageAndProofProvider,
-	GrandpaJustificationSender, GrandpaJustificationReceiver,
-	JustificationNotification,
+pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
+pub use notification::{
+	GrandpaJustificationSender, GrandpaJustificationReceiver, JustificationNotification,
 };
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;

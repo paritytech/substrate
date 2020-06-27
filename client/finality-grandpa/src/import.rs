@@ -44,7 +44,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingCha
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
-use crate::finality_proof::GrandpaJustificationSender;
+use crate::notification::GrandpaJustificationSender;
 use std::marker::PhantomData;
 
 /// A block-import handler for GRANDPA.

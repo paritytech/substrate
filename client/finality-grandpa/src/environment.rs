@@ -51,7 +51,7 @@ use sp_consensus::SelectChain;
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::finality_proof::{GrandpaJustificationSender, JustificationNotification};
+use crate::notification::{GrandpaJustificationSender, JustificationNotification};
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
