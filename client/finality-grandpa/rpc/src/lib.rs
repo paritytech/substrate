@@ -28,15 +28,16 @@ use jsonrpc_core::futures::{
 	stream::Stream as Stream01,
 	future::Future as Future01,
 };
-use serde::{Serialize, Deserialize};
 
 mod error;
+mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationReceiver;
 use sp_runtime::traits::Block as BlockT;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+use notification::JustificationNotification;
 
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
@@ -147,24 +148,6 @@ where
 		id: SubscriptionId
 	) -> jsonrpc_core::Result<bool> {
 		Ok(self.manager.cancel(id))
-	}
-}
-
-/// Justification for a finalized block.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct JustificationNotification<Block: BlockT> {
-	/// Highest finalized block header
-	pub header: Block::Header,
-	/// An encoded justification proving that the given header has been finalized
-	pub justification: Vec<u8>,
-}
-
-impl<Block: BlockT> From<(Block::Header, Vec<u8>)> for JustificationNotification<Block> {
-	fn from(notification: (Block::Header, Vec<u8>)) -> Self {
-		JustificationNotification {
-			header: notification.0,
-			justification: notification.1,
-		}
 	}
 }
 
