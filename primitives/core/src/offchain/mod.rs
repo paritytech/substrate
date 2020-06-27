@@ -179,6 +179,65 @@ impl TryFrom<u32> for HttpRequestStatus {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PollableKind {
+	Http = 1,
+	Unknown,
+}
+
+impl From<u32> for PollableKind {
+	fn from(value: u32) -> Self {
+		match value {
+			1 => PollableKind::Http,
+			_ => PollableKind::Unknown,
+		}
+	}
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner)]
+#[cfg_attr(feature = "std", derive(Hash))]
+#[repr(transparent)]
+pub struct PollableId(pub u64);
+
+impl PollableId {
+	pub fn kind(self) -> PollableKind {
+		PollableKind::from((self.0 >> 32) as u32)
+	}
+
+	pub fn from_parts(kind: PollableKind, id: u32) -> PollableId {
+		PollableId::from(((kind as u64) << 32)| id as u64)
+	}
+}
+
+impl From<u64> for PollableId {
+	fn from(value: u64) -> PollableId {
+		PollableId(value)
+	}
+}
+
+impl Into<u64> for PollableId {
+	fn into(self) -> u64 {
+		self.0
+	}
+}
+
+impl From<HttpRequestId> for PollableId {
+	fn from(value: HttpRequestId) -> PollableId {
+		PollableId::from_parts(PollableKind::Http, u32::from(value.0))
+	}
+}
+
+impl TryFrom<PollableId> for HttpRequestId {
+	type Error = ();
+	fn try_from(value: PollableId) -> Result<HttpRequestId, Self::Error> {
+		match value.kind() {
+			PollableKind::Http => Ok(HttpRequestId(value.0 as _)),
+			_ => Err(()),
+		}
+	}
+}
+
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
@@ -495,6 +554,9 @@ pub trait Externalities: Send {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
+
+	/// TODO:
+	fn pollable_wait(&mut self, ids: &[PollableId]);
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -572,6 +634,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn pollable_wait(&mut self, ids: &[PollableId]) {
+		(&mut **self).pollable_wait(ids)
 	}
 }
 
@@ -690,6 +756,11 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	) -> Result<usize, HttpError> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
+	}
+
+	fn pollable_wait(&mut self, ids: &[PollableId]) {
+		self.check(Capability::Http, "pollable_wait");
+		self.externalities.pollable_wait(ids)
 	}
 }
 
