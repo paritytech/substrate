@@ -181,14 +181,6 @@ decl_module! {
 		type Error = Error<T>;
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			if Self::migrate_v1_to_t2() {
-				T::MaximumBlockWeight::get()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
 		/// Anonymously schedule a task.
 		///
 		/// # <weight>
