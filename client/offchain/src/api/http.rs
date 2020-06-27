@@ -661,17 +661,18 @@ impl Future for HttpWorker {
 
 		// Check for messages coming from the [`HttpApi`].
 		match Stream::poll_next(Pin::new(&mut me.from_api), cx) {
-			Poll::Pending => {},
-			Poll::Ready(None) => return Poll::Ready(()),	// stops the worker
+			Poll::Pending => Poll::Pending,
 			Poll::Ready(Some(ApiToWorker::Dispatch { id, request })) => {
 				let future = me.http_client.request(request);
 				debug_assert!(me.requests.iter().all(|(i, _)| *i != id));
 				me.requests.push((id, HttpWorkerRequest::Dispatched(future)));
 				cx.waker().wake_by_ref();	// reschedule the task to poll the request
-			}
-		}
 
-		Poll::Pending
+				Poll::Pending
+			},
+			// Finished, stop the worker
+			Poll::Ready(None) => Poll::Ready(()),
+		}
 	}
 }
 
