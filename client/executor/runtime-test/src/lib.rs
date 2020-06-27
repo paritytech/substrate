@@ -248,8 +248,24 @@ sp_core::wasm_export_functions! {
 		run().is_some()
 	}
 
-	fn test_pollable() -> bool {
-		sp_io::pollable::is_ready(sp_io::PollableId::from(0))
+	fn test_offchain_pollable() -> bool {
+		use sp_core::offchain::{PollableKind, PollableId};
+		let run = || -> Option<()> {
+			let id = sp_io::offchain::http_request_start(
+				"POST",
+				"http://localhost:12345",
+				&[],
+			).ok()?;
+			sp_io::offchain::http_request_write_body(id, &[], None).ok()?;
+			// let status = sp_io::offchain::http_response_wait(&[id], None);
+
+			let id = sp_core::offchain::PollableId::from_parts(PollableKind::Http, id.0 as u32);
+			sp_io::offchain::pollable_wait(&[id]);
+
+			Some(())
+		};
+
+		run().is_some()
 	}
 
 	// Just some test to make sure that `sp-allocator` compiles on `no_std`.

@@ -28,7 +28,7 @@ use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	self, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
-	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, StorageKind,
+	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, PollableId, StorageKind,
 };
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
@@ -179,6 +179,17 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError> {
 		self.http.response_read_body(request_id, buffer, deadline)
+	}
+
+	fn pollable_wait(&mut self, ids: &[PollableId]) {
+		use sp_core::offchain::PollableKind;
+		// FIXME: Handle more pollable kinds
+		assert!(ids.iter().all(|x| x.kind() == PollableKind::Http));
+
+		let ids: Result<Vec<HttpRequestId>, _> = ids.iter().copied().map(TryFrom::try_from).collect();
+		if let Ok(ids) = ids {
+			let _ = self.http.response_wait(&ids, None);
+		}
 	}
 }
 

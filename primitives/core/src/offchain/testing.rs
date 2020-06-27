@@ -32,6 +32,7 @@ use crate::offchain::{
 	HttpRequestStatus as RequestStatus,
 	Timestamp,
 	StorageKind,
+	PollableId,
 	OpaqueNetworkState,
 	TransactionPool,
 	OffchainStorage,
@@ -373,6 +374,19 @@ impl offchain::Externalities for TestOffchainExt {
 			}
 		} else {
 			Err(HttpError::IoError)
+		}
+	}
+
+	fn pollable_wait(&mut self, ids: &[PollableId]) {
+		let state = self.0.read();
+
+		use std::convert::TryFrom;
+		for id in ids.iter().copied().map(RequestId::try_from).filter_map(Result::ok) {
+			match state.requests.get(&id) {
+				Some(req) if req.response.is_none() =>
+					panic!("No `response` provided for request with id: {:?}", id),
+				_ => (),
+			}
 		}
 	}
 }

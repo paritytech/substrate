@@ -45,13 +45,14 @@ use sp_core::{
 	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
+		PollableId,
 	},
 };
 
 #[cfg(feature = "std")]
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 
-use sp_runtime_interface::{runtime_interface, Pointer, pass_by::PassByInner};
+use sp_runtime_interface::{runtime_interface, Pointer};
 
 use codec::{Encode, Decode};
 
@@ -326,54 +327,6 @@ pub trait DefaultChildStorage {
 	) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.next_child_storage_key(&child_info, key)
-	}
-}
-
-#[derive(Debug, Clone, Copy)]
-#[repr(u32)]
-pub enum PollableKind {
-	Http = 1,
-	Unknown,
-}
-
-impl From<u32> for PollableKind {
-	fn from(value: u32) -> Self {
-		match value {
-			1 => PollableKind::Http,
-			_ => PollableKind::Unknown,
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, PassByInner)]
-pub struct PollableId(u64);
-
-impl PollableId {
-	pub fn kind(self) -> PollableKind {
-		PollableKind::from((self.0 >> 32) as u32)
-	}
-}
-
-impl From<u64> for PollableId {
-	fn from(value: u64) -> PollableId {
-		PollableId(value)
-	}
-}
-
-impl Into<u64> for PollableId {
-	fn into(self) -> u64 {
-		self.0
-	}
-}
-
-/// Interface that provides async execution related functionality.
-#[runtime_interface]
-pub trait Pollable {
-	fn is_ready(msg: PollableId) -> bool {
-		false
-	}
-	fn wait_for(msg: PollableId) {
-		unimplemented!()
 	}
 }
 
@@ -1010,6 +963,12 @@ pub trait Offchain {
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)
 	}
+
+	fn pollable_wait(&mut self, ids: &[PollableId]) {
+		self.extension::<OffchainExt>()
+			.expect("pollable_wait can be called only in the offchain worker context")
+			.pollable_wait(ids)
+	}
 }
 
 /// Wasm only interface that provides functions for calling into the allocator.
@@ -1246,7 +1205,6 @@ pub type SubstrateHostFunctions = (
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,
-	pollable::HostFunctions,
 	allocator::HostFunctions,
 	logging::HostFunctions,
 	sandbox::HostFunctions,

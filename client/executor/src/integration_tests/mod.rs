@@ -522,17 +522,30 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 
 #[test_case(WasmExecutionMethod::Interpreted)]
 #[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
-fn pollable_smoke_test(wasm_method: WasmExecutionMethod) {
+fn offchain_pollable_should_wait(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
+	let (offchain, state) = testing::TestOffchainExt::new();
+	ext.register_extension(OffchainExt::new(offchain));
+	state.write().expect_request(
+		0,
+		testing::PendingRequest {
+			method: "POST".into(),
+			uri: "http://localhost:12345".into(),
+			sent: true,
+			response: Some(vec![1, 2, 3]),
+			response_headers: vec![("X-Auth".to_owned(), "hello".to_owned())],
+			..Default::default()
+		},
+	);
 
 	assert_eq!(
 		call_in_wasm(
-			"test_pollable",
+			"test_offchain_pollable",
 			&[0],
 			wasm_method,
 			&mut ext.ext(),
 		).unwrap(),
-		false.encode(),
+		true.encode(),
 	);
 }
 
