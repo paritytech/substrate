@@ -154,7 +154,6 @@ mod tests {
 	use super::*;
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 	use jsonrpc_core::Output;
-	use parking_lot::Mutex;
 
 	use sc_finality_grandpa::{report, AuthorityId};
 	use sp_core::crypto::Public;

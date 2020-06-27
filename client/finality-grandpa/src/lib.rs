@@ -81,7 +81,7 @@ use sp_core::{
 use sp_application_crypto::AppKey;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
-use parking_lot::{RwLock, Mutex};
+use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
 use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};

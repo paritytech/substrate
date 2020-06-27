@@ -1190,7 +1190,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 						justification,
 					};
 					if let Some(sender) = justification_sender {
-						sender.notify(notification);
+						let _ = sender.notify(notification);
 					}
 				},
 				Ok(None) => debug!(target: "afg", "Expected a header for sending a justification notification."),
