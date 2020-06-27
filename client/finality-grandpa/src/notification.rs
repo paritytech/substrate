@@ -29,11 +29,11 @@ type JustificationNotification<Block> = (<Block as BlockT>::Header, Vec<u8>);
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
 
 // Sending endpoint for notifying about justifications.
-type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
+type JustificationSubscriber<T> = TracingUnboundedSender<JustificationNotification<T>>;
 
 // Collection of channel sending endpoints shared with the receiver side so they can register
 // themselves.
-type SharedFinalityNotifiers<T> = Arc<Mutex<Vec<FinalityNotifier<T>>>>;
+type SharedJustificationSubscribers<T> = Arc<Mutex<Vec<JustificationSubscriber<T>>>>;
 
 /// The sending half of the Grandpa justification channel(s).
 ///
@@ -41,22 +41,22 @@ type SharedFinalityNotifiers<T> = Arc<Mutex<Vec<FinalityNotifier<T>>>>;
 /// at the end of a Grandpa round.
 #[derive(Clone)]
 pub struct GrandpaJustificationSubscribers<Block: BlockT> {
-	notifiers: SharedFinalityNotifiers<Block>
+	subscribers: SharedJustificationSubscribers<Block>
 }
 
 impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
 	/// The `notifiers` should be shared with a corresponding
 	/// `GrandpaJustificationReceiver`.
-	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
+	fn new(subscribers: SharedJustificationSubscribers<Block>) -> Self {
 		Self {
-			notifiers,
+			subscribers,
 		}
 	}
 
 	/// Send out a notification to all subscribers that a new justification
 	/// is available for a block.
 	pub fn notify(&self, notification: JustificationNotification<Block>) -> Result<(), ()> {
-		self.notifiers.lock()
+		self.subscribers.lock()
 			.retain(|n| {
 				!n.is_closed() || n.unbounded_send(notification.clone()).is_ok()
 			});
@@ -71,7 +71,7 @@ impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
 /// at the end of a Grandpa round.
 #[derive(Clone)]
 pub struct GrandpaJustifications<Block: BlockT> {
-	notifiers: SharedFinalityNotifiers<Block>
+	subscribers: SharedJustificationSubscribers<Block>
 }
 
 impl<Block: BlockT> GrandpaJustifications<Block> {
@@ -87,9 +87,9 @@ impl<Block: BlockT> GrandpaJustifications<Block> {
 	///
 	/// The `notifiers` should be shared with a corresponding
 	/// `GrandpaJustificationSender`.
-	fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
+	fn new(subscribers: SharedJustificationSubscribers<Block>) -> Self {
 		Self {
-			notifiers,
+			subscribers,
 		}
 	}
 
@@ -97,7 +97,7 @@ impl<Block: BlockT> GrandpaJustifications<Block> {
 	/// at the end of each Grandpa voting round.
 	pub fn subscribe(&self) -> JustificationStream<Block> {
 		let (sender, receiver) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.notifiers.lock().push(sender);
+		self.subscribers.lock().push(sender);
 		receiver
 	}
 }
