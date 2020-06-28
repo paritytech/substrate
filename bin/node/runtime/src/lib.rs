@@ -541,9 +541,8 @@ parameter_types! {
 	pub const TipCountdown: BlockNumber = 1 * DAYS;
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
-	pub const TipReportDepositPerByte: Balance = 1 * CENTS;
+	pub const DataDepositPerByte: Balance = 1 * CENTS;
 	pub const BountyDepositBase: Balance = 1 * DOLLARS;
-	pub const BountyDepositPerByte: Balance = 1 * CENTS;
 	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const BountyValueMinimum: Balance = 10 * DOLLARS;
@@ -567,7 +566,7 @@ impl pallet_treasury::Trait for Runtime {
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
-	type TipReportDepositPerByte = TipReportDepositPerByte;
+	type DataDepositPerByte = DataDepositPerByte;
 	type Event = Event;
 	type ProposalRejection = ();
 	type ProposalBond = ProposalBond;
@@ -575,7 +574,6 @@ impl pallet_treasury::Trait for Runtime {
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
 	type BountyDepositBase = BountyDepositBase;
-	type BountyDepositPerByte = BountyDepositPerByte;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyValueMinimum = BountyValueMinimum;
 	type BountyDuration = BountyDuration;
