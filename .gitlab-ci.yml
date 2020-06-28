@@ -26,7 +26,7 @@ stages:
   - test
   - build
   - post-build-test
-  - build-pr
+  - docker
   - chaos
   - publish
   - kubernetes
@@ -508,10 +508,10 @@ trigger-contracts-ci:
     - master
     - schedules
 
-#### stage:                        build-pr
-pr-docker-build:            &pr-docker-build
+#### stage:                        docker
+docker-build-chaos:                &docker-build-chaos
   <<:                              *chaos-only
-  stage:                           build-pr
+  stage:                           docker
   image:                           docker:stable
   tags: 
     - kubernetes-parity-build
