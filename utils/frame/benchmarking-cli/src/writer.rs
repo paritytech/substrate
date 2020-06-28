@@ -1,17 +1,21 @@
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
 
 fn uppercase_first_letter(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
+	let mut c = s.chars();
+	match c.next() {
+		None => String::new(),
+		Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+	}
 }
 
 pub fn open_file() -> Result<File, std::io::Error> {
-	File::create("benchmarks.rs")
+	OpenOptions::new()
+		.create(true)
+		.write(true)
+		.append(true)
+		.open("benchmarks.rs")
 }
 
 pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>) -> Result<(), std::io::Error> {
