@@ -21,9 +21,10 @@ macro_rules! pin_mut {
 use sp_std::{rc::Rc, collections::btree_map::BTreeMap, vec::Vec};
 use sp_std::cell::RefCell;
 
-use core::pin::Pin;
 use core::future::Future;
-use core::{task::{self, Context, Poll, Waker}};
+use core::mem::{self, ManuallyDrop};
+use core::pin::Pin;
+use core::{task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable}};
 
 use spin::Mutex;
 
@@ -79,37 +80,76 @@ pub(crate) fn register_message_waker(message_id: MessageId, waker: Waker) {
     state.wakers.push(waker);
 }
 
+// Copied `alloc::task::Wake` without having to opt-in via `#![feature(wake_trait)]`
+// https://github.com/rust-lang/rust/pull/68700
+trait Wake {
+    fn wake(self: Rc<Self>);
+    fn wake_by_ref(self: &Rc<Self>) {
+        self.clone().wake();
+    }
+}
+
+// Work around being unable to impl Into<Waker> for Rc<T> due to coherence check
+// and blanket impls
+trait IntoWaker: Wake {
+    fn into_waker(self: Rc<Self>) -> Waker;
+}
+
+impl<T> IntoWaker for T where T: Wake + Send + 'static {
+    fn into_waker(self: Rc<Self>) -> Waker {
+        // SAFETY: This is safe because raw_waker safely constructs
+        // a RawWaker from Rc<W> where W: Wake.
+        unsafe { task::Waker::from_raw(raw_waker(self)) }
+    }
+}
+
+#[inline(always)]
+fn raw_waker<W: Wake + Send + 'static>(waker: Rc<W>) -> RawWaker {
+    // Increment the reference count of the arc to clone it.
+    unsafe fn clone_waker<W: Wake + Send + 'static>(waker: *const ()) -> RawWaker {
+        let waker: Rc<W> = Rc::from_raw(waker as *const W);
+        mem::forget(Rc::clone(&waker));
+        raw_waker(waker)
+    }
+
+    // Wake by value, moving the Arc into the Wake::wake function
+    unsafe fn wake<W: Wake + Send + 'static>(waker: *const ()) {
+        let waker: Rc<W> = Rc::from_raw(waker as *const W);
+        <W as Wake>::wake(waker);
+    }
+
+    // Wake by reference, wrap the waker in ManuallyDrop to avoid dropping it
+    unsafe fn wake_by_ref<W: Wake + Send + 'static>(waker: *const ()) {
+        let waker: ManuallyDrop<Rc<W>> = ManuallyDrop::new(Rc::from_raw(waker as *const W));
+        <W as Wake>::wake_by_ref(&waker);
+    }
+
+    // Decrement the reference count of the Arc on drop
+    unsafe fn drop_waker<W: Wake + Send + 'static>(waker: *const ()) {
+        mem::drop(Rc::from_raw(waker as *const W));
+    }
+
+    RawWaker::new(
+        Rc::into_raw(waker) as *const (),
+        &RawWakerVTable::new(clone_waker::<W>, wake::<W>, wake_by_ref::<W>, drop_waker::<W>),
+    )
+}
+
 // TODO: Executor + reactor for wasm-side futures, waits on host-executed
 // futures like HTTP requests etc.
 pub fn block_on<T>(future: impl Future<Output = T>) -> T {
     pin_mut!(future);
 
-    // We don't have `Arc` to use convenient `ArcWake` and we're always running
-    // on a single thread in WASM so ¯\_(ツ)_/¯
-    fn trigger_wakeup(data: *const ()) {
-        let data: *const RefCell<bool> = data as _;
-        unsafe { *(*data).borrow_mut() = true; }
-    };
-    fn drop_shared_wakeup(data: *const ()) {
-        unsafe { Rc::from_raw(data as *const RefCell<bool>); }
-    }
-    fn create_waker(data: *const()) -> core::task::RawWaker {
-        let data = unsafe { Rc::from_raw(data as *const RefCell<bool>) };
-        let cloned = Rc::clone(&data);
-        core::task::RawWaker::new(Rc::into_raw(cloned) as _, &core::task::RawWakerVTable::new(
-            create_waker,
-            |data| { trigger_wakeup(data); drop_shared_wakeup(data) },
-            trigger_wakeup,
-            drop_shared_wakeup,
-        ))
+    struct WokenUp(RefCell<bool>);
+    impl Wake for WokenUp {
+        fn wake(self: Rc<Self>) {
+            *self.0.borrow_mut() = true;
+        }
     }
 
-    let woken_up = Rc::new(RefCell::new(false));
-    let waker = {
-        let raw = create_waker(Rc::into_raw(Rc::clone(&woken_up)) as _);
-        unsafe { task::Waker::from_raw(raw) }
-    };
+    let woken_up = Rc::new(WokenUp(RefCell::new(false)));
 
+    let waker = woken_up.clone().into_waker();
     let mut context = Context::from_waker(&waker);
 
     loop {
@@ -122,8 +162,8 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
 
             // If the waker has been used during the polling of this future,
             // then we have to poll again.
-            let was_woken = *woken_up.borrow();
-            *woken_up.borrow_mut() = false;
+            let was_woken = *woken_up.0.borrow();
+            *woken_up.0.borrow_mut() = false;
 
             if was_woken {
                 continue;
