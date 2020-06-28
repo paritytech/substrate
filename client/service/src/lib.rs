@@ -33,7 +33,6 @@ mod builder;
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]
 mod client;
-mod status_sinks;
 mod task_manager;
 
 use std::{io, pin::Pin};
@@ -56,9 +55,9 @@ use sc_network::{NetworkService, NetworkStatus, network_state::NetworkState, Pee
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
+use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -66,7 +65,9 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
 };
-pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
+pub use config::{
+	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
+};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -83,7 +84,7 @@ pub use sc_network::config::{
 	TransactionImportFuture,
 };
 pub use sc_tracing::TracingReceiver;
-pub use task_manager::SpawnTaskHandle;
+pub use task_manager::{SpawnEssentialTaskHandle, SpawnTaskHandle};
 use task_manager::TaskManager;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_api::{ApiExt, ConstructRuntimeApi, ApiErrorExt};
@@ -110,14 +111,14 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	task_manager: TaskManager,
 	select_chain: Option<TSc>,
 	network: Arc<TNet>,
-	/// Sinks to propagate network status updates.
-	/// For each element, every time the `Interval` fires we push an element on the sender.
+	// Sinks to propagate network status updates.
+	// For each element, every time the `Interval` fires we push an element on the sender.
 	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(TNetStatus, NetworkState)>>>,
 	transaction_pool: Arc<TTxPool>,
-	/// Send a signal when a spawned essential task has concluded. The next time
-	/// the service future is polled it should complete with an error.
+	// Send a signal when a spawned essential task has concluded. The next time
+	// the service future is polled it should complete with an error.
 	essential_failed_tx: TracingUnboundedSender<()>,
-	/// A receiver for spawned essential-tasks concluding.
+	// A receiver for spawned essential-tasks concluding.
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
@@ -127,6 +128,9 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
 	prometheus_registry: Option<prometheus_endpoint::Registry>,
+	// The base path is kept here because it can be a temporary directory which will be deleted
+	// when dropped
+	_base_path: Option<Arc<BasePath>>,
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
@@ -164,12 +168,18 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	/// The task name is a `&'static str` as opposed to a `String`. The reason for that is that
 	/// in order to avoid memory consumption issues with the Prometheus metrics, the set of
 	/// possible task names has to be bounded.
+	#[deprecated(note = "Use `spawn_task_handle().spawn() instead.")]
 	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Spawns a task in the background that runs the future passed as
 	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
+	#[deprecated(note = "Use `spawn_essential_task_handle().spawn() instead.")]
 	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
+
+	/// Returns a handle for spawning essential tasks. Any task spawned through this handle is
+	/// considered essential, i.e. if it errors we trigger a service exit.
+	fn spawn_essential_task_handle(&self) -> SpawnEssentialTaskHandle;
 
 	/// Returns a handle for spawning tasks.
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
@@ -210,6 +220,9 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 
 	/// Get the prometheus metrics registry, if available.
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry>;
+
+	/// Get a clone of the base_path
+	fn base_path(&self) -> Option<Arc<BasePath>>;
 }
 
 impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
@@ -244,7 +257,7 @@ where
 	}
 
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry> {
-		self._telemetry.as_ref().map(|t| t.clone())
+		self._telemetry.clone()
 	}
 
 	fn keystore(&self) -> sc_keystore::KeyStorePtr {
@@ -264,11 +277,18 @@ where
 				let _ = essential_failed.send(());
 			});
 
-		let _ = self.spawn_task(name, essential_task);
+		let _ = self.spawn_task_handle().spawn(name, essential_task);
 	}
 
 	fn spawn_task_handle(&self) -> SpawnTaskHandle {
 		self.task_manager.spawn_handle()
+	}
+
+	fn spawn_essential_task_handle(&self) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle::new(
+			self.essential_failed_tx.clone(),
+			self.task_manager.spawn_handle(),
+		)
 	}
 
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>> {
@@ -309,6 +329,10 @@ where
 
 	fn prometheus_registry(&self) -> Option<prometheus_endpoint::Registry> {
 		self.prometheus_registry.clone()
+	}
+
+	fn base_path(&self) -> Option<Arc<BasePath>> {
+		self._base_path.clone()
 	}
 }
 
@@ -372,6 +396,13 @@ fn build_network_future<
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
 			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
+			}
+
+			if let sp_consensus::BlockOrigin::Own = notification.origin {
+				network.service().own_block_imported(
+					notification.hash,
+					notification.header.number().clone(),
+				);
 			}
 		}
 
@@ -500,6 +531,16 @@ mod waiting {
 		}
 	}
 
+	pub struct IpcServer(pub Option<sc_rpc_server::IpcServer>);
+	impl Drop for IpcServer {
+		fn drop(&mut self) {
+			if let Some(server) = self.0.take() {
+				server.close_handle().close();
+				let _ = server.wait();
+			}
+		}
+	}
+
 	pub struct WsServer(pub Option<sc_rpc_server::WsServer>);
 	impl Drop for WsServer {
 		fn drop(&mut self) {
@@ -545,6 +586,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 	}
 
 	Ok(Box::new((
+		config.rpc_ipc.as_ref().map(|path| sc_rpc_server::start_ipc(&*path, gen_handler(sc_rpc::DenyUnsafe::No))),
 		maybe_start_server(
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(

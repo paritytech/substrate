@@ -6,16 +6,16 @@ const logger = require('../../utils/logger')
 exports.readOrCreateNamespace = async function (namespace) {
   try {
     logger.debug('Reading namespace')
-    await k8s.readNameSpace(namespace) // if namespace is available, do not create here
+    await k8s.readNamespace(namespace) // if namespace is available, do not create here
   } catch (error) {
     if (error.response.statusCode !== 404) {
       logger.error(error)
       throw error
     }
     logger.debug('Namespace not present, creating...')
-    await k8s.createNameSpace(namespace)
+    await k8s.createNamespace(namespace)
   }
-  this.config.setNameSpace(namespace)
+  this.config.setNamespace(namespace)
 }
 exports.createAlice = async function (image, port) {
   const substrateArgs = [
@@ -171,7 +171,7 @@ exports.createNode = async function (nodeSpec) {
 }
 
 exports.cleanup = async function (namespace) {
-  await k8s.deleteNameSpace(namespace)
+  await k8s.deleteNamespace(namespace)
   if (namespace === this.config.namespace) {
     this.config.reset()
   }

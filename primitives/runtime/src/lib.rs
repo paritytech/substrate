@@ -71,7 +71,7 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16,
+	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
 	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
 };
 /// Re-export 128 bit helpers.
@@ -80,6 +80,8 @@ pub use sp_arithmetic::helpers_128bit;
 pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
+
+pub use either::Either;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///

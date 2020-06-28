@@ -39,7 +39,7 @@ class Config {
     })
   }
 
-  async setNameSpace (namespace) {
+  async setNamespace (namespace) {
     this.namespace = namespace
     this.update()
   }

@@ -12,7 +12,7 @@ description = "FRAME offences pallet benchmarking"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
 frame-benchmarking = { version = "2.0.0-rc3", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "2.0.0-rc3", default-features = false, path = "../../support" }
 frame-system = { version = "2.0.0-rc3", default-features = false, path = "../../system" }
@@ -28,7 +28,7 @@ sp-staking = { version = "2.0.0-rc3", default-features = false, path = "../../..
 sp-std = { version = "2.0.0-rc3", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.1", features = ["derive"] }
 pallet-staking-reward-curve = { version = "2.0.0-rc3", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "2.0.0-rc3", path = "../../timestamp" }
 serde = { version = "1.0.101" }

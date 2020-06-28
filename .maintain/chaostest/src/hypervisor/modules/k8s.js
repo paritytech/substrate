@@ -10,7 +10,7 @@ kc.loadFromDefault()
 const k8sAppApi = kc.makeApiClient(k8s.AppsV1Api)
 const k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api)
 
-const createNameSpace = async namespace => {
+const createNamespace = async namespace => {
   const namespaceJson = {
     apiVersion: 'v1',
     kind: 'Namespace',
@@ -21,7 +21,7 @@ const createNameSpace = async namespace => {
   return await k8sCoreApi.createNamespace(namespaceJson)
 }
 
-const readNameSpace = async namespace => {
+const readNamespace = async namespace => {
   return await k8sCoreApi.readNamespace(namespace)
 }
 
@@ -85,21 +85,21 @@ const getDeploymentStatus = async (deploymentName, namespace) => {
   return undefined
 }
 
-const deleteNameSpace = async (namespace) => {
-  logger.debug(`Taking down NameSpace ${namespace}...`)
+const deleteNamespace = async (namespace) => {
+  logger.debug(`Taking down Namespace ${namespace}...`)
   if (process.env.KEEP_NAMESPACE && process.env.KEEP_NAMESPACE === 1) {
     return
   }
   return k8sCoreApi.deleteNamespace(namespace)
 }
 
-const getNameSpacedPods = async (namespace) => {
+const getNamespacedPods = async (namespace) => {
   const response = await k8sCoreApi.listNamespacedPod(namespace)
   return response.body.items
 }
 
 const getPod = async (podName, namespace) => {
-  const pods = await getNameSpacedPods(namespace)
+  const pods = await getNamespacedPods(namespace)
   const found = pods.find(
     (pod) => !!pod.metadata && pod.metadata.name === podName && !!pod.status && pod.status.podIP
   )
@@ -134,4 +134,4 @@ const startForwardServer = async (namespace, pod, port, onReady) => new Promise(
   })
 })
 
-module.exports = { createNameSpace, readNameSpace, createPod, deleteNameSpace, getDeploymentStatus, getPod, getNameSpacedPods, startForwardServer }
+module.exports = { createNamespace, readNamespace, createPod, deleteNamespace, getDeploymentStatus, getPod, getNamespacedPods, startForwardServer }

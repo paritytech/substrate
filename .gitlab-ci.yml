@@ -26,7 +26,7 @@ stages:
   - test
   - build
   - post-build-test
-  - build-pr
+  - docker
   - chaos
   - publish
   - kubernetes
@@ -58,9 +58,10 @@ default:
     - kubernetes-parity-build
   environment:
     name: parity-build
+  interruptible:                   true
 
 .docker-env:                       &docker-env
-  image:                           parity/rust-builder:latest
+  image:                           paritytech/ci-linux:production
   before_script:
     - rustup show
     - cargo --version
@@ -91,7 +92,7 @@ default:
 .chaos-only:                       &chaos-only
   only:
     variables:
-      - $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/
+      - $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/  # i.e add [chaos:basic] in commit message to trigger
 
 
 #### stage:                       .pre
@@ -367,6 +368,14 @@ cargo-check-macos:
   tags:
     - osx
 
+test-prometheus-alerting-rules:
+  stage:                           test
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-build
+  script:
+    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
+
 #### stage:                        build
 
 check-polkadot-companion-status:
@@ -483,19 +492,26 @@ build-rust-doc-release:
     - sccache -s
 
 #### stage:                        post-build-test
-check-polkadot-companion-status:
+trigger-contracts-ci:
   stage:                           post-build-test
-  image:                           parity/tools:latest
-  <<:                              *kubernetes-build
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   false
+    - job:                         test-linux-stable
+      artifacts:                   false
+  trigger:
+    project:                       parity/srml-contracts-waterfall
+    branch:                        master
+    strategy:                      depend
   only:
-    - /^[0-9]+$/
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+    - master
+    - schedules
 
-#### stage:                        build-pr
-pr-docker-build:            &pr-docker-build
+#### stage:                        docker
+docker-build-chaos:                &docker-build-chaos
   <<:                              *chaos-only
-  stage:                           build-pr
+  stage:                           docker
+  image:                           docker:stable
   tags: 
     - kubernetes-parity-build
   variables:
@@ -506,7 +522,6 @@ pr-docker-build:            &pr-docker-build
     CONTAINER_IMAGE:               paritypr/$PRODUCT
   environment:
     name:                          parity-chaosnet
-  image:                           docker:stable
   services:
     - docker:dind
   before_script:
@@ -532,6 +547,7 @@ pr-docker-build:            &pr-docker-build
 chaos-test-singlenodeheight:
   <<:                              *chaos-only
   stage:                           chaos
+  image:                           parity/chaostools:latest
   tags: 
     - parity-chaos
   variables:
@@ -544,7 +560,6 @@ chaos-test-singlenodeheight:
   interruptible: true
   environment:
     name:                          parity-chaosnet
-  image:                           parity/chaostools:latest
   script:
     - cd ./.maintain/chaostest
     - npm link
@@ -552,21 +567,6 @@ chaos-test-singlenodeheight:
     - chaostest singlenodeheight -h 30
   after_script:
     - chaostest clean
-
-trigger-contracts-ci:
-  stage:                           post-build-test
-  needs:
-    - job:                         build-linux-substrate
-      artifacts:                   false
-    - job:                         test-linux-stable
-      artifacts:                   false
-  trigger:
-    project:                       parity/srml-contracts-waterfall
-    branch:                        master
-    strategy:                      depend
-  only:
-    - master
-    - schedules
 
 #### stage:                        publish
 
@@ -800,4 +800,14 @@ validator 4 4:
   <<:                              *validator-deploy
   script:
     - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
-    
+
+#### stage:                       .post
+
+check-labels:
+  stage:                          .post
+  image:                          paritytech/tools:latest
+  <<:                             *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_labels.sh

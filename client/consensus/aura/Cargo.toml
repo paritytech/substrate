@@ -17,7 +17,7 @@ sp-consensus-aura = { version = "0.8.0-rc3", path = "../../../primitives/consens
 sp-block-builder = { version = "2.0.0-rc3", path = "../../../primitives/block-builder" }
 sc-block-builder = { version = "0.8.0-rc3", path = "../../../client/block-builder" }
 sc-client-api = { version = "2.0.0-rc3", path = "../../api" }
-codec = { package = "parity-scale-codec", version = "1.3.0" }
+codec = { package = "parity-scale-codec", version = "1.3.1" }
 sp-consensus = { version = "0.8.0-rc3", path = "../../../primitives/consensus/common" }
 derive_more = "0.99.2"
 futures = "0.3.4"

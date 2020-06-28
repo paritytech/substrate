@@ -1,0 +1,239 @@
+rule_files:
+    - /dev/stdin
+
+evaluation_interval: 1m
+
+tests:
+    - interval: 1m
+      input_series:
+          - series: 'polkadot_sub_libp2p_peers_count{
+              job="polkadot",
+              pod="polkadot-abcdef01234-abcdef",
+              instance="polkadot-abcdef01234-abcdef",
+            }'
+            values: '3 2+0x4 1+0x9' # 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1
+
+          - series: 'polkadot_sub_txpool_validations_scheduled{
+              job="polkadot",
+              pod="polkadot-abcdef01234-abcdef",
+              instance="polkadot-abcdef01234-abcdef",
+            }'
+            values: '10+1x30' # 10 11 12 13 .. 40
+
+          - series: 'polkadot_sub_txpool_validations_finished{
+              job="polkadot",
+              pod="polkadot-abcdef01234-abcdef",
+              instance="polkadot-abcdef01234-abcdef",
+            }'
+            values: '0x30' # 0 0 0 0 .. 0
+
+          - series: 'polkadot_block_height{
+              status="best", job="polkadot",
+              pod="polkadot-abcdef01234-abcdef",
+              instance="polkadot-abcdef01234-abcdef",
+            }'
+            values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
+
+          - series: 'polkadot_block_height{
+              status="finalized",
+              job="polkadot",
+              pod="polkadot-abcdef01234-abcdef",
+              instance="polkadot-abcdef01234-abcdef",
+            }'
+            values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
+
+          - series: 'polkadot_cpu_usage_percentage{
+              job="polkadot",
+              pod="polkadot-abcdef01234-abcdef",
+              instance="polkadot-abcdef01234-abcdef",
+            }'
+            values: '0+20x5 100+0x5' # 0 20 40 60 80 100 100 100 100 100 100
+
+      alert_rule_test:
+
+          ######################################################################
+          # Resource usage
+          ######################################################################
+
+          - eval_time: 9m
+            alertname: HighCPUUsage
+            exp_alerts:
+          - eval_time: 10m
+            alertname: HighCPUUsage
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has a CPU
+                      usage higher than 100% for more than 5 minutes"
+
+          ######################################################################
+          # Block production
+          ######################################################################
+
+          - eval_time: 6m
+            alertname: LowNumberOfNewBlocks
+            exp_alerts:
+          - eval_time: 7m
+            alertname: LowNumberOfNewBlocks
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                      status: best
+                  exp_annotations:
+                      message: "Less than one new block per minute on instance
+                      polkadot-abcdef01234-abcdef."
+
+          - eval_time: 14m
+            alertname: LowNumberOfNewBlocks
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                      status: best
+                  exp_annotations:
+                      message: "Less than one new block per minute on instance
+                      polkadot-abcdef01234-abcdef."
+                - exp_labels:
+                      severity: critical
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                      status: best
+                  exp_annotations:
+                      message: "Less than one new block per minute on instance
+                      polkadot-abcdef01234-abcdef."
+
+          ######################################################################
+          # Block finalization
+          ######################################################################
+
+          - eval_time: 6m
+            alertname: BlockFinalizationSlow
+            exp_alerts:
+          - eval_time: 7m
+            alertname: BlockFinalizationSlow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                      status: finalized
+                  exp_annotations:
+                      message: "Finalized block on instance
+                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      minute."
+
+          - eval_time: 14m
+            alertname: BlockFinalizationSlow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                      status: finalized
+                  exp_annotations:
+                      message: "Finalized block on instance
+                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      minute."
+                - exp_labels:
+                      severity: critical
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                      status: finalized
+                  exp_annotations:
+                      message: "Finalized block on instance
+                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      minute."
+
+          ######################################################################
+          # Transaction queue
+          ######################################################################
+
+          - eval_time: 10m
+            alertname: TransactionQueueSize
+            exp_alerts:
+          - eval_time: 11m
+            alertname: TransactionQueueSize
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has more
+                      than 10 transactions in the queue for more than 10
+                      minutes"
+
+          - eval_time: 31m
+            alertname: TransactionQueueSize
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has more
+                      than 10 transactions in the queue for more than 10
+                      minutes"
+                - exp_labels:
+                      severity: critical
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has more
+                      than 10 transactions in the queue for more than 30
+                      minutes"
+
+          ######################################################################
+          # Networking
+          ######################################################################
+
+          - eval_time: 3m # Values: 3 2 2
+            alertname: LowNumberOfPeers
+            exp_alerts:
+          - eval_time: 4m # Values: 2 2 2
+            alertname: LowNumberOfPeers
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has less
+                      than 3 peers for more than 3 minutes"
+
+          - eval_time: 16m # Values: 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 1
+            alertname: LowNumberOfPeers
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has less
+                      than 3 peers for more than 3 minutes"
+                - exp_labels:
+                      severity: critical
+                      pod: polkadot-abcdef01234-abcdef
+                      instance: polkadot-abcdef01234-abcdef
+                      job: polkadot
+                  exp_annotations:
+                      message: "The node polkadot-abcdef01234-abcdef has less
+                      than 3 peers for more than 15 minutes"

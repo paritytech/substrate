@@ -160,7 +160,6 @@ use sp_runtime::{
 use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	storage::IterableStorageMap,
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -601,22 +600,6 @@ decl_module! {
 		const MaxVotes: u32 = T::MaxVotes::get();
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> Weight {
-			if let None = StorageVersion::get() {
-				StorageVersion::put(Releases::V1);
-
-				DepositOf::<T>::translate::<
-					(BalanceOf<T>, Vec<T::AccountId>), _
-				>(|_, (balance, accounts)| {
-					Some((accounts, balance))
-				});
-
-				T::MaximumBlockWeight::get()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
 
 		/// Propose a sensitive action to be taken.
 		///
