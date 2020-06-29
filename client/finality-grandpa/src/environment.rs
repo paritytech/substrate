@@ -1148,7 +1148,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 		// justifications for transition blocks which will be requested by
 		// syncing clients.
 		let justification = match justification_or_commit {
-			JustificationOrCommit::Justification(justification) => Some(justification.encode()),
+			JustificationOrCommit::Justification(justification) => Some(justification),
 			JustificationOrCommit::Commit((round_number, commit)) => {
 				let mut justification_required =
 					// justification is always required when block that enacts new authorities
@@ -1175,17 +1175,18 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 						commit,
 					)?;
 
-					Some(justification.encode())
+					Some(justification)
 				} else {
 					None
 				}
 			},
 		};
 
-		if let Some(justification) = justification.clone() {
+		// Notify any registered listeners in case we have a justification
+		if let Some(ref justification) = justification {
 			match client.header(BlockId::Hash(hash)) {
 				Ok(Some(header)) => {
-					let notification = (header, justification);
+					let notification = (header, justification.clone());
 					if let Some(sender) = justification_sender {
 						let _ = sender.notify(notification);
 					}
@@ -1194,6 +1195,8 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 				Err(err) => debug!(target: "afg", "Getting header failed: {}", err),
 			};
 		}
+
+		let justification = justification.map(|j| j.encode());
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 

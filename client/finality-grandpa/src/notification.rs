@@ -22,8 +22,10 @@ use parking_lot::Mutex;
 use sp_runtime::traits::Block as BlockT;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
+use crate::justification::GrandpaJustification;
+
 /// Justification for a finalized block.
-type JustificationNotification<Block> = (<Block as BlockT>::Header, Vec<u8>);
+type JustificationNotification<Block> = (<Block as BlockT>::Header, GrandpaJustification<Block>);
 
 // Stream of justifications returned when subscribing.
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;

@@ -17,7 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use serde::{Serialize, Deserialize};
+use parity_scale_codec::Encode;
 use sp_runtime::traits::Block as BlockT;
+use sc_finality_grandpa::GrandpaJustification;
 
 /// Justification for a finalized block.
 #[derive(Clone, Serialize, Deserialize)]
@@ -28,11 +30,11 @@ pub struct JustificationNotification<Block: BlockT> {
 	pub justification: Vec<u8>,
 }
 
-impl<Block: BlockT> From<(Block::Header, Vec<u8>)> for JustificationNotification<Block> {
-	fn from(notification: (Block::Header, Vec<u8>)) -> Self {
+impl<Block: BlockT> From<(Block::Header, GrandpaJustification<Block>)> for JustificationNotification<Block> {
+	fn from(notification: (Block::Header, GrandpaJustification<Block>)) -> Self {
 		JustificationNotification {
 			header: notification.0,
-			justification: notification.1,
+			justification: notification.1.encode(),
 		}
 	}
 }
