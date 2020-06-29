@@ -23,7 +23,7 @@ use crate::exec::{
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
 use sp_sandbox;
 use frame_system;
-use sp_std::{prelude::*, mem, convert::TryInto};
+use sp_std::{prelude::*, convert::TryInto};
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
 use sp_io::hashing::{
@@ -44,7 +44,7 @@ const TRAP_RETURN_CODE: u32 = 0x0100;
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
 	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(Vec<u8>),
+	Return(u32, Vec<u8>),
 	/// Signals that trap was generated because the contract exhausted its gas limit.
 	OutOfGas,
 	/// Signals that a trap was generated in response to a succesful call to the
@@ -59,7 +59,7 @@ enum SpecialTrap {
 /// Can only be used for one call.
 pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
-	scratch_buf: Vec<u8>,
+	input_data: Option<Vec<u8>>,
 	schedule: &'a Schedule,
 	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
@@ -75,8 +75,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	) -> Self {
 		Runtime {
 			ext,
-			// Put the input data into the scratch buffer immediately.
-			scratch_buf: input_data,
+			input_data: Some(input_data),
 			schedule,
 			memory,
 			gas_meter,
@@ -91,9 +90,11 @@ pub(crate) fn to_execution_result<E: Ext>(
 ) -> ExecResult {
 	match runtime.special_trap {
 		// The trap was the result of the execution `return` host function.
-		Some(SpecialTrap::Return(data)) => {
+		Some(SpecialTrap::Return(status, data)) => {
+			let status = (status & 0xFF).try_into()
+				.expect("exit_code is masked into the range of a u8; qed");
 			return Ok(ExecReturnValue {
-				status: STATUS_SUCCESS,
+				status,
 				data,
 			})
 		},
@@ -112,13 +113,11 @@ pub(crate) fn to_execution_result<E: Ext>(
 		Some(SpecialTrap::OutOfGas) => {
 			return Err(ExecError {
 				reason: "ran out of gas during contract execution".into(),
-				buffer: runtime.scratch_buf,
 			})
 		},
 		Some(SpecialTrap::OutputBufferTooSmall) => {
 			return Err(ExecError {
 				reason: "output buffer too small".into(),
-				buffer: runtime.scratch_buf,
 			})
 		},
 		None => (),
@@ -127,21 +126,9 @@ pub(crate) fn to_execution_result<E: Ext>(
 	// Check the exact type of the error.
 	match sandbox_result {
 		// No traps were generated. Proceed normally.
-		Ok(sp_sandbox::ReturnValue::Unit) => {
-			let mut buffer = runtime.scratch_buf;
-			buffer.clear();
-			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: buffer })
+		Ok(_) => {
+			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
 		}
-		Ok(sp_sandbox::ReturnValue::Value(sp_sandbox::Value::I32(exit_code))) => {
-			let status = (exit_code & 0xFF).try_into()
-				.expect("exit_code is masked into the range of a u8; qed");
-			Ok(ExecReturnValue { status, data: runtime.scratch_buf })
-		}
-		// This should never happen as the return type of exported functions should have been
-		// validated by the code preparation process. However, because panics are really
-		// undesirable in the runtime code, we treat this as a trap for now. Eventually, we might
-		// want to revisit this.
-		Ok(_) => Err(ExecError { reason: "return type error".into(), buffer: runtime.scratch_buf }),
 		// `Error::Module` is returned only if instantiation or linking failed (i.e.
 		// wasm binary tried to import a function that is not provided by the host).
 		// This shouldn't happen because validation process ought to reject such binaries.
@@ -149,10 +136,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
 		Err(sp_sandbox::Error::Module) =>
-			Err(ExecError { reason: "validation error".into(), buffer: runtime.scratch_buf }),
+			Err(ExecError { reason: "validation error".into() }),
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "contract trapped during execution".into(), buffer: runtime.scratch_buf }),
+			Err(ExecError { reason: "contract trapped during execution".into() }),
 	}
 }
 
@@ -258,31 +245,6 @@ fn read_sandbox_memory<E: Ext>(
 	Ok(buf)
 }
 
-/// Read designated chunk from the sandbox memory into the scratch buffer, consuming an
-/// appropriate amount of gas. Resizes the scratch buffer to the specified length on success.
-///
-/// Returns `Err` if one of the following conditions occurs:
-///
-/// - calculating the gas cost resulted in overflow.
-/// - out of gas
-/// - requested buffer is not within the bounds of the sandbox memory.
-fn read_sandbox_memory_into_scratch<E: Ext>(
-	ctx: &mut Runtime<E>,
-	ptr: u32,
-	len: u32,
-) -> Result<(), sp_sandbox::HostError> {
-	charge_gas(
-		ctx.gas_meter,
-		ctx.schedule,
-		&mut ctx.special_trap,
-		RuntimeToken::ReadMemory(len),
-	)?;
-
-	ctx.scratch_buf.resize(len as usize, 0);
-	ctx.memory.get(ptr, ctx.scratch_buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
-	Ok(())
-}
-
 /// Read designated chunk from the sandbox memory into the supplied buffer, consuming
 /// an appropriate amount of gas.
 ///
@@ -332,26 +294,37 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 /// - calculating the gas cost resulted in overflow.
 /// - out of gas
 /// - designated area is not within the bounds of the sandbox memory.
-fn write_sandbox_memory<T: Trait>(
-	schedule: &Schedule,
-	special_trap: &mut Option<SpecialTrap>,
-	gas_meter: &mut GasMeter<T>,
-	memory: &sp_sandbox::Memory,
+fn write_sandbox_memory<E: Ext>(
+	ctx: &mut Runtime<E>,
 	ptr: u32,
 	buf: &[u8],
 ) -> Result<(), sp_sandbox::HostError> {
 	charge_gas(
-		gas_meter,
-		schedule,
-		special_trap,
+		ctx.gas_meter,
+		ctx.schedule,
+		&mut ctx.special_trap,
 		RuntimeToken::WriteMemory(buf.len() as u32),
 	)?;
 
-	memory.set(ptr, buf)?;
+	ctx.memory.set(ptr, buf)?;
 
 	Ok(())
 }
 
+/// Write the given buffer and its length to the designated locations in sandbox memory.
+//
+/// `out_ptr` is the location in sandbox memory where `buf` should be written to.
+/// `out_len_ptr` is an in-out location in sandbox memory. It is read to determine the
+/// lenght of the buffer located at `out_ptr`. If that buffer is large enough the actual
+/// `buf.len()` is written to this location.
+///
+/// If `out_ptr` is set to the sentinel value of `u32::max_value()` the operation is
+/// skipped and `Ok` is returned. This is supposed to help callers to make copying
+/// output optional. For example to skip copying back the output buffer of an `ext_call`
+/// when the caller is not interested in the result.
+///
+/// In addition to the error conditions of `write_sandbox_memory` this functions returns
+/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
 fn write_sandbox_output<E: Ext>(
 	ctx: &mut Runtime<E>,
 	out_ptr: u32,
@@ -549,10 +522,10 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data,
 					)
-					.map_err(|err| err.buffer)
+					.map_err(|_| ())
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(input_data),
+				None => Err(()),
 			}
 		});
 
@@ -636,18 +609,18 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data
 					)
-					.map_err(|err| err.buffer)
+					.map_err(|_| ())
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(input_data),
+				None => Err(()),
 			}
 		});
 		match instantiate_outcome {
 			Ok((address, output)) => {
 				if output.is_success() {
 					write_sandbox_output(ctx, address_ptr, address_len_ptr, &address.encode())?;
-					write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data)?;
 				}
+				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data)?;
 				Ok(output.status.into())
 			},
 			Err(_) => {
@@ -680,11 +653,19 @@ define_env!(Env, <E: Ext>,
 		Err(sp_sandbox::HostError)
 	},
 
+	ext_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
+		if let Some(input) = ctx.input_data.take() {
+			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input)
+		} else {
+			Err(sp_sandbox::HostError)
+		}
+	},
+
 	// Save a data buffer as a result of the execution, terminate the execution and return a
 	// successful result to the caller.
 	//
 	// This is the only way to return a data buffer to the caller.
-	ext_return(ctx, data_ptr: u32, data_len: u32) => {
+	ext_return(ctx, status_code: u32, data_ptr: u32, data_len: u32) => {
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
@@ -692,10 +673,8 @@ define_env!(Env, <E: Ext>,
 			RuntimeToken::ReturnData(data_len)
 		)?;
 
-		read_sandbox_memory_into_scratch(ctx, data_ptr, data_len)?;
-		let output_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
-
-		ctx.special_trap = Some(SpecialTrap::Return(output_buf));
+		let output_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
+		ctx.special_trap = Some(SpecialTrap::Return(status_code, output_data));
 
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
@@ -857,54 +836,6 @@ define_env!(Env, <E: Ext>,
 			ctx.special_trap = Some(SpecialTrap::Restoration);
 		}
 		Err(sp_sandbox::HostError)
-	},
-
-	// Returns the size of the scratch buffer.
-	//
-	// For more details on the scratch buffer see `ext_scratch_read`.
-	ext_scratch_size(ctx) -> u32 => {
-		Ok(ctx.scratch_buf.len() as u32)
-	},
-
-	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract
-	// memory. The region at which the data should be put is specified by `dest_ptr`.
-	//
-	// In order to get size of the scratch buffer use `ext_scratch_size`. At the start of contract
-	// execution, the scratch buffer is filled with the input data. Whenever a contract calls
-	// function that uses the scratch buffer the contents of the scratch buffer are overwritten.
-	ext_scratch_read(ctx, dest_ptr: u32, offset: u32, len: u32) => {
-		let offset = offset as usize;
-		if offset > ctx.scratch_buf.len() {
-			// Offset can't be larger than scratch buffer length.
-			return Err(sp_sandbox::HostError);
-		}
-
-		// This can't panic since `offset <= ctx.scratch_buf.len()`.
-		let src = &ctx.scratch_buf[offset..];
-		if src.len() != len as usize {
-			return Err(sp_sandbox::HostError);
-		}
-
-		// Finally, perform the write.
-		write_sandbox_memory(
-			ctx.schedule,
-			&mut ctx.special_trap,
-			ctx.gas_meter,
-			&ctx.memory,
-			dest_ptr,
-			src,
-		)?;
-
-		Ok(())
-	},
-
-	// Copy data from contract memory starting from `src_ptr` with length `len` into the scratch
-	// buffer. This overwrites the entire scratch buffer and resizes to `len`. Specifying a `len`
-	// of zero clears the scratch buffer.
-	//
-	// This should be used before exiting a call or instantiation in order to set the return data.
-	ext_scratch_write(ctx, src_ptr: u32, len: u32) => {
-		read_sandbox_memory_into_scratch(ctx, src_ptr, len)
 	},
 
 	// Deposit a contract event with the data buffer and optional list of topics. There is a limit
@@ -1108,10 +1039,7 @@ where
 	let hash = hash_fn(&input);
 	// Write the resulting hash back into the sandboxed output buffer.
 	write_sandbox_memory(
-		ctx.schedule,
-		&mut ctx.special_trap,
-		ctx.gas_meter,
-		&ctx.memory,
+		ctx,
 		output_ptr,
 		hash.as_ref(),
 	)?;

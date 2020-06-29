@@ -67,9 +67,6 @@ impl ExecReturnValue {
 #[cfg_attr(test, derive(sp_runtime::RuntimeDebug))]
 pub struct ExecError {
 	pub reason: DispatchError,
-	/// This is an allocated buffer that may be reused. The buffer must be cleared explicitly
-	/// before reuse.
-	pub buffer: Vec<u8>,
 }
 
 pub type ExecResult = Result<ExecReturnValue, ExecError>;
@@ -80,11 +77,11 @@ pub type ExecResult = Result<ExecReturnValue, ExecError>;
 /// ownership of buffer unless there is an error.
 #[macro_export]
 macro_rules! try_or_exec_error {
-	($e:expr, $buffer:expr) => {
+	($e:expr) => {
 		match $e {
 			Ok(val) => val,
 			Err(reason) => return Err(
-				$crate::exec::ExecError { reason: reason.into(), buffer: $buffer }
+				$crate::exec::ExecError { reason: reason.into() }
 			),
 		}
 	}
@@ -333,7 +330,6 @@ where
 		if self.depth == self.config.max_depth as usize {
 			return Err(ExecError {
 				reason: "reached maximum depth, cannot make a call".into(),
-				buffer: input_data,
 			});
 		}
 
@@ -343,7 +339,6 @@ where
 		{
 			return Err(ExecError {
 				reason: "not enough gas to pay base call fee".into(),
-				buffer: input_data,
 			});
 		}
 
@@ -356,7 +351,6 @@ where
 		if let Some(ContractInfo::Tombstone(_)) = contract_info {
 			return Err(ExecError {
 				reason: "contract has been evicted".into(),
-				buffer: input_data,
 			});
 		};
 
@@ -373,8 +367,7 @@ where
 						&dest,
 						value,
 						nested,
-					),
-					input_data
+					)
 				);
 			}
 
@@ -383,8 +376,7 @@ where
 			match storage::code_hash::<T>(&dest) {
 				Ok(dest_code_hash) => {
 					let executable = try_or_exec_error!(
-						nested.loader.load_main(&dest_code_hash),
-						input_data
+						nested.loader.load_main(&dest_code_hash)
 					);
 					let output = nested.vm
 						.execute(
@@ -410,7 +402,6 @@ where
 		if self.depth == self.config.max_depth as usize {
 			return Err(ExecError {
 				reason: "reached maximum depth, cannot instantiate".into(),
-				buffer: input_data,
 			});
 		}
 
@@ -420,7 +411,6 @@ where
 		{
 			return Err(ExecError {
 				reason: "not enough gas to pay base instantiate fee".into(),
-				buffer: input_data,
 			});
 		}
 
@@ -445,8 +435,7 @@ where
 						.clone()
 						.expect("the nested context always has to have self_trie_id"),
 					code_hash.clone()
-				),
-				input_data
+				)
 			);
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
@@ -459,13 +448,11 @@ where
 					&dest,
 					endowment,
 					nested,
-				),
-				input_data
+				)
 			);
 
 			let executable = try_or_exec_error!(
-				nested.loader.load_init(&code_hash),
-				input_data
+				nested.loader.load_init(&code_hash)
 			);
 			let output = nested.vm
 				.execute(
@@ -479,7 +466,6 @@ where
 			if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
 				return Err(ExecError {
 					reason: "insufficient remaining balance".into(),
-					buffer: output.data,
 				});
 			}
 
@@ -1230,7 +1216,6 @@ mod tests {
 				result,
 				Err(ExecError {
 					reason: DispatchError::Module { message: Some("InsufficientBalance"), .. },
-					buffer: _,
 				})
 			);
 			assert_eq!(get_balance(&origin), 0);
@@ -1372,7 +1357,6 @@ mod tests {
 					r,
 					Err(ExecError {
 						reason: DispatchError::Other("reached maximum depth, cannot make a call"),
-						buffer: _,
 					})
 				);
 				*reached_bottom = true;
@@ -1627,7 +1611,7 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(
-			|_| Err(ExecError { reason: "It's a trap!".into(), buffer: Vec::new() })
+			|_| Err(ExecError { reason: "It's a trap!".into() })
 		);
 		let instantiator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
@@ -1640,7 +1624,7 @@ mod tests {
 						ctx.gas_meter,
 						vec![]
 					),
-					Err(ExecError { reason: DispatchError::Other("It's a trap!"), buffer: _ })
+					Err(ExecError { reason: DispatchError::Other("It's a trap!") })
 				);
 
 				exec_success()
@@ -1693,8 +1677,7 @@ mod tests {
 					),
 					Err(ExecError {
 						reason: DispatchError::Other("insufficient remaining balance"),
-						buffer
-					}) if buffer == Vec::<u8>::new()
+					})
 				);
 
 				assert_eq!(

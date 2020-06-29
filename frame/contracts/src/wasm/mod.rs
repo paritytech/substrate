@@ -799,7 +799,7 @@ mod tests {
 	const CODE_GET_STORAGE: &str = r#"
 (module
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) key for get storage
@@ -847,6 +847,7 @@ mod tests {
 
 		;; Return the contents of the buffer
 		(call $ext_return
+			(i32.const 0)
 			(i32.const 36)
 			(get_local $buf_size)
 		)
@@ -1091,7 +1092,7 @@ mod tests {
 	const CODE_GAS_LEFT: &str = r#"
 (module
 	(import "env" "ext_gas_left" (func $ext_gas_left (param i32 i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1119,7 +1120,7 @@ mod tests {
 		)
 
 		;; return gas left
-		(call $ext_return (i32.const 0) (i32.const 8))
+		(call $ext_return (i32.const 0) (i32.const 0) (i32.const 8))
 
 		(unreachable)
 	)
@@ -1197,12 +1198,13 @@ mod tests {
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
-	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(start $start)
 	(func $start
 		(call $ext_return
+			(i32.const 0)
 			(i32.const 8)
 			(i32.const 4)
 		)
@@ -1387,7 +1389,7 @@ mod tests {
 	const CODE_RANDOM: &str = r#"
 (module
 	(import "env" "ext_random" (func $ext_random (param i32 i32 i32 i32)))
-	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0,128) is reserved for the result of PRNG.
@@ -1429,6 +1431,7 @@ mod tests {
 
 		;; return the random data
 		(call $ext_return
+			(i32.const 0)
 			(i32.const 0)
 			(i32.const 32)
 		)
@@ -1540,7 +1543,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				reason: DispatchError::Other("contract trapped during execution"), buffer: _
+				reason: DispatchError::Other("contract trapped during execution")
 			})
 		);
 	}
@@ -1583,7 +1586,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: DispatchError::Other("contract trapped during execution"), buffer: _ })
+			Err(ExecError { reason: DispatchError::Other("contract trapped during execution") })
 		);
 	}
 
@@ -1641,70 +1644,13 @@ mod tests {
 		).unwrap();
 	}
 
-	// asserts that the size of the input data is 4.
-	const CODE_SIMPLE_ASSERT: &str = r#"
-(module
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
-
-	(func (export "deploy"))
-
-	(func (export "call")
-		(call $assert
-			(i32.eq
-				(call $ext_scratch_size)
-				(i32.const 4)
-			)
-		)
-	)
-)
-"#;
-
-	#[test]
-	fn output_buffer_capacity_preserved_on_success() {
-		let mut input_data = Vec::with_capacity(1_234);
-		input_data.extend_from_slice(&[1, 2, 3, 4][..]);
-
-		let output = execute(
-			CODE_SIMPLE_ASSERT,
-			input_data,
-			MockExt::default(),
-			&mut GasMeter::new(GAS_LIMIT),
-		).unwrap();
-
-		assert_eq!(output.data.len(), 0);
-		assert_eq!(output.data.capacity(), 1_234);
-	}
-
-	#[test]
-	fn output_buffer_capacity_preserved_on_failure() {
-		let mut input_data = Vec::with_capacity(1_234);
-		input_data.extend_from_slice(&[1, 2, 3, 4, 5][..]);
-
-		let error = execute(
-			CODE_SIMPLE_ASSERT,
-			input_data,
-			MockExt::default(),
-			&mut GasMeter::new(GAS_LIMIT),
-		).err().unwrap();
-
-		assert_eq!(error.buffer.capacity(), 1_234);
-	}
-
 	const CODE_RETURN_WITH_DATA: &str = r#"
 (module
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
-	(import "env" "ext_scratch_write" (func $ext_scratch_write (param i32 i32)))
+	(import "env" "ext_input" (func $ext_input (param i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
+
+	(data (i32.const 32) "\20")
 
 	;; Deploy routine is the same as call.
 	(func (export "deploy") (result i32)
@@ -1716,33 +1662,25 @@ mod tests {
 		(local $buf_size i32)
 		(local $exit_status i32)
 
-		;; Find out the size of the scratch buffer
-		(set_local $buf_size (call $ext_scratch_size))
-
-		;; Copy scratch buffer into this contract memory.
-		(call $ext_scratch_read
-			(i32.const 0)		;; The pointer where to store the scratch buffer contents,
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(get_local $buf_size)		;; Count of bytes to copy.
+		;; Copy input data this contract memory.
+		(call $ext_input
+			(i32.const 0)	;; Pointer where to store input
+			(i32.const 32)	;; Pointer to the length of the buffer
 		)
 
 		;; Copy all but the first 4 bytes of the input data as the output data.
-		(call $ext_scratch_write
-			(i32.const 4)		;; Offset from the start of the scratch buffer.
-			(i32.sub		;; Count of bytes to copy.
-				(get_local $buf_size)
-				(i32.const 4)
-			)
+		(call $ext_return
+			(i32.load (i32.const 0))
+			(i32.const 4)
+			(i32.sub (i32.load (i32.const 32)) (i32.const 4))
 		)
-
-		;; Return the first 4 bytes of the input data as the exit status.
-		(i32.load (i32.const 0))
+		(unreachable)
 	)
 )
 "#;
 
 	#[test]
-	fn return_with_success_status() {
+	fn ext_return_with_success_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
 			hex!("00112233445566778899").to_vec(),

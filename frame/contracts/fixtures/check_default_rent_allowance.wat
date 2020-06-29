@@ -1,7 +1,5 @@
 (module
 	(import "env" "ext_rent_allowance" (func $ext_rent_allowance (param i32 i32)))
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) reserved for $ext_rent_allowance output

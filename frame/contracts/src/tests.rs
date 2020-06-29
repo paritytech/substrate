@@ -1166,7 +1166,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					DJANGO,
 					0,
 					GAS_LIMIT,
-					vec![],
+					set_rent_code_hash.as_ref().to_vec(),
 				)
 			};
 

@@ -1,6 +1,5 @@
 (module
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_input" (func $ext_input (param i32 i32)))
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
@@ -21,6 +20,9 @@
 	;; [88, 96) Size of the buffer
 	(data (i32.const 88) "\08")
 
+	;; [96, 100) Size of the input buffer
+	(data (i32.const 96) "\20")
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -31,19 +33,13 @@
 	)
 
 	(func (export "deploy")
-	;; Input data is the code hash of the contract to be deployed.
+		;; Input data is the code hash of the contract to be deployed.
+		(call $ext_input (i32.const 48) (i32.const 96))
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 96))
 				(i32.const 32)
 			)
-		)
-
-		;; Copy code hash from scratch buffer into this contract's memory.
-		(call $ext_scratch_read
-			(i32.const 48)		;; The pointer where to store the scratch buffer contents,
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 32)		;; Count of bytes to copy.
 		)
 
 		;; Deploy the contract with the provided code hash.
@@ -57,7 +53,7 @@
 					(i32.const 8)	;; Length of the buffer with value to transfer.
 					(i32.const 0)	;; Pointer to input data buffer address
 					(i32.const 0)	;; Length of input data buffer
-					(i32.const 80)	;; Buffer where to store address of new contratc
+					(i32.const 80)	;; Buffer where to store address of new contract
 					(i32.const 88)	;; Pointer to the length of the buffer
 					(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
 					(i32.const 0) ;; Length is ignored in this cas

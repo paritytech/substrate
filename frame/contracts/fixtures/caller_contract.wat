@@ -1,6 +1,5 @@
 (module
-	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_input" (func $ext_input (param i32 i32)))
 	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
@@ -38,19 +37,18 @@
 		(local $exit_code i32)
 		(local $balance i64)
 
+		;; Length of the buffer
+		(i32.store (i32.const 20) (i32.const 32))
+
+		;; Copy input to this contracts memory
+		(call $ext_input (i32.const 24) (i32.const 20))
+
 		;; Input data is the code hash of the contract to be deployed.
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 20))
 				(i32.const 32)
 			)
-		)
-
-		;; Copy code hash from scratch buffer into this contract's memory.
-		(call $ext_scratch_read
-			(i32.const 24)		;; The pointer where to store the scratch buffer contents,
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 32)		;; Count of bytes to copy.
 		)
 
 		;; Read current balance into local variable.
