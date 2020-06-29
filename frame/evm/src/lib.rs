@@ -21,6 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod backend;
+mod tests;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
