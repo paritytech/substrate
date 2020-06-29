@@ -917,7 +917,9 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	fn build_common(self) -> Result<ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
+	fn build_common(self) -> Result<
+		ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error
+	>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		let ServiceBuilder {
@@ -1115,7 +1117,9 @@ ServiceBuilder<
 	}
 
 	/// Builds the light service.
-	pub fn build_light(self) -> Result<ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
+	pub fn build_light(self) -> Result<
+		ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error
+	>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		self.build_common()
@@ -1158,7 +1162,9 @@ ServiceBuilder<
 {
 
 	/// Builds the full service.
-	pub fn build_full(self) -> Result<ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error>
+	pub fn build_full(self) -> Result<
+		ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error
+	>
 		where TExec: CallExecutor<TBl, Backend = TBackend>,
 	{
 		// make transaction pool available for off-chain runtime calls.

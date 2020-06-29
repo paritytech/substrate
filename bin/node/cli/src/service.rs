@@ -29,7 +29,7 @@ use node_executor;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
-	ServiceBuilder, config::Configuration, error::{Error as ServiceError},
+	ServiceBuilder, config::{Role, Configuration}, error::{Error as ServiceError},
 	RpcHandlers, ServiceComponents, TaskManager,
 };
 use sp_inherents::InherentDataProviders;
@@ -235,7 +235,7 @@ pub fn new_full_base(
 	}
 
 	// Spawn authority discovery module.
-	if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry {..}) {
+	if matches!(role, Role::Authority{..} | Role::Sentry {..}) {
 		let (sentries, authority_discovery_role) = match role {
 			sc_service::config::Role::Authority { ref sentry_nodes } => (
 				sentry_nodes.clone(),
@@ -250,10 +250,11 @@ pub fn new_full_base(
 			_ => unreachable!("Due to outer matches! constraint; qed.")
 		};
 
-		let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
-			Event::Dht(e) => Some(e),
-			_ => None,
-		}}).boxed();
+		let dht_event_stream = network.event_stream("authority-discovery")
+			.filter_map(|e| async move { match e {
+				Event::Dht(e) => Some(e),
+				_ => None,
+			}}).boxed();
 		let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 			client.clone(),
 			network.clone(),
@@ -334,7 +335,9 @@ type LightFetcher = sc_network::config::OnDemand<Block>;
 pub fn new_light_base(config: Configuration) -> Result<(
 	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	Arc<sc_transaction_pool::BasicPool<sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block>>
+	Arc<sc_transaction_pool::BasicPool<
+		sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block
+	>>
 ), ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
@@ -437,9 +440,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 #[cfg(test)]
 mod tests {
 	use std::{sync::Arc, borrow::Cow, any::Any};
-	use sc_consensus_babe::{
-		CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY
-	};
+	use sc_consensus_babe::{CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY};
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
 		Environment, Proposer, BlockImportParams, BlockOrigin, ForkChoiceStrategy, BlockImport,
@@ -490,14 +491,19 @@ mod tests {
 			chain_spec,
 			|config| {
 				let mut setup_handles = None;
-				let (keep_alive, inherent_data_providers, client, network, transaction_pool) = new_full_base(config, |
-					block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
-					babe_link: &sc_consensus_babe::BabeLink<Block>,
-				| {
-					setup_handles = Some((block_import.clone(), babe_link.clone()));
-				})?;
+				let (keep_alive, inherent_data_providers, client, network, transaction_pool) =
+					new_full_base(config,
+						|
+							block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
+							babe_link: &sc_consensus_babe::BabeLink<Block>,
+						| {
+							setup_handles = Some((block_import.clone(), babe_link.clone()));
+						}
+					)?;
 				
-				let node = sc_service_test::TestNetComponents::new(keep_alive, client, network, transaction_pool);
+				let node = sc_service_test::TestNetComponents::new(
+					keep_alive, client, network, transaction_pool
+				);
 				Ok((node, (inherent_data_providers, setup_handles.unwrap())))
 			},
 			|config| {

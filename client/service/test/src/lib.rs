@@ -112,7 +112,9 @@ TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
 	}
 }
 
-impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future for TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool> {
+impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> Future for
+	TestNetComponents<TBl, TBackend, TExec, TRtApi, TExPool>
+{
 	type Item = ();
 	type Error = sc_service::Error;
 
@@ -540,10 +542,12 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 	info!("Running sync");
 	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
 		|_index, service|
@@ -598,13 +602,16 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	info!("Checking consensus");
 	let first_address = network.authority_nodes[0].3.clone();
 	for (_, service, _, _) in network.full_nodes.iter() {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _, _) in network.authority_nodes.iter().skip(1) {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
 		|_index, service|
@@ -623,10 +630,12 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg).map(|s| (s, ())) })),
 	);
 	for (_, service, _, _) in network.full_nodes.iter() {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	for (_, service, _) in network.light_nodes.iter() {
-		service.network().add_reserved_peer(first_address.to_string()).expect("Error adding reserved peer");
+		service.network().add_reserved_peer(first_address.to_string())
+			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(
 		|_index, service|
