@@ -105,6 +105,7 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 use frame_support::traits::MigrateAccount;
 
 mod benchmarking;
+mod migration;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -666,6 +667,12 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// returns the correct weight.
 			Self::end_block(n)
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>();
+			// TODO: Find sensible weight
+			0
 		}
 	}
 }
