@@ -525,16 +525,14 @@ define_env!(Env, <E: Ext>,
 		value_ptr: u32,
 		value_len: u32,
 		input_data_ptr: u32,
-		input_data_len: u32
+		input_data_len: u32,
+		result_ptr: u32,
+		result_len_ptr: u32
 	) -> u32 => {
 		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, callee_ptr, callee_len)?;
-		let value: BalanceOf<<E as Ext>::T> =
-			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
-
-		// Read input data into the scratch buffer, then take ownership of it.
-		read_sandbox_memory_into_scratch(ctx, input_data_ptr, input_data_len)?;
-		let input_data = mem::replace(&mut ctx.scratch_buf, Vec::new());
+		let value: BalanceOf<<E as Ext>::T> = read_sandbox_memory_as(ctx, value_ptr, value_len)?;
+		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -560,12 +558,10 @@ define_env!(Env, <E: Ext>,
 
 		match call_outcome {
 			Ok(output) => {
-				ctx.scratch_buf = output.data;
+				write_sandbox_output(ctx, result_ptr, result_len_ptr, &output.data)?;
 				Ok(output.status.into())
 			},
-			Err(buffer) => {
-				ctx.scratch_buf = buffer;
-				ctx.scratch_buf.clear();
+			Err(_) => {
 				Ok(TRAP_RETURN_CODE)
 			},
 		}

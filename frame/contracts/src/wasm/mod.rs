@@ -565,9 +565,11 @@ mod tests {
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;    input_data_ptr: u32,
-	;;    input_data_len: u32
+	;;    input_data_len: u32,
+	;;    result_ptr: u32,
+	;;	  result_len_ptr: u32
 	;;) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -579,6 +581,8 @@ mod tests {
 				(i32.const 8)  ;; Length of the buffer with value to transfer.
 				(i32.const 20) ;; Pointer to input data buffer address
 				(i32.const 4)  ;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
 			)
 		)
 	)
@@ -611,7 +615,7 @@ mod tests {
 				to: 9,
 				value: 6,
 				data: vec![1, 2, 3, 4],
-				gas_left: 9985500000,
+				gas_left: 9984500000,
 			}]
 		);
 	}
@@ -728,9 +732,11 @@ mod tests {
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;    input_data_ptr: u32,
-	;;    input_data_len: u32
+	;;    input_data_len: u32,
+	;;    result_ptr: u32,
+	;;	  result_len_ptr: u32
 	;;) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
@@ -742,6 +748,8 @@ mod tests {
 				(i32.const 8)   ;; Length of the buffer with value to transfer.
 				(i32.const 20)   ;; Pointer to input data buffer address
 				(i32.const 4)   ;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this cas
 			)
 		)
 	)

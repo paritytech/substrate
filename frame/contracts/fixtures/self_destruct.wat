@@ -1,8 +1,7 @@
 (module
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_address" (func $ext_address (param i32 i32)))
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -55,6 +54,8 @@
 							(i32.const 8)	;; Length of the buffer with value to transfer
 							(i32.const 0)	;; Pointer to input data buffer address
 							(i32.const 0)	;; Length of input data buffer
+							(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+							(i32.const 0) ;; Length is ignored in this case
 						)
 						(i32.const 0)
 					)

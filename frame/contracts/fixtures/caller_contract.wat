@@ -2,7 +2,7 @@
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_println" (func $ext_println (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -17,12 +17,16 @@
 	)
 
 	(func $current_balance (param $sp i32) (result i64)
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 16))
+			(i32.const 8)
+		)
 		(call $ext_balance
 			(i32.sub (get_local $sp) (i32.const 8))
-			(i32.const 2048)
+			(i32.sub (get_local $sp) (i32.const 16))
 		)
 		(call $assert
-			(i32.eq (i32.load (i32.const 2048)) (i32.const 8))
+			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 16))) (i32.const 8))
 		)
 		(i64.load (i32.sub (get_local $sp) (i32.const 8)))
 	)
@@ -149,6 +153,18 @@
 			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
 		)
 
+		;; Zero out destination buffer of output
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 0)
+		)
+
+		;; Length of the output buffer
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 8))
+			(i32.const 4)
+		)
+
 		;; Call the new contract and expect it to return failing exit code.
 		(set_local $exit_code
 			(call $ext_call
@@ -159,6 +175,8 @@
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 9)	;; Pointer to input data buffer address
 				(i32.const 7)	;; Length of input data buffer
+				(i32.sub (get_local $sp) (i32.const 4)) ;; Ptr to output buffer
+				(i32.sub (get_local $sp) (i32.const 8)) ;; Ptr to output buffer len
 			)
 		)
 
@@ -169,16 +187,7 @@
 
 		;; Check that scratch buffer contains the expected return data.
 		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 3))
-		)
-		(i32.store
-			(i32.sub (get_local $sp) (i32.const 4))
-			(i32.const 0)
-		)
-		(call $ext_scratch_read
-			(i32.sub (get_local $sp) (i32.const 4))
-			(i32.const 0)
-			(i32.const 3)
+			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 8))) (i32.const 3))
 		)
 		(call $assert
 			(i32.eq
@@ -202,6 +211,8 @@
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this cas
 			)
 		)
 
@@ -210,14 +221,21 @@
 			(i32.eq (get_local $exit_code) (i32.const 0x0100))
 		)
 
-		;; Check that scratch buffer is empty since call trapped.
-		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 0))
-		)
-
 		;; Check that balance has not changed.
 		(call $assert
 			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Zero out destination buffer of output
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 0)
+		)
+
+		;; Length of the output buffer
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 8))
+			(i32.const 4)
 		)
 
 		;; Call the contract successfully.
@@ -230,6 +248,8 @@
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
+				(i32.sub (get_local $sp) (i32.const 4)) ;; Ptr to output buffer
+				(i32.sub (get_local $sp) (i32.const 8)) ;; Ptr to output buffer len
 			)
 		)
 
@@ -240,16 +260,7 @@
 
 		;; Check that scratch buffer contains the expected return data.
 		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 4))
-		)
-		(i32.store
-			(i32.sub (get_local $sp) (i32.const 4))
-			(i32.const 0)
-		)
-		(call $ext_scratch_read
-			(i32.sub (get_local $sp) (i32.const 4))
-			(i32.const 0)
-			(i32.const 4)
+			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 8))) (i32.const 4))
 		)
 		(call $assert
 			(i32.eq
@@ -270,6 +281,4 @@
 	(data (i32.const 0) "\00\80")		;; The value to transfer on instantiation and calls.
 										;; Chosen to be greater than existential deposit.
 	(data (i32.const 8) "\00\11\22\33\44\55\66\77")		;; The input data to instantiations and calls.
-
-	(data (i32.const 2048) "\08") ;; size of our $ext_balance output buffer
 )
