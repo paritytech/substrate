@@ -29,7 +29,13 @@ use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollPa
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
-use std::{borrow::Cow, collections::VecDeque, iter, task::{Context, Poll}, time::Duration};
+use std::{
+	borrow::Cow,
+	collections::{HashSet, VecDeque},
+	iter,
+	task::{Context, Poll},
+	time::Duration,
+};
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
@@ -124,7 +130,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Returns the list of nodes that we know exist in the network.
-	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
+	pub fn known_peers(&mut self) -> HashSet<PeerId> {
 		self.discovery.known_peers()
 	}
 
