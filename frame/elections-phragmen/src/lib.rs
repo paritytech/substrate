@@ -712,14 +712,14 @@ impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 			decl_storage! {
 				trait Store for Module<T: Trait> as PhragmenElection {
 					pub VotesOf get(fn votes_of):
-						map hasher(opaque_blake2_256) T::AccountId => Vec<T::AccountId>;
+						map hasher(twox_64_concat) T::AccountId => Vec<T::AccountId>;
 					pub StakeOf get(fn stake_of):
-						map hasher(opaque_blake2_256) T::AccountId => BalanceOf<T>;
+						map hasher(twox_64_concat) T::AccountId => BalanceOf<T>;
 				}
 			}
 		}
 
-		// TODO: will not actually do any useful migration
+		// Note: only migrates the hasher, migration is completed in `migration.rs`
 		if deprecated::StakeOf::<T>::migrate_key_from_blake(a).is_some() {
 			deprecated::VotesOf::<T>::migrate_key_from_blake(a);
 		}

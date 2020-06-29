@@ -10,7 +10,8 @@ pub fn migrate<T: Trait>() {
     {
         if let Some(stake) = take_storage_item::<_, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"StakeOf", &who) {
             Voting::<T>::insert(who, (stake, votes));
+            sp_runtime::print("Phragmen: inserted Voting.");
         }
-        sp_runtime::print("🕊️  Done Election Phragmen.");
     }
+    sp_runtime::print("🕊️  Done Election Phragmen.");
 }
