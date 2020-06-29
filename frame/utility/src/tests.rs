@@ -138,16 +138,16 @@ fn expect_event<E: Into<TestEvent>>(e: E) {
 }
 
 #[test]
-fn as_sub_works() {
+fn as_derivative_works() {
 	new_test_ext().execute_with(|| {
-		let sub_1_0 = Utility::sub_account_id(1, 0);
+		let sub_1_0 = Utility::derivative_account_id(1, 0);
 		assert_ok!(Balances::transfer(Origin::signed(1), sub_1_0, 5));
-		assert_noop!(Utility::as_sub(
+		assert_noop!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::Balances(BalancesCall::transfer(6, 3))),
 		), BalancesError::<Test, _>::InsufficientBalance);
-		assert_ok!(Utility::as_sub(
+		assert_ok!(Utility::as_derivative(
 			Origin::signed(1),
 			0,
 			Box::new(Call::Balances(BalancesCall::transfer(2, 3))),
@@ -158,9 +158,9 @@ fn as_sub_works() {
 }
 
 #[test]
-fn as_sub_filters() {
+fn as_derivative_filters() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Utility::as_sub(
+		assert_noop!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
 			Box::new(Call::System(frame_system::Call::remark(vec![]))),

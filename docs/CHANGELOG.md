@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-rc3 -> 2.0.0-rc4 (Rhinoceros)
+
+Runtime
+-------
+
+* Staking Payout Creates Controller (#6496)
+* `pallet-scheduler`: Check that `when` is not in the past (#6480)
+* Fix `sp-api` handling of multiple arguments (#6484)
+* Fix issues with `Operational` transactions validity and prioritization. (#6435)
+* pallet-atomic-swap: generialized swap action (#6421)
+* Avoid multisig reentrancy (#6445)
+* Root origin use no filter by default. Scheduler and Democracy dispatch without asserting BaseCallFilter (#6408)
+* Scale and increase validator count (#6417)
+* Pallet: Atomic Swap (#6349)
+* Restrict remove_proxies (#6383)
+* Stored call in multisig (#6319)
+* Allow Sudo to do anything (#6375)
+* vesting: Force Vested Transfer (#6368)
+* Add events for balance reserve and unreserve functions (#6330)
+* Introduce frozen indices. (#6307)
+
+Client
+------
+
+* client/network/service: Add primary dimension to connection metrics (#6472)
+* Fix Babe secondary plain slots claiming (#6451)
+* add network propagated metrics (#6438)
+* client/authority-discovery: Compare PeerIds and not Multihashes (#6414)
+* Update sync chain info on own block import (#6424)
+* Remove --legacy-network-protocol CLI flag (#6411)
+* Runtime interface to add support for tracing from wasm (#6381)
+* Remove penalty on duplicate Status message (#6377)
+* Fix the broken weight multiplier update function (#6334)
+* client/authority-discovery: Don't add own address to priority group (#6370)
+* Split the service initialisation up into seperate functions (#6332)
+* Fix transaction pool event sending (#6341)
+* Add a [prefix]_process_start_time_seconds metric (#6315)
+* new crate sc-light (#6235)
+* Allow adding a prefix to the informant (#6174)
+
+API
+---
+
+* seal: Remove ext_dispatch_call and ext_get_runtime_storage (#6464)
+* seal: Refactor ext_gas_price (#6478)
+* Implement nested storage transactions (#6269)
+* Allow empty values in the storage (#6364)
+* add system_dryRun (#6300)
+* Introduce in-origin filtering (#6318)
+* add extend_lock for StorageLock (#6323)
+* Deprecate FunctionOf and remove its users (#6340)
+* transaction-pool: expose blocking api for tx submission (#6325)
+
+
 ## 2.0.0-rc2 -> 2.0.0-rc3
 
 Runtime

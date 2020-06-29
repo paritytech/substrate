@@ -575,6 +575,9 @@ where
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
 	fn commit(&mut self) {
@@ -590,8 +593,24 @@ where
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
+			changes.main_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
+	}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.backend.read_write_count()
+	}
+
+	fn reset_read_write_count(&mut self) {
+		self.backend.reset_read_write_count()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+		self.backend.set_whitelist(new)
 	}
 }
 
