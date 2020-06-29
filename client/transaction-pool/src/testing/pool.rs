@@ -1081,7 +1081,7 @@ fn pruning_a_transaction_should_remove_it_from_best_transaction() {
 	block_on(pool.maintain(block_event(header)));
 
 	// Submit the tx again.
-	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("1. Imported");
+	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("2. Imported");
 
 	let mut iterator = block_on(pool.ready_at(1));
 
