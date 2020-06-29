@@ -3,7 +3,7 @@
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_balance" (func $ext_balance (param i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_println" (func $ext_println (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -69,17 +69,16 @@
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 9)	;; Pointer to input data buffer address
 				(i32.const 7)	;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy address
+				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
 			)
 		)
 
 		;; Check non-zero exit status.
 		(call $assert
 			(i32.eq (get_local $exit_code) (i32.const 0x11))
-		)
-
-		;; Check that scratch buffer is empty since contract instantiation failed.
-		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 0))
 		)
 
 		;; Check that balance has not changed.
@@ -97,6 +96,10 @@
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy address
+				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
 			)
 		)
 
@@ -105,14 +108,15 @@
 			(i32.eq (get_local $exit_code) (i32.const 0x0100))
 		)
 
-		;; Check that scratch buffer is empty since contract instantiation failed.
-		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 0))
-		)
-
 		;; Check that balance has not changed.
 		(call $assert
 			(i64.eq (get_local $balance) (call $current_balance (get_local $sp)))
+		)
+
+		;; Length of the output buffer
+		(i32.store
+			(i32.sub (get_local $sp) (i32.const 4))
+			(i32.const 8)
 		)
 
 		;; Deploy the contract successfully.
@@ -125,6 +129,11 @@
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
 				(i32.const 8)	;; Length of input data buffer
+				(i32.const 16) ;; Pointer to the address output buffer
+				(i32.sub (get_local $sp) (i32.const 4)) ;; Pointer to the address buffer length
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
+
 			)
 		)
 
@@ -133,16 +142,9 @@
 			(i32.eq (get_local $exit_code) (i32.const 0x00))
 		)
 
-		;; Check that scratch buffer contains the address of the new contract.
+		;; Check that address has the expected length
 		(call $assert
-			(i32.eq (call $ext_scratch_size) (i32.const 8))
-		)
-
-		;; Copy contract address from scratch buffer into this contract's memory.
-		(call $ext_scratch_read
-			(i32.const 16)		;; The pointer where to store the scratch buffer contents,
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
+			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 4))) (i32.const 8))
 		)
 
 		;; Check that balance has been deducted.

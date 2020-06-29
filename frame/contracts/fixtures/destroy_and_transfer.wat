@@ -4,7 +4,7 @@
 	(import "env" "ext_get_storage" (func $ext_get_storage (param i32 i32 i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
-	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_instantiate" (func $ext_instantiate (param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 8) Endowment to send when creating contract.
@@ -57,22 +57,21 @@
 					(i32.const 8)	;; Length of the buffer with value to transfer.
 					(i32.const 0)	;; Pointer to input data buffer address
 					(i32.const 0)	;; Length of input data buffer
+					(i32.const 80)	;; Buffer where to store address of new contratc
+					(i32.const 88)	;; Pointer to the length of the buffer
+					(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+					(i32.const 0) ;; Length is ignored in this cas
 				)
 				(i32.const 0)
 			)
 		)
 
-		;; Read the address of the instantiated contract into memory.
+		;; Check that address has expected length
 		(call $assert
 			(i32.eq
-				(call $ext_scratch_size)
+				(i32.load (i32.const 88))
 				(i32.const 8)
 			)
-		)
-		(call $ext_scratch_read
-			(i32.const 80)		;; The pointer where to store the scratch buffer contents,
-			(i32.const 0)		;; Offset from the start of the scratch buffer.
-			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		;; Store the return address.
