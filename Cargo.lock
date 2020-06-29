@@ -2670,13 +2670,12 @@ checksum = "c7d73b3f436185384286bd8098d17ec07c9a7d2388a6599f824d8502b529702a"
 [[package]]
 name = "libp2p"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db81113df355dea9dddfcb01cd867555298dca29d915f25d1b1a0aad2e29338b"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "bytes 0.5.4",
  "futures 0.3.5",
  "lazy_static",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "libp2p-core-derive",
  "libp2p-dns",
  "libp2p-identify",
@@ -2688,15 +2687,48 @@ dependencies = [
  "libp2p-secio",
  "libp2p-swarm",
  "libp2p-tcp",
- "libp2p-wasm-ext",
+ "libp2p-wasm-ext 0.19.0 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "libp2p-websocket",
  "libp2p-yamux",
  "multihash",
- "parity-multiaddr 0.9.1",
+ "parity-multiaddr 0.9.1 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "parking_lot 0.10.2",
  "pin-project",
  "smallvec 1.4.0",
  "wasm-timer",
+]
+
+[[package]]
+name = "libp2p-core"
+version = "0.19.2"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
+dependencies = [
+ "asn1_der",
+ "bs58",
+ "ed25519-dalek",
+ "either",
+ "fnv",
+ "futures 0.3.5",
+ "futures-timer 3.0.2",
+ "lazy_static",
+ "libsecp256k1",
+ "log",
+ "multihash",
+ "multistream-select 0.8.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
+ "parity-multiaddr 0.9.1 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
+ "parking_lot 0.10.2",
+ "pin-project",
+ "prost",
+ "prost-build",
+ "rand 0.7.3",
+ "ring",
+ "rw-stream-sink",
+ "sha2",
+ "smallvec 1.4.0",
+ "thiserror",
+ "unsigned-varint 0.4.0",
+ "void",
+ "zeroize",
 ]
 
 [[package]]
@@ -2716,8 +2748,8 @@ dependencies = [
  "libsecp256k1",
  "log",
  "multihash",
- "multistream-select",
- "parity-multiaddr 0.9.1",
+ "multistream-select 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-multiaddr 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.10.2",
  "pin-project",
  "prost",
@@ -2736,8 +2768,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core-derive"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f09548626b737ed64080fde595e06ce1117795b8b9fc4d2629fa36561c583171"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "quote 1.0.6",
  "syn 1.0.17",
@@ -2746,22 +2777,20 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cc186d9a941fd0207cf8f08ef225a735e2d7296258f570155e525f6ee732f87"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "futures 0.3.5",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
 ]
 
 [[package]]
 name = "libp2p-identify"
 version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62f76075b170d908bae616f550ade410d9d27c013fa69042551dbfc757c7c094"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "futures 0.3.5",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "libp2p-swarm",
  "log",
  "prost",
@@ -2773,8 +2802,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7c819a5425b2eb3416d67e9c868c5c1e922b6658655e06b9eeafaa41304b876"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "arrayvec 0.5.1",
  "bytes 0.5.4",
@@ -2782,7 +2810,7 @@ dependencies = [
  "fnv",
  "futures 0.3.5",
  "futures_codec 0.4.1",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "libp2p-swarm",
  "log",
  "multihash",
@@ -2800,8 +2828,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mdns"
 version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f55b2d4b80986e5bf158270ab23268ec0e7f644ece5436fbaabc5155472f357"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "async-std",
  "data-encoding",
@@ -2809,7 +2836,7 @@ dependencies = [
  "either",
  "futures 0.3.5",
  "lazy_static",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "libp2p-swarm",
  "log",
  "net2",
@@ -2822,14 +2849,13 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be7d913a4cd57de2013257ec73f07d77bfce390b370023e2d59083e5ca079864"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
  "futures 0.3.5",
  "futures_codec 0.4.1",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
  "parking_lot 0.10.2",
  "unsigned-varint 0.4.0",
@@ -2838,13 +2864,12 @@ dependencies = [
 [[package]]
 name = "libp2p-noise"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a03db664653369f46ee03fcec483a378c20195089bb43a26cb9fb0058009ac88"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "curve25519-dalek",
  "futures 0.3.5",
  "lazy_static",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
  "prost",
  "prost-build",
@@ -2859,11 +2884,10 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.19.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8dedd34e35a9728d52d59ef36a218e411359a353f9011b2574b86ee790978f6"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "futures 0.3.5",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "libp2p-swarm",
  "log",
  "rand 0.7.3",
@@ -2874,8 +2898,7 @@ dependencies = [
 [[package]]
 name = "libp2p-secio"
 version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c99b3c33e96bb402486d5b4f7cbeab14e66e6a2ed010abbb5bb032a05460bfda"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "aes-ctr",
  "ctr",
@@ -2883,7 +2906,7 @@ dependencies = [
  "hmac",
  "js-sys",
  "lazy_static",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
  "parity-send-wrapper",
  "pin-project",
@@ -2904,11 +2927,10 @@ dependencies = [
 [[package]]
 name = "libp2p-swarm"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce53ff4d127cf8b39adf84dbd381ca32d49bd85788cee08e6669da2495993930"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "futures 0.3.5",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
  "rand 0.7.3",
  "smallvec 1.4.0",
@@ -2919,17 +2941,29 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp"
 version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9481500c5774c62e8c413e9535b3f33a0e3dbacf2da63b8d3056c686a9df4146"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "async-std",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "get_if_addrs",
  "ipnet",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
  "socket2",
+]
+
+[[package]]
+name = "libp2p-wasm-ext"
+version = "0.19.0"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
+dependencies = [
+ "futures 0.3.5",
+ "js-sys",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
+ "parity-send-wrapper",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -2940,7 +2974,7 @@ checksum = "f59fdbb5706f2723ca108c088b1c7a37f735a8c328021f0508007162627e9885"
 dependencies = [
  "futures 0.3.5",
  "js-sys",
- "libp2p-core",
+ "libp2p-core 0.19.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-send-wrapper",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2949,13 +2983,12 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e4440551bf6519e0a684cd859ea809aec6d798f686e0d6ed03a28c3e76849b8"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "async-tls",
  "either",
  "futures 0.3.5",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "log",
  "quicksink",
  "rustls",
@@ -2969,11 +3002,10 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da33e7b5f49c75c6a8afb0b8d1e229f5fa48be9f39bd14cdbc21459a02ac6fc"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
 dependencies = [
  "futures 0.3.5",
- "libp2p-core",
+ "libp2p-core 0.19.2 (git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control)",
  "parking_lot 0.10.2",
  "thiserror",
  "yamux",
@@ -3277,6 +3309,19 @@ name = "multimap"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8883adfde9756c1d30b0f519c9b8c502a94b41ac62f696453c37c7fc0a958ce"
+
+[[package]]
+name = "multistream-select"
+version = "0.8.2"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
+dependencies = [
+ "bytes 0.5.4",
+ "futures 0.3.5",
+ "log",
+ "pin-project",
+ "smallvec 1.4.0",
+ "unsigned-varint 0.4.0",
+]
 
 [[package]]
 name = "multistream-select"
@@ -4804,6 +4849,23 @@ dependencies = [
  "serde",
  "static_assertions",
  "unsigned-varint 0.3.3",
+ "url 2.1.1",
+]
+
+[[package]]
+name = "parity-multiaddr"
+version = "0.9.1"
+source = "git+https://github.com/romanb/rust-libp2p?branch=kad-bucket-control#c0774aec34ea4f4fd5c177a863f875e7ec85efc8"
+dependencies = [
+ "arrayref",
+ "bs58",
+ "byteorder",
+ "data-encoding",
+ "multihash",
+ "percent-encoding 2.1.0",
+ "serde",
+ "static_assertions",
+ "unsigned-varint 0.4.0",
  "url 2.1.1",
 ]
 
@@ -8211,7 +8273,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "js-sys",
  "kvdb-web",
- "libp2p-wasm-ext",
+ "libp2p-wasm-ext 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "rand 0.6.5",
  "rand 0.7.3",
