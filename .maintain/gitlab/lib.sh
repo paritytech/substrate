@@ -5,7 +5,7 @@ api_base="https://api.github.com/repos"
 # Function to take 2 git tags/commits and get any lines from commit messages
 # that contain something that looks like a PR reference: e.g., (#1234)
 sanitised_git_logs(){
-  git --no-pager log --pretty=format:"%s" "$1..$2" |
+  git --no-pager log --pretty=format:"%s" "$1...$2" |
   # Only find messages referencing a PR
   grep -E '\(#[0-9]+\)' |
   # Strip any asterisks
