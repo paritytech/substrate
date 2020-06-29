@@ -610,7 +610,9 @@ mod tests {
 
 	#[test]
 	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid(
+			"very very long names are really not very cool for the ui at all, really they're not"
+		).is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());
