@@ -2,9 +2,9 @@
 
 use super::*;
 
+use std::{str::FromStr, collections::BTreeMap};
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::{DispatchInfo, GetDispatchInfo}, traits::{OnInitialize, OnFinalize}
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -83,12 +83,12 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 }
 
-/// Fixed gas price of `1`.
+/// Fixed gas price of `0`.
 pub struct FixedGasPrice;
 impl FeeCalculator for FixedGasPrice {
 	fn min_gas_price() -> U256 {
 		// Gas price is always one token per gas.
-		1.into()
+		0.into()
 	}
 }
 parameter_types! {
@@ -111,10 +111,58 @@ type EVM = Module<Test>;
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+	let mut accounts = BTreeMap::new();
+	accounts.insert(
+		H160::from_str("1000000000000000000000000000000000000001").unwrap(),
+		GenesisAccount {
+			nonce: U256::from(1),
+			balance: U256::from(1000000),
+			storage: Default::default(),
+			code: vec![
+				0x00, // STOP
+			],
+		}
+	);
+	accounts.insert(
+		H160::from_str("1000000000000000000000000000000000000002").unwrap(),
+		GenesisAccount {
+			nonce: U256::from(1),
+			balance: U256::from(1000000),
+			storage: Default::default(),
+			code: vec![
+				0xff, // INVALID
+			],
+		}
+	);
+
 	// We use default for brevity, but you can configure as desired if needed.
 	pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
-	GenesisConfig {
-		accounts: Default::default(),
-	}.assimilate_storage(&mut t).unwrap();
+	GenesisConfig { accounts }.assimilate_storage(&mut t).unwrap();
 	t.into()
+}
+
+#[test]
+fn fail_call_return_ok() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(EVM::call(
+			Origin::signed(H256::default()),
+			H160::from_str("1000000000000000000000000000000000000001").unwrap(),
+			Vec::new(),
+			U256::default(),
+			1000000,
+			U256::default(),
+			None,
+		));
+
+		assert_ok!(EVM::call(
+			Origin::signed(H256::default()),
+			H160::from_str("1000000000000000000000000000000000000002").unwrap(),
+			Vec::new(),
+			U256::default(),
+			1000000,
+			U256::default(),
+			None,
+		));
+	});
 }
