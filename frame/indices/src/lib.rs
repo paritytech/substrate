@@ -62,9 +62,9 @@ decl_storage! {
 		pub Accounts build(|config: &GenesisConfig<T>|
 			config.indices.iter()
 				.cloned()
-				.map(|(a, b)| (a, (b, Zero::zero())))
+				.map(|(a, b)| (a, (b, Zero::zero(), false)))
 				.collect::<Vec<_>>()
-		): map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>)>;
+		): map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>, bool)>;
 	}
 	add_extra_genesis {
 		config(indices): Vec<(T::AccountIndex, T::AccountId)>;
@@ -80,6 +80,8 @@ decl_event!(
 		IndexAssigned(AccountId, AccountIndex),
 		/// A account index has been freed up (unassigned).
 		IndexFreed(AccountIndex),
+		/// A account index has been frozen to its current account ID.
+		IndexFrozen(AccountIndex, AccountId),
 	}
 );
 
@@ -93,6 +95,8 @@ decl_error! {
 		InUse,
 		/// The source and destination accounts are identical.
 		NotTransfer,
+		/// The index is permanent and may not be freed/changed.
+		Permanent,
 	}
 }
 
@@ -125,7 +129,7 @@ decl_module! {
 
 			Accounts::<T>::try_mutate(index, |maybe_value| {
 				ensure!(maybe_value.is_none(), Error::<T>::InUse);
-				*maybe_value = Some((who.clone(), T::Deposit::get()));
+				*maybe_value = Some((who.clone(), T::Deposit::get(), false));
 				T::Currency::reserve(&who, T::Deposit::get())
 			})?;
 			Self::deposit_event(RawEvent::IndexAssigned(who, index));
@@ -158,10 +162,11 @@ decl_module! {
 			ensure!(who != new, Error::<T>::NotTransfer);
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
-				let (account, amount) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				ensure!(!perm, Error::<T>::Permanent);
 				ensure!(&account == &who, Error::<T>::NotOwner);
 				let lost = T::Currency::repatriate_reserved(&who, &new, amount, Reserved)?;
-				*maybe_value = Some((new.clone(), amount.saturating_sub(lost)));
+				*maybe_value = Some((new.clone(), amount.saturating_sub(lost), false));
 				Ok(())
 			})?;
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
@@ -191,7 +196,8 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
-				let (account, amount) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				ensure!(!perm, Error::<T>::Permanent);
 				ensure!(&account == &who, Error::<T>::NotOwner);
 				T::Currency::unreserve(&who, amount);
 				Ok(())
@@ -206,6 +212,7 @@ decl_module! {
 		///
 		/// - `index`: the index to be (re-)assigned.
 		/// - `new`: the new owner of the index. This function is a no-op if it is equal to sender.
+		/// - `freeze`: if set to `true`, will freeze the index so it cannot be transferred.
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
@@ -221,16 +228,49 @@ decl_module! {
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(2, 2) + 25 * WEIGHT_PER_MICROS]
-		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
+		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex, freeze: bool) {
 			ensure_root(origin)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
-				if let Some((account, amount)) = maybe_value.take() {
+				if let Some((account, amount, _)) = maybe_value.take() {
 					T::Currency::unreserve(&account, amount);
 				}
-				*maybe_value = Some((new.clone(), Zero::zero()));
+				*maybe_value = Some((new.clone(), Zero::zero(), freeze));
 			});
 			Self::deposit_event(RawEvent::IndexAssigned(new, index));
+		}
+
+		/// Freeze an index so it will always point to the sender account. This consumes the deposit.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the signing account must have a
+		/// non-frozen account `index`.
+		///
+		/// - `index`: the index to be frozen in place.
+		///
+		/// Emits `IndexFrozen` if successful.
+		///
+		/// # <weight>
+		/// - `O(1)`.
+		/// - One storage mutation (codec `O(1)`).
+		/// - Up to one slash operation.
+		/// - One event.
+		/// -------------------
+		/// - Base Weight: 30.86 µs
+		/// - DB Weight: 1 Read/Write (Accounts)
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 30 * WEIGHT_PER_MICROS]
+		fn freeze(origin, index: T::AccountIndex) {
+			let who = ensure_signed(origin)?;
+
+			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
+				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
+				ensure!(!perm, Error::<T>::Permanent);
+				ensure!(&account == &who, Error::<T>::NotOwner);
+				T::Currency::slash_reserved(&who, amount);
+				*maybe_value = Some((account, Zero::zero(), true));
+				Ok(())
+			})?;
+			Self::deposit_event(RawEvent::IndexFrozen(index, who));
 		}
 	}
 }

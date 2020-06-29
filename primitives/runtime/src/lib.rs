@@ -71,7 +71,7 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16,
+	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
 	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
 };
 /// Re-export 128 bit helpers.
@@ -80,6 +80,8 @@ pub use sp_arithmetic::helpers_128bit;
 pub use sp_arithmetic::biguint;
 
 pub use random_number_generator::RandomNumberGenerator;
+
+pub use either::Either;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -712,7 +714,14 @@ macro_rules! assert_eq_error_rate {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-pub struct OpaqueExtrinsic(pub Vec<u8>);
+pub struct OpaqueExtrinsic(Vec<u8>);
+
+impl OpaqueExtrinsic {
+	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
+	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
+		OpaqueExtrinsic::decode(&mut bytes)
+	}
+}
 
 #[cfg(feature = "std")]
 impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {

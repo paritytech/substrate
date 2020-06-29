@@ -32,7 +32,8 @@ use frame_support::{
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
-use frame_support::traits::{Filter, InstanceFilter};
+use frame_system::{EnsureRoot, EnsureOneOf};
+use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
 use sp_core::{
 	crypto::KeyTypeId,
@@ -43,8 +44,8 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
-	Permill, Perbill, Perquintill, Percent, PerThing, ApplyExtrinsicResult,
-	impl_opaque_keys, generic, create_runtime_str, ModuleId,
+	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult,
+	impl_opaque_keys, generic, create_runtime_str, ModuleId, FixedPointNumber,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
@@ -60,6 +61,7 @@ use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
 use pallet_session::{historical as pallet_session_historical};
 use sp_inherents::{InherentData, CheckInherentsResult};
@@ -76,7 +78,7 @@ pub use pallet_staking::StakerStatus;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{CurrencyToVoteHandler, Author, TargetedFeeAdjustment};
+use impls::{CurrencyToVoteHandler, Author};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -95,8 +97,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 251,
-	impl_version: 2,
+	spec_version: 254,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
 };
@@ -111,15 +113,6 @@ pub fn native_version() -> NativeVersion {
 }
 
 type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
-
-pub struct BaseFilter;
-impl Filter<Call> for BaseFilter {
-	fn filter(_call: &Call) -> bool {
-		true
-	}
-}
-pub struct IsCallable;
-frame_support::impl_filter_stack!(IsCallable, BaseFilter, Call, is_callable);
 
 pub struct DealWithFees;
 impl OnUnbalanced<NegativeImbalance> for DealWithFees {
@@ -154,6 +147,7 @@ parameter_types! {
 const_assert!(AvailableBlockRatio::get().deconstruct() >= AVERAGE_ON_INITIALIZE_WEIGHT.deconstruct());
 
 impl frame_system::Trait for Runtime {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = Index;
@@ -182,7 +176,6 @@ impl frame_system::Trait for Runtime {
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type IsCallable = IsCallable;
 }
 
 parameter_types! {
@@ -200,7 +193,6 @@ impl pallet_multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
-	type IsCallable = IsCallable;
 }
 
 parameter_types! {
@@ -250,7 +242,6 @@ impl pallet_proxy::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
 	type Currency = Balances;
-	type IsCallable = IsCallable;
 	type ProxyType = ProxyType;
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
@@ -305,23 +296,17 @@ impl pallet_balances::Trait for Runtime {
 parameter_types! {
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
+	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(1, 100_000);
+	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 1_000_000_000u128);
 }
-
-// for a sane configuration, this should always be less than `AvailableBlockRatio`.
-const_assert!(
-	TargetBlockFullness::get().deconstruct() <
-	(AvailableBlockRatio::get().deconstruct() as <Perquintill as PerThing>::Inner)
-		* (<Perquintill as PerThing>::ACCURACY / <Perbill as PerThing>::ACCURACY as <Perquintill as PerThing>::Inner)
-);
 
 impl pallet_transaction_payment::Trait for Runtime {
 	type Currency = Balances;
 	type OnTransactionPayment = DealWithFees;
 	type TransactionByteFee = TransactionByteFee;
-	// In the Substrate node, a weight of 10_000_000 (smallest non-zero weight)
-	// is mapped to 10_000_000 units of fees, hence:
 	type WeightToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = TargetedFeeAdjustment<TargetBlockFullness>;
+	type FeeMultiplierUpdate =
+		TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
 }
 
 parameter_types! {
@@ -410,7 +395,11 @@ impl pallet_staking::Trait for Runtime {
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;
 	/// A super-majority of the council can cancel the slash.
-	type SlashCancelOrigin = pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>;
+	type SlashCancelOrigin = EnsureOneOf<
+		AccountId,
+		EnsureRoot<AccountId>,
+		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>
+	>;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
 	type NextNewSession = Session;
@@ -528,13 +517,18 @@ impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type MaxProposals = TechnicalMaxProposals;
 }
 
+type EnsureRootOrHalfCouncil = EnsureOneOf<
+	AccountId,
+	EnsureRoot<AccountId>,
+	pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>
+>;
 impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
 	type Event = Event;
-	type AddOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
-	type RemoveOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
-	type SwapOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
-	type ResetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
-	type PrimeOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type AddOrigin = EnsureRootOrHalfCouncil;
+	type RemoveOrigin = EnsureRootOrHalfCouncil;
+	type SwapOrigin = EnsureRootOrHalfCouncil;
+	type ResetOrigin = EnsureRootOrHalfCouncil;
+	type PrimeOrigin = EnsureRootOrHalfCouncil;
 	type MembershipInitialized = TechnicalCommittee;
 	type MembershipChanged = TechnicalCommittee;
 }
@@ -554,8 +548,16 @@ parameter_types! {
 impl pallet_treasury::Trait for Runtime {
 	type ModuleId = TreasuryModuleId;
 	type Currency = Balances;
-	type ApproveOrigin = pallet_collective::EnsureMembers<_4, AccountId, CouncilCollective>;
-	type RejectOrigin = pallet_collective::EnsureMembers<_2, AccountId, CouncilCollective>;
+	type ApproveOrigin = EnsureOneOf<
+		AccountId,
+		EnsureRoot<AccountId>,
+		pallet_collective::EnsureMembers<_4, AccountId, CouncilCollective>
+	>;
+	type RejectOrigin = EnsureOneOf<
+		AccountId,
+		EnsureRoot<AccountId>,
+		pallet_collective::EnsureMembers<_2, AccountId, CouncilCollective>
+	>;
 	type Tippers = Elections;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
@@ -570,16 +572,16 @@ impl pallet_treasury::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const TombstoneDeposit: Balance = 1 * DOLLARS;
-	pub const RentByteFee: Balance = 1 * DOLLARS;
-	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
-	pub const SurchargeReward: Balance = 150 * DOLLARS;
+	pub const TombstoneDeposit: Balance = 16 * MILLICENTS;
+	pub const RentByteFee: Balance = 4 * MILLICENTS;
+	pub const RentDepositOffset: Balance = 1000 * MILLICENTS;
+	pub const SurchargeReward: Balance = 150 * MILLICENTS;
 }
 
 impl pallet_contracts::Trait for Runtime {
 	type Time = Timestamp;
 	type Randomness = RandomnessCollectiveFlip;
-	type Call = Call;
+	type Currency = Balances;
 	type Event = Event;
 	type DetermineContractAddress = pallet_contracts::SimpleAddressDeterminer<Runtime>;
 	type TrieIdGenerator = pallet_contracts::TrieIdFromParentCounter<Runtime>;
@@ -592,6 +594,7 @@ impl pallet_contracts::Trait for Runtime {
 	type SurchargeReward = SurchargeReward;
 	type MaxDepth = pallet_contracts::DefaultMaxDepth;
 	type MaxValueSize = pallet_contracts::DefaultMaxValueSize;
+	type WeightPrice = pallet_transaction_payment::Module<Self>;
 }
 
 impl pallet_sudo::Trait for Runtime {
@@ -734,8 +737,8 @@ impl pallet_identity::Trait for Runtime {
 	type MaxAdditionalFields = MaxAdditionalFields;
 	type MaxRegistrars = MaxRegistrars;
 	type Slashed = Treasury;
-	type ForceOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
-	type RegistrarOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+	type ForceOrigin = EnsureRootOrHalfCouncil;
+	type RegistrarOrigin = EnsureRootOrHalfCouncil;
 }
 
 parameter_types! {
@@ -1072,8 +1075,26 @@ impl_runtime_apis! {
 			impl pallet_offences_benchmarking::Trait for Runtime {}
 			impl frame_system_benchmarking::Trait for Runtime {}
 
+			let whitelist: Vec<Vec<u8>> = vec![
+				// Block Number
+				// frame_system::Number::<Runtime>::hashed_key().to_vec(),
+				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
+				// Total Issuance
+				hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec(),
+				// Execution Phase
+				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec(),
+				// Event Count
+				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec(),
+				// System Events
+				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7").to_vec(),
+				// Caller 0 Account
+				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da946c154ffd9992e395af90b5b13cc6f295c77033fce8a9045824a6690bbf99c6db269502f0a8d1d2a008542d5690a0749").to_vec(),
+				// Treasury Account
+				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95ecffd7b6c0f78751baa9d281e0bfa3a6d6f646c70792f74727372790000000000000000000000000000000000000000").to_vec(),
+			];
+
 			let mut batches = Vec::<BenchmarkBatch>::new();
-			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat);
+			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 
 			add_benchmark!(params, batches, b"balances", Balances);
 			add_benchmark!(params, batches, b"collective", Council);

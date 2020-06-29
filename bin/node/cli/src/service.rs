@@ -184,7 +184,7 @@ macro_rules! new_full {
 				let provider = client as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
 				Ok(Arc::new(grandpa::FinalityProofProvider::new(backend, provider)) as _)
 			})?
-			.build()?;
+			.build_full()?;
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
@@ -222,7 +222,7 @@ macro_rules! new_full {
 			};
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
-			service.spawn_essential_task("babe-proposer", babe);
+			service.spawn_essential_task_handle().spawn_blocking("babe-proposer", babe);
 		}
 
 		// Spawn authority discovery module.
@@ -255,7 +255,7 @@ macro_rules! new_full {
 				service.prometheus_registry(),
 			);
 
-			service.spawn_task("authority-discovery", authority_discovery);
+			service.spawn_task_handle().spawn("authority-discovery", authority_discovery);
 		}
 
 		// if the node isn't actively participating in consensus then it doesn't
@@ -297,7 +297,7 @@ macro_rules! new_full {
 
 			// the GRANDPA voter task is considered infallible, i.e.
 			// if it fails we take down the service with it.
-			service.spawn_essential_task(
+			service.spawn_essential_task_handle().spawn_blocking(
 				"grandpa-voter",
 				grandpa::run_grandpa_voter(grandpa_config)?
 			);
@@ -410,7 +410,7 @@ pub fn new_light(config: Configuration)
 
 			Ok(node_rpc::create_light(light_deps))
 		})?
-		.build()?;
+		.build_light()?;
 
 	Ok(service)
 }
@@ -429,13 +429,12 @@ mod tests {
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
-	use codec::{Encode, Decode};
+	use codec::Encode;
 	use sp_core::{crypto::Pair as CryptoPair, H256};
 	use sp_runtime::{
 		generic::{BlockId, Era, Digest, SignedPayload},
 		traits::{Block as BlockT, Header as HeaderT},
 		traits::Verify,
-		OpaqueExtrinsic,
 	};
 	use sp_timestamp;
 	use sp_finality_tracker;
@@ -610,16 +609,13 @@ mod tests {
 					signer.sign(payload)
 				});
 				let (function, extra, _) = raw_payload.deconstruct();
-				let xt = UncheckedExtrinsic::new_signed(
+				index += 1;
+				UncheckedExtrinsic::new_signed(
 					function,
 					from.into(),
 					signature.into(),
 					extra,
-				).encode();
-				let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
-
-				index += 1;
-				OpaqueExtrinsic(v)
+				).into()
 			},
 		);
 	}

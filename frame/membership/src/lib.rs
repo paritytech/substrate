@@ -26,9 +26,9 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains},
 };
-use frame_system::{self as system, ensure_root, ensure_signed};
+use frame_system::{self as system, ensure_signed};
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
@@ -117,12 +117,10 @@ decl_module! {
 
 		/// Add a member `who` to the set.
 		///
-		/// May only be called from `AddOrigin` or root.
+		/// May only be called from `T::AddOrigin`.
 		#[weight = 50_000_000]
 		pub fn add_member(origin, who: T::AccountId) {
-			T::AddOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::AddOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
@@ -136,12 +134,10 @@ decl_module! {
 
 		/// Remove a member `who` from the set.
 		///
-		/// May only be called from `RemoveOrigin` or root.
+		/// May only be called from `T::RemoveOrigin`.
 		#[weight = 50_000_000]
 		pub fn remove_member(origin, who: T::AccountId) {
-			T::RemoveOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::RemoveOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
@@ -156,14 +152,12 @@ decl_module! {
 
 		/// Swap out one member `remove` for another `add`.
 		///
-		/// May only be called from `SwapOrigin` or root.
+		/// May only be called from `T::SwapOrigin`.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
 		#[weight = 50_000_000]
 		pub fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
-			T::SwapOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::SwapOrigin::ensure_origin(origin)?;
 
 			if remove == add { return Ok(()) }
 
@@ -187,12 +181,10 @@ decl_module! {
 		/// Change the membership to a new set, disregarding the existing membership. Be nice and
 		/// pass `members` pre-sorted.
 		///
-		/// May only be called from `ResetOrigin` or root.
+		/// May only be called from `T::ResetOrigin`.
 		#[weight = 50_000_000]
 		pub fn reset_members(origin, members: Vec<T::AccountId>) {
-			T::ResetOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ResetOrigin::ensure_origin(origin)?;
 
 			let mut members = members;
 			members.sort();
@@ -239,22 +231,22 @@ decl_module! {
 		}
 
 		/// Set the prime member. Must be a current member.
+		///
+		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
 		pub fn set_prime(origin, who: T::AccountId) {
-			T::PrimeOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::PrimeOrigin::ensure_origin(origin)?;
 			Self::members().binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			Prime::<T, I>::put(&who);
 			T::MembershipChanged::set_prime(Some(who));
 		}
 
 		/// Remove the prime member if it exists.
+		///
+		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
 		pub fn clear_prime(origin) {
-			T::PrimeOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::PrimeOrigin::ensure_origin(origin)?;
 			Prime::<T, I>::kill();
 			T::MembershipChanged::set_prime(None);
 		}
@@ -269,6 +261,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				Err(_) => Prime::<T, I>::kill(),
 			}
 		}
+	}
+}
+
+impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+	fn sorted_members() -> Vec<T::AccountId> {
+		Self::members()
+	}
+
+	fn count() -> usize {
+		Members::<T, I>::decode_len().unwrap_or(0)
 	}
 }
 
@@ -303,6 +305,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;

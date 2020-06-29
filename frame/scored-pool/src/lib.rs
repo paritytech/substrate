@@ -308,7 +308,7 @@ decl_module! {
 
 		/// Kick a member `who` from the set.
 		///
-		/// May only be called from `KickOrigin` or root.
+		/// May only be called from `T::KickOrigin`.
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
@@ -318,9 +318,7 @@ decl_module! {
 			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32
 		) {
-			T::KickOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::KickOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
 
@@ -333,7 +331,7 @@ decl_module! {
 
 		/// Score a member `who` with `score`.
 		///
-		/// May only be called from `ScoreOrigin` or root.
+		/// May only be called from `T::ScoreOrigin`.
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
@@ -344,9 +342,7 @@ decl_module! {
 			index: u32,
 			score: T::Score
 		) {
-			T::ScoreOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ScoreOrigin::ensure_origin(origin)?;
 
 			let who = T::Lookup::lookup(dest)?;
 

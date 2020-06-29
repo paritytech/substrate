@@ -17,7 +17,6 @@
 
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
-use std::sync::Arc;
 use sc_network::config::TransportConfig;
 use sc_service::{
 	AbstractService, RpcSession, Role, Configuration,
@@ -64,7 +63,7 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: Arc::new(move |fut, _| wasm_bindgen_futures::spawn_local(fut)),
+		task_executor: (|fut, _| wasm_bindgen_futures::spawn_local(fut)).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
@@ -86,6 +85,7 @@ where
 		pruning: Default::default(),
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
+		rpc_ipc: Default::default(),
 		rpc_ws: Default::default(),
 		rpc_ws_max_connections: Default::default(),
 		rpc_methods: Default::default(),
@@ -97,6 +97,11 @@ where
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,
 		announce_block: true,
+		base_path: None,
+		informant_output_format: sc_informant::OutputFormat {
+			enable_color: false,
+			prefix: String::new(),
+		},
 	};
 
 	Ok(config)
@@ -116,11 +121,6 @@ struct RpcMessage {
 
 /// Create a Client object that connects to a service.
 pub fn start_client(mut service: impl AbstractService) -> Client {
-	// Spawn informant
-	wasm_bindgen_futures::spawn_local(
-		sc_informant::build(&service, sc_informant::OutputFormat::Plain).map(drop)
-	);
-
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with

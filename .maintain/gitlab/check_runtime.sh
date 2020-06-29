@@ -67,7 +67,7 @@ sub_spec_version="$(git diff tags/release...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 if [ "${add_spec_version}" != "${sub_spec_version}" ]
 then
 
-	github_label "B2-breaksapi"
+	github_label "D2-breaksapi"
 
 	boldcat <<-EOT
 

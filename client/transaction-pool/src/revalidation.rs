@@ -71,11 +71,8 @@ async fn batch_revalidate<Api: ChainApi>(
 	let validation_results = futures::future::join_all(
 		batch.into_iter().filter_map(|ext_hash| {
 			pool.validated_pool().ready_by_hash(&ext_hash).map(|ext| {
-				let api = api.clone();
-				async move {
-					api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
-						.map(|validation_result| (validation_result, ext_hash.clone(), ext)).await
-				}
+				api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone())
+					.map(move |validation_result| (validation_result, ext_hash, ext))
 			})
 		})
 	).await;
