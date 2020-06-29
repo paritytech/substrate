@@ -6,4 +6,14 @@ const isFunction = (obj) => {
   return !!(obj && obj.constructor && obj.call && obj.apply)
 }
 
-module.exports = { getBootNodeUrl, isFunction }
+const isNodeType = (node, type) => {
+  return node.nodeType === type
+}
+
+const getNodesFromType = (nodes, type) => {
+  return nodes.filter((node) => {
+    return isNodeType(node, type)
+  })
+}
+
+module.exports = { getBootNodeUrl, isFunction, getNodesFromType }

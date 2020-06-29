@@ -3,30 +3,14 @@
  */
 
 const createPair = require('@polkadot/keyring/pair').default
-// const { stringToU8a } = require('@polkadot/util')
 const {
   cryptoWaitReady,
   naclKeypairFromSeed,
   schnorrkelKeypairFromSeed
 } = require('@polkadot/util-crypto')
-
-const Keyring = require('@polkadot/keyring').default;
+const { u8aToHex } = require('@polkadot/util')
 const stringToU8a = require('@polkadot/util/string/toU8a').default;
 
-async function main (str) {
-  // Create account seed for Alice
-  const ALICE_SEED = str.padEnd(32, ' ');
-  console.log(ALICE_SEED, ALICE_SEED.length)
-
-  // Create an instance of the Keyring
-  const keyring = new Keyring();
-
-  // Create pair and add Alice to keyring pair dictionary (with account seed)
-  const pairAlice = keyring.addFromSeed(stringToU8a(ALICE_SEED));
-
-  console.log(`Created keyring pair for Alice with address: ${keyring.getPair(pairAlice.address).address}`);
-  console.log(pairAlice.toJson())
-}
 /**
  * @ignore
  */
@@ -91,19 +75,13 @@ const getNodeKeys = async (
  */
 const getSudoKeys = async () => {
   // sudo key is 'chaos'
-  return getKeysFromSeed('ed25519', 'chaos');
+//   return getKeysFromSeed('ed25519', 'chaos');
+    return '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
 }
 
-module.exports = {getKeysFromSeed, getNodeKeys, getSudoKeys}
-// main('node-validator-0')
-const log = async () => {
-    for (var i=0;i<51;i++) {
-        const seed = `node-validator-${i}/gran`
-        const key = await getKeysFromSeed('ed25519', seed)
-        console.log('"'+key.address+'",')
-    }
-   
-    // const keys2 = await getKeysFromSeed('ed25519', 'node-validator-1')
-    // console.log(keys2.address)
-};
-log()
+const getKeyFromNodeId = (nodeId) => {
+    const u8a = stringToU8a(nodeId.padEnd(32))
+    return u8aToHex(u8a, undefined, false) // remove 0x in front
+}
+
+module.exports = {getKeysFromSeed, getNodeKeys, getSudoKeys, getKeyFromNodeId}

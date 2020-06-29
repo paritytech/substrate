@@ -1,7 +1,8 @@
 const { Command, flags } = require('@oclif/command')
-const logger = require('../../utils/logger')
 const Hypervisor = require('../../hypervisor')
 const CONFIG = require('../../config')()
+const { succeedExit, errorExit } = require('../../utils/exit')
+const logger = require('../../utils/logger')
 
 class SpawnCommand extends Command {
   async run () {
@@ -19,24 +20,24 @@ class SpawnCommand extends Command {
     try {
       // Check/Create namespace
       await hypervisor.readOrCreateNamespace(namespace)
-      const command = args.customCommand
-      if (command) {
+      const command = args.chainType
         if (command === 'dev') {
-          logger.debug('Starting with dev mode...')
-          await hypervisor.createDevNode(options)
+            logger.debug('Starting with dev mode...')
+            await hypervisor.createDevNode(options)
         } else if (command === 'local') {
-          logger.debug('Starting a network with 2 default validators...')
-          await hypervisor.createAliceBobNodes(options)
-        } else {
-            const options = {
+            logger.debug('Starting a network with 2 default validators...')
+            await hypervisor.createAliceBobNodes(options)
+        } else if (chainspec){
+            options = {
                 image: image,
                 port,
-                chainSpecFileName: chainspec,
+                chainspecFileName: chainspec,
             }
             await hypervisor.createCustomChain(options)
-          // TODO: customized chain with chainName
+            // TODO: customized chain with chainName
+        } else {
+            errorExit('A chainspec is required to create customized chain, if not given, try dev or local')
         }
-      }
     } catch (error) {
       logger.error(error)
       process.exit(1)
@@ -55,6 +56,6 @@ SpawnCommand.flags = {
   chainspec: flags.string({ char: 'c', description: 'number of full nodes, if not set but exists, default to 1' })
 }
 
-SpawnCommand.args = [{ name: 'customCommand' }]
+SpawnCommand.args = [{ name: 'chainType' }]
 
 module.exports = SpawnCommand

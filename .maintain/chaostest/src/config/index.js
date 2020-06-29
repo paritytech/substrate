@@ -49,17 +49,14 @@ class Config {
     this.update()
   }
 
-  async setChainSpec (chainspec) {
-    this.chainspec = chainspec
-    this.update()
-  }
-
   async addNode (node) {
-    if (!this.nodes || Array.isArray(this.nodes)) {
+    if (!this.nodes || !Array.isArray(this.nodes)) {
       this.nodes = []
     }
     if (node.nodeType === 'bootnode') {
       this.bootnode = node
+      this.chainspec = node.chainspec
+      this.image = node.image
     }
     this.nodes.push(node)
     this.update()
