@@ -33,7 +33,7 @@ pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 // upgraded, nothing here will happen anyway.
 
 fn change_name_contract_to_contracts<T: Trait>() -> Weight {
-	sp_runtime::print("Migrating Contracts.");
+	sp_runtime::print("🕊️  Migrating Contracts.");
 
 	let mut weight = 0;
 	let db = T::DbWeight::get();
@@ -76,6 +76,6 @@ fn change_name_contract_to_contracts<T: Trait>() -> Weight {
 	}
 	weight += db.reads(1);
 
-	sp_runtime::print("Done Contracts.");
+	sp_runtime::print("🕊️  Done Contracts.");
 	weight
 }

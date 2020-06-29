@@ -630,7 +630,7 @@ impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 mod migration {
 	use super::*;
 
-	pub fn migrate<T: Trait>() {
+	pub fn migrate<T: Trait>() -> Weight {
 		mod deprecated {
 			use super::*;
 
@@ -660,6 +660,9 @@ mod migration {
 			DepositOf::<T>::migrate_key_from_blake(p);
 			Preimages::<T>::migrate_key_from_blake(h);
 		}
+
+		// TODO: figure out actual weight
+		0
 	}
 }
 
@@ -696,6 +699,10 @@ decl_module! {
 		const MaxVotes: u32 = T::MaxVotes::get();
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate::<T>()
+		}
 
 		/// Propose a sensitive action to be taken.
 		///

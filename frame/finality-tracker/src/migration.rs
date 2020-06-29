@@ -31,7 +31,7 @@ pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 // upgraded, nothing here will happen anyway.
 
 fn change_name_timestamp_to_finality_tracker<T:Trait>() -> Weight {
-	sp_runtime::print("Migrating Finality Tracker.");
+	sp_runtime::print("🕊️  Migrating Finality Tracker.");
 
 	let mut reads = 0;
 	let mut writes = 0;
@@ -65,6 +65,6 @@ fn change_name_timestamp_to_finality_tracker<T:Trait>() -> Weight {
 	}
 	reads += 1;
 
-	sp_runtime::print("Done Finality Tracker.");
+	sp_runtime::print("🕊️  Done Finality Tracker.");
 	T::DbWeight::get().reads_writes(reads, writes)
 }

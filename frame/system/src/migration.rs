@@ -14,7 +14,7 @@ pub fn migrate_block_hash<T: Trait>() -> Weight {
 	let db = T::DbWeight::get();
 	let block_num = Number::<T>::get();
 	if block_num > One::one() {
-		sp_runtime::print("Migrating BlockHashes...");
+		sp_runtime::print("🕊️  Migrating BlockHashes...");
 		BlockHash::<T>::migrate_key_from_blake(T::BlockNumber::zero());
 		let mut n = block_num - One::one() - One::one();
 		let mut migrations = 1;
@@ -26,7 +26,7 @@ pub fn migrate_block_hash<T: Trait>() -> Weight {
 			}
 			n -= One::one();
 		}
-		sp_runtime::print("Done BlockHashes");
+		sp_runtime::print("🕊️  Done BlockHashes");
 		db.reads_writes(migrations + 1, migrations)
 	} else {
 		sp_runtime::print("No BlockHashes to migrate...");
@@ -35,7 +35,7 @@ pub fn migrate_block_hash<T: Trait>() -> Weight {
 }
 
 pub fn migrate_accounts<T: Trait>() -> Weight {
-	sp_runtime::print("Migrating Accounts...");
+	sp_runtime::print("🕊️  Migrating Accounts...");
 	let mut count = 0u32;
 	if let Ok(accounts) = Vec::<T::AccountId>::decode(&mut &include_bytes!("accounts.scale")[..]) {
 		for a in &accounts {
@@ -50,6 +50,6 @@ pub fn migrate_accounts<T: Trait>() -> Weight {
 		}
 	}
 	sp_runtime::print(count);
-	sp_runtime::print("Done Accounts.");
+	sp_runtime::print("🕊️  Done Accounts.");
 	T::MaximumBlockWeight::get()
 }
