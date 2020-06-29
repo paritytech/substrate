@@ -41,8 +41,6 @@ use notification::JustificationNotification;
 
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
-/// Returned when unsubscribing to finality notifications fail.
-pub const UNSUBSCRIBE_ERROR_CODE: i64 = 2;
 
 type FutureResult<T> =
 	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
