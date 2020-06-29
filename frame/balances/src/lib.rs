@@ -153,15 +153,16 @@
 mod tests;
 mod tests_local;
 mod tests_composite;
+mod tests_both;
 mod benchmarking;
 
 use sp_std::prelude::*;
-use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
+use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible, marker::PhantomData};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	traits::{
-		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap, Happened,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
 		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
@@ -237,6 +238,10 @@ decl_event!(
 		/// Some balance was moved from the reserve of the first account to the second account.
 		/// Final argument indicates the destination balance type.
 		ReserveRepatriated(AccountId, AccountId, Balance, Status),
+		/// A new account was created.
+		NewAccount(AccountId),
+		/// An account was reaped.
+		KilledAccount(AccountId),
 	}
 );
 
@@ -258,6 +263,8 @@ decl_error! {
 		ExistingVestingSchedule,
 		/// Beneficiary account must pre-exist
 		DeadAccount,
+		/// The main account of beneficiary account must pre-exist
+		DeadMainAccount,
 	}
 }
 
@@ -388,11 +395,15 @@ decl_storage! {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
 		// ^^ begin, length, amount liquid at genesis
 		build(|config: &GenesisConfig<T, I>| {
-			for (_, balance) in &config.balances {
+			for (who, balance) in &config.balances {
 				assert!(
 					*balance >= <T as Trait<I>>::ExistentialDeposit::get(),
 					"the balance of any account should always be more than existential deposit.",
-				)
+				);
+				assert!(
+					main_account_alive::<T, I>(&who),
+					"the balance of any account's main account should always be alive.",
+				);
 			}
 			for &(ref who, free) in config.balances.iter() {
 				T::AccountStore::insert(who, AccountData { free, .. Default::default() });
@@ -660,14 +671,14 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		let existed = Locks::<T, I>::contains_key(who);
 		if locks.is_empty() {
 			Locks::<T, I>::remove(who);
-			if existed {
+			if existed && T::AccountStore::is_system() {
 				// TODO: use Locks::<T, I>::hashed_key
 				// https://github.com/paritytech/substrate/issues/4969
 				system::Module::<T>::dec_ref(who);
 			}
 		} else {
 			Locks::<T, I>::insert(who, locks);
-			if !existed {
+			if !existed && T::AccountStore::is_system() {
 				system::Module::<T>::inc_ref(who);
 			}
 		}
@@ -978,6 +989,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 				let ed = T::ExistentialDeposit::get();
 				ensure!(to_account.total() >= ed, Error::<T, I>::ExistentialDeposit);
+				ensure!(main_account_alive::<T, I>(&dest), Error::<T, I>::DeadMainAccount);
 
 				Self::ensure_can_withdraw(
 					transactor,
@@ -986,8 +998,12 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 					from_account.free,
 				)?;
 
-				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
-				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
+				let mut allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				if T::AccountStore::is_system() {
+					allow_death = allow_death && system::Module::<T>::allow_death(transactor);
+				} else {
+					allow_death = allow_death && !Locks::<T, I>::contains_key(transactor);
+				}
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
@@ -1062,6 +1078,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// bail if not yet created and this operation wouldn't be enough to create it.
 			let ed = T::ExistentialDeposit::get();
 			ensure!(value >= ed || !is_new, Self::PositiveImbalance::zero());
+			ensure!(main_account_alive::<T, I>(who), Self::PositiveImbalance::zero());
 
 			// defensive only: overflow should never happen, however in case it does, then this
 			// operation is a no-op.
@@ -1243,8 +1260,10 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 /// Implement `OnKilledAccount` to remove the local account, if using local account storage.
 ///
 /// NOTE: You probably won't need to use this! This only needs to be "wired in" to System module
-/// if you're using the local balance storage. **If you're using the composite system account
-/// storage (which is the default in most examples and tests) then there's no need.**
+/// if you're using the local balance storage and you want to kill account from System module
+/// by `suicide` call or you configure balances module with `CallKillAccount` of System module.
+/// **If you're using the composite system account storage (which is the default in most examples
+/// and tests) then there's no need.**
 impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
 	fn on_killed_account(who: &T::AccountId) {
 		Account::<T, I>::mutate_exists(who, |account| {
@@ -1328,4 +1347,28 @@ impl<T: Trait<I>, I: Instance> IsDeadAccount<T::AccountId> for Module<T, I> wher
 		// this should always be exactly equivalent to `Self::account(who).total().is_zero()` if ExistentialDeposit > 0
 		!T::AccountStore::is_explicit(who)
 	}
+}
+
+/// Event handler which calls on_created_account when it happens.
+pub struct CallOnCreatedAccount<T, I: Instance=DefaultInstance>(PhantomData<(T, I)>);
+impl<T: Trait<I>, I: Instance> Happened<T::AccountId> for CallOnCreatedAccount<T, I> {
+	fn happened(who: &T::AccountId) {
+		// T::OnNewAccount::on_new_account(&who);
+		Module::<T, I>::deposit_event(RawEvent::NewAccount(who.clone()));
+		system::Module::<T>::inc_ref(who);
+	}
+}
+
+/// Event handler which calls kill_account when it happens.
+pub struct CallKillAccount<T, I: Instance=DefaultInstance>(PhantomData<(T, I)>);
+impl<T: Trait<I>, I: Instance> Happened<T::AccountId> for CallKillAccount<T, I> {
+	fn happened(who: &T::AccountId) {
+		// T::OnKilledAccount::on_killed_account(&who);
+		Module::<T, I>::deposit_event(RawEvent::KilledAccount(who.clone()));
+		system::Module::<T>::dec_ref(who);
+	}
+}
+
+fn main_account_alive<T: Trait<I>, I: Instance>(who: &T::AccountId) -> bool {
+	T::AccountStore::is_system() || <system::Module<T> as StoredMap<T::AccountId, T::AccountData>>::is_explicit(who)
 }

@@ -94,6 +94,7 @@ impl frame_system::Trait for Test {
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
+	pub const UsingSystemAccount: bool = true;
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Module<Test>;
@@ -111,7 +112,8 @@ impl Trait for Test {
 		super::Account<Test>,
 		system::CallOnCreatedAccount<Test>,
 		system::CallKillAccount<Test>,
-		u64, super::AccountData<u64>
+		u64, super::AccountData<u64>,
+		UsingSystemAccount,
 	>;
 }
 

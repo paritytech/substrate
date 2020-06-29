@@ -321,6 +321,8 @@ pub trait StoredMap<K, T> {
 	fn insert(k: &K, t: T) { Self::mutate(k, |i| *i = t); }
 	/// Remove the item or otherwise replace it with its default value; we don't care which.
 	fn remove(k: &K);
+	/// Get whether the storage of System is being used.
+	fn is_system() -> bool { true }
 }
 
 /// A simple, generic one-parameter event notifier/handler.
@@ -349,15 +351,17 @@ pub struct StorageMapShim<
 	Created,
 	Removed,
 	K,
-	T
->(sp_std::marker::PhantomData<(S, Created, Removed, K, T)>);
+	T,
+	IsSystem: Get<bool>=(),
+>(sp_std::marker::PhantomData<(S, Created, Removed, K, T, IsSystem)>);
 impl<
 	S: StorageMap<K, T, Query=T>,
 	Created: Happened<K>,
 	Removed: Happened<K>,
 	K: FullCodec,
 	T: FullCodec,
-> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
+	IsSystem: Get<bool>,
+> StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T, IsSystem> {
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
 	fn insert(k: &K, t: T) {
@@ -408,6 +412,7 @@ impl<
 			v
 		})
 	}
+	fn is_system() -> bool { IsSystem::get() }
 }
 
 /// Something that can estimate at which block the next session rotation will happen. This should
