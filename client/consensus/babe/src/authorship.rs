@@ -169,11 +169,13 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else {
+			} else if keystore.read().has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
 					authority_index: *authority_index as u32,
 				}))
+			} else {
+				None
 			};
 
 			if let Some(pre_digest) = pre_digest {
@@ -282,4 +284,42 @@ fn claim_primary_slot(
 	}
 
 	None
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_core::{sr25519::Pair, crypto::Pair as _};
+	use sp_consensus_babe::{AuthorityId, BabeEpochConfiguration, AllowedSlots};
+
+	#[test]
+	fn claim_secondary_plain_slot_works() {
+		let keystore = sc_keystore::Store::new_in_memory();
+		let valid_public_key = dbg!(keystore.write().sr25519_generate_new(
+			AuthorityId::ID,
+			Some(sp_core::crypto::DEV_PHRASE),
+		).unwrap());
+
+		let authorities = vec![
+			(AuthorityId::from(Pair::generate().0.public()), 5),
+			(AuthorityId::from(Pair::generate().0.public()), 7),
+		];
+
+		let mut epoch = Epoch {
+			epoch_index: 10,
+			start_slot: 0,
+			duration: 20,
+			authorities: authorities.clone(),
+			randomness: Default::default(),
+			config: BabeEpochConfiguration {
+				c: (3, 10),
+				allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+			},
+		};
+
+		assert!(claim_slot(10, &epoch, &keystore).is_none());
+
+		epoch.authorities.push((valid_public_key.clone().into(), 10));
+		assert_eq!(claim_slot(10, &epoch, &keystore).unwrap().1, valid_public_key.into());
+	}
 }

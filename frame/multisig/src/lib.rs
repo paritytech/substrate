@@ -235,17 +235,6 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			// Utility.Multisigs -> Multisig.Multisigs
-			use frame_support::migration::{StorageIterator, put_storage_value};
-			for (key, value) in StorageIterator::<
-				Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>
-			>::new(b"Utility", b"Multisigs").drain() {
-				put_storage_value(b"Multisig", b"Multisigs", &key, value);
-			}
-			1_000_000_000
-		}
-
 		/// Immediately dispatch a multi-signature call using a single approval from the caller.
 		///
 		/// The dispatch origin for this call must be _Signed_.
@@ -553,10 +542,13 @@ impl<T: Trait> Module<T> {
 				// verify weight
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::WeightTooLow);
 
-				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				T::Currency::unreserve(&m.depositor, m.deposit);
+				// Clean up storage before executing call to avoid an possibility of reentrancy
+				// attack.
 				<Multisigs<T>>::remove(&id, call_hash);
 				Self::clear_call(&call_hash);
+				T::Currency::unreserve(&m.depositor, m.deposit);
+
+				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
 				Self::deposit_event(RawEvent::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));

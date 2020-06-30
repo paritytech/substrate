@@ -209,13 +209,19 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	) -> Self::ValidationFuture {
 		self.validation_requests.write().push(uxt.clone());
 
-		let chain_nonce = self.chain.read().nonces.get(&uxt.transfer().from).cloned().unwrap_or(0);
-		let requires = if chain_nonce == uxt.transfer().nonce {
-			vec![]
+		let (requires, provides) = if let Some(transfer) = uxt.try_transfer() {
+			let chain_nonce = self.chain.read().nonces.get(&transfer.from).cloned().unwrap_or(0);
+			let requires = if chain_nonce == transfer.nonce {
+				vec![]
+			} else {
+				vec![vec![chain_nonce as u8]]
+			};
+			let provides = vec![vec![transfer.nonce as u8]];
+
+			(requires, provides)
 		} else {
-			vec![vec![chain_nonce as u8]]
+			(Vec::new(), vec![uxt.encode()])
 		};
-		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
 		if self.chain.read().invalid_hashes.contains(&self.hash_and_length(&uxt).0) {
 			return futures::future::ready(Ok(

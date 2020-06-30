@@ -18,6 +18,7 @@
 
 use crate::{config, Event, NetworkService, NetworkWorker};
 
+use libp2p::PeerId;
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{sync::Arc, time::Duration};
@@ -138,6 +139,7 @@ fn build_nodes_one_proto()
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
 		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
+		listen_addresses: vec![],
 		reserved_nodes: vec![config::MultiaddrWithPeerId {
 			multiaddr: listen_addr,
 			peer_id: node1.local_peer_id().clone(),
@@ -340,5 +342,121 @@ fn lots_of_incoming_peers_works() {
 
 	futures::executor::block_on(async move {
 		future::join_all(background_tasks_to_wait).await
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_listen_addresses_consistent_with_transport_memory() {
+	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		transport: config::TransportConfig::MemoryOnly,
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_listen_addresses_consistent_with_transport_not_memory() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_boot_node_addresses_consistent_with_transport_memory() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+	let boot_node = config::MultiaddrWithPeerId {
+		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
+		peer_id: PeerId::random(),
+	};
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		transport: config::TransportConfig::MemoryOnly,
+		boot_nodes: vec![boot_node],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
+	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+	let boot_node = config::MultiaddrWithPeerId {
+		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
+		peer_id: PeerId::random(),
+	};
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		boot_nodes: vec![boot_node],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+	let reserved_node = config::MultiaddrWithPeerId {
+		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
+		peer_id: PeerId::random(),
+	};
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		transport: config::TransportConfig::MemoryOnly,
+		reserved_nodes: vec![reserved_node],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
+	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+	let reserved_node = config::MultiaddrWithPeerId {
+		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
+		peer_id: PeerId::random(),
+	};
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		reserved_nodes: vec![reserved_node],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_public_addresses_consistent_with_transport_memory() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+	let public_address = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		transport: config::TransportConfig::MemoryOnly,
+		public_addresses: vec![public_address],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
+	});
+}
+
+#[test]
+#[should_panic(expected = "don't match the transport")]
+fn ensure_public_addresses_consistent_with_transport_not_memory() {
+	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
+	let public_address = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let _ = build_test_full_node(config::NetworkConfiguration {
+		listen_addresses: vec![listen_addr.clone()],
+		public_addresses: vec![public_address],
+		.. config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
