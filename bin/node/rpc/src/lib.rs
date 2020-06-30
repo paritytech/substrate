@@ -32,22 +32,22 @@
 
 use std::sync::Arc;
 
+use jsonrpc_pubsub::manager::SubscriptionManager;
 use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use node_runtime::UncheckedExtrinsic;
-use sp_api::ProvideRuntimeApi;
-use sp_transaction_pool::TransactionPool;
-use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
-use sp_consensus::SelectChain;
-use sc_keystore::KeyStorePtr;
-use sp_consensus_babe::BabeApi;
-use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
+use sc_consensus_epochs::SharedEpochChanges;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustifications};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
+use sc_keystore::KeyStorePtr;
 use sc_rpc_api::DenyUnsafe;
+use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
-use jsonrpc_pubsub::manager::SubscriptionManager;
+use sp_blockchain::{Error as BlockChainError, HeaderMetadata, HeaderBackend};
+use sp_consensus::SelectChain;
+use sp_consensus_babe::BabeApi;
+use sp_transaction_pool::TransactionPool;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -102,7 +102,7 @@ pub struct FullDeps<C, P, SC> {
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, SC>(
 	deps: FullDeps<C, P, SC>,
-) -> jsonrpc_core::MetaIoHandler<sc_rpc::Metadata> where
+) -> jsonrpc_core::MetaIoHandler<sc_rpc_api::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,

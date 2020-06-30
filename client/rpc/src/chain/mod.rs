@@ -106,7 +106,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// All new head subscription
 	fn subscribe_all_heads(
 		&self,
-		_metadata: crate::metadata::Metadata,
+		_metadata: crate::Metadata,
 		subscriber: Subscriber<Block::Header>,
 	) {
 		subscribe_headers(
@@ -123,7 +123,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// Unsubscribe from all head subscription.
 	fn unsubscribe_all_heads(
 		&self,
-		_metadata: Option<crate::metadata::Metadata>,
+		_metadata: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
@@ -132,7 +132,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// New best head subscription
 	fn subscribe_new_heads(
 		&self,
-		_metadata: crate::metadata::Metadata,
+		_metadata: crate::Metadata,
 		subscriber: Subscriber<Block::Header>,
 	) {
 		subscribe_headers(
@@ -150,7 +150,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// Unsubscribe from new best head subscription.
 	fn unsubscribe_new_heads(
 		&self,
-		_metadata: Option<crate::metadata::Metadata>,
+		_metadata: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
@@ -159,7 +159,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// Finalized head subscription
 	fn subscribe_finalized_heads(
 		&self,
-		_metadata: crate::metadata::Metadata,
+		_metadata: crate::Metadata,
 		subscriber: Subscriber<Block::Header>,
 	) {
 		subscribe_headers(
@@ -176,7 +176,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	/// Unsubscribe from finalized head subscription.
 	fn unsubscribe_finalized_heads(
 		&self,
-		_metadata: Option<crate::metadata::Metadata>,
+		_metadata: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
@@ -230,7 +230,7 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 			Block: BlockT + 'static,
 			Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	type Metadata = crate::metadata::Metadata;
+	type Metadata = crate::Metadata;
 
 	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
 		self.backend.header(hash)

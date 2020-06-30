@@ -22,10 +22,7 @@
 
 #![warn(missing_docs)]
 
-mod metadata;
-
-pub use sc_rpc_api::DenyUnsafe;
-pub use self::metadata::Metadata;
+pub use sc_rpc_api::{DenyUnsafe, Metadata};
 pub use rpc::IoHandlerExtension as RpcExtension;
 
 pub mod author;
