@@ -13,14 +13,15 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, result::Result};
+use std::{panic, result::Result, pin::Pin};
 use exit_future::Signal;
 use log::debug;
 use futures::{
-	Future, FutureExt,
+	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture},
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
+	sink::SinkExt,
 };
 use prometheus_endpoint::{
 	exponential_buckets, register,
@@ -28,8 +29,8 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
-use sp_utils::mpsc::TracingUnboundedSender;
-use crate::config::{TaskExecutor, TaskType};
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use crate::{config::{TaskExecutor, TaskType}, Error};
 
 mod prometheus_future;
 
@@ -192,7 +193,6 @@ impl SpawnEssentialTaskHandle {
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
-		use futures::sink::SinkExt;
 		let mut essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
@@ -216,6 +216,13 @@ pub struct TaskManager {
 	executor: TaskExecutor,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
+	/// Send a signal when a spawned essential task has concluded. The next time
+	/// the service future is polled it should complete with an error.
+	essential_failed_tx: TracingUnboundedSender<()>,
+	/// A receiver for spawned essential-tasks concluding.
+	essential_failed_rx: TracingUnboundedReceiver<()>,
+	/// Things to keep alive until the task manager is dropped.
+	keep_alive: Box<dyn std::any::Any + Send + Sync>,
 }
 
 impl TaskManager {
@@ -226,6 +233,8 @@ impl TaskManager {
 		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
+		// A side-channel for essential tasks to communicate shutdown.
+		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
@@ -234,17 +243,15 @@ impl TaskManager {
 			signal: Some(signal),
 			executor,
 			metrics,
+			essential_failed_tx,
+			essential_failed_rx,
+			keep_alive: Box::new(()),
 		})
 	}
 
-	/// Spawn background/async task, which will be aware on exit signal.
-	///
-	/// See also the documentation of [`SpawnTaskHandler::spawn`].
-	pub(super) fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_handle().spawn(name, task)
-	}
 
-	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
+	/// Get a handle for spawning tasks.
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
@@ -252,18 +259,37 @@ impl TaskManager {
 		}
 	}
 
-	/// Clone on exit signal.
-	pub(super) fn on_exit(&self) -> exit_future::Exit {
-		self.on_exit.clone()
+	/// Get a handle for spawning essential tasks.
+	pub fn spawn_essential_handle(&self) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
+	}
+
+	/// Return a future that will end if an essential task fails.
+	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+		Box::pin(async move {
+			self.essential_failed_rx.next().await;
+
+			Err(Error::Other("Essential task failed.".into()))
+		})
+	}
+
+	/// Signal to terminate all the running tasks.
+	pub fn terminate(&mut self) {
+		if let Some(signal) = self.signal.take() {
+			let _ = signal.fire();
+		}
+	}
+
+	/// Set what the task manager should keep alivei
+	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+		self.keep_alive = Box::new(to_keep_alive);
 	}
 }
 
 impl Drop for TaskManager {
 	fn drop(&mut self) {
 		debug!(target: "service", "Tasks manager shutdown");
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-		}
+		self.terminate();
 	}
 }
 

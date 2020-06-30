@@ -106,7 +106,7 @@ impl TestNetFactory for GrandpaTestNet {
 		_cfg: &ProtocolConfig,
 		_: &PeerData,
 	) -> Self::Verifier {
-		PassThroughVerifier(false) // use non-instant finality.
+		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
 	fn make_block_import<Transaction>(&self, client: PeersClient)
