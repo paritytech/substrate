@@ -23,7 +23,7 @@ use std::{
 	sync::Arc,
 	pin::Pin,
 };
-use futures::{Future, Stream,};
+use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
 use sp_utils::mpsc;
 use sp_runtime::{
@@ -164,7 +164,7 @@ pub trait InPoolTransaction {
 	/// Get priority of the transaction.
 	fn priority(&self) -> &TransactionPriority;
 	/// Get longevity of the transaction.
-	fn longevity(&self) ->&TransactionLongevity;
+	fn longevity(&self) -> &TransactionLongevity;
 	/// Get transaction dependencies.
 	fn requires(&self) -> &[TransactionTag];
 	/// Get tags that transaction provides.

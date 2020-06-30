@@ -40,7 +40,13 @@ use sp_api::{InitializeBlock, StorageTransactionCache, ProofRecorder, OffchainOv
 use sp_consensus::{BlockOrigin};
 use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVersion};
 use sp_core::{H256, tasks::executor as tasks_executor, NativeOrEncoded};
-use sc_client_api::{blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider, in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation, RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest, RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest};
+use sc_client_api::{
+	blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider,
+	in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain},
+	AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation,
+	RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest,
+	RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest, BlockBackend,
+};
 use sp_externalities::Extensions;
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::{
