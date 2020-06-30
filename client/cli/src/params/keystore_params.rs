@@ -65,7 +65,8 @@ impl KeystoreParams {
 			#[cfg(not(target_os = "unknown"))]
 			{
 				let mut password = input_keystore_password()?;
-				let secret = std::str::FromStr::from_str(password.as_str())?;
+				let secret = std::str::FromStr::from_str(password.as_str())
+					.map_err(|()| "Error reading password")?;
 				use sp_core::crypto::Zeroize;
 				password.zeroize();
 				Some(secret)
@@ -75,7 +76,8 @@ impl KeystoreParams {
 		} else if let Some(ref file) = self.password_filename {
 			let mut password = fs::read_to_string(file)
 				.map_err(|e| format!("{}", e))?;
-			let secret = std::str::FromStr::from_str(password.as_str())?;
+			let secret = std::str::FromStr::from_str(password.as_str())
+				.map_err(|()| "Error reading password")?;
 			use sp_core::crypto::Zeroize;
 			password.zeroize();
 			Some(secret)
