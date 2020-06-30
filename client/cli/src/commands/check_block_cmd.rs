@@ -16,17 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::params::BlockNumberOrHash;
-use crate::CliConfiguration;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::fmt::Debug;
-use std::str::FromStr;
-use std::sync::Arc;
-use structopt::StructOpt;
+use crate::{
+	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
+};
 use sc_client_api::{BlockBackend, UsageProvider};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
+use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt)]
@@ -61,13 +57,12 @@ impl CheckBlockCmd {
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		C: BlockBackend<B> + UsageProvider<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
-		<B as BlockT>::Hash: FromStr,
-		<<B as BlockT>::Hash as FromStr>::Err: Debug,
-		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		B::Hash: FromStr,
+		<B::Hash as FromStr>::Err: Debug,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		let start = std::time::Instant::now();
-		let block_id = self.input.parse()?;
-		sc_service::chain_ops::check_block(client, import_queue, block_id).await?;
+		sc_service::chain_ops::check_block(client, import_queue, self.input.parse()?).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

@@ -53,9 +53,9 @@ impl ExportStateCmd {
 		B: BlockT,
 		C: UsageProvider<B> + StorageProvider<B, BA>,
 		BA: sc_client_api::backend::Backend<B>,
-		<B as BlockT>::Hash: FromStr,
-		<<B as BlockT>::Hash as FromStr>::Err: Debug,
-		<<<B as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		B::Hash: FromStr,
+		<B::Hash as FromStr>::Err: Debug,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
 		info!("Exporting raw state...");
 		let block_id = self.input.as_ref().map(|b| b.parse()).transpose()?;
