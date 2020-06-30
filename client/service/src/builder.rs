@@ -24,14 +24,13 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig},
 };
 use sc_client_api::{
-	self, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
-	backend::RemoteBackend,
+	self, light::RemoteBlockchain, execution_extensions::ExtensionsFactory, ExecutorProvider, 
+	ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider, backend::RemoteBackend,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use sc_chain_spec::get_extension;
 use sp_consensus::{
-	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
+	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator, Chain},
 	import_queue::ImportQueue,
 };
 use futures::{
@@ -46,9 +45,9 @@ use sc_network::NetworkService;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HashFor, Zero,
+	Block as BlockT, NumberFor, SaturatedConversion, HashFor, Zero, BlockIdTo,
 };
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::{
 	collections::HashMap,
@@ -62,8 +61,14 @@ use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
-use sc_client_api::execution_extensions::ExecutionExtensions;
+use sc_client_api::{
+	BlockBackend, BlockchainEvents,
+	backend::StorageProvider,
+	proof_provider::ProofProvider,
+	execution_extensions::ExecutionExtensions
+};
 use sp_core::storage::Storage;
+use sp_blockchain::{HeaderMetadata, HeaderBackend};
 use crate::{ServiceComponents, TelemetryOnConnectSinks, RpcHandlers, NetworkStatusSinks};
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
@@ -879,11 +884,11 @@ pub trait ServiceBuilderCommand {
 	) -> Result<Storage, Error>;
 }
 
-impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
+impl<TBl, TRtApi, TBackend, TSc, TImpQu, TExPool, TRpc, TCl>
 ServiceBuilder<
 	TBl,
 	TRtApi,
-	Client<TBackend, TExec, TBl, TRtApi>,
+	TCl,
 	Arc<OnDemand<TBl>>,
 	TSc,
 	TImpQu,
@@ -893,8 +898,12 @@ ServiceBuilder<
 	TRpc,
 	TBackend,
 > where
-	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
-	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+	TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
+	BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
+	HeaderBackend<TBl> + BlockchainEvents<TBl> + ExecutorProvider<TBl> + UsageProvider<TBl> +
+	StorageProvider<TBl, TBackend> + CallApiAt<TBl, Error=sp_blockchain::Error> +
+	Send + 'static,
+	<TCl as ProvideRuntimeApi<TBl>>::Api:
 		sp_api::Metadata<TBl> +
 		sc_offchain::OffchainWorkerApi<TBl> +
 		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
@@ -904,7 +913,6 @@ ServiceBuilder<
 	TBl: BlockT,
 	TRtApi: 'static + Send + Sync,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExec: 'static + CallExecutor<TBl> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
@@ -917,11 +925,7 @@ ServiceBuilder<
 		Ok(self)
 	}
 
-	fn build_common(self) -> Result<
-		ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error
-	>
-		where TExec: CallExecutor<TBl, Backend = TBackend>,
-	{
+	fn build_common(self) -> Result<ServiceComponents<TBl, TBackend, TSc, TExPool, TCl>, Error> {
 		let ServiceBuilder {
 			marker: _,
 			mut config,
@@ -940,13 +944,13 @@ ServiceBuilder<
 			block_announce_validator_builder,
 		} = self;
 
+		let chain_info = client.usage_info().chain;
+
 		sp_session::generate_initial_session_keys(
 			client.clone(),
-			&BlockId::Hash(client.chain_info().best_hash),
+			&BlockId::Hash(chain_info.best_hash),
 			config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
 		)?;
-
-		let chain_info = client.chain_info();
 
 		info!("📦 Highest known block at #{}", chain_info.best_number);
 		telemetry!(
@@ -1117,20 +1121,16 @@ ServiceBuilder<
 	}
 
 	/// Builds the light service.
-	pub fn build_light(self) -> Result<
-		ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error
-	>
-		where TExec: CallExecutor<TBl, Backend = TBackend>,
-	{
+	pub fn build_light(self) -> Result<ServiceComponents<TBl, TBackend, TSc, TExPool, TCl>, Error> {
 		self.build_common()
 	}
 }
 
-impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
+impl<TBl, TRtApi, TBackend, TSc, TImpQu, TExPool, TRpc, TCl>
 ServiceBuilder<
 	TBl,
 	TRtApi,
-	Client<TBackend, TExec, TBl, TRtApi>,
+	TCl,
 	Arc<OnDemand<TBl>>,
 	TSc,
 	TImpQu,
@@ -1140,8 +1140,12 @@ ServiceBuilder<
 	TRpc,
 	TBackend,
 > where
-	Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
-	<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+	TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
+	BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
+	HeaderBackend<TBl> + BlockchainEvents<TBl> + ExecutorProvider<TBl> + UsageProvider<TBl> +
+	StorageProvider<TBl, TBackend> + CallApiAt<TBl, Error=sp_blockchain::Error> +
+	Send + 'static,
+	<TCl as ProvideRuntimeApi<TBl>>::Api:
 		sp_api::Metadata<TBl> +
 		sc_offchain::OffchainWorkerApi<TBl> +
 		sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl> +
@@ -1151,7 +1155,6 @@ ServiceBuilder<
 	TBl: BlockT,
 	TRtApi: 'static + Send + Sync,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExec: 'static + CallExecutor<TBl> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> +
@@ -1162,11 +1165,7 @@ ServiceBuilder<
 {
 
 	/// Builds the full service.
-	pub fn build_full(self) -> Result<
-		ServiceComponents<TBl, TBackend, TExec, TRtApi, TSc, TExPool>, Error
-	>
-		where TExec: CallExecutor<TBl, Backend = TBackend>,
-	{
+	pub fn build_full(self) -> Result<ServiceComponents<TBl, TBackend, TSc, TExPool, TCl>, Error> {
 		// make transaction pool available for off-chain runtime calls.
 		self.client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&self.transaction_pool) as _);
@@ -1198,18 +1197,16 @@ async fn transaction_notifications<TBl, TExPool>(
 }
 
 // Periodically notify the telemetry.
-async fn telemetry_periodic_send<TBl, TBackend, TExec, TRtApi, TExPool>(
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+async fn telemetry_periodic_send<TBl, TExPool, TCl>(
+	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	mut metrics_service: MetricsService,
 	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>
 )
 	where
 		TBl: BlockT,
-		TExec: CallExecutor<TBl>,
-		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
-		TBackend: sc_client_api::backend::Backend<TBl>,
 {
 	let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
 	network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
@@ -1287,11 +1284,11 @@ fn build_telemetry<TBl: BlockT>(
 	(telemetry, future)
 }
 
-fn gen_handler<TBl, TBackend, TExec, TRtApi, TExPool, TRpc>(
+fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	deny_unsafe: sc_rpc::DenyUnsafe,
 	config: &Configuration,
 	task_manager: &TaskManager,
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	keystore: Arc<RwLock<Keystore>>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
@@ -1302,13 +1299,14 @@ fn gen_handler<TBl, TBackend, TExec, TRtApi, TExPool, TRpc>(
 ) -> jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata>
 	where
 		TBl: BlockT,
-		TExec: CallExecutor<TBl, Backend = TBackend> + Send + Sync + 'static,
-		TRtApi: Send + Sync + 'static,
-		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+		TCl: ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + HeaderBackend<TBl> +
+		HeaderMetadata<TBl, Error=sp_blockchain::Error> + ExecutorProvider<TBl> +
+		CallApiAt<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
+		StorageProvider<TBl, TBackend> + BlockBackend<TBl> + Send + Sync + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-		<Client<TBackend, TExec, TBl, TRtApi> as ProvideRuntimeApi<TBl>>::Api:
+		<TCl as ProvideRuntimeApi<TBl>>::Api:
 			sp_session::SessionKeys<TBl> +
 			sp_api::Metadata<TBl, Error = sp_blockchain::Error>,
 {
@@ -1377,15 +1375,14 @@ fn gen_handler<TBl, TBackend, TExec, TRtApi, TExPool, TRpc>(
 	))
 }
 
-fn build_network<TBl, TBackend, TExec, TRtApi, TExPool, TImpQu>(
+fn build_network<TBl, TExPool, TImpQu, TCl>(
 	config: &Configuration,
-	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	spawn_handle: SpawnTaskHandle,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	block_announce_validator_builder: Option<Box<
-		dyn FnOnce(Arc<Client<TBackend, TExec, TBl, TRtApi>>) ->
-			Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
+		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
 	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
@@ -1401,11 +1398,10 @@ fn build_network<TBl, TBackend, TExec, TRtApi, TExPool, TImpQu>(
 >
 	where
 		TBl: BlockT,
-		TExec: CallExecutor<TBl> + Send + Sync + 'static,
-		TRtApi: Send + Sync + 'static,
-		Client<TBackend, TExec, TBl, TRtApi>: ProvideRuntimeApi<TBl>,
+		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
+		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
+		HeaderBackend<TBl> + BlockchainEvents<TBl> + 'static,
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
-		TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {

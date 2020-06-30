@@ -43,7 +43,6 @@ use wasm_timer::Instant;
 use std::task::Poll;
 use parking_lot::Mutex;
 
-use client::Client;
 use futures::{Future, FutureExt, Stream, StreamExt, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
@@ -80,7 +79,7 @@ pub use sc_network::config::{
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
-use sc_client_api::BlockchainEvents;
+use sc_client_api::{Backend, BlockchainEvents};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -152,11 +151,9 @@ impl TelemetryOnConnectSinks {
 
 /// The individual components of the chain, built by the service builder. You are encouraged to
 /// deconstruct this into its fields.
-pub struct ServiceComponents<
-	TBl: BlockT, TBackend: sc_client_api::backend::Backend<TBl>, TExec, TRtApi, TSc, TExPool,
-> {
+pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, TCl> {
 	/// A blockchain client.
-	pub client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
+	pub client: Arc<TCl>,
 	/// A shared transaction pool instance.
 	pub transaction_pool: Arc<TExPool>,
 	/// The chain task manager. 
@@ -177,9 +174,7 @@ pub struct ServiceComponents<
 	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
 	/// A shared offchain workers instance.
 	pub offchain_workers: Option<Arc<sc_offchain::OffchainWorkers<
-		Client<TBackend, TExec, TBl, TRtApi>,
-		TBackend::OffchainStorage,
-		TBl
+		TCl, TBackend::OffchainStorage, TBl
 	>>>,
 }
 

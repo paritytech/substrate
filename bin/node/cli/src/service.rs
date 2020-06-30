@@ -463,6 +463,7 @@ mod tests {
 	use crate::service::{new_full_base, new_light_base};
 	use sp_runtime::traits::IdentifyAccount;
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
+	use sc_client_api::BlockBackend;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
