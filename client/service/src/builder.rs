@@ -1057,7 +1057,7 @@ ServiceBuilder<
 		);
 		let rpc = start_rpc_servers(&config, gen_handler)?;
 		// This is used internally, so don't restrict access to unsafe RPC
-		let rpc_handlers = Arc::new(RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No)));
+		let rpc_handlers = RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No));
 
 		let telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>> = Default::default();
 
@@ -1103,7 +1103,7 @@ ServiceBuilder<
 			config.informant_output_format,
 		));
 
-		task_manager.keep_alive((telemetry, config.base_path, rpc, rpc_handlers.clone()));
+		task_manager.keep_alive((telemetry, config.base_path, rpc));
 
 		Ok(ServiceComponents {
 			client,

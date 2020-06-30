@@ -333,7 +333,7 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, node_executor::Ex
 type LightFetcher = sc_network::config::OnDemand<Block>;
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
+	TaskManager, RpcHandlers, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::BasicPool<
 		sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block

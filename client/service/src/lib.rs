@@ -115,8 +115,8 @@ impl RpcHandlers {
 	}
 
 	/// Provides access to the underlying pubsub instance.
-	pub fn handler(&self) -> &jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata> {
-		&self.0
+	pub fn into_handler(self) -> jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata> {
+		self.0
 	}
 }
 
@@ -168,7 +168,7 @@ pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, 
 	/// A shared network instance.
 	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// RPC handlers that can perform RPC queries.
-	pub rpc_handlers: Arc<RpcHandlers>,
+	pub rpc_handlers: RpcHandlers,
 	/// A shared instance of the chain selection algorithm.
 	pub select_chain: Option<TSc>,
 	/// Sinks to propagate network status updates.
