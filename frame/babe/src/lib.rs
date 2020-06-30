@@ -620,7 +620,7 @@ impl<T: Trait> Module<T> {
 		// check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that epoch)
 		if epoch_index != session_index {
-			return Err(Error::InvalidEquivocationProof.into());
+			return Err(Error::InvalidKeyOwnershipProof.into());
 		}
 
 		// check the membership proof and extract the offender's id
