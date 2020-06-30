@@ -194,10 +194,20 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 }
 
 impl Extrinsic {
+	/// Convert `&self` into `&Transfer`.
+	///
+	/// Panics if this is no `Transfer` extrinsic.
 	pub fn transfer(&self) -> &Transfer {
+		self.try_transfer().expect("cannot convert to transfer ref")
+	}
+
+	/// Try to convert `&self` into `&Transfer`.
+	///
+	/// Returns `None` if this is no `Transfer` extrinsic.
+	pub fn try_transfer(&self) -> Option<&Transfer> {
 		match self {
-			Extrinsic::Transfer { ref transfer, .. } => transfer,
-			_ => panic!("cannot convert to transfer ref"),
+			Extrinsic::Transfer { ref transfer, .. } => Some(transfer),
+			_ => None,
 		}
 	}
 }
@@ -313,6 +323,9 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Test that ensures that we can call a function that takes multiple
+				/// arguments.
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 			}
 		}
 	} else {
@@ -359,6 +372,9 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Test that ensures that we can call a function that takes multiple
+				/// arguments.
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 			}
 		}
 	}
@@ -641,6 +657,11 @@ cfg_if! {
 					test_read_storage();
 					test_read_child_storage();
 				}
+
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
+					assert_eq!(&data[..], &other[..]);
+					assert_eq!(data.len(), num as usize);
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -861,6 +882,11 @@ cfg_if! {
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
+				}
+
+				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32) {
+					assert_eq!(&data[..], &other[..]);
+					assert_eq!(data.len(), num as usize);
 				}
 			}
 

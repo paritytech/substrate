@@ -1,6 +1,6 @@
 [package]
 name = "pallet-assets"
-version = "2.0.0-rc3"
+version = "2.0.0-rc4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -15,16 +15,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.3.1", default-features = false }
 # Needed for various traits. In our case, `OnFinalize`.
-sp-runtime = { version = "2.0.0-rc3", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/runtime" }
 # Needed for type-safe access to storage DB.
-frame-support = { version = "2.0.0-rc3", default-features = false, path = "../support" }
+frame-support = { version = "2.0.0-rc4", default-features = false, path = "../support" }
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
-frame-system = { version = "2.0.0-rc3", default-features = false, path = "../system" }
+frame-system = { version = "2.0.0-rc4", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { version = "2.0.0-rc3", path = "../../primitives/core" }
-sp-std = { version = "2.0.0-rc3", path = "../../primitives/std" }
-sp-io = { version = "2.0.0-rc3", path = "../../primitives/io" }
+sp-core = { version = "2.0.0-rc4", path = "../../primitives/core" }
+sp-std = { version = "2.0.0-rc4", path = "../../primitives/std" }
+sp-io = { version = "2.0.0-rc4", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
