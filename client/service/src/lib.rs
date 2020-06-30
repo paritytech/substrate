@@ -383,33 +383,33 @@ async fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>,
-	rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
+	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
-	let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
-	// In the case where the channel containing RPC requests shuts down, we want the network
-	// future to continue running. To make that easier, we make sure that `rpc_rx` never finishes.
-	let mut rpc_rx = rpc_rx.chain(stream::pending()).fuse();
+	// Stream of finalized blocks reported by the client.
+	let mut finality_notification_stream = {
+		let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
-	loop {
-		let before_polling = Instant::now();
-
-		// This future does the same as `finality_notification_stream.next()`, except that if
-		// multiple events are ready on the stream, only the last one is returned.
-		let mut last_finality_notification = futures::future::poll_fn(|cx| {
+		// We tweak the `Stream` in order to merge together multiple items if they happen to be
+		// ready. This way, we only get the latest finalized block.
+		stream::poll_fn(move |cx| {
 			let mut last = None;
 			while let Poll::Ready(Some(item)) = Pin::new(&mut finality_notification_stream).poll_next(cx) {
 				last = Some(item);
 			}
 			if let Some(last) = last {
-				Poll::Ready(last)
+				Poll::Ready(Some(last))
 			} else {
 				Poll::Pending
 			}
-		}).fuse();
+		}).fuse()
+	};
+
+	loop {
+		let before_polling = Instant::now();
 
 		futures::select!{
 			// List of blocks that the client has imported.
@@ -434,25 +434,24 @@ async fn build_network_future<
 			}
 
 			// List of blocks that the client has finalized.
-			notification = last_finality_notification => {
+			notification = finality_notification_stream.select_next_some() => {
 				network.on_block_finalized(notification.hash, notification.header);
 			}
 
 			// Answer incoming RPC requests.
-			request = rpc_rx.next() => {
+			request = rpc_rx.select_next_some() => {
 				match request {
-					None => continue,
-					Some(sc_rpc::system::Request::Health(sender)) => {
+					sc_rpc::system::Request::Health(sender) => {
 						let _ = sender.send(sc_rpc::system::Health {
 							peers: network.peers_debug_info().len(),
 							is_syncing: network.service().is_major_syncing(),
 							should_have_peers,
 						});
 					},
-					Some(sc_rpc::system::Request::LocalPeerId(sender)) => {
+					sc_rpc::system::Request::LocalPeerId(sender) => {
 						let _ = sender.send(network.local_peer_id().to_base58());
 					},
-					Some(sc_rpc::system::Request::LocalListenAddresses(sender)) => {
+					sc_rpc::system::Request::LocalListenAddresses(sender) => {
 						let peer_id = network.local_peer_id().clone().into();
 						let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 						let addresses = network.listen_addresses()
@@ -460,7 +459,7 @@ async fn build_network_future<
 							.collect();
 						let _ = sender.send(addresses);
 					},
-					Some(sc_rpc::system::Request::Peers(sender)) => {
+					sc_rpc::system::Request::Peers(sender) => {
 						let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
 							sc_rpc::system::PeerInfo {
 								peer_id: peer_id.to_base58(),
@@ -471,17 +470,17 @@ async fn build_network_future<
 							}
 						).collect());
 					}
-					Some(sc_rpc::system::Request::NetworkState(sender)) => {
+					sc_rpc::system::Request::NetworkState(sender) => {
 						if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
 							let _ = sender.send(network_state);
 						}
 					}
-					Some(sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender)) => {
+					sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
 						let x = network.add_reserved_peer(peer_addr)
 							.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
 						let _ = sender.send(x);
 					}
-					Some(sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender)) => {
+					sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
 						let _ = match peer_id.parse::<PeerId>() {
 							Ok(peer_id) => {
 								network.remove_reserved_peer(peer_id);
@@ -492,7 +491,7 @@ async fn build_network_future<
 							))),
 						};
 					}
-					Some(sc_rpc::system::Request::NodeRoles(sender)) => {
+					sc_rpc::system::Request::NodeRoles(sender) => {
 						use sc_rpc::system::NodeRole;
 
 						let node_role = match role {
