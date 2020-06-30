@@ -74,6 +74,7 @@ macro_rules! impl_outer_inherent {
 
 			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
 				use $crate::inherent::{ProvideInherent, IsFatalError};
+				use $crate::sp_runtime::traits::Block as _;
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 				for xt in block.extrinsics() {

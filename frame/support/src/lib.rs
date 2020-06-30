@@ -267,7 +267,9 @@ macro_rules! ord_parameter_types {
 }
 
 #[doc(inline)]
-pub use frame_support_procedural::{decl_storage, construct_runtime};
+pub use frame_support_procedural::{
+	decl_storage, construct_runtime, expand_after, decl_construct_runtime_args,
+};
 
 /// Return Err of the expression: `return Err($expression);`.
 ///

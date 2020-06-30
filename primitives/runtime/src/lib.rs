@@ -623,7 +623,12 @@ macro_rules! impl_outer_config {
 
 		$crate::paste::item! {
 			#[cfg(any(feature = "std", test))]
+			#[doc(hidden)]
+			use $crate::serde as _sp_runtime_hidden_serde;
+
+			#[cfg(any(feature = "std", test))]
 			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
+			#[serde(crate = "_sp_runtime_hidden_serde")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
 			pub struct $main {

@@ -22,17 +22,77 @@ use frame_support_procedural_tools::{generate_crate_access, generate_hidden_incl
 use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{quote, quote_spanned};
 use syn::{Ident, Result, TypePath};
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
 
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
+	let input_clone = input.clone().into();
 	let definition = syn::parse_macro_input!(input as RuntimeDefinition);
+
+	if let Some(preprocess) = construct_runtime_preprocess(&definition, input_clone)
+		.unwrap_or_else(|e| Some(e.to_compile_error()))
+	{
+		return preprocess.into()
+	}
+
 	construct_runtime_parsed(definition)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
+}
+
+fn construct_runtime_preprocess(
+	def: &RuntimeDefinition,
+	input_clone: TokenStream2,
+) -> Result<Option<TokenStream2>> {
+	let mut auto_modules = vec![];
+	for module in def.modules.content.inner.iter() {
+		if module.module_parts.is_none() {
+			auto_modules.push(module.clone())
+		}
+	}
+
+	if !auto_modules.is_empty() {
+
+		// Make frame-support available to construct_runtime_args
+		let hidden_crate_name = "construct_runtime_preprocess";
+		let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
+		let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
+
+		let mut expand = quote!( #scrate::construct_runtime! { #input_clone } );
+
+		while let Some(module) = auto_modules.pop()  {
+			let macro_call = if def.local_macro.as_ref().map_or(false, |m| *m == module.module) {
+				quote!( construct_runtime_args! )
+			} else {
+				let module = &module.module;
+				quote!( #module::construct_runtime_args! )
+			};
+
+			let module_name = &module.name;
+			let module_module = &module.module;
+			let module_instance = module.instance.as_ref()
+				.map(|instance| quote!( ::< #instance > ));
+
+			expand = quote_spanned!(module_name.span() =>
+				#macro_call {
+					{ #module_name : #module_module #module_instance}
+					#expand
+				}
+			);
+		}
+
+		expand = quote!(
+			#scrate_decl
+			#expand
+		);
+
+		Ok(Some(expand))
+	} else {
+		Ok(None)
+	}
 }
 
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
@@ -164,6 +224,12 @@ fn decl_outer_inherent<'a>(
 		})
 	});
 	quote!(
+		// Prevent UncheckedExtrinsic to print unused warning.
+		const _: () = {
+			#[allow(unused)]
+			type __hidden_use_unchecked_extrinsic = #unchecked_extrinsic;
+		};
+
 		#scrate::impl_outer_inherent!(
 			impl Inherents where Block = #block, UncheckedExtrinsic = #unchecked_extrinsic {
 				#(#modules_tokens)*
@@ -201,6 +267,7 @@ fn decl_outer_config<'a>(
 					#module #(#instance)* #(#generics)*,
 			)
 		});
+
 	quote!(
 		#scrate::sp_runtime::impl_outer_config! {
 			pub struct GenesisConfig for #runtime {
@@ -221,6 +288,7 @@ fn decl_runtime_metadata<'a>(
 			module_declaration.find_part("Module").map(|_| {
 				let filtered_names: Vec<_> = module_declaration
 					.module_parts()
+					.expect("Preprocessing has expanded module parts")
 					.into_iter()
 					.filter(|part| part.name() != "Module")
 					.map(|part| part.ident())

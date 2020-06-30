@@ -107,15 +107,15 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable, AtLeast32BitUnsigned
+		Dispatchable, AtLeast32BitUnsigned, BlakeTwo256,
 	},
 	offchain::storage_lock::BlockNumberProvider,
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug,
-	storage,
+	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug, storage,
+	decl_construct_runtime_args,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin, OriginTrait, Filter,
@@ -147,6 +147,8 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
+
+decl_construct_runtime_args!(Module, Call, Config, Storage, Event<T>);
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -1351,3 +1353,14 @@ impl<T: Trait> Lookup for ChainContext<T> {
 		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }
+
+/// An implementation of `sp_runtime::traits::Block` to be used in test.
+pub type MockBlock<T> = generic::Block<
+	generic::Header<<T as Trait>::BlockNumber, BlakeTwo256>,
+	MockUncheckedExtrinsic<T>,
+>;
+
+/// An unchecked extrinsic type to be used in test.
+pub type MockUncheckedExtrinsic<T> = generic::UncheckedExtrinsic<
+	<T as Trait>::AccountId, <T as Trait>::Call, (), (),
+>;

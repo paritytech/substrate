@@ -23,6 +23,7 @@
 
 mod storage;
 mod construct_runtime;
+mod expand_after;
 
 use proc_macro::TokenStream;
 
@@ -260,6 +261,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         // Module with instances
 ///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
 ///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
+///
+///         TestAuto: pallet_with_automatic_expansion,
 ///     }
 /// )
 /// ```
@@ -282,12 +285,112 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///                             inherent.
 /// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
 ///
+/// if no module parts is provided construct_runtime will try to use the expansion provided by the
+/// crate through `decl_construct_runtime_args`.
+///
 /// # Note
 ///
 /// The population of the genesis storage depends on the order of modules. So, if one of your
 /// modules depends on another module, the module that is depended upon needs to come before
 /// the module depending on it.
+///
+/// # Use an inside pallet
+///
+/// The attribute `#[local_macro(pallet_name)]` can be provided if the pallet is defined in
+/// the same crate as construct_runtime is called. Usage is:
+///
+/// ```nocompile
+/// use crate as pallet_name;
+/// construct_runtime!(
+///     #[local_macro(pallet_name)]
+///     pub enum Runtime where
+///         Block = Block,
+///         NodeBlock = runtime::Block,
+///         UncheckedExtrinsic = UncheckedExtrinsic
+///     {
+///         System: system,
+///         MyPallet: pallet_name,
+///     }
+/// )
+/// ```
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
+}
+
+/// Macro than expand after the first finding of some pattern.
+///
+/// # Example:
+///
+/// ```nocompile
+/// expand_after!(
+///     { match pattern } // the match pattern cannot contains any group: `[]`, `()`, `{}`.
+///     { expansion tokens } // content inside braces can be anything including groups.
+///     Some content with { at some point match pattern } other match pattern are ignored
+/// );
+/// ```
+///
+/// will generate:
+///
+/// ```nocompile
+///     Some content with { at some point something or else } other match pattern are ignored
+/// ```
+#[proc_macro]
+pub fn expand_after(input: TokenStream) -> TokenStream {
+	expand_after::expand_after(input)
+}
+
+/// Declare the construct_runtime_args to be used in construct_runtime to get the default pallet
+/// parts.
+///
+/// # Example:
+///
+/// if pallet want to give the given args:
+/// ```nocompile
+/// construct_runtime!(
+///     ...
+///     {
+///         ...
+///         Example: frame_example::{Module, Call, Event<T>},
+///         ...
+///     }
+/// );
+/// ```
+///
+/// then it must define:
+///
+/// ```nocompile
+/// decl_construct_runtime_args!(Module, Call, Event<T>)
+/// ```
+///
+/// # Limitation:
+///
+/// * `Inherent(another_pallet)` is not supported because there is no way to know the other pallet
+///   name in advance, though `Inherent` is supported.
+///
+/// * Only one declararion is allowed per crate, if a crate define multiples pallet, make sure
+///   `decl_construct_runtime_args` is declare in the namespace of the wanted pallet.
+#[proc_macro]
+pub fn decl_construct_runtime_args(input: TokenStream) -> TokenStream {
+	use frame_support_procedural_tools::generate_crate_access;
+
+	let input: proc_macro2::TokenStream = input.into();
+
+	// frame-support is made available by construct_runtime_preprocess
+	let hidden_crate_name = "construct_runtime_preprocess";
+	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
+
+	quote::quote!(
+		/// This can be internally called by `construct_runtime` to builds the pallet args.
+		#[macro_export(local_macros)]
+		macro_rules! construct_runtime_args {
+			( { $( $pattern:tt )* } $( $t:tt )* ) => {
+				#scrate::expand_after! {
+					{ $( $pattern )* }
+					{ ::{ #input } }
+					$( $t )*
+				}
+			}
+		}
+	).into()
 }
