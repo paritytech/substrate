@@ -259,7 +259,7 @@ test-wasmtime:
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
+    # but still want to have debug assertions. 
     RUSTFLAGS: -Cdebug-assertions=y
     RUST_BACKTRACE: 1
   except:
