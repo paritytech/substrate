@@ -275,12 +275,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		let mut ready = self.ready.write();
-		loop {
-			let hash = match to_remove.pop() {
-				Some(hash) => hash,
-				None => return removed,
-			};
-
+		while let Some(hash) = to_remove.pop() {
 			if let Some(mut tx) = ready.remove(&hash) {
 				let invalidated = tx.transaction.transaction.provides
 					.iter()
@@ -319,6 +314,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				removed.push(tx.transaction.transaction);
 			}
 		}
+
+		removed
 	}
 
 	/// Removes transactions that provide given tag.
@@ -330,17 +327,16 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		let mut removed = vec![];
 		let mut to_remove = vec![tag];
 
-		loop {
-			let tag = match to_remove.pop() {
-				Some(tag) => tag,
-				None => return removed,
-			};
-
+		while let Some(tag) = to_remove.pop() {
 			let res = self.provided_tags.remove(&tag)
-					.and_then(|hash| self.ready.write().remove(&hash));
+				.and_then(|hash| self.ready.write().remove(&hash));
 
 			if let Some(tx) = res {
 				let unlocks = tx.unlocks;
+
+				// Make sure we remove it from best txs
+				self.best.remove(&tx.transaction);
+
 				let tx = tx.transaction.transaction;
 
 				// prune previous transactions as well
@@ -403,6 +399,8 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 				removed.push(tx);
 			}
 		}
+
+		removed
 	}
 
 	/// Checks if the transaction is providing the same tags as other transactions.
