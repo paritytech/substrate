@@ -17,9 +17,9 @@
 
 //! Consensus extension module tests for BABE consensus.
 
-use super::*;
+use super::{Call, *};
 use frame_support::{
-	assert_err,
+	assert_err, assert_ok,
 	traits::{Currency, OnFinalize},
 };
 use mock::*;
@@ -508,4 +508,80 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		assert_invalid_equivocation(equivocation_proof.clone());
 	})
+}
+
+#[test]
+fn report_equivocation_validate_unsigned_prevents_duplicates() {
+	use sp_runtime::transaction_validity::{
+		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
+		TransactionValidity, ValidTransaction,
+	};
+
+	let (pairs, mut ext) = new_test_ext_with_pairs(3);
+
+	ext.execute_with(|| {
+		start_era(1);
+
+		let authorities = Babe::authorities();
+
+		// generate and report an equivocation for the validator at index 0
+		let offending_validator_index = 0;
+		let offending_authority_pair = pairs
+			.into_iter()
+			.find(|p| p.public() == authorities[offending_validator_index].0)
+			.unwrap();
+
+		let equivocation_proof = generate_equivocation_proof(
+			offending_validator_index as u32,
+			&offending_authority_pair,
+			CurrentSlot::get(),
+		);
+
+		let key = (
+			sp_consensus_babe::KEY_TYPE,
+			&offending_authority_pair.public(),
+		);
+		let key_owner_proof = Historical::prove(key).unwrap();
+
+		let inner =
+			Call::report_equivocation_unsigned(equivocation_proof.clone(), key_owner_proof.clone());
+
+		// only local/inblock reports are allowed
+		assert_eq!(
+			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&inner,
+			),
+			InvalidTransaction::Call.into(),
+		);
+
+		// the transaction is valid when passed as local
+		let tx_tag = (offending_authority_pair.public(), CurrentSlot::get());
+		assert_eq!(
+			<Babe as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&inner,
+			),
+			TransactionValidity::Ok(ValidTransaction {
+				priority: TransactionPriority::max_value(),
+				requires: vec![],
+				provides: vec![("BabeEquivocation", tx_tag).encode()],
+				longevity: TransactionLongevity::max_value(),
+				propagate: false,
+			})
+		);
+
+		// the pre dispatch checks should also pass
+		assert_ok!(<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner));
+
+		// we submit the report
+		Babe::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
+			.unwrap();
+
+		// the report should now be considered stale and the transaction is invalid
+		assert_err!(
+			<Babe as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&inner),
+			InvalidTransaction::Stale,
+		);
+	});
 }
