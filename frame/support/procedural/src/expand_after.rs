@@ -16,9 +16,12 @@ pub fn expand_after(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 struct ExpandAfterDef {
-	// This is ensured to have no TokenTree::Group nor TokenTree::Literal and not being empty.
+	// Pattern to expand after, this is ensured to have no TokenTree::Group nor TokenTree::Literal
+	// (i.e. contains only Punct or Ident), and not being empty.
 	expand_after: Vec<TokenTree>,
+	// Token stream to write after match.
 	expand_with: TokenStream,
+	// Token stream to search and write inside.
 	expand_in: TokenStream,
 }
 
@@ -52,7 +55,7 @@ impl syn::parse::Parse for ExpandAfterDef {
 	}
 }
 
-// Replace the first found `auto` ident by content of `with`.
+// Replace the first found `after` pattern by content of `with`.
 // `with` must be some (Option is used for internal simplification).
 // `after` musn't be empty and only contains Ident or Punct
 fn expand_in_stream(
