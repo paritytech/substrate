@@ -17,7 +17,7 @@ jobs:
           contexts: 'continuous-integration/gitlab-check-polkadot-companion-build'
           timeout: 1800
           notPresentTimeout: 3600 # It can take quite a while before the job starts...
-          failedStates: failure
+          failureStates: failure
           interruptedStates: error # Error = job was probably cancelled. We don't want to label the PR in that case
       - name: Label success
         uses: andymckay/labeler@master
