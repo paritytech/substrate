@@ -19,9 +19,9 @@
 
 use super::*;
 use mock::*;
-use frame_support::traits::OnFinalize;
+use frame_support::traits::{Currency, OnFinalize};
 use pallet_session::ShouldEndSession;
-use sp_core::crypto::IsWrappedBy;
+use sp_core::crypto::{IsWrappedBy, Pair};
 use sp_consensus_babe::AllowedSlots;
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
@@ -40,14 +40,14 @@ fn empty_randomness_is_correct() {
 
 #[test]
 fn initial_values() {
-	new_test_ext(4).1.execute_with(|| {
+	new_test_ext(4).execute_with(|| {
 		assert_eq!(Babe::authorities().len(), 4)
 	})
 }
 
 #[test]
 fn check_module() {
-	new_test_ext(4).1.execute_with(|| {
+	new_test_ext(4).execute_with(|| {
 		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
 		assert!(!Babe::should_end_session(200000),
 			"BABE does not include the block number in epoch calculations");
@@ -56,7 +56,7 @@ fn check_module() {
 
 #[test]
 fn first_block_epoch_zero_start() {
-	let (pairs, mut ext) = new_test_ext(4);
+	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
 		let genesis_slot = 100;
@@ -124,7 +124,7 @@ fn first_block_epoch_zero_start() {
 
 #[test]
 fn authority_index() {
-	new_test_ext(4).1.execute_with(|| {
+	new_test_ext(4).execute_with(|| {
 		assert_eq!(
 			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
 			"Trivially invalid authorities are ignored")
@@ -133,7 +133,7 @@ fn authority_index() {
 
 #[test]
 fn can_predict_next_epoch_change() {
-	new_test_ext(0).1.execute_with(|| {
+	new_test_ext(1).execute_with(|| {
 		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
@@ -154,7 +154,7 @@ fn can_predict_next_epoch_change() {
 
 #[test]
 fn can_enact_next_config() {
-	new_test_ext(0).1.execute_with(|| {
+	new_test_ext(1).execute_with(|| {
 		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
@@ -182,4 +182,95 @@ fn can_enact_next_config() {
 
 		assert_eq!(header.digest.logs[2], consensus_digest.clone())
 	});
+}
+
+#[test]
+fn report_equivocation_current_session_works() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(3);
+
+	ext.execute_with(|| {
+		start_era(1);
+
+		let authorities = Babe::authorities();
+		let validators = Session::validators();
+
+		// make sure that all authorities have the same balance
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(1, validator),
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: vec![],
+				},
+			);
+		}
+
+		// we will use the validator at index 0 as the offending authority
+		let offending_validator_index = 0;
+		let offending_validator_id = Session::validators()[offending_validator_index];
+		let offending_authority_pair = pairs
+			.into_iter()
+			.find(|p| p.public() == authorities[offending_validator_index].0)
+			.unwrap();
+
+		// generate an equivocation proof. it creates two votes at the given
+		// slot with different block hashes and signed by the given key
+		let equivocation_proof = generate_equivocation_proof(
+			offending_validator_index as u32,
+			&offending_authority_pair,
+			CurrentSlot::get(),
+		);
+
+		// create the key ownership proof
+		let key_owner_proof = Historical::prove(
+			(sp_consensus_babe::KEY_TYPE, &offending_authority_pair.public()),
+		).unwrap();
+
+		// report the equivocation
+		Babe::report_equivocation_unsigned(
+			Origin::none(),
+			equivocation_proof,
+			key_owner_proof,
+		).unwrap();
+
+		// start a new era so that the results of the offence report
+		// are applied at era end
+		start_era(2);
+
+		// check that the balance of 0-th validator is slashed 100%.
+		assert_eq!(Balances::total_balance(&offending_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&offending_validator_id), 0);
+
+		assert_eq!(
+			Staking::eras_stakers(2, offending_validator_id),
+			pallet_staking::Exposure {
+				total: 0,
+				own: 0,
+				others: vec![],
+			},
+		);
+
+		// check that the balances of all other validators are left intact.
+		for validator in &validators {
+			if *validator == offending_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(2, validator),
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: vec![],
+				},
+			);
+		}
+	})
 }
