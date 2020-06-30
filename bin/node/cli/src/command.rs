@@ -97,8 +97,10 @@ pub fn run() -> Result<()> {
 		}
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
-
-			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+			runner.run_subcommand(subcommand, |config| {
+				let (builder, _, _, _) = new_full_start!(config);
+				Ok(builder.to_chain_ops_parts())
+			})
 		}
 	}
 }

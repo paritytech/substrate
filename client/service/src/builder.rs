@@ -523,6 +523,11 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		self.remote_backend.clone()
 	}
 
+	/// Consume the builder and return the parts needed for chain operations.
+	pub fn to_chain_ops_parts(self) -> (Arc<TCl>, Arc<Backend>, TImpQu) {
+		(self.client, self.backend, self.import_queue)
+	}
+
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		self,

@@ -23,7 +23,6 @@
 #![recursion_limit="128"]
 
 pub mod config;
-#[macro_use]
 pub mod chain_ops;
 pub mod error;
 
@@ -79,6 +78,7 @@ pub use sc_network::config::{
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
+pub use sp_consensus::import_queue::ImportQueue;
 use sc_client_api::{Backend, BlockchainEvents};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";

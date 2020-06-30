@@ -71,7 +71,10 @@ pub fn run() -> sc_cli::Result<()> {
 	match &cli.subcommand {
 		Some(subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
-			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+			runner.run_subcommand(subcommand, |config| {
+				let (builder, _, _) = new_full_start!(config);
+				Ok(builder.to_chain_ops_parts())
+			})
 		}
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
