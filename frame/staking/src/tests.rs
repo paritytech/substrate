@@ -4501,3 +4501,33 @@ fn on_initialize_weight_is_correct() {
 		assert_eq!(final_weight, Staking::on_initialize(System::block_number()));
 	});
 }
+
+
+#[test]
+fn payout_creates_controller() {
+	// Here we will test validator can set `max_nominators_payout` and it works.
+	// We also test that `payout_extra_nominators` works.
+	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
+		let balance = 1000;
+		// Create three validators:
+		bond_validator(11, 10, balance); // Default(64)
+
+		// Create a stash/controller pair
+		bond_nominator(1234, 1337, 100, vec![11]);
+
+		// kill controller
+		assert_ok!(Balances::transfer(Origin::signed(1337), 1234, 100));
+		assert_eq!(Balances::free_balance(1337), 0);
+
+		mock::start_era(1);
+		Staking::reward_by_ids(vec![(11, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
+		mock::start_era(2);
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+
+		// Controller is created
+		assert!(Balances::free_balance(1337) > 0);
+	})
+}
