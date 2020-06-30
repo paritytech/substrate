@@ -200,15 +200,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			record_proof,
 		)?;
 
-		// We don't check the API versions any further here since the dispatch compatibility
-		// check should be enough.
-		for inherent in self.client.runtime_api()
-			.inherent_extrinsics_with_context(
-				&self.parent_id,
-				ExecutionContext::BlockConstruction,
-				inherent_data
-			)?
-		{
+		for inherent in block_builder.create_inherents(inherent_data)? {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),

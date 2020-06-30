@@ -350,21 +350,39 @@ pub trait ApiErrorExt {
 	type Error: std::fmt::Debug + From<String>;
 }
 
+/// Describes on what should happen with a transaction.
+pub enum TransactionOutcome<R> {
+	/// Commit the transaction.
+	Commit(R),
+	/// Rollback the transaction.
+	Rollback(R),
+}
+
+impl<R> TransactionOutcome<R> {
+	/// Convert into the inner type.
+	pub fn into_inner(self) -> R {
+		match self {
+			Self::Commit(r) => r,
+			Self::Rollback(r) => r,
+		}
+	}
+}
+
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
 
-	/// The given closure will be called with api instance. Inside the closure any api call is
-	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
-	/// different `Result` type. This can be important, as the internal data structure that keeps
-	/// track of modifications to the storage, discards changes when the `Result` is an `Err`.
-	/// On `Ok`, the structure commits the changes to an internal buffer.
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
+	/// Execute the given closure inside a new transaction.
+	///
+	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
+	///
+	/// The internal result of the closure is returned afterwards.
+	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
 		&self,
-		map_call: F,
-	) -> result::Result<R, E> where Self: Sized;
+		call: F,
+	) -> R where Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
