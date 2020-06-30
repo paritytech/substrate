@@ -19,14 +19,15 @@ use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use sc_network::config::TransportConfig;
 use sc_service::{
-	AbstractService, RpcSession, Role, Configuration,
+	RpcSession, Role, Configuration, TaskManager, RpcHandlers,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
-use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
-use std::task::Poll;
-use std::pin::Pin;
+use futures::{
+	prelude::*, channel::{oneshot, mpsc}, compat::*, future::{ready, ok, select}
+};
+use std::{sync::Arc, pin::Pin};
 use sc_chain_spec::Extension;
 use libp2p_wasm_ext::{ExtTransport, ffi};
 
@@ -120,31 +121,25 @@ struct RpcMessage {
 }
 
 /// Create a Client object that connects to a service.
-pub fn start_client(mut service: impl AbstractService) -> Client {
+pub fn start_client(mut task_manager: TaskManager, rpc_handlers: Arc<RpcHandlers>) -> Client {
 	// We dispatch a background task responsible for processing the service.
 	//
 	// The main action performed by the code below consists in polling the service with
 	// `service.poll()`.
 	// The rest consists in handling RPC requests.
-	let (rpc_send_tx, mut rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
-	wasm_bindgen_futures::spawn_local(poll_fn(move |cx| {
-		loop {
-			match Pin::new(&mut rpc_send_rx).poll_next(cx) {
-				Poll::Ready(Some(message)) => {
-					let fut = service
-						.rpc_query(&message.session, &message.rpc_json)
-						.boxed();
-					let _ = message.send_back.send(fut);
-				},
-				Poll::Pending => break,
-				Poll::Ready(None) => return Poll::Ready(()),
-			}
-		}
-
-		Pin::new(&mut service)
-			.poll(cx)
-			.map(drop)
-	}));
+	let (rpc_send_tx, rpc_send_rx) = mpsc::unbounded::<RpcMessage>();
+	wasm_bindgen_futures::spawn_local(
+		select(
+			rpc_send_rx.for_each(move |message| {
+				let fut = rpc_handlers.rpc_query(&message.session, &message.rpc_json);
+				let _ = message.send_back.send(fut);
+				ready(())
+			}),
+			Box::pin(async move {
+				let _ = task_manager.future().await;
+			}),
+		).map(drop)
+	);
 
 	Client {
 		rpc_send_tx,
