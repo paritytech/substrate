@@ -113,6 +113,11 @@ impl RpcHandlers {
 			.map(|res| res.expect("this should never fail"))
 			.boxed()
 	}
+
+	/// Provides access to the underlying pubsub instance.
+	pub fn handler(&self) -> &jsonrpc_pubsub::PubSubHandler<sc_rpc::Metadata> {
+		&self.0
+	}
 }
 
 /// Sinks to propagate network status updates.
