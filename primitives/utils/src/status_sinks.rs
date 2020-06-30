@@ -173,9 +173,9 @@ impl<T> futures::Future for YieldAfter<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate::mpsc::tracing_unbounded;
 	use super::StatusSinks;
 	use futures::prelude::*;
-	use futures::channel::mpsc;
 	use std::time::Duration;
 
 	#[test]
@@ -185,7 +185,7 @@ mod tests {
 
 		let status_sinks = StatusSinks::new();
 
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("test");
 		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut val_order = 5;
