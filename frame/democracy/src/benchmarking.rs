@@ -74,13 +74,13 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		0.into(),
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
-	let _ = T::Scheduler::schedule_named(
+	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
-		0.into(),
+		1.into(),
 		None,
 		63,
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
-	);
+	).map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
 }
 

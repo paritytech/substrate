@@ -329,6 +329,10 @@ pub trait Happened<T> {
 	fn happened(t: &T);
 }
 
+impl<T> Happened<T> for () {
+	fn happened(_: &T) {}
+}
+
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
 /// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
 /// would break the ability to have custom impls of `StoredValue`. The other workaround is to

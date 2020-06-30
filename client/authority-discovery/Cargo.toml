@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", default-features = false, version = "1
 derive_more = "0.99.2"
 futures = "0.3.4"
 futures-timer = "3.0.1"
-libp2p = { version = "0.19.1", default-features = false, features = ["kad"] }
+libp2p = { version = "0.20.1", default-features = false, features = ["kad"] }
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-rc4"}
 prost = "0.6.1"
