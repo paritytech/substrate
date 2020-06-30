@@ -809,7 +809,7 @@ where
 		let generate_key_owner_proof = |block_id: &BlockId<Block>| {
 			self.client
 				.runtime_api()
-				.generate_key_ownership_proof(block_id, equivocation_proof.offender.clone())
+				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
 				.map_err(Error::Client)
 		};
 

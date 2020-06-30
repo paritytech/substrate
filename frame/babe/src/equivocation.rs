@@ -231,7 +231,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 /// When a validator released two or more blocks at the same slot.
 pub struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
-	pub slot: u64,
+	pub slot: SlotNumber,
 	/// The session index in which the incident happened.
 	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.

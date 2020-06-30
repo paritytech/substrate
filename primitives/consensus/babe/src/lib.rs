@@ -369,7 +369,14 @@ sp_api::decl_runtime_apis! {
 		/// session historical module to prove that a given authority key is
 		/// tied to a given staking identity during a specific session. Proofs
 		/// of key ownership are necessary for submitting equivocation reports.
+		/// NOTE: even though the API takes a `slot_number` as parameter the current
+		/// implementations ignores this parameter and instead relies on this
+		/// method being called at the correct block height, i.e. any point at
+		/// which the epoch for the given slot is live on-chain. Future
+		/// implementations will instead use indexed data through an offchain
+		/// worker, not requiring older states to be available.
 		fn generate_key_ownership_proof(
+			slot_number: SlotNumber,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 

@@ -999,6 +999,7 @@ impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
+			_slot_number: sp_consensus_babe::SlotNumber,
 			authority_id: sp_consensus_babe::AuthorityId,
 		) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 			use codec::Encode;
