@@ -55,7 +55,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
 use sc_client_api::{
-	ExecutionStrategy,
+	ExecutionStrategy, BlockBackend,
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
 use sp_core::{Pair, Public, sr25519, ed25519};
