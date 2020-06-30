@@ -65,6 +65,11 @@ impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
 
 		Ok(())
 	}
+
+	/// Return the number of subscribers.
+	pub fn len(&self) -> usize {
+		self.subscribers.lock().len()
+	}
 }
 
 /// The receiving half of the Grandpa justification channel.

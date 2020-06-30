@@ -155,9 +155,20 @@ mod tests {
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 	use jsonrpc_core::Output;
 
-	use sc_finality_grandpa::{report, AuthorityId};
+	use sc_block_builder::BlockBuilder;
+	use sc_finality_grandpa::{report, AuthorityId, GrandpaJustificationSubscribers, GrandpaJustification};
+	use sp_blockchain::HeaderBackend;
+	use sp_consensus::RecordProof;
 	use sp_core::crypto::Public;
-	use sc_network_test::Block;
+	use sp_keyring::Ed25519Keyring;
+	use sp_runtime::generic::Header;
+	use sp_runtime::traits::{Header as HeaderT, BlakeTwo256};
+	use substrate_test_runtime_client::{
+		runtime::Block,
+		DefaultTestClientBuilderExt,
+		TestClientBuilderExt,
+		TestClientBuilder,
+	};
 
 	struct TestAuthoritySet;
 	struct TestVoterState;
@@ -214,24 +225,31 @@ mod tests {
 		}
 	}
 
-	fn setup_rpc_handler<VoterState>(voter_state: VoterState) -> GrandpaRpcHandler<TestAuthoritySet, VoterState, Block> {
-		let (_, justification_receiver) = GrandpaJustifications::channel();
+	fn setup_io_handler<VoterState>(voter_state: VoterState) -> (
+		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
+		GrandpaJustificationSubscribers<Block>,
+	) where
+		VoterState: ReportVoterState + Send + Sync + 'static,
+	{
+		let (subscribers, justifications) = GrandpaJustifications::channel();
 		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
 			voter_state,
-			justification_receiver,
+			justifications,
 			manager,
 		);
-		handler
+
+		let mut io = jsonrpc_core::MetaIoHandler::default();
+		io.extend_with(GrandpaApi::to_delegate(handler));
+
+		(io, subscribers)
 	}
 
 	#[test]
 	fn uninitialized_rpc_handler() {
-		let handler = setup_rpc_handler(EmptyVoterState);
-		let mut io = jsonrpc_core::MetaIoHandler::default();
-		io.extend_with(GrandpaApi::to_delegate(handler));
+		let (io, _) = setup_io_handler(EmptyVoterState);
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
 		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
@@ -242,9 +260,7 @@ mod tests {
 
 	#[test]
 	fn working_rpc_handler() {
-		let handler = setup_rpc_handler(TestVoterState);
-		let mut io = jsonrpc_core::MetaIoHandler::default();
-		io.extend_with(GrandpaApi::to_delegate(handler));
+		let (io,  _) = setup_io_handler(TestVoterState);
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
 		let response = "{\"jsonrpc\":\"2.0\",\"result\":{\
@@ -265,19 +281,16 @@ mod tests {
 		assert_eq!(io.handle_request_sync(request, meta), Some(response.into()));
 	}
 
-	fn setup_io_handler() -> (sc_rpc::Metadata, jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>) {
-		let handler = setup_rpc_handler(TestVoterState);
-		let mut io = jsonrpc_core::MetaIoHandler::default();
-		io.extend_with(GrandpaApi::to_delegate(handler));
-
-		let (tx, _rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
+	fn setup_session() -> (sc_rpc::Metadata, jsonrpc_core::futures::sync::mpsc::Receiver<String>) {
+		let (tx, rx) = jsonrpc_core::futures::sync::mpsc::channel(1);
 		let meta = sc_rpc::Metadata::new(tx);
-		(meta, io)
+		(meta, rx)
 	}
 
 	#[test]
 	fn subscribe_and_unsubscribe_to_justifications() {
-		let (meta, io) = setup_io_handler();
+		let (io, _) = setup_io_handler(TestVoterState);
+		let (meta, _) = setup_session();
 
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
@@ -308,7 +321,8 @@ mod tests {
 
 	#[test]
 	fn subscribe_and_unsubscribe_with_wrong_id() {
-		let (meta, io) = setup_io_handler();
+		let (io, _) = setup_io_handler(TestVoterState);
+		let (meta, _) = setup_session();
 
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
@@ -325,4 +339,83 @@ mod tests {
 			Some(r#"{"jsonrpc":"2.0","result":false,"id":1}"#.into())
 		);
 	}
+
+	fn create_justification() -> (Header<u64, BlakeTwo256>, GrandpaJustification<Block>) {
+		let peers = &[Ed25519Keyring::Alice];
+
+		let builder = TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+		let client = Arc::new(client);
+
+		let built_block = BlockBuilder::new(
+			&*client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		).unwrap().build().unwrap();
+
+		let block = built_block.block;
+		let block_hash = block.hash();
+		let block_header = block.header.clone();
+
+		let justification = {
+			let round = 1;
+			let set_id = 0;
+
+			let precommit = finality_grandpa::Precommit {
+				target_hash: block_hash,
+				target_number: *block.header.number(),
+			};
+
+			let msg = finality_grandpa::Message::Precommit(precommit.clone());
+			let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
+			let signature = peers[0].sign(&encoded[..]).into();
+
+			let precommit = finality_grandpa::SignedPrecommit {
+				precommit,
+				signature,
+				id: peers[0].public().into(),
+			};
+
+			let commit = finality_grandpa::Commit {
+				target_hash: block_hash,
+				target_number: *block.header.number(),
+				precommits: vec![precommit],
+			};
+
+			GrandpaJustification::from_commit(
+				&client,
+				round,
+				commit,
+			).unwrap()
+		};
+
+		(block_header, justification)
+	}
+
+	#[test]
+	#[ignore]
+	fn subscribe_and_listen_to_one_justification() {
+		let (io, subscribers) = setup_io_handler(TestVoterState);
+		let (meta, receiver) = setup_session();
+
+		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
+
+		assert!(subscribers.len() == 0);
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		assert!(subscribers.len() == 1);
+		dbg!(&resp);
+
+		let (block_header, justification) = create_justification();
+		let _ = subscribers.notify((block_header, justification)).unwrap();
+
+		let _ = receiver.for_each(|item| {
+			dbg!(item);
+			Ok(())
+		}).wait().ok();
+	}
+
 }

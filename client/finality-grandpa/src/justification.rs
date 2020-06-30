@@ -47,7 +47,7 @@ pub struct GrandpaJustification<Block: BlockT> {
 impl<Block: BlockT> GrandpaJustification<Block> {
 	/// Create a GRANDPA justification from the given commit. This method
 	/// assumes the commit is valid and well-formed.
-	pub(crate) fn from_commit<C>(
+	pub fn from_commit<C>(
 		client: &Arc<C>,
 		round: u64,
 		commit: Commit<Block>,

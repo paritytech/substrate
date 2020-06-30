@@ -6411,13 +6411,19 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
+ "sc-block-builder",
  "sc-finality-grandpa",
  "sc-network-test",
  "sc-rpc",
  "serde",
  "serde_json",
+ "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-grandpa",
+ "sp-keyring",
  "sp-runtime",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
