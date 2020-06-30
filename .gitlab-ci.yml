@@ -115,5 +115,5 @@ test-runtime-benchmarks:
       - $DEPLOY_TAG
   script:
     - cd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
+    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --release --verbose --features runtime-benchmarks
     - sccache -s
