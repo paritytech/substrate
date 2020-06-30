@@ -155,6 +155,25 @@ cargo-audit:
     - cargo audit
   allow_failure:                   true
 
+cargo-deny:
+  stage:                           test
+  <<:                              *docker-env
+  only:
+    - schedules
+    - tags
+    - web
+  script:
+    - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
+  after_script:
+    - echo "___The complete log is in the artifacts___"
+    - cargo deny check -c .maintain/deny.toml 2> deny.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    expire_in:                     3 days
+    when:                          always
+    paths:
+      - deny.log
+
 cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
