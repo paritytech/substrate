@@ -1013,7 +1013,7 @@ impl_runtime_apis! {
 				Contracts::bare_call(origin, dest.into(), value, gas_limit, input_data);
 			match exec_result {
 				Ok(v) => ContractExecResult::Success {
-					status: v.status,
+					flags: v.flags.bits(),
 					data: v.data,
 				},
 				Err(_) => ContractExecResult::Error,

@@ -112,7 +112,7 @@
 					(i32.const 0) ;; Length is ignored in this case
 
 				)
-				(i32.const 0x0100)
+				(i32.const 0x1)
 			)
 		)
 

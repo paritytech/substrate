@@ -35,8 +35,9 @@ pub enum ContractExecResult {
 	///
 	/// There is a status code and, optionally, some data returned by the contract.
 	Success {
-		/// Status code returned by the contract.
-		status: u8,
+		/// Flags that the contract passed along on returning to alter its exit behaviour.
+		/// Described in `pallet_contracts::exec::ReturnFlags`.
+		flags: u32,
 		/// Output data returned by the contract.
 		///
 		/// Can be empty.

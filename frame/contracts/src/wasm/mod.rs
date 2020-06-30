@@ -153,7 +153,7 @@ mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, STATUS_SUCCESS};
+	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, ReturnFlags};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -251,7 +251,7 @@ mod tests {
 			Ok((
 				address,
 				ExecReturnValue {
-					status: STATUS_SUCCESS,
+					flags: ReturnFlags::empty(),
 					data: Vec::new(),
 				},
 			))
@@ -285,7 +285,7 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 		}
 		fn terminate(
 			&mut self,
@@ -511,16 +511,14 @@ mod tests {
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;) -> u32
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(drop
-			(call $ext_transfer
-				(i32.const 4)  ;; Pointer to "account" address.
-				(i32.const 8)  ;; Length of "account" address.
-				(i32.const 12) ;; Pointer to the buffer with value to transfer
-				(i32.const 8)  ;; Length of the buffer with value to transfer.
-			)
+		(call $ext_transfer
+			(i32.const 4)  ;; Pointer to "account" address.
+			(i32.const 8)  ;; Length of "account" address.
+			(i32.const 12) ;; Pointer to the buffer with value to transfer
+			(i32.const 8)  ;; Length of the buffer with value to transfer.
 		)
 	)
 	(func (export "deploy"))
@@ -551,7 +549,7 @@ mod tests {
 				to: 7,
 				value: 153,
 				data: Vec::new(),
-				gas_left: 9989000000,
+				gas_left: 9989500000,
 			}]
 		);
 	}
@@ -874,7 +872,7 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: [0x22; 32].to_vec() });
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: [0x22; 32].to_vec() });
 	}
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
@@ -1229,7 +1227,7 @@ mod tests {
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] });
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] });
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1455,7 +1453,7 @@ mod tests {
 		assert_eq!(
 			output,
 			ExecReturnValue {
-				status: STATUS_SUCCESS,
+				flags: ReturnFlags::empty(),
 				data: hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F").to_vec(),
 			},
 		);
@@ -1653,15 +1651,12 @@ mod tests {
 	(data (i32.const 32) "\20")
 
 	;; Deploy routine is the same as call.
-	(func (export "deploy") (result i32)
+	(func (export "deploy")
 		(call $call)
 	)
 
 	;; Call reads the first 4 bytes (LE) as the exit status and returns the rest as output data.
-	(func $call (export "call") (result i32)
-		(local $buf_size i32)
-		(local $exit_status i32)
-
+	(func $call (export "call")
 		;; Copy input data this contract memory.
 		(call $ext_input
 			(i32.const 0)	;; Pointer where to store input
@@ -1683,25 +1678,25 @@ mod tests {
 	fn ext_return_with_success_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
-			hex!("00112233445566778899").to_vec(),
+			hex!("00000000445566778899").to_vec(),
 			MockExt::default(),
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: 0, data: hex!("445566778899").to_vec() });
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: hex!("445566778899").to_vec() });
 		assert!(output.is_success());
 	}
 
 	#[test]
-	fn return_with_failure_status() {
+	fn return_with_revert_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
-			hex!("112233445566778899").to_vec(),
+			hex!("010000005566778899").to_vec(),
 			MockExt::default(),
 			&mut GasMeter::new(GAS_LIMIT),
 		).unwrap();
 
-		assert_eq!(output, ExecReturnValue { status: 17, data: hex!("5566778899").to_vec() });
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::REVERT, data: hex!("5566778899").to_vec() });
 		assert!(!output.is_success());
 	}
 }

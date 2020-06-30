@@ -76,7 +76,7 @@
 
 		;; Check non-zero exit status.
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0x11))
+			(i32.eq (get_local $exit_code) (i32.const 2)) ;; ReturnCode::CalleeReverted
 		)
 
 		;; Check that balance has not changed.
@@ -103,7 +103,7 @@
 
 		;; Check for special trap exit status.
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0x0100))
+			(i32.eq (get_local $exit_code) (i32.const 1)) ;; ReturnCode::CalleeTrapped
 		)
 
 		;; Check that balance has not changed.
@@ -137,7 +137,7 @@
 
 		;; Check for success exit status.
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0x00))
+			(i32.eq (get_local $exit_code) (i32.const 0)) ;; ReturnCode::Success
 		)
 
 		;; Check that address has the expected length
@@ -182,7 +182,7 @@
 
 		;; Check non-zero exit status.
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0x11))
+			(i32.eq (get_local $exit_code) (i32.const 2)) ;; ReturnCode::CalleeReverted
 		)
 
 		;; Check that scratch buffer contains the expected return data.
@@ -218,7 +218,7 @@
 
 		;; Check for special trap exit status.
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0x0100))
+			(i32.eq (get_local $exit_code) (i32.const 1)) ;; ReturnCode::CalleeTrapped
 		)
 
 		;; Check that balance has not changed.
@@ -255,7 +255,7 @@
 
 		;; Check for success exit status.
 		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0x00))
+			(i32.eq (get_local $exit_code) (i32.const 0)) ;; ReturnCode::Success
 		)
 
 		;; Check that scratch buffer contains the expected return data.
@@ -280,5 +280,5 @@
 
 	(data (i32.const 0) "\00\80")		;; The value to transfer on instantiation and calls.
 										;; Chosen to be greater than existential deposit.
-	(data (i32.const 8) "\00\11\22\33\44\55\66\77")		;; The input data to instantiations and calls.
+	(data (i32.const 8) "\00\01\22\33\44\55\66\77")		;; The input data to instantiations and calls.
 )

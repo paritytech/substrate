@@ -93,7 +93,7 @@ use crate::exec::ExecutionContext;
 use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
-pub use crate::exec::{ExecResult, ExecReturnValue, ExecError, StatusCode};
+pub use crate::exec::{ExecResult, ExecReturnValue, ExecError};
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};

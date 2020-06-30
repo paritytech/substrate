@@ -1592,7 +1592,7 @@ fn crypto_hashes() {
 					GAS_LIMIT,
 					params,
 				).unwrap();
-				assert_eq!(result.status, 0);
+				assert!(result.is_success());
 				let expected = hash_fn(input.as_ref());
 				assert_eq!(&result.data[..*expected_size], &*expected);
 			}

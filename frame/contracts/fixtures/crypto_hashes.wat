@@ -47,7 +47,7 @@
 	;; |     2 |    BLAKE2 |       256 |
 	;; |     3 |    BLAKE2 |       128 |
 	;; ---------------------------------
-	(func (export "call") (result i32)
+	(func (export "call")
 		(local $chosen_hash_fn i32)
 		(local $input_len_ptr i32)
 		(local $input_ptr i32)

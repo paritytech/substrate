@@ -19,6 +19,7 @@ use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 use crate::gas::{Gas, GasMeter, Token};
 use crate::rent;
 use crate::storage;
+use bitflags::bitflags;
 
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert};
@@ -37,26 +38,27 @@ pub type StorageKey = [u8; 32];
 /// A type that represents a topic of an event. At the moment a hash is used.
 pub type TopicOf<T> = <T as frame_system::Trait>::Hash;
 
-/// A status code return to the source of a contract call or instantiation indicating success or
-/// failure. A code of 0 indicates success and that changes are applied. All other codes indicate
-/// failure and that changes are reverted. The particular code in the case of failure is opaque and
-/// may be interpreted by the calling contract.
-pub type StatusCode = u8;
-
-/// The status code indicating success.
-pub const STATUS_SUCCESS: StatusCode = 0;
+bitflags! {
+	/// Flags used by a contract to customize exit behaviour.
+	pub struct ReturnFlags: u32 {
+		/// If this bit is set all changes made by the contract exection are rolled back.
+		const REVERT = 0x0000_0001;
+	}
+}
 
 /// Output of a contract call or instantiation which ran to completion.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ExecReturnValue {
-	pub status: StatusCode,
+	/// Flags passed along by `ext_return`. Empty when `ext_return` was never called.
+	pub flags: ReturnFlags,
+	/// Buffer passed along by `ext_return`. Empty when `ext_return` was never called.
 	pub data: Vec<u8>,
 }
 
 impl ExecReturnValue {
-	/// Returns whether the call or instantiation exited with a successful status code.
+	/// We understand the absense of a revert flag as success.
 	pub fn is_success(&self) -> bool {
-		self.status == STATUS_SUCCESS
+		!self.flags.contains(ReturnFlags::REVERT)
 	}
 }
 
@@ -387,7 +389,7 @@ where
 						)?;
 					Ok(output)
 				}
-				Err(storage::ContractAbsentError) => Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }),
+				Err(storage::ContractAbsentError) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
 			}
 		})
 	}
@@ -504,7 +506,7 @@ where
 		frame_support::storage::with_transaction(|| {
 			let output = func(&mut nested);
 			match output {
-				Ok(ref rv) if rv.is_success() => Commit(output),
+				Ok(ref rv) if !rv.flags.contains(ReturnFlags::REVERT) => Commit(output),
 				_ => Rollback(output),
 			}
 		})
@@ -853,11 +855,11 @@ fn deposit_event<T: Trait>(
 mod tests {
 	use super::{
 		BalanceOf, Event, ExecFeeToken, ExecResult, ExecutionContext, Ext, Loader,
-		RawEvent, TransferFeeKind, TransferFeeToken, Vm,
+		RawEvent, TransferFeeKind, TransferFeeToken, Vm, ReturnFlags,
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
-		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
+		exec::{ExecReturnValue, ExecError}, CodeHash, Config,
 		gas::Gas,
 		storage,
 	};
@@ -966,7 +968,7 @@ mod tests {
 	}
 
 	fn exec_success() -> ExecResult {
-		Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
+		Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 	}
 
 	#[test]
@@ -1082,7 +1084,7 @@ mod tests {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let return_ch = loader.insert(
-			|_| Ok(ExecReturnValue { status: 1, data: Vec::new() })
+			|_| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Vec::new() })
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1233,7 +1235,7 @@ mod tests {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let return_ch = loader.insert(
-			|_| Ok(ExecReturnValue { status: STATUS_SUCCESS, data: vec![1, 2, 3, 4] })
+			|_| Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] })
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1264,7 +1266,7 @@ mod tests {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let return_ch = loader.insert(
-			|_| Ok(ExecReturnValue { status: 1, data: vec![1, 2, 3, 4] })
+			|_| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![1, 2, 3, 4] })
 		);
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1501,7 +1503,7 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(
-			|_| Ok(ExecReturnValue { status: STATUS_SUCCESS, data: vec![80, 65, 83, 83] })
+			|_| Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![80, 65, 83, 83] })
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
@@ -1534,7 +1536,7 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(
-			|_| Ok(ExecReturnValue { status: 1, data: vec![70, 65, 73, 76] })
+			|_| Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![70, 65, 73, 76] })
 		);
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
