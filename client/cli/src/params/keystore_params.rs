@@ -21,7 +21,7 @@ use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sp_core::crypto::{SecretString, secrety_string_from_str};
+use sp_core::crypto::SecretString;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -43,7 +43,7 @@ pub struct KeystoreParams {
 	/// Password used by the keystore.
 	#[structopt(
 		long = "password",
-		parse(try_from_str = secrety_string_from_str),
+		parse(try_from_str = secret_string_from_str),
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
 	pub password: Option<SecretString>,
@@ -56,6 +56,12 @@ pub struct KeystoreParams {
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
 	pub password_filename: Option<PathBuf>,
+}
+
+/// Parse a sercret string, returning a displayable error.
+pub fn secret_string_from_str(s: &str) -> Result<SecretString, String> {
+	Ok(std::str::FromStr::from_str(s)
+		.map_err(|_e| "Could not get SecretString".to_string())?)
 }
 
 impl KeystoreParams {

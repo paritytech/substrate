@@ -48,13 +48,6 @@ pub use secrecy::ExposeSecret;
 #[cfg(feature = "std")]
 pub use secrecy::SecretString;
 
-#[cfg(feature = "std")]
-/// Parse a sercret string, returning a displayable error.
-pub fn secrety_string_from_str(s: &str) -> Result<SecretString, String> {
-	Ok(std::str::FromStr::from_str(s)
-		.map_err(|_e| "Could not get SecretString".to_string())?)
-}
-
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
