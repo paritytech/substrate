@@ -181,6 +181,11 @@ impl Configuration {
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
 	}
+
+	/// Returns the prometheus metrics registry, if available.
+	pub fn prometheus_registry<'a>(&'a self) -> Option<&'a Registry> {
+		self.prometheus_config.as_ref().map(|config| &config.registry)
+	}
 }
 
 /// Available RPC methods.

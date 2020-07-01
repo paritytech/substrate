@@ -72,8 +72,8 @@ pub fn run() -> sc_cli::Result<()> {
 		Some(subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
 			runner.run_subcommand(subcommand, |config| {
-				let (builder, _, _) = new_full_start!(config);
-				Ok(builder.to_chain_ops_parts())
+				let (client, backend, _, task_manager, .., import_queue) = new_full_up_to_import_queue!(&config);
+				Ok((client, backend, import_queue, task_manager))
 			})
 		}
 		None => {
