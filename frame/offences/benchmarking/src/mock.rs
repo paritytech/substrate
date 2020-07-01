@@ -27,7 +27,7 @@ use frame_support::{
 use frame_system as system;
 use sp_runtime::{
 	SaturatedConversion,
-	traits::{IdentityLookup, Block as BlockT},
+	traits::IdentityLookup,
 	testing::{Header, UintAuthorityId},
 };
 

@@ -1057,7 +1057,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		Perbill, testing::Header, BuildStorage, DispatchResult,
-		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use crate as elections_phragmen;
 	use frame_system as system;
