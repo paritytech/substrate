@@ -69,7 +69,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// Calls `std::env::current_exe()` and resorts to the env var `CARGO_PKG_NAME` in case of Error.
 	fn executable_name() -> String {
-		std::env::current_exe().unwrap_or_else(|_| env!("CARGO_PKG_NAME"))
+		std::env::current_exe().map(|p| p.display()).unwrap_or_else(|_| env!("CARGO_PKG_NAME"))
 	}
 
 	/// Executable file description.
