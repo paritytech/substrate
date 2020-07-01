@@ -38,37 +38,10 @@ use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
 use sp_state_machine::InspectState;
 
-use crate::core::{self, Path, Mode};
-
-#[derive(Clone, Copy, Debug, derive_more::Display)]
-pub enum SizeType {
-	#[display(fmt = "empty")]
-	Empty,
-	#[display(fmt = "small")]
-	Small,
-	#[display(fmt = "medium")]
-	Medium,
-	#[display(fmt = "large")]
-	Large,
-	#[display(fmt = "full")]
-	Full,
-	#[display(fmt = "custom")]
-	Custom(usize),
-}
-
-impl SizeType {
-	pub fn transactions(&self) -> Option<usize> {
-		match self {
-			SizeType::Empty => Some(0),
-			SizeType::Small => Some(10),
-			SizeType::Medium => Some(100),
-			SizeType::Large => Some(500),
-			SizeType::Full => None,
-			// Custom SizeType will use the `--transactions` input parameter
-			SizeType::Custom(val) => Some(*val),
-		}
-	}
-}
+use crate::{
+	common::SizeType,
+	core::{self, Path, Mode},
+};
 
 pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
@@ -134,8 +107,9 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Import benchmark ({:?}, {:?}, {:?} backend)",
+			"Block import ({:?}/{}, {:?}, {:?} backend)",
 			self.block_type,
+			self.size,
 			self.profile,
 			self.database_type,
 		).into()

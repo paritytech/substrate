@@ -353,13 +353,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.executor.runtime_version(id)
 	}
 
-	/// Get block hash by number.
-	pub fn block_hash(&self,
-		block_number: <<Block as BlockT>::Header as HeaderT>::Number
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		self.backend.blockchain().hash(block_number)
-	}
-
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
 	pub fn header_proof_with_cht_size(
 		&self,
@@ -1925,6 +1918,10 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		self.backend.blockchain().justification(*id)
 	}
+
+	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+		self.backend.blockchain().hash(number)
+	}	
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>

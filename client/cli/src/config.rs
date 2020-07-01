@@ -36,7 +36,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 /// The maximum number of characters for a node name.
-pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
+pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";

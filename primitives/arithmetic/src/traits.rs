@@ -79,6 +79,11 @@ pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
 
 impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
 
+/// A meta trait for arithmetic.  Same as [`AtLeast32Bit `], but also bounded to be unsigned.
+pub trait AtLeast32BitUnsigned: AtLeast32Bit + Unsigned {}
+
+impl<T: AtLeast32Bit + Unsigned> AtLeast32BitUnsigned for T {}
+
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.
 pub trait UniqueSaturatedFrom<T: Sized>: Sized {

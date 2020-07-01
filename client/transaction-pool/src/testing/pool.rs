@@ -1066,3 +1066,28 @@ fn import_notification_to_pool_maintain_works() {
 	block_on(pool.maintain(evt.into()));
 	assert_eq!(pool.status().ready, 0);
 }
+
+// When we prune transactions, we need to make sure that we remove
+#[test]
+fn pruning_a_transaction_should_remove_it_from_best_transaction() {
+	let (pool, _guard, _notifier) = maintained_pool();
+
+	let xt1 = Extrinsic::IncludeData(Vec::new());
+
+	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt1.clone())).expect("1. Imported");
+	let header = pool.api.push_block(1, vec![xt1.clone()]);
+
+	// This will prune `xt1`.
+	block_on(pool.maintain(block_event(header)));
+
+	// Submit the tx again.
+	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("2. Imported");
+
+	let mut iterator = block_on(pool.ready_at(1));
+
+	assert_eq!(iterator.next().unwrap().data, xt1.clone());
+
+	// If the tx was not removed from the best txs, the tx would be
+	// returned a second time by the iterator.
+	assert!(iterator.next().is_none());
+}
