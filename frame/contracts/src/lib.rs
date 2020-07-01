@@ -673,10 +673,6 @@ decl_event! {
 		/// Triggered when the current schedule is updated.
 		ScheduleUpdated(u32),
 
-		/// A call was dispatched from the given account. The bool signals whether it was
-		/// successful execution or not.
-		Dispatched(AccountId, bool),
-
 		/// An event deposited upon execution of a contract from the account.
 		ContractExecution(AccountId, Vec<u8>),
 	}
