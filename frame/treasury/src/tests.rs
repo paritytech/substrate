@@ -134,6 +134,7 @@ parameter_types! {
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const BountyValueMinimum: u64 = 5;
 	pub const BountyDuration: u32 = 20;
+	pub const MaximumReasonLenght: u32 = 16384;
 }
 impl Trait for Test {
 	type ModuleId = TreasuryModuleId;
@@ -155,6 +156,7 @@ impl Trait for Test {
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyValueMinimum = BountyValueMinimum;
 	type BountyDuration = BountyDuration;
+	type MaximumReasonLenght = MaximumReasonLenght;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;

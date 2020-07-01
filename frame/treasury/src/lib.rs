@@ -121,12 +121,6 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-/// The treasury's module id, used for deriving its sovereign account ID.
-const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
-
-/// Maximum acceptable reason length.
-const MAX_SENSIBLE_REASON_LENGTH: usize = 16384;
-
 pub trait Trait: frame_system::Trait {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
@@ -187,6 +181,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Bounty duration in blocks.
 	type BountyDuration: Get<Self::BlockNumber>;
+
+	/// Maximum acceptable reason length.
+	type MaximumReasonLenght: Get<u32>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -443,6 +440,9 @@ decl_module! {
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
 
+		/// Maximum acceptable reason length.
+		const MaximumReasonLenght: u32 = T::MaximumReasonLenght::get();
+
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -538,7 +538,7 @@ decl_module! {
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
-			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+			ensure!(reason.len() <= T::MaximumReasonLenght::get() as usize, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
@@ -933,7 +933,7 @@ impl<T: Trait> Module<T> {
 	pub fn bounty_account_id(id: BountyIndex) -> T::AccountId {
 		// only use two byte prefix to support 16 byte account id (used by test)
 		// "modl" ++ "py/trsry" ++ "bt" is 14 bytes, and two bytes remaining for bounty index
-		MODULE_ID.into_sub_account(("bt", id))
+		T::ModuleId::get().into_sub_account(("bt", id))
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
@@ -1125,7 +1125,7 @@ impl<T: Trait> Module<T> {
 		value: BalanceOf<T>,
 		parent_bounty_id: Option<BountyIndex>,
 	) -> DispatchResult {
-		ensure!(description.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+		ensure!(description.len() <= T::MaximumReasonLenght::get() as usize, Error::<T>::ReasonTooBig);
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
 		ensure!(fee < value, Error::<T>::InvalidFee);
 
