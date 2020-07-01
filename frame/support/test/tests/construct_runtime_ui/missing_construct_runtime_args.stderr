@@ -1,0 +1,13 @@
+error[E0433]: failed to resolve: could not find `construct_runtime_args` in `system`
+  --> $DIR/missing_construct_runtime_args.rs:6:1
+   |
+6  | / construct_runtime! {
+7  | |     pub enum Runtime where
+8  | |         Block = Block,
+9  | |         NodeBlock = Block,
+...  |
+13 | |     }
+14 | | }
+   | |_^ could not find `construct_runtime_args` in `system`
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
