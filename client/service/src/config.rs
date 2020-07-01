@@ -37,9 +37,9 @@ use tempfile::TempDir;
 #[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
-	pub impl_name: &'static str,
+	pub impl_name: String,
 	/// Implementation version (see sc-cli to see an example of format)
-	pub impl_version: &'static str,
+	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.

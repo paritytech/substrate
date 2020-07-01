@@ -21,32 +21,32 @@ use crate::service;
 use sc_cli::{SubstrateCli, RuntimeVersion, Role, ChainSpec};
 
 impl SubstrateCli for Cli {
-	fn impl_name() -> &'static str {
-		"Substrate Node"
+	fn impl_name() -> String {
+		String::from("Substrate Node")
 	}
 
-	fn impl_version() -> &'static str {
-		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	fn impl_version() -> String {
+		String::from(env!("SUBSTRATE_CLI_IMPL_VERSION"))
 	}
 
-	fn description() -> &'static str {
-		env!("CARGO_PKG_DESCRIPTION")
+	fn description() -> String {
+		String::from(env!("CARGO_PKG_DESCRIPTION"))
 	}
 
-	fn author() -> &'static str {
-		env!("CARGO_PKG_AUTHORS")
+	fn author() -> String {
+		String::from(env!("CARGO_PKG_AUTHORS"))
 	}
 
-	fn support_url() -> &'static str {
-		"support.anonymous.an"
+	fn support_url() -> String {
+		String::from("support.anonymous.an")
 	}
 
 	fn copyright_start_year() -> i32 {
 		2017
 	}
 
-	fn executable_name() -> &'static str {
-		env!("CARGO_PKG_NAME")
+	fn executable_name() -> String {
+		String::from(env!("CARGO_PKG_NAME"))
 	}
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {

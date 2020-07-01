@@ -57,25 +57,25 @@ use structopt::{
 /// its own implementation that will fill the necessary field based on the trait's functions.
 pub trait SubstrateCli: Sized {
 	/// Implementation name.
-	fn impl_name() -> &'static str;
+	fn impl_name() -> String;
 
 	/// Implementation version.
 	///
 	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
 	/// short commit hash of the commit of in the Git repository.
-	fn impl_version() -> &'static str;
+	fn impl_version() -> String;
 
 	/// Executable file name.
-	fn executable_name() -> &'static str;
+	fn executable_name() -> String;
 
 	/// Executable file description.
-	fn description() -> &'static str;
+	fn description() -> String;
 
 	/// Executable file author.
-	fn author() -> &'static str;
+	fn author() -> String;
 
 	/// Support URL.
-	fn support_url() -> &'static str;
+	fn support_url() -> String;
 
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
@@ -119,10 +119,13 @@ pub trait SubstrateCli: Sized {
 		let mut full_version = Self::impl_version().to_string();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(&*name)
+			.author(&*author)
+			.about(&*about)
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -178,10 +181,13 @@ pub trait SubstrateCli: Sized {
 		let mut full_version = Self::impl_version().to_string();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(&*name)
+			.author(&*author)
+			.about(&*about)
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;

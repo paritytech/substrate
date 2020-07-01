@@ -22,32 +22,32 @@ use node_runtime::{Block, RuntimeApi};
 use sc_cli::{Result, SubstrateCli, RuntimeVersion, Role, ChainSpec};
 
 impl SubstrateCli for Cli {
-	fn impl_name() -> &'static str {
-		"Substrate Node"
+	fn impl_name() -> String {
+		String::from("Substrate Node")
 	}
 
-	fn impl_version() -> &'static str {
-		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	fn impl_version() -> String {
+		String::from(env!("SUBSTRATE_CLI_IMPL_VERSION"))
 	}
 
-	fn description() -> &'static str {
-		env!("CARGO_PKG_DESCRIPTION")
+	fn description() -> String {
+		String::from(env!("CARGO_PKG_DESCRIPTION"))
 	}
 
-	fn author() -> &'static str {
-		env!("CARGO_PKG_AUTHORS")
+	fn author() -> String {
+		String::from(env!("CARGO_PKG_AUTHORS"))
 	}
 
-	fn support_url() -> &'static str {
-		"https://github.com/paritytech/substrate/issues/new"
+	fn support_url() -> String {
+		String::from("https://github.com/paritytech/substrate/issues/new")
 	}
 
 	fn copyright_start_year() -> i32 {
 		2017
 	}
 
-	fn executable_name() -> &'static str {
-		"substrate"
+	fn executable_name() -> String {
+		String::from("substrate")
 	}
 
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
