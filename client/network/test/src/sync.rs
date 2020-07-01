@@ -20,6 +20,8 @@ use sp_consensus::BlockOrigin;
 use std::time::Duration;
 use futures::executor::block_on;
 use super::*;
+use sp_consensus::block_validation::Validation;
+use substrate_test_runtime::Header;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	let _ = ::env_logger::try_init();
@@ -582,10 +584,10 @@ fn can_sync_explicit_forks() {
 
 #[test]
 fn syncs_header_only_forks() {
-	let _ = ::env_logger::try_init();
+	let _ = env_logger::try_init();
 	let mut net = TestNet::new(0);
-	net.add_full_peer_with_states(None);
-	net.add_full_peer_with_states(Some(3));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig { keep_blocks: Some(3), ..Default::default() });
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
@@ -683,7 +685,7 @@ fn imports_stale_once() {
 
 #[test]
 fn can_sync_to_peers_with_wrong_common_block() {
-	let _ = ::env_logger::try_init();
+	let _ = env_logger::try_init();
 	let mut net = TestNet::new(2);
 
 	net.peer(0).push_blocks(2, true);
@@ -710,3 +712,41 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
 }
 
+/// Returns `is_new_best = true` for each validated announcement.
+struct NewBestBlockAnnounceValidator;
+
+impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
+	fn validate(
+		&mut self,
+		_: &Header,
+		_: &[u8],
+	) -> Result<Validation, Box<dyn std::error::Error + Send>> {
+		Ok(Validation::Success { is_new_best: true })
+	}
+}
+
+#[test]
+fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
+	let _ = env_logger::try_init();
+	log::trace!(target: "sync", "Test");
+	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+
+	let block_hash = net.peer(0).push_blocks(1, false);
+
+	while !net.peer(2).has_block(&block_hash) {
+		net.block_until_idle();
+	}
+
+	// Peer1 should not have the block, because peer 0 did not reported the block
+	// as new best. However, peer2 has a special block announcement validator
+	// that flags all blocks as `is_new_best` and thus, it should have synced the blocks.
+	assert!(!net.peer(1).has_block(&block_hash));
+}

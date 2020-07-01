@@ -104,6 +104,8 @@ impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
+			// For benchmarking, this acts as a noop call
+			Call::System(frame_system::Call::remark(..)) => true,
 			_ => false,
 		}
 	}
@@ -163,7 +165,7 @@ fn as_derivative_filters() {
 		assert_noop!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
-			Box::new(Call::System(frame_system::Call::remark(vec![]))),
+			Box::new(Call::System(frame_system::Call::suicide())),
 		), DispatchError::BadOrigin);
 	});
 }
@@ -208,7 +210,7 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			Utility::batch(Origin::signed(1), vec![
-				Call::System(frame_system::Call::remark(vec![]))
+				Call::System(frame_system::Call::suicide())
 			]),
 		);
 		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));
