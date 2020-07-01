@@ -50,6 +50,9 @@ use sp_inherents::{InherentData, InherentIdentifier, MakeFatalError, ProvideInhe
 pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
 
 mod equivocation;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
 #[cfg(all(feature = "std", test))]
 mod mock;
 #[cfg(all(feature = "std", test))]
