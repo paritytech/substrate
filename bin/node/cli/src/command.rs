@@ -46,10 +46,6 @@ impl SubstrateCli for Cli {
 		2017
 	}
 
-	fn executable_name() -> String {
-		"substrate".into()
-	}
-
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::development_config()),
