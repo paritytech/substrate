@@ -255,7 +255,7 @@ decl_module! {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
-		#[weight = 0]
+		#[weight = weight::weight_for_report_equivocation::<T>()]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -278,7 +278,7 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = 0]
+		#[weight = weight::weight_for_report_equivocation::<T>()]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -292,6 +292,27 @@ decl_module! {
 				key_owner_proof,
 			)?;
 		}
+	}
+}
+
+mod weight {
+	use frame_support::{
+		traits::Get,
+		weights::{constants::WEIGHT_PER_MICROS, Weight},
+	};
+
+	pub fn weight_for_report_equivocation<T: super::Trait>() -> Weight {
+		// checking membership proof
+		(30 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().reads(5))
+			// check equivocation proof
+			.saturating_add(130 * WEIGHT_PER_MICROS)
+			// report offence
+			.saturating_add(135 * WEIGHT_PER_MICROS)
+			// worst case we are considering is that the given offender
+			// is backed by 200 nominators
+			.saturating_add(T::DbWeight::get().reads(14 + 3 * 200))
+			.saturating_add(T::DbWeight::get().writes(10 + 3 * 200))
 	}
 }
 
