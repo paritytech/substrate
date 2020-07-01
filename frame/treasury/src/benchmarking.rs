@@ -150,6 +150,12 @@ fn create_bounty<T: Trait>(u: u32) -> Result<(
 	Ok((curator_lookup, bounty_id))
 }
 
+fn setup_pod_account<T: Trait>() {
+	let pot_account = Treasury::<T>::account_id();
+	let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
+	let _ = T::Currency::make_free_balance_be(&pot_account, value);
+}
+
 fn setup_sub_bounty<T: Trait>(u: u32, r: u32) -> Result<(
 	T::AccountId,
 	<T::Lookup as StaticLookup>::Source,
@@ -158,7 +164,18 @@ fn setup_sub_bounty<T: Trait>(u: u32, r: u32) -> Result<(
 	Vec<u8>,
 ), &'static str> {
 	create_bounty::<T>(u)?;
-	Ok(setup_bounty::<T>(u + 100000, r))
+	setup_pod_account::<T>();
+	Treasury::<T>::on_initialize(T::BlockNumber::zero());
+
+	let caller = account("curator", u, SEED);
+	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(50.into());
+	let fee = T::BountyValueMinimum::get() / 2.into();
+	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
+	let _ = T::Currency::make_free_balance_be(&caller, deposit);
+	let curator = account("curator2", u, SEED);
+	let curator_lookup = T::Lookup::unlookup(curator);
+	let reason = vec![0; r as usize];
+	Ok((caller, curator_lookup, fee, value, reason))
 }
 
 const MAX_BYTES: u32 = 16384;
@@ -239,9 +256,7 @@ benchmarks! {
 		let t in 1 .. MAX_TIPPERS;
 
 		// Make sure pot is funded
-		let pot_account = Treasury::<T>::account_id();
-		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
-		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+		setup_pod_account::<T>();
 
 		// Set up a new tip proposal
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
@@ -298,6 +313,8 @@ benchmarks! {
 		let u in 0 .. 1000;
 
 		let (curator_lookup, bounty_id) = create_bounty::<T>(u)?;
+		setup_pod_account::<T>();
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
@@ -308,6 +325,8 @@ benchmarks! {
 		let u in 0 .. 1000;
 
 		let (curator_lookup, bounty_id) = create_bounty::<T>(u)?;
+		setup_pod_account::<T>();
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
@@ -315,12 +334,16 @@ benchmarks! {
 		let beneficiary = T::Lookup::unlookup(account("beneficiary", u, SEED));
 		Treasury::<T>::award_bounty(RawOrigin::Signed(curator.clone()).into(), bounty_id, beneficiary)?;
 
+		frame_system::Module::<T>::set_block_number(T::BountyDepositPayoutDelay::get());
+
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
 	cancel_bounty {
 		let u in 0 .. 1000;
 
 		let (curator_lookup, bounty_id) = create_bounty::<T>(u)?;
+		setup_pod_account::<T>();
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
@@ -330,6 +353,8 @@ benchmarks! {
 		let u in 0 .. 1000;
 
 		let (curator_lookup, bounty_id) = create_bounty::<T>(u)?;
+		setup_pod_account::<T>();
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 
 		let bounty_id = BountyCount::get() - 1;
 		let curator = T::Lookup::lookup(curator_lookup)?;
@@ -338,9 +363,7 @@ benchmarks! {
 	on_initialize {
 		let p in 0 .. 100;
 		let q in 0 .. 100;
-		let pot_account = Treasury::<T>::account_id();
-		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
-		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+		setup_pod_account::<T>();
 		create_approved_proposals::<T>(p)?;
 		create_approved_bounties::<T>(q)?;
 	}: {
@@ -365,6 +388,14 @@ mod tests {
 			assert_ok!(test_benchmark_tip_new::<Test>());
 			assert_ok!(test_benchmark_tip::<Test>());
 			assert_ok!(test_benchmark_close_tip::<Test>());
+			assert_ok!(test_benchmark_propose_bounty::<Test>());
+			assert_ok!(test_benchmark_create_sub_bounty::<Test>());
+			assert_ok!(test_benchmark_approve_bounty::<Test>());
+			assert_ok!(test_benchmark_reject_bounty::<Test>());
+			assert_ok!(test_benchmark_award_bounty::<Test>());
+			assert_ok!(test_benchmark_claim_bounty::<Test>());
+			assert_ok!(test_benchmark_cancel_bounty::<Test>());
+			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}

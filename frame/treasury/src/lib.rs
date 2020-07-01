@@ -1135,7 +1135,6 @@ impl<T: Trait> Module<T> {
 			// this is a sub bounty
 			Bounties::<T>::try_mutate_exists(parent_bounty_id, |bounty| -> DispatchResult {
 				let parent = bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-
 				ensure!(parent.status.is_active(), Error::<T>::UnexpectedStatus);
 				ensure!(proposer == parent.curator, Error::<T>::RequireCurator);
 				ensure!(fee < parent.fee, Error::<T>::InvalidFee);
