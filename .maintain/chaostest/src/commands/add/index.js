@@ -11,6 +11,7 @@ class AddCommand extends Command {
     const port = flags.port || 9933
     const chainspec = flags.chainspec
     const number = flags.number || 1
+    const name = flags.name
     // const label = flags.label
     
 
@@ -25,7 +26,7 @@ class AddCommand extends Command {
       if (nodeType === 'validator' || nodeType === 'peer') {
         logger.debug('Adding nodes to current network...')
         let options = {
-            number, port, nodeType
+            number, port, nodeType, name
             }
         await hypervisor.addCustomNodes(options)
       } else {
@@ -41,13 +42,10 @@ class AddCommand extends Command {
 AddCommand.description = 'Spawn a local testnet with options'
 
 AddCommand.flags = {
-//   image: flags.string({ char: 'i', description: 'image to deploy' }),
   port: flags.integer({ char: 'p', description: 'port to deploy on' }),
-//   namespace: flags.string({ description: 'desired namespace to deploy to', env: 'NAMESPACE' }),
-//   validator: flags.string({ char: 'v', description: 'number of validators' }),
-//   label: flags.string({ char: 'l', description: 'label to mark the nodes'}),
+  name: flags.string({ char: 'i', description: 'node name to specify (also this would be the seed of the node)' }),
   number: flags.string({ char: 'n', description: 'number of options[validators, peers]' }),
-  chainspec: flags.string({ char: 'c', description: 'number of full nodes, if not set but exists, default to 1' })
+  chainspec: flags.string({ char: 'c', description: 'specify a chainspec to use to deploy' })
 }
 
 AddCommand.args = [{ name: 'nodeType' }]

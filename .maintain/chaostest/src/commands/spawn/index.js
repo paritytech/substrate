@@ -34,7 +34,6 @@ class SpawnCommand extends Command {
                 chainspecFileName: chainspec,
             }
             await hypervisor.createCustomChain(options)
-            // TODO: customized chain with chainName
         } else {
             errorExit('A chainspec is required to create customized chain, if not given, try dev or local')
         }

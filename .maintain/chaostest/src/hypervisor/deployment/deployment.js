@@ -1,6 +1,6 @@
 const k8s = require('../modules/k8s')
 const { pollUntil } = require('../../utils/wait')
-const { getBootNodeUrl, getNodesFromType } = require('../../utils')
+const { getBootNodeUrl, getNodesFromType, getChainspec } = require('../../utils')
 const logger = require('../../utils/logger')
 const { getKeyFromNodeId } = require('../modules/keyring')
 
@@ -78,7 +78,7 @@ exports.createAliceBobNodes = async function (options) {
 
 exports.createDevNode = async function (options) {
     const {image, port} = options
-  const substrateArgs = ['--chain', 'dev', '--rpc-external', '--ws-external']
+  const substrateArgs = ['--dev', '--rpc-external', '--ws-external']
   const nodeSpec = {
     nodeId: 'node-validator-0',
     image,
@@ -98,6 +98,7 @@ exports.createBootNode = async function(options) {
     const substrateArgs = [
         '--chain',
         options.chainspec,
+        // 'local',
         '--node-key',
         '0000000000000000000000000000000000000000000000000000000000000001',
         '--validator',
@@ -115,9 +116,10 @@ exports.createBootNode = async function(options) {
         image: options.image,
         port: options.port,
         args: substrateArgs,
+        customChainspec: options.customChainspec,
         extraInfo: {
             nodeType: 'bootnode',
-            chainspec: options.chainspec,
+            chainspec: options.chainspecFileName,
             peerId: '12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp',
             image: options.image
           }
@@ -128,7 +130,7 @@ exports.createBootNode = async function(options) {
 exports.createCustomNode = async function(options, nodeId) {
     const substrateArgs = [
         '--chain',
-        options.chainspec,
+        getChainspec(options.chainspec),
         '--no-telemetry',
         '--rpc-cors',
         'all',
@@ -157,22 +159,28 @@ exports.createCustomNode = async function(options, nodeId) {
 }
 
 exports.createCustomChain = async function (options) {
-    const chainspecPath = `/chainspecs/${options.chainspecFileName}`
-    options.chainspec = chainspecPath
+    // const chainspecPath = `/chainspecs/${options.chainspecFileName}`
+    // options.chainspecFileName = chainspecFileName
+    options.customChainspec = true
+    options.chainspec = getChainspec(options.chainspecFileName)
     await this.createBootNode(options)
 }
 
 exports.addCustomNodes = async function (options) {
-    const {number, port, nodeType} = options
-    const nodeIdPrefix = `node-${nodeType}-`
-    const deployedNodes = getNodesFromType(this.config.nodes, options.nodeType)
+    const {number, port, nodeType, name} = options
     const nodeOption = {image: this.config.bootnode.image, port, chainspec: this.config.bootnode.chainspec, nodeType}
-    const deployArray = []
-    for(let i=1; i <= number; i++) {
-        const nodeIdPostfix = deployedNodes.length + i
-        deployArray.push(this.createCustomNode(nodeOption, nodeIdPrefix+nodeIdPostfix))
+    if (name) {
+        await this.createCustomNode(nodeOption, name)
+    } else {
+        const nodeIdPrefix = `node-${nodeType}-`
+        const deployedNodes = getNodesFromType(this.config.nodes, options.nodeType)
+        const deployArray = []
+        for(let i=1; i <= number; i++) {
+            const nodeIdPostfix = deployedNodes.length + i
+            deployArray.push(this.createCustomNode(nodeOption, nodeIdPrefix+nodeIdPostfix))
+        }
+        await Promise.all(deployArray)
     }
-    await Promise.all(deployArray)
 }
 
 exports.createNode = async function (nodeSpec) {

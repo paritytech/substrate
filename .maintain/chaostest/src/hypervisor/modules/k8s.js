@@ -26,7 +26,7 @@ const readNamespace = async namespace => {
 }
 
 const createPod = async (nodeSpec, namespace) => {
-  const { label, nodeId, image, args, port, chainSpecPath } = nodeSpec
+  const { label, nodeId, image, args, port, customChainspec, extraInfo } = nodeSpec
   let spec = {
     metadata: {
       labels: {
@@ -44,7 +44,7 @@ const createPod = async (nodeSpec, namespace) => {
           args: args,
           volumeMounts:[{
             name: 'chain',
-            mountPath: '/substrate'
+            mountPath: '/chaoshelper'
           }]
         }
       ],
@@ -56,15 +56,15 @@ const createPod = async (nodeSpec, namespace) => {
       ]
     }
   }
-  if (chainSpecPath) {
+  if (customChainspec) {
     let initContainers = [
       {
-        name: 'getchainspec',
-        image: 'busybox',
-        command: ['wget', '-O', '/chainspecs/custom.json', chainSpecPath],
+        name: 'chaoshelper',
+        image: 'paritypr/chaoshelper:latest',
+        command: ["/bin/sh", "-c", `cp /chainspecs/${extraInfo.chainspec} /chaoshelper/${extraInfo.chainspec}`],
         volumeMounts:[{
           name: 'chain',
-          mountPath: '/chainspecs'
+          mountPath: '/chaoshelper'
         }]
       }
     ]

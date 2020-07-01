@@ -55,8 +55,6 @@ class Config {
     }
     if (node.nodeType === 'bootnode') {
       this.bootnode = node
-      this.chainspec = node.chainspec
-      this.image = node.image
     }
     this.nodes.push(node)
     this.update()

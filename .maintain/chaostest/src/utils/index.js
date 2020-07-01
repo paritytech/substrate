@@ -16,4 +16,11 @@ const getNodesFromType = (nodes, type) => {
   })
 }
 
-module.exports = { getBootNodeUrl, isFunction, getNodesFromType }
+const getChainspec = (chainspec) => {
+  if (chainspec === 'dev' || chainspec === 'local') {
+    return chainspec
+  }
+  return `/chaoshelper/${chainspec}`
+}
+
+module.exports = { getBootNodeUrl, isFunction, getNodesFromType, getChainspec }
