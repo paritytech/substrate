@@ -21,6 +21,7 @@ use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use sp_core::crypto::SecretString;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -42,9 +43,10 @@ pub struct KeystoreParams {
 	/// Password used by the keystore.
 	#[structopt(
 		long = "password",
+		parse(try_from_str = secret_string_from_str),
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
 	)]
-	pub password: Option<String>,
+	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
 	#[structopt(
@@ -56,26 +58,37 @@ pub struct KeystoreParams {
 	pub password_filename: Option<PathBuf>,
 }
 
+/// Parse a sercret string, returning a displayable error.
+pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, String> {
+	Ok(std::str::FromStr::from_str(s)
+		.map_err(|_e| "Could not get SecretString".to_string())?)
+}
+
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
 	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{
-				Some(input_keystore_password()?.into())
+				let mut password = input_keystore_password()?;
+				let secret = std::str::FromStr::from_str(password.as_str())
+					.map_err(|()| "Error reading password")?;
+				use sp_core::crypto::Zeroize;
+				password.zeroize();
+				Some(secret)
 			}
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			Some(
-				fs::read_to_string(file)
-					.map_err(|e| format!("{}", e))?
-					.into(),
-			)
-		} else if let Some(ref password) = self.password {
-			Some(password.clone().into())
+			let mut password = fs::read_to_string(file)
+				.map_err(|e| format!("{}", e))?;
+			let secret = std::str::FromStr::from_str(password.as_str())
+				.map_err(|()| "Error reading password")?;
+			use sp_core::crypto::Zeroize;
+			password.zeroize();
+			Some(secret)
 		} else {
-			None
+			self.password.clone()
 		};
 
 		let path = self
