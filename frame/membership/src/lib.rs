@@ -26,7 +26,7 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains},
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -261,6 +261,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				Err(_) => Prime::<T, I>::kill(),
 			}
 		}
+	}
+}
+
+impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+	fn sorted_members() -> Vec<T::AccountId> {
+		Self::members()
+	}
+
+	fn count() -> usize {
+		Members::<T, I>::decode_len().unwrap_or(0)
 	}
 }
 
