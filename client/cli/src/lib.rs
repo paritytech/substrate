@@ -124,16 +124,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
 		let name = Self::executable_name();
 		let author = Self::author();
 		let about = Self::description();
 		let app = app
-			.name(&*name)
-			.author(&*author)
-			.about(&*about)
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -186,16 +186,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
 		let name = Self::executable_name();
 		let author = Self::author();
 		let about = Self::description();
 		let app = app
-			.name(&*name)
-			.author(&*author)
-			.about(&*about)
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;
