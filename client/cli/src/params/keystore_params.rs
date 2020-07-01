@@ -59,7 +59,7 @@ pub struct KeystoreParams {
 }
 
 /// Parse a sercret string, returning a displayable error.
-pub fn secret_string_from_str(s: &str) -> Result<SecretString, String> {
+pub fn secret_string_from_str(s: &str) -> std::result::Result<SecretString, String> {
 	Ok(std::str::FromStr::from_str(s)
 		.map_err(|_e| "Could not get SecretString".to_string())?)
 }
