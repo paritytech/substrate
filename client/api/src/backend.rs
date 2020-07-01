@@ -431,15 +431,10 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Finalize block with given Id.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
-	///
-	/// The `finalization_check` closure checks that if an imported block is able to be
-	/// finalized. If the check returns false, the import succeeds, but with the imported block
-	/// unfinalized.
-	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
+	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
 		justification: Option<Justification>,
-		finalization_check: &F,
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns reference to blockchain backend.

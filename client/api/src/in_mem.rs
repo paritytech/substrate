@@ -678,11 +678,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(())
 	}
 
-	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
+	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
 		justification: Option<Justification>,
-		_finalization_check: &F,
 	) -> sp_blockchain::Result<()> {
 		self.blockchain.finalize_header(block, justification)
 	}

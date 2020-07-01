@@ -192,11 +192,10 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(())
 	}
 
-	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
+	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
 		_justification: Option<Justification>,
-		_finalization_check: &F,
 	) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}

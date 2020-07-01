@@ -949,7 +949,7 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn finalize_block_with_transaction<F: Fn(&Block::Hash) -> bool>(
+	fn finalize_block_with_transaction(
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		hash: &Block::Hash,
@@ -958,15 +958,10 @@ impl<Block: BlockT> Backend<Block> {
 		justification: Option<Justification>,
 		changes_trie_cache_ops: &mut Option<DbChangesTrieStorageTransaction<Block>>,
 		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
-		finalization_check: &F
 	) -> ClientResult<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool)> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
-
-		if !finalization_check(hash) {
-			return Ok((*hash, number, false, false))
-		}
 
 		self.note_finalized(
 			transaction,
@@ -1038,19 +1033,21 @@ impl<Block: BlockT> Backend<Block> {
 		let mut changes_trie_cache_ops = None;
 		for (block, justification) in operation.finalized_blocks {
 			let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
-			let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
 
-			meta_updates.push(self.finalize_block_with_transaction(
-				&mut transaction,
-				&block_hash,
-				&block_header,
-				Some(last_finalized_hash),
-				justification,
-				&mut changes_trie_cache_ops,
-				&mut finalization_displaced_leaves,
-				finalization_check,
-			)?);
-			last_finalized_hash = block_hash;
+			if finalization_check(&block_hash) {
+				let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
+
+				meta_updates.push(self.finalize_block_with_transaction(
+					&mut transaction,
+					&block_hash,
+					&block_header,
+					Some(last_finalized_hash),
+					justification,
+					&mut changes_trie_cache_ops,
+					&mut finalization_displaced_leaves,
+				)?);
+				last_finalized_hash = block_hash;
+			}
 		}
 
 		let imported = if let Some(pending_block) = operation.pending_block {
@@ -1434,11 +1431,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn finalize_block<F: Fn(&Block::Hash) -> bool>(
+	fn finalize_block(
 		&self,
 		block: BlockId<Block>,
 		justification: Option<Justification>,
-		finalization_check: &F,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -1454,7 +1450,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			justification,
 			&mut changes_trie_cache_ops,
 			&mut displaced,
-			finalization_check,
 		)?;
 		self.storage.db.commit(transaction);
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
@@ -2065,9 +2060,9 @@ pub(crate) mod tests {
 			).is_none());
 		}
 
-		backend.finalize_block(BlockId::Number(1), None, &|_| true).unwrap();
-		backend.finalize_block(BlockId::Number(2), None, &|_| true).unwrap();
-		backend.finalize_block(BlockId::Number(3), None, &|_| true).unwrap();
+		backend.finalize_block(BlockId::Number(1), None).unwrap();
+		backend.finalize_block(BlockId::Number(2), None).unwrap();
+		backend.finalize_block(BlockId::Number(3), None).unwrap();
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
@@ -2266,8 +2261,8 @@ pub(crate) mod tests {
 
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c, block1_c]);
 
-		backend.finalize_block(BlockId::hash(block1_a), None, &|_| true).unwrap();
-		backend.finalize_block(BlockId::hash(block2_a), None, &|_| true).unwrap();
+		backend.finalize_block(BlockId::hash(block1_a), None).unwrap();
+		backend.finalize_block(BlockId::hash(block2_a), None).unwrap();
 
 		// leaves at same height stay. Leaves at lower heights pruned.
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c]);
@@ -2293,7 +2288,7 @@ pub(crate) mod tests {
 		let _ = insert_header(&backend, 1, block0, None, Default::default());
 
 		let justification = Some(vec![1, 2, 3]);
-		backend.finalize_block(BlockId::Number(1), justification.clone(), &|_| true).unwrap();
+		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(
 			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
