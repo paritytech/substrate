@@ -18,7 +18,6 @@
 
 //! Contains the `Node` struct, which handles communications with a single telemetry endpoint.
 
-use bytes::BytesMut;
 use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::Multiaddr;
@@ -57,7 +56,7 @@ struct NodeSocketConnected<TTrans: Transport> {
 	/// Where to send data.
 	sink: TTrans::Output,
 	/// Queue of packets to send.
-	pending: VecDeque<BytesMut>,
+	pending: VecDeque<Vec<u8>>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
 	/// A timeout for the socket to write data.
@@ -103,15 +102,15 @@ impl<TTrans: Transport> Node<TTrans> {
 
 impl<TTrans: Transport, TSinkErr> Node<TTrans>
 where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
-	TTrans::Output: Sink<BytesMut, Error = TSinkErr>
-		+ Stream<Item=Result<BytesMut, TSinkErr>>
+	TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
+		+ Stream<Item=Result<Vec<u8>, TSinkErr>>
 		+ Unpin,
 	TSinkErr: fmt::Debug
 {
 	/// Sends a WebSocket frame to the node. Returns an error if we are not connected to the node.
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
-	pub fn send_message(&mut self, payload: impl Into<BytesMut>) -> Result<(), ()> {
+	pub fn send_message(&mut self, payload: impl Into<Vec<u8>>) -> Result<(), ()> {
 		if let NodeSocket::Connected(NodeSocketConnected { pending, .. }) = &mut self.socket {
 			if pending.len() <= MAX_PENDING {
 				trace!(target: "telemetry", "Adding log entry to queue for {:?}", self.addr);
@@ -203,8 +202,8 @@ fn gen_rand_reconnect_delay() -> Delay {
 }
 
 impl<TTrans: Transport, TSinkErr> NodeSocketConnected<TTrans>
-where TTrans::Output: Sink<BytesMut, Error = TSinkErr>
-	+ Stream<Item=Result<BytesMut, TSinkErr>>
+where TTrans::Output: Sink<Vec<u8>, Error = TSinkErr>
+	+ Stream<Item=Result<Vec<u8>, TSinkErr>>
 	+ Unpin
 {
 	/// Processes the queue of messages for the connected socket.

@@ -1,6 +1,6 @@
 [package]
 name = "sc-informant"
-version = "0.8.0-rc3"
+version = "0.8.0-rc4"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate informant."
 edition = "2018"
@@ -17,10 +17,10 @@ futures = "0.3.4"
 log = "0.4.8"
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 wasm-timer = "0.2"
-sc-client-api = { version = "2.0.0-rc3", path = "../api" }
-sc-network = { version = "0.8.0-rc3", path = "../network" }
-sp-blockchain = { version = "2.0.0-rc3", path = "../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-rc3", path = "../../primitives/runtime" }
+sc-client-api = { version = "2.0.0-rc4", path = "../api" }
+sc-network = { version = "0.8.0-rc4", path = "../network" }
+sp-blockchain = { version = "2.0.0-rc4", path = "../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-rc2", path = "../../primitives/utils" }
 sp-transaction-pool = { version = "2.0.0-rc2", path = "../../primitives/transaction-pool" }
 parking_lot = "0.10.2"

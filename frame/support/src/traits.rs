@@ -25,7 +25,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin
+		BadOrigin, AtLeast32BitUnsigned
 	},
 };
 use crate::dispatch::Parameter;
@@ -327,6 +327,10 @@ pub trait StoredMap<K, T> {
 pub trait Happened<T> {
 	/// The thing happened.
 	fn happened(t: &T);
+}
+
+impl<T> Happened<T> for () {
+	fn happened(_: &T) {}
 }
 
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
@@ -788,7 +792,7 @@ pub enum SignedImbalance<B, P: Imbalance<B>>{
 impl<
 	P: Imbalance<B, Opposite=N>,
 	N: Imbalance<B, Opposite=P>,
-	B: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
+	B: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default,
 > SignedImbalance<B, P> {
 	pub fn zero() -> Self {
 		SignedImbalance::Positive(P::zero())
@@ -851,7 +855,8 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32BitUnsigned + FullCodec + Copy + MaybeSerializeDeserialize + Debug +
+		Default;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.
@@ -1426,10 +1431,18 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	}
 }
 
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
+/// The runtime upgrade trait.
+///
+/// Implementing this lets you express what should happen when the runtime upgrades,
+/// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
 	/// Perform a module upgrade.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
