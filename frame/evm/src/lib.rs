@@ -118,6 +118,15 @@ impl Precompiles for () {
 	}
 }
 
+/// Substrate system chain ID.
+pub struct SystemChainId;
+
+impl Get<u64> for SystemChainId {
+	fn get() -> u64 {
+		sp_io::misc::chain_id()
+	}
+}
+
 static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
@@ -134,6 +143,8 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
+	/// Chain ID of EVM.
+	type ChainId: Get<U256>;
 
 	/// EVM config used in the module.
 	fn config() -> &'static Config {
@@ -159,7 +170,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
 		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
 		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
-		AccountStorages get(fn account_storages): 
+		AccountStorages get(fn account_storages):
 			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
 	}
 
