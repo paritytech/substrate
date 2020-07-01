@@ -60,7 +60,7 @@ impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
 	pub fn notify(&self, notification: JustificationNotification<Block>) -> Result<(), ()> {
 		self.subscribers.lock()
 			.retain(|n| {
-				!n.is_closed() || n.unbounded_send(notification.clone()).is_ok()
+				!n.is_closed() && n.unbounded_send(notification.clone()).is_ok()
 			});
 
 		Ok(())
