@@ -23,7 +23,7 @@ use sp_runtime::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 		TransactionPriority,
 	},
-	Perbill, DispatchResult,
+	DispatchResult,
 };
 use frame_support::{
 	traits::{Get},
@@ -38,7 +38,8 @@ pub struct CheckWeight<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
 impl<T: Trait + Send + Sync> CheckWeight<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
 {
-	/// Checks if the current extrinsic does not exceed `MaximumExtrinsicWeight` limit.
+	/// Checks if the current extrinsic does not exceed the maximum weight a single extrinsic
+	/// with given `DispatchClass` can have.
 	fn check_extrinsic_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<(), TransactionValidityError> {
@@ -106,7 +107,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		}
 	}
 
-	/// get the priority of an extrinsic denoted by `info`.
+	/// Get the priority of an extrinsic denoted by `info`.
 	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
@@ -260,11 +261,16 @@ mod tests {
 	use frame_support::weights::{Weight, Pays};
 
 	fn normal_weight_limit() -> Weight {
-		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockWeight::get()
+		Test::block_weights().max_for_class.normal
+			.unwrap_or_else(|| Test::block_weights().max_block)
+	}
+
+	fn block_weight_limit() -> Weight {
+		Test::block_weights().max_block
 	}
 
 	fn normal_length_limit() -> u32 {
-		<Test as Trait>::AvailableBlockRatio::get() * <Test as Trait>::MaximumBlockLength::get()
+		<Test as Trait>::BlockLength::get().max.normal
 	}
 
 	#[test]
@@ -285,7 +291,7 @@ mod tests {
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
 			assert_eq!(System::block_weight().total(), Weight::max_value());
-			assert!(System::block_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+			assert!(System::block_weight().total() > block_weight_limit());
 		});
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
@@ -296,7 +302,7 @@ mod tests {
 	fn normal_extrinsic_limited_by_maximum_extrinsic_weight() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
-				weight: <Test as Trait>::MaximumExtrinsicWeight::get() + 1,
+				weight: Test::block_weights().max_extrinsic.normal.unwrap() + 1,
 				class: DispatchClass::Normal,
 				..Default::default()
 			};
@@ -312,13 +318,12 @@ mod tests {
 	#[test]
 	fn operational_extrinsic_limited_by_operational_space_limit() {
 		new_test_ext().execute_with(|| {
-			let operational_limit = CheckWeight::<Test>::get_dispatch_limit_ratio(
-				DispatchClass::Operational
-			) * <Test as Trait>::MaximumBlockWeight::get();
-			let base_weight = <Test as Trait>::ExtrinsicBaseWeight::get();
-			let block_base = <Test as Trait>::BlockExecutionWeight::get();
+			let weights = Test::block_weights();
+			let operational_limit = weights.max_for_class.operational
+				.unwrap_or_else(|| weights.max_block);
+			let base_weight = weights.base_extrinsic.normal;
 
-			let weight = operational_limit - base_weight - block_base;
+			let weight = operational_limit - base_weight;
 			let okay = DispatchInfo {
 				weight,
 				class: DispatchClass::Operational,
@@ -350,7 +355,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Normal);
 			assert_eq!(System::block_weight().total(), Weight::max_value());
-			assert!(System::block_weight().total() > <Test as Trait>::MaximumBlockWeight::get());
+			assert!(System::block_weight().total() > block_weight_limit());
 		});
 	}
 
@@ -370,8 +375,8 @@ mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(System::block_weight().total(), 768);
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
-			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+			assert_eq!(block_weight_limit(), 1024);
+			assert_eq!(System::block_weight().total(), block_weight_limit());
 			// Checking single extrinsic should not take current block weight into account.
 			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&rest_operational), Ok(()));
 		});
@@ -390,8 +395,8 @@ mod tests {
 			// Extra 15 here from block execution + base extrinsic weight
 			assert_eq!(System::block_weight().total(), 266);
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
-			assert_eq!(System::block_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+			assert_eq!(block_weight_limit(), 1024);
+			assert_eq!(System::block_weight().total(), block_weight_limit());
 		});
 	}
 
@@ -496,12 +501,13 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
+			let base_extrinsic = Test::block_weights().base_extrinsic.normal;
 			let medium = DispatchInfo {
-				weight: normal_limit - <Test as Trait>::ExtrinsicBaseWeight::get(),
+				weight: normal_limit - base_extrinsic,
 				..Default::default()
 			};
 			let big = DispatchInfo {
-				weight: normal_limit - <Test as Trait>::ExtrinsicBaseWeight::get() + 1,
+				weight: normal_limit - base_extrinsic + 1,
 				..Default::default()
 			};
 			let len = 0_usize;
@@ -527,10 +533,11 @@ mod tests {
 			let info = DispatchInfo { weight: 512, ..Default::default() };
 			let post_info = PostDispatchInfo { actual_weight: Some(128), };
 			let len = 0_usize;
+			let base_extrinsic = Test::block_weights().base_extrinsic.normal;
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
 			BlockWeight::mutate(|current_weight| {
-				current_weight.put(256 - <Test as Trait>::ExtrinsicBaseWeight::get(), DispatchClass::Normal)
+				current_weight.put(256 - base_extrinsic, DispatchClass::Normal)
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
@@ -561,7 +568,7 @@ mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
 				BlockWeight::get().total(),
-				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
+				info.weight + 128 + Test::block_weights().base_extrinsic.normal,
 			);
 
 			assert!(
@@ -570,7 +577,7 @@ mod tests {
 			);
 			assert_eq!(
 				BlockWeight::get().total(),
-				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
+				info.weight + 128 + Test::block_weights().base_extrinsic.normal,
 			);
 		})
 	}
@@ -578,16 +585,20 @@ mod tests {
 	#[test]
 	fn zero_weight_extrinsic_still_has_base_weight() {
 		new_test_ext().execute_with(|| {
+			let weights = Test::block_weights();
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
 			// Initial weight from `BlockExecutionWeight`
-			assert_eq!(System::block_weight().total(), <Test as Trait>::BlockExecutionWeight::get());
+			assert_eq!(
+				System::block_weight().total(),
+				weights.base_block
+			);
 			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
 			assert!(r.is_ok());
 			assert_eq!(
 				System::block_weight().total(),
-				<Test as Trait>::ExtrinsicBaseWeight::get() + <Test as Trait>::BlockExecutionWeight::get()
+				weights.base_extrinsic.normal + weights.base_block
 			);
 		})
 	}

@@ -39,7 +39,7 @@ use frame_support::{
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
 	weights::{
 		Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays, WeightToFeePolynomial,
-		WeightToFeeCoefficient,
+		WeightToFeeCoefficient, DispatchClass,
 	},
 	dispatch::DispatchResult,
 };
@@ -121,13 +121,12 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 		let min_multiplier = M::get();
 		let previous = previous.max(min_multiplier);
 
+		let weights = T::block_weights();
 		// the computed ratio is only among the normal class.
-		let normal_max_weight =
-			<T as frame_system::Trait>::AvailableBlockRatio::get() *
-			<T as frame_system::Trait>::MaximumBlockWeight::get();
-		let normal_block_weight =
-			<frame_system::Module<T>>::block_weight()
-			.get(frame_support::weights::DispatchClass::Normal)
+		let normal_max_weight = weights.max_for_class.normal
+			.unwrap_or_else(|| weights.max_block);
+		let normal_block_weight = <frame_system::Module<T>>::block_weight()
+			.get(DispatchClass::Normal)
 			.min(normal_max_weight);
 
 		let s = S::get();
@@ -226,7 +225,7 @@ decl_module! {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 				Multiplier::checked_from_integer(
-					<T as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
+					T::block_weights().max_block.try_into().unwrap()
 				).unwrap(),
 			);
 		}
@@ -294,7 +293,13 @@ impl<T: Trait> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
-		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee)
+		Self::compute_fee_raw(
+			len,
+			info.weight,
+			tip,
+			info.pays_fee,
+			info.class,
+		)
 	}
 
 	/// Compute the actual post dispatch fee for a particular transaction.
@@ -309,7 +314,13 @@ impl<T: Trait> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
-		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, info.pays_fee)
+		Self::compute_fee_raw(
+			len,
+			post_info.calc_actual_weight(info),
+			tip,
+			info.pays_fee,
+			info.class,
+		)
 	}
 
 	fn compute_fee_raw(
@@ -317,6 +328,7 @@ impl<T: Trait> Module<T> where
 		weight: Weight,
 		tip: BalanceOf<T>,
 		pays_fee: Pays,
+		class: DispatchClass,
 	) -> BalanceOf<T> {
 		if pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
@@ -331,7 +343,7 @@ impl<T: Trait> Module<T> where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
+			let base_fee = Self::weight_to_fee(T::block_weights().base_extrinsic.get(class));
 			base_fee
 				.saturating_add(fixed_len_fee)
 				.saturating_add(adjusted_weight_fee)
@@ -344,7 +356,7 @@ impl<T: Trait> Module<T> where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+		let capped_weight = weight.min(T::block_weights().max_block);
 		T::WeightToFee::calc(&capped_weight)
 	}
 }

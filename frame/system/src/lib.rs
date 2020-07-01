@@ -132,13 +132,14 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+pub mod weights;
 #[cfg(test)]
 pub(crate) mod mock;
 
 mod extensions;
-mod weights;
 #[cfg(test)]
 mod tests;
+
 
 pub use extensions::{
 	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
@@ -165,10 +166,10 @@ pub trait Trait: 'static + Eq + Clone {
 	type BaseCallFilter: Filter<Self::Call>;
 
 	/// Block & extrinsics weights: base values and limits.
-	type BlockWeights: Get<BlockWeights>;
+	type BlockWeights: Get<weights::BlockWeights>;
 
 	/// The maximum length of a block (in bytes).
-	type BlockLength: Get<BlockLength>;
+	type BlockLength: Get<weights::BlockLength>;
 
 	/// The `Origin` type used by dispatchable calls.
 	type Origin:
@@ -248,7 +249,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 
 	/// Return block weights object.
-	fn block_weights() -> Self::BlockWeights {
+	fn block_weights() -> weights::BlockWeights {
 		Self::BlockWeights::get()
 	}
 }

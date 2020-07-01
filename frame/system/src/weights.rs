@@ -16,14 +16,15 @@
 // limitations under the License.
 
 use codec::{Encode, Decode};
-use frame_support::weights::{Weight, DispatchClass};
-use sp_runtime::RuntimeDebug;
+use frame_support::weights::{Weight, DispatchClass, constants};
+use sp_runtime::{RuntimeDebug, Perbill};
 
 /// An object to track the currently used extrinsic weight in a block.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct ExtrinsicsWeight {
 	normal: Weight,
 	operational: Weight,
+	// TODO [ToDr] We should probably track `mandatory` separately here!
 }
 
 impl ExtrinsicsWeight {
@@ -87,7 +88,10 @@ pub struct BlockLength {
 
 impl Default for BlockLength {
 	fn default() -> Self {
-		BlockLength::new(5 * 1024 * 1024)
+		BlockLength::max_with_normal_ratio(
+			5 * 1024 * 1024,
+			DEFAULT_NORMAL_RATIO,
+		)
 	}
 }
 
@@ -159,6 +163,11 @@ impl<T: Copy> ForDispatchClass<T> {
 	}
 }
 
+/// A ratio of `Normal` dispatch class within block, used as default value for
+/// `BlockWeight` and `BlockLength`. The `Default` impls are provided mostly for convenience
+/// to use in tests.
+const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
+
 /// Block weight limits configuration.
 #[derive(RuntimeDebug, Clone)]
 pub struct BlockWeights {
@@ -192,12 +201,10 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::builder()
-			.max_for_class(
-				frame_support::weights::constants::WEIGHT_PER_SECOND,
-				DispatchClass::Normal
-			)
-			.build()
+		Self::with_sensible_defaults(
+			1 * constants::WEIGHT_PER_SECOND,
+			DEFAULT_NORMAL_RATIO,
+		)
 	}
 }
 
@@ -220,14 +227,24 @@ impl BlockWeights {
 				|| max_for_class == 0
 			);
 			// Max extrinsic can't be greater than max_for_class.
-			assert!(or_max(self.max_extrinsic.get(class)) < max_for_class - base_extrinsic);
+			assert!(self.max_extrinsic.get(class).unwrap_or(0) <= max_for_class - base_extrinsic);
 			// Make sure that if reserved is set it's greater than base_extrinsic.
 			assert!(reserved > base_extrinsic || reserved == 0);
 			// Make sure max block is greater than max_for_class if it's set.
-			assert!(self.max_block >= self.max_for_class.get(class).unwrap_or_default());
+			assert!(self.max_block >= self.max_for_class.get(class).unwrap_or(0));
 			// Make sure we can fit at least one extrinsic.
 			assert!(self.max_block > base_extrinsic + self.base_block);
 		}
+	}
+
+	pub fn with_sensible_defaults(expected_block_weight: Weight, normal_ratio: Perbill) -> BlockWeights {
+		let normal_weight = normal_ratio * expected_block_weight;
+		Self::builder()
+			.max_for_class(normal_weight, DispatchClass::Normal)
+			.max_for_class(expected_block_weight, DispatchClass::Operational)
+			.reserved(expected_block_weight - normal_weight, DispatchClass::Operational)
+			.avg_block_initialization(Perbill::from_percent(10))
+			.build()
 	}
 
 	/// Start constructing new `BlockWeights` object.
@@ -241,8 +258,8 @@ impl BlockWeights {
 		};
 		BlockWeightsBuilder {
 			weights: BlockWeights {
-				base_block: 0,
-				base_extrinsic: Default::default(),
+				base_block: constants::BlockExecutionWeight::get(),
+				base_extrinsic: ForDispatchClass::new(constants::ExtrinsicBaseWeight::get()),
 				max_extrinsic: max_for_class.clone(),
 				reserved: max_for_class.clone(),
 				max_for_class,
@@ -331,7 +348,8 @@ impl BlockWeightsBuilder {
 			let class = *class;
 			// compute max weight of single extrinsic
 			let max_for_class = weights.max_for_class.get(class);
-			let max_extrinsic = max_for_class.map(|x| max_rate *
+			let max_extrinsic = max_for_class
+				.map(|x| max_rate * x)
 				.map(|x| x.saturating_sub(weights.base_extrinsic.get(class)));
 			weights.max_extrinsic.set(max_extrinsic, class.into());
 			// Compute max block
@@ -350,6 +368,8 @@ impl BlockWeightsBuilder {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+
 	#[test]
 	fn default_weights_are_valid() {
 		BlockWeights::default().validate()

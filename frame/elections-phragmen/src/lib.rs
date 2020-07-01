@@ -626,7 +626,7 @@ decl_module! {
 		#[weight = if *has_replacement {
 			50 * WEIGHT_PER_MICROS + T::DbWeight::get().reads_writes(3, 2)
 		} else {
-			T::MaximumBlockWeight::get()
+			T::block_weights().max_block
 		}]
 		fn remove_member(
 			origin,
@@ -831,7 +831,7 @@ impl<T: Trait> Module<T> {
 		if !Self::term_duration().is_zero() {
 			if (block_number % Self::term_duration()).is_zero() {
 				Self::do_phragmen();
-				return T::MaximumBlockWeight::get()
+				return T::block_weights().max_block;
 			}
 		}
 		0

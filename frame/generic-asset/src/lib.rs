@@ -1121,7 +1121,8 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type BaseCallFilter = T::BaseCallFilter;
-	type Weights = T::Weights;
+	type BlockWeights = T::BlockWeights;
+	type BlockLength = T::BlockLength;
 	type Origin = T::Origin;
 	type Call = T::Call;
 	type Index = T::Index;
@@ -1133,13 +1134,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Header = T::Header;
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
-	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = T::MaximumBlockWeight;
-	type MaximumBlockLength = T::MaximumBlockLength;
-	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
 	type ModuleToIndex = ();
 	type AccountData = ();
