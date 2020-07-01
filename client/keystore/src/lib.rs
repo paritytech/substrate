@@ -19,7 +19,7 @@
 #![warn(missing_docs)]
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
-	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
+	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
 	traits::{BareCryptoStore, Error as TraitError},
 	sr25519::{Public as Sr25519Public, Pair as Sr25519Pair},
 	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
@@ -95,14 +95,14 @@ pub struct Store {
 	path: Option<PathBuf>,
 	/// Map over `(KeyTypeId, Raw public key)` -> `Key phrase/seed`
 	additional: HashMap<(KeyTypeId, Vec<u8>), String>,
-	password: Option<Protected<String>>,
+	password: Option<SecretString>,
 }
 
 impl Store {
 	/// Open the store at the given path.
 	///
 	/// Optionally takes a password that will be used to encrypt/decrypt the keys.
-	pub fn open<T: Into<PathBuf>>(path: T, password: Option<Protected<String>>) -> Result<KeyStorePtr> {
+	pub fn open<T: Into<PathBuf>>(path: T, password: Option<SecretString>) -> Result<KeyStorePtr> {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
 
@@ -155,7 +155,7 @@ impl Store {
 	pub fn insert_by_type<Pair: PairT>(&self, key_type: KeyTypeId, suri: &str) -> Result<Pair> {
 		let pair = Pair::from_string(
 			suri,
-			self.password.as_ref().map(|p| &***p)
+			self.password()
 		).map_err(|_| Error::InvalidSeed)?;
 		self.insert_unknown(key_type, suri, pair.public().as_slice())
 			.map_err(|_| Error::Unavailable)?;
@@ -173,7 +173,7 @@ impl Store {
 	///
 	/// Places it into the file system store.
 	pub fn generate_by_type<Pair: PairT>(&self, key_type: KeyTypeId) -> Result<Pair> {
-		let (pair, phrase, _) = Pair::generate_with_phrase(self.password.as_ref().map(|p| &***p));
+		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
 			let mut file = File::create(path)?;
 			serde_json::to_writer(&file, &phrase)?;
@@ -229,7 +229,7 @@ impl Store {
 		let phrase = self.key_phrase_by_type(public.as_slice(), key_type)?;
 		let pair = Pair::from_string(
 			&phrase,
-			self.password.as_ref().map(|p| &***p),
+			self.password(),
 		).map_err(|_| Error::InvalidPhrase)?;
 
 		if &pair.public() == public {
@@ -434,7 +434,9 @@ impl BareCryptoStore for Store {
 	}
 
 	fn password(&self) -> Option<&str> {
-		self.password.as_ref().map(|x| x.as_str())
+		self.password.as_ref()
+			.map(|p| p.expose_secret())
+			.map(|p| p.as_str())
 	}
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
@@ -464,6 +466,7 @@ mod tests {
 	use super::*;
 	use tempfile::TempDir;
 	use sp_core::{testing::SR25519, crypto::Ss58Codec};
+	use std::str::FromStr;
 
 	#[test]
 	fn basic_store() {
@@ -504,7 +507,10 @@ mod tests {
 	fn password_being_used() {
 		let password = String::from("password");
 		let temp_dir = TempDir::new().unwrap();
-		let store = Store::open(temp_dir.path(), Some(password.clone().into())).unwrap();
+		let store = Store::open(
+			temp_dir.path(),
+			Some(FromStr::from_str(password.as_str()).unwrap()),
+		).unwrap();
 
 		let pair: ed25519::AppPair = store.write().generate().unwrap();
 		assert_eq!(
@@ -516,7 +522,10 @@ mod tests {
 		let store = Store::open(temp_dir.path(), None).unwrap();
 		assert!(store.read().key_pair::<ed25519::AppPair>(&pair.public()).is_err());
 
-		let store = Store::open(temp_dir.path(), Some(password.into())).unwrap();
+		let store = Store::open(
+			temp_dir.path(),
+			Some(FromStr::from_str(password.as_str()).unwrap()),
+		).unwrap();
 		assert_eq!(
 			pair.public(),
 			store.read().key_pair::<ed25519::AppPair>(&pair.public()).unwrap().public(),
