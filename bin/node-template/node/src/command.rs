@@ -22,23 +22,23 @@ use sc_cli::{SubstrateCli, RuntimeVersion, Role, ChainSpec};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
-		String::from("Substrate Node")
+		"Substrate Node".into()
 	}
 
 	fn impl_version() -> String {
-		String::from(env!("SUBSTRATE_CLI_IMPL_VERSION"))
+		env!("SUBSTRATE_CLI_IMPL_VERSION").into()
 	}
 
 	fn description() -> String {
-		String::from(env!("CARGO_PKG_DESCRIPTION"))
+		env!("CARGO_PKG_DESCRIPTION").into()
 	}
 
 	fn author() -> String {
-		String::from(env!("CARGO_PKG_AUTHORS"))
+		env!("CARGO_PKG_AUTHORS").into()
 	}
 
 	fn support_url() -> String {
-		String::from("support.anonymous.an")
+		"support.anonymous.an".into()
 	}
 
 	fn copyright_start_year() -> i32 {
@@ -46,7 +46,7 @@ impl SubstrateCli for Cli {
 	}
 
 	fn executable_name() -> String {
-		String::from(env!("CARGO_PKG_NAME"))
+		env!("CARGO_PKG_NAME").into()
 	}
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
