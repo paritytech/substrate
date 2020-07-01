@@ -716,12 +716,18 @@ where
 			HasVoted::No => HasVoted::No,
 		};
 
+		// we can only sign when we have a local key in the authority set
+		// and we have a reference to the keystore.
+		let keystore = match (local_key.as_ref(), self.config.keystore.as_ref()) {
+			(Some(id), Some(keystore)) => Some((id.clone(), keystore.clone()).into()),
+			_ => None,
+		};
+
 		let (incoming, outgoing) = self.network.round_communication(
-			self.config.keystore.clone(),
+			keystore,
 			crate::communication::Round(round),
 			crate::communication::SetId(self.set_id),
 			self.voters.clone(),
-			local_key.clone(),
 			has_voted,
 		);
 
