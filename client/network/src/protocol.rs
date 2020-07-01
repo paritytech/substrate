@@ -1287,7 +1287,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let is_best = self.context_data.chain.info().best_hash == hash;
-		debug!(target: "sync", "Reannouncing block {:?}", hash);
+		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
 		self.send_announcement(&header, data, is_best, true)
 	}
 
@@ -2160,7 +2160,7 @@ mod tests {
 				reserved_only: false,
 				priority_groups: Vec::new(),
 			},
-			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			Box::new(DefaultBlockAnnounceValidator),
 			None,
 			Default::default(),
 			None,
