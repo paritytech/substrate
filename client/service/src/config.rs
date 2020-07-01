@@ -27,7 +27,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
-use sp_core::crypto::Protected;
+use sp_core::crypto::SecretString;
 pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
 #[cfg(not(target_os = "unknown"))]
@@ -130,7 +130,7 @@ pub enum KeystoreConfig {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<Protected<String>>
+		password: Option<SecretString>
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
