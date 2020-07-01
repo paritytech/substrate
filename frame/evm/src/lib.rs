@@ -145,7 +145,7 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
 	/// Chain ID of EVM.
-	type ChainId: Get<U256>;
+	type ChainId: Get<u64>;
 
 	/// EVM config used in the module.
 	fn config() -> &'static Config {
@@ -313,7 +313,7 @@ decl_module! {
 				ExitReason::Succeed(_) => {
 					Module::<T>::deposit_event(Event::<T>::Executed(target));
 				},
-				_ => {
+				ExitReason::Error(_) | ExitReason::Revert(_) | ExitReason::Fatal(_) => {
 					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
 				},
 			}

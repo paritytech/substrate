@@ -95,6 +95,7 @@ parameter_types! {
 	pub const EVMModuleId: ModuleId = ModuleId(*b"py/evmpa");
 }
 impl Trait for Test {
+	type ChainId = SystemChainId;
 	type ModuleId = EVMModuleId;
 	type FeeCalculator = FixedGasPrice;
 	type ConvertAccountId = HashTruncateConvertAccountId<BlakeTwo256>;
