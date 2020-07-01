@@ -28,8 +28,9 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ChangesTrieConfiguration, convert_hash, NativeOrEncoded,
-	storage::{StorageKey, PrefixedStorageKey, StorageData, well_known_keys, ChildInfo},
+	convert_hash,
+	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
+	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
@@ -356,13 +357,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
-	}
-
-	/// Get block hash by number.
-	pub fn block_hash(&self,
-		block_number: <<Block as BlockT>::Header as HeaderT>::Number
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		self.backend.blockchain().hash(block_number)
 	}
 
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
@@ -758,11 +752,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				) = storage_changes.into_inner();
 
 				if self.config.offchain_indexing_api {
-					// if let Some(mut offchain_storage) = self.backend.offchain_storage() {
-					// 	offchain_sc.iter().for_each(|(k,v)| {
-					// 		offchain_storage.set(b"block-import-info", k,v)
-					// 	});
-					// }
 					operation.op.update_offchain_storage(offchain_sc)?;
 				}
 
@@ -869,9 +858,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// block.
 			(true, ref mut storage_changes @ None, Some(ref body)) => {
 				let runtime_api = self.runtime_api();
+				let execution_context = if import_block.origin == BlockOrigin::NetworkInitialSync {
+					ExecutionContext::Syncing
+				} else {
+					ExecutionContext::Importing
+				};
 
-				runtime_api.execute_block(
+				runtime_api.execute_block_with_context(
 					&at,
+					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
@@ -1947,6 +1942,10 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
 		self.backend.blockchain().justification(*id)
 	}
+
+	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+		self.backend.blockchain().hash(number)
+	}	
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>

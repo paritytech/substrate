@@ -89,6 +89,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
 	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
+	let integrity_test = decl_integrity_test(&scrate);
 
 	let res = quote!(
 		#scrate_decl
@@ -120,6 +121,8 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#inherent
 
 		#validate_unsigned
+
+		#integrity_test
 	);
 
 	Ok(res.into())
@@ -405,4 +408,18 @@ fn find_system_module<'a>(
 	module_declarations
 		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
 		.map(|decl| &decl.module)
+}
+
+fn decl_integrity_test(scrate: &TokenStream2) -> TokenStream2 {
+	quote!(
+		#[cfg(test)]
+		mod __construct_runtime_integrity_test {
+			use super::*;
+
+			#[test]
+			pub fn runtime_integrity_tests() {
+				<AllModules as #scrate::traits::IntegrityTest>::integrity_test();
+			}
+		}
+	)
 }

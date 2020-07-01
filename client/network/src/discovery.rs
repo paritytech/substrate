@@ -324,7 +324,8 @@ impl DiscoveryBehaviour {
 		let ip = match addr.iter().next() {
 			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
 			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
-			Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) => return true,
+			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_))
+				=> return true,
 			_ => return false
 		};
 		ip.is_global()
@@ -600,7 +601,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								Ok(ok) => {
 									let results = ok.records
 										.into_iter()
-										.map(|r| (r.key, r.value))
+										.map(|r| (r.record.key, r.record.value))
 										.collect();
 
 									DiscoveryOut::ValueFound(results)

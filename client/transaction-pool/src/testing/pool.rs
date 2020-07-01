@@ -678,6 +678,66 @@ fn fork_aware_finalization() {
 	}
 }
 
+/// Tests that when pruning and retracing a tx by the same event, we generate
+/// the correct events in the correct order.
+#[test]
+fn prune_and_retract_tx_at_same_time() {
+	let api = TestApi::empty();
+	// starting block A1 (last finalized.)
+	api.push_block(1, vec![]);
+
+	let (pool, _background, _) = BasicPool::new_test(api.into());
+
+	let from_alice = uxt(Alice, 1);
+	pool.api.increment_nonce(Alice.into());
+
+	let watcher = block_on(
+		pool.submit_and_watch(&BlockId::number(1), SOURCE, from_alice.clone())
+	).expect("1. Imported");
+
+	// Block B1
+	let b1 = {
+		let header = pool.api.push_block(2, vec![from_alice.clone()]);
+		assert_eq!(pool.status().ready, 1);
+
+		let event = ChainEvent::NewBlock {
+			hash: header.hash(),
+			is_new_best: true,
+			header: header.clone(),
+			tree_route: None,
+		};
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+		header.hash()
+	};
+
+	// Block B2
+	let b2 = {
+		let header = pool.api.push_block(2, vec![from_alice.clone()]);
+		assert_eq!(pool.status().ready, 0);
+
+		let event = block_event_with_retracted(header.clone(), b1, &*pool.api);
+		block_on(pool.maintain(event));
+		assert_eq!(pool.status().ready, 0);
+
+		let event = ChainEvent::Finalized { hash: header.hash() };
+		block_on(pool.maintain(event));
+
+		header.hash()
+	};
+
+	{
+		let mut stream = futures::executor::block_on_stream(watcher);
+		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2)));
+		assert_eq!(stream.next(), None);
+	}
+}
+
+
 /// This test ensures that transactions from a fork are re-submitted if
 /// the forked block is not part of the retracted blocks. This happens as the
 /// retracted block list only contains the route from the old best to the new
@@ -1005,4 +1065,29 @@ fn import_notification_to_pool_maintain_works() {
 	let evt = import_stream.next().expect("Importing a block leads to an event");
 	block_on(pool.maintain(evt.into()));
 	assert_eq!(pool.status().ready, 0);
+}
+
+// When we prune transactions, we need to make sure that we remove
+#[test]
+fn pruning_a_transaction_should_remove_it_from_best_transaction() {
+	let (pool, _guard, _notifier) = maintained_pool();
+
+	let xt1 = Extrinsic::IncludeData(Vec::new());
+
+	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt1.clone())).expect("1. Imported");
+	let header = pool.api.push_block(1, vec![xt1.clone()]);
+
+	// This will prune `xt1`.
+	block_on(pool.maintain(block_event(header)));
+
+	// Submit the tx again.
+	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("2. Imported");
+
+	let mut iterator = block_on(pool.ready_at(1));
+
+	assert_eq!(iterator.next().unwrap().data, xt1.clone());
+
+	// If the tx was not removed from the best txs, the tx would be
+	// returned a second time by the iterator.
+	assert!(iterator.next().is_none());
 }
