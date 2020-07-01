@@ -3420,6 +3420,7 @@ version = "0.8.0-rc4"
 dependencies = [
  "derive_more",
  "fs_extra",
+ "futures 0.3.5",
  "hash-db",
  "hex",
  "kvdb",
@@ -3432,13 +3433,19 @@ dependencies = [
  "parity-db",
  "parity-util-mem",
  "rand 0.7.3",
+ "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
  "serde",
  "serde_json",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-tracker",
+ "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
+ "sp-timestamp",
+ "sp-transaction-pool",
  "sp-trie",
  "structopt",
  "tempfile",
@@ -7151,6 +7158,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "secrecy"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9182278ed645df3477a9c27bfee0621c621aa16f6972635f7f795dae3d81070f"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "security-framework"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7687,6 +7703,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "regex",
  "schnorrkel",
+ "secrecy",
  "serde",
  "serde_json",
  "sha2",

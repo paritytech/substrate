@@ -593,7 +593,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	voters: &Arc<VoterSet<AuthorityId>>,
 	client: Arc<C>,
 	network: &NetworkBridge<Block, N>,
-	keystore: &Option<BareCryptoStorePtr>,
+	keystore: Option<&BareCryptoStorePtr>,
 	metrics: Option<until_imported::Metrics>,
 ) -> (
 	impl Stream<
@@ -609,7 +609,7 @@ fn global_communication<BE, Block: BlockT, C, N>(
 	N: NetworkT<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	let is_voter = is_voter(voters, keystore.as_ref()).is_some();
+	let is_voter = is_voter(voters, keystore).is_some();
 
 	// verification stream
 	let (global_in, global_out) = network.global_communication(
@@ -907,7 +907,7 @@ where
 					&self.env.voters,
 					self.env.client.clone(),
 					&self.env.network,
-					&self.env.config.keystore,
+					self.env.config.keystore.as_ref(),
 					self.metrics.as_ref().map(|m| m.until_imported.clone()),
 				);
 
