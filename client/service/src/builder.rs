@@ -519,8 +519,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	}
 
 	/// Consume the builder and return the parts needed for chain operations.
-	pub fn to_chain_ops_parts(self) -> (Arc<TCl>, Arc<Backend>, TImpQu) {
-		(self.client, self.backend, self.import_queue)
+	pub fn to_chain_ops_parts(self) -> (Arc<TCl>, Arc<Backend>, TImpQu, TaskManager) {
+		(self.client, self.backend, self.import_queue, self.task_manager)
 	}
 
 	/// Defines which head-of-chain strategy to use.

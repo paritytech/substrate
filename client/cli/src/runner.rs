@@ -178,7 +178,7 @@ impl<C: SubstrateCli> Runner<C> {
 		-> Result<()>
 	where
 		BU: FnOnce(Configuration)
-			-> sc_service::error::Result<(Arc<CL>, Arc<BA>, IQ)>,
+			-> sc_service::error::Result<(Arc<CL>, Arc<BA>, IQ, TaskManager)>,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
@@ -195,24 +195,24 @@ impl<C: SubstrateCli> Runner<C> {
 		match subcommand {
 			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
 			Subcommand::ExportBlocks(cmd) => {
-				let (client, _, _) = builder(self.config)?;
+				let (client, _, _, _) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, db_config))
 			}
 			Subcommand::ImportBlocks(cmd) => {
-				let (client, _, import_queue) = builder(self.config)?;
+				let (client, _, import_queue, _task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue))
 			}
 			Subcommand::CheckBlock(cmd) => {
-				let (client, _, import_queue) = builder(self.config)?;
+				let (client, _, import_queue, _task_manager) = builder(self.config)?;
 				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue))
 			}
 			Subcommand::Revert(cmd) => {
-				let (client, backend, _) = builder(self.config)?;
+				let (client, backend, _, _) = builder(self.config)?;
 				cmd.run(client, backend)
 			},
 			Subcommand::PurgeChain(cmd) => cmd.run(db_config),
 			Subcommand::ExportState(cmd) => {
-				let (client, _, _) = builder(self.config)?;
+				let (client, _, _, _) = builder(self.config)?;
 				cmd.run(client, chain_spec)
 			},
 		}
