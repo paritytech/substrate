@@ -44,7 +44,7 @@ pub struct ExportStateCmd {
 
 impl ExportStateCmd {
 	/// Run the `export-state` command
-	pub fn run<B, BA, C>(
+	pub async fn run<B, BA, C>(
 		&self,
 		client: Arc<C>,
 		mut input_spec: Box<dyn sc_service::ChainSpec>,
