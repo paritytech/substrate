@@ -1426,7 +1426,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let block_announce_validator = if let Some(f) = block_announce_validator_builder {
 		f(client.clone())
 	} else {
-		Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+		Box::new(DefaultBlockAnnounceValidator)
 	};
 
 	let network_params = sc_network::config::Params {
