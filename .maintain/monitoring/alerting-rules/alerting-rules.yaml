@@ -73,24 +73,33 @@ groups:
   # Transaction queue
   ##############################################################################
 
-  - alert: TransactionQueueSize
-    expr: 'polkadot_sub_txpool_validations_scheduled -
-    polkadot_sub_txpool_validations_finished > 10'
+  - alert: TransactionQueueSizeIncreasing
+    expr: 'increase(polkadot_sub_txpool_validations_scheduled[5m]) -
+    increase(polkadot_sub_txpool_validations_finished[5m]) > 0'
     for: 10m
     labels:
       severity: warning
     annotations:
-      message: 'The node {{ $labels.instance }} has more than 10 transactions in
-      the queue for more than 10 minutes'
-  - alert: TransactionQueueSize
-    expr: 'polkadot_sub_txpool_validations_scheduled -
-    polkadot_sub_txpool_validations_finished > 10'
+      message: 'The transaction pool size on node {{ $labels.instance }} has
+      been monotonically increasing for the last 10 minutes.'
+  - alert: TransactionQueueSizeIncreasing
+    expr: 'increase(polkadot_sub_txpool_validations_scheduled[5m]) -
+    increase(polkadot_sub_txpool_validations_finished[5m]) > 0'
     for: 30m
     labels:
       severity: critical
     annotations:
-      message: 'The node {{ $labels.instance }} has more than 10 transactions in
-      the queue for more than 30 minutes'
+      message: 'The transaction pool size on node {{ $labels.instance }} has
+      been monotonically increasing for the last 30 minutes.'
+  - alert: TransactionQueueSizeHigh
+    expr: 'polkadot_sub_txpool_validations_scheduled -
+    polkadot_sub_txpool_validations_finished > 10000'
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      message: 'The transaction pool size on node {{ $labels.instance }} has
+      been above 10_000 for the last 5 minutes.'
 
   ##############################################################################
   # Networking
