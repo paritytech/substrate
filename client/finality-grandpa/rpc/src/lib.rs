@@ -402,22 +402,50 @@ mod tests {
 		let (io, subscribers) = setup_io_handler(TestVoterState);
 		let (meta, receiver) = setup_session();
 
+		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
 
 		assert!(subscribers.len() == 0);
 		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
 		assert!(subscribers.len() == 1);
-		dbg!(&resp);
 
+		let sub_id = match resp {
+			Output::Success(success) => success.result,
+			_ => panic!(),
+		};
+
+		// Notify with a header and justification
 		let (block_header, justification) = create_justification();
 		let _ = subscribers.notify((block_header, justification)).unwrap();
 
-		// WIP: we want to just poll a single time, ensuring we get the justification pushed.
+		// FIXME: we want to just poll a single time, ensuring we get the justification pushed.
 		let _ = receiver.for_each(|item| {
 			dbg!(item);
 			Ok(())
 		}).wait().ok(); // FIXME: hangs!
 
-		// WIP: unsubscribe and notify again to make sure we don't send anything.
+		// Unsubscribe
+		let unsub_req = format!(
+			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
+			sub_id
+		);
+		assert!(subscribers.len() == 1);
+		assert_eq!(
+			io.handle_request_sync(&unsub_req, meta.clone()),
+			Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
+		);
+		assert!(subscribers.len() == 0);
+
+		// Notify with another header and justification
+		// TODO: make the second justification different.
+		let (block_header, justification) = create_justification();
+		let _ = subscribers.notify((block_header, justification)).unwrap();
+
+		// FIXME: nothing should be sent since we unsubscribed.
+		//let _ = receiver.for_each(|item| {
+		//	dbg!(item);
+		//	Ok(())
+		//}).wait().ok(); // FIXME: hangs!
 	}
 }
