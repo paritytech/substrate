@@ -823,7 +823,7 @@ mod tests {
 	(func (export "call")
 		(local $buf_size i32)
 
-		;; Load a storage value into the scratch buf.
+		;; Load a storage value into contract memory.
 		(call $assert
 			(i32.eq
 				(call $ext_get_storage
@@ -875,8 +875,7 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: [0x22; 32].to_vec() });
 	}
 
-	/// calls `ext_caller`, loads the address from the scratch buffer and
-	/// compares it with the constant 42.
+	/// calls `ext_caller` and compares the result with the constant 42.
 	const CODE_CALLER: &str = r#"
 (module
 	(import "env" "ext_caller" (func $ext_caller (param i32 i32)))
@@ -929,8 +928,7 @@ mod tests {
 		).unwrap();
 	}
 
-	/// calls `ext_address`, loads the address from the scratch buffer and
-	/// compares it with the constant 69.
+	/// calls `ext_address` and compares the result with the constant 69.
 	const CODE_ADDRESS: &str = r#"
 (module
 	(import "env" "ext_address" (func $ext_address (param i32 i32)))
@@ -1588,8 +1586,7 @@ mod tests {
 		);
 	}
 
-	/// calls `ext_block_number`, loads the current block number from the scratch buffer and
-	/// compares it with the constant 121.
+	/// calls `ext_block_number` compares the result with the constant 121.
 	const CODE_BLOCK_NUMBER: &str = r#"
 (module
 	(import "env" "ext_block_number" (func $ext_block_number (param i32 i32)))

@@ -24,8 +24,7 @@
 
 	;; Called by the tests.
 	;;
-	;; The `call` function expects data in a certain format in the scratch
-	;; buffer.
+	;; The `call` function expects data in a certain format in the input buffer.
 	;;
 	;; 1. The first byte encodes an identifier for the crypto hash function
 	;;    under test. (*)
@@ -33,7 +32,7 @@
 	;;    crypto hash function chosen in 1.
 	;;
 	;; The `deploy` function then computes the chosen crypto hash function
-	;; given the input and puts the result back into the scratch buffer.
+	;; given the input and puts the result into the output buffer.
 	;; After contract execution the test driver then asserts that the returned
 	;; values are equal to the expected bytes for the input and chosen hash
 	;; function.

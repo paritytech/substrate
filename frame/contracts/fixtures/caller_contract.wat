@@ -185,7 +185,7 @@
 			(i32.eq (get_local $exit_code) (i32.const 2)) ;; ReturnCode::CalleeReverted
 		)
 
-		;; Check that scratch buffer contains the expected return data.
+		;; Check that output buffer contains the expected return data.
 		(call $assert
 			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 8))) (i32.const 3))
 		)
@@ -258,7 +258,7 @@
 			(i32.eq (get_local $exit_code) (i32.const 0)) ;; ReturnCode::Success
 		)
 
-		;; Check that scratch buffer contains the expected return data.
+		;; Check that the output buffer contains the expected return data.
 		(call $assert
 			(i32.eq (i32.load (i32.sub (get_local $sp) (i32.const 8))) (i32.const 4))
 		)
