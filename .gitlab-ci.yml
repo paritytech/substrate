@@ -94,6 +94,11 @@ default:
     variables:
       - $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/  # i.e add [chaos:basic] in commit message to trigger
 
+.test-only:                       &test-only
+  only:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /\[chaos:test\]/  # i.e add [chaos:basic] in commit message to trigger
+
 
 #### stage:                       .pre
 
@@ -421,6 +426,7 @@ build-linux-substrate:             &build-binary
   <<:                              *docker-env
   <<:                              *build-only
   <<:                              *chaos-only
+  <<:                              *test-only
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
