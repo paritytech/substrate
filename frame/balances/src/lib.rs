@@ -201,6 +201,14 @@ pub trait BalancesWeight {
 	fn set_balance_killing(u: u32, e: u32, ) -> Weight;
 }
 
+impl BalancesWeight for () {
+	fn transfer(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
+	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
+	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
+	fn set_balance(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
+	fn set_balance_killing(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
+}
+
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
