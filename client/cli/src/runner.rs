@@ -94,7 +94,9 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 }
 
 fn run_until_exit<FUT, ERR>(
-	mut tokio_runtime: tokio::runtime::Runtime, future: FUT, mut task_manager: Option<TaskManager>
+	mut tokio_runtime: tokio::runtime::Runtime, 
+	future: FUT, 
+	mut task_manager: TaskManager,
 ) -> Result<()>
 where
 	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
@@ -105,10 +107,7 @@ where
 
 	tokio_runtime.block_on(main(f)).map_err(|e| e.to_string())?;
 
-	if let Some(task_manager) = task_manager.as_mut() {
-		task_manager.terminate();
-	}
-
+	task_manager.terminate();
 	drop(tokio_runtime);
 
 	Ok(())
@@ -204,34 +203,24 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::BuildSpec(cmd) => cmd.run(chain_spec, network_config),
 			Subcommand::ExportBlocks(cmd) => {
 				let (client, _, _, task_manager) = builder(self.config)?;
-				run_until_exit(
-					self.tokio_runtime, cmd.run(client, db_config), Some(task_manager)
-				)
+				run_until_exit(self.tokio_runtime, cmd.run(client, db_config), task_manager)
 			}
 			Subcommand::ImportBlocks(cmd) => {
 				let (client, _, import_queue, task_manager) = builder(self.config)?;
-				run_until_exit(
-					self.tokio_runtime, cmd.run(client, import_queue), Some(task_manager)
-				)
+				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue), task_manager)
 			}
 			Subcommand::CheckBlock(cmd) => {
 				let (client, _, import_queue, task_manager) = builder(self.config)?;
-				run_until_exit(
-					self.tokio_runtime, cmd.run(client, import_queue), Some(task_manager)
-				)
+				run_until_exit(self.tokio_runtime, cmd.run(client, import_queue), task_manager)
 			}
 			Subcommand::Revert(cmd) => {
-				let (client, backend, _, mut task_manager) = builder(self.config)?;
-				cmd.run(client, backend)?;
-				task_manager.terminate();
-				Ok(())
+				let (client, backend, _, task_manager) = builder(self.config)?;
+				run_until_exit(self.tokio_runtime, cmd.run(client, backend), task_manager)
 			},
 			Subcommand::PurgeChain(cmd) => cmd.run(db_config),
 			Subcommand::ExportState(cmd) => {
-				let (client, _, _, mut task_manager) = builder(self.config)?;
-				cmd.run(client, chain_spec)?;
-				task_manager.terminate();
-				Ok(())
+				let (client, _, _, task_manager) = builder(self.config)?;
+				run_until_exit(self.tokio_runtime, cmd.run(client, chain_spec), task_manager)
 			},
 		}
 	}
@@ -258,11 +247,14 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives
 	/// the signal SIGTERM or SIGINT
-	pub fn async_run<FUT>(self, runner: impl FnOnce(Configuration) -> FUT) -> Result<()>
+	pub fn async_run<FUT>(
+		self, runner: impl FnOnce(Configuration) -> Result<(FUT, TaskManager)>,
+	) -> Result<()>
 	where
 		FUT: Future<Output = Result<()>>,
 	{
-		run_until_exit(self.tokio_runtime, runner(self.config), None)
+		let (future, task_manager) = runner(self.config)?;
+		run_until_exit(self.tokio_runtime, future, task_manager)
 	}
 
 	/// Get an immutable reference to the node Configuration

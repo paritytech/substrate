@@ -186,6 +186,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	new_full_parts(config).map(|parts| parts.0)
 }
 
+/// Create the initial parts of a full node.
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
 ) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
@@ -253,6 +254,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	Ok((client, backend, keystore, task_manager))
 }
 
+/// Create the initial parts of a light node.
 pub fn new_light_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration
 ) -> Result<TLightParts<TBl, TRtApi, TExecDisp>, Error> where
@@ -355,34 +357,41 @@ pub fn new_client<E, Block, RA>(
 	))
 }
 
-pub struct ServiceParams<'a, TBl, TCl, TFchr, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend> {
+/// Parameters to pass into `build`.
+pub struct ServiceParams<'a, TBl: BlockT, TCl, TImpQu, TExPool, TRpc, Backend> {
+	/// The service configuration.
 	pub config: Configuration,
+	/// A shared client returned by `new_full_parts`/`new_light_parts`.
 	pub client: Arc<TCl>,
+	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
 	pub backend: Arc<Backend>,
+	/// A task manager returned by `new_full_parts`/`new_light_parts`.
 	pub task_manager: &'a mut TaskManager,
+	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
 	pub keystore: Arc<RwLock<Keystore>>,
-	pub on_demand: Option<TFchr>,
+	/// An optional, shared data fetcher for light clients.
+	pub on_demand: Option<Arc<OnDemand<TBl>>>,
+	/// An import queue.
 	pub import_queue: TImpQu,
-	pub finality_proof_request_builder: Option<TFprb>,
-	pub finality_proof_provider: Option<TFpp>,
+	/// An optional finality proof request builder.
+	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
+	/// An optional, shared finality proof request provider.
+	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
+	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
+	/// A RPC extension builder. Use `NoopRpcExtensionBuilder` if you just want to pass in the
+	/// extensions directly.
 	pub rpc_extensions_builder: Box<dyn RpcExtensionBuilder<Output = TRpc> + Send>,
-	pub remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
+	/// An optional, shared remote blockchain instance. Used for light clients.
+	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
+	/// A block annouce validator builder.
 	pub block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 }
 
-pub fn build_common<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(builder: ServiceParams<
-	TBl,
-	TCl,
-	Arc<OnDemand<TBl>>,
-	TImpQu,
-	BoxFinalityProofRequestBuilder<TBl>,
-	Arc<dyn FinalityProofProvider<TBl>>,
-	TExPool,
-	TRpc,
-	TBackend,
->)
-	-> Result<ServiceComponents<TBl, TBackend, TCl>, Error>
+/// Put together the components of a service from the parameters.
+pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
+	builder: ServiceParams<TBl, TCl, TImpQu, TExPool, TRpc, TBackend>,
+) -> Result<ServiceComponents<TBl, TBackend, TCl>, Error>
 	where
 		TCl: ProvideRuntimeApi<TBl> + HeaderMetadata<TBl, Error=sp_blockchain::Error> + Chain<TBl> +
 		BlockBackend<TBl> + BlockIdTo<TBl, Error=sp_blockchain::Error> + ProofProvider<TBl> +
@@ -414,7 +423,7 @@ pub fn build_common<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(builder: ServiceP
 		finality_proof_provider,
 		transaction_pool,
 		rpc_extensions_builder,
-		remote_backend,
+		remote_blockchain,
 		block_announce_validator_builder,
 	} = builder;
 
@@ -479,7 +488,7 @@ pub fn build_common<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(builder: ServiceP
 				config.role.is_authority(),
 				client.clone(),
 				offchain,
-				Clone::clone(&spawn_handle),
+				task_manager.spawn_handle(),
 				network.clone()
 			)
 		);
@@ -517,8 +526,8 @@ pub fn build_common<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(builder: ServiceP
 
 	// RPC
 	let gen_handler = |deny_unsafe: sc_rpc::DenyUnsafe| gen_handler(
-		deny_unsafe, &config, Clone::clone(&spawn_handle), client.clone(), transaction_pool.clone(),
-		keystore.clone(), on_demand.clone(), remote_backend.clone(), &*rpc_extensions_builder,
+		deny_unsafe, &config, task_manager.spawn_handle(), client.clone(), transaction_pool.clone(),
+		keystore.clone(), on_demand.clone(), remote_blockchain.clone(), &*rpc_extensions_builder,
 		offchain_storage.clone(), system_rpc_tx.clone()
 	);
 	let rpc = start_rpc_servers(&config, gen_handler)?;
@@ -536,7 +545,7 @@ pub fn build_common<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(builder: ServiceP
 
 		build_telemetry(
 			&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone(),
-			Clone::clone(&spawn_handle), genesis_hash,
+			task_manager.spawn_handle(), genesis_hash,
 		)
 	});
 
@@ -692,7 +701,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	transaction_pool: Arc<TExPool>,
 	keystore: Arc<RwLock<Keystore>>,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
-	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
+	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>
@@ -722,19 +731,19 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let subscriptions = SubscriptionManager::new(Arc::new(spawn_handle));
 
-	let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
-		(remote_backend, on_demand) {
+	let (chain, state, child_state) = if let (Some(remote_blockchain), Some(on_demand)) =
+		(remote_blockchain, on_demand) {
 		// Light clients
 		let chain = sc_rpc::chain::new_light(
 			client.clone(),
 			subscriptions.clone(),
-			remote_backend.clone(),
+			remote_blockchain.clone(),
 			on_demand.clone()
 		);
 		let (state, child_state) = sc_rpc::state::new_light(
 			client.clone(),
 			subscriptions.clone(),
-			remote_backend.clone(),
+			remote_blockchain.clone(),
 			on_demand.clone()
 		);
 		(chain, state, child_state)

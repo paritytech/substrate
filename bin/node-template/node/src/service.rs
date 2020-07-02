@@ -38,7 +38,7 @@ macro_rules! new_full_up_to_import_queue {
 		let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 			$config.transaction_pool.clone(),
 			std::sync::Arc::new(pool_api),
-			$config.prometheus_registry().as_ref(),
+			$config.prometheus_registry(),
 			task_manager.spawn_handle(),
 			client.clone(),
 		);
@@ -59,7 +59,7 @@ macro_rules! new_full_up_to_import_queue {
 			client.clone(),
 			inherent_data_providers.clone(),
 			&task_manager.spawn_handle(),
-			$config.prometheus_registry().as_ref(),
+			$config.prometheus_registry(),
 		)?;
 
 		(
@@ -79,17 +79,24 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
 	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
 	
-	let prometheus_registry = config.prometheus_registry();
-
-	let role = config.role.clone();
-	let force_authoring = config.force_authoring;
-	let name = config.network.node_name.clone();
-	let enable_grandpa = !config.disable_grandpa;
+	let (
+		role,
+		force_authoring,
+		name,
+		enable_grandpa,
+		prometheus_registry,
+	) = (
+		config.role.clone(),
+		config.force_authoring,
+		config.network.node_name.clone(),
+		!config.disable_grandpa,
+		config.prometheus_registry().cloned(),
+	);
 
 	let ServiceComponents {
 		network,
 		telemetry_on_connect_sinks, ..
-	 } = sc_service::build_common(sc_service::ServiceParams {
+	 } = sc_service::build(sc_service::ServiceParams {
 		config: config,
 		backend: backend.clone(),
 		client: client.clone(),
@@ -100,7 +107,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		import_queue: import_queue,
 		keystore: keystore.clone(),
 		task_manager: &mut task_manager,
-		remote_backend: None,
+		remote_blockchain: None,
 		rpc_extensions_builder: Box::new(|_| ()),
 		transaction_pool: transaction_pool.clone(),
 	 })?;
@@ -197,7 +204,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	let transaction_pool = sc_transaction_pool::BasicPool::new_light(
 		config.transaction_pool.clone(),
 		transaction_pool_api,
-		config.prometheus_registry().as_ref(),
+		config.prometheus_registry(),
 		task_manager.spawn_handle(),
 	);
 
@@ -217,20 +224,20 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		client.clone(),
 		InherentDataProviders::new(),
 		&task_manager.spawn_handle(),
-		config.prometheus_registry().as_ref(),
+		config.prometheus_registry(),
 	)?;
 
 	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(
 		backend.clone(), client.clone() as Arc<_>
 	));
 
-	sc_service::build_common(sc_service::ServiceParams {	
+	sc_service::build(sc_service::ServiceParams {	
 		block_announce_validator_builder: None,
 		finality_proof_request_builder: Some(finality_proof_request_builder),
 		finality_proof_provider: Some(finality_proof_provider),
 		on_demand: Some(on_demand),
 		task_manager: &mut task_manager,
-		remote_backend: Some(backend.remote_blockchain()),
+		remote_blockchain: Some(backend.remote_blockchain()),
 		rpc_extensions_builder: Box::new(|_| ()),
 		transaction_pool: Arc::new(transaction_pool),
 		config, client, import_queue, keystore, backend,

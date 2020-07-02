@@ -54,7 +54,7 @@ impl BuildSpecCmd {
 	pub fn run(
 		&self,
 		mut spec: Box<dyn ChainSpec>,
-		network_config: NetworkConfiguration
+		network_config: NetworkConfiguration,
 	) -> error::Result<()> {
 		info!("Building chain spec");
 		let raw_output = self.raw;

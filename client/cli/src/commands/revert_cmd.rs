@@ -45,8 +45,10 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BA, C>(
-		&self, client: Arc<C>, backend: Arc<BA>
+	pub async fn run<B, BA, C>(
+		&self,
+		client: Arc<C>,
+		backend: Arc<BA>,
 	) -> error::Result<()>
 	where
 		B: BlockT,

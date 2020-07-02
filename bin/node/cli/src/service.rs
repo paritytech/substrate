@@ -166,20 +166,20 @@ pub fn new_full_base(
 		role,
 		force_authoring,
 		name,
-		disable_grandpa,
+		enable_grandpa,
 		prometheus_registry,
 	) = (
 		config.role.clone(),
 		config.force_authoring,
 		config.network.node_name.clone(),
-		config.disable_grandpa,
+		!config.disable_grandpa,
 		config.prometheus_registry().cloned(),
 	);
 
 	let ServiceComponents {
 		network,
 		telemetry_on_connect_sinks, ..
-	} = sc_service::build_common(sc_service::ServiceParams {
+	} = sc_service::build(sc_service::ServiceParams {
 		config,
 		backend: backend.clone(),
 		client: client.clone(),
@@ -190,7 +190,7 @@ pub fn new_full_base(
 		import_queue: import_queue,
 		keystore: keystore.clone(),
 		task_manager: &mut task_manager,
-		remote_backend: None,
+		remote_blockchain: None,
 		rpc_extensions_builder,
 		transaction_pool: transaction_pool.clone(),
 	})?;
@@ -278,7 +278,6 @@ pub fn new_full_base(
 		is_authority: role.is_network_authority(),
 	};
 
-	let enable_grandpa = !disable_grandpa;
 	if enable_grandpa {
 		// start the full GRANDPA voter
 		// NOTE: non-authorities could run the GRANDPA observer protocol, but at
@@ -388,13 +387,13 @@ pub fn new_light_base(config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let ServiceComponents { rpc_handlers, network, .. } = sc_service::build_common(sc_service::ServiceParams {	
+	let ServiceComponents { rpc_handlers, network, .. } = sc_service::build(sc_service::ServiceParams {	
 		block_announce_validator_builder: None,
 		finality_proof_request_builder: Some(finality_proof_request_builder),
 		finality_proof_provider: Some(finality_proof_provider),
 		on_demand: Some(on_demand),
 		task_manager: &mut task_manager,
-		remote_backend: Some(backend.remote_blockchain()),
+		remote_blockchain: Some(backend.remote_blockchain()),
 		rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
 		client: client.clone(),
 		transaction_pool: transaction_pool.clone(),
