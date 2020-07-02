@@ -861,13 +861,13 @@ pub trait TestNetFactory: Sized {
 		);
 	}
 
-	/// Polls the testnet. Processes all the pending actions and returns `NotReady`.
+	/// Polls the testnet. Processes all the pending actions.
 	fn poll(&mut self, cx: &mut FutureContext) {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				trace!(target: "sync", "-- Polling {}", peer.id());
-				if let Poll::Ready(res) = Pin::new(&mut peer.network).poll(cx) {
-					res.unwrap();
+				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
+					panic!("NetworkWorker has terminated unexpectedly.")
 				}
 				trace!(target: "sync", "-- Polling complete {}", peer.id());
 
