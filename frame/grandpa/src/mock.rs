@@ -118,6 +118,7 @@ impl frame_system::Trait for Test {
 	type AccountData = balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl<C> system::offchain::SendTransactionTypes<C> for Test

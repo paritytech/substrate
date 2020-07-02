@@ -81,6 +81,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl_opaque_keys! {
@@ -99,12 +100,14 @@ impl pallet_session::Trait for Test {
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = Babe;
+	type WeightInfo = ();
 }
 
 impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 impl Trait for Test {

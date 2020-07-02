@@ -83,6 +83,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -93,6 +94,7 @@ impl pallet_balances::Trait for Test {
 	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
@@ -113,6 +115,7 @@ impl Filter<Call> for TestBaseCallFilter {
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
+	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;

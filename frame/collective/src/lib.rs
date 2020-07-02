@@ -1065,6 +1065,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
