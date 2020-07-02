@@ -41,11 +41,12 @@ pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::pin::Pin;
 use std::sync::Arc;
-use std::collections::HashMap;
-use futures::future::Future;
+use std::collections::{HashSet, HashMap};
+use futures::{future::Future, stream::StreamExt};
 use sp_core::storage::ChildInfo;
 use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
+use sc_client_api::BlockchainEvents;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = sc_light::Backend<
@@ -305,6 +306,39 @@ impl RpcHandlersExt for RpcHandlers {
 			let res = future.await;
 
 			(res, mem, rx)
+		})
+	}
+}
+
+/// An extension trait for `BlockchainEvents`.
+pub trait BlockchainEventsExt<C, B>
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
+	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+impl<C, B> BlockchainEventsExt<C, B> for C
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		assert!(count > 0, "'count' argument must be greater than 0");
+
+		let mut import_notification_stream = self.import_notification_stream();
+		let mut blocks = HashSet::new();
+
+		Box::pin(async move {
+			while let Some(notification) = import_notification_stream.next().await {
+				blocks.insert(notification.hash);
+				if blocks.len() == count {
+					break;
+				}
+			}
 		})
 	}
 }
