@@ -540,6 +540,16 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		s
 	}
 
+	fn notify_slot(
+		&self,
+		_parent_header: &B::Header,
+		slot_number: SlotNumber,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+	) {
+		self.slot_notification_sinks.lock()
+			.retain(|sink| sink.unbounded_send((slot_number, epoch_descriptor.clone())).is_ok());
+	}
+
 	fn pre_digest_data(
 		&self,
 		_slot_number: u64,
