@@ -1151,7 +1151,7 @@ mod tests {
 		ord_parameter_types,
 	};
 	use sp_core::H256;
-	use frame_system::EnsureSignedBy;
+	use frame_system::{EnsureSignedBy, EnsureOneOf, EnsureRoot};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -1221,6 +1221,16 @@ mod tests {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 	}
+	type EnsureOneOrRoot = EnsureOneOf<
+		u64,
+		EnsureRoot<u64>,
+		EnsureSignedBy<One, u64>
+	>;
+	type EnsureTwoOrRoot = EnsureOneOf<
+		u64,
+		EnsureRoot<u64>,
+		EnsureSignedBy<Two, u64>
+	>;
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
@@ -1231,8 +1241,8 @@ mod tests {
 		type MaxSubAccounts = MaxSubAccounts;
 		type MaxAdditionalFields = MaxAdditionalFields;
 		type MaxRegistrars = MaxRegistrars;
-		type RegistrarOrigin = EnsureSignedBy<One, u64>;
-		type ForceOrigin = EnsureSignedBy<Two, u64>;
+		type RegistrarOrigin = EnsureOneOrRoot;
+		type ForceOrigin = EnsureTwoOrRoot;
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
