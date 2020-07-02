@@ -97,7 +97,7 @@ impl Default for BlockLength {
 
 impl BlockLength {
 	/// Create new `BlockLength` with `max` for every class.
-	pub fn new(max: u32) -> Self {
+	pub fn max(max: u32) -> Self {
 		Self {
 			max: ForDispatchClass::new(max),
 		}
@@ -106,7 +106,7 @@ impl BlockLength {
 	/// Create new `BlockLength` with `max` for `Operational` & `Mandatory`
 	/// and `normal * max` for `Normal`.
 	pub fn max_with_normal_ratio(max: u32, normal: Perbill) -> Self {
-		let mut len = BlockLength::new(max);
+		let mut len = BlockLength::max(max);
 		len.max.normal = normal * max;
 		len
 	}
@@ -315,6 +315,15 @@ impl BlockWeightsBuilder {
 	) -> Self {
 		self.weights.max_for_class.set(max_allowance.into(), class.into());
  		self
+	}
+
+	/// Set maximal block total weight for `Normal` and `Operational` dispatch class.
+	pub fn max_for_non_mandatory(
+		mut self,
+		max_allowance: Weight,
+	) -> Self {
+		self.max_for_class(max_allowance, DispatchClass::Normal)
+			.max_for_class(max_allowance, DispatchClass::Operational)
 	}
 
 	/// Set reserved allowance for given dispatch class.

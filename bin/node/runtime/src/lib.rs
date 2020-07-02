@@ -34,7 +34,8 @@ use frame_support::{
 };
 use frame_system::{
 	EnsureRoot, EnsureOneOf,
-	weights::{BlockWeights, BlockLength, ExtrinsicDispatchClass};
+	weights::{BlockWeights, BlockLength, ExtrinsicDispatchClass}
+};
 use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
 use sp_core::{
@@ -137,7 +138,7 @@ impl OnUnbalanced<NegativeImbalance> for DealWithFees {
 const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// We allow `Normal` extrinsics to fill up the block up to 75%, the rest can be used
 /// by  Operational  extrinsics.
-const NORMAL_DISPATCH_RATIO: Perbill = Perbil::from_percent(75);
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time.
 const MAXIMUM_BLOCK_WEIGHT: Weight = 2 * WEIGHT_PER_SECOND;
 
@@ -262,7 +263,8 @@ impl pallet_proxy::Trait for Runtime {
 }
 
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		RuntimeBlockWeights::get().max_block;
 }
 
 impl pallet_scheduler::Trait for Runtime {
@@ -686,7 +688,8 @@ impl pallet_im_online::Trait for Runtime {
 }
 
 parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * MaximumBlockWeight::get();
+	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) *
+		RuntimeBlockWeights::get().max_block;
 }
 
 impl pallet_offences::Trait for Runtime {
