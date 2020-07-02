@@ -104,7 +104,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		protocol_id: config::ProtocolId::from(&b"/test-protocol-name"[..]),
 		import_queue,
 		block_announce_validator: Box::new(
-			sp_consensus::block_validation::DefaultBlockAnnounceValidator::new(client.clone()),
+			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
 		),
 		metrics_registry: None,
 	})

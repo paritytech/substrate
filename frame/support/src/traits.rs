@@ -329,6 +329,10 @@ pub trait Happened<T> {
 	fn happened(t: &T);
 }
 
+impl<T> Happened<T> for () {
+	fn happened(_: &T) {}
+}
+
 /// A shim for placing around a storage item in order to use it as a `StoredValue`. Ideally this
 /// wouldn't be needed as `StorageValue`s should blanket implement `StoredValue`s, however this
 /// would break the ability to have custom impls of `StoredValue`. The other workaround is to
@@ -1427,10 +1431,18 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	}
 }
 
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
+/// The runtime upgrade trait.
+///
+/// Implementing this lets you express what should happen when the runtime upgrades,
+/// and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
 	/// Perform a module upgrade.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
@@ -1488,7 +1500,7 @@ pub mod schedule {
 	pub const LOWEST_PRIORITY: Priority = 255;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call> {
+	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
@@ -1501,6 +1513,7 @@ pub mod schedule {
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, DispatchError>;
 
@@ -1518,7 +1531,7 @@ pub mod schedule {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call> {
+	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
@@ -1530,6 +1543,7 @@ pub mod schedule {
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, ()>;
 
@@ -1593,6 +1607,9 @@ pub trait OriginTrait: Sized {
 
 	/// Filter the call, if false then call is filtered out.
 	fn filter_call(&self, call: &Self::Call) -> bool;
+
+	/// Get the caller.
+	fn caller(&self) -> &Self::PalletsOrigin;
 }
 
 /// Trait to be used when types are exactly same.

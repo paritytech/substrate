@@ -5,6 +5,7 @@ use serde::{Serialize, Deserialize};
 use codec::{Encode, Decode};
 use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
+use frame_support::traits::Get;
 use frame_support::storage::{StorageMap, StorageDoubleMap};
 use sha3::{Keccak256, Digest};
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
@@ -91,7 +92,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 	}
 
 	fn chain_id(&self) -> U256 {
-		U256::from(sp_io::misc::chain_id())
+		U256::from(T::ChainId::get())
 	}
 
 	fn exists(&self, _address: H160) -> bool {
