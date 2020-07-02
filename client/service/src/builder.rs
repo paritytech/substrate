@@ -45,15 +45,11 @@ use sc_network::NetworkService;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HashFor, Zero, BlockIdTo,
+	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
-use std::{
-	collections::HashMap,
-	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, pin::Pin
-};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, pin::Pin};
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{LocalTransactionPool, MaintainedTransactionPool};
@@ -67,7 +63,6 @@ use sc_client_api::{
 	proof_provider::ProofProvider,
 	execution_extensions::ExecutionExtensions
 };
-use sp_core::storage::Storage;
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 use crate::{ServiceComponents, TelemetryOnConnectSinks, RpcHandlers, NetworkStatusSinks};
 
@@ -523,6 +518,11 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		self.remote_backend.clone()
 	}
 
+	/// Consume the builder and return the parts needed for chain operations.
+	pub fn to_chain_ops_parts(self) -> (Arc<TCl>, Arc<Backend>, TImpQu, TaskManager) {
+		(self.client, self.backend, self.import_queue, self.task_manager)
+	}
+
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		self,
@@ -838,50 +838,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			marker: self.marker,
 		})
 	}
-}
-
-/// Implemented on `ServiceBuilder`. Allows running block commands, such as import/export/validate
-/// components to the builder.
-pub trait ServiceBuilderCommand {
-	/// Block type this API operates on.
-	type Block: BlockT;
-	/// Native execution dispatch required by some commands.
-	type NativeDispatch: NativeExecutionDispatch + 'static;
-	/// Starts the process of importing blocks.
-	fn import_blocks(
-		self,
-		input: impl Read + Seek + Send + 'static,
-		force: bool,
-		binary: bool,
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
-
-	/// Performs the blocks export.
-	fn export_blocks(
-		self,
-		output: impl Write + 'static,
-		from: NumberFor<Self::Block>,
-		to: Option<NumberFor<Self::Block>>,
-		binary: bool
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
-
-	/// Performs a revert of `blocks` blocks.
-	fn revert_chain(
-		&self,
-		blocks: NumberFor<Self::Block>
-	) -> Result<(), Error>;
-
-	/// Re-validate known block.
-	fn check_block(
-		self,
-		block: BlockId<Self::Block>
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
-
-	/// Export the raw state at the given `block`. If `block` is `None`, the
-	/// best block will be used.
-	fn export_raw_state(
-		&self,
-		block: Option<BlockId<Self::Block>>,
-	) -> Result<Storage, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TSc, TImpQu, TExPool, TRpc, TCl>
@@ -1247,8 +1203,8 @@ fn build_telemetry<TBl: BlockT>(
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
 	let name = config.network.node_name.clone();
-	let impl_name = config.impl_name.to_owned();
-	let version = config.impl_version;
+	let impl_name = config.impl_name.clone();
+	let impl_version = config.impl_version.clone();
 	let chain_name = config.chain_spec.name().to_owned();
 	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 		endpoints,
@@ -1265,7 +1221,7 @@ fn build_telemetry<TBl: BlockT>(
 			telemetry!(SUBSTRATE_INFO; "system.connected";
 				"name" => name.clone(),
 				"implementation" => impl_name.clone(),
-				"version" => version,
+				"version" => impl_version.clone(),
 				"config" => "",
 				"chain" => chain_name.clone(),
 				"genesis_hash" => ?genesis_hash,
@@ -1314,8 +1270,8 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
-		impl_name: config.impl_name.into(),
-		impl_version: config.impl_version.into(),
+		impl_name: config.impl_name.clone(),
+		impl_version: config.impl_version.clone(),
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};

@@ -301,7 +301,7 @@ pub struct EventRecord<E: Parameter + Member, T> {
 }
 
 /// Origin for the System module.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
