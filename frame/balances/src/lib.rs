@@ -190,10 +190,10 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
-	type Weight: BalancesWeight;
+	type Weights: Weights;
 }
 
-pub trait BalancesWeight {
+pub trait Weights {
 	fn transfer(u: u32, e: u32, ) -> Weight;
 	fn transfer_best_case(u: u32, e: u32, ) -> Weight;
 	fn transfer_keep_alive(u: u32, e: u32, ) -> Weight;
@@ -201,7 +201,7 @@ pub trait BalancesWeight {
 	fn set_balance_killing(u: u32, e: u32, ) -> Weight;
 }
 
-impl BalancesWeight for () {
+impl Weights for () {
 	fn transfer(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
 	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
 	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
@@ -226,14 +226,14 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
-	type Weight: BalancesWeight;
+	type Weights: Weights;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
-	type Weight = T::Weight;
+	type Weights = T::Weights;
 }
 
 decl_event!(
@@ -459,7 +459,7 @@ decl_module! {
 		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = T::Weight::transfer(0,0)]
+		#[weight = T::Weights::transfer(0,0)]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -488,7 +488,7 @@ decl_module! {
 		///     - Killing: 35.11 µs
 		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight = T::Weight::set_balance(0, 0)]
+		#[weight = T::Weights::set_balance(0, 0)]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -531,7 +531,7 @@ decl_module! {
 		///   not assumed to be in the overlay.
 		/// # </weight>
 		// TODO: ADD NEW BENCHMARK
-		#[weight = T::Weight::transfer(0,0)]
+		#[weight = T::Weights::transfer(0,0)]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -555,7 +555,7 @@ decl_module! {
 		/// - Base Weight: 51.4 µs
 		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
 		/// #</weight>
-		#[weight = T::Weight::transfer_keep_alive(0,0)]
+		#[weight = T::Weights::transfer_keep_alive(0,0)]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -902,7 +902,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
-	type Weight = T::Weight;
+	type Weights = T::Weights;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where

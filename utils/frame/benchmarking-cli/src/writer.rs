@@ -38,20 +38,14 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 				write!(file, "}}\n").unwrap();
 			}
 
-			// pallet trait import
-			write!(file, "use pallet_{}::{}Weight;\n",
-				pallet_string,
-				uppercase_first_letter(&pallet_string),
-			).unwrap();
-
 			// struct for weights
 			write!(file, "pub struct WeightFor{};\n",
 				uppercase_first_letter(&pallet_string),
 			).unwrap();
 
 			// trait wrapper
-			write!(file, "impl {}Weight for WeightFor{} {{\n",
-				uppercase_first_letter(&pallet_string),
+			write!(file, "impl pallet_{}::Weights for WeightFor{} {{\n",
+				pallet_string,
 				uppercase_first_letter(&pallet_string),
 			).unwrap();
 

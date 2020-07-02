@@ -1,7 +1,6 @@
 use frame_support::weights::{Weight, constants::RocksDbWeight};
-use pallet_balances::BalancesWeight;
 pub struct WeightForBalances;
-impl BalancesWeight for WeightForBalances {
+impl pallet_balances::Weights for WeightForBalances {
 	fn transfer(u: u32, e: u32, ) -> Weight {
 		(574875000 as Weight)
 			.saturating_add((u as Weight).saturating_mul(7000 as Weight))
