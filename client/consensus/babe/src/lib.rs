@@ -370,7 +370,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	babe_link,
 	can_author_with,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
-	impl futures::Future<Output=()>,
+	BabeWorker,
 	sp_consensus::Error,
 > where
 	B: BlockT,
@@ -378,13 +378,13 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		+ HeaderBackend<B> + HeaderMetadata<B, Error = ClientError> + Send + Sync + 'static,
 	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
-	E: Environment<B, Error = Error> + Send + Sync,
+	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>> + Send
 		+ Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
-	SO: SyncOracle + Send + Sync + Clone,
-	CAW: CanAuthorWith<B> + Send,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
+	CAW: CanAuthorWith<B> + Send + 'static,
 {
 	let config = babe_link.config;
 	let worker = BabeSlotWorker {
@@ -406,7 +406,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	)?;
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
-	Ok(sc_consensus_slots::start_slot_worker(
+	let inner = sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
 		worker,
@@ -414,7 +414,24 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		inherent_data_providers,
 		babe_link.time_source,
 		can_author_with,
-	))
+	);
+	Ok(BabeWorker { inner: Box::pin(inner) })
+}
+
+/// Worker for Babe which implements `Future<Output=()>`. This must be polled.
+pub struct BabeWorker {
+	inner: Pin<Box<dyn futures::Future<Output=()>>>,
+}
+
+impl futures::Future for BabeWorker {
+	type Output = ();
+
+	fn poll(
+		mut self: Pin<&mut Self>,
+		cx: &mut futures::task::Context
+	) -> futures::task::Poll<Self::Output> {
+		self.inner.as_mut().poll(cx)
+	}
 }
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
