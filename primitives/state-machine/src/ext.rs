@@ -37,6 +37,10 @@ use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
+const BENCHMARKING_FN: &str = "\
+	This is a special fn only for benchmarking where a database commit happens from the runtime.
+	For that reason client started transactions before calling into runtime are not allowed.
+	Without client transactions the loop condition garantuees the success of the tx close.";
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -147,8 +151,7 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -293,7 +296,7 @@ where
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
 				self.next_storage_key(&overlay_key.0[..])
@@ -317,7 +320,7 @@ where
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
 				self.next_child_storage_key(
@@ -478,21 +481,14 @@ where
 			);
 			root.encode()
 		} else {
+			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
+				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
+				Some(self.backend.child_storage_root(info, delta))
+			} else {
+				None
+			};
 
-			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
-				let (root, is_empty, _) = {
-					let delta = self.overlay.committed.children_default.get(storage_key)
-						.into_iter()
-						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						.chain(
-							self.overlay.prospective.children_default.get(storage_key)
-								.into_iter()
-								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						);
-
-					self.backend.child_storage_root(&child_info, delta)
-				};
-
+			if let Some((root, is_empty, _)) = root {
 				let root = root.encode();
 				// We store update in the overlay in order to be able to use 'self.storage_transaction'
 				// cache. This is brittle as it rely on Ext only querying the trie backend for
@@ -554,20 +550,40 @@ where
 		root.map(|r| r.map(|o| o.encode()))
 	}
 
+	fn storage_start_transaction(&mut self) {
+		self.overlay.start_transaction()
+	}
+
+	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
+		self.mark_dirty();
+		self.overlay.rollback_transaction().map_err(|_| ())
+	}
+
+	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
+		self.overlay.commit_transaction().map_err(|_| ())
+	}
+
 	fn wipe(&mut self) {
-		self.overlay.discard_prospective();
+		for _ in 0..self.overlay.transaction_depth() {
+			self.overlay.rollback_transaction().expect(BENCHMARKING_FN);
+		}
 		self.overlay.drain_storage_changes(
 			&self.backend,
 			None,
 			Default::default(),
 			self.storage_transaction_cache,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.storage_transaction_cache.reset();
-		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
+		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
 	}
 
 	fn commit(&mut self) {
-		self.overlay.commit_prospective();
+		for _ in 0..self.overlay.transaction_depth() {
+			self.overlay.commit_transaction().expect(BENCHMARKING_FN);
+		}
 		let changes = self.overlay.drain_storage_changes(
 			&self.backend,
 			None,
@@ -577,8 +593,24 @@ where
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
+			changes.main_storage_changes,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
-		self.storage_transaction_cache.reset();
+		self.mark_dirty();
+		self.overlay
+			.enter_runtime()
+			.expect("We have reset the overlay above, so we can not be in the runtime; qed");
+	}
+
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.backend.read_write_count()
+	}
+
+	fn reset_read_write_count(&mut self) {
+		self.backend.reset_read_write_count()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+		self.backend.set_whitelist(new)
 	}
 }
 
@@ -677,28 +709,19 @@ mod tests {
 		changes_trie::{
 			Configuration as ChangesTrieConfiguration,
 			InMemoryStorage as TestChangesTrieStorage,
-		}, InMemoryBackend, overlayed_changes::OverlayedValue,
+		}, InMemoryBackend,
 	};
 
 	type TestBackend = InMemoryBackend<Blake2Hasher>;
 	type TestExt<'a> = Ext<'a, Blake2Hasher, u64, TestBackend>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
-		OverlayedChanges {
-			prospective: vec![
-				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
-					value: Some(3u32.encode()),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-				(vec![1], OverlayedValue {
-					value: Some(vec![100].into_iter().collect()),
-					extrinsics: Some(vec![1].into_iter().collect())
-				}),
-			].into_iter().collect(),
-			committed: Default::default(),
-			collect_extrinsics: true,
-			stats: Default::default(),
-		}
+		let mut changes = OverlayedChanges::default();
+		changes.set_collect_extrinsics(true);
+		changes.set_extrinsic_index(1);
+		changes.set_storage(vec![1], Some(vec![100]));
+		changes.set_storage(EXTRINSIC_INDEX.to_vec(), Some(3u32.encode()));
+		changes
 	}
 
 	fn prepare_offchain_overlay_with_changes() -> OffchainOverlayedChanges {
@@ -755,7 +778,8 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let mut offchain_overlay = prepare_offchain_overlay_with_changes();
 		let mut cache = StorageTransactionCache::default();
-		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
+		overlay.set_collect_extrinsics(false);
+		overlay.set_storage(vec![1], None);
 		let storage = TestChangesTrieStorage::with_blocks(vec![(99, Default::default())]);
 		let state = Some(ChangesTrieState::new(changes_trie_config(), Zero::zero(), &storage));
 		let backend = TestBackend::default();

@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,11 +15,12 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use sc_service::config::TransactionPoolOptions;
 use structopt::StructOpt;
 
 /// Parameters used to create the pool configuration.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
 	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]

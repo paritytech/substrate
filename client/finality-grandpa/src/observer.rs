@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -25,7 +26,7 @@ use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
-
+use sp_core::traits::BareCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
 use sp_utils::mpsc::TracingUnboundedReceiver;
@@ -210,7 +211,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<sc_keystore::KeyStorePtr>,
+	keystore: Option<BareCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	_phantom: PhantomData<BE>,
 }
@@ -227,7 +228,7 @@ where
 		client: Arc<Client>,
 		network: NetworkBridge<B, Network>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<sc_keystore::KeyStorePtr>,
+		keystore: Option<BareCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
@@ -238,7 +239,7 @@ where
 			client,
 			network,
 			persistent_data,
-			keystore,
+			keystore: keystore.clone(),
 			voter_commands_rx,
 			_phantom: PhantomData,
 		};
@@ -259,7 +260,7 @@ where
 			&voters,
 			self.client.clone(),
 			&self.network,
-			&self.keystore,
+			self.keystore.as_ref(),
 			None,
 		);
 

@@ -57,10 +57,12 @@ impl Convert<u128, u64> for CurrencyToVoteHandler {
 pub struct Test;
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = ();
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type Call = Call;
@@ -184,6 +186,7 @@ impl pallet_staking::Trait for Test {
 	type ElectionLookahead = ();
 	type Call = Call;
 	type MaxIterations = MaxIterations;
+	type MinSolutionScoreBump = ();
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 }

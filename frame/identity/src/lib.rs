@@ -78,7 +78,7 @@ use frame_support::{
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{self as system, ensure_signed};
 
 mod benchmarking;
 
@@ -389,6 +389,8 @@ pub struct RegistrarInfo<
 decl_storage! {
 	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
+		///
+		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 		pub IdentityOf get(fn identity):
 			map hasher(twox_64_concat) T::AccountId => Option<Registration<BalanceOf<T>>>;
 
@@ -400,6 +402,8 @@ decl_storage! {
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
+		///
+		/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 		pub SubsOf get(fn subs_of):
 			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
@@ -618,7 +622,7 @@ decl_module! {
 
 		/// Add a registrar to the system.
 		///
-		/// The dispatch origin for this call must be `RegistrarOrigin` or `Root`.
+		/// The dispatch origin for this call must be `T::RegistrarOrigin`.
 		///
 		/// - `account`: the account of the registrar.
 		///
@@ -631,9 +635,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = weight_for::add_registrar::<T>(T::MaxRegistrars::get().into()) ]
 		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
-			T::RegistrarOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::RegistrarOrigin::ensure_origin(origin)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
@@ -1085,7 +1087,7 @@ decl_module! {
 		/// `Slash`. Verification request deposits are not returned; they should be cancelled
 		/// manually using `cancel_request`.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// - `target`: the account whose identity the judgement is upon. This must be an account
 		///   with a registered identity.
@@ -1104,9 +1106,7 @@ decl_module! {
 			T::MaxAdditionalFields::get().into(), // X
 		)]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
@@ -1151,7 +1151,7 @@ mod tests {
 		ord_parameter_types,
 	};
 	use sp_core::H256;
-	use frame_system::EnsureSignedBy;
+	use frame_system::{EnsureSignedBy, EnsureOneOf, EnsureRoot};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
@@ -1174,6 +1174,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -1189,6 +1190,7 @@ mod tests {
 		type DbWeight = ();
 		type BlockExecutionWeight = ();
 		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -1219,6 +1221,16 @@ mod tests {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 	}
+	type EnsureOneOrRoot = EnsureOneOf<
+		u64,
+		EnsureRoot<u64>,
+		EnsureSignedBy<One, u64>
+	>;
+	type EnsureTwoOrRoot = EnsureOneOf<
+		u64,
+		EnsureRoot<u64>,
+		EnsureSignedBy<Two, u64>
+	>;
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
@@ -1229,8 +1241,8 @@ mod tests {
 		type MaxSubAccounts = MaxSubAccounts;
 		type MaxAdditionalFields = MaxAdditionalFields;
 		type MaxRegistrars = MaxRegistrars;
-		type RegistrarOrigin = EnsureSignedBy<One, u64>;
-		type ForceOrigin = EnsureSignedBy<Two, u64>;
+		type RegistrarOrigin = EnsureOneOrRoot;
+		type ForceOrigin = EnsureTwoOrRoot;
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
@@ -1430,7 +1442,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
-			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
+			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert!(Identity::super_of(20).is_none());
 		});

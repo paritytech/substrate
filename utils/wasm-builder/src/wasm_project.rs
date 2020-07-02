@@ -26,7 +26,7 @@ use toml::value::Table;
 
 use build_helper::rerun_if_changed;
 
-use cargo_metadata::MetadataCommand;
+use cargo_metadata::{MetadataCommand, Metadata};
 
 use walkdir::WalkDir;
 
@@ -302,10 +302,23 @@ fn create_wasm_workspace_project(wasm_workspace: &Path, workspace_root_path: &Pa
 		wasm_workspace_toml.insert("patch".into(), patch.into());
 	}
 
-	fs::write(
+	write_file_if_changed(
 		wasm_workspace.join("Cargo.toml"),
 		toml::to_string_pretty(&wasm_workspace_toml).expect("Wasm workspace toml is valid; qed"),
-	).expect("WASM workspace `Cargo.toml` writing can not fail; qed");
+	);
+}
+
+/// Find a package by the given `manifest_path` in the metadata.
+///
+/// Panics if the package could not be found.
+fn find_package_by_manifest_path<'a>(
+	manifest_path: &Path,
+	crate_metadata: &'a cargo_metadata::Metadata,
+) -> &'a cargo_metadata::Package {
+	crate_metadata.packages
+		.iter()
+		.find(|p| p.manifest_path == manifest_path)
+		.expect("Wasm project exists in its own metadata; qed")
 }
 
 /// Get a list of enabled features for the project.
@@ -313,10 +326,7 @@ fn project_enabled_features(
 	cargo_manifest: &Path,
 	crate_metadata: &cargo_metadata::Metadata,
 ) -> Vec<String> {
-	let package = crate_metadata.packages
-		.iter()
-		.find(|p| p.manifest_path == cargo_manifest)
-		.expect("Wasm project exists in its own metadata; qed");
+	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
 
 	let mut enabled_features = package.features.keys()
 		.filter(|f| {
@@ -338,23 +348,34 @@ fn project_enabled_features(
 	enabled_features
 }
 
+/// Returns if the project has the `runtime-wasm` feature
+fn has_runtime_wasm_feature_declared(
+	cargo_manifest: &Path,
+	crate_metadata: &cargo_metadata::Metadata,
+) -> bool {
+	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
+
+	package.features.keys().any(|k| k == "runtime-wasm")
+}
+
 /// Create the project used to build the wasm binary.
 ///
 /// # Returns
 /// The path to the created project.
-fn create_project(
-	cargo_manifest: &Path,
-	wasm_workspace: &Path,
-	crate_metadata: &cargo_metadata::Metadata,
-) -> PathBuf {
+fn create_project(cargo_manifest: &Path, wasm_workspace: &Path, crate_metadata: &Metadata) -> PathBuf {
 	let crate_name = get_crate_name(cargo_manifest);
 	let crate_path = cargo_manifest.parent().expect("Parent path exists; qed");
 	let wasm_binary = get_wasm_binary_name(cargo_manifest);
 	let project_folder = wasm_workspace.join(&crate_name);
 
-	fs::create_dir_all(project_folder.join("src")).expect("Wasm project dir create can not fail; qed");
+	fs::create_dir_all(project_folder.join("src"))
+		.expect("Wasm project dir create can not fail; qed");
 
-	let enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
+	let mut enabled_features = project_enabled_features(&cargo_manifest, &crate_metadata);
+
+	if has_runtime_wasm_feature_declared(cargo_manifest, crate_metadata) {
+		enabled_features.push("runtime-wasm".into());
+	}
 
 	write_file_if_changed(
 		project_folder.join("Cargo.toml"),
@@ -386,8 +407,7 @@ fn create_project(
 
 	if let Some(crate_lock_file) = find_cargo_lock(cargo_manifest) {
 		// Use the `Cargo.lock` of the main project.
-		fs::copy(crate_lock_file, wasm_workspace.join("Cargo.lock"))
-			.expect("Copying the `Cargo.lock` can not fail; qed");
+		crate::copy_file_if_changed(crate_lock_file, wasm_workspace.join("Cargo.lock"));
 	}
 
 	project_folder
@@ -519,22 +539,33 @@ fn generate_rerun_if_changed_instructions(
 		.exec()
 		.expect("`cargo metadata` can not fail!");
 
-	// Start with the dependencies of the crate we want to compile for wasm.
-	let mut dependencies = metadata.packages
+	let package = metadata.packages
 		.iter()
 		.find(|p| p.manifest_path == cargo_manifest)
-		.expect("The crate package is contained in its own metadata; qed")
-		.dependencies
-		.iter()
-		.collect::<Vec<_>>();
+		.expect("The crate package is contained in its own metadata; qed");
+
+	// Start with the dependencies of the crate we want to compile for wasm.
+	let mut dependencies = package.dependencies.iter().collect::<Vec<_>>();
 
 	// Collect all packages by follow the dependencies of all packages we find.
 	let mut packages = HashSet::new();
+	packages.insert(DeduplicatePackage::from(package));
+
 	while let Some(dependency) = dependencies.pop() {
+		let path_or_git_dep = dependency.source
+			.as_ref()
+			.map(|s| s.starts_with("git+"))
+			.unwrap_or(true);
+
 		let package = metadata.packages
 			.iter()
 			.filter(|p| !p.manifest_path.starts_with(wasm_workspace))
-			.find(|p| dependency.req.matches(&p.version) && dependency.name == p.name);
+			.find(|p| {
+				// Check that the name matches and that the version matches or this is
+				// a git or path dep. A git or path dependency can only occur once, so we don't
+				// need to check the version.
+				(path_or_git_dep || dependency.req.matches(&p.version)) && dependency.name == p.name
+			});
 
 		if let Some(package) = package {
 			if packages.insert(DeduplicatePackage::from(package)) {
@@ -544,21 +575,7 @@ fn generate_rerun_if_changed_instructions(
 	}
 
 	// Make sure that if any file/folder of a dependency change, we need to rerun the `build.rs`
-	packages.into_iter()
-		.filter(|p| !p.manifest_path.starts_with(wasm_workspace))
-		.for_each(|package| {
-			let mut manifest_path = package.manifest_path.clone();
-			if manifest_path.ends_with("Cargo.toml") {
-				manifest_path.pop();
-			}
-
-			rerun_if_changed(&manifest_path);
-
-			WalkDir::new(manifest_path)
-				.into_iter()
-				.filter_map(|p| p.ok())
-				.for_each(|p| rerun_if_changed(p.path()));
-		});
+	packages.iter().for_each(package_rerun_if_changed);
 
 	// Register our env variables
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
@@ -568,8 +585,32 @@ fn generate_rerun_if_changed_instructions(
 	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TOOLCHAIN);
 }
 
-/// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment variable.
-/// If the variable is not set, this is a no-op.
+/// Track files and paths related to the given package to rerun `build.rs` on any relevant change.
+fn package_rerun_if_changed(package: &DeduplicatePackage) {
+	let mut manifest_path = package.manifest_path.clone();
+	if manifest_path.ends_with("Cargo.toml") {
+		manifest_path.pop();
+	}
+
+	WalkDir::new(&manifest_path)
+		.into_iter()
+		.filter_entry(|p| {
+			// Ignore this entry if it is a directory that contains a `Cargo.toml` that is not the
+			// `Cargo.toml` related to the current package. This is done to ignore sub-crates of a crate.
+			// If such a sub-crate is a dependency, it will be processed independently anyway.
+			p.path() == manifest_path
+				|| !p.path().is_dir()
+				|| !p.path().join("Cargo.toml").exists()
+		})
+		.filter_map(|p| p.ok().map(|p| p.into_path()))
+		.filter(|p| {
+			p.is_dir() || p.extension().map(|e| e == "rs" || e == "toml").unwrap_or_default()
+		})
+		.for_each(|p| rerun_if_changed(p));
+}
+
+/// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment
+/// variable. If the variable is not set, this is a no-op.
 fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary) {
 	let target_dir = match env::var(crate::WASM_TARGET_DIRECTORY) {
 		Ok(path) => PathBuf::from(path),

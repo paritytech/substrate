@@ -237,16 +237,25 @@ decl_storage! {
 		// bit-wise manner. In order to get a human-readable representation (`Vec<bool>`), use
 		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 		// `APPROVAL_SET_SIZE`.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash and `SetIndex` is not
+		/// attacker-controlled.
 		pub ApprovalsOf get(fn approvals_of):
 			map hasher(twox_64_concat) (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they
 		/// are not currently registered.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 		pub RegisterInfoOf get(fn candidate_reg_info):
 			map hasher(twox_64_concat) T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 		pub VoterInfoOf get(fn voter_info):
 			map hasher(twox_64_concat) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
+		///
+		/// TWOX-NOTE: OKAY ― `SetIndex` is not user-controlled data.
 		pub Voters get(fn voters): map hasher(twox_64_concat) SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
 		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
@@ -265,10 +274,6 @@ decl_storage! {
 		/// of each entry; It may be the direct summed approval stakes, or a weighted version of it.
 		/// Sorted from low to high.
 		pub Leaderboard get(fn leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >;
-
-		/// Who is able to vote for whom. Value is the fund-holding account, key is the
-		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
 	}
 }
 
@@ -283,8 +288,6 @@ decl_error! {
 		CannotReapPresenting,
 		/// Cannot reap during grace period.
 		ReapGrace,
-		/// Not a proxy.
-		NotProxy,
 		/// Invalid reporter index.
 		InvalidReporterIndex,
 		/// Invalid target index.
@@ -418,23 +421,6 @@ decl_module! {
 			#[compact] value: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_set_approvals(who, votes, index, hint, value)
-		}
-
-		/// Set candidate approvals from a proxy. Approval slots stay valid as long as candidates in
-		/// those slots are registered.
-		///
-		/// # <weight>
-		/// - Same as `set_approvals` with one additional storage read.
-		/// # </weight>
-		#[weight = 2_500_000_000]
-		fn proxy_set_approvals(origin,
-			votes: Vec<bool>,
-			#[compact] index: VoteIndex,
-			hint: SetIndex,
-			#[compact] value: BalanceOf<T>,
-		) -> DispatchResult {
-			let who = Self::proxy(ensure_signed(origin)?).ok_or(Error::<T>::NotProxy)?;
 			Self::do_set_approvals(who, votes, index, hint, value)
 		}
 

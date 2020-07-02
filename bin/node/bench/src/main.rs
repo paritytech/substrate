@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -16,20 +16,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+mod construct;
 #[macro_use] mod core;
 mod import;
-mod trie;
-mod simple_trie;
 mod generator;
-mod tempdb;
+mod simple_trie;
 mod state_sizes;
+mod tempdb;
+mod trie;
 
-use crate::core::{run_benchmark, Mode as BenchmarkMode};
-use crate::tempdb::DatabaseType;
-use import::{ImportBenchmarkDescription, SizeType};
-use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
-use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
 use structopt::StructOpt;
+
+use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
+
+use crate::{
+	common::SizeType,
+	core::{run_benchmark, Mode as BenchmarkMode},
+	tempdb::DatabaseType,
+	import::ImportBenchmarkDescription,
+	trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize},
+	construct::ConstructionBenchmarkDescription,
+};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "node-bench", about = "Node integration benchmarks")]
@@ -126,6 +134,20 @@ fn main() {
 			]
 			.iter().map(move |db_type| (size, db_type)))
 			=> TrieWriteBenchmarkDescription { database_size: *size, database_type: *db_type },
+		ConstructionBenchmarkDescription {
+			profile: Profile::Wasm,
+			key_types: KeyTypes::Sr25519,
+			block_type: BlockType::RandomTransfersKeepAlive,
+			size: SizeType::Medium,
+			database_type: BenchDataBaseType::RocksDb,
+		},
+		ConstructionBenchmarkDescription {
+			profile: Profile::Wasm,
+			key_types: KeyTypes::Sr25519,
+			block_type: BlockType::RandomTransfersKeepAlive,
+			size: SizeType::Large,
+			database_type: BenchDataBaseType::RocksDb,
+		},
 	);
 
 	if opt.list {
@@ -150,6 +172,11 @@ fn main() {
 
 			results.push(result);
 		}
+	}
+
+	if results.is_empty() {
+		eprintln!("No benchmark was found for query");
+		std::process::exit(1);
 	}
 
 	if opt.json {

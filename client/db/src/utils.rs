@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
@@ -35,7 +36,7 @@ use crate::{DatabaseSettings, DatabaseSettingsSrc, Database, DbHash};
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
-#[cfg(any(feature = "kvdb-rocksdb", feature = "test-helpers", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", feature = "test-helpers", test))]
 pub const NUM_COLUMNS: u32 = 11;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
@@ -218,7 +219,7 @@ pub fn open_database<Block: BlockT>(
 	);
 
 	let db: Arc<dyn Database<DbHash>> = match &config.source {
-		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::RocksDb { path, cache_size } => {
 			// first upgrade database to required version
 			crate::upgrade::upgrade_db::<Block>(&path, db_type)?;
@@ -254,27 +255,27 @@ pub fn open_database<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
-		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
+		#[cfg(not(any(feature = "with-kvdb-rocksdb", test)))]
 		DatabaseSettingsSrc::RocksDb { .. } => {
-			return db_open_error("kvdb-rocksdb");
+			return db_open_error("with-kvdb-rocksdb");
 		},
-		#[cfg(feature = "subdb")]
+		#[cfg(feature = "with-subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
 			crate::subdb::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(not(feature = "subdb"))]
+		#[cfg(not(feature = "with-subdb"))]
 		DatabaseSettingsSrc::SubDb { .. } => {
-			return db_open_error("subdb");
+			return db_open_error("with-subdb");
 		},
-		#[cfg(feature = "parity-db")]
+		#[cfg(feature = "with-parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(not(feature = "parity-db"))]
+		#[cfg(not(feature = "with-parity-db"))]
 		DatabaseSettingsSrc::ParityDb { .. } => {
-			return db_open_error("parity-db");
+			return db_open_error("with-parity-db");
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};

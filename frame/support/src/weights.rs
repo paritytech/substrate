@@ -134,7 +134,10 @@ use sp_runtime::{
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
-use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
+use sp_runtime::traits::SaturatedConversion;
+use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
+use smallvec::{smallvec, SmallVec};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -269,16 +272,25 @@ pub struct PostDispatchInfo {
 impl PostDispatchInfo {
 	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
 	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+		info.weight - self.calc_actual_weight(info)
+	}
+
+	/// Calculate how much weight was actually spent by the `Dispatchable`.
+	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> Weight {
 		if let Some(actual_weight) = self.actual_weight {
-			if actual_weight >= info.weight {
-				0
-			} else {
-				info.weight - actual_weight
-			}
+			actual_weight.min(info.weight)
 		} else {
-			0
+			info.weight
 		}
 	}
+}
+
+/// Extract the actual weight from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+	match result {
+		Ok(post_info) => &post_info,
+		Err(err) => &err.post_info,
+	}.calc_actual_weight(info)
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {
@@ -413,9 +425,11 @@ impl<T> PaysFee<T> for (Weight, Pays) {
 ///   with the same argument list as the dispatched, wrapped in a tuple.
 /// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that
 ///   returns a `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
+#[deprecated = "Function arguments are available directly inside the annotation now."]
 pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
 // `WeighData` as a raw value
+#[allow(deprecated)]
 impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 	fn weigh_data(&self, _: Args) -> Weight {
 		self.0
@@ -423,6 +437,7 @@ impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 }
 
 // `WeighData` as a closure
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
 	WD : Fn(Args) -> Weight
 {
@@ -432,6 +447,7 @@ impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `ClassifyDispatch` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> {
 	fn classify_dispatch(&self, _: Args) -> DispatchClass {
 		self.1
@@ -439,6 +455,7 @@ impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> 
 }
 
 // `ClassifyDispatch` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 	CD : Fn(Args) -> DispatchClass
 {
@@ -448,6 +465,7 @@ impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `PaysFee` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 	fn pays_fee(&self, _: Args) -> Pays {
 		self.2
@@ -455,6 +473,7 @@ impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 }
 
 // `PaysFee` as a closure
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF> where
 	PF : Fn(Args) -> Pays
 {
@@ -522,6 +541,90 @@ impl RuntimeDbWeight {
 	}
 }
 
+/// One coefficient and its position in the `WeightToFeePolynomial`.
+///
+/// One term of polynomial is calculated as:
+///
+/// ```ignore
+/// coeff_integer * x^(degree) + coeff_frac * x^(degree)
+/// ```
+///
+/// The `negative` value encodes whether the term is added or substracted from the
+/// overall polynomial result.
+#[derive(Clone, Encode, Decode)]
+pub struct WeightToFeeCoefficient<Balance> {
+	/// The integral part of the coefficient.
+	pub coeff_integer: Balance,
+	/// The fractional part of the coefficient.
+	pub coeff_frac: Perbill,
+	/// True iff the coefficient should be interpreted as negative.
+	pub negative: bool,
+	/// Degree/exponent of the term.
+	pub degree: u8,
+}
+
+/// A list of coefficients that represent one polynomial.
+pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
+
+/// A trait that describes the weight to fee calculation as polynomial.
+///
+/// An implementor should only implement the `polynomial` function.
+pub trait WeightToFeePolynomial {
+	/// The type that is returned as result from polynomial evaluation.
+	type Balance: BaseArithmetic + From<u32> + Copy + Unsigned;
+
+	/// Returns a polynomial that describes the weight to fee conversion.
+	///
+	/// This is the only function that should be manually implemented. Please note
+	/// that all calculation is done in the probably unsigned `Balance` type. This means
+	/// that the order of coefficients is important as putting the negative coefficients
+	/// first will most likely saturate the result to zero mid evaluation.
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance>;
+
+	/// Calculates the fee from the passed `weight` according to the `polynomial`.
+	///
+	/// This should not be overriden in most circumstances. Calculation is done in the
+	/// `Balance` type and never overflows. All evaluation is saturating.
+	fn calc(weight: &Weight) -> Self::Balance {
+		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
+			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
+
+			// The sum could get negative. Therefore we only sum with the accumulator. 
+			// The Perbill Mul implementation is non overflowing.
+			let frac = args.coeff_frac * w;
+			let integer = args.coeff_integer.saturating_mul(w);
+
+			if args.negative {
+				acc = acc.saturating_sub(frac);
+				acc = acc.saturating_sub(integer);
+			} else {
+				acc = acc.saturating_add(frac);
+				acc = acc.saturating_add(integer);
+			}
+
+			acc
+		})
+	}
+}
+
+/// Implementor of `WeightToFeePolynomial` that maps one unit of weight to one unit of fee.
+pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
+
+impl<T> WeightToFeePolynomial for IdentityFee<T> where
+	T: BaseArithmetic + From<u32> + Copy + Unsigned
+{
+	type Balance = T;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+		smallvec!(WeightToFeeCoefficient {
+			coeff_integer: 1u32.into(),
+			coeff_frac: Perbill::zero(),
+			negative: false,
+			degree: 1,
+		})
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
@@ -567,10 +670,10 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, Pays::Yes)]
+			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
@@ -615,5 +718,92 @@ mod tests {
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
 		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
+	}
+
+	#[test]
+	fn extract_actual_weight_works() {
+		let pre = DispatchInfo {
+			weight: 1000,
+			.. Default::default()
+		};
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), 7);
+		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), 1000);
+		assert_eq!(
+			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre),
+			9
+		);
+	}
+
+	#[test]
+	fn extract_actual_weight_caps_at_pre_weight() {
+		let pre = DispatchInfo {
+			weight: 1000,
+			.. Default::default()
+		};
+		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), 1000);
+		assert_eq!(
+			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
+			1000
+		);
+	}
+
+	type Balance = u64;
+
+	// 0.5x^3 + 2.333x2 + 7x - 10_000
+	struct Poly;
+	impl WeightToFeePolynomial for Poly {
+		type Balance = Balance;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![
+				WeightToFeeCoefficient {
+					coeff_integer: 0,
+					coeff_frac: Perbill::from_fraction(0.5),
+					negative: false,
+					degree: 3
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 2,
+					coeff_frac: Perbill::from_rational_approximation(1u32, 3u32),
+					negative: false,
+					degree: 2
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 7,
+					coeff_frac: Perbill::zero(),
+					negative: false,
+					degree: 1
+				},
+				WeightToFeeCoefficient {
+					coeff_integer: 10_000,
+					coeff_frac: Perbill::zero(),
+					negative: true,
+					degree: 0
+				},
+			]
+		}
+	}
+
+	#[test]
+	fn polynomial_works() {
+		assert_eq!(Poly::calc(&100), 514033);
+		assert_eq!(Poly::calc(&10_123), 518917034928);
+	}
+
+	#[test]
+	fn polynomial_does_not_underflow() {
+		assert_eq!(Poly::calc(&0), 0);
+	}
+
+	#[test]
+	fn polynomial_does_not_overflow() {
+		assert_eq!(Poly::calc(&Weight::max_value()), Balance::max_value() - 10_000);
+	}
+
+	#[test]
+	fn identity_fee_works() {
+		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
+		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
+		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
 	}
 }

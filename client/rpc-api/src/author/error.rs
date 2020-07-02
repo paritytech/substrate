@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,10 +15,12 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Authoring RPC module errors.
 
 use crate::errors;
 use jsonrpc_core as rpc;
+use sp_runtime::transaction_validity::InvalidTransaction;
 
 /// Author RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -113,10 +115,18 @@ impl From<Error> for rpc::Error {
 				message: format!("Verification Error: {}", e).into(),
 				data: Some(format!("{:?}", e).into()),
 			},
-			Error::Pool(PoolError::InvalidTransaction(e)) => rpc::Error {
+			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
 				message: "Invalid Transaction".into(),
-				data: serde_json::to_value(e).ok(),
+				data: Some(format!("Custom error: {}", e).into()),
+			},
+			Error::Pool(PoolError::InvalidTransaction(e)) => {
+				let msg: &str = e.into();
+				rpc::Error {
+					code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),
+					message: "Invalid Transaction".into(),
+					data: Some(msg.into()),
+				}
 			},
 			Error::Pool(PoolError::UnknownTransaction(e)) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_UNKNOWN_VALIDITY),

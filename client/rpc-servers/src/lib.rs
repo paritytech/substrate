@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Substrate RPC servers.
 
 #![warn(missing_docs)]
@@ -61,6 +62,8 @@ pub fn rpc_handler<M: PubSubMetadata>(
 mod inner {
 	use super::*;
 
+	/// Type alias for ipc server
+	pub type IpcServer = ipc::Server;
 	/// Type alias for http server
 	pub type HttpServer = http::Server;
 	/// Type alias for ws server
@@ -86,6 +89,23 @@ mod inner {
 			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
 			.max_request_body_size(MAX_PAYLOAD)
 			.start_http(addr)
+	}
+
+	/// Start IPC server listening on given path.
+	///
+	/// **Note**: Only available if `not(target_os = "unknown")`.
+	pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
+		addr: &str,
+		io: RpcHandler<M>,
+	) -> io::Result<ipc::Server> {
+		let builder = ipc::ServerBuilder::new(io);
+		#[cfg(target_os = "unix")]
+		builder.set_security_attributes({
+			let security_attributes = ipc::SecurityAttributes::empty();
+			security_attributes.set_mode(0o600)?;
+			security_attributes
+		});
+		builder.start(addr)
 	}
 
 	/// Start WS server listening on given address.

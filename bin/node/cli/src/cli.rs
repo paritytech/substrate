@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -20,7 +20,7 @@ use sc_cli::RunCmd;
 use structopt::StructOpt;
 
 /// An overarching CLI command definition.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub struct Cli {
 	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
@@ -31,7 +31,7 @@ pub struct Cli {
 }
 
 /// Possible subcommands of the main binary.
-#[derive(Clone, Debug, StructOpt)]
+#[derive(Debug, StructOpt)]
 pub enum Subcommand {
 	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]

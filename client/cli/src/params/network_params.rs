@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use crate::params::node_key_params::NodeKeyParams;
 use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
@@ -25,7 +26,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// Parameters used to create the network configuration.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
 	#[structopt(long = "bootnodes", value_name = "ADDR")]
@@ -101,11 +102,6 @@ pub struct NetworkParams {
 	/// By default this option is true for `--dev` and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
-
-	/// Use the legacy "pre-mainnet-launch" networking protocol. Enable if things seem broken.
-	/// This option will be removed in the future.
-	#[structopt(long)]
-	pub legacy_network_protocol: bool,
 }
 
 impl NetworkParams {
@@ -123,6 +119,9 @@ impl NetworkParams {
 
 		let listen_addresses = if self.listen_addr.is_empty() {
 			vec![
+				Multiaddr::empty()
+					.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
+					.with(Protocol::Tcp(port)),
 				Multiaddr::empty()
 					.with(Protocol::Ip4([0, 0, 0, 0].into()))
 					.with(Protocol::Tcp(port)),
@@ -161,7 +160,6 @@ impl NetworkParams {
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht: self.discover_local || is_dev,
-			use_new_block_requests_protocol: !self.legacy_network_protocol,
 		}
 	}
 }

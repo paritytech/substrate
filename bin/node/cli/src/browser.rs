@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -52,8 +52,10 @@ async fn start_inner(chain_spec: Option<String>, log_level: String) -> Result<Cl
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.
-	let service = crate::service::new_light(config)
-		.map_err(|e| format!("{:?}", e))?;
+	let (task_manager, rpc_handlers) =
+		crate::service::new_light_base(config)
+			.map(|(components, rpc_handlers, _, _, _)| (components, rpc_handlers))
+			.map_err(|e| format!("{:?}", e))?;
 
-	Ok(browser_utils::start_client(service))
+	Ok(browser_utils::start_client(task_manager, rpc_handlers))
 }

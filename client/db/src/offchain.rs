@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! RocksDB-based offchain workers local storage.
 
 use std::{
@@ -62,6 +63,14 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
 		tx.set(columns::OFFCHAIN, &key, value);
+
+		self.db.commit(tx);
+	}
+
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+		let mut tx = Transaction::new();
+		tx.remove(columns::OFFCHAIN, &key);
 
 		self.db.commit(tx);
 	}

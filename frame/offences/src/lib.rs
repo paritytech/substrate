@@ -28,9 +28,10 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug,
+	traits::Get,
 	weights::Weight,
 };
-use sp_runtime::{traits::Hash, Perbill};
+use sp_runtime::{traits::{Hash, Zero}, Perbill};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
@@ -58,7 +59,11 @@ pub trait Trait: frame_system::Trait {
 	/// Full identification of the validator.
 	type IdentificationTuple: Parameter + Ord;
 	/// A handler called for every offence report.
-	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple>;
+	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
+	/// The a soft limit on maximum weight that may be consumed while dispatching deferred offences in
+	/// `on_initialize`.
+	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
+	type WeightSoftLimit: Get<Weight>;
 }
 
 decl_storage! {
@@ -102,23 +107,39 @@ decl_module! {
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			// only decode storage if we can actually submit anything again.
-			if T::OnOffenceHandler::can_report() {
-				<DeferredOffences<T>>::mutate(|deferred| {
-					// keep those that fail to be reported again. An error log is emitted here; this
-					// should not happen if staking's `can_report` is implemented properly.
-					deferred.retain(|(o, p, s)| {
-						T::OnOffenceHandler::on_offence(&o, &p, *s).map_err(|_| {
-							debug::native::error!(
-								target: "pallet-offences",
-								"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
-								now,
-							);
-						}).is_err()
-					})
-				})
+			if !T::OnOffenceHandler::can_report() {
+				return 0;
 			}
 
-			0
+			let limit = T::WeightSoftLimit::get();
+			let mut consumed = Weight::zero();
+
+			<DeferredOffences<T>>::mutate(|deferred| {
+				deferred.retain(|(offences, perbill, session)| {
+					if consumed >= limit {
+						true
+					} else {
+						// keep those that fail to be reported again. An error log is emitted here; this
+						// should not happen if staking's `can_report` is implemented properly.
+						match T::OnOffenceHandler::on_offence(&offences, &perbill, *session) {
+							Ok(weight) => {
+								consumed += weight;
+								false
+							},
+							Err(_) => {
+								debug::native::error!(
+									target: "pallet-offences",
+									"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
+									now,
+								);
+								true
+							},
+						}
+					}
+				})
+			});
+
+			consumed
 		}
 	}
 }

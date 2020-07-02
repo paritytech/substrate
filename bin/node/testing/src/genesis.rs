@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -23,7 +23,7 @@ use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use node_runtime::{
 	GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, SystemConfig,
 	GrandpaConfig, IndicesConfig, ContractsConfig, SocietyConfig, WASM_BINARY,
-	AccountId,
+	AccountId, StakerStatus,
 };
 use node_runtime::constants::currency::*;
 use sp_core::ChangesTrieConfiguration;
@@ -87,9 +87,9 @@ pub fn config_endowed(
 		}),
 		pallet_staking: Some(StakingConfig {
 			stakers: vec![
-				(dave(), alice(), 111 * DOLLARS, pallet_staking::StakerStatus::Validator),
-				(eve(), bob(), 100 * DOLLARS, pallet_staking::StakerStatus::Validator),
-				(ferdie(), charlie(), 100 * DOLLARS, pallet_staking::StakerStatus::Validator)
+				(dave(), alice(), 111 * DOLLARS, StakerStatus::Validator),
+				(eve(), bob(), 100 * DOLLARS, StakerStatus::Validator),
+				(ferdie(), charlie(), 100 * DOLLARS, StakerStatus::Validator)
 			],
 			validator_count: 3,
 			minimum_validator_count: 0,

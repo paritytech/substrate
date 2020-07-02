@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,8 +15,10 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Substrate network possible errors.
 
+use crate::config::TransportConfig;
 use libp2p::{PeerId, Multiaddr};
 
 use std::fmt;
@@ -47,7 +49,18 @@ pub enum Error {
 		second_id: PeerId,
 	},
 	/// Prometheus metrics error.
-	Prometheus(prometheus_endpoint::PrometheusError)
+	Prometheus(prometheus_endpoint::PrometheusError),
+	/// The network addresses are invalid because they don't match the transport.
+	#[display(
+		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
+		addresses,
+	)]
+	AddressesForAnotherTransport {
+		/// Transport used.
+		transport: TransportConfig,
+		/// The invalid addresses.
+		addresses: Vec<Multiaddr>,
+	},
 }
 
 // Make `Debug` use the `Display` implementation.
@@ -64,6 +77,7 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(err),
 			Error::DuplicateBootnode { .. } => None,
 			Error::Prometheus(ref err) => Some(err),
+			Error::AddressesForAnotherTransport { .. } => None,
 		}
 	}
 }

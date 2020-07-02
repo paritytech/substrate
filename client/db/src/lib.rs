@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Client backend that is backed by a database.
 //!
 //! # Canonicality vs. Finality
@@ -30,20 +31,20 @@
 pub mod light;
 pub mod offchain;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
 mod cache;
 mod changes_tries_storage;
 mod storage_cache;
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
 mod utils;
 mod stats;
-#[cfg(feature = "parity-db")]
+#[cfg(feature = "with-parity-db")]
 mod parity_db;
-#[cfg(feature = "subdb")]
+#[cfg(feature = "with-subdb")]
 mod subdb;
 
 use std::sync::Arc;
@@ -90,7 +91,7 @@ use log::{trace, debug, warn};
 pub use sp_database::Database;
 pub use sc_state_db::PruningMode;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -211,21 +212,18 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
-	{
+	fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, Self::Transaction) where B::Hash: Ord {
 		self.state.storage_root(delta)
 	}
 
-	fn child_storage_root<I>(
+	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: I,
-	) -> (B::Hash, bool, Self::Transaction)
-		where
-			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-	{
+		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
+	) -> (B::Hash, bool, Self::Transaction) where B::Hash: Ord {
 		self.state.child_storage_root(child_info, delta)
 	}
 
@@ -273,7 +271,7 @@ pub struct DatabaseSettings {
 }
 
 /// Where to find the database..
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum DatabaseSettingsSrc {
 	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {
@@ -546,7 +544,12 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
-		for (key, value_operation) in self.offchain_storage_updates.drain() {
+		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
+			let key: Vec<u8> = prefix
+				.into_iter()
+				.chain(sp_core::sp_std::iter::once(b'/'))
+				.chain(key.into_iter())
+				.collect();
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
 				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
@@ -604,26 +607,25 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		&mut self,
 		storage: Storage,
 	) -> ClientResult<Block::Hash> {
-
-		if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		let child_delta = storage.children_default.into_iter().map(|(_storage_key, child_content)|(
-			child_content.child_info,
-			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)|(
+			&child_content.child_info,
+			child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let (root, transaction) = self.old_state.full_storage_root(
-			storage.top.into_iter().map(|(k, v)| {
-				if k == well_known_keys::CHANGES_TRIE_CONFIG {
+			storage.top.iter().map(|(k, v)| {
+				if &k[..] == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(
 						Decode::decode(&mut &v[..])
 							.expect("changes trie configuration is encoded properly at genesis")
 					);
 				}
-				(k, Some(v))
+				(&k[..], Some(&v[..]))
 			}),
 			child_delta
 		);
@@ -1809,13 +1811,12 @@ pub(crate) mod tests {
 
 			header.state_root = op.old_state.storage_root(storage
 				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y)))
+				.map(|(x, y)| (&x[..], Some(&y[..])))
 			).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
-				top: storage.iter().cloned().collect(),
+				top: storage.into_iter().collect(),
 				children_default: Default::default(),
 			}).unwrap();
 			op.set_block_data(
@@ -1852,7 +1853,10 @@ pub(crate) mod tests {
 				(vec![5, 5, 5], Some(vec![4, 5, 6])),
 			];
 
-			let (root, overlay) = op.old_state.storage_root(storage.iter().cloned());
+			let (root, overlay) = op.old_state.storage_root(
+				storage.iter()
+					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+			);
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
@@ -1891,17 +1895,11 @@ pub(crate) mod tests {
 				extrinsics_root: Default::default(),
 			};
 
-			let storage: Vec<(_, _)> = vec![];
-
-			header.state_root = op.old_state.storage_root(storage
-				.iter()
-				.cloned()
-				.map(|(x, y)| (x, Some(y)))
-			).0.into();
+			header.state_root = op.old_state.storage_root(std::iter::empty()).0.into();
 			let hash = header.hash();
 
 			op.reset_storage(Storage {
-				top: storage.iter().cloned().collect(),
+				top: Default::default(),
 				children_default: Default::default(),
 			}).unwrap();
 

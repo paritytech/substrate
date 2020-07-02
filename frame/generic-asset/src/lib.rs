@@ -157,7 +157,7 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, AtLeast32Bit,
-	Zero, Bounded,
+	Zero, Bounded, AtLeast32BitUnsigned
 };
 
 use sp_std::prelude::*;
@@ -165,8 +165,9 @@ use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
-		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
+		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency,
+		ReservableCurrency, SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop,
+		BalanceStatus,
 	},
 	Parameter, StorageMap,
 };
@@ -178,25 +179,15 @@ mod tests;
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 
 pub trait Trait: frame_system::Trait {
-	type Balance: Parameter
-		+ Member
-		+ AtLeast32Bit
-		+ Default
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+		MaybeSerializeDeserialize;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 pub trait Subtrait: frame_system::Trait {
-	type Balance: Parameter
-		+ Member
-		+ AtLeast32Bit
-		+ Default
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+		MaybeSerializeDeserialize;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 }
 
@@ -442,16 +433,22 @@ pub struct BalanceLock<Balance> {
 decl_storage! {
 	trait Store for Module<T: Trait> as GenericAsset {
 		/// Total issuance of a given asset.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
 		}): map hasher(twox_64_concat) T::AssetId => T::Balance;
 
 		/// The free balance of a given asset under an account.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub FreeBalance:
 			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		/// The reserved balance of a given asset under an account.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub ReservedBalance:
 			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
@@ -459,6 +456,8 @@ decl_storage! {
 		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
+		///
+		/// TWOX-NOTE: `AssetId` is trusted.
 		pub Permissions get(fn get_permission):
 			map hasher(twox_64_concat) T::AssetId => PermissionVersions<T::AccountId>;
 
@@ -1112,6 +1111,7 @@ impl<T: Subtrait> PartialEq for ElevatedTrait<T> {
 }
 impl<T: Subtrait> Eq for ElevatedTrait<T> {}
 impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
+	type BaseCallFilter = T::BaseCallFilter;
 	type Origin = T::Origin;
 	type Call = T::Call;
 	type Index = T::Index;
@@ -1127,6 +1127,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type DbWeight = ();
 	type BlockExecutionWeight = ();
 	type ExtrinsicBaseWeight = ();
+	type MaximumExtrinsicWeight = T::MaximumBlockWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;

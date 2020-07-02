@@ -215,7 +215,7 @@ mod tests {
 		assert_eq!(r(MAX128 - 10, MAX128).to_den(10), Ok(r(10, 10)));
 		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Ok(r(5, 10)));
 
-		// large to perbill. This is very well needed for phragmen.
+		// large to perbill. This is very well needed for npos-elections.
 		assert_eq!(
 			r(MAX128 / 2, MAX128).to_den(1000_000_000),
 			Ok(r(500_000_000, 1000_000_000))
@@ -359,6 +359,15 @@ mod tests {
 		assert_eq!(
 			multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(),
 			250000000,
+		);
+
+		assert_eq!(
+			multiply_by_rational(
+				29459999999999999988000u128,
+				1000000000000000000u128,
+				10000000000000000000u128
+			).unwrap(),
+			2945999999999999998800u128
 		);
 	}
 

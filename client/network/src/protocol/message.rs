@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
 use bitflags::bitflags;
@@ -83,6 +84,20 @@ bitflags! {
 		const MESSAGE_QUEUE = 0b00001000;
 		/// Include a justification for the block.
 		const JUSTIFICATION = 0b00010000;
+	}
+}
+
+impl BlockAttributes {
+	/// Encodes attributes as big endian u32, compatible with SCALE-encoding (i.e the
+	/// significant byte has zero index).
+	pub fn to_be_u32(&self) -> u32 {
+		u32::from_be_bytes([self.bits(), 0, 0, 0])
+	}
+
+	/// Decodes attributes, encoded with the `encode_to_be_u32()` call.
+	pub fn from_be_u32(encoded: u32) -> Result<Self, Error> {
+		BlockAttributes::from_bits(encoded.to_be_bytes()[0])
+			.ok_or_else(|| Error::from("Invalid BlockAttributes"))
 	}
 }
 

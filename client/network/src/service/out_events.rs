@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Registering events streams.
 //!
 //! This code holds the logic that is used for the network service to inform other parts of
@@ -34,7 +35,7 @@
 use crate::Event;
 use super::maybe_utf8_bytes_to_string;
 
-use futures::{prelude::*, channel::mpsc, ready};
+use futures::{prelude::*, channel::mpsc, ready, stream::FusedStream};
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
@@ -118,8 +119,10 @@ impl fmt::Debug for Receiver {
 
 impl Drop for Receiver {
 	fn drop(&mut self) {
-		// Empty the list to properly decrease the metrics.
-		while let Some(Some(_)) = self.next().now_or_never() {}
+		if !self.inner.is_terminated() {
+			// Empty the list to properly decrease the metrics.
+			while let Some(Some(_)) = self.next().now_or_never() {}
+		}
 	}
 }
 

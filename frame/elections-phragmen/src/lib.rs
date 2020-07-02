@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Phragmen Election Module.
+//! # Phragmén Election Module.
 //!
 //! An election module based on sequential phragmen.
 //!
@@ -100,7 +100,7 @@ use frame_support::{
 		ContainsLengthBound,
 	}
 };
-use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
+use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod benchmarking;
@@ -197,6 +197,8 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes and locked stake of a particular voter.
+		///
+		/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash
 		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
@@ -243,7 +245,6 @@ decl_storage! {
 }
 
 decl_error! {
-	/// Error for the elections-phragmen module.
 	pub enum Error for Module<T: Trait> {
 		/// Cannot vote when no candidates or members exist.
 		UnableToVote,
@@ -608,7 +609,7 @@ decl_module! {
 		/// the outgoing member is slashed.
 		///
 		/// If a runner-up is available, then the best runner-up will be removed and replaces the
-		/// outgoing member. Otherwise, a new phragmen round is started.
+		/// outgoing member. Otherwise, a new phragmen election is started.
 		///
 		/// Note that this does not affect the designated block number of the next election.
 		///
@@ -838,13 +839,10 @@ impl<T: Trait> Module<T> {
 
 	/// Run the phragmen election with all required side processes and state updates.
 	///
-	/// Calls the appropriate `ChangeMembers` function variant internally.
+	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	///
-	/// # <weight>
-	/// #### State
 	/// Reads: O(C + V*E) where C = candidates, V voters and E votes per voter exits.
 	/// Writes: O(M + R) with M desired members and R runners_up.
-	/// # </weight>
 	fn do_phragmen() {
 		let desired_seats = Self::desired_members() as usize;
 		let desired_runners_up = Self::desired_runners_up() as usize;
@@ -874,14 +872,14 @@ impl<T: Trait> Module<T> {
 		let voters_and_votes = Voting::<T>::iter()
 			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
 			.collect::<Vec<_>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<T::AccountId, Perbill>(
+		let maybe_phragmen_result = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
 			voters_and_votes.clone(),
 		);
 
-		if let Some(PhragmenResult { winners, assignments }) = maybe_phragmen_result {
+		if let Some(ElectionResult { winners, assignments }) = maybe_phragmen_result {
 			let old_members_ids = <Members<T>>::take().into_iter()
 				.map(|(m, _)| m)
 				.collect::<Vec<T::AccountId>>();
@@ -905,7 +903,7 @@ impl<T: Trait> Module<T> {
 			// exposed candidates, cleaning any previous members, and so on. For now, in favour of
 			// readability and veracity, we keep it simple.
 
-			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
+			let staked_assignments = sp_npos_elections::assignment_ratio_to_staked(
 				assignments,
 				stake_of,
 			);
@@ -1072,10 +1070,11 @@ mod tests {
 	}
 
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1087,6 +1086,7 @@ mod tests {
 		type DbWeight = ();
 		type BlockExecutionWeight = ();
 		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -1377,11 +1377,8 @@ mod tests {
 		// historical note: helper function was created in a period of time in which the API of vote
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.
-		if let Origin::system(frame_system::RawOrigin::Signed(_account)) = origin {
-			Elections::vote(origin, votes, stake)
-		} else {
-			panic!("vote origin must be signed");
-		}
+		ensure_signed(origin.clone()).expect("vote origin must be signed");
+		Elections::vote(origin, votes, stake)
 	}
 
 	fn votes_of(who: &u64) -> Vec<u64> {
@@ -2359,7 +2356,7 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(3)));
 			assert_ok!(vote(Origin::signed(3), vec![3], 30));
 
-			assert_ok!(Elections::remove_member(Origin::ROOT, 4, false));
+			assert_ok!(Elections::remove_member(Origin::root(), 4, false));
 
 			assert_eq!(balances(&4), (35, 2)); // slashed
 			assert_eq!(Elections::election_rounds(), 2); // new election round
@@ -2382,7 +2379,7 @@ mod tests {
 
 			// no replacement yet.
 			assert_err_with_weight!(
-				Elections::remove_member(Origin::ROOT, 4, true),
+				Elections::remove_member(Origin::root(), 4, true),
 				Error::<Test>::InvalidReplacement,
 				Some(6000000),
 			);
@@ -2404,7 +2401,7 @@ mod tests {
 
 			// there is a replacement! and this one needs a weight refund.
 			assert_err_with_weight!(
-				Elections::remove_member(Origin::ROOT, 4, false),
+				Elections::remove_member(Origin::root(), 4, false),
 				Error::<Test>::InvalidReplacement,
 				Some(6000000) // only thing that matters for now is that it is NOT the full block.
 			);
@@ -2563,7 +2560,7 @@ mod tests {
 			Elections::end_block(System::block_number());
 
 			assert_eq!(Elections::members_ids(), vec![2, 4]);
-			assert_ok!(Elections::remove_member(Origin::ROOT, 2, true));
+			assert_ok!(Elections::remove_member(Origin::root(), 2, true));
 			assert_eq!(Elections::members_ids(), vec![4, 5]);
 		});
 	}

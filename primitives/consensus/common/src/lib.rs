@@ -72,7 +72,9 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-/// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
+/// Environment for a Consensus instance.
+///
+/// Creates proposer instance.
 pub trait Environment<B: BlockT> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B> + Send + 'static;
@@ -155,7 +157,7 @@ pub trait Proposer<B: BlockT> {
 	///
 	/// Returns a future that resolves to a [`Proposal`] or to [`Error`].
 	fn propose(
-		&mut self,
+		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<B>,
 		max_duration: Duration,

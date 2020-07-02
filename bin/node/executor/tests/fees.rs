@@ -19,16 +19,15 @@ use codec::{Encode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight},
+	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
 };
 use sp_core::NeverNativeValue;
-use sp_runtime::{Fixed128, Perbill, traits::Convert};
+use sp_runtime::{Perbill, FixedPointNumber};
 use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
-	TransactionByteFee, WeightFeeCoefficient,
+	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, Multiplier,
+	TransactionByteFee,
 	constants::currency::*,
 };
-use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
 use node_testing::keyring::*;
 
@@ -39,8 +38,8 @@ use self::common::{*, sign};
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut t = new_test_ext(COMPACT_CODE, false);
 
-	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed128::from_parts(0);
+	// initial fee multiplier must be one.
+	let mut prev_multiplier = Multiplier::one();
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
@@ -60,7 +59,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(90))),
+				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(60))),
 			}
 		]
 	);
@@ -123,7 +122,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 }
 
 #[test]
-fn transaction_fee_is_correct_ultimate() {
+fn transaction_fee_is_correct() {
 	// This uses the exact values of substrate-node.
 	//
 	// weight of transfer call as of now: 1_000_000
@@ -181,13 +180,13 @@ fn transaction_fee_is_correct_ultimate() {
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
 		let base_weight = ExtrinsicBaseWeight::get();
-		let base_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(base_weight);
+		let base_fee = IdentityFee::<Balance>::calc(&base_weight);
 
 		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
+		let weight_fee = IdentityFee::<Balance>::calc(&weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000

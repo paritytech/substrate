@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Substrate CLI library.
 
 #![warn(missing_docs)]
@@ -36,11 +37,10 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration, TaskType};
-use std::future::Future;
+use sc_service::{Configuration, TaskExecutor};
+pub use sc_service::{ChainSpec, Role};
+pub use sp_version::RuntimeVersion;
 use std::io::Write;
-use std::pin::Pin;
-use std::sync::Arc;
 pub use structopt;
 use structopt::{
 	clap::{self, AppSettings},
@@ -164,9 +164,9 @@ pub trait SubstrateCli: Sized {
 	/// Print the error message and quit the program in case of failure.
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
-	/// used. It will return a [`clap::Error`], where the [`kind`] is a
-	/// [`ErrorKind::HelpDisplayed`] or [`ErrorKind::VersionDisplayed`] respectively. You must call
-	/// [`Error::exit`] or perform a [`std::process::exit`].
+	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
+	/// [`clap::ErrorKind::HelpDisplayed`] or [`clap::ErrorKind::VersionDisplayed`] respectively.
+	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
 		Self: StructOpt + Sized,
@@ -198,7 +198,7 @@ pub trait SubstrateCli: Sized {
 	fn create_configuration<T: CliConfiguration>(
 		&self,
 		command: &T,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+		task_executor: TaskExecutor,
 	) -> error::Result<Configuration> {
 		command.create_configuration(self, task_executor)
 	}
@@ -209,6 +209,9 @@ pub trait SubstrateCli: Sized {
 		command.init::<Self>()?;
 		Runner::new(self, command)
 	}
+
+	/// Native runtime version.
+	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
 
 /// Initialize the logger
@@ -252,7 +255,7 @@ pub fn init_logger(pattern: &str) {
 					format!("{}", Colour::Blue.bold().paint(x))
 				});
 			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-			let timestamp = format!("{}.{}", timestamp, millis);
+			let timestamp = format!("{}.{:03}", timestamp, millis);
 			format!(
 				"{} {} {} {}  {}",
 				Colour::Black.bold().paint(timestamp),

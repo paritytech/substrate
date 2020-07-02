@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! Transaction pool Prometheus metrics.
 
 use std::sync::Arc;
@@ -47,6 +48,8 @@ pub struct Metrics {
 	pub validations_scheduled: Counter<U64>,
 	pub validations_finished: Counter<U64>,
 	pub validations_invalid: Counter<U64>,
+	pub block_transactions_pruned: Counter<U64>,
+	pub block_transactions_resubmitted: Counter<U64>,
 }
 
 impl Metrics {
@@ -70,6 +73,20 @@ impl Metrics {
 				Counter::new(
 					"sub_txpool_validations_invalid",
 					"Total number of transactions that were removed from the pool as invalid",
+				)?,
+				registry,
+			)?,
+			block_transactions_pruned: register(
+				Counter::new(
+					"sub_txpool_block_transactions_pruned",
+					"Total number of transactions that was requested to be pruned by block events",
+				)?,
+				registry,
+			)?,
+			block_transactions_resubmitted: register(
+				Counter::new(
+					"sub_txpool_block_transactions_resubmitted",
+					"Total number of transactions that was requested to be resubmitted by block events",
 				)?,
 				registry,
 			)?,

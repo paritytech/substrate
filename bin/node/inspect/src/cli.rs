@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -23,7 +23,7 @@ use sc_cli::{ImportParams, SharedParams};
 use structopt::StructOpt;
 
 /// The `inspect` command used to print decoded chain data.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct InspectCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -39,7 +39,7 @@ pub struct InspectCmd {
 }
 
 /// A possible inspect sub-commands.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub enum InspectSubCmd {
 	/// Decode block with native version of runtime and print out the details.
 	Block {

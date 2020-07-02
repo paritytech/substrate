@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -39,7 +39,7 @@ pub use crate::params::shared_params::*;
 pub use crate::params::transaction_pool_params::*;
 
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockNumber(String);
 
 impl FromStr for BlockNumber {
@@ -72,7 +72,7 @@ impl BlockNumber {
 }
 
 /// Wrapper type that is either a `Hash` or the number of a `Block`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockNumberOrHash(String);
 
 impl FromStr for BlockNumberOrHash {

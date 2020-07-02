@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME #1021 move this into sp-consensus
@@ -38,21 +39,31 @@ use futures::{executor, future, future::Either};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
+use prometheus_endpoint::Registry as PrometheusRegistry;
+use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
+
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
 	/// The client instance.
 	client: Arc<C>,
 	/// The transaction pool.
 	transaction_pool: Arc<A>,
+	/// Prometheus Link,
+	metrics: PrometheusMetrics,
 	/// phantom member to pin the `Backend` type.
 	_phantom: PhantomData<B>,
 }
 
 impl<A, B, C> ProposerFactory<A, B, C> {
-	pub fn new(client: Arc<C>, transaction_pool: Arc<A>) -> Self {
+	pub fn new(
+		client: Arc<C>,
+		transaction_pool: Arc<A>,
+		prometheus: Option<&PrometheusRegistry>,
+	) -> Self {
 		ProposerFactory {
 			client,
 			transaction_pool,
+			metrics: PrometheusMetrics::new(prometheus),
 			_phantom: PhantomData,
 		}
 	}
@@ -80,15 +91,14 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
-			inner: Arc::new(ProposerInner {
-				client: self.client.clone(),
-				parent_hash,
-				parent_id: id,
-				parent_number: *parent_header.number(),
-				transaction_pool: self.transaction_pool.clone(),
-				now,
-				_phantom: PhantomData,
-			}),
+			client: self.client.clone(),
+			parent_hash,
+			parent_id: id,
+			parent_number: *parent_header.number(),
+			transaction_pool: self.transaction_pool.clone(),
+			now,
+			metrics: self.metrics.clone(),
+			_phantom: PhantomData,
 		};
 
 		proposer
@@ -120,17 +130,13 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
-	inner: Arc<ProposerInner<B, Block, C, A>>,
-}
-
-/// Proposer inner, to wrap parameters under Arc.
-struct ProposerInner<B, Block: BlockT, C, A: TransactionPool> {
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
+	metrics: PrometheusMetrics,
 	_phantom: PhantomData<B>,
 }
 
@@ -152,22 +158,21 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 	type Error = sp_blockchain::Error;
 
 	fn propose(
-		&mut self,
+		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		max_duration: time::Duration,
 		record_proof: RecordProof,
 	) -> Self::Proposal {
-		let inner = self.inner.clone();
 		tokio_executor::blocking::run(move || {
 			// leave some time for evaluation and block finalization (33%)
-			let deadline = (inner.now)() + max_duration - max_duration / 3;
-			inner.propose_with(inherent_data, inherent_digests, deadline, record_proof)
+			let deadline = (self.now)() + max_duration - max_duration / 3;
+			self.propose_with(inherent_data, inherent_digests, deadline, record_proof)
 		})
 	}
 }
 
-impl<A, B, Block, C> ProposerInner<B, Block, C, A>
+impl<A, B, Block, C> Proposer<B, Block, C, A>
 	where
 		A: TransactionPool<Block = Block>,
 		B: backend::Backend<Block> + Send + Sync + 'static,
@@ -178,7 +183,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	fn propose_with(
-		&self,
+		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
 		deadline: time::Instant,
@@ -219,7 +224,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		}
 
 		// proceed with transactions
-		let mut is_first = true;
+		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
@@ -229,7 +234,8 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool to be ready. Proceeding to block production anyway.",
+					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					self.parent_number,
 				);
 				self.transaction_pool.ready()
 			}
@@ -255,10 +261,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				}
 				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
-					if is_first {
-						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
-						unqueue_invalid.push(pending_tx_hash);
-					} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
 						debug!(
 							"Block seems full, but will try {} more transactions before quitting.",
@@ -281,13 +284,18 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 					unqueue_invalid.push(pending_tx_hash);
 				}
 			}
-
-			is_first = false;
 		}
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+
+		self.metrics.report(
+			|metrics| {
+				metrics.number_of_transactions.set(block.extrinsics().len() as u64);
+				metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+			}
+		);
 
 		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
@@ -324,15 +332,14 @@ mod tests {
 	use parking_lot::Mutex;
 	use sp_consensus::{BlockOrigin, Proposer};
 	use substrate_test_runtime_client::{
-		prelude::*,
-		runtime::{Extrinsic, Transfer},
+		prelude::*, TestClientBuilder, runtime::{Extrinsic, Transfer}, TestClientBuilderExt,
 	};
 	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
-	use backend::Backend;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
+	use sc_client_api::Backend;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
 
@@ -345,12 +352,12 @@ mod tests {
 		}.into_signed_tx()
 	}
 
-	fn chain_event<B: BlockT>(block_number: u64, header: B::Header) -> ChainEvent<B>
+	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
 		where NumberFor<B>: From<u64>
 	{
 		ChainEvent::NewBlock {
-			id: BlockId::Number(block_number.into()),
-			retracted: vec![],
+			hash: header.hash(),
+			tree_route: None,
 			is_new_best: true,
 			header,
 		}
@@ -374,15 +381,16 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
-		let mut proposer = proposer_factory.init_with_now(
+		let proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
@@ -420,10 +428,10 @@ mod tests {
 			).0
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
 		let cell = Mutex::new((false, time::Instant::now()));
-		let mut proposer = proposer_factory.init_with_now(
+		let proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
 			Box::new(move || {
 				let mut value = cell.lock();
@@ -445,8 +453,7 @@ mod tests {
 
 	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
-			.build_with_backend();
+		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
 			BasicPool::new(
@@ -465,14 +472,15 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 
-		let mut proposer = proposer_factory.init_with_now(
+		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
 			Box::new(move || time::Instant::now()),
 		);
@@ -493,8 +501,11 @@ mod tests {
 			backend.changes_trie_storage(),
 		).unwrap();
 
-		let storage_changes = api.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(
+			&state,
+			changes_trie_state.as_ref(),
+			genesis_hash,
+		).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,
@@ -536,14 +547,14 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 		let mut propose_block = |
 			client: &TestClient,
 			number,
 			expected_block_extrinsics,
 			expected_pool_transactions,
 		| {
-			let mut proposer = proposer_factory.init_with_now(
+			let proposer = proposer_factory.init_with_now(
 				&client.header(&BlockId::number(number)).unwrap().unwrap(),
 				Box::new(move || time::Instant::now()),
 			);
@@ -564,8 +575,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				0,
-				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 
@@ -575,8 +587,9 @@ mod tests {
 
 		futures::executor::block_on(
 			txpool.maintain(chain_event(
-				1,
-				client.header(&BlockId::Number(1)).expect("header get error").expect("there should be header")
+				client.header(&BlockId::Number(1))
+					.expect("header get error")
+					.expect("there should be header")
 			))
 		);
 

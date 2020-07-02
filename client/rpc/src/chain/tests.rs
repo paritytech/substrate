@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -15,6 +15,7 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 use super::*;
 use assert_matches::assert_matches;
 use substrate_test_runtime_client::{
@@ -30,7 +31,7 @@ use crate::testing::TaskExecutor;
 #[test]
 fn should_return_header() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.header(Some(client.genesis_hash()).into()).wait(),
@@ -62,7 +63,7 @@ fn should_return_header() {
 #[test]
 fn should_return_a_block() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let block_hash = block.hash();
@@ -113,7 +114,7 @@ fn should_return_a_block() {
 #[test]
 fn should_return_block_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.block_hash(None.into()),
@@ -148,7 +149,7 @@ fn should_return_block_hash() {
 	);
 
 	assert_matches!(
-		api.block_hash(Some(vec![0u64.into(), 1.into(), 2.into()].into())),
+		api.block_hash(Some(vec![0u64.into(), 1u64.into(), 2u64.into()].into())),
 		Ok(ListOrValue::List(list)) if list == &[client.genesis_hash().into(), block.hash().into(), None]
 	);
 }
@@ -157,7 +158,7 @@ fn should_return_block_hash() {
 #[test]
 fn should_return_finalized_hash() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+	let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 	assert_matches!(
 		api.finalized_head(),
@@ -187,12 +188,15 @@ fn should_notify_about_latest_block() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_all_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
+		assert!(matches!(
+			executor::block_on(id.compat()),
+			Ok(Ok(SubscriptionId::String(_)))
+		));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -214,12 +218,15 @@ fn should_notify_about_best_block() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_new_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
+		assert!(matches!(
+			executor::block_on(id.compat()),
+			Ok(Ok(SubscriptionId::String(_)))
+		));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();
@@ -241,12 +248,15 @@ fn should_notify_about_finalized_block() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(TaskExecutor)));
+		let api = new_full(client.clone(), SubscriptionManager::new(Arc::new(TaskExecutor)));
 
 		api.subscribe_finalized_heads(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(executor::block_on(id.compat()), Ok(Ok(SubscriptionId::Number(1))));
+		assert!(matches!(
+			executor::block_on(id.compat()),
+			Ok(Ok(SubscriptionId::String(_)))
+		));
 
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 		client.import(BlockOrigin::Own, block).unwrap();

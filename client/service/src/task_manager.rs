@@ -13,14 +13,15 @@
 
 //! Substrate service tasks management module.
 
-use std::{panic, pin::Pin, result::Result, sync::Arc};
+use std::{panic, result::Result, pin::Pin};
 use exit_future::Signal;
 use log::debug;
 use futures::{
-	Future, FutureExt,
+	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture},
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
+	sink::SinkExt,
 };
 use prometheus_endpoint::{
 	exponential_buckets, register,
@@ -28,18 +29,16 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
-use crate::config::TaskType;
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use crate::{config::{TaskExecutor, TaskType}, Error};
 
 mod prometheus_future;
-
-/// Type alias for service task executor (usually runtime).
-pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
-	executor: ServiceTaskExecutor,
+	executor: TaskExecutor,
 	metrics: Option<Metrics>,
 }
 
@@ -112,7 +111,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		(self.executor)(Box::pin(future), task_type);
+		self.executor.spawn(Box::pin(future), task_type);
 	}
 }
 
@@ -124,9 +123,13 @@ impl Spawn for SpawnTaskHandle {
 	}
 }
 
-impl sp_core::traits::SpawnBlocking for SpawnTaskHandle {
+impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_blocking(name, future);
+	}
+
+	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn(name, future);
 	}
 }
 
@@ -145,6 +148,63 @@ impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
 	}
 }
 
+/// A wrapper over `SpawnTaskHandle` that will notify a receiver whenever any
+/// task spawned through it fails. The service should be on the receiver side
+/// and will shut itself down whenever it receives any message, i.e. an
+/// essential task has failed.
+pub struct SpawnEssentialTaskHandle {
+	essential_failed_tx: TracingUnboundedSender<()>,
+	inner: SpawnTaskHandle,
+}
+
+impl SpawnEssentialTaskHandle {
+	/// Creates a new `SpawnEssentialTaskHandle`.
+	pub fn new(
+		essential_failed_tx: TracingUnboundedSender<()>,
+		spawn_task_handle: SpawnTaskHandle,
+	) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle {
+			essential_failed_tx,
+			inner: spawn_task_handle,
+		}
+	}
+
+	/// Spawns the given task with the given name.
+	///
+	/// See also [`SpawnTaskHandle::spawn`].
+	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_inner(name, task, TaskType::Async)
+	}
+
+	/// Spawns the blocking task with the given name.
+	///
+	/// See also [`SpawnTaskHandle::spawn_blocking`].
+	pub fn spawn_blocking(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+	) {
+		self.spawn_inner(name, task, TaskType::Blocking)
+	}
+
+	fn spawn_inner(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+		task_type: TaskType,
+	) {
+		let mut essential_failed = self.essential_failed_tx.clone();
+		let essential_task = std::panic::AssertUnwindSafe(task)
+			.catch_unwind()
+			.map(move |_| {
+				log::error!("Essential task `{}` failed. Shutting down service.", name);
+				let _ = essential_failed.send(());
+			});
+
+		let _ = self.inner.spawn_inner(name, essential_task, task_type);
+	}
+}
+
 /// Helper struct to manage background/async tasks in Service.
 pub struct TaskManager {
 	/// A future that resolves when the service has exited, this is useful to
@@ -153,19 +213,28 @@ pub struct TaskManager {
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
 	/// How to spawn background tasks.
-	executor: ServiceTaskExecutor,
+	executor: TaskExecutor,
 	/// Prometheus metric where to report the polling times.
 	metrics: Option<Metrics>,
+	/// Send a signal when a spawned essential task has concluded. The next time
+	/// the service future is polled it should complete with an error.
+	essential_failed_tx: TracingUnboundedSender<()>,
+	/// A receiver for spawned essential-tasks concluding.
+	essential_failed_rx: TracingUnboundedReceiver<()>,
+	/// Things to keep alive until the task manager is dropped.
+	keep_alive: Box<dyn std::any::Any + Send + Sync>,
 }
 
 impl TaskManager {
  	/// If a Prometheus registry is passed, it will be used to report statistics about the
  	/// service tasks.
 	pub(super) fn new(
-		executor: ServiceTaskExecutor,
+		executor: TaskExecutor,
 		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
+		// A side-channel for essential tasks to communicate shutdown.
+		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
@@ -174,17 +243,15 @@ impl TaskManager {
 			signal: Some(signal),
 			executor,
 			metrics,
+			essential_failed_tx,
+			essential_failed_rx,
+			keep_alive: Box::new(()),
 		})
 	}
 
-	/// Spawn background/async task, which will be aware on exit signal.
-	///
-	/// See also the documentation of [`SpawnTaskHandler::spawn`].
-	pub(super) fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_handle().spawn(name, task)
-	}
 
-	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
+	/// Get a handle for spawning tasks.
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
@@ -192,18 +259,37 @@ impl TaskManager {
 		}
 	}
 
-	/// Clone on exit signal.
-	pub(super) fn on_exit(&self) -> exit_future::Exit {
-		self.on_exit.clone()
+	/// Get a handle for spawning essential tasks.
+	pub fn spawn_essential_handle(&self) -> SpawnEssentialTaskHandle {
+		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
+	}
+
+	/// Return a future that will end if an essential task fails.
+	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
+		Box::pin(async move {
+			self.essential_failed_rx.next().await;
+
+			Err(Error::Other("Essential task failed.".into()))
+		})
+	}
+
+	/// Signal to terminate all the running tasks.
+	pub fn terminate(&mut self) {
+		if let Some(signal) = self.signal.take() {
+			let _ = signal.fire();
+		}
+	}
+
+	/// Set what the task manager should keep alivei
+	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
+		self.keep_alive = Box::new(to_keep_alive);
 	}
 }
 
 impl Drop for TaskManager {
 	fn drop(&mut self) {
 		debug!(target: "service", "Tasks manager shutdown");
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-		}
+		self.terminate();
 	}
 }
 

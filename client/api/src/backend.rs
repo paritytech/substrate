@@ -5,7 +5,7 @@
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -67,8 +67,10 @@ pub struct ImportSummary<Block: BlockT> {
 	pub is_new_best: bool,
 	/// Optional storage changes.
 	pub storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
-	/// Blocks that got retracted because of this one got imported.
-	pub retracted: Vec<Block::Hash>,
+	/// Tree route from old best to new best.
+	///
+	/// If `None`, there was no re-org while importing.
+	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
 }
 
 /// Import operation wrapper
