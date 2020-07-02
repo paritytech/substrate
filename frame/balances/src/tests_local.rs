@@ -113,7 +113,7 @@ impl Trait for Test {
 		system::CallKillAccount<Test>,
 		u64, super::AccountData<u64>
 	>;
-	type Weights = ();
+	type WeightInfo = ();
 }
 
 pub struct ExtBuilder {

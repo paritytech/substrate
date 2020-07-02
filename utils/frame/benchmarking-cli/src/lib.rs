@@ -60,6 +60,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub no_min_squares: bool,
 
+	/// Output the benchmarks to a Rust file.
+	#[structopt(long)]
+	pub output: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,

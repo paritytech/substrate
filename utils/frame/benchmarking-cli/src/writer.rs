@@ -44,7 +44,7 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 			).unwrap();
 
 			// trait wrapper
-			write!(file, "impl pallet_{}::Weights for WeightFor{} {{\n",
+			write!(file, "impl pallet_{}::WeightInfo for WeightFor{} {{\n",
 				pallet_string,
 				uppercase_first_letter(&pallet_string),
 			).unwrap();
