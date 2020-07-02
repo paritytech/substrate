@@ -412,10 +412,12 @@ mod tests {
 		let (block_header, justification) = create_justification();
 		let _ = subscribers.notify((block_header, justification)).unwrap();
 
+		// WIP: we want to just poll a single time, ensuring we get the justification pushed.
 		let _ = receiver.for_each(|item| {
 			dbg!(item);
 			Ok(())
-		}).wait().ok();
-	}
+		}).wait().ok(); // FIXME: hangs!
 
+		// WIP: unsubscribe and notify again to make sure we don't send anything.
+	}
 }
