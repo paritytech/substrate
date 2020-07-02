@@ -42,7 +42,7 @@ pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::collections::{HashSet, HashMap};
-use futures::{future::Future, stream::StreamExt};
+use futures::{future::{Future, FutureExt}, stream::StreamExt};
 use sp_core::storage::ChildInfo;
 use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
