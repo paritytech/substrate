@@ -287,10 +287,10 @@ impl RpcHandlersExt for RpcHandlers {
 	> + Send>> {
 		let (tx, rx) = futures01::sync::mpsc::channel(0);
 		let mem = RpcSession::new(tx.into());
-		let future = self
+		self
 			.rpc_query(
 				&mem,
-				format!(
+				&format!(
 					r#"{{
 						"jsonrpc": "2.0",
 						"method": "author_submitExtrinsic",
@@ -298,15 +298,9 @@ impl RpcHandlersExt for RpcHandlers {
 						"id": 0
 					}}"#,
 					hex::encode(extrinsic.encode())
-				)
-				.as_str(),
-			);
-
-		Box::pin(async move {
-			let res = future.await;
-
-			(res, mem, rx)
-		})
+				),
+			)
+			.map(move |res| (res, mem, rx))
 	}
 }
 
