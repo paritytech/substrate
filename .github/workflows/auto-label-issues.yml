@@ -8,10 +8,10 @@ on:
 
 jobs:
   label-new-issues:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest 
     steps:
       - name: Label drafts
         uses: andymckay/labeler@master
-        if: github.event.issue.author_association == "NONE"
+        if: github.event.issue.author_association == 'NONE'
         with:
           add-labels: 'Z0-unconfirmed'

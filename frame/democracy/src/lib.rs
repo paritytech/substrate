@@ -279,7 +279,10 @@ pub trait Trait: frame_system::Trait + Sized {
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The Scheduler.
-	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
+	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal, Self::PalletsOrigin>;
+
+	/// Overarching type of all pallets origins.
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>>;
 
 	/// The maximum number of votes for an account.
 	///
@@ -1625,6 +1628,7 @@ impl<T: Trait> Module<T> {
 					when,
 					None,
 					63,
+					system::RawOrigin::Root.into(),
 					Call::enact_proposal(status.proposal_hash, index).into(),
 				).is_err() {
 					frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");
