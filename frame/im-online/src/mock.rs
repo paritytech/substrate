@@ -177,6 +177,7 @@ impl Trait for Runtime {
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where
