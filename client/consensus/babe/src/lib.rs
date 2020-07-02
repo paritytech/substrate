@@ -106,6 +106,7 @@ use sc_client_api::{
 	BlockchainEvents, ProvideUncles,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
@@ -370,7 +371,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	babe_link,
 	can_author_with,
 }: BabeParams<B, C, E, I, SO, SC, CAW>) -> Result<
-	BabeWorker,
+	BabeWorker<B>,
 	sp_consensus::Error,
 > where
 	B: BlockT,
@@ -387,6 +388,8 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 	CAW: CanAuthorWith<B> + Send + 'static,
 {
 	let config = babe_link.config;
+	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
+
 	let worker = BabeSlotWorker {
 		client: client.clone(),
 		block_import: Arc::new(Mutex::new(block_import)),
@@ -415,15 +418,19 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		babe_link.time_source,
 		can_author_with,
 	);
-	Ok(BabeWorker { inner: Box::pin(inner) })
+	Ok(BabeWorker {
+		inner: Box::pin(inner),
+		slot_notification_sinks,
+	})
 }
 
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
-pub struct BabeWorker {
+pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()>>>,
+	slot_notification_sinks: Arc<Mutex<Vec<TracingUnboundedSender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
 }
 
-impl futures::Future for BabeWorker {
+impl<B: BlockT> futures::Future for BabeWorker<B> {
 	type Output = ();
 
 	fn poll(

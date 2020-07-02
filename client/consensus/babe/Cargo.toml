@@ -37,6 +37,7 @@ sp-consensus-vrf = { version = "0.8.0-rc4", path = "../../../primitives/consensu
 sc-consensus-uncles = { version = "0.8.0-rc4", path = "../uncles" }
 sc-consensus-slots = { version = "0.8.0-rc4", path = "../slots" }
 sp-runtime = { version = "2.0.0-rc4", path = "../../../primitives/runtime" }
+sp-utils = { version = "2.0.0-rc4", path = "../../../primitives/utils" }
 fork-tree = { version = "2.0.0-rc4", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc4"}
 futures = "0.3.4"
