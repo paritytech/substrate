@@ -197,6 +197,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl pallet_timestamp::Trait for Test {
@@ -222,6 +223,7 @@ impl Trait for Test {
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = ();
+	type WeightInfo = ();
 }
 
 #[cfg(feature = "historical")]
