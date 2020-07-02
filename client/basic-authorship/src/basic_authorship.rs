@@ -26,7 +26,6 @@ use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
-use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},

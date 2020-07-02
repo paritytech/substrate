@@ -58,7 +58,7 @@ pub use sp_runtime::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
 		Header as HeaderT, Hash as HashT,
 	},
-	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString,
+	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString, TransactionOutcome,
 };
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
@@ -348,24 +348,6 @@ pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
 pub trait ApiErrorExt {
 	/// Error type used by the runtime apis.
 	type Error: std::fmt::Debug + From<String>;
-}
-
-/// Describes on what should happen with a transaction.
-pub enum TransactionOutcome<R> {
-	/// Commit the transaction.
-	Commit(R),
-	/// Rollback the transaction.
-	Rollback(R),
-}
-
-impl<R> TransactionOutcome<R> {
-	/// Convert into the inner type.
-	pub fn into_inner(self) -> R {
-		match self {
-			Self::Commit(r) => r,
-			Self::Rollback(r) => r,
-		}
-	}
 }
 
 /// Extends the runtime api implementation with some common functionality.
