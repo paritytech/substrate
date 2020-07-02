@@ -94,7 +94,9 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 }
 
 fn run_until_exit<FUT, ERR>(
-	mut tokio_runtime: tokio::runtime::Runtime, future: FUT, mut task_manager: TaskManager,
+	mut tokio_runtime: tokio::runtime::Runtime, 
+	future: FUT, 
+	mut task_manager: TaskManager,
 ) -> Result<()>
 where
 	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
