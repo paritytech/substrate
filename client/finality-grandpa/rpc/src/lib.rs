@@ -153,8 +153,9 @@ where
 mod tests {
 	use super::*;
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
-	use jsonrpc_core::Output;
+	use jsonrpc_core::{Notification, Output, types::Params};
 
+	use parity_scale_codec::Encode;
 	use sc_block_builder::BlockBuilder;
 	use sc_finality_grandpa::{report, AuthorityId, GrandpaJustificationSubscribers, GrandpaJustification};
 	use sp_blockchain::HeaderBackend;
@@ -397,7 +398,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore]
 	fn subscribe_and_listen_to_one_justification() {
 		let (io, subscribers) = setup_io_handler(TestVoterState);
 		let (meta, receiver) = setup_session();
@@ -405,47 +405,30 @@ mod tests {
 		// Subscribe
 		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
 
-		assert!(subscribers.len() == 0);
 		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
-		assert!(subscribers.len() == 1);
-
-		let sub_id = match resp {
-			Output::Success(success) => success.result,
-			_ => panic!(),
-		};
+		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
+		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
 		// Notify with a header and justification
 		let (block_header, justification) = create_justification();
-		let _ = subscribers.notify((block_header, justification)).unwrap();
+		let _ = subscribers.notify((block_header.clone(), justification.clone())).unwrap();
 
-		// FIXME: we want to just poll a single time, ensuring we get the justification pushed.
-		let _ = receiver.for_each(|item| {
-			dbg!(item);
-			Ok(())
-		}).wait().ok(); // FIXME: hangs!
+		// Inspect what we received
+		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
+		let recv: Notification = serde_json::from_str(&recv[0]).unwrap();
+		let mut json_map = match recv.params {
+			Params::Map(json_map) => json_map,
+			_ => panic!(),
+		};
 
-		// Unsubscribe
-		let unsub_req = format!(
-			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
-			sub_id
-		);
-		assert!(subscribers.len() == 1);
-		assert_eq!(
-			io.handle_request_sync(&unsub_req, meta.clone()),
-			Some(r#"{"jsonrpc":"2.0","result":true,"id":1}"#.into()),
-		);
-		assert!(subscribers.len() == 0);
+		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+		let mut result = json_map["result"].take();
+		let recv_block_header: Header<u64, BlakeTwo256> = serde_json::from_value(result["header"].take()).unwrap();
+		let recv_justification: Vec<u8> = serde_json::from_value(result["justification"].take()).unwrap();
 
-		// Notify with another header and justification
-		// TODO: make the second justification different.
-		let (block_header, justification) = create_justification();
-		let _ = subscribers.notify((block_header, justification)).unwrap();
-
-		// FIXME: nothing should be sent since we unsubscribed.
-		//let _ = receiver.for_each(|item| {
-		//	dbg!(item);
-		//	Ok(())
-		//}).wait().ok(); // FIXME: hangs!
+		assert_eq!(recv.method, "grandpa_justifications");
+		assert_eq!(recv_sub_id, sub_id);
+		assert_eq!(recv_block_header, block_header);
+		assert_eq!(recv_justification, justification.encode());
 	}
 }
