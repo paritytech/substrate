@@ -90,8 +90,13 @@ impl BenchmarkCmd {
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		if self.output {
-			let mut file = crate::writer::open_file()?;
-			crate::writer::write_results(&mut file, results.clone())?;
+			if self.weight_trait {
+				let mut file = crate::writer::open_file("traits.rs")?;
+				crate::writer::write_trait(&mut file, results.clone())?;
+			} else {
+				let mut file = crate::writer::open_file("benchmarks.rs")?;
+				crate::writer::write_results(&mut file, results.clone())?;
+			}
 		}
 
 		match results {

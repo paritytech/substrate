@@ -202,11 +202,11 @@ pub trait WeightInfo {
 }
 
 impl WeightInfo for () {
-	fn transfer(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
-	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
-	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
-	fn set_balance(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
-	fn set_balance_killing(_u: u32, _e: u32, ) -> Weight { 100_000_000 }
+	fn transfer(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn set_balance(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn set_balance_killing(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {

@@ -10,12 +10,90 @@ fn uppercase_first_letter(s: &str) -> String {
 	}
 }
 
-pub fn open_file() -> Result<File, std::io::Error> {
+pub fn open_file(path: &str) -> Result<File, std::io::Error> {
 	OpenOptions::new()
 		.create(true)
 		.write(true)
 		.append(true)
-		.open("benchmarks.rs")
+		.open(path)
+}
+
+pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>) -> Result<(), std::io::Error> {
+	let batches = batches.unwrap();
+
+	let mut current_pallet = Vec::<u8>::new();
+
+	batches.iter().for_each(|batch| {
+
+		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
+		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
+
+		// only create new trait definitions when we go to a new pallet
+		if batch.pallet != current_pallet {
+			if !current_pallet.is_empty() {
+				// close trait
+				write!(file, "}}\n").unwrap();
+			}
+
+			// trait wrapper
+			write!(file, "// {}\n", pallet_string).unwrap();
+			write!(file, "pub trait WeightInfo {{\n").unwrap();
+
+			current_pallet = batch.pallet.clone()
+		}
+
+		// function name
+		write!(file, "	fn {}(", benchmark_string).unwrap();
+
+		// params
+		let components = &batch.results[0].components;
+		for component in components {
+			write!(file, "{:?}: u32, ", component.0).unwrap();
+		}
+		// return value
+		write!(file, ") -> Weight;\n").unwrap();
+	});
+
+	// final close trait
+	write!(file, "}}\n").unwrap();
+
+	// Reset
+	current_pallet = Vec::<u8>::new();
+
+	batches.iter().for_each(|batch| {
+
+		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
+
+		// only create new trait definitions when we go to a new pallet
+		if batch.pallet != current_pallet {
+			if !current_pallet.is_empty() {
+				// close trait
+				write!(file, "}}\n").unwrap();
+			}
+
+			// impl trait
+			write!(file, "\n").unwrap();
+			write!(file, "impl WeightInfo for () {{\n").unwrap();
+
+			current_pallet = batch.pallet.clone()
+		}
+
+		// function name
+		write!(file, "	fn {}(", benchmark_string).unwrap();
+
+		// params
+		let components = &batch.results[0].components;
+		for component in components {
+			write!(file, "_{:?}: u32, ", component.0).unwrap();
+		}
+		// return value
+		write!(file, ") -> Weight {{ 1_000_000_000 }}\n").unwrap();
+	});
+
+	// final close trait
+	write!(file, "}}\n").unwrap();
+
+	Ok(())
 }
 
 pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>) -> Result<(), std::io::Error> {

@@ -64,6 +64,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub output: bool,
 
+	/// Output the trait definition to a Rust file.
+	#[structopt(long)]
+	pub weight_trait: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
