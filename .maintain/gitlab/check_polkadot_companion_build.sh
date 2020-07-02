@@ -112,7 +112,7 @@ mkdir -p target/debug/wbuild/.cargo
 cp .cargo/config target/debug/wbuild/.cargo/config
 
 # package, others are updated along the way.
-cargo update
+cargo update -p sp-io
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
