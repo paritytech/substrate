@@ -106,7 +106,7 @@ use sc_client_api::{
 	BlockchainEvents, ProvideUncles,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
@@ -428,6 +428,18 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()>>>,
 	slot_notification_sinks: Arc<Mutex<Vec<TracingUnboundedSender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
+}
+
+impl<B: BlockT> BabeWorker<B> {
+	/// Return an event stream of notifications for when new slot happens, and the corresponding
+	/// epoch descriptor.
+	pub fn slot_notification_stream(
+		&self
+	) -> TracingUnboundedReceiver<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+		let (sink, stream) = tracing_unbounded("mpsc_babe_slot_notifications");
+		self.slot_notification_sinks.lock().push(sink);
+		stream
+	}
 }
 
 impl<B: BlockT> futures::Future for BabeWorker<B> {
