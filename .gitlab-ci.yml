@@ -567,6 +567,7 @@ chaos-test-singlenodeheight:
     CONTAINER_IMAGE:               paritypr/$PRODUCT
     KEEP_NAMESPACE:                0
     NAMESPACE:                     "substrate-ci-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
+  interruptible:                   true
     VERSION:                       "ci-${CI_COMMIT_SHORT_SHA}"
   interruptible: true
   environment:
