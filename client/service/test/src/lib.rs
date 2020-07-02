@@ -229,8 +229,8 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 	};
 
 	Configuration {
-		impl_name: "network-test-impl",
-		impl_version: "0.1",
+		impl_name: String::from("network-test-impl"),
+		impl_version: String::from("0.1"),
 		role,
 		task_executor,
 		transaction_pool: Default::default(),

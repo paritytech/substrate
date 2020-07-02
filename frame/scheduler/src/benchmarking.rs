@@ -44,6 +44,7 @@ fn fill_schedule<T: Trait> (when: T::BlockNumber, n: u32) -> Result<(), &'static
 			Some((T::BlockNumber::one(), 100)),
 			// HARD_DEADLINE priority means it gets executed no matter what
 			0,
+			frame_system::RawOrigin::Root.into(),
 			call.clone().into(),
 		)?;
 	}
