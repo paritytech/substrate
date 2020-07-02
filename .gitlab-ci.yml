@@ -89,11 +89,20 @@ default:
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
 
+.build-chaos-only:                       &build-chaos-only
+  only:
+    refs:
+    - master
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+    - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
+    - web
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/  # i.e add [chaos:basic] in commit message to trigger
+
 .chaos-only:                       &chaos-only
   only:
     variables:
       - $CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/  # i.e add [chaos:basic] in commit message to trigger
-
 
 #### stage:                       .pre
 
@@ -166,6 +175,10 @@ cargo-audit:
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
+  only:
+    - schedules
+    - tags
+    - web
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -267,7 +280,7 @@ test-wasmtime:
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
+    # but still want to have debug assertions. 
     RUSTFLAGS: -Cdebug-assertions=y
     RUST_BACKTRACE: 1
   except:
@@ -293,7 +306,7 @@ test-runtime-benchmarks:
       - $DEPLOY_TAG
   script:
     - cd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
+    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --release --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
@@ -415,8 +428,7 @@ build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-only
-  <<:                              *chaos-only
+  <<:                              *build-chaos-only
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
@@ -515,6 +527,7 @@ docker-build-chaos:                &docker-build-chaos
   tags: 
     - kubernetes-parity-build
   variables:
+    <<:                            *default-vars
     DOCKER_HOST:                   tcp://localhost:2375
     DOCKER_DRIVER:                 overlay2
     PRODUCT:                       substrate
