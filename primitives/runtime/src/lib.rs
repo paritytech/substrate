@@ -801,7 +801,7 @@ impl Drop for SignatureBatching {
 	}
 }
 
-/// Describes on what should happen with a transaction.
+/// Describes on what should happen with a storage transaction.
 pub enum TransactionOutcome<R> {
 	/// Commit the transaction.
 	Commit(R),
