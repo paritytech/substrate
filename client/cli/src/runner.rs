@@ -246,12 +246,12 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs a future with tokio and stops if the process receives
 	/// the signal SIGTERM or SIGINT
 	pub fn async_run<FUT>(
-		self, runner: impl FnOnce(Configuration) -> (FUT, TaskManager),
+		self, runner: impl FnOnce(Configuration) -> Result<(FUT, TaskManager)>,
 	) -> Result<()>
 	where
 		FUT: Future<Output = Result<()>>,
 	{
-		let (future, task_manager) = runner(self.config);
+		let (future, task_manager) = runner(self.config)?;
 		run_until_exit(self.tokio_runtime, future, task_manager)
 	}
 
