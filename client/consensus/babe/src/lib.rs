@@ -398,6 +398,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		force_authoring,
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
+		slot_notification_sinks: slot_notification_sinks.clone(),
 		config: config.clone(),
 	};
 
@@ -461,6 +462,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
+	slot_notification_sinks: Arc<Mutex<Vec<TracingUnboundedSender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
 	config: Config,
 }
 
