@@ -63,7 +63,7 @@ wasm-timer = "0.2"
 zeroize = "1.0.0"
 
 [dependencies.libp2p]
-version = "0.20.1"
+version = "0.21.0"
 default-features = false
 features = ["identify", "kad", "mdns", "mplex", "noise", "ping", "tcp-async-std", "websocket", "yamux"]
 
