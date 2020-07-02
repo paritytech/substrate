@@ -222,10 +222,14 @@ macro_rules! impl_outer_origin {
 			fn filter_call(&self, call: &Self::Call) -> bool {
 				(self.filter)(call)
 			}
+
+			fn caller(&self) -> &Self::PalletsOrigin {
+				&self.caller
+			}
 		}
 
 		$crate::paste::item! {
-			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug)]
+			#[derive(Clone, PartialEq, Eq, $crate::RuntimeDebug, $crate::codec::Encode, $crate::codec::Decode)]
 			$(#[$attr])*
 			#[allow(non_camel_case_types)]
 			pub enum $caller_name {
@@ -255,13 +259,25 @@ macro_rules! impl_outer_origin {
 			}
 		}
 
+		impl From<$system::Origin<$runtime>> for $caller_name {
+			fn from(x: $system::Origin<$runtime>) -> Self {
+				$caller_name::system(x)
+			}
+		}
 		impl From<$system::Origin<$runtime>> for $name {
 			/// Convert to runtime origin:
 			/// * root origin is built with no filter
 			/// * others use `frame-system::Trait::BaseCallFilter`
 			fn from(x: $system::Origin<$runtime>) -> Self {
+				let o: $caller_name = x.into();
+				o.into()
+			}
+		}
+
+		impl From<$caller_name> for $name {
+			fn from(x: $caller_name) -> Self {
 				let mut o = $name {
-					caller: $caller_name::system(x),
+					caller: x,
 					filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
 
@@ -273,6 +289,7 @@ macro_rules! impl_outer_origin {
 				o
 			}
 		}
+
 		impl Into<$crate::sp_std::result::Result<$system::Origin<$runtime>, $name>> for $name {
 			/// NOTE: converting to pallet origin loses the origin filter information.
 			fn into(self) -> $crate::sp_std::result::Result<$system::Origin<$runtime>, Self> {
@@ -290,17 +307,20 @@ macro_rules! impl_outer_origin {
 				<$system::Origin<$runtime>>::from(x).into()
 			}
 		}
+
 		$(
 			$crate::paste::item! {
+				impl From<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > for $caller_name {
+					fn from(x: $module::Origin < $( $generic )? $(, $module::$generic_instance )? >) -> Self {
+						$caller_name::[< $module $( _ $generic_instance )? >](x)
+					}
+				}
+
 				impl From<$module::Origin < $( $generic )? $(, $module::$generic_instance )? > > for $name {
 					/// Convert to runtime origin using `frame-system::Trait::BaseCallFilter`.
 					fn from(x: $module::Origin < $( $generic )? $(, $module::$generic_instance )? >) -> Self {
-						let mut o = $name {
-							caller: $caller_name::[< $module $( _ $generic_instance )? >](x),
-							filter: $crate::sp_std::rc::Rc::new(Box::new(|_| true)),
-						};
-						$crate::traits::OriginTrait::reset_filter(&mut o);
-						o
+						let x: $caller_name = x.into();
+						x.into()
 					}
 				}
 				impl Into<
@@ -328,15 +348,18 @@ macro_rules! impl_outer_origin {
 
 #[cfg(test)]
 mod tests {
+	use codec::{Encode, Decode};
 	use crate::traits::{Filter, OriginTrait};
 	mod system {
+		use super::*;
+
 		pub trait Trait {
 			type AccountId;
 			type Call;
 			type BaseCallFilter;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -356,18 +379,22 @@ mod tests {
 	}
 
 	mod origin_without_generic {
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		use super::*;
+
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub struct Origin;
 	}
 
 	mod origin_with_generic {
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		use super::*;
+
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub struct Origin<T> {
 			t: T
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug)]
+	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 	pub struct TestRuntime;
 
 	pub struct BaseCallFilter;

@@ -79,6 +79,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		1.into(),
 		None,
 		63,
+		system::RawOrigin::Root.into(),
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
 	).map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
