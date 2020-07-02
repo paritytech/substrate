@@ -1203,8 +1203,8 @@ fn build_telemetry<TBl: BlockT>(
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
 	let name = config.network.node_name.clone();
-	let impl_name = config.impl_name.to_owned();
-	let version = config.impl_version;
+	let impl_name = config.impl_name.clone();
+	let impl_version = config.impl_version.clone();
 	let chain_name = config.chain_spec.name().to_owned();
 	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 		endpoints,
@@ -1221,7 +1221,7 @@ fn build_telemetry<TBl: BlockT>(
 			telemetry!(SUBSTRATE_INFO; "system.connected";
 				"name" => name.clone(),
 				"implementation" => impl_name.clone(),
-				"version" => version,
+				"version" => impl_version.clone(),
 				"config" => "",
 				"chain" => chain_name.clone(),
 				"genesis_hash" => ?genesis_hash,
@@ -1270,8 +1270,8 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
-		impl_name: config.impl_name.into(),
-		impl_version: config.impl_version.into(),
+		impl_name: config.impl_name.clone(),
+		impl_version: config.impl_version.clone(),
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
