@@ -1381,10 +1381,10 @@ decl_module! {
 			}
 		}
 		
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			migrate_hasher::<T>();
-			// TODO: determine actual weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 
 		fn on_finalize() {

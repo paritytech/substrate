@@ -13,13 +13,13 @@ pub fn migrate_block_hash<T: Trait>() -> Weight {
 	// Number - 2 is therefore the most recent block's hash that needs migrating.
 	let db = T::DbWeight::get();
 	let block_num = Number::<T>::get();
+	frame_support::runtime_print!("BlockNumber: {}", block_num.saturated_into::<u64>());
 	if block_num > One::one() {
 		sp_runtime::print("🕊️  Migrating BlockHashes...");
 		BlockHash::<T>::migrate_key_from_blake(T::BlockNumber::zero());
 		let mut n = block_num - One::one() - One::one();
 		let mut migrations = 1;
 		while !n.is_zero() {
-			sp_runtime::print(n.saturated_into::<u32>());
 			migrations += 1;
 			if BlockHash::<T>::migrate_key_from_blake(n).is_none() {
 				break;
@@ -29,7 +29,7 @@ pub fn migrate_block_hash<T: Trait>() -> Weight {
 		sp_runtime::print("🕊️  Done BlockHashes");
 		db.reads_writes(migrations + 1, migrations)
 	} else {
-		sp_runtime::print("No BlockHashes to migrate...");
+		sp_runtime::print("🕊️  No BlockHashes to migrate...");
 		db.reads(1)
 	}
 }

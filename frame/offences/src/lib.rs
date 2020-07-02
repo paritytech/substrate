@@ -142,12 +142,12 @@ decl_module! {
 			consumed
 		}
 
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			Reports::<T>::remove_all();
 			ConcurrentReportsIndex::<T>::remove_all();
 			ReportsByKindIndex::remove_all();
-			// TODO: determine actual weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 	}
 }

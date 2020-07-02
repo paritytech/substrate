@@ -352,10 +352,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T, I>();
-			// TODO: determine actual weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 
 		/// Set the collective's membership.

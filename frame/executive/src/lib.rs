@@ -233,6 +233,8 @@ where
 		digest: &Digest<System::Hash>,
 	) {
 		if Self::runtime_upgraded() {
+			// the block hash migration needs the block number to perform the migration
+			frame_system::Number::<System>::put(block_number);
 			// System is not part of `AllModules`, so we need to call this manually.
 			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());

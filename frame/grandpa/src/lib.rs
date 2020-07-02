@@ -40,7 +40,7 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
+	decl_error, decl_event, decl_module, decl_storage, storage, traits::{Get, KeyOwnerProofSystem},
 	Parameter, weights::Weight,
 };
 use frame_system::{self as system, ensure_signed, DigestOf};
@@ -239,17 +239,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
-			// TODO: determine actual weight
-			0
-		}
-
-		fn on_initialize() -> Weight {
-			#[cfg(feature = "migrate-authorities")]
-			Self::migrate_authorities();
-			// TODO: determine actual weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 
 		/// Report voter equivocation/misbehavior. This method will verify the

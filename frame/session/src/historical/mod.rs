@@ -74,13 +74,14 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			CachedObsolete::<T>::remove_all();
-			// TODO: determine actual weight
 			0
 		}
 
+		// The edgeware migration is so big we just assume it consumes the whole block.
+		// Tricky to get access to `T::MaximumBlockWeight` here, so we just use 0 because this is
+		// part of a bigger migration.
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
-			// TODO: determine actual weight
 			0
 		}
 	}

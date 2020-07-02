@@ -184,6 +184,8 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub mod migration;
+
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 /// The maximum number of vetoers on a single proposal used to compute Weight.
@@ -569,100 +571,7 @@ mod weight_for {
 
 impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 	fn migrate_account(a: &T::AccountId) {
-		mod deprecated {
-			use sp_std::prelude::*;
-		
-			use codec::{Encode, EncodeLike, Decode, Input, Output};
-			use frame_support::{decl_module, decl_storage};
-			use sp_runtime::RuntimeDebug;
-			use sp_std::convert::TryFrom;
-
-			use crate::{Trait, ReferendumIndex, Conviction};
-
-			#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
-			pub struct Vote {
-				pub aye: bool,
-				pub conviction: Conviction,
-			}
-
-			impl Encode for Vote {
-				fn encode_to<T: Output>(&self, output: &mut T) {
-					output.push_byte(u8::from(self.conviction) | if self.aye { 0b1000_0000 } else { 0 });
-				}
-			}
-
-			impl EncodeLike for Vote {}
-
-			impl Decode for Vote {
-				fn decode<I: Input>(input: &mut I) -> core::result::Result<Self, codec::Error> {
-					let b = input.read_byte()?;
-					Ok(Vote {
-						aye: (b & 0b1000_0000) == 0b1000_0000,
-						conviction: Conviction::try_from(b & 0b0111_1111)
-							.map_err(|_| codec::Error::from("Invalid conviction"))?,
-					})
-				}
-			}
-
-			decl_module! {
-				pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
-			}
-			decl_storage! {
-				trait Store for Module<T: Trait> as Democracy {
-					pub VoteOf get(fn vote_of):
-						map hasher(opaque_blake2_256) (ReferendumIndex, T::AccountId) => Vote;
-					pub Delegations get(fn delegations):
-						map hasher(opaque_blake2_256) T::AccountId => (T::AccountId, Conviction);
-				}
-			}
-		}
-
-		Locks::<T>::migrate_key_from_blake(a);
-		// TODO: will not actually do any useful migration
-		deprecated::Delegations::<T>::migrate_key_from_blake(a);
-		for i in LowestUnbaked::get()..ReferendumCount::get() {
-			// TODO: will not actually do any useful migration
-			deprecated::VoteOf::<T>::migrate_key_from_blake((i, a));
-		}
-	}
-}
-
-mod migration {
-	use super::*;
-
-	pub fn migrate<T: Trait>() -> Weight {
-		mod deprecated {
-			use super::*;
-
-			decl_module! {
-				pub struct Module<T: Trait> for enum Call where origin: T::Origin { }
-			}
-			decl_storage! {
-				trait Store for Module<T: Trait> as Democracy {
-					pub VotersFor get(fn voters_for):
-						map hasher(opaque_blake2_256) ReferendumIndex => Vec<T::AccountId>;
-					pub Proxy get(fn proxy):
-						map hasher(opaque_blake2_256) T::AccountId => Option<T::AccountId>;
-				}
-			}
-		}
-
-		// proxies were removed
-		deprecated::Proxy::<T>::remove_all();
-		Blacklist::<T>::remove_all();
-		Cancellations::<T>::remove_all();
-		for i in LowestUnbaked::get()..ReferendumCount::get() {
-			// TODO: will not actually do any useful migration
-			deprecated::VotersFor::<T>::migrate_key_from_blake(i);
-			ReferendumInfoOf::<T>::migrate_key_from_blake(i);
-		}
-		for (p, h, _) in PublicProps::<T>::get().into_iter() {
-			DepositOf::<T>::migrate_key_from_blake(p);
-			Preimages::<T>::migrate_key_from_blake(h);
-		}
-
-		// TODO: figure out actual weight
-		0
+		migration::migrate_account::<T>(a)
 	}
 }
 
@@ -701,7 +610,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>()
+			migration::migrate_all::<T>()
 		}
 
 		/// Propose a sensitive action to be taken.

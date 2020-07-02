@@ -453,7 +453,8 @@ decl_storage! {
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number): T::BlockNumber;
+		// make block number public so we can set it in `Executive` for the block hash migration
+		pub Number get(fn block_number): T::BlockNumber;
 
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
@@ -572,6 +573,7 @@ decl_module! {
 		/// The maximum length of a block (in bytes).
 		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
 		
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
 
@@ -579,8 +581,7 @@ decl_module! {
 			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
 			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
 			sp_io::storage::clear(&runtime_upgraded_key);
-			// TODO: determine actual weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 
 		/// A dispatch that will fill the block weight up to the given ratio.

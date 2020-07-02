@@ -334,10 +334,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
-			// TODO: determine actual weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 
 		/// Put forward a suggestion for spending. A deposit proportional to the value

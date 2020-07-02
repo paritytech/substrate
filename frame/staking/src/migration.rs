@@ -85,6 +85,8 @@ struct OldStakingLedger<AccountId, Balance: HasCompact> {
 //   * CurrentEraStart
 //   * CurrentEraStartSessionIndex
 //   * CurrentEraPointsEarned
+//
+// The edgeware migration is so big we just assume it consumes the whole block.
 pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
     sp_runtime::print("🕊️  Migrating Staking...");
     let current_era_start_index = deprecated::CurrentEraStartSessionIndex::get();
@@ -146,6 +148,5 @@ pub fn migrate_to_simple_payouts<T: Trait>() -> Weight {
     deprecated::CurrentEraPointsEarned::kill();
 
     sp_runtime::print("🕊️  Done Staking.");
-    // TODO: determine actual weight?
     T::MaximumBlockWeight::get()
 }

@@ -209,12 +209,12 @@ decl_module! {
 			Lateness::<T>::kill();
 		}
 
+		// The edgeware migration is so big we just assume it consumes the whole block.
 		fn on_runtime_upgrade() -> Weight {
 			for i in 0..=SegmentIndex::get() {
 				UnderConstruction::migrate_key_from_blake(i);
 			}
-			// TODO: determine weight
-			0
+			T::MaximumBlockWeight::get()
 		}
 	}
 }
