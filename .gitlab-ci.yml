@@ -565,6 +565,7 @@ chaos-test-singlenodeheight:
   tags: 
     - parity-chaos
   variables:
+    <<:                            *default-vars
     PRODUCT:                       substrate
     DOCKERFILE:                    $PRODUCT.Dockerfile
     CONTAINER_IMAGE:               paritypr/$PRODUCT
