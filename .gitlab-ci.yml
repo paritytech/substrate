@@ -113,3 +113,49 @@ test-linux-stable:                 &test-linux
   script:
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
     - sccache -s
+
+test-linux-nightly-stable:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    <<:                            *default-vars
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - time cargo +nightly test --all -Z package-features --features runtime-benchmarks
+    - time BUILD_DUMMY_WASM_BINARY=1 cargo check --all
+
+check-stable:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    <<:                            *default-vars
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - time BUILD_DUMMY_WASM_BINARY=1 cargo check --all
+
+test-linux-ns-rel-loc:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    <<:                            *default-vars
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:  
+    - time WASM_BUILD_NO_COLOR=1 cargo +nightly test --all --release --verbose --locked -Z package-features --features runtime-benchmarks
