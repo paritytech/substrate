@@ -47,11 +47,8 @@ use futures::{Future, FutureExt, Stream, StreamExt, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
-use sp_runtime::{
-	OpaqueExtrinsic,
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
-};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
 
@@ -115,36 +112,6 @@ impl RpcHandlers {
 			.compat()
 			.map(|res| res.expect("this should never fail"))
 			.boxed()
-	}
-
-	/// Send a transaction through the RpcHandlers.
-	pub async fn send_transaction(
-		&self,
-		extrinsic: OpaqueExtrinsic,
-	) -> (
-		Option<String>,
-		RpcSession,
-		futures01::sync::mpsc::Receiver<String>,
-	) {
-		let (tx, rx) = futures01::sync::mpsc::channel(0);
-		let mem = RpcSession::new(tx.into());
-		let res = self
-			.rpc_query(
-				&mem,
-				format!(
-					r#"{{
-						"jsonrpc": "2.0",
-						"method": "author_submitExtrinsic",
-						"params": ["0x{}"],
-						"id": 0
-					}}"#,
-					hex::encode(extrinsic.encode())
-				)
-				.as_str(),
-			)
-			.await;
-
-		(res, mem, rx)
 	}
 }
 

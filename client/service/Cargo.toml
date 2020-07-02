@@ -40,7 +40,6 @@ hash-db = "0.15.2"
 serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.13.3"
-hex = "0.4"
 sc-keystore = { version = "2.0.0-rc4", path = "../keystore" }
 sp-io = { version = "2.0.0-rc4", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
