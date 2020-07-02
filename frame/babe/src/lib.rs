@@ -303,12 +303,12 @@ mod weight {
 
 	pub fn weight_for_report_equivocation<T: super::Trait>() -> Weight {
 		// checking membership proof
-		(30 * WEIGHT_PER_MICROS)
+		(35 * WEIGHT_PER_MICROS)
 			.saturating_add(T::DbWeight::get().reads(5))
 			// check equivocation proof
-			.saturating_add(130 * WEIGHT_PER_MICROS)
+			.saturating_add(110 * WEIGHT_PER_MICROS)
 			// report offence
-			.saturating_add(135 * WEIGHT_PER_MICROS)
+			.saturating_add(110 * WEIGHT_PER_MICROS)
 			// worst case we are considering is that the given offender
 			// is backed by 200 nominators
 			.saturating_add(T::DbWeight::get().reads(14 + 3 * 200))
