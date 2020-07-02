@@ -230,6 +230,8 @@ where
 	) -> Result<Vec<Block::Extrinsic>, ApiErrorFor<A, Block>> {
 		let block_id = self.block_id;
 		self.api.execute_in_transaction(move |api| {
+			// `create_inherents` should not change any state, to ensure this we always rollback
+			// the transaction.
 			TransactionOutcome::Rollback(api.inherent_extrinsics_with_context(
 				&block_id,
 				ExecutionContext::BlockConstruction,
