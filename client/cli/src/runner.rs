@@ -236,7 +236,7 @@ impl<C: SubstrateCli> Runner<C> {
 		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
 			.map_err(|e| e.to_string())?;
 		task_manager.terminate();
-		drop(task_manager);
+		drop(self.tokio_runtime);
 		Ok(())
 	}
 
