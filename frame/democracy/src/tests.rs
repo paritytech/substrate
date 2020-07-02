@@ -137,7 +137,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	type Weight = ();
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const LaunchPeriod: u64 = 2;
@@ -200,6 +200,7 @@ impl super::Trait for Test {
 	type MaxVotes = MaxVotes;
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
