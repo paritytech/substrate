@@ -287,7 +287,7 @@ impl RpcHandlersExt for RpcHandlers {
 	> + Send>> {
 		let (tx, rx) = futures01::sync::mpsc::channel(0);
 		let mem = RpcSession::new(tx.into());
-		self
+		Box::pin(self
 			.rpc_query(
 				&mem,
 				&format!(
@@ -300,7 +300,7 @@ impl RpcHandlersExt for RpcHandlers {
 					hex::encode(extrinsic.encode())
 				),
 			)
-			.map(move |res| (res, mem, rx))
+			.map(move |res| (res, mem, rx)))
 	}
 }
 
