@@ -36,13 +36,15 @@ pub use sp_keyring::{
 pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
-pub use sc_service::client;
+pub use sc_service::{RpcHandlers, RpcSession, client};
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
+use std::pin::Pin;
 use std::sync::Arc;
 use std::collections::HashMap;
+use futures::future::Future;
 use sp_core::storage::ChildInfo;
-use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
+use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
 
 /// Test client light database backend.
@@ -253,5 +255,56 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor(), Default::default());
 
 		self.build_with_executor(executor)
+	}
+}
+
+/// An extension trait for `RpcHandlers`.
+pub trait RpcHandlersExt {
+	/// Send a transaction through the RpcHandlers.
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<
+		Output = (
+			Option<String>,
+			RpcSession,
+			futures01::sync::mpsc::Receiver<String>,
+		),
+	> + Send>>;
+}
+
+impl RpcHandlersExt for RpcHandlers {
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<
+		Output = (
+			Option<String>,
+			RpcSession,
+			futures01::sync::mpsc::Receiver<String>,
+		),
+	> + Send>> {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+		let future = self
+			.rpc_query(
+				&mem,
+				format!(
+					r#"{{
+						"jsonrpc": "2.0",
+						"method": "author_submitExtrinsic",
+						"params": ["0x{}"],
+						"id": 0
+					}}"#,
+					hex::encode(extrinsic.encode())
+				)
+				.as_str(),
+			);
+
+		Box::pin(async move {
+			let res = future.await;
+
+			(res, mem, rx)
+		})
 	}
 }
