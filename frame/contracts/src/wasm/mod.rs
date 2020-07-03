@@ -646,7 +646,7 @@ mod tests {
 				(i32.const 8)    ;; Length of the buffer with value to transfer
 				(i32.const 12)   ;; Pointer to input data buffer address
 				(i32.const 4)    ;; Length of input data buffer
-				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
+				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy address
 				(i32.const 0) ;; Length is ignored in this case
 				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
 				(i32.const 0) ;; Length is ignored in this case

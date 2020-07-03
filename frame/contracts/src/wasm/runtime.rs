@@ -355,8 +355,8 @@ fn write_sandbox_memory<E: Ext>(
 /// lenght of the buffer located at `out_ptr`. If that buffer is large enough the actual
 /// `buf.len()` is written to this location.
 ///
-/// If `out_ptr` is set to the sentinel value of `u32::max_value()` the operation is
-/// skipped and `Ok` is returned. This is supposed to help callers to make copying
+/// If `out_ptr` is set to the sentinel value of `u32::max_value()`  and `allow_skip` is true the
+/// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 /// output optional. For example to skip copying back the output buffer of an `ext_call`
 /// when the caller is not interested in the result.
 ///
@@ -367,8 +367,9 @@ fn write_sandbox_output<E: Ext>(
 	out_ptr: u32,
 	out_len_ptr: u32,
 	buf: &[u8],
+	allow_skip: bool,
 ) -> Result<(), sp_sandbox::HostError> {
-	if out_ptr == u32::max_value() {
+	if allow_skip && out_ptr == u32::max_value() {
 		return Ok(());
 	}
 
@@ -477,7 +478,7 @@ define_env!(Env, <E: Ext>,
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
-			write_sandbox_output(ctx, out_ptr, out_len_ptr, &value)?;
+			write_sandbox_output(ctx, out_ptr, out_len_ptr, &value, false)?;
 			Ok(ReturnCode::Success)
 		} else {
 			Ok(ReturnCode::KeyNotFound)
@@ -590,7 +591,7 @@ define_env!(Env, <E: Ext>,
 
 		match call_outcome {
 			Ok(output) => {
-				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data)?;
+				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 				Ok(output.into())
 			},
 			Err(_) => {
@@ -603,11 +604,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// This function creates an account and executes the constructor defined in the code specified
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
-	// to `address_len_ptr`.
+	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
+	// length to `output_len_ptr`.
 	//
-	// The constructors output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
-	// The copy of the output buffer can be skipped by supplying the sentinel value
-	// of `u32::max_value()` to `output_ptr`.
+	// The copy of the output buffer and address can be skipped by supplying the sentinel value
+	// of `u32::max_value()` to `output_ptr` or `address_ptr`.
 	//
 	// # Parameters
 	//
@@ -684,9 +685,11 @@ define_env!(Env, <E: Ext>,
 		match instantiate_outcome {
 			Ok((address, output)) => {
 				if !output.flags.contains(ReturnFlags::REVERT) {
-					write_sandbox_output(ctx, address_ptr, address_len_ptr, &address.encode())?;
+					write_sandbox_output(
+						ctx, address_ptr, address_len_ptr, &address.encode(), true
+					)?;
 				}
-				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data)?;
+				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 				Ok(output.into())
 			},
 			Err(_) => {
@@ -721,7 +724,7 @@ define_env!(Env, <E: Ext>,
 
 	ext_input(ctx, buf_ptr: u32, buf_len_ptr: u32) => {
 		if let Some(input) = ctx.input_data.take() {
-			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input)
+			write_sandbox_output(ctx, buf_ptr, buf_len_ptr, &input, false)
 		} else {
 			Err(sp_sandbox::HostError)
 		}
@@ -772,7 +775,7 @@ define_env!(Env, <E: Ext>,
 	// extrinsic will be returned. Otherwise, if this call is initiated by another contract then the
 	// address of the contract will be returned. The value is encoded as T::AccountId.
 	ext_caller(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false)
 	},
 
 	// Stores the address of the current contract into the supplied buffer.
@@ -782,7 +785,7 @@ define_env!(Env, <E: Ext>,
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	ext_address(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.address().encode(), false)
 	},
 
 	// Stores the price for the specified amount of gas into the supplied buffer.
@@ -799,7 +802,9 @@ define_env!(Env, <E: Ext>,
 	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
 	// gas can be smaller than one.
 	ext_gas_price(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode())
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false
+		)
 	},
 
 	// Stores the amount of gas left into the supplied buffer.
@@ -811,7 +816,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as Gas.
 	ext_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.gas_meter.gas_left().encode(), false)
 	},
 
 	// Stores the balance of the current account into the supplied buffer.
@@ -823,7 +828,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance.
 	ext_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.balance().encode(), false)
 	},
 
 	// Stores the value transferred along with this call or as endowment into the supplied buffer.
@@ -835,7 +840,9 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance.
 	ext_value_transferred(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode())
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.value_transferred().encode(), false
+		)
 	},
 
 	// Stores a random number for the current block and the given subject into the supplied buffer.
@@ -852,7 +859,9 @@ define_env!(Env, <E: Ext>,
 			return Err(sp_sandbox::HostError);
 		}
 		let subject_buf = read_sandbox_memory(ctx, subject_ptr, subject_len)?;
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).encode())
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.random(&subject_buf).encode(), false
+		)
 	},
 
 	// Load the latest block timestamp into the supplied buffer
@@ -862,14 +871,14 @@ define_env!(Env, <E: Ext>,
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	ext_now(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.now().encode(), false)
 	},
 
 	// Stores the minimum balance (a.k.a. existential deposit) into the supplied buffer.
 	//
 	// The data is encoded as T::Balance.
 	ext_minimum_balance(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.minimum_balance().encode(), false)
 	},
 
 	// Stores the tombstone deposit into the supplied buffer.
@@ -888,7 +897,9 @@ define_env!(Env, <E: Ext>,
 	// below the sum of existential deposit and the tombstone deposit. The sum
 	// is commonly referred as subsistence threshold in code.
 	ext_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode())
+		write_sandbox_output(
+			ctx, out_ptr, out_len_ptr, &ctx.ext.tombstone_deposit().encode(), false
+		)
 	},
 
 	// Try to restore the given destination contract sacrificing the caller.
@@ -1020,7 +1031,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The data is encoded as T::Balance.
 	ext_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.rent_allowance().encode(), false)
 	},
 
 	// Prints utf8 encoded string from the data buffer.
@@ -1041,7 +1052,7 @@ define_env!(Env, <E: Ext>,
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	ext_block_number(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode())
+		write_sandbox_output(ctx, out_ptr, out_len_ptr, &ctx.ext.block_number().encode(), false)
 	},
 
 	// Computes the SHA2 256-bit hash on the given input buffer.
