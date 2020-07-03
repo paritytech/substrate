@@ -1450,6 +1450,7 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0-rc4"
 dependencies = [
+ "Inflector",
  "frame-benchmarking",
  "parity-scale-codec",
  "sc-cli",

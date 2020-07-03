@@ -1180,9 +1180,10 @@ macro_rules! impl_benchmark_test {
 /// At the end of `dispatch_benchmark`, you should return this batches object.
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:literal, $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
+		let name_string = stringify!($name).as_bytes();
 		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist) = $params;
-		if &pallet[..] == &$name[..] || &pallet[..] == &b"*"[..] {
+		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks().into_iter() {
 					$batches.push($crate::BenchmarkBatch {
@@ -1194,7 +1195,7 @@ macro_rules! add_benchmark {
 							repeat,
 							whitelist,
 						)?,
-						pallet: $name.to_vec(),
+						pallet: name_string.to_vec(),
 						benchmark: benchmark.to_vec(),
 					});
 				}
@@ -1208,7 +1209,7 @@ macro_rules! add_benchmark {
 						repeat,
 						whitelist,
 					)?,
-					pallet: $name.to_vec(),
+					pallet: name_string.to_vec(),
 					benchmark: benchmark.clone(),
 				});
 			}

@@ -1,14 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
-
-fn uppercase_first_letter(s: &str) -> String {
-	let mut c = s.chars();
-	match c.next() {
-		None => String::new(),
-		Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-	}
-}
+use inflector::Inflector;
 
 pub fn open_file(path: &str) -> Result<File, std::io::Error> {
 	OpenOptions::new()
@@ -102,7 +95,7 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 	let mut current_pallet = Vec::<u8>::new();
 
 	// general imports
-	write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight}};\n").unwrap();
+	write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n").unwrap();
 
 	batches.iter().for_each(|batch| {
 
@@ -118,13 +111,13 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 
 			// struct for weights
 			write!(file, "pub struct WeightFor{};\n",
-				uppercase_first_letter(&pallet_string),
+				pallet_string.to_pascal_case(),
 			).unwrap();
 
 			// trait wrapper
-			write!(file, "impl pallet_{}::WeightInfo for WeightFor{} {{\n",
+			write!(file, "impl {}::WeightInfo for WeightFor{} {{\n",
 				pallet_string,
-				uppercase_first_letter(&pallet_string),
+				pallet_string.to_pascal_case(),
 			).unwrap();
 
 			current_pallet = batch.pallet.clone()
@@ -151,18 +144,18 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		});
 
 		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		write!(file, "			.saturating_add(RocksDbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
+		write!(file, "			.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
 		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
-			write!(file, "			.saturating_add(RocksDbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(file, "			.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
 			).unwrap();
 		});
 
 		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-		write!(file, "			.saturating_add(RocksDbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
+		write!(file, "			.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
 		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
-			write!(file, "			.saturating_add(RocksDbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(file, "			.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
 			).unwrap();
