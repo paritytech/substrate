@@ -1080,7 +1080,6 @@ impl_runtime_apis! {
 
 			let whitelist: Vec<Vec<u8>> = vec![
 				// Block Number
-				// frame_system::Number::<Runtime>::hashed_key().to_vec(),
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
 				// Total Issuance
 				hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec(),
