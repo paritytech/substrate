@@ -50,7 +50,9 @@ SUBSTRATE_PATH=$(pwd)
 git merge origin/master
 
 # Clone the current Polkadot master branch into ./polkadot.
-git clone --depth 1 https://github.com/paritytech/polkadot.git
+# NOTE: we need to pull enough commits to be able to find a common
+# ancestor for successfully performing merges below.
+git clone --depth 20 https://github.com/paritytech/polkadot.git
 
 cd polkadot
 
