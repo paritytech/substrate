@@ -21,7 +21,6 @@ use flexi_logger::{
     DeferredNow, Duplicate, LogSpecBuilder,
     LogSpecification, LogTarget, Logger, Criterion, Naming, Cleanup, Age,
 };
-use log::info;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::PathBuf;
@@ -32,11 +31,15 @@ use crate::error::{Error, Result};
 
 type IoResult = std::result::Result<(), std::io::Error>;
 
+/// Default size used for rotation. Corresponds to 100 MiB.
+const DEFAULT_ROTATION_SIZE: u64 = 104_857_600;
+
 
 /// Options for log rotation.
 #[derive(Debug, StructOpt)]
 pub struct LogRotationOpt {
 	/// Specify the path of the directory which will contain the log files.
+	/// Defaults to rotating logs once they reach 100 MiB.
     #[structopt(long, parse(from_os_str))]
 	log_directory: Option<PathBuf>,
 	
@@ -151,10 +154,10 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 	builder.default(log::LevelFilter::Info);
 
 	// Add filtesr defined by RUST_LOG.
-	builder.insert_modules_from(LogSpecification::env().map_err(|e| Error::Other(e.to_string()))?);
+	builder.insert_modules_from(LogSpecification::env()?);
 
 	// Add filters passed in as argument.
-	builder.insert_modules_from(LogSpecification::parse(pattern).map_err(|e| Error::Other(e.to_string()))?);
+	builder.insert_modules_from(LogSpecification::parse(pattern)?);
 
 	// Build the LogSpec.
 	let spec = builder.build();
@@ -171,9 +174,9 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 	let criterion = match (age, size) {
 		(Some(a), None) => Criterion::Age(a),
 		(None, Some(s)) => Criterion::Size(s),
-		// Won't be used anyways, because this means that `log-directory` has not been speicified.
-		(None, None) => Criterion::Size(0),
-		_ => return Err(Error::Other("Only one of Age or Size should be defined".into()))
+		// Default to rotating with a size of `DEFAULT_ROTATION_SIZE`.
+		(None, None) => Criterion::Size(DEFAULT_ROTATION_SIZE),
+		_ => return Err(Error::Input("Only one of Age or Size should be defined".into()))
 	};
 
 	let isatty = atty::is(atty::Stream::Stderr);
@@ -205,13 +208,7 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 			.directory(file),
 	};
 
-	if logger.start().is_err() {
-		let s = "💬 Not registering Substrate logger, as there is already a global logger registered!";
-		info!("{}", s);
-		Err(Error::Other(s.into()))
-	} else {
-		Ok(())
-	}
+	logger.start().map_or_else(|_| ().map_err(|e| e.into())
 }
 
 fn kill_color(s: &str) -> String {
