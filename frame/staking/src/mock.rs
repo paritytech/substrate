@@ -231,7 +231,6 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
-	type Weight = ();
 }
 parameter_types! {
 	pub const Offset: BlockNumber = 0;
