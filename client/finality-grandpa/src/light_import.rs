@@ -50,16 +50,18 @@ const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 pub fn light_block_import<BE, Block: BlockT, Client>(
 	client: Arc<Client>,
 	backend: Arc<BE>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 ) -> Result<GrandpaLightBlockImport<BE, Block, Client>, ClientError>
 	where
 		BE: Backend<Block>,
-		Client: crate::ClientForGrandpa<Block, BE> + GenesisAuthoritySetProvider<Block>,
+		Client: crate::ClientForGrandpa<Block, BE>,
 {
 	let info = client.info();
 	let import_data = load_aux_import_data(
 		info.finalized_hash,
 		&*client,
+		genesis_authorities_provider,
 	)?;
 	Ok(GrandpaLightBlockImport {
 		client,
@@ -496,40 +498,40 @@ fn do_finalize_block<B, C, Block: BlockT>(
 	Ok(ImportResult::imported(true))
 }
 
-/// Load light import aux data from the client.
-fn load_aux_import_data<Client, Block>(
+/// Load light import aux data from the store.
+fn load_aux_import_data<B, Block>(
 	last_finalized: Block::Hash,
-	client: &Client,
-
+	aux_store: &B,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 ) -> Result<LightImportData<Block>, ClientError>
 	where
-		Client: AuxStore + GenesisAuthoritySetProvider<Block>,
+		B: AuxStore,
 		Block: BlockT,
 {
-	let authority_set = match load_decode(client, LIGHT_AUTHORITY_SET_KEY)? {
+	let authority_set = match load_decode(aux_store, LIGHT_AUTHORITY_SET_KEY)? {
 		Some(authority_set) => authority_set,
 		None => {
 			info!(target: "afg", "Loading GRANDPA authorities \
 				from genesis on what appears to be first startup.");
 
 			// no authority set on disk: fetch authorities from genesis state
-			let genesis_authorities = client.get()?;
+			let genesis_authorities = genesis_authorities_provider.get()?;
 
 			let authority_set = LightAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.encode();
-			client.insert_aux(&[(LIGHT_AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+			aux_store.insert_aux(&[(LIGHT_AUTHORITY_SET_KEY, &encoded[..])], &[])?;
 
 			authority_set
 		},
 	};
 
-	let consensus_changes = match load_decode(client, LIGHT_CONSENSUS_CHANGES_KEY)? {
+	let consensus_changes = match load_decode(aux_store, LIGHT_CONSENSUS_CHANGES_KEY)? {
 		Some(consensus_changes) => consensus_changes,
 		None => {
 			let consensus_changes = ConsensusChanges::<Block::Hash, NumberFor<Block>>::empty();
 
 			let encoded = authority_set.encode();
-			client.insert_aux(&[(LIGHT_CONSENSUS_CHANGES_KEY, &encoded[..])], &[])?;
+			aux_store.insert_aux(&[(LIGHT_CONSENSUS_CHANGES_KEY, &encoded[..])], &[])?;
 
 			consensus_changes
 		},

@@ -189,7 +189,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 
 	/// Create new basic transaction pool with provided api and custom
 	/// revalidation type.
-	fn with_revalidation_type(
+	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,

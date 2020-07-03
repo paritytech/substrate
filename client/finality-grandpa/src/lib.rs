@@ -462,8 +462,8 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<Block: BlockT, E, T> GenesisAuthoritySetProvider<Block> for T
-	where T: ExecutorProvider<Block, Executor = E>, E: CallExecutor<Block>,
+impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorProvider<Block, Executor = E>>
+	where E: CallExecutor<Block>,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -490,6 +490,7 @@ impl<Block: BlockT, E, T> GenesisAuthoritySetProvider<Block> for T
 /// to it.
 pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 ) -> Result<
 	(
@@ -501,10 +502,11 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
-	Client: ClientForGrandpa<Block, BE> + GenesisAuthoritySetProvider<Block> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
 	block_import_with_authority_set_hard_forks(
 		client,
+		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
 	)
@@ -517,6 +519,7 @@ where
 /// given static authorities.
 pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
 ) -> Result<
@@ -529,7 +532,7 @@ pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
-	Client: ClientForGrandpa<Block, BE> + GenesisAuthoritySetProvider<Block> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
 {
 	let chain_info = client.info();
 	let genesis_hash = chain_info.genesis_hash;
@@ -539,7 +542,7 @@ where
 		genesis_hash,
 		<NumberFor<Block>>::zero(),
 		|| {
-			let authorities = client.get()?;
+			let authorities = genesis_authorities_provider.get()?;
 			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
 				"authorities_len" => ?authorities.len()
 			);

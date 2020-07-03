@@ -63,8 +63,7 @@ macro_rules! new_full_up_to_import_queue {
 		);
 
 		let (grandpa_block_import, grandpa_link) = grandpa::block_import(
-			client.clone(),
-			select_chain.clone(),
+			client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
 		)?;
 		let justification_import = grandpa_block_import.clone();
 
@@ -346,8 +345,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	));
 
 	let grandpa_block_import = grandpa::light_block_import(
-		client.clone(),
-		backend.clone(),
+		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
 		Arc::new(on_demand.checker().clone()),
 	)?;
 

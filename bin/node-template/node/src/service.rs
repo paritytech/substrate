@@ -44,7 +44,7 @@ macro_rules! new_full_up_to_import_queue {
 		);
 
 		let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-			client.clone(), select_chain.clone(),
+			client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
 		)?;
 
 		let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
@@ -209,7 +209,7 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	);
 
 	let grandpa_block_import = sc_finality_grandpa::light_block_import(
-		client.clone(), backend.clone(),
+		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
 		Arc::new(on_demand.checker().clone()) as Arc<_>,
 	)?;
 	let finality_proof_import = grandpa_block_import.clone();
