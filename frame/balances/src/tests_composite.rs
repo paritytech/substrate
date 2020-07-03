@@ -108,7 +108,6 @@ impl Trait for Test {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
-	type WeightInfo = ();
 }
 
 pub struct ExtBuilder {

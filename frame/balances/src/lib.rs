@@ -159,7 +159,6 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
-	weights::Weight,
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
@@ -189,24 +188,6 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
-
-	type WeightInfo: WeightInfo;
-}
-
-pub trait WeightInfo {
-	fn transfer(u: u32, e: u32, ) -> Weight;
-	fn transfer_best_case(u: u32, e: u32, ) -> Weight;
-	fn transfer_keep_alive(u: u32, e: u32, ) -> Weight;
-	fn set_balance(u: u32, e: u32, ) -> Weight;
-	fn set_balance_killing(u: u32, e: u32, ) -> Weight;
-}
-
-impl WeightInfo for () {
-	fn transfer(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn set_balance(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn set_balance_killing(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
@@ -225,15 +206,12 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
-
-	type WeightInfo: WeightInfo;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
-	type WeightInfo = T::WeightInfo;
 }
 
 decl_event!(
@@ -459,7 +437,7 @@ decl_module! {
 		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = T::WeightInfo::transfer(0,0)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 70_000_000]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -488,7 +466,7 @@ decl_module! {
 		///     - Killing: 35.11 µs
 		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight = T::WeightInfo::set_balance(0, 0)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 35_000_000]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -530,8 +508,7 @@ decl_module! {
 		/// - Same as transfer, but additional read and write because the source account is
 		///   not assumed to be in the overlay.
 		/// # </weight>
-		// TODO: ADD NEW BENCHMARK
-		#[weight = T::WeightInfo::transfer(0,0)]
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 70_000_000]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -555,7 +532,7 @@ decl_module! {
 		/// - Base Weight: 51.4 µs
 		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
 		/// #</weight>
-		#[weight = T::WeightInfo::transfer_keep_alive(0,0)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 50_000_000]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -902,7 +879,6 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
-	type WeightInfo = T::WeightInfo;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
