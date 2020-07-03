@@ -102,6 +102,7 @@ impl pallet_balances::Trait for Test {
 impl pallet_utility::Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;

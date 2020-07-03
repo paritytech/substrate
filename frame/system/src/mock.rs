@@ -105,7 +105,7 @@ impl Trait for Test {
 	type AccountData = u32;
 	type OnNewAccount = ();
 	type OnKilledAccount = RecordKilled;
-	type WeightInfo = ();
+	type SystemWeightInfo = ();
 }
 
 pub type System = Module<Test>;
