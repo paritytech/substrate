@@ -223,7 +223,8 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(Options::default(), api(), None, spawner, client.clone());
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),

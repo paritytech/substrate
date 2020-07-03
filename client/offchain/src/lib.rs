@@ -227,7 +227,7 @@ mod tests {
 	}
 
 	struct TestPool(
-		BasicPool<FullChainApi<TestClient, Block>, Block>
+		Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>
 	);
 
 	impl sp_transaction_pool::OffchainSubmitTransaction<Block> for TestPool {
@@ -248,13 +248,14 @@ mod tests {
 		let _ = env_logger::try_init();
 
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(TestPool(BasicPool::new(
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = TestPool(BasicPool::new_full(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
 			None,
-		).0));
-		client.execution_extensions()
-			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);
+			spawner,
+			client.clone(),
+		));
 		let db = sc_client_db::offchain::LocalStorage::new_test();
 		let network_state = Arc::new(MockNetworkStateInfo());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();

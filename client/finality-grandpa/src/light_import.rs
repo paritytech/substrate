@@ -673,14 +673,13 @@ pub mod tests {
 	pub fn light_block_import_without_justifications<BE, Block: BlockT, Client>(
 		client: Arc<Client>,
 		backend: Arc<BE>,
-		genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 		authority_set_provider: Arc<dyn AuthoritySetForFinalityChecker<Block>>,
 	) -> Result<NoJustificationsImport<BE, Block, Client>, ClientError>
 		where
 			BE: Backend<Block> + 'static,
-			Client: crate::ClientForGrandpa<Block, BE>,
+			Client: crate::ClientForGrandpa<Block, BE> + GenesisAuthoritySetProvider<Block>,
 	{
-		light_block_import(client, backend, genesis_authorities_provider, authority_set_provider)
+		light_block_import(client, backend, authority_set_provider)
 			.map(NoJustificationsImport)
 	}
 
@@ -784,23 +783,21 @@ pub mod tests {
 	#[test]
 	fn aux_data_updated_on_start() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)]);
-
 		// when aux store is empty initially
 		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_none());
 		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_none());
 
+		let api = TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)], aux_store);
+
 		// it is updated on importer start
-		load_aux_import_data(Default::default(), &aux_store, &api).unwrap();
-		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_some());
-		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_some());
+		load_aux_import_data(Default::default(), &api).unwrap();
+		assert!(api.aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_some());
+		assert!(api.aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_some());
 	}
 
 	#[test]
 	fn aux_data_loaded_on_restart() {
 		let aux_store = InMemoryAuxStore::<Block>::new();
-		let api = TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)]);
-
 		// when aux store is non-empty initially
 		let mut consensus_changes = ConsensusChanges::<H256, u64>::empty();
 		consensus_changes.note_change((42, Default::default()));
@@ -820,8 +817,10 @@ pub mod tests {
 			&[],
 		).unwrap();
 
+		let api = TestApi::new(vec![(AuthorityId::from_slice(&[1; 32]), 1)], aux_store);
+
 		// importer uses it on start
-		let data = load_aux_import_data(Default::default(), &aux_store, &api).unwrap();
+		let data = load_aux_import_data(Default::default(), &api).unwrap();
 		assert_eq!(data.authority_set.authorities(), vec![(AuthorityId::from_slice(&[42; 32]), 2)]);
 		assert_eq!(data.consensus_changes.pending_changes(), &[(42, Default::default())]);
 	}
@@ -872,7 +871,7 @@ pub mod tests {
 		).unwrap();
 
 		// verify that new authorities set has been saved to the aux storage
-		let data = load_aux_import_data(Default::default(), &client, &TestApi::new(initial_set)).unwrap();
+		let data = load_aux_import_data(Default::default(), &client).unwrap();
 		assert_eq!(data.authority_set.authorities(), updated_set);
 	}
 }
