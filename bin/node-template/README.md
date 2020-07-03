@@ -1,4 +1,6 @@
-[![Try on playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
+[![Instant hacking via Playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)[The Substrate Playground](https://playground-staging.substrate.dev/?deploy=node-template) is our
+online development environment (IDE) that allows developers to take advantage of a pre-configured container
+with pre-compiled build artifacts. 
 
 # Substrate Node Template
 
@@ -6,11 +8,11 @@ A new FRAME-based Substrate node, ready for hacking :rocket:
 
 ## Local Development
 
-Follow these steps to prepare your local environment for Substrate development :hammer_and_wrench:
+Follow these steps to prepare the local environment for Substrate development :hammer_and_wrench:
 
 ### Simple Setup
 
-You can install all the required dependencies with a single command (be patient, this can take up
+Install all the required dependencies with a single command (be patient, this can take up
 to 30 minutes).
 
 ```bash
@@ -19,8 +21,8 @@ curl https://getsubstrate.io -sSf | bash -s -- --fast
 
 ### Manual Setup
 
-Manual steps for Linux-based systems can be found below; you can
-[find more information at substrate.dev](https://substrate.dev/docs/en/knowledgebase/getting-started/#manual-installation).
+Manual installation for Linux-based systems can be found below; additional informatoin can be found at
+[substrate.dev](https://substrate.dev/docs/en/knowledgebase/getting-started/#manual-installation).
 
 Install Rust:
 
@@ -28,7 +30,7 @@ Install Rust:
 curl https://sh.rustup.rs -sSf | sh
 ```
 
-Initialize your Wasm Build environment:
+Initialize the Wasm Build environment:
 
 ```bash
 ./scripts/init.sh
@@ -36,8 +38,9 @@ Initialize your Wasm Build environment:
 
 ### Build
 
-Once you have prepared your local development environment, you can build the node template. Use this
-command to build the [Wasm](https://substrate.dev/docs/en/knowledgebase/advanced/executor#wasm-execution)
+Once the local development environment is complied, the node template can be built. The node template allows developers a working runtime which you can use to quickly get started building your own custom blockchain utilizing all the capacities of [FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame).
+
+Utilize the command line to build the [Wasm](https://substrate.dev/docs/en/knowledgebase/advanced/executor#wasm-execution)
 and [native](https://substrate.dev/docs/en/knowledgebase/advanced/executor#native-execution) code:
 
 ```bash
@@ -46,9 +49,6 @@ cargo build --release
 
 ## Playground [![Try on playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
 
-[The Substrate Playground](https://playground-staging.substrate.dev/?deploy=node-template) is an
-online development environment that allows you to take advantage of a pre-configured container
-with pre-compiled build artifacts :cartwheeling:
 
 ## Run
 
@@ -60,7 +60,7 @@ Purge any existing developer chain state:
 ./target/release/node-template purge-chain --dev
 ```
 
-Start a development chain with:
+Start a new development chain:
 
 ```bash
 ./target/release/node-template --dev
@@ -71,14 +71,14 @@ Detailed logs may be shown by running the node with the following environment va
 
 ### Multi-Node Local Testnet
 
-If you want to see the multi-node consensus algorithm in action locally, then you can create a local
+If developers want to see the multi-node consensus algorithm running locally, then developers can create a local
 testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis
 chain that have been endowed with testnet units.
 
-Optionally, give each node a name and expose them so they are listed on the Polkadot
+Optionally, define each node with a name and expose them so they are listed on the Polkadot
 [telemetry site](https://telemetry.polkadot.io/#/Local%20Testnet).
 
-You'll need two terminal windows open.
+Note: you'll need two terminal windows open.
 
 We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored
 locally at `/tmp/alice`. The bootnode ID of her node is
@@ -112,9 +112,9 @@ cargo run -- \
 
 Additional CLI usage options are available and may be shown by running `cargo run -- --help`.
 
-## Advanced: Generate Your Own Substrate Node Template
+## Generate Your Own Substrate Node Template
 
-You can generate your own Substrate node template based on a particular Substrate
+Generate a Substrate node template based on a particular Substrate
 version/commit by running following commands:
 
 ```bash
@@ -131,5 +131,5 @@ git checkout <branch/tag/sha1>
 .maintain/node-template-release.sh ../node-template.tar.gz
 ```
 
-Please note that you will likely get faster and more thorough support if you stick with the releases
-provided in [the Substrate Node Template repository](https://github.com/substrate-developer-hub/substrate-node-template).
+Please note that this generally outputs a more constant support by appending with the releases
+provided within [the Substrate Node Template repository](https://github.com/substrate-developer-hub/substrate-node-template).
