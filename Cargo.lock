@@ -4502,6 +4502,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "substrate-test-utils",
 ]
 
 [[package]]
@@ -5993,6 +5994,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
  "sp-trie",
@@ -8307,8 +8309,10 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.0-rc4"
 dependencies = [
+ "futures 0.1.29",
  "futures 0.3.5",
  "hash-db",
+ "hex",
  "parity-scale-codec",
  "sc-client-api",
  "sc-client-db",
