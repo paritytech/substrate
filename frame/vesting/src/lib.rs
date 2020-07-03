@@ -216,7 +216,7 @@ decl_module! {
 		///     - Locked: 44.43 + .284 * l µs (min square analysis)
 		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::vest_locked(50).max(T::WeightInfo::vest_unlocked(50))]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -241,7 +241,7 @@ decl_module! {
 		///     - Locked: 48.16 + .103 * l µs (min square analysis)
 		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 50_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vest_other_locked(50).max(T::WeightInfo::vest_other_unlocked(50))]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -265,7 +265,7 @@ decl_module! {
 		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
 		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::vested_transfer(50)]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
