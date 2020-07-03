@@ -258,14 +258,14 @@ mod tests {
 	#[test]
 	fn check_inherents_works() {
 		let block = Block::new(
-			Header::default(),
+			Header::new_from_number(1),
 			vec![Extrinsic { function: Call::Test(CallTest::Something) }],
 		);
 
 		assert!(InherentData::new().check_extrinsics(&block).ok());
 
 		let block = Block::new(
-			Header::default(),
+			Header::new_from_number(1),
 			vec![Extrinsic { function: Call::Test(CallTest::SomethingElse) }],
 		);
 
