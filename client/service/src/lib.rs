@@ -152,6 +152,8 @@ impl TelemetryOnConnectSinks {
 /// The individual components of the chain, built by the service builder. You are encouraged to
 /// deconstruct this into its fields.
 pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TCl> {
+	/// The chain task manager. 
+	pub task_manager: TaskManager,
 	/// A shared network instance.
 	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// RPC handlers that can perform RPC queries.

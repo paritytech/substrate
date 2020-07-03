@@ -358,7 +358,7 @@ pub fn new_client<E, Block, RA>(
 }
 
 /// Parameters to pass into `build`.
-pub struct ServiceParams<'a, TBl: BlockT, TCl, TImpQu, TExPool, TRpc, Backend> {
+pub struct ServiceParams<TBl: BlockT, TCl, TImpQu, TExPool, TRpc, Backend> {
 	/// The service configuration.
 	pub config: Configuration,
 	/// A shared client returned by `new_full_parts`/`new_light_parts`.
@@ -366,7 +366,7 @@ pub struct ServiceParams<'a, TBl: BlockT, TCl, TImpQu, TExPool, TRpc, Backend> {
 	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
 	pub backend: Arc<Backend>,
 	/// A task manager returned by `new_full_parts`/`new_light_parts`.
-	pub task_manager: &'a mut TaskManager,
+	pub task_manager: TaskManager,
 	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
 	pub keystore: Arc<RwLock<Keystore>>,
 	/// An optional, shared data fetcher for light clients.
@@ -413,8 +413,8 @@ pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
 {
 	let ServiceParams {
 		mut config,
+		mut task_manager,
 		client,
-		task_manager,
 		on_demand,
 		backend,
 		keystore,
@@ -571,9 +571,7 @@ pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
 	task_manager.keep_alive((telemetry, config.base_path, rpc, rpc_handlers.clone()));
 
 	Ok(ServiceComponents {
-		network,
-		rpc_handlers,
-		offchain_workers,
+		task_manager, network, rpc_handlers, offchain_workers,
 		telemetry_on_connect_sinks: TelemetryOnConnectSinks(telemetry_connection_sinks),
 		network_status_sinks: NetworkStatusSinks::new(network_status_sinks),
 	})
