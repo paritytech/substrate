@@ -179,33 +179,56 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 		_ => return Err(Error::Input("Only one of Age or Size should be defined".into()))
 	};
 
-	let isatty = atty::is(atty::Stream::Stderr);
+	let isatty_stderr = atty::is(atty::Stream::Stderr);
+	let isatty_stdout = atty::is(atty::Stream::Stdout);
 	let logger = Logger::with(spec)
 		.format(file_fmt)
 		.format_for_stderr(colored_fmt)
 		.format_for_stdout(colored_fmt)
-		.rotate(criterion, naming, cleanup);
+		.rotate(criterion, naming, cleanup); // Won't get used if log_directory has not been specified.
 
-	let logger = match (log_rotation_opt.log_directory.as_ref(), isatty) {
+
+	let logger = match (log_rotation_opt.log_directory.as_ref(), isatty_stderr) {
 		// Only log to stderr using colored format; nothing to file, nothing to stdout.
-		(None, true) => logger.log_target(LogTarget::StdErr),
+		(None, true) => {
+			logger.log_target(LogTarget::StdErr)
+		}
 		// Log to stderr using file format, log to stdout using colored format.
-		(None, false) => logger
-			.log_target(LogTarget::DevNull)
-			.format_for_stderr(file_fmt)
-			.duplicate_to_stderr(Duplicate::All)
-			.duplicate_to_stdout(Duplicate::Info),
+		(None, false) => {
+			let logger = logger
+				.log_target(LogTarget::DevNull)
+				.format_for_stderr(file_fmt)
+				.duplicate_to_stderr(Duplicate::All);
+
+			// Write to stdout only if it's a tty.
+			if isatty_stdout {
+				logger.duplicate_to_stdout(Duplicate::Info)
+			} else {
+				logger
+			}
+		}
 		// Log to stderr with colored format, log to file with file format. Nothing to stdout.
-		(Some(file), true) => logger.log_target(LogTarget::File)
-			.duplicate_to_stderr(Duplicate::All)
-			.directory(file),
+		(Some(file), true) => {
+			logger
+				.log_target(LogTarget::File)
+				.duplicate_to_stderr(Duplicate::All)
+				.directory(file)
+		}
 		// Log to stderr with file format, log to file with file format, log to stdout with colored format.
-		(Some(file), false) => logger
-			.log_target(LogTarget::File)
-			.format_for_stderr(file_fmt)
-			.duplicate_to_stderr(Duplicate::All)
-			.duplicate_to_stdout(Duplicate::Info)
-			.directory(file),
+		(Some(file), false) => {
+			let logger = logger
+				.log_target(LogTarget::File)
+				.format_for_stderr(file_fmt)
+				.duplicate_to_stderr(Duplicate::All)
+				.directory(file);
+
+			// Write to stdout only if it's a tty.
+			if isatty_stdout {
+				logger.duplicate_to_stdout(Duplicate::Info)
+			} else {
+				logger
+			}
+		}
 	};
 
 	logger.start().map(|_| ()).map_err(|e| e.into())
