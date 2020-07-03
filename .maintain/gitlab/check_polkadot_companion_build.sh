@@ -72,14 +72,6 @@ then
       -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
 
-  if [ -z "${pr_companion}" ]
-  then
-    pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*paritytech/polkadot/#([0-9]+).*$;\1;p' \
-      -e 's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
-      | tail -n 1)"
-  fi
-
   if [ "${pr_companion}" ]
   then
     boldprint "companion pr specified/detected: #${pr_companion}"
