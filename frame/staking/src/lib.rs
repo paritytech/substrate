@@ -854,10 +854,10 @@ pub trait WeightInfo {
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
 	fn do_slash(l: u32, ) -> Weight;
-	fn payout_all(v: u32, n: u32, ) -> Weight;
-	fn submit_solution_initial(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
-	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
-	fn submit_solution_weaker(v: u32, n: u32, ) -> Weight;
+	// fn payout_all(v: u32, n: u32, ) -> Weight;
+	// fn submit_solution_initial(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	// fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	// fn submit_solution_weaker(v: u32, n: u32, ) -> Weight;
 }
 
 impl WeightInfo for () {
@@ -885,10 +885,10 @@ impl WeightInfo for () {
 	fn reap_stash(_s: u32, ) -> Weight { 1_000_000_000 }
 	fn new_era(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
 	fn do_slash(_l: u32, ) -> Weight { 1_000_000_000 }
-	fn payout_all(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
-	fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	// fn payout_all(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	// fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
+	// fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
+	// fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {

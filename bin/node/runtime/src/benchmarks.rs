@@ -1225,3 +1225,202 @@ impl pallet_vesting::WeightInfo for WeightForVesting {
 			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(l as Weight)))
 	}
 }
+
+pub struct WeightForStaking;
+impl pallet_staking::WeightInfo for WeightForStaking {
+	fn bond(u: u32, ) -> Weight {
+		(71369000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn bond_extra(u: u32, ) -> Weight {
+		(59039000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn unbond(u: u32, ) -> Weight {
+		(54521000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn withdraw_unbonded_update(s: u32, ) -> Weight {
+		(55084000 as Weight)
+			.saturating_add((67000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(s as Weight)))
+	}
+	fn withdraw_unbonded_kill(s: u32, ) -> Weight {
+		(85803000 as Weight)
+			.saturating_add((2524000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(RocksDbWeight::get().reads(7 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
+	}
+	fn validate(u: u32, ) -> Weight {
+		(19465000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn nominate(n: u32, ) -> Weight {
+		(25595000 as Weight)
+			.saturating_add((687000 as Weight).saturating_mul(n as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(n as Weight)))
+	}
+	fn chill(u: u32, ) -> Weight {
+		(18949000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn set_payee(u: u32, ) -> Weight {
+		(13465000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn set_controller(u: u32, ) -> Weight {
+		(28535000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(u as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(u as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(u as Weight)))
+	}
+	fn set_validator_count(c: u32, ) -> Weight {
+		(2295000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(c as Weight))
+			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(c as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(c as Weight)))
+	}
+	fn force_no_eras(i: u32, ) -> Weight {
+		(2491000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(i as Weight))
+			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(i as Weight)))
+	}
+	fn force_new_era(i: u32, ) -> Weight {
+		(2553000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(i as Weight))
+			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(i as Weight)))
+	}
+	fn force_new_era_always(i: u32, ) -> Weight {
+		(2562000 as Weight)
+			.saturating_add((0 as Weight).saturating_mul(i as Weight))
+			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(i as Weight)))
+	}
+	fn set_invulnerables(v: u32, ) -> Weight {
+		(2876000 as Weight)
+			.saturating_add((6000 as Weight).saturating_mul(v as Weight))
+			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(v as Weight)))
+	}
+	fn force_unstake(s: u32, ) -> Weight {
+		(58601000 as Weight)
+			.saturating_add((2552000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
+	}
+	fn cancel_deferred_slash(s: u32, ) -> Weight {
+		(5876541000 as Weight)
+			.saturating_add((34639000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(s as Weight)))
+	}
+	fn payout_stakers(n: u32, ) -> Weight {
+		(34120000 as Weight)
+			.saturating_add((46001000 as Weight).saturating_mul(n as Weight))
+			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(n as Weight)))
+	}
+	fn payout_stakers_alive_controller(n: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((58725000 as Weight).saturating_mul(n as Weight))
+			.saturating_add(RocksDbWeight::get().reads(0 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((5 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(0 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(n as Weight)))
+	}
+	fn rebond(l: u32, ) -> Weight {
+		(37332000 as Weight)
+			.saturating_add((68000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(l as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(l as Weight)))
+	}
+	fn set_history_depth(e: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((30240000 as Weight).saturating_mul(e as Weight))
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(e as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((7 as Weight).saturating_mul(e as Weight)))
+	}
+	fn reap_stash(s: u32, ) -> Weight {
+		(72990000 as Weight)
+			.saturating_add((2523000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(s as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(s as Weight)))
+	}
+	fn new_era(v: u32, n: u32, ) -> Weight {
+		(0 as Weight)
+			.saturating_add((1022678000 as Weight).saturating_mul(v as Weight))
+			.saturating_add((115746000 as Weight).saturating_mul(n as Weight))
+			.saturating_add(RocksDbWeight::get().reads(10 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(n as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(8 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(n as Weight)))
+	}
+	fn do_slash(l: u32, ) -> Weight {
+		(45708000 as Weight)
+			.saturating_add((105000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(l as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(l as Weight)))
+	}
+}
