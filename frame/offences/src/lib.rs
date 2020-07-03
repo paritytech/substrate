@@ -78,7 +78,7 @@ pub trait Trait: frame_system::Trait {
 	/// `on_initialize`.
 	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
 	type WeightSoftLimit: Get<Weight>;
-
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

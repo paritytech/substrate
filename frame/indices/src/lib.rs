@@ -71,6 +71,7 @@ pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

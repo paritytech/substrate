@@ -267,6 +267,7 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

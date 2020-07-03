@@ -350,6 +350,7 @@ pub trait Trait: frame_system::Trait + Sized {
 	/// lead to extrinsic with very big weight: see `delegate` for instance.
 	type MaxVotes: Get<u32>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

@@ -106,6 +106,7 @@ pub trait Trait: system::Trait {
 	/// Required origin to schedule or cancel calls.
 	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

@@ -140,6 +140,7 @@ pub trait Trait: frame_system::Trait {
 	/// period on default settings.
 	type MinimumPeriod: Get<Self::Moment>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

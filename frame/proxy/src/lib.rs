@@ -106,6 +106,7 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum amount of proxies allowed for a single account.
 	type MaxProxies: Get<u16>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

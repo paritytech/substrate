@@ -151,6 +151,7 @@ pub trait Trait: frame_system::Trait {
 	/// The origin which may add or remove registrars. Root can always do this.
 	type RegistrarOrigin: EnsureOrigin<Self::Origin>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

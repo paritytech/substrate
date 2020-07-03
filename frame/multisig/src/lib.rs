@@ -118,6 +118,7 @@ pub trait Trait: frame_system::Trait {
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

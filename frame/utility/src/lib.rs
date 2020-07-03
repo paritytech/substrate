@@ -90,6 +90,7 @@ pub trait Trait: frame_system::Trait {
 		+ GetDispatchInfo + From<frame_system::Call<Self>>
 		+ UnfilteredDispatchable<Origin=Self::Origin>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 

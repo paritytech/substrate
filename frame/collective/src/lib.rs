@@ -119,6 +119,7 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// Maximum number of proposals allowed to be active in parallel.
 	type MaxProposals: Get<u32>;
 
+	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
 
