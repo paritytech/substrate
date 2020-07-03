@@ -587,17 +587,22 @@ impl<T: Trait> Module<T> {
 	///
 	/// This function is similar to `Self::call`, but doesn't perform any address lookups and better
 	/// suitable for calling directly from Rust.
+	///
+	/// It returns the exection result and the amount of used weight.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Gas,
 		input_data: Vec<u8>,
-	) -> ExecResult {
+	) -> (ExecResult, Gas) {
 		let mut gas_meter = GasMeter::new(gas_limit);
-		Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
-			ctx.call(dest, value, gas_meter, input_data)
-		})
+		(
+			Self::execute_wasm(origin, &mut gas_meter, |ctx, gas_meter| {
+				ctx.call(dest, value, gas_meter, input_data)
+			}),
+			gas_meter.gas_spent(),
+		)
 	}
 
 	/// Query storage of a specified contract under a specified key.

@@ -42,6 +42,8 @@ pub enum ContractExecResult {
 		///
 		/// Can be empty.
 		data: Vec<u8>,
+		/// How much gas was consumed by the call.
+		gas_consumed: u64,
 	},
 	/// The contract execution either trapped or returned an error.
 	Error,
