@@ -779,6 +779,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();
