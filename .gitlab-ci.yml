@@ -93,24 +93,24 @@ default:
 
 .build-rules:                       &build-rules
   rules:
-    - if: $DEPLOY_TAG
+    - if: '$DEPLOY_TAG'
       when: never
     - if: $CI_COMMIT_REF_NAME=="master"
-      when: on_success
+      when: always
     - if: $CI_PIPELINE_SOURCE=="web"
-      when: on_success
+      when: always
     - if: $CI_COMMIT_REF_NAME=~ /^v[0-9]+\.[0-9]+.*$/
-      when: on_success
+      when: always
     - if: $CI_COMMIT_REF_NAME=~ /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
-      when: on_success
-    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_PIPELINE_SOURCE=="merge_request_event"'  # i.e add [chaos:basic] in commit message to trigger
-      when: on_success
+      when: always
+    - if: '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME=~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
+      when: always
     - when: never
 
 .chaos-only:                       &chaos-only
   only:
     variables:
-      - '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_PIPELINE_SOURCE=="merge_request_event"'  # i.e add [chaos:basic] in commit message to trigger
+      - '$CI_COMMIT_MESSAGE =~ /\[chaos:(basic|medium|large)\]/ && $CI_COMMIT_REF_NAME=~ /^[0-9]+$/'  # i.e add [chaos:basic] in commit message to trigger
 
 #### stage:                       .pre
 
@@ -121,6 +121,10 @@ skip-if-draft:
   only:
     - /^[0-9]+$/                  # Pull requests
   script:
+     - echo "Commit message is ${CI_COMMIT_MESSAGE}"
+     - echo "Ref is ${CI_COMMIT_REF_NAME}"
+     - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
+     - echo "deploy tag is ${DEPLOY_TAG}"
      - ./.maintain/gitlab/skip_if_draft.sh
 
 #### stage:                        check
@@ -547,6 +551,8 @@ trigger-contracts-ci:
 docker-build-chaos:                &docker-build-chaos
   <<:                              *chaos-only
   stage:                           docker
+  needs:
+    - job:                         build-linux-substrate
   image:                           docker:stable
   tags: 
     - kubernetes-parity-build
@@ -585,6 +591,8 @@ chaos-test-singlenodeheight:
   <<:                              *chaos-only
   stage:                           chaos
   image:                           parity/chaostools:latest
+  needs:
+    - job:                         docker-build-chaos
   tags: 
     - parity-chaos
   variables:
