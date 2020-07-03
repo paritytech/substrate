@@ -8309,8 +8309,10 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.0-rc4"
 dependencies = [
+ "futures 0.1.29",
  "futures 0.3.5",
  "hash-db",
+ "hex",
  "parity-scale-codec",
  "sc-client-api",
  "sc-client-db",

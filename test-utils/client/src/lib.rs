@@ -36,14 +36,17 @@ pub use sp_keyring::{
 pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
-pub use sc_service::client;
+pub use sc_service::{RpcHandlers, RpcSession, client};
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
+use std::pin::Pin;
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
+use futures::{future::{Future, FutureExt}, stream::StreamExt};
 use sp_core::storage::ChildInfo;
-use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
+use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
+use sc_client_api::BlockchainEvents;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = sc_light::Backend<
@@ -253,5 +256,83 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor(), Default::default());
 
 		self.build_with_executor(executor)
+	}
+}
+
+/// An extension trait for `RpcHandlers`.
+pub trait RpcHandlersExt {
+	/// Send a transaction through the RpcHandlers.
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<
+		Output = (
+			Option<String>,
+			RpcSession,
+			futures01::sync::mpsc::Receiver<String>,
+		),
+	> + Send>>;
+}
+
+impl RpcHandlersExt for RpcHandlers {
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<
+		Output = (
+			Option<String>,
+			RpcSession,
+			futures01::sync::mpsc::Receiver<String>,
+		),
+	> + Send>> {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+		Box::pin(self
+			.rpc_query(
+				&mem,
+				&format!(
+					r#"{{
+						"jsonrpc": "2.0",
+						"method": "author_submitExtrinsic",
+						"params": ["0x{}"],
+						"id": 0
+					}}"#,
+					hex::encode(extrinsic.encode())
+				),
+			)
+			.map(move |res| (res, mem, rx)))
+	}
+}
+
+/// An extension trait for `BlockchainEvents`.
+pub trait BlockchainEventsExt<C, B>
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
+	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+impl<C, B> BlockchainEventsExt<C, B> for C
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		assert!(count > 0, "'count' argument must be greater than 0");
+
+		let mut import_notification_stream = self.import_notification_stream();
+		let mut blocks = HashSet::new();
+
+		Box::pin(async move {
+			while let Some(notification) = import_notification_stream.next().await {
+				blocks.insert(notification.hash);
+				if blocks.len() == count {
+					break;
+				}
+			}
+		})
 	}
 }
