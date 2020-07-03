@@ -51,6 +51,9 @@ use sp_transaction_pool::{
 use sc_transaction_graph::{ChainApi, ExtrinsicHash};
 use wasm_timer::Instant;
 
+use node_runtime::UncheckedExtrinsic;
+use codec::{Decode, Encode};
+
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use crate::metrics::MetricsLink as PrometheusMetrics;
 
@@ -252,6 +255,21 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 
 		self.metrics.report(|metrics| metrics.submitted_transactions.inc_by(xts.len() as u64));
+		log::trace!(
+			target: "txpool_incoming",
+			"Transactions from {:?}: {:?}",
+			source,
+			xts.iter().fold(String::new(), |mut val, next| {
+				val.push_str(";;");
+				let decoded_tx_str = UncheckedExtrinsic::decode(&mut next.encode().as_slice()).map_or(
+					format!("{:?}", next),
+					|decoded_tx| format!("{:?}", decoded_tx)
+				);
+				val.push_str(&decoded_tx_str);
+				val
+			})
+		);
+
 
 		async move { pool.submit_at(&at, source, xts).await }.boxed()
 	}
@@ -265,7 +283,15 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		self.metrics.report(|metrics| metrics.submitted_transactions.inc());
+		log::trace!(
+			target: "txpool_incoming",
+			"Transaction from {:?}: {:?}",
+			source,
+			UncheckedExtrinsic::decode(&mut xt.encode().as_slice()).map_or(
+				format!("{:?}", xt),
+				|decoded_tx| format!("{:?}", decoded_tx)
+			)
+		);
 
 		async move { pool.submit_one(&at, source, xt).await }.boxed()
 	}
