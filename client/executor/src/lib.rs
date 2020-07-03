@@ -82,7 +82,7 @@ mod tests {
 			8,
 		);
 		let res = executor.call_in_wasm(
-			&WASM_BINARY[..],
+			&WASM_BINARY.unwrap()[..],
 			None,
 			"test_empty_return",
 			&[],

@@ -68,7 +68,7 @@ impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
 /// making the binary slimmer. There is a convention to use compact version of the runtime
 /// as canonical. This is why `native_executor_instance` also uses the compact version of the
 /// runtime.
-pub const COMPACT_CODE: &[u8] = node_runtime::WASM_BINARY;
+pub const COMPACT_CODE: Option<&[u8]> = node_runtime::WASM_BINARY;
 
 pub const GENESIS_HASH: [u8; 32] = [69u8; 32];
 

@@ -55,7 +55,7 @@ impl GenesisConfig {
 	}
 
 	pub fn genesis_map(&self) -> Storage {
-		let wasm_runtime = WASM_BINARY.to_vec();
+		let wasm_runtime = WASM_BINARY.expect("Wasm binary must be built for testing").to_vec();
 		let mut map: BTreeMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (blake2_256(&k[..])[..].to_vec(), v.to_vec()))

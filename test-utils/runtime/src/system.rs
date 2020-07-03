@@ -365,7 +365,7 @@ mod tests {
 			Sr25519Keyring::Charlie.to_raw_public()
 		];
 		TestExternalities::new_with_code(
-			WASM_BINARY,
+			WASM_BINARY.unwrap(),
 			sp_core::storage::Storage {
 				top: map![
 					twox_128(b"latest").to_vec() => vec![69u8; 32],
@@ -407,7 +407,7 @@ mod tests {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.unwrap().into()),
 				hash: Vec::new(),
 				heap_pages: None,
 			};
@@ -507,7 +507,7 @@ mod tests {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(WASM_BINARY.unwrap().into()),
 				hash: Vec::new(),
 				heap_pages: None,
 			};

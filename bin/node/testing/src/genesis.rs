@@ -61,7 +61,7 @@ pub fn config_endowed(
 				digest_interval: 2,
 				digest_levels: 2,
 			}) } else { None },
-			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
+			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.expect("Wasm binary must be built for testing").to_vec()),
 		}),
 		pallet_indices: Some(IndicesConfig {
 			indices: vec![],

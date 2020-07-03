@@ -241,7 +241,7 @@ pub fn testnet_genesis(
 
 	GenesisConfig {
 		frame_system: Some(SystemConfig {
-			code: WASM_BINARY.to_vec(),
+			code: WASM_BINARY.expect("Testing wasm binary not available").to_vec(),
 			changes_trie_config: Default::default(),
 		}),
 		pallet_balances: Some(BalancesConfig {
