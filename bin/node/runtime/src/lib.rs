@@ -179,7 +179,7 @@ impl frame_system::Trait for Runtime {
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForUtility;
 }
 
 parameter_types! {
@@ -197,7 +197,7 @@ impl pallet_multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForMultisig;
 }
 
 parameter_types! {
@@ -251,7 +251,7 @@ impl pallet_proxy::Trait for Runtime {
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForProxy;
 }
 
 parameter_types! {
@@ -265,7 +265,7 @@ impl pallet_scheduler::Trait for Runtime {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<AccountId>;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForScheduler;
 }
 
 parameter_types! {
@@ -288,7 +288,7 @@ impl pallet_indices::Trait for Runtime {
 	type Currency = Balances;
 	type Deposit = IndexDeposit;
 	type Event = Event;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForIndices;
 }
 
 parameter_types! {
@@ -328,7 +328,7 @@ impl pallet_timestamp::Trait for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForTimestamp;
 }
 
 parameter_types! {
@@ -365,7 +365,7 @@ impl pallet_session::Trait for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForSession;
 }
 
 impl pallet_session::historical::Trait for Runtime {
@@ -471,7 +471,7 @@ impl pallet_democracy::Trait for Runtime {
 	type Scheduler = Scheduler;
 	type PalletsOrigin = OriginCaller;
 	type MaxVotes = MaxVotes;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForDemocracy;
 }
 
 parameter_types! {
@@ -486,7 +486,7 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Event = Event;
 	type MotionDuration = CouncilMotionDuration;
 	type MaxProposals = CouncilMaxProposals;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForCollective;
 }
 
 parameter_types! {
@@ -518,7 +518,7 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	type DesiredMembers = DesiredMembers;
 	type DesiredRunnersUp = DesiredRunnersUp;
 	type TermDuration = TermDuration;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForElections;
 }
 
 parameter_types! {
@@ -533,7 +533,7 @@ impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Event = Event;
 	type MotionDuration = TechnicalMotionDuration;
 	type MaxProposals = TechnicalMaxProposals;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForCollective;
 }
 
 type EnsureRootOrHalfCouncil = EnsureOneOf<
@@ -588,7 +588,7 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForTreasury;
 }
 
 parameter_types! {
@@ -690,7 +690,7 @@ impl pallet_im_online::Trait for Runtime {
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForImOnline;
 }
 
 parameter_types! {
@@ -702,7 +702,7 @@ impl pallet_offences::Trait for Runtime {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForOffences;
 }
 
 impl pallet_authority_discovery::Trait for Runtime {}
@@ -761,7 +761,7 @@ impl pallet_identity::Trait for Runtime {
 	type Slashed = Treasury;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type RegistrarOrigin = EnsureRootOrHalfCouncil;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForIdentity;
 }
 
 parameter_types! {
@@ -818,7 +818,7 @@ impl pallet_vesting::Trait for Runtime {
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
-	type WeightInfo = ();
+	type WeightInfo = benchmarks::WeightForVesting;
 }
 
 construct_runtime!(
