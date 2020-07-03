@@ -768,6 +768,12 @@ where
 		author: &AuthorityId,
 		origin: &BlockOrigin,
 	) -> Result<(), Error<Block>> {
+		// don't report any equivocations during initial sync
+		// as they are most likely stale.
+		if *origin == BlockOrigin::NetworkInitialSync {
+			return Ok(());
+		}
+
 		// check if authorship of this header is an equivocation and return a proof if so.
 		let equivocation_proof =
 			match check_equivocation(&*self.client, slot_now, slot, header, author)
@@ -776,12 +782,6 @@ where
 				Some(proof) => proof,
 				None => return Ok(()),
 			};
-
-		// don't report any equivocations during initial sync
-		// as they are most likely stale.
-		if *origin == BlockOrigin::NetworkInitialSync {
-			return Ok(());
-		}
 
 		info!(
 			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
