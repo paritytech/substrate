@@ -811,6 +811,7 @@ impl pallet_society::Trait for Runtime {
 
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
+	pub const LocksUpperBound: u32 = 50;
 }
 
 impl pallet_vesting::Trait for Runtime {
@@ -819,6 +820,7 @@ impl pallet_vesting::Trait for Runtime {
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = benchmarks::WeightForVesting;
+	type LocksUpperBound = LocksUpperBound;
 }
 
 construct_runtime!(

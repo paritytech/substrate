@@ -1224,6 +1224,14 @@ impl pallet_vesting::WeightInfo for WeightForVesting {
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(l as Weight)))
 	}
+	fn force_vested_transfer(l: u32, ) -> Weight {
+		(87306000 as Weight)
+			.saturating_add((442000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((0 as Weight).saturating_mul(l as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes((0 as Weight).saturating_mul(l as Weight)))
+	}
 }
 
 pub struct WeightForStaking;

@@ -70,6 +70,7 @@ pub trait WeightInfo {
 	fn vest_other_locked(l: u32, ) -> Weight;
 	fn vest_other_unlocked(l: u32, ) -> Weight;
 	fn vested_transfer(l: u32, ) -> Weight;
+	fn force_vested_transfer(l: u32, ) -> Weight;
 }
 
 impl WeightInfo for () {
@@ -78,6 +79,7 @@ impl WeightInfo for () {
 	fn vest_other_locked(_l: u32, ) -> Weight { 1_000_000_000 }
 	fn vest_other_unlocked(_l: u32, ) -> Weight { 1_000_000_000 }
 	fn vested_transfer(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn force_vested_transfer(_l: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
@@ -93,7 +95,11 @@ pub trait Trait: frame_system::Trait {
 	/// The minimum amount transferred to call `vested_transfer`.
 	type MinVestedTransfer: Get<BalanceOf<Self>>;
 
+	/// Weight information for the extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// The upper bound of locks on an average user, used for weight calculation.
+	type LocksUpperBound: Get<u32>;
 }
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -197,6 +203,9 @@ decl_module! {
 		/// The minimum amount to be transferred to create a new vesting schedule.
 		const MinVestedTransfer: BalanceOf<T> = T::MinVestedTransfer::get();
 
+		/// The expected upper bound for locks on the average user.
+		const LocksUpperBound: u32 = T::LocksUpperBound::get();
+
 		fn deposit_event() = default;
 
 		/// Unlock any vested funds of the sender account.
@@ -216,7 +225,9 @@ decl_module! {
 		///     - Locked: 44.43 + .284 * l µs (min square analysis)
 		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = T::WeightInfo::vest_locked(50).max(T::WeightInfo::vest_unlocked(50))]
+		#[weight = T::WeightInfo::vest_locked(T::LocksUpperBound::get())
+			.max(T::WeightInfo::vest_unlocked(T::LocksUpperBound::get()))
+		]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -241,7 +252,9 @@ decl_module! {
 		///     - Locked: 48.16 + .103 * l µs (min square analysis)
 		/// - Using 50 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = T::WeightInfo::vest_other_locked(50).max(T::WeightInfo::vest_other_unlocked(50))]
+		#[weight = T::WeightInfo::vest_other_locked(T::LocksUpperBound::get())
+			.max(T::WeightInfo::vest_other_unlocked(T::LocksUpperBound::get()))
+		]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -265,7 +278,7 @@ decl_module! {
 		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
 		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = T::WeightInfo::vested_transfer(50)]
+		#[weight = T::WeightInfo::vested_transfer(T::LocksUpperBound::get())]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -304,7 +317,7 @@ decl_module! {
 		/// - Benchmark: 100.3 + .365 * l µs (min square analysis)
 		/// - Using 100 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(4, 4)]
+		#[weight = T::WeightInfo::force_vested_transfer(T::LocksUpperBound::get())]
 		pub fn force_vested_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -476,6 +489,7 @@ mod tests {
 	}
 	parameter_types! {
 		pub const MinVestedTransfer: u64 = 256 * 2;
+		pub const LocksUpperBound: u32 = 50;
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -483,6 +497,7 @@ mod tests {
 		type BlockNumberToBalance = Identity;
 		type MinVestedTransfer = MinVestedTransfer;
 		type WeightInfo = ();
+		type LocksUpperBound = LocksUpperBound;
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
