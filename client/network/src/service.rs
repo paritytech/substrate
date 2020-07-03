@@ -62,7 +62,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::{
 	borrow::{Borrow, Cow},
 	collections::HashSet,
-	fs, io,
+	fs,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -1111,7 +1111,7 @@ impl Metrics {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
-	type Output = Result<(), io::Error>;
+	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
@@ -1138,7 +1138,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_worker.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
-				Poll::Ready(None) => return Poll::Ready(Ok(())),
+				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
 
