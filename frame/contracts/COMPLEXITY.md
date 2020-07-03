@@ -283,7 +283,7 @@ This is the list of getters:
 
 - ext_caller
 - ext_address
-- ext_gas_price
+- ext_weight_to_fee
 - ext_gas_left
 - ext_balance
 - ext_value_transferred

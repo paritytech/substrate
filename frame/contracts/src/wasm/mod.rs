@@ -1035,7 +1035,7 @@ mod tests {
 
 	const CODE_GAS_PRICE: &str = r#"
 (module
-	(import "env" "ext_gas_price" (func $ext_gas_price (param i64 i32 i32)))
+	(import "env" "ext_weight_to_fee" (func $ext_weight_to_fee (param i64 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 32 bytes
@@ -1052,7 +1052,7 @@ mod tests {
 
 	(func (export "call")
 		;; This stores the gas price in the buffer
-		(call $ext_gas_price (i64.const 2) (i32.const 0) (i32.const 32))
+		(call $ext_weight_to_fee (i64.const 2) (i32.const 0) (i32.const 32))
 
 		;; assert len == 8
 		(call $assert

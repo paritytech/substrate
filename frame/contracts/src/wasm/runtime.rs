@@ -801,7 +801,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// It is recommended to avoid specifying very small values for `gas` as the prices for a single
 	// gas can be smaller than one.
-	ext_gas_price(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
+	ext_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		write_sandbox_output(
 			ctx, out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false
 		)
