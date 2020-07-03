@@ -208,7 +208,7 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 			.directory(file),
 	};
 
-	logger.start().map_or_else(|_| ().map_err(|e| e.into())
+	logger.start().map(|_| ()).map_err(|e| e.into())
 }
 
 fn kill_color(s: &str) -> String {
