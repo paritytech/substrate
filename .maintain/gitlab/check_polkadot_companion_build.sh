@@ -87,15 +87,7 @@ then
     git checkout pr/${pr_companion}
     git merge origin/master
   else
-    pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
-    if git fetch origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
-    then
-      boldprint "companion branch detected: $pr_ref"
-      git checkout branch/"$pr_ref"
-      git merge origin/master
-    else
-      boldprint "no companion branch found - building polkadot:master"
-    fi
+    boldprint "no companion branch found - building polkadot:master"
   fi
   rm -f "${pr_data_file}"
 else
