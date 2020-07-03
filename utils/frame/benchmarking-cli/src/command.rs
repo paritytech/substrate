@@ -55,7 +55,7 @@ impl BenchmarkCmd {
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
-			None, // heap pages
+			self.heap_pages,
 			2, // The runtime instances cache size.
 		);
 

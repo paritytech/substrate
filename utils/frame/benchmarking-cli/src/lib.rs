@@ -68,6 +68,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub weight_trait: bool,
 
+	/// Set the heap pages while running benchmarks.
+	#[structopt(long)]
+	pub heap_pages: Option<u64>,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,
