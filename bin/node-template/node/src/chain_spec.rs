@@ -41,11 +41,11 @@ pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 pub fn development_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or("Development wasm binary not available".to_string())?;
 
-	ChainSpec::from_genesis(
+	Ok(ChainSpec::from_genesis(
 		"Development",
 		"dev",
 		ChainType::Development,
-		|| testnet_genesis(
+		move || testnet_genesis(
 			wasm_binary,
 			vec![
 				authority_keys_from_seed("Alice"),
@@ -64,17 +64,17 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		None,
 		None,
 		None,
-	)
+	))
 }
 
 pub fn local_testnet_config() -> Result<ChainSpec, String> {
 	let wasm_binary = WASM_BINARY.ok_or("Development wasm binary not available".to_string())?;
 
-	ChainSpec::from_genesis(
+	Ok(ChainSpec::from_genesis(
 		"Local Testnet",
 		"local_testnet",
 		ChainType::Local,
-		|| testnet_genesis(
+		move || testnet_genesis(
 			wasm_binary,
 			vec![
 				authority_keys_from_seed("Alice"),
@@ -102,7 +102,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		None,
 		None,
 		None,
-	)
+	))
 }
 
 fn testnet_genesis(
