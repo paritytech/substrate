@@ -36,7 +36,7 @@ criterion_group!(benches, bench_execute_block);
 criterion_main!(benches);
 
 /// The wasm runtime code.
-const COMPACT_CODE: &[u8] = node_runtime::WASM_BINARY;
+const COMPACT_CODE: Option<&[u8]> = node_runtime::WASM_BINARY;
 
 const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
@@ -60,7 +60,7 @@ fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 
 fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256> {
 	let mut test_ext = TestExternalities::new_with_code(
-		COMPACT_CODE,
+		COMPACT_CODE.unwrap(),
 		genesis_config.build_storage().unwrap(),
 	);
 	test_ext.ext().place_storage(well_known_keys::HEAP_PAGES.to_vec(), Some(HEAP_PAGES.encode()));
@@ -94,7 +94,7 @@ fn construct_block<E: Externalities>(
 	};
 
 	let runtime_code = RuntimeCode {
-		code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.unwrap().into()),
 		hash: vec![1, 2, 3],
 		heap_pages: None,
 	};
@@ -168,7 +168,7 @@ fn bench_execute_block(c: &mut Criterion) {
 	c.bench_function_over_inputs(
 		"execute blocks",
 		|b, strategy| {
-			let genesis_config = node_testing::genesis::config(false, Some(COMPACT_CODE));
+			let genesis_config = node_testing::genesis::config(false, Some(COMPACT_CODE.unwrap()));
 			let (use_native, wasm_method) = match strategy {
 				ExecutionMethod::Native => (true, WasmExecutionMethod::Interpreted),
 				ExecutionMethod::Wasm(wasm_method) => (false, *wasm_method),
@@ -176,7 +176,7 @@ fn bench_execute_block(c: &mut Criterion) {
 
 			let executor = NativeExecutor::new(wasm_method, None, 8);
 			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.unwrap().into()),
 				hash: vec![1, 2, 3],
 				heap_pages: None,
 			};
