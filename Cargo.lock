@@ -4009,9 +4009,15 @@ dependencies = [
 name = "pallet-babe"
 version = "2.0.0-rc4"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-offences",
  "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
  "serde",
@@ -4022,6 +4028,7 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
  "sp-timestamp",
@@ -4554,10 +4561,12 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
+ "rand 0.7.3",
  "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-std",
 ]
 
@@ -6343,6 +6352,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
@@ -7568,6 +7578,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
+ "sp-consensus-slots",
  "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
@@ -7585,6 +7596,14 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "sp-consensus-slots"
+version = "0.8.0-rc4"
+dependencies = [
+ "parity-scale-codec",
+ "sp-runtime",
 ]
 
 [[package]]

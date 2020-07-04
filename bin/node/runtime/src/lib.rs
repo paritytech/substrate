@@ -270,6 +270,21 @@ impl pallet_babe::Trait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+
+	type KeyOwnerProofSystem = Historical;
+
+	type KeyOwnerProof = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		pallet_babe::AuthorityId,
+	)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		pallet_babe::AuthorityId,
+	)>>::IdentificationTuple;
+
+	type HandleEquivocation =
+		pallet_babe::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
 }
 
 parameter_types! {
@@ -808,7 +823,7 @@ construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Utility: pallet_utility::{Module, Call, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
+		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp), ValidateUnsigned},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
@@ -985,6 +1000,29 @@ impl_runtime_apis! {
 		fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 			Babe::current_epoch_start()
 		}
+
+		fn generate_key_ownership_proof(
+			_slot_number: sp_consensus_babe::SlotNumber,
+			authority_id: sp_consensus_babe::AuthorityId,
+		) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
+			use codec::Encode;
+
+			Historical::prove((sp_consensus_babe::KEY_TYPE, authority_id))
+				.map(|p| p.encode())
+				.map(sp_consensus_babe::OpaqueKeyOwnershipProof::new)
+		}
+
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: sp_consensus_babe::EquivocationProof<<Block as BlockT>::Header>,
+			key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			let key_owner_proof = key_owner_proof.decode()?;
+
+			Babe::submit_unsigned_equivocation_report(
+				equivocation_proof,
+				key_owner_proof,
+			)
+		}
 	}
 
 	impl sp_authority_discovery::AuthorityDiscoveryApi<Block> for Runtime {
@@ -1099,6 +1137,7 @@ impl_runtime_apis! {
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 
+			add_benchmark!(params, batches, b"babe", Babe);
 			add_benchmark!(params, batches, b"balances", Balances);
 			add_benchmark!(params, batches, b"collective", Council);
 			add_benchmark!(params, batches, b"democracy", Democracy);
