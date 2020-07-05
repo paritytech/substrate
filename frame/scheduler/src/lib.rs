@@ -240,7 +240,9 @@ decl_module! {
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
-			Self::do_schedule_named(id, DelayedDispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call)?;
+			Self::do_schedule_named(
+				id, DelayedDispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call
+			)?;
 		}
 
 		/// Cancel a named scheduled task.
@@ -279,7 +281,9 @@ decl_module! {
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
-			Self::do_schedule(DelayedDispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call)?;
+			Self::do_schedule(
+				DelayedDispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
+			)?;
 		}
 
 		/// Schedule a named task after a delay.
@@ -302,7 +306,9 @@ decl_module! {
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
-			Self::do_schedule_named(id, DelayedDispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call)?;
+			Self::do_schedule_named(
+				id, DelayedDispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
+			)?;
 		}
 
 		/// Execute the scheduled calls
@@ -835,11 +841,21 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
 			Scheduler::do_schedule_named(
-				1u32.encode(), DelayedDispatchTime::At(4), Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
+				1u32.encode(),
+				DelayedDispatchTime::At(4),
+				Some((3, 3)),
+				127,
+				root(),
+				Call::Logger(logger::Call::log(42, 1000))
 			).unwrap();
 			// same id results in error.
 			assert!(Scheduler::do_schedule_named(
-				1u32.encode(), DelayedDispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
+				1u32.encode(),
+				DelayedDispatchTime::At(4),
+				None,
+				127,
+				root(),
+				Call::Logger(logger::Call::log(69, 1000))
 			).is_err());
 			// different id is ok.
 			Scheduler::do_schedule_named(
@@ -860,10 +876,17 @@ mod tests {
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				127,
+				root(),
+				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				127,
+				root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// 69 and 42 do not fit together
 			run_to_block(4);
@@ -877,10 +900,18 @@ mod tests {
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 0, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				0,
+				root(),
+				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				0,
+				root(),
+				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
 			run_to_block(4);
@@ -892,10 +923,18 @@ mod tests {
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 1, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				1,
+				root(),
+				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 0, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				0,
+				root(),
+				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![(root(), 69u32), (root(), 42u32)]);
@@ -906,13 +945,22 @@ mod tests {
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 255, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
+				DelayedDispatchTime::At(4),
+				None,
+				255,
+				root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				127,
+				root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 126, root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(4),
+				None,
+				126,
+				root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
 			);
 
 			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
@@ -941,11 +989,19 @@ mod tests {
 			);
 			// Anon Periodic
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(1), Some((1000, 3)), 128, root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
+				DelayedDispatchTime::At(1),
+				Some((1000, 3)),
+				128,
+				root(),
+				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
 			// Anon
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(1), None, 127, root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
+				DelayedDispatchTime::At(1),
+				None,
+				127,
+				root(),
+				Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			// Named Periodic
 			assert_ok!(Scheduler::do_schedule_named(
