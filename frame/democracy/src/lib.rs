@@ -163,7 +163,7 @@ use frame_support::{
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
+		OnUnbalanced, BalanceStatus, schedule::{Named as ScheduleNamed, DelayedDispatchTime}, EnsureOrigin
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -1625,7 +1625,7 @@ impl<T: Trait> Module<T> {
 
 				if T::Scheduler::schedule_named(
 					(DEMOCRACY_ID, index).encode(),
-					when,
+					DelayedDispatchTime::At(when),
 					None,
 					63,
 					system::RawOrigin::Root.into(),
