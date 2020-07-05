@@ -183,7 +183,7 @@ pub trait Trait: frame_system::Trait {
 	type BountyDuration: Get<Self::BlockNumber>;
 
 	/// Maximum acceptable reason length.
-	type MaximumReasonLenght: Get<u32>;
+	type MaximumReasonLength: Get<u32>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -441,7 +441,7 @@ decl_module! {
 		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
 
 		/// Maximum acceptable reason length.
-		const MaximumReasonLenght: u32 = T::MaximumReasonLenght::get();
+		const MaximumReasonLength: u32 = T::MaximumReasonLength::get();
 
 		type Error = Error<T>;
 
@@ -538,7 +538,7 @@ decl_module! {
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
-			ensure!(reason.len() <= T::MaximumReasonLenght::get() as usize, Error::<T>::ReasonTooBig);
+			ensure!(reason.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T>::contains_key(&reason_hash), Error::<T>::AlreadyKnown);
@@ -1125,7 +1125,7 @@ impl<T: Trait> Module<T> {
 		value: BalanceOf<T>,
 		parent_bounty_id: Option<BountyIndex>,
 	) -> DispatchResult {
-		ensure!(description.len() <= T::MaximumReasonLenght::get() as usize, Error::<T>::ReasonTooBig);
+		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
 		ensure!(fee < value, Error::<T>::InvalidFee);
 

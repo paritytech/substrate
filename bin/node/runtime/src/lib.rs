@@ -547,7 +547,7 @@ parameter_types! {
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const BountyValueMinimum: Balance = 10 * DOLLARS;
 	pub const BountyDuration: BlockNumber = 14 * DAYS;
-	pub const MaximumReasonLenght: u32 = 16384;
+	pub const MaximumReasonLength: u32 = 16384;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -578,7 +578,7 @@ impl pallet_treasury::Trait for Runtime {
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyValueMinimum = BountyValueMinimum;
 	type BountyDuration = BountyDuration;
-	type MaximumReasonLenght = MaximumReasonLenght;
+	type MaximumReasonLength = MaximumReasonLength;
 }
 
 parameter_types! {
