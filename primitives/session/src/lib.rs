@@ -64,6 +64,48 @@ pub struct MembershipProof {
 	pub validator_count: ValidatorCount,
 }
 
+/// A utility trait to get a session number. This is implemented for
+/// `MembershipProof` below to fetch the session number the given session
+/// membership proof is for. It is useful when we need to deal with key owner
+/// proofs generically (i.e. just typing against the `KeyOwnerProofSystem`
+/// trait) but still restrict their capabilities.
+pub trait GetSessionNumber {
+	fn session(&self) -> SessionIndex;
+}
+
+/// A utility trait to get the validator count of a given session. This is
+/// implemented for `MembershipProof` below and fetches the number of validators
+/// in the session the membership proof is for. It is useful when we need to
+/// deal with key owner proofs generically (i.e. just typing against the
+/// `KeyOwnerProofSystem` trait) but still restrict their capabilities.
+pub trait GetValidatorCount {
+	fn validator_count(&self) -> ValidatorCount;
+}
+
+impl GetSessionNumber for sp_core::Void {
+	fn session(&self) -> SessionIndex {
+		Default::default()
+	}
+}
+
+impl GetValidatorCount for sp_core::Void {
+	fn validator_count(&self) -> ValidatorCount {
+		Default::default()
+	}
+}
+
+impl GetSessionNumber for MembershipProof {
+	fn session(&self) -> SessionIndex {
+		self.session
+	}
+}
+
+impl GetValidatorCount for MembershipProof {
+	fn validator_count(&self) -> ValidatorCount {
+		self.validator_count
+	}
+}
+
 /// Generate the initial session keys with the given seeds, at the given block and store them in
 /// the client's keystore.
 #[cfg(feature = "std")]
