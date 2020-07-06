@@ -59,7 +59,7 @@ use sp_runtime::{RuntimeDebug, traits::{Zero, One, BadOrigin, Saturating}};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, IterableStorageMap,
 	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
-	traits::{Get, schedule::{self, DelayedDispatchTime}, OriginTrait, EnsureOrigin, IsType},
+	traits::{Get, schedule::{self, DispatchTime}, OriginTrait, EnsureOrigin, IsType},
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system};
@@ -200,7 +200,7 @@ decl_module! {
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
-			Self::do_schedule(DelayedDispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call)?;
+			Self::do_schedule(DispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call)?;
 		}
 
 		/// Cancel an anonymously scheduled task.
@@ -241,7 +241,7 @@ decl_module! {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
 			Self::do_schedule_named(
-				id, DelayedDispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call
+				id, DispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call
 			)?;
 		}
 
@@ -265,12 +265,7 @@ decl_module! {
 		/// Anonymously schedule a task after a delay.
 		///
 		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 22.29 + .126 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda
-		///     - Write: Agenda
-		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
+		/// Same as [`schedule`].
 		/// # </weight>
 		#[weight = 25_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn schedule_after(origin,
@@ -282,19 +277,14 @@ decl_module! {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
 			Self::do_schedule(
-				DelayedDispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
+				DispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
 			)?;
 		}
 
 		/// Schedule a named task after a delay.
 		///
 		/// # <weight>
-		/// - S = Number of already scheduled calls
-		/// - Base Weight: 29.6 + .159 * S µs
-		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
+		/// Same as [`schedule_named`].
 		/// # </weight>
 		#[weight = 35_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn schedule_named_after(origin,
@@ -307,7 +297,7 @@ decl_module! {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Trait>::Origin::from(origin);
 			Self::do_schedule_named(
-				id, DelayedDispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
+				id, DispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
 			)?;
 		}
 
@@ -427,7 +417,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_schedule(
-		when: DelayedDispatchTime<T::BlockNumber>,
+		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
@@ -436,8 +426,8 @@ impl<T: Trait> Module<T> {
 		let now = frame_system::Module::<T>::block_number();
 
 		let when = match when {
-			DelayedDispatchTime::At(x) => x,
-			DelayedDispatchTime::After(x) => now.saturating_add(x)
+			DispatchTime::At(x) => x,
+			DispatchTime::After(x) => now.saturating_add(x)
 		};
 
 		if when <= now {
@@ -490,7 +480,7 @@ impl<T: Trait> Module<T> {
 
 	fn do_schedule_named(
 		id: Vec<u8>,
-		when: DelayedDispatchTime<T::BlockNumber>,
+		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
@@ -504,8 +494,8 @@ impl<T: Trait> Module<T> {
 		let now = frame_system::Module::<T>::block_number();
 
 		let when = match when {
-			DelayedDispatchTime::At(x) => x,
-			DelayedDispatchTime::After(x) => now.saturating_add(x)
+			DispatchTime::At(x) => x,
+			DispatchTime::After(x) => now.saturating_add(x)
 		};
 
 		if when <= now {
@@ -558,7 +548,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrig
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule(
-		when: DelayedDispatchTime<T::BlockNumber>,
+		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
@@ -577,7 +567,7 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOri
 
 	fn schedule_named(
 		id: Vec<u8>,
-		when: DelayedDispatchTime<T::BlockNumber>,
+		when: DispatchTime<T::BlockNumber>,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
@@ -767,7 +757,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
-			let _ = Scheduler::do_schedule(DelayedDispatchTime::At(4), None, 127, root(), call);
+			let _ = Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -783,7 +773,7 @@ mod tests {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
 			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
-			let _ = Scheduler::do_schedule(DelayedDispatchTime::After(3), None, 127, root(), call);
+			let _ = Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call);
 			run_to_block(4);
 			assert!(logger::log().is_empty());
 			run_to_block(5);
@@ -798,7 +788,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
+				DispatchTime::At(4), Some((3, 3)), 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			);
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -822,10 +812,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// at #4.
 			Scheduler::do_schedule_named(
-				1u32.encode(), DelayedDispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
+				1u32.encode(), DispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
 			).unwrap();
 			let i = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(42, 1000))
+				DispatchTime::At(4), None, 127, root(), Call::Logger(logger::Call::log(42, 1000))
 			).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -842,7 +832,7 @@ mod tests {
 			// at #4, every 3 blocks, 3 times.
 			Scheduler::do_schedule_named(
 				1u32.encode(),
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				Some((3, 3)),
 				127,
 				root(),
@@ -851,7 +841,7 @@ mod tests {
 			// same id results in error.
 			assert!(Scheduler::do_schedule_named(
 				1u32.encode(),
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				127,
 				root(),
@@ -859,7 +849,7 @@ mod tests {
 			).is_err());
 			// different id is ok.
 			Scheduler::do_schedule_named(
-				2u32.encode(), DelayedDispatchTime::At(8), None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
+				2u32.encode(), DispatchTime::At(8), None, 127, root(), Call::Logger(logger::Call::log(69, 1000))
 			).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -876,14 +866,14 @@ mod tests {
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				127,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				127,
 				root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
@@ -900,14 +890,14 @@ mod tests {
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				0,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				0,
 				root(),
@@ -923,14 +913,14 @@ mod tests {
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				1,
 				root(),
 				Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				0,
 				root(),
@@ -945,19 +935,19 @@ mod tests {
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				255,
 				root(), Call::Logger(logger::Call::log(42, MaximumSchedulerWeight::get() / 3))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				127,
 				root(), Call::Logger(logger::Call::log(69, MaximumSchedulerWeight::get() / 2))
 			);
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(4),
+				DispatchTime::At(4),
 				None,
 				126,
 				root(), Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2))
@@ -983,13 +973,13 @@ mod tests {
 			// Named
 			assert_ok!(
 				Scheduler::do_schedule_named(
-					1u32.encode(), DelayedDispatchTime::At(1), None, 255, root(),
+					1u32.encode(), DispatchTime::At(1), None, 255, root(),
 					Call::Logger(logger::Call::log(3, MaximumSchedulerWeight::get() / 3))
 				)
 			);
 			// Anon Periodic
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(1),
+				DispatchTime::At(1),
 				Some((1000, 3)),
 				128,
 				root(),
@@ -997,7 +987,7 @@ mod tests {
 			);
 			// Anon
 			let _ = Scheduler::do_schedule(
-				DelayedDispatchTime::At(1),
+				DispatchTime::At(1),
 				None,
 				127,
 				root(),
@@ -1005,7 +995,7 @@ mod tests {
 			);
 			// Named Periodic
 			assert_ok!(Scheduler::do_schedule_named(
-				2u32.encode(), DelayedDispatchTime::At(1), Some((1000, 3)), 126, root(),
+				2u32.encode(), DispatchTime::At(1), Some((1000, 3)), 126, root(),
 				Call::Logger(logger::Call::log(2600, MaximumSchedulerWeight::get() / 2)))
 			);
 
