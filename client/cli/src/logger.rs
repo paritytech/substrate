@@ -153,7 +153,7 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 	// Enable info for others.
 	builder.default(log::LevelFilter::Info);
 
-	// Add filtesr defined by RUST_LOG.
+	// Add filters defined by RUST_LOG.
 	builder.insert_modules_from(LogSpecification::env()?);
 
 	// Add filters passed in as argument.
