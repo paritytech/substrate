@@ -323,21 +323,16 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let r in 1 .. MAX_REPORTERS;
 		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
-		let o = 1;
 
-		// Make r reporters
-		let mut reporters = vec![];
-		for i in 0 .. r {
-			let reporter = account("reporter", i, SEED);
-			reporters.push(reporter);
-		}
+		// for babe equivocation reports the number of reporters
+		// and offenders is always 1
+		let reporters = vec![account("reporter", 1, SEED)];
 
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let (mut offenders, raw_offenders) = make_offenders::<T>(o, n)?;
+		let (mut offenders, raw_offenders) = make_offenders::<T>(1, n)?;
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
@@ -357,9 +352,9 @@ benchmarks! {
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence
-			+ 2 * r // reporter (reward + endowment)
-			+ o // offenders slashed
-			+ o * n // nominators slashed
+			+ 2 // reporter (reward + endowment)
+			+ 1 // offenders slashed
+			+ n // nominators slashed
 		);
 	}
 

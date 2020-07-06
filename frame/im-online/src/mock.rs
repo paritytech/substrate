@@ -86,10 +86,16 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
 		Ok(())
 	}
+
+	fn is_known_offence(_offenders: &[IdentificationTuple], _time_slot: &SessionIndex) -> bool {
+		false
+	}
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = frame_system::GenesisConfig::default()
+		.build_storage::<Runtime>()
+		.unwrap();
 	t.into()
 }
 

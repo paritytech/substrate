@@ -21,6 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod backend;
+mod tests;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
@@ -144,7 +145,7 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
 	/// Chain ID of EVM.
-	type ChainId: Get<U256>;
+	type ChainId: Get<u64>;
 
 	/// EVM config used in the module.
 	fn config() -> &'static Config {
@@ -201,6 +202,12 @@ decl_event! {
 		Log(Log),
 		/// A contract has been created at given address.
 		Created(H160),
+		/// A contract was attempted to be created, but the execution failed.
+		CreatedFailed(H160),
+		/// A contract has been executed successfully with states applied.
+		Executed(H160),
+		/// A contract has been executed with errors. States are reverted with only gas fees applied.
+		ExecutedFailed(H160),
 		/// A deposit has been made at a given address.
 		BalanceDeposit(AccountId, H160, U256),
 		/// A withdrawal has been made from a given address.
@@ -220,12 +227,6 @@ decl_error! {
 		WithdrawFailed,
 		/// Gas price is too low.
 		GasPriceTooLow,
-		/// Call failed
-		ExitReasonFailed,
-		/// Call reverted
-		ExitReasonRevert,
-		/// Call returned VM fatal error
-		ExitReasonFatal,
 		/// Nonce is invalid
 		InvalidNonce,
 	}
@@ -300,7 +301,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			Self::execute_call(
+			match Self::execute_call(
 				source,
 				target,
 				input,
@@ -308,7 +309,16 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce,
-			).map_err(Into::into)
+			)? {
+				ExitReason::Succeed(_) => {
+					Module::<T>::deposit_event(Event::<T>::Executed(target));
+				},
+				ExitReason::Error(_) | ExitReason::Revert(_) | ExitReason::Fatal(_) => {
+					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
+				},
+			}
+
+			Ok(())
 		}
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
@@ -327,16 +337,22 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			let create_address = Self::execute_create(
+			match Self::execute_create(
 				source,
 				init,
 				value,
 				gas_limit,
 				gas_price,
 				nonce
-			)?;
+			)? {
+				(create_address, ExitReason::Succeed(_)) => {
+					Module::<T>::deposit_event(Event::<T>::Created(create_address));
+				},
+				(create_address, _) => {
+					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
+				},
+			}
 
-			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 
@@ -356,7 +372,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			let create_address = Self::execute_create2(
+			match Self::execute_create2(
 				source,
 				init,
 				salt,
@@ -364,9 +380,15 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce
-			)?;
+			)? {
+				(create_address, ExitReason::Succeed(_)) => {
+					Module::<T>::deposit_event(Event::<T>::Created(create_address));
+				},
+				(create_address, _) => {
+					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
+				},
+			}
 
-			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 	}
@@ -413,7 +435,7 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>
-	) -> Result<H160, Error<T>> {
+	) -> Result<(H160, ExitReason), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -442,7 +464,7 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>
-	) -> Result<H160, Error<T>> {
+	) -> Result<(H160, ExitReason), Error<T>> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
 		Self::execute_evm(
 			source,
@@ -473,8 +495,8 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>,
-	) -> Result<(), Error<T>> {
-		Self::execute_evm(
+	) -> Result<ExitReason, Error<T>> {
+		Ok(Self::execute_evm(
 			source,
 			value,
 			gas_limit,
@@ -487,7 +509,7 @@ impl<T: Trait> Module<T> {
 				input,
 				gas_limit as usize,
 			)),
-		)
+		)?.1)
 	}
 
 	/// Execute an EVM operation.
@@ -498,7 +520,7 @@ impl<T: Trait> Module<T> {
 		gas_price: U256,
 		nonce: Option<U256>,
 		f: F,
-	) -> Result<R, Error<T>> where
+	) -> Result<(R, ExitReason), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (R, ExitReason),
 	{
 		let vicinity = Vicinity {
@@ -527,19 +549,12 @@ impl<T: Trait> Module<T> {
 
 		let (retv, reason) = f(&mut executor);
 
-		let ret = match reason {
-			ExitReason::Succeed(_) => Ok(retv),
-			ExitReason::Error(_) => Err(Error::<T>::ExitReasonFailed),
-			ExitReason::Revert(_) => Err(Error::<T>::ExitReasonRevert),
-			ExitReason::Fatal(_) => Err(Error::<T>::ExitReasonFatal),
-		};
-
 		let actual_fee = executor.fee(gas_price);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 		let (values, logs) = executor.deconstruct();
 		backend.apply(values, logs, true);
 
-		ret
+		Ok((retv, reason))
 	}
 }

@@ -209,8 +209,9 @@ mod tests {
 	use sp_io::TestExternalities;
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
+		testing::Header,
+		traits::{BlakeTwo256, IdentityLookup},
+		Perbill,
 	};
 	use frame_support::{
 		assert_ok, impl_outer_origin, parameter_types,
