@@ -20,14 +20,15 @@
 use super::*;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, impl_outer_event, parameter_types,
-	weights::{Weight, DispatchClass}
+	weights::Weight,
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. 
+// or public keys.
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
+use frame_support::traits::Filter;
 
 // Logger module to track execution.
 pub mod logger {
@@ -56,25 +57,17 @@ pub mod logger {
 		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event() = default;
 
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
+			#[weight = *weight]
 			fn privileged_i32_log(origin, i: i32, weight: Weight){
-				// Ensure that the `origin` is `Root`.	
+				// Ensure that the `origin` is `Root`.
 				ensure_root(origin)?;
 				<I32Log>::append(i);
 				Self::deposit_event(RawEvent::AppendI32(i, weight));
 			}
 
-			#[weight = FunctionOf(
-				|args: (&i32, &Weight)| *args.1,
-				DispatchClass::Normal,
-				Pays::Yes,
-			)]
+			#[weight = *weight]
 			fn non_privileged_log(origin, i: i32, weight: Weight){
-				// Ensure that the `origin` is some signed account.		
+				// Ensure that the `origin` is some signed account.
 				let sender = ensure_signed(origin)?;
 				<I32Log>::append(i);
 				<AccountLog<T>>::append(sender.clone());
@@ -120,7 +113,15 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
+pub struct BlockEverything;
+impl Filter<Call> for BlockEverything {
+	fn filter(_: &Call) -> bool {
+		false
+	}
+}
+
 impl frame_system::Trait for Test {
+	type BaseCallFilter = BlockEverything;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -128,7 +129,7 @@ impl frame_system::Trait for Test {
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>; 
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;

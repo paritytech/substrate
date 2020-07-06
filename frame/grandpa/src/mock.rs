@@ -40,8 +40,8 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{
-		Convert, Extrinsic as ExtrinsicT, Header as _, IdentityLookup, OpaqueKeys,
-		SaturatedConversion, SignedExtension,
+		Convert, Extrinsic as ExtrinsicT, IdentityLookup, OpaqueKeys, SaturatedConversion,
+		SignedExtension,
 	},
 	transaction_validity::TransactionValidityError,
 	DigestItem, Perbill,
@@ -94,6 +94,7 @@ parameter_types! {
 }
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;

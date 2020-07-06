@@ -56,6 +56,7 @@ default:
     - kubernetes-parity-build
   environment:
     name: parity-build
+  interruptible:                   true
 
 .docker-env:                       &docker-env
   image:                           paritytech/ci-linux:production
@@ -157,6 +158,10 @@ cargo-audit:
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
+  only:
+    - schedules
+    - tags
+    - web
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -258,7 +263,7 @@ test-wasmtime:
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
+    # but still want to have debug assertions. 
     RUSTFLAGS: -Cdebug-assertions=y
     RUST_BACKTRACE: 1
   except:
@@ -284,7 +289,7 @@ test-runtime-benchmarks:
       - $DEPLOY_TAG
   script:
     - cd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
+    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --release --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
@@ -358,6 +363,14 @@ cargo-check-macos:
     - sccache -s
   tags:
     - osx
+
+test-prometheus-alerting-rules:
+  stage:                           test
+  image:                           paritytech/tools:latest
+  <<:                              *kubernetes-build
+  script:
+    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        build
 
@@ -721,3 +734,14 @@ validator 4 4:
   <<:                              *validator-deploy
   script:
     - ./.maintain/flamingfir-deploy.sh flamingfir-validator4
+
+#### stage:                       .post
+
+check-labels:
+  stage:                          .post
+  image:                          paritytech/tools:latest
+  <<:                             *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_labels.sh

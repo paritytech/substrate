@@ -37,10 +37,16 @@ use regex::Regex;
 use base58::{FromBase58, ToBase58};
 #[cfg(feature = "std")]
 use crate::hexdisplay::HexDisplay;
-use zeroize::Zeroize;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
 use sp_runtime_interface::pass_by::PassByInner;
+/// Trait to zeroize a memory buffer.
+pub use zeroize::Zeroize;
+/// Trait for accessing reference to `SecretString`.
+pub use secrecy::ExposeSecret;
+/// A store for sensitive data.
+#[cfg(feature = "std")]
+pub use secrecy::SecretString;
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -76,51 +82,6 @@ pub trait UncheckedInto<T> {
 impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 	fn unchecked_into(self) -> T {
 		T::unchecked_from(self)
-	}
-}
-
-/// A store for sensitive data.
-///
-/// Calls `Zeroize::zeroize` upon `Drop`.
-#[derive(Clone)]
-pub struct Protected<T: Zeroize>(T);
-
-impl<T: Zeroize> AsRef<T> for Protected<T> {
-	fn as_ref(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: Zeroize> sp_std::ops::Deref for Protected<T> {
-	type Target = T;
-
-	fn deref(&self) -> &T {
-		&self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: Zeroize> std::fmt::Debug for Protected<T> {
-	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(fmt, "<protected>")
-	}
-}
-
-impl<T: Zeroize> From<T> for Protected<T> {
-	fn from(t: T) -> Self {
-		Protected(t)
-	}
-}
-
-impl<T: Zeroize> Zeroize for Protected<T> {
-	fn zeroize(&mut self) {
-		self.0.zeroize()
-	}
-}
-
-impl<T: Zeroize> Drop for Protected<T> {
-	fn drop(&mut self) {
-		self.zeroize()
 	}
 }
 
@@ -357,10 +318,18 @@ macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
 		#[derive(Copy, Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.
 			Custom(u8),
+		}
+
+		#[cfg(feature = "std")]
+		impl std::fmt::Display for Ss58AddressFormat {
+			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				write!(f, "{:?}", self)
+			}
 		}
 
 		static ALL_SS58_ADDRESS_FORMATS: [Ss58AddressFormat; 0 $(+ { let _ = $number; 1})*] = [
@@ -462,8 +431,12 @@ ss58_address_format!(
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	StafiAccount =>
+		(20, "stafi", "Stafi mainnet, standard account (*25519).")
 	RobonomicsAccount =>
 		(32, "robonomics", "Any Robonomics network standard account (*25519).")
+	DataHighwayAccount =>
+		(33, "datahighway", "DataHighway mainnet, standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>

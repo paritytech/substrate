@@ -21,6 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod backend;
+mod tests;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
@@ -30,7 +31,7 @@ use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::{Weight, DispatchClass, FunctionOf, Pays};
+use frame_support::weights::Weight;
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
@@ -118,6 +119,15 @@ impl Precompiles for () {
 	}
 }
 
+/// Substrate system chain ID.
+pub struct SystemChainId;
+
+impl Get<u64> for SystemChainId {
+	fn get() -> u64 {
+		sp_io::misc::chain_id()
+	}
+}
+
 static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
@@ -134,6 +144,8 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
+	/// Chain ID of EVM.
+	type ChainId: Get<u64>;
 
 	/// EVM config used in the module.
 	fn config() -> &'static Config {
@@ -159,7 +171,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
 		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
 		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
-		AccountStorages: double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
+		AccountStorages get(fn account_storages):
+			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
 	}
 
 	add_extra_genesis {
@@ -189,6 +202,12 @@ decl_event! {
 		Log(Log),
 		/// A contract has been created at given address.
 		Created(H160),
+		/// A contract was attempted to be created, but the execution failed.
+		CreatedFailed(H160),
+		/// A contract has been executed successfully with states applied.
+		Executed(H160),
+		/// A contract has been executed with errors. States are reverted with only gas fees applied.
+		ExecutedFailed(H160),
 		/// A deposit has been made at a given address.
 		BalanceDeposit(AccountId, H160, U256),
 		/// A withdrawal has been made from a given address.
@@ -208,12 +227,6 @@ decl_error! {
 		WithdrawFailed,
 		/// Gas price is too low.
 		GasPriceTooLow,
-		/// Call failed
-		ExitReasonFailed,
-		/// Call reverted
-		ExitReasonRevert,
-		/// Call returned VM fatal error
-		ExitReasonFatal,
 		/// Nonce is invalid
 		InvalidNonce,
 	}
@@ -273,12 +286,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = FunctionOf(
-			|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)|
-				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn call(
 			origin,
 			target: H160,
@@ -293,7 +301,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			Self::execute_call(
+			match Self::execute_call(
 				source,
 				target,
 				input,
@@ -301,17 +309,21 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce,
-			).map_err(Into::into)
+			)? {
+				ExitReason::Succeed(_) => {
+					Module::<T>::deposit_event(Event::<T>::Executed(target));
+				},
+				ExitReason::Error(_) | ExitReason::Revert(_) | ExitReason::Fatal(_) => {
+					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
+				},
+			}
+
+			Ok(())
 		}
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = FunctionOf(
-			|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)|
-				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn create(
 			origin,
 			init: Vec<u8>,
@@ -325,26 +337,27 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			let create_address = Self::execute_create(
+			match Self::execute_create(
 				source,
 				init,
 				value,
 				gas_limit,
 				gas_price,
 				nonce
-			)?;
+			)? {
+				(create_address, ExitReason::Succeed(_)) => {
+					Module::<T>::deposit_event(Event::<T>::Created(create_address));
+				},
+				(create_address, _) => {
+					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
+				},
+			}
 
-			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = FunctionOf(
-			|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)|
-				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn create2(
 			origin,
 			init: Vec<u8>,
@@ -359,7 +372,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			let source = T::ConvertAccountId::convert_account_id(&sender);
 
-			let create_address = Self::execute_create2(
+			match Self::execute_create2(
 				source,
 				init,
 				salt,
@@ -367,9 +380,15 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce
-			)?;
+			)? {
+				(create_address, ExitReason::Succeed(_)) => {
+					Module::<T>::deposit_event(Event::<T>::Created(create_address));
+				},
+				(create_address, _) => {
+					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
+				},
+			}
 
-			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 	}
@@ -416,7 +435,7 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>
-	) -> Result<H160, Error<T>> {
+	) -> Result<(H160, ExitReason), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
@@ -445,7 +464,7 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>
-	) -> Result<H160, Error<T>> {
+	) -> Result<(H160, ExitReason), Error<T>> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
 		Self::execute_evm(
 			source,
@@ -476,8 +495,8 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>,
-	) -> Result<(), Error<T>> {
-		Self::execute_evm(
+	) -> Result<ExitReason, Error<T>> {
+		Ok(Self::execute_evm(
 			source,
 			value,
 			gas_limit,
@@ -490,7 +509,7 @@ impl<T: Trait> Module<T> {
 				input,
 				gas_limit as usize,
 			)),
-		)
+		)?.1)
 	}
 
 	/// Execute an EVM operation.
@@ -501,7 +520,7 @@ impl<T: Trait> Module<T> {
 		gas_price: U256,
 		nonce: Option<U256>,
 		f: F,
-	) -> Result<R, Error<T>> where
+	) -> Result<(R, ExitReason), Error<T>> where
 		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (R, ExitReason),
 	{
 		let vicinity = Vicinity {
@@ -530,19 +549,12 @@ impl<T: Trait> Module<T> {
 
 		let (retv, reason) = f(&mut executor);
 
-		let ret = match reason {
-			ExitReason::Succeed(_) => Ok(retv),
-			ExitReason::Error(_) => Err(Error::<T>::ExitReasonFailed),
-			ExitReason::Revert(_) => Err(Error::<T>::ExitReasonRevert),
-			ExitReason::Fatal(_) => Err(Error::<T>::ExitReasonFatal),
-		};
-
 		let actual_fee = executor.fee(gas_price);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
 		let (values, logs) = executor.deconstruct();
 		backend.apply(values, logs, true);
 
-		ret
+		Ok((retv, reason))
 	}
 }

@@ -22,7 +22,7 @@ use super::*;
 use frame_benchmarking::{benchmarks, account};
 use frame_support::{
 	IterableStorageMap,
-	traits::{Currency, Get, EnsureOrigin, OnInitialize},
+	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
@@ -74,13 +74,14 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		0.into(),
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
-	let _ = T::Scheduler::schedule_named(
+	T::Scheduler::schedule_named(
 		(DEMOCRACY_ID, referendum_index).encode(),
-		0.into(),
+		1.into(),
 		None,
 		63,
+		system::RawOrigin::Root.into(),
 		Call::enact_proposal(proposal_hash, referendum_index).into(),
-	);
+	).map_err(|_| "failed to schedule named")?;
 	Ok(referendum_index)
 }
 
@@ -212,14 +213,14 @@ benchmarks! {
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
 			let call = Call::<T>::emergency_cancel(ref_idx);
-			call.dispatch(origin.clone())?;
+			call.dispatch_bypass_filter(origin.clone())?;
 		}
 
 		// Lets now measure one more
 		let referendum_index = add_referendum::<T>(r)?;
 		let call = Call::<T>::emergency_cancel(referendum_index);
 		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
-	}: { call.dispatch(origin)? }
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// Referendum has been canceled
 		assert!(Democracy::<T>::referendum_status(referendum_index).is_err());
@@ -239,7 +240,7 @@ benchmarks! {
 		);
 
 		let call = Call::<T>::external_propose(proposal_hash);
-	}: { call.dispatch(origin)? }
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -251,7 +252,7 @@ benchmarks! {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&p);
 		let call = Call::<T>::external_propose_majority(proposal_hash);
-	}: { call.dispatch(origin)? }
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -263,7 +264,7 @@ benchmarks! {
 		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&p);
 		let call = Call::<T>::external_propose_default(proposal_hash);
-	}: { call.dispatch(origin)? }
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -282,7 +283,7 @@ benchmarks! {
 		let delay = 0;
 		let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into());
 
-	}: { call.dispatch(origin_fast_track)? }
+	}: { call.dispatch_bypass_filter(origin_fast_track)? }
 	verify {
 		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created")
 	}
@@ -306,7 +307,7 @@ benchmarks! {
 		let call = Call::<T>::veto_external(proposal_hash);
 		let origin = T::VetoOrigin::successful_origin();
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
-	}: { call.dispatch(origin)? }
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(NextExternal::<T>::get().is_none());
 		let (_, new_vetoers) = <Blacklist<T>>::get(&proposal_hash).ok_or("no blacklist")?;
@@ -347,7 +348,7 @@ benchmarks! {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&r);
 		let call = Call::<T>::external_propose_majority(proposal_hash);
-		call.dispatch(origin)?;
+		call.dispatch_bypass_filter(origin)?;
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
 

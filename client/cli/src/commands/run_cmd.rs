@@ -122,6 +122,10 @@ pub struct RunCmd {
 	#[structopt(long = "prometheus-external")]
 	pub prometheus_external: bool,
 
+	/// Specify IPC RPC server path
+	#[structopt(long = "ipc-path", value_name = "PATH")]
+	pub ipc_path: Option<String>,
+
 	/// Specify HTTP RPC server TCP port.
 	#[structopt(long = "rpc-port", value_name = "PORT")]
 	pub rpc_port: Option<u16>,
@@ -321,7 +325,7 @@ impl CliConfiguration for RunCmd {
 			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-			));
+		))
 		})?;
 
 		Ok(name)
@@ -432,6 +436,10 @@ impl CliConfiguration for RunCmd {
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
+	}
+
+	fn rpc_ipc(&self) -> Result<Option<String>> {
+		Ok(self.ipc_path.clone())
 	}
 
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
@@ -602,7 +610,9 @@ mod tests {
 
 	#[test]
 	fn tests_node_name_bad() {
-		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid(
+			"very very long names are really not very cool for the ui at all, really they're not"
+		).is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());

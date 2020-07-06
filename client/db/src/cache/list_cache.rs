@@ -860,16 +860,15 @@ fn read_forks<Block: BlockT, T: CacheItemT, S: Storage<Block, T>>(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
 	use substrate_test_runtime_client::runtime::H256;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
-	use sp_runtime::traits::Header as HeaderT;
 	use crate::cache::list_storage::tests::{DummyStorage, FaultyStorage, DummyTransaction};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
-	pub fn test_id(number: u64) -> ComplexBlockId<Block> {
+	fn test_id(number: u64) -> ComplexBlockId<Block> {
 		ComplexBlockId::new(H256::from_low_u64_be(number), number)
 	}
 

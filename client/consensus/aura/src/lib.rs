@@ -479,8 +479,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header.hash(),
+					equivocation_proof.second_header.hash(),
 				);
 			}
 
@@ -833,7 +833,7 @@ pub fn import_queue<B, I, C, P, S>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
-	S: sp_core::traits::SpawnBlocking,
+	S: sp_core::traits::SpawnNamed,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;

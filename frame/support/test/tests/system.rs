@@ -21,15 +21,17 @@ pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
+	type BaseCallFilter: frame_support::traits::Filter<Self::Call>;
 	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default;
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode;
+	type Call;
 	type Event: From<Event<Self>>;
 	type ModuleToIndex: frame_support::traits::ModuleToIndex;
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin, {}
 }
 
 impl<T: Trait> Module<T> {
@@ -55,7 +57,7 @@ frame_support::decl_error! {
 }
 
 /// Origin for the system module.
-#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId> {
 	Root,
 	Signed(AccountId),
