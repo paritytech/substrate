@@ -31,14 +31,14 @@ use crate::error::{Error, Result};
 
 type IoResult = std::result::Result<(), std::io::Error>;
 
-/// Default size used for rotation. Corresponds to 100 MiB.
-const DEFAULT_ROTATION_SIZE: u64 = 104_857_600;
+/// Default size used for rotation. Basically unlimited.
+const DEFAULT_ROTATION_SIZE: u64 = u64::MAX;
 
 /// Options for log rotation.
 #[derive(Debug, StructOpt)]
 pub struct LogRotationOpt {
 	/// Specify the path of the directory which will contain the log files.
-	/// Defaults to rotating logs once they reach 100 MiB.
+	/// Defaults to never rotating logs.
 	#[structopt(long, parse(from_os_str))]
 	log_directory: Option<PathBuf>,
 	
