@@ -100,7 +100,7 @@ impl From<ReportEquivocationValidityError> for TransactionValidityError {
 
 impl<T: super::Trait + Send + Sync> SignedExtension for ValidateEquivocationReport<T>
 where
-	<T as frame_system::Trait>::Call: IsSubType<super::Module<T>, T>,
+	<T as frame_system::Trait>::Call: IsSubType<super::Call<T>>,
 {
 	const IDENTIFIER: &'static str = "ValidateEquivocationReport";
 	type AccountId = T::AccountId;
