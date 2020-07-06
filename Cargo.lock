@@ -3149,9 +3149,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "297efb9401445cf7b6986a583d7ac194023334b46b294ff7da0d36662c1251c2"
+checksum = "35c456c123957de3a220cd03786e0d86aa542a88b46029973b542f426da6ef34"
 dependencies = [
  "hashbrown 0.6.3",
 ]
@@ -5004,7 +5004,7 @@ dependencies = [
  "ethereum-types",
  "hashbrown 0.8.0",
  "impl-trait-for-tuples",
- "lru 0.5.2",
+ "lru 0.5.3",
  "parity-util-mem-derive",
  "parking_lot 0.10.2",
  "primitive-types",
@@ -8062,7 +8062,7 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-trie",
- "trie-db",
+ "trie-db 0.22.0",
  "trie-root",
 ]
 
@@ -8143,7 +8143,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "trie-bench",
- "trie-db",
+ "trie-db 0.22.0",
  "trie-root",
  "trie-standardmap",
 ]
@@ -8477,7 +8477,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder-runner",
- "trie-db",
+ "trie-db 0.22.0",
 ]
 
 [[package]]
@@ -9218,7 +9218,7 @@ dependencies = [
  "keccak-hasher",
  "memory-db",
  "parity-scale-codec",
- "trie-db",
+ "trie-db 0.21.1",
  "trie-root",
  "trie-standardmap",
 ]
@@ -9228,6 +9228,19 @@ name = "trie-db"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aabee036bb83228a99cf5dcc8e1f4766396103dc85265426fda6396b55e13f89"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.8.0",
+ "log",
+ "rustc-hex",
+ "smallvec 1.4.0",
+]
+
+[[package]]
+name = "trie-db"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39f1a9a9252d38c5337cf0c5392988821a5cf1b2103245016968f2ab41de9e38"
 dependencies = [
  "hash-db",
  "hashbrown 0.8.0",

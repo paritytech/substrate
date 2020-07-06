@@ -39,7 +39,7 @@ pallet-timestamp = { version = "2.0.0-rc4", default-features = false, path = "..
 sp-finality-grandpa = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/finality-grandpa" }
 sp-trie = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/transaction-pool" }
-trie-db = { version = "0.21.1", default-features = false }
+trie-db = { version = "0.22.0", default-features = false }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.8.0-rc4", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 
