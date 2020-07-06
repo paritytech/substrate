@@ -159,8 +159,6 @@ exports.createCustomNode = async function(options, nodeId) {
 }
 
 exports.createCustomChain = async function (options) {
-    // const chainspecPath = `/chainspecs/${options.chainspecFileName}`
-    // options.chainspecFileName = chainspecFileName
     options.customChainspec = true
     options.chainspec = getChainspec(options.chainspecFileName)
     await this.createBootNode(options)

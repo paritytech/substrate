@@ -28,12 +28,20 @@ USAGE
 # Commands
 <!-- commands -->
 * [`chaostest spawn`](#chaostest-spawn)
-* [`chaostest singlenodeheight`](#chaostest-singlenodeheight)
+* [`chaostest add`](#chaostest-add)
 * [`chaostest clean`](#chaostest-clean)
+* [`chaostest singlenodeheight`](#chaostest-singlenodeheight)
+
 
 ## `chaostest spawn`
 
 Spawn a testnet based on your local k8s configuration. Could be either a dev node, a two node alicebob chain or a customized chain with various validators/fullnodes.
+
+Namespace is essential here (default to ```substrate-ci```)
+Recommand to set your own namespace in environment BEFORE run ```chaostest spawn``` to not conflict with others:
+```
+export NAMESPACE=YOUR_OWN_NAMESPACE (ex: harry-chaos-test)
+```
 
 ```
 USAGE
@@ -41,15 +49,14 @@ USAGE
 
 Arguments
   dev,  a single fullnode in --dev mode
-  alicebob, a two nodes private chain with Alice as bootnode and Bob as validator
-  [chainName], a customized chain deployed with -v numbers of validators and -n numbers of fullnodes
+  local, a two nodes private chain with Alice as bootnode and Bob as validator
+  [chainName], a customized chain deployed with -c as a customized chainspec. (currently using pre-configured chainspecs to test on)
 
 Flags
   --image, -i, the image tag of the certain substrate version you want to deploy
   --port, -p, the port to expose when image is deployed in a pod
   --namespace, the desired namespace to deploy on
-  --validator, -v, the number of substrate validators to deploy
-  --node, -n, the number of full nodes, if not set but exists, default to 1
+  --chainspec, -c, the desired chainspec to pass as argument on bootstrapping a private network
   
 DESCRIPTION
   ...
@@ -57,6 +64,31 @@ DESCRIPTION
 ```
 
 _See code: [src/commands/spawn/index.js](https://github.com/paritytech/substrate/blob/harry/chaostest-init/.maintain/chaostest/src/commands/spawn/index.js)_
+
+## `chaostest add`
+
+Only use after you spawned a network, if you want to add various numbers of validators/peers to the network you just deployed.
+
+```
+USAGE
+  $ chaostest add [ARGUMENTS] [FLAGS]
+
+Arguments
+  validator, the nodes will be deployed to the network with --validator and key will be based on the node-name (if not specified, it would be "node-validator-XX")
+  peer, the nodes will be deployed to the network as fullnodes and key will be based on the node-name (if not specified, it would be "node-peer-XX")
+
+Flags
+  --number, -n, number of nodes to deploy (default to 1 if not specified or a node name is given)
+  --port, -p, port to deploy on
+  --name, node name to specify (also this would be the seed of the node)
+  
+DESCRIPTION
+  ...
+  Extra documentation goes here
+```
+
+_See code: [src/commands/add/index.js](https://github.com/paritytech/substrate/blob/harry/chaostest-init/.maintain/chaostest/src/commands/add/index.js)_
+
 
 ## `chaostest singlenodeheight`
 

@@ -74,8 +74,7 @@ const getNodeKeys = async (
  * Get the {@link Keys} of the sudo account
  */
 const getSudoKeys = async () => {
-  // sudo key is 'chaos'
-//   return getKeysFromSeed('ed25519', 'chaos');
+  // Using current dev/local sudo key
     return '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY'
 }
 

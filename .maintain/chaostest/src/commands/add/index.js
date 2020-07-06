@@ -11,16 +11,14 @@ class AddCommand extends Command {
     const port = flags.port || 9933
     const chainspec = flags.chainspec
     const number = flags.number || 1
-    const name = flags.name
-    // const label = flags.label
-    
+    const name = flags.name    
 
     const hypervisor = new Hypervisor(CONFIG)
     const config = hypervisor.config
-    console.log(CONFIG)
+    // Checking if there is a current deployment
     if (!config.namespace) errorExit('namespace has to be present')
-    if (!config.image) errorExit('image has to be present')
     if (!config.bootnode) errorExit('chain has to be spawned first with command: chaostest spawn [flags]')
+    if (!config.bootnode.image) errorExit('image has to be present')
     try {
       const nodeType = args.nodeType
       if (nodeType === 'validator' || nodeType === 'peer') {
@@ -39,12 +37,12 @@ class AddCommand extends Command {
   }
 }
 
-AddCommand.description = 'Spawn a local testnet with options'
+AddCommand.description = 'Add nodes to a spawned testnet'
 
 AddCommand.flags = {
   port: flags.integer({ char: 'p', description: 'port to deploy on' }),
-  name: flags.string({ char: 'i', description: 'node name to specify (also this would be the seed of the node)' }),
-  number: flags.string({ char: 'n', description: 'number of options[validators, peers]' }),
+  name: flags.string({ description: 'node name to specify (also this would be the seed of the node)' }),
+  number: flags.string({ char: 'n', description: 'number of nodes to deploy (default to 1 if not specified or a node name is given)' }),
   chainspec: flags.string({ char: 'c', description: 'specify a chainspec to use to deploy' })
 }
 

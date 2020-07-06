@@ -50,8 +50,6 @@ SpawnCommand.flags = {
   image: flags.string({ char: 'i', description: 'image to deploy' }),
   port: flags.integer({ char: 'p', description: 'port to deploy on' }),
   namespace: flags.string({ description: 'desired namespace to deploy to', env: 'NAMESPACE' }),
-//   validator: flags.string({ char: 'v', description: 'number of validators' }),
-  number: flags.string({ char: 'n', description: 'number of options[validators, peers]' }),
   chainspec: flags.string({ char: 'c', description: 'number of full nodes, if not set but exists, default to 1' })
 }
 
