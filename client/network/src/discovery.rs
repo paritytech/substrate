@@ -414,6 +414,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
+		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
+
 		list
 	}
 
