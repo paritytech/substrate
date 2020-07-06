@@ -17,7 +17,7 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkBatch};
+use frame_benchmarking::{Analysis, BenchmarkBatch, BenchmarkSelector};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -55,7 +55,7 @@ impl BenchmarkCmd {
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
-			None, // heap pages
+			self.heap_pages,
 			2, // The runtime instances cache size.
 		);
 
@@ -89,6 +89,16 @@ impl BenchmarkCmd {
 		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
+		if self.output {
+			if self.weight_trait {
+				let mut file = crate::writer::open_file("traits.rs")?;
+				crate::writer::write_trait(&mut file, results.clone())?;
+			} else {
+				let mut file = crate::writer::open_file("benchmarks.rs")?;
+				crate::writer::write_results(&mut file, results.clone())?;
+			}
+		}
+
 		match results {
 			Ok(batches) => for batch in batches.into_iter() {
 				// Print benchmark metadata
@@ -107,15 +117,22 @@ impl BenchmarkCmd {
 
 				if self.raw_data {
 					// Print the table header
-					batch.results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+					batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
 
-					print!("extrinsic_time,storage_root_time\n");
+					print!("extrinsic_time,storage_root_time,reads,repeat_reads,writes,repeat_writes\n");
 					// Print the values
 					batch.results.iter().for_each(|result| {
-						let parameters = &result.0;
+						let parameters = &result.components;
 						parameters.iter().for_each(|param| print!("{:?},", param.1));
 						// Print extrinsic time and storage root time
-						print!("{:?},{:?}\n", result.1, result.2);
+						print!("{:?},{:?},{:?},{:?},{:?},{:?}\n",
+							result.extrinsic_time,
+							result.storage_root_time,
+							result.reads,
+							result.repeat_reads,
+							result.writes,
+							result.repeat_writes,
+						);
 					});
 
 					println!();
@@ -123,13 +140,27 @@ impl BenchmarkCmd {
 
 				// Conduct analysis.
 				if !self.no_median_slopes {
-					if let Some(analysis) = Analysis::median_slopes(&batch.results) {
-						println!("Median Slopes Analysis\n========\n{}", analysis);
+					println!("Median Slopes Analysis\n========");
+					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+						println!("-- Extrinsic Time --\n{}", analysis);
+					}
+					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+						println!("Reads = {:?}", analysis);
+					}
+					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+						println!("Writes = {:?}", analysis);
 					}
 				}
 				if !self.no_min_squares {
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results) {
-						println!("Min Squares Analysis\n========\n{}", analysis);
+					println!("Min Squares Analysis\n========");
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+						println!("-- Extrinsic Time --\n{}", analysis);
+					}
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+						println!("Reads = {:?}", analysis);
+					}
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+						println!("Writes = {:?}", analysis);
 					}
 				}
 			},

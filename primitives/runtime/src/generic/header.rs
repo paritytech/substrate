@@ -21,7 +21,7 @@
 use serde::{Deserialize, Serialize};
 use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef, Error};
 use crate::traits::{
-	self, Member, AtLeast32Bit, SimpleBitOps, Hash as HashT,
+	self, Member, AtLeast32BitUnsigned, SimpleBitOps, Hash as HashT,
 	MaybeSerializeDeserialize, MaybeSerialize, MaybeDisplay,
 	MaybeMallocSizeOf,
 };
@@ -123,7 +123,7 @@ impl<Number, Hash> codec::EncodeLike for Header<Number, Hash> where
 
 impl<Number, Hash> traits::Header for Header<Number, Hash> where
 	Number: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash + MaybeDisplay +
-		AtLeast32Bit + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr +
+		AtLeast32BitUnsigned + Codec + Copy + Into<U256> + TryFrom<U256> + sp_std::str::FromStr +
 		MaybeMallocSizeOf,
 	Hash: HashT,
 	Hash::Output: Default + sp_std::hash::Hash + Copy + Member + Ord +
@@ -171,7 +171,8 @@ impl<Number, Hash> traits::Header for Header<Number, Hash> where
 }
 
 impl<Number, Hash> Header<Number, Hash> where
-	Number: Member + sp_std::hash::Hash + Copy + MaybeDisplay + AtLeast32Bit + Codec + Into<U256> + TryFrom<U256>,
+	Number: Member + sp_std::hash::Hash + Copy + MaybeDisplay + AtLeast32BitUnsigned + Codec +
+		Into<U256> + TryFrom<U256>,
 	Hash: HashT,
 	Hash::Output: Default + sp_std::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {

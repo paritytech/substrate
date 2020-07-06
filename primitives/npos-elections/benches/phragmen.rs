@@ -59,8 +59,8 @@ mod bench_closure_and_slice {
 	}
 
 	/// Converts a vector of ratio assignments into ones with absolute budget value.
-	pub fn assignment_ratio_to_staked_slice<A: IdentifierT, T: PerThing>(
-		ratio: Vec<Assignment<A, T>>,
+	pub fn assignment_ratio_to_staked_slice<A: IdentifierT, P: PerThing>(
+		ratio: Vec<Assignment<A, P>>,
 		stakes: &[VoteWeight],
 	) -> Vec<StakedAssignment<A>>
 	where

@@ -271,7 +271,7 @@ pub struct DatabaseSettings {
 }
 
 /// Where to find the database..
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum DatabaseSettingsSrc {
 	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {

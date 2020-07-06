@@ -160,7 +160,6 @@ use sp_runtime::{
 use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	storage::IterableStorageMap,
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -280,7 +279,10 @@ pub trait Trait: frame_system::Trait + Sized {
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The Scheduler.
-	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
+	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal, Self::PalletsOrigin>;
+
+	/// Overarching type of all pallets origins.
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>>;
 
 	/// The maximum number of votes for an account.
 	///
@@ -601,22 +603,6 @@ decl_module! {
 		const MaxVotes: u32 = T::MaxVotes::get();
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> Weight {
-			if let None = StorageVersion::get() {
-				StorageVersion::put(Releases::V1);
-
-				DepositOf::<T>::translate::<
-					(BalanceOf<T>, Vec<T::AccountId>), _
-				>(|_, (balance, accounts)| {
-					Some((accounts, balance))
-				});
-
-				T::MaximumBlockWeight::get()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
 
 		/// Propose a sensitive action to be taken.
 		///
@@ -1642,6 +1628,7 @@ impl<T: Trait> Module<T> {
 					when,
 					None,
 					63,
+					system::RawOrigin::Root.into(),
 					Call::enact_proposal(status.proposal_hash, index).into(),
 				).is_err() {
 					frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");

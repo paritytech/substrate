@@ -82,7 +82,7 @@ use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
-	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill,
+	traits::{Convert, Member, Saturating, AtLeast32BitUnsigned}, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionSource,
 		TransactionPriority,
@@ -160,7 +160,7 @@ struct HeartbeatStatus<BlockNumber> {
 	pub sent_at: BlockNumber,
 }
 
-impl<BlockNumber: PartialEq + AtLeast32Bit + Copy> HeartbeatStatus<BlockNumber> {
+impl<BlockNumber: PartialEq + AtLeast32BitUnsigned + Copy> HeartbeatStatus<BlockNumber> {
 	/// Returns true if heartbeat has been recently sent.
 	///
 	/// Parameters:

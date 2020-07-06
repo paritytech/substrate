@@ -19,7 +19,7 @@
 //! The offchain workers is a special function of the runtime that
 //! gets executed after block is imported. During execution
 //! it's able to asynchronously submit extrinsics that will either
-//! be propagated to other nodes added to the next block
+//! be propagated to other nodes or added to the next block
 //! produced by the node as unsigned transactions.
 //!
 //! Offchain workers can be used for computation-heavy tasks
@@ -46,6 +46,7 @@ use sp_runtime::{generic::BlockId, traits::{self, Header}};
 use futures::{prelude::*, future::ready};
 
 mod api;
+use api::SharedClient;
 
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 
@@ -55,16 +56,19 @@ pub struct OffchainWorkers<Client, Storage, Block: traits::Block> {
 	db: Storage,
 	_block: PhantomData<Block>,
 	thread_pool: Mutex<ThreadPool>,
+	shared_client: SharedClient,
 }
 
 impl<Client, Storage, Block: traits::Block> OffchainWorkers<Client, Storage, Block> {
 	/// Creates new `OffchainWorkers`.
 	pub fn new(client: Arc<Client>, db: Storage) -> Self {
+		let shared_client = SharedClient::new();
 		Self {
 			client,
 			db,
 			_block: PhantomData,
 			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
+			shared_client,
 		}
 	}
 }
@@ -120,6 +124,7 @@ impl<Client, Storage, Block> OffchainWorkers<
 				self.db.clone(),
 				network_state.clone(),
 				is_validator,
+				self.shared_client.clone(),
 			);
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();
