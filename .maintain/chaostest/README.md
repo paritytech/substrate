@@ -8,13 +8,28 @@ A cli for chaos testing on substrate
 [![Downloads/week](https://img.shields.io/npm/dw/chaostest.svg)](https://npmjs.org/package/chaostest)
 
 <!-- toc -->
+* [Setup](#setup)
 * [Usage](#usage)
 * [Commands](#commands)
 <!-- tocstop -->
+
+# Setup
+<!-- setup -->
+To use this CLI tool.
+You need: 
+```
+kubectl cli [installed and connect to a cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl)
+node js 8+ [installed](https://nodesource.com/blog/installing-node-js-tutorial-using-nvm-on-mac-os-x-and-ubuntu/)
+```
+https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl
+<!-- setupstop -->
 # Usage
 <!-- usage -->
 ```sh-session
 $ npm install -g chaostest // yarn add global chaostest
+OR
+$ npm link
+
 $ chaostest COMMAND
 running command...
 $ chaostest (-v|--version|version)
