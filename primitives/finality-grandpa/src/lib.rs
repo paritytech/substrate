@@ -31,8 +31,8 @@ use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_core::traits::BareCryptoStorePtr;
+#[cfg(feature = "std")]
 use sp_std::convert::TryInto;
-
 #[cfg(feature = "std")]
 use log::debug;
 

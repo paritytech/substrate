@@ -319,7 +319,7 @@ impl BlockWeightsBuilder {
 
 	/// Set maximal block total weight for `Normal` and `Operational` dispatch class.
 	pub fn max_for_non_mandatory(
-		mut self,
+		self,
 		max_allowance: Weight,
 	) -> Self {
 		self.max_for_class(max_allowance, DispatchClass::Normal)
