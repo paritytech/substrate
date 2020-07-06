@@ -46,7 +46,14 @@
 //!
 //! ### Bounty
 //!
-//! TODO
+//! A Bounty Spending is a reward for a specified body of work - or specified set of objectives - that 
+//! needs to be executed for a predefined Treasury amount to be paid out. A Curator is assigned to be delegated 
+//! the responsibility of assigning a payout address once the specified set of objectives is completed. 
+//!
+//! After the Council has activated a bounty, it delegates the work that requires expertise to the Curator. They 
+//! get to close the Active bounty. Closing the Active bounty enacts a delayed payout to the payout address. The 
+//! delay allows for intervention through regular democracy.
+//!
 //!
 //! ### Terminology
 //!
@@ -69,7 +76,14 @@
 //!   rather than the main beneficiary.
 //!
 //! Bounty:
-//! - TODO
+//! - **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion by the Treasury.
+//! - **Proposer:** An account proposing a bounty spending.
+//! - **Curator:** An account managing the bounty and assigning a payout address receiving the reward for the completion of work.
+//! - **Deposit:** The amount held on deposit for placing a bounty proposal plus the amount held on deposit per byte within the bounty description.
+//! - **Bounty value:** The total amount that should be paid to the Payout Address if the bounty is rewarded.
+//! - **Payout address:** The account to which the total or part of the bounty is assigned to.
+//! - **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before claiming. 
+//! - **Sub-bounty:** A portion of the total Bounty value assigned to the completion of a specified body of work in the bounty.
 //!
 //! ## Interface
 //!
@@ -90,7 +104,15 @@
 //! - `close_tip` - Close and pay out a tip.
 //!
 //! Bounty protocol:
-//! - TODO
+//! - `Propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of tasks and stake the required deposit.
+//! - `Create_bounty` - Earmark a specific treasury amount to the completion of a body of tasks managed by a Curator.
+//! - `Create_sub_bounty` - Allocate a portion of the earmarked treasury amount for a parent_bounty_id to a new curator.
+//! - `Reject_bounty` - Reject a specific treasury amount to be earmarked for a predefined body of work.
+//! - `Approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of work.
+//! - `Award_bounty` - Close and pay out the specified amount for the completed work.
+//! - `Claim_bounty` - Claim a specific bounty amount from the Payout Address
+//! - `Cancel_bounty` - Cancel the earmark for a specific treasury amount and close the bounty.
+//! - `Extend_bounty_expiry` - Extend the expiry block number of the bounty and stay active.
 //!
 //! ## GenesisConfig
 //!
