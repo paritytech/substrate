@@ -3223,6 +3223,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "memory-db"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89fbfa526b4b3bb77997c014e1161410c92c28c9bd811fd562be6e5f4c69fa77"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.8.0",
+ "parity-util-mem 0.7.0",
+]
+
+[[package]]
 name = "memory_units"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8062,7 +8073,7 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-trie",
- "trie-db 0.22.0",
+ "trie-db",
  "trie-root",
 ]
 
@@ -8137,13 +8148,13 @@ dependencies = [
  "criterion 0.2.11",
  "hash-db",
  "hex-literal",
- "memory-db",
+ "memory-db 0.22.0",
  "parity-scale-codec",
  "sp-core",
  "sp-runtime",
  "sp-std",
  "trie-bench",
- "trie-db 0.22.0",
+ "trie-db",
  "trie-root",
  "trie-standardmap",
 ]
@@ -8447,7 +8458,7 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "log",
- "memory-db",
+ "memory-db 0.22.0",
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -8477,7 +8488,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder-runner",
- "trie-db 0.22.0",
+ "trie-db",
 ]
 
 [[package]]
@@ -9209,31 +9220,18 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 
 [[package]]
 name = "trie-bench"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed8419971832eb3333dc26066e50943a20e0934efeb451b3df5ee94f7f7323ab"
+checksum = "8e6aa610cca82513f55723cbb7156b89fbf8768b7931bb14d43edf2ae1dced7f"
 dependencies = [
  "criterion 0.2.11",
  "hash-db",
  "keccak-hasher",
- "memory-db",
+ "memory-db 0.21.2",
  "parity-scale-codec",
- "trie-db 0.21.1",
+ "trie-db",
  "trie-root",
  "trie-standardmap",
-]
-
-[[package]]
-name = "trie-db"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aabee036bb83228a99cf5dcc8e1f4766396103dc85265426fda6396b55e13f89"
-dependencies = [
- "hash-db",
- "hashbrown 0.8.0",
- "log",
- "rustc-hex",
- "smallvec 1.4.0",
 ]
 
 [[package]]
