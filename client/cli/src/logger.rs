@@ -42,7 +42,8 @@ pub struct LogRotationOpt {
 	#[structopt(long, parse(from_os_str))]
 	log_directory: Option<PathBuf>,
 	
-	/// Rotate the log file when it has become older than the specified age.
+	/// Rotate the log file when the local clock has started a new day/hour/minute/second
+	/// since the current file has been created.
 	#[structopt(long,
 		conflicts_with("log-size"), 
 		possible_values(&["day", "hour", "minute", "second"]), 
