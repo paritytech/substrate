@@ -497,9 +497,7 @@ fn offchain_http_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let (offchain, state) = testing::TestOffchainExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
-	state.write().expect_request(
-		0,
-		testing::PendingRequest {
+	state.write().expect_request(testing::PendingRequest {
 			method: "POST".into(),
 			uri: "http://localhost:12345".into(),
 			body: vec![1, 2, 3, 4],
