@@ -22,7 +22,7 @@ sp-std = { version = "2.0.0-rc4", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.22.0", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
-memory-db = { version = "0.21.2", default-features = false }
+memory-db = { version = "0.22.0", default-features = false }
 sp-core = { version = "2.0.0-rc4", default-features = false, path = "../core" }
 
 [dev-dependencies]
