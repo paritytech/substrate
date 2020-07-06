@@ -40,8 +40,8 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{
-		Convert, Extrinsic as ExtrinsicT, Header as _, IdentityLookup, OpaqueKeys,
-		SaturatedConversion, SignedExtension,
+		Convert, Extrinsic as ExtrinsicT, IdentityLookup, OpaqueKeys, SaturatedConversion,
+		SignedExtension,
 	},
 	transaction_validity::TransactionValidityError,
 	DigestItem, Perbill,
