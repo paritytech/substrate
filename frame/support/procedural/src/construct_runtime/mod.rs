@@ -99,8 +99,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let res = quote!(
 		#scrate_decl
 
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug)]
 		pub struct #name;
 		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
 			type NodeBlock = #node_block;
