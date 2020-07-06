@@ -87,7 +87,12 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let dispatch = decl_outer_dispatch(&name, modules.iter(), &scrate);
 	let metadata = decl_runtime_metadata(&name, modules.iter(), &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, modules.iter(), &scrate);
-	let inherent = decl_outer_inherent(&block, &unchecked_extrinsic, modules.iter(), &scrate);
+	let inherent = decl_outer_inherent(
+		&block,
+		&unchecked_extrinsic,
+		modules.iter(),
+		&scrate,
+	);
 	let validate_unsigned = decl_validate_unsigned(&name, modules.iter(), &scrate);
 	let integrity_test = decl_integrity_test(&scrate);
 
@@ -153,19 +158,17 @@ fn decl_outer_inherent<'a>(
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations.filter_map(|module_declaration| {
 		let maybe_config_part = module_declaration.find_part("Inherent");
-		maybe_config_part.map(|config_part| {
-			let arg = config_part
-				.args
-				.as_ref()
-				.and_then(|parens| parens.content.inner.iter().next())
-				.unwrap_or(&module_declaration.name);
+		maybe_config_part.map(|_| {
 			let name = &module_declaration.name;
-			quote!(#name : #arg,)
+			quote!(#name,)
 		})
 	});
 	quote!(
 		#scrate::impl_outer_inherent!(
-			impl Inherents where Block = #block, UncheckedExtrinsic = #unchecked_extrinsic {
+			impl Inherents where
+				Block = #block,
+				UncheckedExtrinsic = #unchecked_extrinsic
+			{
 				#(#modules_tokens)*
 			}
 		);
