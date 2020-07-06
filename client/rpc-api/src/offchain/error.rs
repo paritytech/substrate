@@ -31,6 +31,9 @@ pub enum Error {
 	UnavailableStorageKind,
 	/// Call to an unsafe RPC was denied.
 	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
+	/// Other offchain error
+	#[display(fmt="Other offchain error: {}", _0)]
+	Other(sp_core::offchain::error::OffchainError),
 }
 
 impl std::error::Error for Error {
@@ -54,6 +57,11 @@ impl From<Error> for rpc::Error {
 				data: None,
 			},
 			Error::UnsafeRpcCalled(e) => e.into(),
+			Error::Other(_) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+				message: "Offchain error" .into(),
+				data: None,
+			},
 		}
 	}
 }

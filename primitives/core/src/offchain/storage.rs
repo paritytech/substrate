@@ -18,7 +18,7 @@
 //! In-memory implementation of offchain workers database.
 
 use std::collections::hash_map::{HashMap, Entry};
-use crate::offchain::OffchainStorage;
+use crate::offchain::{error, OffchainStorage};
 use std::iter::Iterator;
 
 /// In-memory storage for offchain workers.
@@ -46,14 +46,16 @@ impl InMemOffchainStorage {
 }
 
 impl OffchainStorage for InMemOffchainStorage {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> error::Result<()> {
 		let key = prefix.iter().chain(key).cloned().collect();
 		self.storage.insert(key, value.to_vec());
+		Ok(())
 	}
 
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) -> error::Result<()> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.storage.remove(&key);
+		Ok(())
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -67,10 +69,10 @@ impl OffchainStorage for InMemOffchainStorage {
 		key: &[u8],
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
-	) -> bool {
+	) -> error::Result<bool> {
 		let key = prefix.iter().chain(key).cloned().collect();
 
-		match self.storage.entry(key) {
+		Ok(match self.storage.entry(key) {
 			Entry::Vacant(entry) => if old_value.is_none() {
 				entry.insert(new_value.to_vec());
 				true
@@ -80,7 +82,7 @@ impl OffchainStorage for InMemOffchainStorage {
 				true
 			},
 			_ => false,
-		}
+		})
 	}
 }
 

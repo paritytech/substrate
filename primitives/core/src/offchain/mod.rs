@@ -17,6 +17,12 @@
 
 //! Offchain workers types
 
+#[cfg(feature = "std")]
+pub mod storage;
+#[cfg(feature = "std")]
+pub mod testing;
+pub mod error;
+
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
@@ -24,21 +30,16 @@ use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
 
-#[cfg(feature = "std")]
-pub mod storage;
-#[cfg(feature = "std")]
-pub mod testing;
-
 /// Local storage prefix used by the Offchain Worker API to
 pub const STORAGE_PREFIX : &'static [u8] = b"storage";
 
 /// Offchain workers local storage.
 pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> error::Result<()>;
 
 	/// Clear a storage entry under given key and prefix.
-	fn remove(&mut self, prefix: &[u8], key: &[u8]);
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) -> error::Result<()>;
 
 	/// Retrieve a value from storage under given key and prefix.
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
@@ -52,7 +53,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 		key: &[u8],
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
-	) -> bool;
+	) -> error::Result<bool>;
 }
 
 /// A type of supported crypto.

@@ -1,9 +1,15 @@
 #[derive(Debug)]
-pub struct DatabaseError(pub Box<dyn std::error::Error>);
+pub struct DatabaseError(pub Box<dyn std::error::Error + Send>);
 
 impl std::fmt::Display for DatabaseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{:?}", self)
+	}
+}
+
+impl std::error::Error for DatabaseError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		None
 	}
 }
 

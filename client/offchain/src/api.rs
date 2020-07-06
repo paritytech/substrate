@@ -96,16 +96,16 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		match kind {
-			StorageKind::PERSISTENT => self.db.set(STORAGE_PREFIX, key, value),
+			StorageKind::PERSISTENT => self.db.set(STORAGE_PREFIX, key, value).unwrap(),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
+		};
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
 		match kind {
-			StorageKind::PERSISTENT => self.db.remove(STORAGE_PREFIX, key),
+			StorageKind::PERSISTENT => self.db.remove(STORAGE_PREFIX, key).unwrap(),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
+		};
 	}
 
 	fn local_storage_compare_and_set(
@@ -117,7 +117,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	) -> bool {
 		match kind {
 			StorageKind::PERSISTENT => {
-				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
+				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value).unwrap()
 			},
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		}
