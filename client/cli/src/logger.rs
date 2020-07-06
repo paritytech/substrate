@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,13 +34,12 @@ type IoResult = std::result::Result<(), std::io::Error>;
 /// Default size used for rotation. Corresponds to 100 MiB.
 const DEFAULT_ROTATION_SIZE: u64 = 104_857_600;
 
-
 /// Options for log rotation.
 #[derive(Debug, StructOpt)]
 pub struct LogRotationOpt {
 	/// Specify the path of the directory which will contain the log files.
 	/// Defaults to rotating logs once they reach 100 MiB.
-    #[structopt(long, parse(from_os_str))]
+	#[structopt(long, parse(from_os_str))]
 	log_directory: Option<PathBuf>,
 	
 	/// Rotate the log file when it has become older than the specified age.
@@ -53,7 +52,7 @@ pub struct LogRotationOpt {
 
 	/// Rotate the log file when it exceeds this size (in bytes).
 	#[structopt(long, conflicts_with("log-age"))]
-    log_size: Option<u64>,
+	log_size: Option<u64>,
 }
 
 /// Utility for parsing an Age from a &str.
