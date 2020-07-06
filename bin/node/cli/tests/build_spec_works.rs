@@ -36,6 +36,5 @@ fn build_spec_works() {
 	assert!(!base_path.path().join("chains/dev/db").exists());
 	let s = String::from_utf8_lossy(output.stdout.as_slice());
 
-	println!("bbb{:?}aaaa", s.get(0..30));
 	let _value: serde_json::Value = serde_json::from_slice(output.stdout.as_slice()).unwrap();
 }
