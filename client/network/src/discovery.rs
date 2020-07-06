@@ -315,17 +315,11 @@ impl DiscoveryBehaviour {
 
 	/// Can the given `Multiaddr` be put into the DHT?
 	///
-	/// This test is successful only for global IP addresses and DNS names.
-	//
-	// NB: Currently all DNS names are allowed and no check for TLD suffixes is done
-	// because the set of valid domains is highly dynamic and would require frequent
-	// updates, for example by utilising publicsuffix.org or IANA.
-	pub fn can_add_to_dht(&self, addr: &Multiaddr) -> bool {
+	/// This test is successful only for global IP addresses.
+	fn can_add_to_dht(&self, addr: &Multiaddr) -> bool {
 		let ip = match addr.iter().next() {
 			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
 			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
-			Some(Protocol::Dns(_)) | Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_))
-				=> return true,
 			_ => return false
 		};
 		ip.is_global()

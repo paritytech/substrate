@@ -477,6 +477,15 @@ where
 
 				false // Multiaddr does not contain a PeerId.
 			}))
+			// Ignore DNS records (cf. https://github.com/paritytech/substrate/issues/5756).
+			.filter(|addr| !addr.iter().any(|protocol| {
+				match protocol {
+					| multiaddr::Protocol::Dns(_)
+					| multiaddr::Protocol::Dns4(_)
+					| multiaddr::Protocol::Dns6(_) => true,
+					_ => false
+				}
+			}))
 			.collect();
 
 		if !remote_addresses.is_empty() {

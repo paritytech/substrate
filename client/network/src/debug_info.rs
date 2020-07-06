@@ -19,6 +19,7 @@ use futures::prelude::*;
 use libp2p::Multiaddr;
 use libp2p::core::connection::{ConnectionId, ListenerId};
 use libp2p::core::{ConnectedPoint, either::EitherOutput, PeerId, PublicKey};
+use libp2p::multiaddr::Protocol;
 use libp2p::swarm::{IntoProtocolsHandler, IntoProtocolsHandlerSelect, ProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
@@ -315,7 +316,8 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 				Poll::Pending => break,
 				Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
 					match event {
-						IdentifyEvent::Received { peer_id, info, .. } => {
+						IdentifyEvent::Received { peer_id, mut info, .. } => {
+							strip_dns_addrs(&mut info.listen_addrs);
 							self.handle_identify_report(&peer_id, &info);
 							let event = DebugInfoEvent::Identified { peer_id, info };
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
@@ -348,4 +350,17 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 
 		Poll::Pending
 	}
+}
+
+// Remove all addresses with a DNS component.
+//
+// This is done to prevent subsequent name resolution of addresses
+// (cf. https://github.com/paritytech/substrate/issues/5756).
+fn strip_dns_addrs(addrs: &mut Vec<Multiaddr>) {
+	addrs.retain(|a| a.iter().all(|p| match p {
+		| Protocol::Dns(_)
+		| Protocol::Dns4(_)
+		| Protocol::Dns6(_) => false,
+		_ => true
+	}))
 }
