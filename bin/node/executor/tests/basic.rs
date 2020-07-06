@@ -47,7 +47,10 @@ use self::common::{*, sign};
 /// The idea here is to pass it as the current runtime code to the executor so the executor will
 /// have to execute provided wasm code instead of the native equivalent. This trick is used to
 /// test code paths that differ between native and wasm versions.
-pub const BLOATY_CODE: Option<&[u8]> = node_runtime::WASM_BINARY_BLOATY;
+pub fn bloaty_code_unwrap() -> &'static [u8] {
+	node_runtime::WASM_BINARY_BLOATY.expect("Development wasm binary is not available. \
+											 Testing is only supported with the flag disabled.")
+}
 
 /// Default transfer fee. This will use the same logic that is implemented in transaction-payment module.
 ///
@@ -158,7 +161,7 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 
 #[test]
 fn panic_execution_with_foreign_code_gives_error() {
-	let mut t = new_test_ext(BLOATY_CODE.unwrap(), false);
+	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(69u128, 0u8, 0u128, 0u128, 0u128).encode()
@@ -259,7 +262,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 
 #[test]
 fn successful_execution_with_foreign_code_gives_ok() {
-	let mut t = new_test_ext(BLOATY_CODE.unwrap(), false);
+	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
@@ -693,7 +696,7 @@ fn native_big_block_import_fails_on_fallback() {
 
 #[test]
 fn panic_execution_gives_error() {
-	let mut t = new_test_ext(BLOATY_CODE.unwrap(), false);
+	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()

@@ -26,6 +26,13 @@ use sp_runtime_interface::runtime_interface;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+#[cfg(feature = "std")]
+/// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
+pub fn wasm_binary_unwrap() -> &'static [u8] {
+	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.")
+}
+
 /// This function is not used, but we require it for the compiler to include `sp-io`.
 /// `sp-io` is required for its panic and oom handler.
 #[no_mangle]
