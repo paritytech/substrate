@@ -34,7 +34,6 @@ fn build_spec_works() {
 	// Make sure that the `dev` chain folder exists, but the `db` doesn't
 	assert!(base_path.path().join("chains/dev/").exists());
 	assert!(!base_path.path().join("chains/dev/db").exists());
-	let s = String::from_utf8_lossy(output.stdout.as_slice());
 
 	let _value: serde_json::Value = serde_json::from_slice(output.stdout.as_slice()).unwrap();
 }
