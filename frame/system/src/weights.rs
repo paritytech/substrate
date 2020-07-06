@@ -237,7 +237,25 @@ impl BlockWeights {
 		}
 	}
 
-	pub fn with_sensible_defaults(expected_block_weight: Weight, normal_ratio: Perbill) -> BlockWeights {
+	/// Create new weights definition, with both `Normal` and `Operational`
+	/// classes limited to given weight.
+	///
+	/// Note there is no reservation for `Operational` class, so this constructor
+	/// is not suitable for production deployments.
+	pub fn simple_max(block_weight: Weight) -> Self {
+		Self::builder().max_for_non_mandatory(block_weight).build()
+	}
+
+	/// Create a sensible default weights system given only expected maximal block weight and the
+	/// ratio that `Normal` extrinsics should occupy.
+	///
+	/// Assumptions:
+	///  - Average block initialization is assumed to be `10%`.
+	///  - `Operational` transactions have reserved allowance (`1.0 - normal_ratio`)
+	pub fn with_sensible_defaults(
+		expected_block_weight: Weight,
+		normal_ratio: Perbill,
+	) -> Self {
 		let normal_weight = normal_ratio * expected_block_weight;
 		Self::builder()
 			.max_for_class(normal_weight, DispatchClass::Normal)

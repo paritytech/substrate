@@ -135,13 +135,12 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill,
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
 	use frame_system::weights;
 	use frame_support::{
-		impl_outer_origin, parameter_types, weights::Weight, traits::{Randomness, OnInitialize},
+		impl_outer_origin, parameter_types, traits::{Randomness, OnInitialize},
 	};
 
 	#[derive(Clone, PartialEq, Eq)]
@@ -154,15 +153,15 @@ mod tests {
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: weights::BlockWeights = weights::BlockWeights
-			::builder()
-			.max_for_non_mandatory(1024)
-			.build();
+			::simple_max(1024);
 		pub BlockLength: weights::BlockLength = weights::BlockLength
 			::max(2 * 1024);
 	}
 
 	impl frame_system::Trait for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = BlockWeights;
+		type BlockLength = BlockLength;
 		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;

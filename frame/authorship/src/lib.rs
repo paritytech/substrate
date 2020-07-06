@@ -399,9 +399,9 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem,
 	};
-	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
+	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test  where system = frame_system {}

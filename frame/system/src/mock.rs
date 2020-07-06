@@ -48,8 +48,6 @@ parameter_types! {
 		apis: sp_version::create_apis_vec!([]),
 		transaction_version: 1,
 	};
-	pub const BlockExecutionWeight: Weight = 10;
-	pub const ExtrinsicBaseWeight: Weight = 5;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 10,
 		write: 100,

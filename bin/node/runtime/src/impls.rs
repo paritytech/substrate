@@ -53,13 +53,14 @@ mod multiplier_tests {
 
 	use crate::{
 		constants::{currency::*, time::*},
-		TransactionPayment, MaximumBlockWeight, AvailableBlockRatio, Runtime, TargetBlockFullness,
+		TransactionPayment, Runtime, TargetBlockFullness,
 		AdjustmentVariable, System, MinimumMultiplier,
+		RuntimeBlockWeights as BlockWeights,
 	};
 	use frame_support::weights::{Weight, WeightToFeePolynomial};
 
 	fn max() -> Weight {
-		AvailableBlockRatio::get() * MaximumBlockWeight::get()
+		BlockWeights::get().max_block
 	}
 
 	fn min_multiplier() -> Multiplier {
@@ -201,7 +202,7 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = AvailableBlockRatio::get() * max() - 100;
+		let block_weight = BlockWeights::get().max_for_class.normal.unwrap() - 100;
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();
@@ -339,8 +340,8 @@ mod multiplier_tests {
 			10 * mb,
 			2147483647,
 			4294967295,
-			MaximumBlockWeight::get() / 2,
-			MaximumBlockWeight::get(),
+			BlockWeights::get().max_block / 2,
+			BlockWeights::get().max_block,
 			Weight::max_value() / 2,
 			Weight::max_value(),
 		].into_iter().for_each(|i| {

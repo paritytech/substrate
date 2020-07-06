@@ -20,12 +20,12 @@
 use super::*;
 
 use std::cell::RefCell;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight, ord_parameter_types};
+use frame_support::{impl_outer_origin, parameter_types, ord_parameter_types};
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
+	traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
 use frame_system::EnsureSignedBy;
 
@@ -41,13 +41,10 @@ pub struct Test;
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub const Period: u64 = 4;
-
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
-
 	pub const ExistentialDeposit: u64 = 1;
+	pub BlockWeights: frame_system::weights::BlockWeights =
+		frame_system::weights::BlockWeights::simple_max(1024);
 }
 ord_parameter_types! {
 	pub const KickOrigin: u64 = 2;
@@ -56,6 +53,9 @@ ord_parameter_types! {
 
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = BlockWeights;
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -67,13 +67,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;

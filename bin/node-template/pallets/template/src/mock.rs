@@ -2,7 +2,7 @@
 
 use crate::{Module, Trait};
 use sp_core::H256;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 };
@@ -19,13 +19,21 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1024);
+	pub BlockWeights: system::weights::BlockWeights =
+		system::weights::BlockWeights::with_sensible_defaults(
+			1024,
+			Perbill::from_percent(75)
+		);
+	pub BlockLength: system::weights::BlockLength = system::weights::BlockLength
+		::max_with_normal_ratio(
+			2 * 1024,
+			Perbill::from_percent(75)
+		);
 }
 impl system::Trait for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = BlockWeights;
-	type BlockLength = ();
+	type BlockLength = BlockLength;
 	type DbWeight = ();
 	type Origin = Origin;
 	type Call = ();

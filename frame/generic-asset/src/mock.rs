@@ -21,12 +21,11 @@
 #![cfg(test)]
 
 use sp_runtime::{
-	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use sp_core::H256;
-use frame_support::{parameter_types, impl_outer_event, impl_outer_origin, weights::Weight};
+use frame_support::{parameter_types, impl_outer_event, impl_outer_origin};
 
 use super::*;
 
@@ -44,6 +43,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::weights::BlockWeights =
 		frame_system::weights::BlockWeights::simple_max(1024);
 }
+
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = BlockWeights;

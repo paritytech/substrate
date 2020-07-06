@@ -589,7 +589,7 @@ mod tests {
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
-			// Initial weight from `BlockExecutionWeight`
+			// Initial weight from `weights.base_block`
 			assert_eq!(
 				System::block_weight().total(),
 				weights.base_block

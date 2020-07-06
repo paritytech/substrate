@@ -211,11 +211,9 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		Perbill,
 	};
 	use frame_support::{
 		assert_ok, impl_outer_origin, parameter_types,
-		weights::Weight,
 		traits::OnFinalize,
 	};
 	use frame_system as system;

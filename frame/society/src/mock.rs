@@ -26,7 +26,6 @@ use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
@@ -49,14 +48,11 @@ parameter_types! {
 	pub const PeriodSpend: u64 = 1000;
 	pub const MaxLockDuration: u64 = 100;
 	pub const ChallengePeriod: u64 = 8;
-
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
-
 	pub const ExistentialDeposit: u64 = 1;
 	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub BlockWeights: frame_system::weights::BlockWeights =
+		frame_system::weights::BlockWeights::simple_max(1024);
 }
 
 ord_parameter_types! {
@@ -66,6 +62,9 @@ ord_parameter_types! {
 
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = BlockWeights;
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -77,13 +76,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type OnNewAccount = ();

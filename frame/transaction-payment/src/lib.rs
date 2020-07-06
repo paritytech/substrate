@@ -556,20 +556,28 @@ mod tests {
 		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
 	}
 
-	pub struct ExtrinsicBaseWeight;
-	impl Get<u64> for ExtrinsicBaseWeight {
-		fn get() -> u64 { EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()) }
+	pub struct BlockWeights;
+	impl Get<frame_system::weights::BlockWeights> for BlockWeights {
+		fn get() -> frame_system::weights::BlockWeights {
+			frame_system::weights::BlockWeights::builder()
+				.max_for_non_mandatory(1024)
+				.base_extrinsic(
+					EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()),
+					frame_system::weights::ExtrinsicDispatchClass::All,
+				)
+				.build()
+		}
 	}
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 
 	impl frame_system::Trait for Runtime {
 		type BaseCallFilter = ();
+		type BlockWeights = BlockWeights;
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -581,13 +589,6 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -796,7 +797,7 @@ mod tests {
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <Runtime as frame_system::Trait>::MaximumBlockWeight::get()) as u64
+				(10000 - <Runtime as frame_system::Trait>::BlockWeights::get().max_block) as u64
 			);
 		});
 	}
@@ -894,7 +895,7 @@ mod tests {
 					partial_fee:
 						5 * 2 /* base * weight_fee */
 						+ len as u64  /* len * 1 */
-						+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 * 3 / 2 /* weight */
+						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
 

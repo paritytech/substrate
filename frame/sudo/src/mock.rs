@@ -25,10 +25,11 @@ use frame_support::{
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys.
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
 use frame_support::traits::Filter;
+use frame_system::weights;
 
 // Logger module to track execution.
 pub mod logger {
@@ -108,8 +109,8 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1024);
+	pub BlockWeights: weights::BlockWeights = weights::BlockWeights
+		::simple_max(1024);
 }
 
 pub struct BlockEverything;

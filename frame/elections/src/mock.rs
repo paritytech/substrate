@@ -23,23 +23,24 @@ use std::cell::RefCell;
 use frame_support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
 	traits::{Get, ChangeMembers, Currency, LockIdentifier},
-	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
-	Perbill, BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
+	BuildStorage, testing::Header, traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 };
 use crate as elections;
 
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::weights::BlockWeights =
+		frame_system::weights::BlockWeights::simple_max(1024);
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = BlockWeights;
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -51,13 +52,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -128,7 +122,7 @@ impl ChangeMembers<u64> for TestChangeMembers {
 }
 
 parameter_types!{
-	pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
+	pub const ElectionModuleId: LockIdentifier = *b"py/elect";
 }
 
 impl elections::Trait for Test {
