@@ -1118,7 +1118,6 @@ impl_runtime_apis! {
 
 			let whitelist: Vec<Vec<u8>> = vec![
 				// Block Number
-				// frame_system::Number::<Runtime>::hashed_key().to_vec(),
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
 				// Total Issuance
 				hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec(),
@@ -1137,25 +1136,25 @@ impl_runtime_apis! {
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 
-			add_benchmark!(params, batches, b"babe", Babe);
-			add_benchmark!(params, batches, b"balances", Balances);
-			add_benchmark!(params, batches, b"collective", Council);
-			add_benchmark!(params, batches, b"democracy", Democracy);
-			add_benchmark!(params, batches, b"elections", Elections);
-			add_benchmark!(params, batches, b"identity", Identity);
-			add_benchmark!(params, batches, b"im-online", ImOnline);
-			add_benchmark!(params, batches, b"indices", Indices);
-			add_benchmark!(params, batches, b"multisig", Multisig);
-			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
-			add_benchmark!(params, batches, b"proxy", Proxy);
-			add_benchmark!(params, batches, b"scheduler", Scheduler);
-			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
-			add_benchmark!(params, batches, b"staking", Staking);
-			add_benchmark!(params, batches, b"system", SystemBench::<Runtime>);
-			add_benchmark!(params, batches, b"timestamp", Timestamp);
-			add_benchmark!(params, batches, b"treasury", Treasury);
-			add_benchmark!(params, batches, b"utility", Utility);
-			add_benchmark!(params, batches, b"vesting", Vesting);
+			add_benchmark!(params, batches, pallet_babe, Babe);
+			add_benchmark!(params, batches, pallet_balances, Balances);
+			add_benchmark!(params, batches, pallet_collective, Council);
+			add_benchmark!(params, batches, pallet_democracy, Democracy);
+			add_benchmark!(params, batches, pallet_elections_phragmen, Elections);
+			add_benchmark!(params, batches, pallet_identity, Identity);
+			add_benchmark!(params, batches, pallet_im_online, ImOnline);
+			add_benchmark!(params, batches, pallet_indices, Indices);
+			add_benchmark!(params, batches, pallet_multisig, Multisig);
+			add_benchmark!(params, batches, pallet_offences, OffencesBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_proxy, Proxy);
+			add_benchmark!(params, batches, pallet_scheduler, Scheduler);
+			add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_staking, Staking);
+			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
+			add_benchmark!(params, batches, pallet_treasury, Treasury);
+			add_benchmark!(params, batches, pallet_utility, Utility);
+			add_benchmark!(params, batches, pallet_vesting, Vesting);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
