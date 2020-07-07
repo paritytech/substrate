@@ -134,10 +134,10 @@ mod tests {
 		let key = b"key";
 		let value = b"value";
 
-		storage.set(prefix, key, value);
+		storage.set(prefix, key, value).unwrap();
 		assert_eq!(storage.get(prefix, key), Some(value.to_vec()));
 
-		assert_eq!(storage.compare_and_set(prefix, key, Some(value), b"asd"), true);
+		assert!(storage.compare_and_set(prefix, key, Some(value), b"asd").unwrap());
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}
@@ -148,7 +148,7 @@ mod tests {
 		let prefix = b"prefix";
 		let key = b"key";
 
-		assert_eq!(storage.compare_and_set(prefix, key, None, b"asd"), true);
+		assert!(storage.compare_and_set(prefix, key, None, b"asd").unwrap());
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}

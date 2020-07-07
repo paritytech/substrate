@@ -42,16 +42,16 @@ fn in_memory_offchain_storage() {
 	assert_eq!(storage.get(b"A", b"B"), None);
 	assert_eq!(storage.get(b"B", b"A"), None);
 
-	storage.set(b"A", b"B", b"C");
+	storage.set(b"A", b"B", b"C").unwrap();
 	assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
 	assert_eq!(storage.get(b"B", b"A"), None);
 
-	storage.compare_and_set(b"A", b"B", Some(b"X"), b"D");
+	storage.compare_and_set(b"A", b"B", Some(b"X"), b"D").unwrap();
 	assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
-	storage.compare_and_set(b"A", b"B", Some(b"C"), b"D");
+	storage.compare_and_set(b"A", b"B", Some(b"C"), b"D").unwrap();
 	assert_eq!(storage.get(b"A", b"B"), Some(b"D".to_vec()));
 
-	assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y"));
-	assert!(storage.compare_and_set(b"B", b"A", None, b"X"));
+	assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y").unwrap());
+	assert!(storage.compare_and_set(b"B", b"A", None, b"X").unwrap());
 	assert_eq!(storage.get(b"B", b"A"), Some(b"X".to_vec()));
 }
