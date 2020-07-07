@@ -602,4 +602,6 @@ mod tests {
 			);
 		})
 	}
+
+	// Test to make sure normal & mandatory are tracked separately.
 }

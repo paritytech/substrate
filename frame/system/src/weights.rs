@@ -20,12 +20,7 @@ use frame_support::weights::{Weight, DispatchClass, constants};
 use sp_runtime::{RuntimeDebug, Perbill};
 
 /// An object to track the currently used extrinsic weight in a block.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-pub struct ExtrinsicsWeight {
-	normal: Weight,
-	operational: Weight,
-	mandatory: Weight,
-}
+pub type ExtrinsicsWeight = ForDispatchClass<Weight>;
 
 impl ExtrinsicsWeight {
 	/// Returns the total weight consumed by all extrinsics in the block.
@@ -54,15 +49,6 @@ impl ExtrinsicsWeight {
 	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_sub(weight);
-	}
-
-	/// Get the current weight of a specific dispatch class.
-	pub fn get(&self, class: DispatchClass) -> Weight {
-		match class {
-			DispatchClass::Operational => self.operational,
-			DispatchClass::Normal => self.normal,
-			DispatchClass::Mandatory => self.mandatory,
-		}
 	}
 
 	/// Get a mutable reference to the current weight of a specific dispatch class.
@@ -117,7 +103,7 @@ impl BlockLength {
 }
 
 /// A struct holding value for each `DispatchClass`.
-#[derive(RuntimeDebug, Default, Clone)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
 pub struct ForDispatchClass<T> {
 	/// Value for `Normal` extrinsics.
 	pub normal: T,
