@@ -1141,7 +1141,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	fn on_transactions(
 		&mut self,
 		who: PeerId,
-		transactions: message::Transactions<B::Extrinsic>
+		transactions: message::Transactions<B::Extrinsic>,
 	) {
 		// sending transaction to light node is considered a bad behavior
 		if !self.config.roles.is_full() {
@@ -1211,7 +1211,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		&mut self,
 		transactions: &[(H, B::Extrinsic)],
 	) -> HashMap<H, Vec<String>> {
-		let mut propagated_to = HashMap::new();
+		let mut propagated_to = HashMap::<_, Vec<_>>::new();
+		let mut propagated_transactions = 0;
+
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			// never send transactions to the light node
 			if !peer.info.roles.is_full() {
@@ -1224,11 +1226,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				.cloned()
 				.unzip();
 
+			propagated_transactions += hashes.len();
+
 			if !to_send.is_empty() {
 				for hash in hashes {
 					propagated_to
 						.entry(hash)
-						.or_insert_with(Vec::new)
+						.or_default()
 						.push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
@@ -1243,10 +1247,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 		}
 
-		if propagated_to.len() > 0 {
-			if let Some(ref metrics) = self.metrics {
-				metrics.propagated_transactions.inc();
-			}
+		if let Some(ref metrics) = self.metrics {
+			metrics.propagated_transactions.inc_by(propagated_transactions as _)
 		}
 
 		propagated_to

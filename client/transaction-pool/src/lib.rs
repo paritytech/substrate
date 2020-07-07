@@ -248,15 +248,9 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		self.metrics.report(|metrics| metrics.validations_scheduled.inc_by(xts.len() as u64));
+		self.metrics.report(|metrics| metrics.submitted_transactions.inc_by(xts.len() as u64));
 
-		let metrics = self.metrics.clone();
-		async move {
-			let tx_count = xts.len();
-			let res = pool.submit_at(&at, source, xts, false).await;
-			metrics.report(|metrics| metrics.validations_finished.inc_by(tx_count as u64));
-			res
-		}.boxed()
+		async move { pool.submit_at(&at, source, xts).await }.boxed()
 	}
 
 	fn submit_one(
@@ -268,16 +262,9 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+		self.metrics.report(|metrics| metrics.submitted_transactions.inc());
 
-		let metrics = self.metrics.clone();
-		async move {
-			let res = pool.submit_one(&at, source, xt).await;
-
-			metrics.report(|metrics| metrics.validations_finished.inc());
-			res
-
-		}.boxed()
+		async move { pool.submit_one(&at, source, xt).await }.boxed()
 	}
 
 	fn submit_and_watch(
@@ -289,17 +276,12 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 		let pool = self.pool.clone();
 
-		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+		self.metrics.report(|metrics| metrics.submitted_transactions.inc());
 
-		let metrics = self.metrics.clone();
 		async move {
-			let result = pool.submit_and_watch(&at, source, xt)
+			pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-				.await;
-
-			metrics.report(|metrics| metrics.validations_finished.inc());
-
-			result
+				.await
 		}.boxed()
 	}
 
@@ -632,13 +614,12 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							);
 						}
 
-						if let Err(e) = pool.submit_at(
+						if let Err(e) = pool.resubmit_at(
 							&id,
 							// These transactions are coming from retracted blocks, we should
 							// simply consider them external.
 							TransactionSource::External,
 							resubmit_transactions,
-							true,
 						).await {
 							log::debug!(
 								target: "txpool",

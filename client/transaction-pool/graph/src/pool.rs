@@ -23,7 +23,7 @@ use std::{
 
 use crate::{base_pool as base, watcher::Watcher};
 
-use futures::{Future, FutureExt};
+use futures::Future;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion, Block as BlockT},
@@ -149,23 +149,27 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub async fn submit_at<T>(
+	pub async fn submit_at(
 		&self,
 		at: &BlockId<B::Block>,
 		source: TransactionSource,
-		xts: T,
-		force: bool,
-	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> where
-		T: IntoIterator<Item=ExtrinsicFor<B>>,
-	{
-		let validated_pool = self.validated_pool.clone();
+		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
+	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
-		self.verify(at, xts, force)
-			.map(move |validated_transactions| validated_transactions
-				.map(|validated_transactions| validated_pool.submit(validated_transactions
-					.into_iter()
-					.map(|(_, tx)| tx))))
-			.await
+		let validated_transactions = self.verify(at, xts, true).await?;
+		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+	}
+
+	/// Resubmit the given extrinsics to the pool.
+	pub async fn resubmit_at(
+		&self,
+		at: &BlockId<B::Block>,
+		source: TransactionSource,
+		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
+	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
+		let xts = xts.into_iter().map(|xt| (source, xt));
+		let validated_transactions = self.verify(at, xts, false).await?;
+		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -175,12 +179,8 @@ impl<B: ChainApi> Pool<B> {
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
 	) -> Result<ExtrinsicHash<B>, B::Error> {
-		self.submit_at(at, source, std::iter::once(xt), false)
-			.map(|import_result| import_result.and_then(|mut import_result| import_result
-				.pop()
-				.expect("One extrinsic passed; one result returned; qed")
-			))
-			.await
+		let res = self.submit_at(at, source, std::iter::once(xt)).await?.pop();
+		res.expect("One extrinsic passed; one result returned; qed")
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
@@ -191,9 +191,7 @@ impl<B: ChainApi> Pool<B> {
 		xt: ExtrinsicFor<B>,
 	) -> Result<Watcher<ExtrinsicHash<B>, ExtrinsicHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
-		let (_, tx) = self.verify_one(
-			at, block_number, source, xt, false
-		).await;
+		let (_, tx) = self.verify_one(at, block_number, source, xt, true).await;
 		self.validated_pool.submit_and_watch(tx)
 	}
 
@@ -328,7 +326,7 @@ impl<B: ChainApi> Pool<B> {
 			.into_iter()
 			.map(|tx| (tx.source, tx.data.clone()));
 
-		let reverified_transactions = self.verify(at, pruned_transactions, false).await?;
+		let reverified_transactions = self.verify(at, pruned_transactions, true).await?;
 
 		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
@@ -358,23 +356,17 @@ impl<B: ChainApi> Pool<B> {
 		&self,
 		at: &BlockId<B::Block>,
 		xts: impl IntoIterator<Item=(TransactionSource, ExtrinsicFor<B>)>,
-		force: bool,
+		check_is_known: bool,
 	) -> Result<HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>, B::Error> {
 		// we need a block number to compute tx validity
 		let block_number = self.resolve_block_number(at)?;
-		let mut result = HashMap::new();
 
-		for (hash, validated_tx) in
-			futures::future::join_all(
-				xts.into_iter()
-					.map(|(source, xt)| self.verify_one(at, block_number, source, xt, force))
-			)
-			.await
-		{
-			result.insert(hash, validated_tx);
-		}
+		let res = futures::future::join_all(
+			xts.into_iter()
+				.map(|(source, xt)| self.verify_one(at, block_number, source, xt, check_is_known))
+		).await.into_iter().collect::<HashMap<_, _>>();
 
-		Ok(result)
+		Ok(res)
 	}
 
 	/// Returns future that validates single transaction at given block.
@@ -384,14 +376,14 @@ impl<B: ChainApi> Pool<B> {
 		block_number: NumberFor<B>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-		force: bool,
+		check_is_known: bool,
 	) -> (ExtrinsicHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
-		if !force && self.validated_pool.is_banned(&hash) {
-			return (
-				hash.clone(),
-				ValidatedTransaction::Invalid(hash, error::Error::TemporarilyBanned.into()),
-			)
+
+		if check_is_known {
+			if let Err(err) = self.validated_pool.check_is_known(&hash) {
+				return (hash.clone(), ValidatedTransaction::Invalid(hash, err.into()))
+			}
 		}
 
 		let validation_result = self.validated_pool.api().validate_transaction(
