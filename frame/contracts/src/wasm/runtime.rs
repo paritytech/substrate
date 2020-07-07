@@ -18,7 +18,7 @@
 
 use crate::{Schedule, Trait, CodeHash, BalanceOf};
 use crate::exec::{
-	Ext, ExecResult, ExecError, ExecReturnValue, StorageKey, TopicOf, ReturnFlags,
+	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags,
 };
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
 use crate::wasm::env_def::ConvertibleToWasm;
@@ -127,9 +127,9 @@ pub(crate) fn to_execution_result<E: Ext>(
 	match runtime.special_trap {
 		// The trap was the result of the execution `return` host function.
 		Some(SpecialTrap::Return(flags, data)) => {
-			let flags = ReturnFlags::from_bits(flags).ok_or_else(|| ExecError {
-				reason: "used reserved bit in return flags".into(),
-			})?;
+			let flags = ReturnFlags::from_bits(flags).ok_or_else(||
+				"used reserved bit in return flags"
+			)?;
 			return Ok(ExecReturnValue {
 				flags,
 				data,
@@ -148,14 +148,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 			})
 		}
 		Some(SpecialTrap::OutOfGas) => {
-			return Err(ExecError {
-				reason: "ran out of gas during contract execution".into(),
-			})
+			Err("ran out of gas during contract execution")?
 		},
 		Some(SpecialTrap::OutputBufferTooSmall) => {
-			return Err(ExecError {
-				reason: "output buffer too small".into(),
-			})
+			Err("output buffer too small")?
 		},
 		None => (),
 	}
@@ -173,10 +169,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 		// Because panics are really undesirable in the runtime code, we treat this as
 		// a trap for now. Eventually, we might want to revisit this.
 		Err(sp_sandbox::Error::Module) =>
-			Err(ExecError { reason: "validation error".into() }),
+			Err("validation error")?,
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err(ExecError { reason: "contract trapped during execution".into() }),
+			Err("contract trapped during execution")?,
 	}
 }
 

@@ -62,32 +62,7 @@ impl ExecReturnValue {
 	}
 }
 
-/// An error indicating some failure to execute a contract call or instantiation. This can include
-/// VM-specific errors during execution (eg. division by 0, OOB access, failure to satisfy some
-/// precondition of a system call, etc.) or errors with the orchestration (eg. out-of-gas errors, a
-/// non-existent destination contract, etc.).
-#[cfg_attr(test, derive(sp_runtime::RuntimeDebug))]
-pub struct ExecError {
-	pub reason: DispatchError,
-}
-
-pub type ExecResult = Result<ExecReturnValue, ExecError>;
-
-/// Evaluate an expression of type Result<_, &'static str> and either resolve to the value if Ok or
-/// wrap the error string into an ExecutionError with the provided buffer and return from the
-/// enclosing function. This macro is used instead of .map_err(..)? in order to avoid taking
-/// ownership of buffer unless there is an error.
-#[macro_export]
-macro_rules! try_or_exec_error {
-	($e:expr) => {
-		match $e {
-			Ok(val) => val,
-			Err(reason) => return Err(
-				$crate::exec::ExecError { reason: reason.into() }
-			),
-		}
-	}
-}
+pub type ExecResult = Result<ExecReturnValue, DispatchError>;
 
 /// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
@@ -117,7 +92,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		input_data: Vec<u8>,
-	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
+	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), DispatchError>;
 
 	/// Transfer some amount of funds into the specified account.
 	fn transfer(
@@ -330,18 +305,14 @@ where
 		input_data: Vec<u8>,
 	) -> ExecResult {
 		if self.depth == self.config.max_depth as usize {
-			return Err(ExecError {
-				reason: "reached maximum depth, cannot make a call".into(),
-			});
+			Err("reached maximum depth, cannot make a call")?
 		}
 
 		if gas_meter
 			.charge(self.config, ExecFeeToken::Call)
 			.is_out_of_gas()
 		{
-			return Err(ExecError {
-				reason: "not enough gas to pay base call fee".into(),
-			});
+			Err("not enough gas to pay base call fee")?
 		}
 
 		// Assumption: `collect_rent` doesn't collide with overlay because
@@ -351,9 +322,7 @@ where
 
 		// Calls to dead contracts always fail.
 		if let Some(ContractInfo::Tombstone(_)) = contract_info {
-			return Err(ExecError {
-				reason: "contract has been evicted".into(),
-			});
+			Err("contract has been evicted")?
 		};
 
 		let caller = self.self_account.clone();
@@ -361,25 +330,21 @@ where
 
 		self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			if value > BalanceOf::<T>::zero() {
-				try_or_exec_error!(
-					transfer(
-						gas_meter,
-						TransferCause::Call,
-						&caller,
-						&dest,
-						value,
-						nested,
-					)
-				);
+				transfer(
+					gas_meter,
+					TransferCause::Call,
+					&caller,
+					&dest,
+					value,
+					nested,
+				)?
 			}
 
 			// If code_hash is not none, then the destination account is a live contract, otherwise
 			// it is a regular account since tombstone accounts have already been rejected.
 			match storage::code_hash::<T>(&dest) {
 				Ok(dest_code_hash) => {
-					let executable = try_or_exec_error!(
-						nested.loader.load_main(&dest_code_hash)
-					);
+					let executable = nested.loader.load_main(&dest_code_hash)?;
 					let output = nested.vm
 						.execute(
 							&executable,
@@ -400,20 +365,16 @@ where
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
 		input_data: Vec<u8>,
-	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
+	) -> Result<(T::AccountId, ExecReturnValue), DispatchError> {
 		if self.depth == self.config.max_depth as usize {
-			return Err(ExecError {
-				reason: "reached maximum depth, cannot instantiate".into(),
-			});
+			Err("reached maximum depth, cannot instantiate")?
 		}
 
 		if gas_meter
 			.charge(self.config, ExecFeeToken::Instantiate)
 			.is_out_of_gas()
 		{
-			return Err(ExecError {
-				reason: "not enough gas to pay base instantiate fee".into(),
-			});
+			Err("not enough gas to pay base instantiate fee")?
 		}
 
 		let caller = self.self_account.clone();
@@ -429,33 +390,27 @@ where
 		let dest_trie_id = <T as Trait>::TrieIdGenerator::trie_id(&dest);
 
 		let output = self.with_nested_context(dest.clone(), Some(dest_trie_id), |nested| {
-			try_or_exec_error!(
-				storage::place_contract::<T>(
-					&dest,
-					nested
-						.self_trie_id
-						.clone()
-						.expect("the nested context always has to have self_trie_id"),
-					code_hash.clone()
-				)
-			);
+			storage::place_contract::<T>(
+				&dest,
+				nested
+					.self_trie_id
+					.clone()
+					.expect("the nested context always has to have self_trie_id"),
+				code_hash.clone()
+			)?;
 
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
 			// then error will be returned here.
-			try_or_exec_error!(
-				transfer(
-					gas_meter,
-					TransferCause::Instantiate,
-					&caller,
-					&dest,
-					endowment,
-					nested,
-				)
-			);
+			transfer(
+				gas_meter,
+				TransferCause::Instantiate,
+				&caller,
+				&dest,
+				endowment,
+				nested,
+			)?;
 
-			let executable = try_or_exec_error!(
-				nested.loader.load_init(&code_hash)
-			);
+			let executable = nested.loader.load_init(&code_hash)?;
 			let output = nested.vm
 				.execute(
 					&executable,
@@ -466,9 +421,7 @@ where
 
 			// Error out if insufficient remaining balance.
 			if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
-				return Err(ExecError {
-					reason: "insufficient remaining balance".into(),
-				});
+				Err("insufficient remaining balance")?
 			}
 
 			// Deposit an instantiation event.
@@ -669,7 +622,7 @@ where
 		endowment: BalanceOf<T>,
 		gas_meter: &mut GasMeter<T>,
 		input_data: Vec<u8>,
-	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
+	) -> Result<(AccountIdOf<T>, ExecReturnValue), DispatchError> {
 		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
 	}
 
@@ -859,7 +812,7 @@ mod tests {
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
-		exec::{ExecReturnValue, ExecError}, CodeHash, Config,
+		exec::ExecReturnValue, CodeHash, Config,
 		gas::Gas,
 		storage,
 	};
@@ -1216,9 +1169,7 @@ mod tests {
 
 			assert_matches!(
 				result,
-				Err(ExecError {
-					reason: DispatchError::Module { message: Some("InsufficientBalance"), .. },
-				})
+				Err(DispatchError::Module { message: Some("InsufficientBalance"), .. })
 			);
 			assert_eq!(get_balance(&origin), 0);
 			assert_eq!(get_balance(&dest), 0);
@@ -1357,9 +1308,7 @@ mod tests {
 				// Verify that we've got proper error and set `reached_bottom`.
 				assert_matches!(
 					r,
-					Err(ExecError {
-						reason: DispatchError::Other("reached maximum depth, cannot make a call"),
-					})
+					Err(DispatchError::Other("reached maximum depth, cannot make a call"))
 				);
 				*reached_bottom = true;
 			} else {
@@ -1613,7 +1562,7 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let dummy_ch = loader.insert(
-			|_| Err(ExecError { reason: "It's a trap!".into() })
+			|_| Err("It's a trap!".into())
 		);
 		let instantiator_ch = loader.insert({
 			let dummy_ch = dummy_ch.clone();
@@ -1626,7 +1575,7 @@ mod tests {
 						ctx.gas_meter,
 						vec![]
 					),
-					Err(ExecError { reason: DispatchError::Other("It's a trap!") })
+					Err(DispatchError::Other("It's a trap!"))
 				);
 
 				exec_success()
@@ -1677,9 +1626,7 @@ mod tests {
 						&terminate_ch,
 						vec![],
 					),
-					Err(ExecError {
-						reason: DispatchError::Other("insufficient remaining balance"),
-					})
+					Err(DispatchError::Other("insufficient remaining balance"))
 				);
 
 				assert_eq!(

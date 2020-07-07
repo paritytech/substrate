@@ -153,7 +153,7 @@ mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecError, ExecReturnValue, ReturnFlags};
+	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -238,7 +238,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), ExecError> {
+		) -> Result<(u64, ExecReturnValue), DispatchError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -390,7 +390,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), ExecError> {
+		) -> Result<(u64, ExecReturnValue), DispatchError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
 		fn transfer(
@@ -1538,9 +1538,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError {
-				reason: DispatchError::Other("contract trapped during execution")
-			})
+			Err(DispatchError::Other("contract trapped during execution"))
 		);
 	}
 
@@ -1582,7 +1580,7 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(ExecError { reason: DispatchError::Other("contract trapped during execution") })
+			Err(DispatchError::Other("contract trapped during execution"))
 		);
 	}
 
