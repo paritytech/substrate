@@ -59,8 +59,8 @@ impl ConvertibleToWasm for ReturnCode {
 		sp_sandbox::Value::I32(self as i32)
 	}
 	fn from_typed_value(_: sp_sandbox::Value) -> Option<Self> {
-		// We will only ever send these values to wasm but never receive them.
-		unimplemented!()
+		debug_assert!(false, "We will never receive a ReturnCode but only send it to wasm.");
+		None
 	}
 }
 
