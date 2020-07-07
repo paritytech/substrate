@@ -17,6 +17,7 @@
 use crate::{
 	BalanceOf, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator, gas::Gas,
+	Error,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -475,7 +476,7 @@ fn run_out_of_gas() {
 					67_500_000,
 					vec![],
 				),
-				"ran out of gas during contract execution"
+				Error::<Test>::OutOfGas,
 			);
 		});
 }
