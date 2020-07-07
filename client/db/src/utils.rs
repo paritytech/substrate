@@ -299,7 +299,9 @@ pub fn check_database_type(db: &dyn Database<DbHash>, db_type: DatabaseType) -> 
 		None => {
 			let mut transaction = Transaction::new();
 			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
-			db.commit(transaction).map_err(|e| sp_blockchain::Error::Msg(e.to_string()))
+			db.commit(transaction)?;
+
+			Ok(())
 		},
 	}
 }
