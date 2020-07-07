@@ -6622,7 +6622,6 @@ dependencies = [
  "futures 0.3.5",
  "log",
  "parity-util-mem 0.7.0",
- "parking_lot 0.10.2",
  "sc-client-api",
  "sc-network",
  "sp-blockchain",
