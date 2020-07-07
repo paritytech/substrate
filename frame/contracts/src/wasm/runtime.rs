@@ -74,13 +74,22 @@ impl From<ExecReturnValue> for ReturnCode {
 	}
 }
 
+/// The data passed through when a contract uses `ext_return`.
+struct ReturnData {
+	/// The flags as passed through by the contract. They are still unchecked and
+	/// will later be parsed into a `ReturnFlags` bitflags struct.
+	flags: u32,
+	/// The output buffer passed by the contract as return data.
+	data: Vec<u8>,
+}
+
 /// Enumerates all possible *special* trap conditions.
 ///
 /// In this runtime traps used not only for signaling about errors but also
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
 	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(u32, Vec<u8>),
+	Return(ReturnData),
 	/// Signals that trap was generated because the contract exhausted its gas limit.
 	OutOfGas,
 	/// Signals that a trap was generated in response to a succesful call to the
@@ -126,7 +135,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 ) -> ExecResult {
 	match runtime.special_trap {
 		// The trap was the result of the execution `return` host function.
-		Some(SpecialTrap::Return(flags, data)) => {
+		Some(SpecialTrap::Return(ReturnData{ flags, data })) => {
 			let flags = ReturnFlags::from_bits(flags).ok_or_else(||
 				"used reserved bit in return flags"
 			)?;
@@ -751,8 +760,10 @@ define_env!(Env, <E: Ext>,
 			RuntimeToken::ReturnData(data_len)
 		)?;
 
-		let output_data = read_sandbox_memory(ctx, data_ptr, data_len)?;
-		ctx.special_trap = Some(SpecialTrap::Return(flags, output_data));
+		ctx.special_trap = Some(SpecialTrap::Return(ReturnData {
+			flags,
+			data: read_sandbox_memory(ctx, data_ptr, data_len)?,
+		}));
 
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
