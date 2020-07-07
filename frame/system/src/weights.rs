@@ -24,13 +24,15 @@ use sp_runtime::{RuntimeDebug, Perbill};
 pub struct ExtrinsicsWeight {
 	normal: Weight,
 	operational: Weight,
-	// TODO [ToDr] We should probably track `mandatory` separately here!
+	mandatory: Weight,
 }
 
 impl ExtrinsicsWeight {
 	/// Returns the total weight consumed by all extrinsics in the block.
 	pub fn total(&self) -> Weight {
-		self.normal.saturating_add(self.operational)
+		self.normal
+			.saturating_add(self.operational)
+			.saturating_add(self.mandatory)
 	}
 
 	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
@@ -58,7 +60,8 @@ impl ExtrinsicsWeight {
 	pub fn get(&self, class: DispatchClass) -> Weight {
 		match class {
 			DispatchClass::Operational => self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => self.normal,
+			DispatchClass::Normal => self.normal,
+			DispatchClass::Mandatory => self.mandatory,
 		}
 	}
 
@@ -66,7 +69,8 @@ impl ExtrinsicsWeight {
 	fn get_mut(&mut self, class: DispatchClass) -> &mut Weight {
 		match class {
 			DispatchClass::Operational => &mut self.operational,
-			DispatchClass::Normal | DispatchClass::Mandatory => &mut self.normal,
+			DispatchClass::Normal => &mut self.normal,
+			DispatchClass::Mandatory => &mut self.mandatory,
 		}
 	}
 
