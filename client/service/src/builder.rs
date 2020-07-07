@@ -1157,7 +1157,7 @@ async fn telemetry_periodic_send<TBl, TExPool, TCl>(
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	mut metrics_service: MetricsService,
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>
+	network_status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>
 )
 	where
 		TBl: BlockT,
@@ -1165,7 +1165,7 @@ async fn telemetry_periodic_send<TBl, TExPool, TCl>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 {
 	let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
-	network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
+	network_status_sinks.push(std::time::Duration::from_millis(5000), state_tx);
 	state_rx.for_each(move |(net_status, _)| {
 		let info = client.usage_info();
 		metrics_service.tick(
@@ -1178,11 +1178,11 @@ async fn telemetry_periodic_send<TBl, TExPool, TCl>(
 }
 
 async fn telemetry_periodic_network_state<TBl: BlockT>(
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>
+	network_status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>
 ) {
 	// Periodically send the network state to the telemetry.
 	let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
-	network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
+	network_status_sinks.push(std::time::Duration::from_secs(30), netstat_tx);
 	netstat_rx.for_each(move |(_, network_state)| {
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -1347,7 +1347,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>,
+		Arc<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>,
 		Pin<Box<dyn Future<Output = ()> + Send>>
 	),
 	Error
@@ -1407,7 +1407,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
-	let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
+	let network_status_sinks = Arc::new(status_sinks::StatusSinks::new());
 
 	let future = build_network_future(
 		config.role.clone(),
