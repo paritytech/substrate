@@ -17,6 +17,7 @@
 
 #![recursion_limit="128"]
 
+use codec::{Codec, EncodeLike, Encode, Decode};
 use sp_runtime::{generic, BuildStorage, traits::{BlakeTwo256, Block as _, Verify}};
 use frame_support::{
 	Parameter, traits::Get, parameter_types,
@@ -44,7 +45,7 @@ mod module1 {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + codec::Codec + codec::EncodeLike;
+		type GenericType: Default + Clone + Codec + EncodeLike;
 	}
 
 	frame_support::decl_module! {
@@ -87,7 +88,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 	pub enum Origin<T: Trait<I>, I> where T::BlockNumber: From<u32> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -148,7 +149,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),

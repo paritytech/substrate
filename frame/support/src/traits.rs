@@ -1500,7 +1500,7 @@ pub mod schedule {
 	pub const LOWEST_PRIORITY: Priority = 255;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call> {
+	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug;
 
@@ -1513,6 +1513,7 @@ pub mod schedule {
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, DispatchError>;
 
@@ -1530,7 +1531,7 @@ pub mod schedule {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call> {
+	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
@@ -1542,6 +1543,7 @@ pub mod schedule {
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
+			origin: Origin,
 			call: Call
 		) -> Result<Self::Address, ()>;
 
@@ -1605,6 +1607,9 @@ pub trait OriginTrait: Sized {
 
 	/// Filter the call, if false then call is filtered out.
 	fn filter_call(&self, call: &Self::Call) -> bool;
+
+	/// Get the caller.
+	fn caller(&self) -> &Self::PalletsOrigin;
 }
 
 /// Trait to be used when types are exactly same.

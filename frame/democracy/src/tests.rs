@@ -31,7 +31,7 @@ use sp_runtime::{
 	testing::Header, Perbill,
 };
 use pallet_balances::{BalanceLock, Error as BalancesError};
-use frame_system::EnsureSignedBy;
+use frame_system::{EnsureSignedBy, EnsureRoot};
 
 mod cancellation;
 mod delegation;
@@ -123,8 +123,10 @@ parameter_types! {
 impl pallet_scheduler::Trait for Test {
 	type Event = Event;
 	type Origin = Origin;
+	type PalletsOrigin = OriginCaller;
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
+	type ScheduleOrigin = EnsureRoot<u64>;
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -196,6 +198,7 @@ impl super::Trait for Test {
 	type Scheduler = Scheduler;
 	type MaxVotes = MaxVotes;
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
+	type PalletsOrigin = OriginCaller;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

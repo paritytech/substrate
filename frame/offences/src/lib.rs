@@ -185,6 +185,15 @@ where
 
 		Ok(())
 	}
+
+	fn is_known_offence(offenders: &[T::IdentificationTuple], time_slot: &O::TimeSlot) -> bool {
+		let any_unknown = offenders.iter().any(|offender| {
+			let report_id = Self::report_id::<O>(time_slot, offender);
+			!<Reports<T>>::contains_key(&report_id)
+		});
+
+		!any_unknown
+	}
 }
 
 impl<T: Trait> Module<T> {
