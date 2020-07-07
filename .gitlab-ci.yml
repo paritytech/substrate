@@ -382,6 +382,8 @@ check-polkadot-companion-status:
     - /^[0-9]+$/                   # PRs
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
+  after_script:
+    - git rev-parse --abbrev-ref HEAD
 
 check-polkadot-companion-build:
   stage:                           build
