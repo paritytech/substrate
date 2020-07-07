@@ -611,7 +611,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Trait>::Call: IsSubType<Module<T>, T>,
+	<T as frame_system::Trait>::Call: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;

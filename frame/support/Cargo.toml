@@ -34,6 +34,7 @@ smallvec = "1.4.0"
 [dev-dependencies]
 pretty_assertions = "0.6.1"
 frame-system = { version = "2.0.0-rc4", path = "../system" }
+parity-util-mem = { version = "0.6.1", features = ["primitive-types"] }
 
 [features]
 default = ["std"]
