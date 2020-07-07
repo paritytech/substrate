@@ -1158,8 +1158,22 @@ macro_rules! impl_benchmark_test {
 /// First create an object that holds in the input parameters for the benchmark:
 ///
 /// ```ignore
-/// let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat);
+/// let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 /// ```
+///
+/// The `whitelist` is a `Vec<Vec<u8>>` of storage keys that you would like to skip for DB tracking. For example:
+///
+/// ```ignore
+/// let whitelist: Vec<Vec<u8>> = vec![
+/// 	// Block Number
+/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
+/// 	// Total Issuance
+/// 	hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec(),
+/// 	// Execution Phase
+/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec(),
+/// 	// Event Count
+/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec(),
+/// ];
 ///
 /// Then define a mutable local variable to hold your `BenchmarkBatch` object:
 ///
@@ -1167,22 +1181,23 @@ macro_rules! impl_benchmark_test {
 /// let mut batches = Vec::<BenchmarkBatch>::new();
 /// ````
 ///
-/// Then add the pallets you want to benchmark to this object, including the string
-/// you want to use target a particular pallet:
+/// Then add the pallets you want to benchmark to this object, using their crate name and generated
+/// module struct:
 ///
 /// ```ignore
-/// add_benchmark!(params, batches, b"balances", Balances);
-/// add_benchmark!(params, batches, b"identity", Identity);
-/// add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
+/// add_benchmark!(params, batches, pallet_balances, Balances);
+/// add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
+/// add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 /// ...
 /// ```
 ///
 /// At the end of `dispatch_benchmark`, you should return this batches object.
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:literal, $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
+		let name_string = stringify!($name).as_bytes();
 		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist) = $params;
-		if &pallet[..] == &$name[..] || &pallet[..] == &b"*"[..] {
+		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
 				for benchmark in $( $location )*::benchmarks().into_iter() {
 					$batches.push($crate::BenchmarkBatch {
@@ -1194,7 +1209,7 @@ macro_rules! add_benchmark {
 							repeat,
 							whitelist,
 						)?,
-						pallet: $name.to_vec(),
+						pallet: name_string.to_vec(),
 						benchmark: benchmark.to_vec(),
 					});
 				}
@@ -1208,7 +1223,7 @@ macro_rules! add_benchmark {
 						repeat,
 						whitelist,
 					)?,
-					pallet: $name.to_vec(),
+					pallet: name_string.to_vec(),
 					benchmark: benchmark.clone(),
 				});
 			}
