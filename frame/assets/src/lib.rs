@@ -87,7 +87,7 @@
 //! ```rust,ignore
 //! use pallet_assets as assets;
 //! use frame_support::{decl_module, dispatch, ensure};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: assets::Trait { }
 //!
@@ -135,7 +135,7 @@
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
 use sp_runtime::traits::{Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup};
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 use sp_runtime::traits::One;
 
 /// The module configuration trait.

@@ -70,7 +70,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -112,7 +112,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -147,7 +147,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
@@ -175,7 +175,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
+/// # use frame_system::{Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -292,7 +292,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<
 				$trait_instance: $trait_name $(<I>, I: $instantiable $(= $module_default_instance)?)?
 			>
-			for enum $call_type where origin: $origin_type, system = system
+			for enum $call_type where origin: $origin_type, system = frame_system
 			{ $( $where_ty: $where_bound ),* }
 			{}
 			{}
@@ -2339,7 +2339,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
