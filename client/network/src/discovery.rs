@@ -561,13 +561,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			while let Poll::Ready(ev) = kademlia.poll(cx, params) {
 				match ev {
 					NetworkBehaviourAction::GenerateEvent(ev) => match ev {
+						KademliaEvent::RoutingUpdated { peer, .. } => {
+							let ev = DiscoveryOut::Discovered(peer);
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
 						KademliaEvent::UnroutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::UnroutablePeer(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::RoutingUpdated { peer, .. } => {
-							let ev = DiscoveryOut::Discovered(peer);
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						KademliaEvent::RoutablePeer { .. } | KademliaEvent::PendingRoutablePeer { .. } => {
+							// We are not interested in these events at the moment.
 						}
 						KademliaEvent::QueryResult { result: QueryResult::GetClosestPeers(res), .. } => {
 							match res {
