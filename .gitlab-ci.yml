@@ -56,6 +56,7 @@ default:
     - kubernetes-parity-build
   environment:
     name: parity-build
+  interruptible:                   true
 
 .docker-env:                       &docker-env
   image:                           paritytech/ci-linux:production
@@ -157,6 +158,10 @@ cargo-audit:
 cargo-deny:
   stage:                           test
   <<:                              *docker-env
+  only:
+    - schedules
+    - tags
+    - web
   script:
     - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
   after_script:
@@ -258,7 +263,7 @@ test-wasmtime:
   variables:
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
+    # but still want to have debug assertions. 
     RUSTFLAGS: -Cdebug-assertions=y
     RUST_BACKTRACE: 1
   except:
@@ -284,7 +289,7 @@ test-runtime-benchmarks:
       - $DEPLOY_TAG
   script:
     - cd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
+    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --release --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
@@ -364,9 +369,8 @@ test-prometheus-alerting-rules:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-build
   script:
-    - curl -L https://github.com/prometheus/prometheus/releases/download/v2.19.0/prometheus-2.19.0.linux-amd64.tar.gz --output prometheus.tar.gz
-    - tar -xzf prometheus.tar.gz
-    - ./prometheus-*/promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
+    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml | promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        build
 

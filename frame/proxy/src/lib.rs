@@ -60,7 +60,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>
+		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Call<Self>>
 		+ IsType<<Self as frame_system::Trait>::Call>;
 
 	/// The currency mechanism.
@@ -134,6 +134,15 @@ decl_module! {
 
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
+
+		/// The base amount of currency needed to reserve for creating a proxy.
+		const ProxyDepositBase: BalanceOf<T> = T::ProxyDepositBase::get();
+
+		/// The amount of currency needed per proxy added.
+		const ProxyDepositFactor: BalanceOf<T> = T::ProxyDepositFactor::get();
+
+		/// The maximum amount of proxies allowed for a single account.
+		const MaxProxies: u16 = T::MaxProxies::get();
 
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.

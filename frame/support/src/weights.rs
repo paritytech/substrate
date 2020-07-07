@@ -136,7 +136,7 @@ use sp_runtime::{
 };
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 use sp_runtime::traits::SaturatedConversion;
-use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating}};
+use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
 use smallvec::{smallvec, SmallVec};
 
 /// Re-export priority as type
@@ -571,7 +571,7 @@ pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 /// An implementor should only implement the `polynomial` function.
 pub trait WeightToFeePolynomial {
 	/// The type that is returned as result from polynomial evaluation.
-	type Balance: BaseArithmetic + From<u32> + Copy;
+	type Balance: BaseArithmetic + From<u32> + Copy + Unsigned;
 
 	/// Returns a polynomial that describes the weight to fee conversion.
 	///
@@ -611,7 +611,7 @@ pub trait WeightToFeePolynomial {
 pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> WeightToFeePolynomial for IdentityFee<T> where
-	T: BaseArithmetic + From<u32> + Copy
+	T: BaseArithmetic + From<u32> + Copy + Unsigned
 {
 	type Balance = T;
 
