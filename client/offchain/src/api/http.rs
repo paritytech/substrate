@@ -66,6 +66,7 @@ pub fn http(shared_client: SharedClient) -> (HttpApi, HttpWorker) {
 		from_api,
 		http_client: shared_client.0,
 		requests: Vec::new(),
+		ready_ids: None,
 	};
 
 	(api, engine)
@@ -567,6 +568,8 @@ pub struct HttpWorker {
 	http_client: Arc<HyperClient<HttpsConnector<client::HttpConnector>, Body>>,
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
+	/// Broadcasts HTTP request IDs ready to progress.
+	ready_ids: Option<TracingUnboundedSender<HttpRequestId>>,
 }
 
 /// HTTP request being processed by the worker.
@@ -580,6 +583,12 @@ enum HttpWorkerRequest {
 		/// Channel to the [`HttpApi`] where we send the chunks to.
 		tx: mpsc::Sender<Result<hyper::body::Bytes, hyper::Error>>,
 	},
+}
+
+impl HttpWorker {
+	pub(super) fn ready_id_sender(&mut self, sender: TracingUnboundedSender<HttpRequestId>) {
+		self.ready_ids = Some(sender);
+	}
 }
 
 impl Future for HttpWorker {
@@ -622,6 +631,13 @@ impl Future for HttpWorker {
 						body: body_rx,
 					});
 
+					// Make sure to announce that HTTP response can be further
+					// processed.
+					// FIXME: Do that in every case and not only when receiving
+					// the first part of the response.
+					if let Some(sender) = &mut me.ready_ids {
+						let _ = sender.unbounded_send(id);
+					}
 					me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx: body_tx }));
 					cx.waker().wake_by_ref();	// reschedule in order to poll the new future
 					continue
