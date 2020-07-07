@@ -575,8 +575,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// substream has been closed.
 	///
 	/// This operation is atomic in the sense that either all or none of the notifications have
-	/// been enqueued. This is the case even if the operation is interrupted by dropping the
-	/// `Future`.
+	/// been enqueued. In particular, it is guaranteed that no notifications have been transmitted
+	/// if the operation is interrupted by dropping the `Future`.
 	///
 	/// An error is returned if there exists no open notifications substream with that combination
 	/// of peer and protocol, or if the remote has asked to close the notifications substream.
