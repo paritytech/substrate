@@ -556,7 +556,11 @@ pub trait Externalities: Send {
 	) -> Result<usize, HttpError>;
 
 	/// TODO:
-	fn pollable_wait(&mut self, ids: &[PollableId]);
+	fn pollable_wait(
+		&mut self,
+		ids: &[PollableId],
+		deadline: Option<Timestamp>
+	) -> Option<PollableId>;
 }
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
@@ -636,8 +640,12 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn pollable_wait(&mut self, ids: &[PollableId]) {
-		(&mut **self).pollable_wait(ids)
+	fn pollable_wait(
+		&mut self,
+		ids: &[PollableId],
+		deadline: Option<Timestamp>
+	) -> Option<PollableId> {
+		(&mut **self).pollable_wait(ids, deadline)
 	}
 }
 
@@ -758,9 +766,14 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
 
-	fn pollable_wait(&mut self, ids: &[PollableId]) {
-		self.check(Capability::Http, "pollable_wait");
-		self.externalities.pollable_wait(ids)
+	fn pollable_wait(
+		&mut self,
+		ids: &[PollableId],
+		deadline: Option<Timestamp>
+	) -> Option<PollableId> {
+		// NOTE: Waiting on a pollable does not require any capability - it
+		// should be enforced on creation of a pollable itself (e.g. HTTP request).
+		self.externalities.pollable_wait(ids, deadline)
 	}
 }
 

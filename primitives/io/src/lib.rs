@@ -964,10 +964,14 @@ pub trait Offchain {
 			.map(|r| r as u32)
 	}
 
-	fn pollable_wait(&mut self, ids: &[PollableId]) {
+	fn pollable_wait(
+		&mut self,
+		ids: &[PollableId],
+		deadline: Option<Timestamp>
+	) -> Option<PollableId> {
 		self.extension::<OffchainExt>()
 			.expect("pollable_wait can be called only in the offchain worker context")
-			.pollable_wait(ids)
+			.pollable_wait(ids, deadline)
 	}
 }
 

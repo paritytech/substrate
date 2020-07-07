@@ -377,7 +377,11 @@ impl offchain::Externalities for TestOffchainExt {
 		}
 	}
 
-	fn pollable_wait(&mut self, ids: &[PollableId]) {
+	fn pollable_wait(
+		&mut self,
+		ids: &[PollableId],
+		deadline: Option<Timestamp>
+	) -> Option<PollableId> {
 		let state = self.0.read();
 
 		use std::convert::TryFrom;
@@ -385,9 +389,12 @@ impl offchain::Externalities for TestOffchainExt {
 			match state.requests.get(&id) {
 				Some(req) if req.response.is_none() =>
 					panic!("No `response` provided for request with id: {:?}", id),
-				_ => (),
+				Some(..) => return Some(id.into()),
+				None => {},
 			}
 		}
+
+		None
 	}
 }
 

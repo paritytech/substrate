@@ -18,6 +18,7 @@ macro_rules! pin_mut {
     )* }
 }
 
+use sp_core::offchain::{PollableId, PollableKind};
 use sp_std::{rc::Rc, collections::btree_map::BTreeMap, vec::Vec};
 use sp_std::cell::RefCell;
 
@@ -28,34 +29,42 @@ use core::{task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable}};
 
 use spin::Mutex;
 
-pub(crate) type MessageId = u64;
+pub(crate) type MessageId = PollableId;
 
 // TODO: Decode actual events
 pub(crate) struct Message(Vec<u8>);
 
-fn epoll_peek(interest_list: &[MessageId]) -> MessageId {
-    unimplemented!()
+fn epoll_peek(interest_list: &[MessageId]) -> Option<MessageId> {
+    let deadline = super::offchain::timestamp();
+    super::offchain::pollable_wait(interest_list, Some(deadline))
 }
 
 fn epoll_wait(interest_list: &[MessageId]) -> MessageId {
-    unimplemented!()
+    super::offchain::pollable_wait(interest_list, None)
+        .expect(
+            "pollable_wait with None deadline should block indefinitely \
+            until we get a response; qed"
+        )
 }
 
 fn decode(id: MessageId) -> Message {
-    unimplemented!()
+    // TODO: Handle FFI boundary and output bytes
+    match id.kind() {
+        PollableKind::Http | _ => unimplemented!(),
+    }
 }
 
 pub(crate) fn next_notification(interest_list: &[MessageId], block: bool) -> Option<(Message, MessageId, usize)> {
-    let id = if !block { epoll_peek(interest_list) } else { epoll_wait(interest_list) };
+    let id = if !block {
+        epoll_peek(interest_list)
+    } else {
+        Some(epoll_wait(interest_list))
+    }?;
 
-    // TODO: Handle FFI boundary and output bytes
-    Some((
-        decode(id),
-        // TODO: Fetch message_id from interest_list
-        0,
-        // TODO: Fetch index from interest_list
-        0,
-    ))
+    let pos = interest_list.iter().position(|&x| x == id)
+        .expect("pollable API should only return an ID from the interest list; qed");
+
+    Some((decode(id), id, pos))
 }
 
 /// Registers a message ID and a waker. The `block_on` function will
@@ -209,7 +218,7 @@ lazy_static::lazy_static! {
 struct BlockOnState {
     /// List of messages for which we are waiting for a response. A pointer to this list is passed
     /// to the kernel.
-    message_ids: Vec<u64>,
+    message_ids: Vec<MessageId>,
 
     /// List whose length is identical to [`BlockOnState::messages_ids`]. For each element in
     /// [`BlockOnState::messages_ids`], contains a corresponding `Waker` that must be waken up

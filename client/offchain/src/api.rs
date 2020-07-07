@@ -28,8 +28,10 @@ use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	self, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
-	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, PollableId, StorageKind,
+	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, PollableId, PollableKind,
+	StorageKind,
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 pub use sp_offchain::STORAGE_PREFIX;
 pub use http::SharedClient;
 
@@ -55,6 +57,9 @@ pub(crate) struct Api<Storage> {
 	is_validator: bool,
 	/// Everything HTTP-related is handled by a different struct.
 	http: http::HttpApi,
+	/// Stream of HTTP request IDs that are ready to be processed. Used with
+	/// the pollable API.
+	http_ready_ids: TracingUnboundedReceiver<HttpRequestId>,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -181,14 +186,33 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
-	fn pollable_wait(&mut self, ids: &[PollableId]) {
-		use sp_core::offchain::PollableKind;
-		// FIXME: Handle more pollable kinds
+	fn pollable_wait(
+		&mut self,
+		ids: &[PollableId],
+		deadline: Option<Timestamp>
+	) -> Option<PollableId> {
+		// TODO: Handle more pollable kinds
 		assert!(ids.iter().all(|x| x.kind() == PollableKind::Http));
 
-		let ids: Result<Vec<HttpRequestId>, _> = ids.iter().copied().map(TryFrom::try_from).collect();
-		if let Ok(ids) = ids {
-			let _ = self.http.response_wait(&ids, None);
+		let mut deadline = timestamp::deadline_to_future(deadline);
+
+		use futures::StreamExt;
+
+		let simplistic_stream = self.http_ready_ids
+			.by_ref()
+			.skip_while(|&x| {
+				let x = PollableId::try_from(x).expect("We verified above that all ids here are of HTTP kind; qed");
+				futures::future::ready(ids.iter().find(|&id| *id != x).is_some())
+			})
+			.into_future();
+
+		match futures::executor::block_on(futures::future::select(simplistic_stream, &mut deadline)) {
+			futures::future::Either::Left(((head, _), _)) => Some(
+				head.expect("The stream won't finish until HTTP worker is stopped \
+					but it won't as long as there is relevant OCW running")
+					.into()
+			),
+			futures::future::Either::Right(..) => None,
 		}
 	}
 }
@@ -276,11 +300,16 @@ impl AsyncApi {
 	) -> (Api<S>, Self) {
 		let (http_api, http_worker) = http::http(shared_client);
 
+		let (send, recv) = tracing_unbounded("mpsc_http_ready_ids");
+		let mut http_worker = http_worker;
+		http_worker.ready_id_sender(send);
+
 		let api = Api {
 			db,
 			network_state,
 			is_validator,
 			http: http_api,
+			http_ready_ids: recv,
 		};
 
 		let async_api = Self {

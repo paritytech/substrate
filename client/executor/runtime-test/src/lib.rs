@@ -260,7 +260,7 @@ sp_core::wasm_export_functions! {
 			// let status = sp_io::offchain::http_response_wait(&[id], None);
 
 			let id = sp_core::offchain::PollableId::from_parts(PollableKind::Http, id.0 as u32);
-			sp_io::offchain::pollable_wait(&[id]);
+			sp_io::offchain::pollable_wait(&[id], None);
 
 			Some(())
 		};
