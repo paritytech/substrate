@@ -3213,20 +3213,9 @@ dependencies = [
 
 [[package]]
 name = "memory-db"
-version = "0.21.2"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63029dea45031f949a79ff15430f11112bfe86a980b657c165cd4043fb4d9203"
-dependencies = [
- "hash-db",
- "hashbrown 0.8.0",
- "parity-util-mem 0.7.0",
-]
-
-[[package]]
-name = "memory-db"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89fbfa526b4b3bb77997c014e1161410c92c28c9bd811fd562be6e5f4c69fa77"
+checksum = "0777fbb396f666701d939e9b3876c18ada6b3581257d88631f2590bc366d8ebe"
 dependencies = [
  "hash-db",
  "hashbrown 0.8.0",
@@ -8148,7 +8137,7 @@ dependencies = [
  "criterion 0.2.11",
  "hash-db",
  "hex-literal",
- "memory-db 0.22.0",
+ "memory-db",
  "parity-scale-codec",
  "sp-core",
  "sp-runtime",
@@ -8458,7 +8447,7 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "log",
- "memory-db 0.22.0",
+ "memory-db",
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -9220,14 +9209,14 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 
 [[package]]
 name = "trie-bench"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e6aa610cca82513f55723cbb7156b89fbf8768b7931bb14d43edf2ae1dced7f"
+checksum = "24987a413863acfa081fb75051d0c2824cd4c450e2f0a7e03dca93ac989775fc"
 dependencies = [
  "criterion 0.2.11",
  "hash-db",
  "keccak-hasher",
- "memory-db 0.21.2",
+ "memory-db",
  "parity-scale-codec",
  "trie-db",
  "trie-root",
