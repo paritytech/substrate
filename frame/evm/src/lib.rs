@@ -40,7 +40,8 @@ use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
 use sha3::{Digest, Keccak256};
-use evm::{ExitReason, ExitSucceed, ExitError, Config};
+pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
+use evm::Config;
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
