@@ -720,27 +720,29 @@ impl<Block: BlockT> BabeLink<Block> {
 }
 
 /// A verifier for Babe blocks.
-pub struct BabeVerifier<Block: BlockT, Client> {
+pub struct BabeVerifier<Block: BlockT, Client, SelectChain> {
 	client: Arc<Client>,
+	select_chain: SelectChain,
 	inherent_data_providers: sp_inherents::InherentDataProviders,
 	config: Config,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	time_source: TimeSource,
 }
 
-impl<Block, Client> BabeVerifier<Block, Client>
-	where
-		Block: BlockT,
-		Client: HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
-		Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+impl<Block, Client, SelectChain> BabeVerifier<Block, Client, SelectChain>
+where
+	Block: BlockT,
+	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
+	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error>
+		+ BabeApi<Block, Error = sp_blockchain::Error>,
+	SelectChain: sp_consensus::SelectChain<Block>,
 {
 	fn check_inherents(
 		&self,
 		block: Block,
 		block_id: BlockId<Block>,
 		inherent_data: InherentData,
-	) -> Result<(), Error<Block>>
-	{
+	) -> Result<(), Error<Block>> {
 		let inherent_res = self.client.runtime_api().check_inherents(
 			&block_id,
 			block,
@@ -757,13 +759,95 @@ impl<Block, Client> BabeVerifier<Block, Client>
 			Ok(())
 		}
 	}
+
+	fn check_and_report_equivocation(
+		&self,
+		slot_now: SlotNumber,
+		slot: SlotNumber,
+		header: &Block::Header,
+		author: &AuthorityId,
+		origin: &BlockOrigin,
+	) -> Result<(), Error<Block>> {
+		// don't report any equivocations during initial sync
+		// as they are most likely stale.
+		if *origin == BlockOrigin::NetworkInitialSync {
+			return Ok(());
+		}
+
+		// check if authorship of this header is an equivocation and return a proof if so.
+		let equivocation_proof =
+			match check_equivocation(&*self.client, slot_now, slot, header, author)
+				.map_err(Error::Client)?
+			{
+				Some(proof) => proof,
+				None => return Ok(()),
+			};
+
+		info!(
+			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+			author,
+			slot,
+			equivocation_proof.first_header.hash(),
+			equivocation_proof.second_header.hash(),
+		);
+
+		// get the best block on which we will build and send the equivocation report.
+		let best_id = self
+			.select_chain
+			.best_chain()
+			.map(|h| BlockId::Hash(h.hash()))
+			.map_err(|e| Error::Client(e.into()))?;
+
+		// generate a key ownership proof. we start by trying to generate the
+		// key owernship proof at the parent of the equivocating header, this
+		// will make sure that proof generation is successful since it happens
+		// during the on-going session (i.e. session keys are available in the
+		// state to be able to generate the proof). this might fail if the
+		// equivocation happens on the first block of the session, in which case
+		// its parent would be on the previous session. if generation on the
+		// parent header fails we try with best block as well.
+		let generate_key_owner_proof = |block_id: &BlockId<Block>| {
+			self.client
+				.runtime_api()
+				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
+				.map_err(Error::Client)
+		};
+
+		let parent_id = BlockId::Hash(*header.parent_hash());
+		let key_owner_proof = match generate_key_owner_proof(&parent_id)? {
+			Some(proof) => proof,
+			None => match generate_key_owner_proof(&best_id)? {
+				Some(proof) => proof,
+				None => {
+					debug!(target: "babe", "Equivocation offender is not part of the authority set.");
+					return Ok(());
+				}
+			},
+		};
+
+		// submit equivocation report at best block.
+		self.client
+			.runtime_api()
+			.submit_report_equivocation_unsigned_extrinsic(
+				&best_id,
+				equivocation_proof,
+				key_owner_proof,
+			)
+			.map_err(Error::Client)?;
+
+		info!(target: "babe", "Submitted equivocation report for author {:?}", author);
+
+		Ok(())
+	}
 }
 
-impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
+impl<Block, Client, SelectChain> Verifier<Block> for BabeVerifier<Block, Client, SelectChain>
+where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-	+ Send + Sync + AuxStore + ProvideCache<Block>,
+		+ Send + Sync + AuxStore + ProvideCache<Block>,
 	Client::Api: BlockBuilderApi<Block, Error = sp_blockchain::Error> + BabeApi<Block, Error = sp_blockchain::Error>,
+	SelectChain: sp_consensus::SelectChain<Block>,
 {
 	fn verify(
 		&mut self,
@@ -824,28 +908,18 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let babe_pre_digest = verified_info.pre_digest.as_babe_pre_digest()
 					.expect("check_header always returns a pre-digest digest item; qed");
-
 				let slot_number = babe_pre_digest.slot_number();
 
-				let author = verified_info.author;
-
 				// the header is valid but let's check if there was something else already
-				// proposed at the same slot by the given author
-				if let Some(equivocation_proof) = check_equivocation(
-					&*self.client,
+				// proposed at the same slot by the given author. if there was, we will
+				// report the equivocation to the runtime.
+				self.check_and_report_equivocation(
 					slot_now,
-					babe_pre_digest.slot_number(),
+					slot_number,
 					&header,
-					&author,
-				).map_err(|e| e.to_string())? {
-					info!(
-						"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
-						author,
-						babe_pre_digest.slot_number(),
-						equivocation_proof.fst_header().hash(),
-						equivocation_proof.snd_header().hash(),
-					);
-				}
+					&verified_info.author,
+					&origin,
+				)?;
 
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
@@ -1284,12 +1358,13 @@ pub fn block_import<Client, Block: BlockT, I>(
 ///
 /// The block import object provided must be the `BabeBlockImport` or a wrapper
 /// of it, otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, Inner>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 	babe_link: BabeLink<Block>,
 	block_import: Inner,
 	justification_import: Option<BoxJustificationImport<Block>>,
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client>,
+	select_chain: SelectChain,
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
@@ -1299,11 +1374,13 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
 	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block, Error = sp_blockchain::Error>,
+	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 {
 	register_babe_inherent_data_provider(&inherent_data_providers, babe_link.config.slot_duration)?;
 
 	let verifier = BabeVerifier {
 		client,
+		select_chain,
 		inherent_data_providers,
 		config: babe_link.config,
 		epoch_changes: babe_link.epoch_changes,

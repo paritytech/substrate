@@ -22,11 +22,11 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionMode
 use crate::BenchmarkResults;
 
 pub struct Analysis {
-	base: u128,
-	slopes: Vec<u128>,
-	names: Vec<String>,
-	value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
-	model: Option<RegressionModel>,
+	pub base: u128,
+	pub slopes: Vec<u128>,
+	pub names: Vec<String>,
+	pub value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
+	pub model: Option<RegressionModel>,
 }
 
 pub enum BenchmarkSelector {
