@@ -43,7 +43,7 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
 	Parameter,
 };
-use frame_system::{self as system, ensure_signed, DigestOf};
+use frame_system::{ensure_signed, DigestOf};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::Zero,
