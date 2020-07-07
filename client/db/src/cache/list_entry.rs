@@ -117,9 +117,13 @@ impl<Block: BlockT, T: CacheItemT> StorageEntry<Block, T> {
 
 #[cfg(test)]
 mod tests {
-	use crate::cache::list_cache::tests::test_id;
 	use crate::cache::list_storage::tests::{DummyStorage, FaultyStorage};
+	use substrate_test_runtime_client::runtime::{H256, Block};
 	use super::*;
+
+	fn test_id(number: u64) -> ComplexBlockId<Block> {
+		ComplexBlockId::new(H256::from_low_u64_be(number), number)
+	}
 
 	#[test]
 	fn entry_try_update_works() {

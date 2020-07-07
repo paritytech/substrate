@@ -30,7 +30,7 @@ use frame_support::{
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
-use sp_runtime::{testing::Digest, traits::Header};
+use sp_runtime::testing::Digest;
 
 #[test]
 fn authorities_change_logged() {
