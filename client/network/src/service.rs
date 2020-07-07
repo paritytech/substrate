@@ -589,7 +589,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// # Usage
 	///
-	/// This method waits until there space is available in the buffer of messages towards the
+	/// This method waits until there is space available in the buffer of messages towards the
 	/// given peer. If the peer processes notifications at a slower rate than we send them, this
 	/// buffer will quickly fill up.
 	///
@@ -626,7 +626,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		target: PeerId,
 		engine_id: ConsensusEngineId,
 		num_slots: usize,
-	) -> Result<NotificationsBufferSlots, SendNotificationError> {
+	) -> Result<NotificationsBufferSlots, SendNotificationsError> {
 		todo!()
 	}
 
@@ -895,15 +895,15 @@ impl<'a> NotificationsBufferSlots<'a> {
 	///
 	/// Panics if the number of items in the `notifications` iterator is different from the number
 	/// of reserved slots.
-	pub send(self, notifications: impl Iterator<Item = Vec<u8>>) {
+	pub send(self, notifications: impl Iterator<Item = impl Into<Vec<u8>>>) {
 		todo!()
 	}
 }
 
 /// Error returned by [`NetworkService::send_notification`].
 #[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum SendNotificationError {
-	/// No open notifications substream exists with this combination of peer and protocol.
+pub enum SendNotificationsError {
+	/// No open notifications substream exists with the provided combination of peer and protocol.
 	NoSubstream,
 }
 
