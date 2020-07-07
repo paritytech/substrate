@@ -156,19 +156,14 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
         // We poll the future continuously until it is either Ready, or the waker stops being
         // invoked during the polling.
         loop {
-            if let Poll::Ready(val) = Future::poll(future.as_mut(), &mut context) {
-                return val;
-            }
-
-            // If the waker has been used during the polling of this future,
-            // then we have to poll again.
-            let was_woken = *woken_up.0.borrow();
-            *woken_up.0.borrow_mut() = false;
-
-            if was_woken {
-                continue;
-            } else {
-                break;
+            match future.as_mut().poll(&mut context) {
+                Poll::Ready(value) => return value,
+                // If the waker has been used during the polling of this future,
+                // then we have to poll again.
+                Poll::Pending if mem::replace(&mut *woken_up.0.borrow_mut(), false) => {},
+                // Otherwise, we need to wait for an external notification for
+                // this future to make progress.
+                Poll::Pending => break,
             }
         }
 
