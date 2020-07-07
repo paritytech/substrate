@@ -541,7 +541,7 @@ mod tests {
 				.max_for_non_mandatory(1024)
 				.base_block(10)
 				.base_extrinsic(5, frame_system::weights::ExtrinsicDispatchClass::All)
-				.build();
+				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
 			write: 100,

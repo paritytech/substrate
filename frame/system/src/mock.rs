@@ -62,7 +62,7 @@ parameter_types! {
 			DispatchClass::Operational,
 		)
 		.avg_block_initialization(Perbill::from_percent(0))
-		.build();
+		.build_or_panic();
 	pub RuntimeBlockLength: weights::BlockLength =
 		weights::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }

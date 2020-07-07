@@ -159,7 +159,7 @@ parameter_types! {
 			DispatchClass::Operational
 		)
 		.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
-		.build();
+		.build_or_panic();
 }
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
@@ -1194,6 +1194,6 @@ mod tests {
 
 	#[test]
 	fn weights_are_valid() {
-		RuntimeBlockWeights::get().validate()
+		RuntimeBlockWeights::get().validate().unwrap();
 	}
 }

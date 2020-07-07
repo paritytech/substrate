@@ -565,7 +565,7 @@ mod tests {
 					EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()),
 					frame_system::weights::ExtrinsicDispatchClass::All,
 				)
-				.build()
+				.build_or_panic()
 		}
 	}
 

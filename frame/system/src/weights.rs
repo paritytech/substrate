@@ -162,6 +162,32 @@ impl<T: Copy> ForDispatchClass<T> {
 		}
 	}
 }
+#[derive(Default, RuntimeDebug)]
+pub struct ValidationErrors {
+	pub has_errors: bool,
+	#[cfg(feature = "std")]
+	pub errors: Vec<String>,
+}
+
+#[cfg(feature = "std")]
+macro_rules! error_assert {
+	($cond : expr, $err : expr, $format : expr $(, $params: expr )*) => {
+		if !$cond {
+			$err.has_errors = true;
+			$err.errors.push(format!($format $(, &$params )*));
+		}
+	}
+}
+#[cfg(not(feature = "std"))]
+macro_rules! error_assert {
+	($cond : expr, $err : expr, $format : expr $(, $params: expr )*) => {
+		if !$cond {
+			$err.has_errors = true;
+		}
+	}
+}
+
+pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 
 /// A ratio of `Normal` dispatch class within block, used as default value for
 /// `BlockWeight` and `BlockLength`. The `Default` impls are provided mostly for convenience
@@ -210,30 +236,59 @@ impl Default for BlockWeights {
 
 impl BlockWeights {
 	/// Verifies correctness of this `BlockWeights` object.
-	pub fn validate(&self) {
+	pub fn validate(self) -> ValidationResult {
 		fn or_max(w: Option<Weight>) -> Weight {
 			w.unwrap_or_else(|| Weight::max_value())
 		}
+		let mut error = ValidationErrors::default();
 
-		// TODO [ToDr] Return a Result but only in std
 		for class in &DispatchClass::all() {
 			let class = *class;
 			let max_for_class = or_max(self.max_for_class.get(class));
 			let base_extrinsic = self.base_extrinsic.get(class);
 			let reserved = or_max(self.reserved.get(class));
 			// Make sure that if total is set it's greater than base_block && base_extrinsic
-			assert!(
+			error_assert!(
 				(max_for_class > self.base_block && max_for_class > base_extrinsic)
-				|| max_for_class == 0
+				|| max_for_class == 0,
+				&mut error,
+				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
+				class, max_for_class, self.base_block, base_extrinsic
 			);
 			// Max extrinsic can't be greater than max_for_class.
-			assert!(self.max_extrinsic.get(class).unwrap_or(0) <= max_for_class - base_extrinsic);
+			error_assert!(
+				self.max_extrinsic.get(class).unwrap_or(0) <= max_for_class - base_extrinsic,
+				&mut error,
+				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
+				class, self.max_extrinsic.get(class), max_for_class - base_extrinsic
+			);
 			// Make sure that if reserved is set it's greater than base_extrinsic.
-			assert!(reserved > base_extrinsic || reserved == 0);
+			error_assert!(
+				reserved > base_extrinsic || reserved == 0,
+				&mut error,
+				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
+				class, reserved, base_extrinsic
+			);
 			// Make sure max block is greater than max_for_class if it's set.
-			assert!(self.max_block >= self.max_for_class.get(class).unwrap_or(0));
+			error_assert!(
+				self.max_block >= self.max_for_class.get(class).unwrap_or(0),
+				&mut error,
+				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
+				class, self.max_block, self.max_for_class.get(class)
+			);
 			// Make sure we can fit at least one extrinsic.
-			assert!(self.max_block > base_extrinsic + self.base_block);
+			error_assert!(
+				self.max_block > base_extrinsic + self.base_block,
+				&mut error,
+				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
+				class, self.max_block, base_extrinsic + self.base_block
+			);
+		}
+
+		if error.has_errors {
+			Err(error)
+		} else {
+			Ok(self)
 		}
 	}
 
@@ -243,7 +298,10 @@ impl BlockWeights {
 	/// Note there is no reservation for `Operational` class, so this constructor
 	/// is not suitable for production deployments.
 	pub fn simple_max(block_weight: Weight) -> Self {
-		Self::builder().max_for_non_mandatory(block_weight).build()
+		Self::builder()
+			.max_for_non_mandatory(block_weight)
+			.build()
+			.expect("We only specify max_for_class and leave base values as defaults; qed")
 	}
 
 	/// Create a sensible default weights system given only expected maximal block weight and the
@@ -263,6 +321,7 @@ impl BlockWeights {
 			.reserved(expected_block_weight - normal_weight, DispatchClass::Operational)
 			.avg_block_initialization(Perbill::from_percent(10))
 			.build()
+			.expect("Sensible defaults are tested to be valid; qed")
 	}
 
 	/// Start constructing new `BlockWeights` object.
@@ -364,8 +423,7 @@ impl BlockWeightsBuilder {
 	}
 
 	/// Construct the `BlockWeights` object.
-	// TODO [ToDr] Return a Result here
-	pub fn build(self) -> BlockWeights {
+	pub fn build(self) -> ValidationResult {
 		use sp_runtime::traits::Saturating;
 		// compute max extrinsic size
 		let Self { mut weights, init_cost } = self;
@@ -387,9 +445,16 @@ impl BlockWeightsBuilder {
 		}
 
 		// Validate the result
-		weights.validate();
+		weights.validate()
+	}
 
-		weights
+	/// Construct the `BlockWeights` object or panic if it's invalid.
+	///
+	/// This is a convenience method to be called whenever you construct a runtime.
+	pub fn build_or_panic(self) -> BlockWeights {
+		self.build().expect(
+			"Builder finished with `build_or_panic`; The panic is expected if runtime weights are not correct"
+		)
 	}
 }
 
@@ -399,6 +464,8 @@ mod tests {
 
 	#[test]
 	fn default_weights_are_valid() {
-		BlockWeights::default().validate()
+		BlockWeights::default()
+			.validate()
+			.unwrap();
 	}
 }
