@@ -787,7 +787,7 @@ dependencies = [
  "log",
  "regalloc",
  "serde",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "target-lexicon",
  "thiserror",
 ]
@@ -825,7 +825,7 @@ checksum = "e45f82e3446dd1ebb8c2c2f6a6b0e6cd6cd52965c7e5f7b1b35e9a9ace31ccde"
 dependencies = [
  "cranelift-codegen",
  "log",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "target-lexicon",
 ]
 
@@ -1246,6 +1246,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethbloom"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71a6567e6fd35589fea0c63b94b4cf2e55573e413901bdbe60ab15cf0e25e5df"
+dependencies = [
+ "crunchy",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde 0.3.0",
+ "tiny-keccak 2.0.2",
+]
+
+[[package]]
+name = "ethereum-types"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "473aecff686bd8e7b9db0165cbbb53562376b39bf35b427f0c60446a9e1634b0"
+dependencies = [
+ "ethbloom",
+ "fixed-hash",
+ "impl-rlp",
+ "impl-serde 0.3.0",
+ "primitive-types",
+ "uint",
+]
+
+[[package]]
 name = "evm"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,6 +1481,7 @@ dependencies = [
 name = "frame-benchmarking-cli"
 version = "2.0.0-rc4"
 dependencies = [
+ "Inflector",
  "frame-benchmarking",
  "parity-scale-codec",
  "sc-cli",
@@ -1509,10 +1537,11 @@ dependencies = [
  "log",
  "once_cell",
  "parity-scale-codec",
+ "parity-util-mem",
  "paste",
  "pretty_assertions",
  "serde",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "sp-arithmetic",
  "sp-core",
  "sp-inherents",
@@ -1926,7 +1955,7 @@ dependencies = [
  "byteorder",
  "fallible-iterator",
  "indexmap",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "stable_deref_trait",
 ]
 
@@ -2570,7 +2599,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e763b2a9b500ba47948061d1e8bc3b5f03a8a1f067dbcf822a4d2c84d2b54a3a"
 dependencies = [
  "parity-util-mem",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
 ]
 
 [[package]]
@@ -2599,7 +2628,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "regex",
  "rocksdb",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
 ]
 
 [[package]]
@@ -2719,7 +2748,7 @@ dependencies = [
  "parity-multiaddr 0.9.1",
  "parking_lot 0.10.2",
  "pin-project",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "wasm-timer",
 ]
 
@@ -2750,7 +2779,7 @@ dependencies = [
  "ring",
  "rw-stream-sink",
  "sha2",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "thiserror",
  "unsigned-varint 0.4.0",
  "void",
@@ -2834,7 +2863,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "wasm-timer",
 ]
 
@@ -2858,7 +2887,7 @@ dependencies = [
  "prost-build",
  "rand 0.7.3",
  "sha2",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "uint",
  "unsigned-varint 0.4.0",
  "void",
@@ -2882,7 +2911,7 @@ dependencies = [
  "log",
  "net2",
  "rand 0.7.3",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "void",
  "wasm-timer",
 ]
@@ -2994,7 +3023,7 @@ dependencies = [
  "libp2p-core 0.20.0",
  "log",
  "rand 0.7.3",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "void",
  "wasm-timer",
 ]
@@ -3371,7 +3400,7 @@ dependencies = [
  "futures 0.3.5",
  "log",
  "pin-project",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "unsigned-varint 0.4.0",
 ]
 
@@ -4092,9 +4121,15 @@ dependencies = [
 name = "pallet-babe"
 version = "2.0.0-rc4"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-offences",
  "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
  "serde",
@@ -4105,6 +4140,7 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
  "sp-timestamp",
@@ -4585,6 +4621,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "substrate-test-utils",
 ]
 
 [[package]]
@@ -4636,10 +4673,12 @@ dependencies = [
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
+ "rand 0.7.3",
  "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-std",
 ]
 
@@ -4775,7 +4814,7 @@ dependencies = [
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
  "serde",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -4987,11 +5026,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6e2583649a3ca84894d1d71da249abcfda54d5aca24733d72ca10d0f02361c"
 dependencies = [
  "cfg-if",
+ "ethereum-types",
+ "hashbrown",
  "impl-trait-for-tuples",
+ "lru",
  "parity-util-mem-derive",
  "parking_lot 0.10.2",
  "primitive-types",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "winapi 0.3.8",
 ]
 
@@ -5073,7 +5115,7 @@ dependencies = [
  "cloudabi",
  "libc",
  "redox_syscall",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "winapi 0.3.8",
 ]
 
@@ -5783,7 +5825,7 @@ checksum = "b27b256b41986ac5141b37b8bbba85d314fbf546c182eb255af6720e07e4f804"
 dependencies = [
  "log",
  "rustc-hash",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
 ]
 
 [[package]]
@@ -6082,6 +6124,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
  "sp-trie",
@@ -6430,6 +6473,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
@@ -6609,7 +6653,6 @@ dependencies = [
  "futures 0.3.5",
  "log",
  "parity-util-mem",
- "parking_lot 0.10.2",
  "sc-client-api",
  "sc-network",
  "sp-blockchain",
@@ -7400,9 +7443,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7cb5678e1615754284ec264d9bb5b4c27d2018577fd90ac0ceb578591ed5ee4"
+checksum = "3757cb9d89161a2f24e1cf78efa0c1fcff485d18e3f55e0aa3480824ddaa0f3f"
 
 [[package]]
 name = "smol"
@@ -7677,6 +7720,7 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
+ "sp-consensus-slots",
  "sp-consensus-vrf",
  "sp-core",
  "sp-inherents",
@@ -7694,6 +7738,14 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "sp-consensus-slots"
+version = "0.8.0-rc4"
+dependencies = [
+ "parity-scale-codec",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -8056,7 +8108,7 @@ dependencies = [
  "parking_lot 0.10.2",
  "pretty_assertions",
  "rand 0.7.3",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
  "sp-core",
  "sp-externalities",
  "sp-panic-handler",
@@ -8418,8 +8470,10 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.0-rc4"
 dependencies = [
+ "futures 0.1.29",
  "futures 0.3.5",
  "hash-db",
+ "hex",
  "parity-scale-codec",
  "sc-client-api",
  "sc-client-db",
@@ -9231,7 +9285,7 @@ dependencies = [
  "hashbrown",
  "log",
  "rustc-hex",
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
 ]
 
 [[package]]
@@ -9335,7 +9389,7 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5479532badd04e128284890390c1e876ef7a993d0570b3597ae43dfa1d59afa4"
 dependencies = [
- "smallvec 1.4.0",
+ "smallvec 1.4.1",
 ]
 
 [[package]]
