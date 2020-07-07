@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, BalanceOf};
+use crate::{Schedule, Trait, CodeHash, BalanceOf, Error};
 use crate::exec::{
 	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags,
 };
@@ -25,6 +25,7 @@ use crate::wasm::env_def::ConvertibleToWasm;
 use sp_sandbox;
 use parity_wasm::elements::ValueType;
 use frame_system;
+use frame_support::dispatch::DispatchError;
 use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
@@ -83,22 +84,23 @@ struct ReturnData {
 	data: Vec<u8>,
 }
 
-/// Enumerates all possible *special* trap conditions.
+/// Enumerates all possible reasons why a trap was generated.
 ///
-/// In this runtime traps used not only for signaling about errors but also
-/// to just terminate quickly in some cases.
-enum SpecialTrap {
+/// This is either used to supply the caller with more information about why an error
+/// occurred (the SupervisorError variant).
+/// The other case is where the trap does not constitute an error but rather was invoked
+/// as a quick way to terminate the application (all other variants).
+enum TrapReason {
+	/// The supervisor trapped the contract because of an error condition occurred during
+	/// execution in privileged code.
+	SupervisorError(DispatchError),
 	/// Signals that trap was generated in response to call `ext_return` host function.
 	Return(ReturnData),
-	/// Signals that trap was generated because the contract exhausted its gas limit.
-	OutOfGas,
 	/// Signals that a trap was generated in response to a succesful call to the
 	/// `ext_terminate` host function.
 	Termination,
 	/// Signals that a trap was generated because of a successful restoration.
 	Restoration,
-	/// Signals that a buffer supplied by the caller is too small to fit the output.
-	OutputBufferTooSmall,
 }
 
 /// Can only be used for one call.
@@ -108,7 +110,7 @@ pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	schedule: &'a Schedule,
 	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
-	special_trap: Option<SpecialTrap>,
+	special_trap: Option<TrapReason>,
 }
 impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
@@ -135,7 +137,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 ) -> ExecResult {
 	match runtime.special_trap {
 		// The trap was the result of the execution `return` host function.
-		Some(SpecialTrap::Return(ReturnData{ flags, data })) => {
+		Some(TrapReason::Return(ReturnData{ flags, data })) => {
 			let flags = ReturnFlags::from_bits(flags).ok_or_else(||
 				"used reserved bit in return flags"
 			)?;
@@ -144,24 +146,19 @@ pub(crate) fn to_execution_result<E: Ext>(
 				data,
 			})
 		},
-		Some(SpecialTrap::Termination) => {
+		Some(TrapReason::Termination) => {
 			return Ok(ExecReturnValue {
 				flags: ReturnFlags::empty(),
 				data: Vec::new(),
 			})
 		},
-		Some(SpecialTrap::Restoration) => {
+		Some(TrapReason::Restoration) => {
 			return Ok(ExecReturnValue {
 				flags: ReturnFlags::empty(),
 				data: Vec::new(),
 			})
 		}
-		Some(SpecialTrap::OutOfGas) => {
-			Err("ran out of gas during contract execution")?
-		},
-		Some(SpecialTrap::OutputBufferTooSmall) => {
-			Err("output buffer too small")?
-		},
+		Some(TrapReason::SupervisorError(error)) => Err(error)?,
 		None => (),
 	}
 
@@ -250,13 +247,13 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
 	metadata: &Tok::Metadata,
-	special_trap: &mut Option<SpecialTrap>,
+	special_trap: &mut Option<TrapReason>,
 	token: Tok,
 ) -> Result<(), sp_sandbox::HostError> {
 	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
 		GasMeterResult::OutOfGas =>  {
-			*special_trap = Some(SpecialTrap::OutOfGas);
+			*special_trap = Some(TrapReason::SupervisorError(Error::<T>::OutOfGas.into()));
 			Err(sp_sandbox::HostError)
 		},
 	}
@@ -382,7 +379,9 @@ fn write_sandbox_output<E: Ext>(
 	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
 
 	if len < buf_len {
-		ctx.special_trap = Some(SpecialTrap::OutputBufferTooSmall);
+		ctx.special_trap = Some(TrapReason::SupervisorError(
+			Error::<E::T>::OutputBufferTooSmall.into()
+		));
 		return Err(sp_sandbox::HostError);
 	}
 
@@ -722,7 +721,7 @@ define_env!(Env, <E: Ext>,
 			read_sandbox_memory_as(ctx, beneficiary_ptr, beneficiary_len)?;
 
 		if let Ok(_) = ctx.ext.terminate(&beneficiary, ctx.gas_meter) {
-			ctx.special_trap = Some(SpecialTrap::Termination);
+			ctx.special_trap = Some(TrapReason::Termination);
 		}
 		Err(sp_sandbox::HostError)
 	},
@@ -760,7 +759,7 @@ define_env!(Env, <E: Ext>,
 			RuntimeToken::ReturnData(data_len)
 		)?;
 
-		ctx.special_trap = Some(SpecialTrap::Return(ReturnData {
+		ctx.special_trap = Some(TrapReason::Return(ReturnData {
 			flags,
 			data: read_sandbox_memory(ctx, data_ptr, data_len)?,
 		}));
@@ -974,7 +973,7 @@ define_env!(Env, <E: Ext>,
 			rent_allowance,
 			delta,
 		) {
-			ctx.special_trap = Some(SpecialTrap::Restoration);
+			ctx.special_trap = Some(TrapReason::Restoration);
 		}
 		Err(sp_sandbox::HostError)
 	},

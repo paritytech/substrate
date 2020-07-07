@@ -410,7 +410,11 @@ decl_error! {
 		/// Tombstones don't match.
 		InvalidTombstone,
 		/// An origin TrieId written in the current block.
-		InvalidContractOrigin
+		InvalidContractOrigin,
+		/// The executed contract exhausted its gas limit.
+		OutOfGas,
+		/// The output buffer supplied to a contract API call was too small.
+		OutputBufferTooSmall,
 	}
 }
 
