@@ -189,7 +189,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 			},
 			ValidatedTransaction::Invalid(hash, err) => {
 				self.rotator.ban(&Instant::now(), std::iter::once(hash));
-				self.listener.write().invalid(&hash, false);
 				Err(err.into())
 			},
 			ValidatedTransaction::Unknown(hash, err) => {
