@@ -277,7 +277,10 @@ all have the following two arguments:
 - `output_len_ptr`: Pointer into contract memory where the size of the buffer is stored. The size of the copied value is also stored there.
 
 **complexity**: The size of the returned value is constant for a given runtime. Therefore we
-consider its complexity constant even though some of them might involve at most one DB read.
+consider its complexity constant even though some of them might involve at most one DB read. Some of those
+functions call into other pallets of the runtime. The assumption here is that those functions are also
+linear in regard to the size of the data that is returned and therefore considered constant for a
+given runtime.
 
 This is the list of getters:
 
@@ -410,7 +413,7 @@ This function receives a pointer to contract memory. It copies the input to the 
 
 ### ext_return
 
-This function receives a `data` buffer and `flags` asarguments. Execution of the function consists of the following steps:
+This function receives a `data` buffer and `flags` arguments. Execution of the function consists of the following steps:
 
 1. Loading `data` buffer from the sandbox memory (see sandboxing memory get).
 2. Storing the `u32` flags value.
