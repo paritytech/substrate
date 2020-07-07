@@ -618,8 +618,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	///  Notifications              Per-peer buffer
 	///    broadcast    +------->   of notifications   +-->  `send_notifications`  +-->  Internet
-	///                     ^
-	///                     |
+	///                     ^       (not covered by
+	///                     |         sc-network)
 	///                     +
 	///       Notifications should be dropped
 	///              if buffer is full
