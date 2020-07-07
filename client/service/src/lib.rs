@@ -27,7 +27,7 @@ pub mod chain_ops;
 pub mod error;
 
 mod metrics;
-mod builder;
+pub mod builder;
 #[cfg(feature = "test-helpers")]
 pub mod client;
 #[cfg(not(feature = "test-helpers"))]

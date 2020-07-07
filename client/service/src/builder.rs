@@ -45,7 +45,7 @@ use sc_network::NetworkService;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
+	Block as BlockT, Header as HeaderT, SaturatedConversion, HashFor, Zero, BlockIdTo,
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
@@ -387,6 +387,534 @@ pub struct ServiceParams<TBl: BlockT, TCl, TImpQu, TExPool, TRpc, Backend> {
 	/// A block annouce validator builder.
 	pub block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 }
+
+
+/*
+
+/// Builds a new service for a light client.
+pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
+	let (client, backend, keystore, task_manager, on_demand) =
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+	
+	let transaction_pool_api = Arc::new(sc_transaction_pool::LightChainApi::new(
+		client.clone(), on_demand.clone(),
+	));
+	let transaction_pool = sc_transaction_pool::BasicPool::new_light(
+		config.transaction_pool.clone(),
+		transaction_pool_api,
+		config.prometheus_registry(),
+		task_manager.spawn_handle(),
+	);
+
+	let grandpa_block_import = sc_finality_grandpa::light_block_import(
+		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
+		Arc::new(on_demand.checker().clone()) as Arc<_>,
+	)?;
+	let finality_proof_import = grandpa_block_import.clone();
+	let finality_proof_request_builder =
+		finality_proof_import.create_finality_proof_request_builder();
+
+	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+		sc_consensus_aura::slot_duration(&*client)?,
+		grandpa_block_import,
+		None,
+		Some(Box::new(finality_proof_import)),
+		client.clone(),
+		InherentDataProviders::new(),
+		&task_manager.spawn_handle(),
+		config.prometheus_registry(),
+	)?;
+
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(
+		backend.clone(), client.clone() as Arc<_>
+	));
+
+	sc_service::build(sc_service::ServiceParams {	
+		block_announce_validator_builder: None,
+		finality_proof_request_builder: Some(finality_proof_request_builder),
+		finality_proof_provider: Some(finality_proof_provider),
+		on_demand: Some(on_demand),
+		remote_blockchain: Some(backend.remote_blockchain()),
+		rpc_extensions_builder: Box::new(|_| ()),
+		transaction_pool: Arc::new(transaction_pool),
+		config, client, import_queue, keystore, backend, task_manager
+	 }).map(|ServiceComponents { task_manager, .. }| task_manager)
+}
+*/
+
+pub trait BlockImportBuilder<
+	Block: BlockT,
+	RuntimeApi:
+		sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>> +
+		sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>,
+	Executor: NativeExecutionDispatch + 'static
+> {
+	type LightBlockImport:
+		sp_consensus::BlockImport<Block, Error=sp_consensus::Error, Transaction=sp_api::TransactionFor<TLightClient<Block, RuntimeApi, Executor>, Block>>;
+	type FullBlockImport:
+		sp_consensus::BlockImport<Block, Error=sp_consensus::Error, Transaction=sp_api::TransactionFor<TFullClient<Block, RuntimeApi, Executor>, Block>>;
+	type SelectChain: sp_consensus::SelectChain<Block>;
+
+	fn build_light(
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+		backend: Arc<TLightBackend<Block>>,
+		on_demand: Arc<OnDemand<Block>>,
+	) -> Result<(Self::LightBlockImport, BoxFinalityProofRequestBuilder<Block>), Error>;
+
+	fn build_full(
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		select_chain: Self::SelectChain
+	) -> Result<Self::FullBlockImport, Error>;
+}
+
+pub struct GrandpaBlockImportBuilder;
+
+impl<Block: BlockT, RuntimeApi, Executor> BlockImportBuilder<
+	Block, RuntimeApi, Executor,
+> for GrandpaBlockImportBuilder
+where
+		Executor: NativeExecutionDispatch + 'static,
+		RuntimeApi: Send + Sync,
+		sp_api::NumberFor<Block>: grandpa::BlockNumberOps,
+		RuntimeApi:
+			sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>> +
+			sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>> +
+			'static,
+		<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>>>::RuntimeApi:
+			sp_api::Core<Block> +
+			sp_api::ApiExt<Block, StateBackend = <TLightBackend<Block> as sc_client_api::backend::Backend<Block>>::State> +
+			sp_api::ApiErrorExt<Error = sp_blockchain::Error>,
+		<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>>::RuntimeApi:
+			sp_api::Core<Block> +
+			sp_api::ApiExt<Block, StateBackend = <TFullBackend<Block> as sc_client_api::backend::Backend<Block>>::State> +
+			sp_api::ApiErrorExt<Error = sp_blockchain::Error>,
+{
+	type LightBlockImport = grandpa::GrandpaLightBlockImport<
+		TLightBackend<Block>, Block, TLightClient<Block, RuntimeApi, Executor>
+	>;
+
+	type FullBlockImport = grandpa::GrandpaBlockImport<
+		TFullBackend<Block>, Block, TFullClient<Block, RuntimeApi, Executor>, Self::SelectChain,
+	>;
+
+	type SelectChain = sc_consensus::LongestChain<TFullBackend<Block>, Block>;
+
+	fn build_light(
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+		backend: Arc<TLightBackend<Block>>,
+		on_demand: Arc<OnDemand<Block>>,
+	) -> Result<(Self::LightBlockImport, BoxFinalityProofRequestBuilder<Block>), Error> {
+		let block_import = grandpa::light_block_import(
+			client.clone(), backend, &(client as Arc<_>),
+			Arc::new(on_demand.checker().clone()) as Arc<_>,
+		)?;
+
+		let fprb = block_import.create_finality_proof_request_builder();
+
+		Ok((block_import, fprb))
+	}
+
+	fn build_full(
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		select_chain: Self::SelectChain
+	) -> Result<Self::FullBlockImport, Error> {
+		let (import, _) = grandpa::block_import(
+			client.clone(), &(client as Arc<_>), select_chain,
+		)?;
+
+		Ok(import)
+	}
+}
+
+pub trait TransactionPoolBuilder<Block: BlockT, RuntimeApi, Executor> {
+	type FullTransactionPool:
+		sp_transaction_pool::TransactionPool<Block = Block> +
+		sp_transaction_pool::MaintainedTransactionPool<Hash=<Block as BlockT>::Hash> +
+		MallocSizeOfWasm + 'static;
+	type LightTransactionPool:
+		sp_transaction_pool::TransactionPool<Block = Block> +
+		sp_transaction_pool::MaintainedTransactionPool<Hash=<Block as BlockT>::Hash> +
+		MallocSizeOfWasm + 'static;
+
+	fn build_light(
+		config: &Configuration,
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+		task_manager: &TaskManager,
+		on_demand: Arc<OnDemand<Block>>,
+	) -> Arc<Self::LightTransactionPool>;
+
+	fn build_full(
+		config: &Configuration,
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		task_manager: &TaskManager,
+	) -> Arc<Self::FullTransactionPool>;
+}
+
+pub struct BasicPoolBuilder;
+
+impl<Block: BlockT, RuntimeApi, Executor> TransactionPoolBuilder<Block, RuntimeApi, Executor> for BasicPoolBuilder
+	where
+		RuntimeApi: sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>> + Send + Sync + 'static,
+		<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>>::RuntimeApi: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+		<<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>>::RuntimeApi as sp_api::ApiErrorExt>::Error: Send + std::fmt::Display,
+		Executor: NativeExecutionDispatch + 'static,
+{
+	type FullTransactionPool = sc_transaction_pool::BasicPool<
+		sc_transaction_pool::FullChainApi<TFullClient<Block, RuntimeApi, Executor>, Block>, Block,
+	>;
+
+	type LightTransactionPool = sc_transaction_pool::BasicPool<
+		sc_transaction_pool::LightChainApi<
+			TLightClient<Block, RuntimeApi, Executor>, OnDemand<Block>, Block
+		>,
+		Block,
+	>;
+
+	fn build_light(
+		config: &Configuration,
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+		task_manager: &TaskManager,
+		on_demand: Arc<OnDemand<Block>>,
+	) -> Arc<Self::LightTransactionPool> {
+		let transaction_pool_api = Arc::new(sc_transaction_pool::LightChainApi::new(
+			client, on_demand,
+		));
+		Arc::new(sc_transaction_pool::BasicPool::new_light(
+			config.transaction_pool.clone(),
+			transaction_pool_api,
+			config.prometheus_registry(),
+			task_manager.spawn_handle(),
+		))
+	}
+
+	fn build_full(
+		config: &Configuration,
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		task_manager: &TaskManager,
+	) -> Arc<Self::FullTransactionPool> {
+		let transaction_pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+
+		sc_transaction_pool::BasicPool::new_full(
+			config.transaction_pool.clone(),
+			Arc::new(transaction_pool_api),
+			config.prometheus_registry(),
+			task_manager.spawn_handle(),
+			client.clone(),
+		)
+	}
+}
+
+pub trait ImportQueueBuilder<
+	Block: BlockT,
+	RuntimeApi:
+		sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>> +
+		sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>,
+	Executor: NativeExecutionDispatch + 'static
+> {
+	type LightImportQueue: sp_consensus::import_queue::ImportQueue<Block> + 'static;
+	type FullImportQueue: sp_consensus::import_queue::ImportQueue<Block> + 'static;
+	type BlockImportBuilder: self::BlockImportBuilder<Block, RuntimeApi, Executor>;
+
+	fn build_light(
+		config: &Configuration,
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+		inherent_data_providers: sp_inherents::InherentDataProviders,
+		task_manager: &TaskManager,
+		block_import: <Self::BlockImportBuilder as self::BlockImportBuilder<Block, RuntimeApi, Executor>>::LightBlockImport,
+	) -> Result<Self::LightImportQueue, Error>;
+
+	fn build_full(
+		config: &Configuration,
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		inherent_data_providers: sp_inherents::InherentDataProviders,
+		task_manager: &TaskManager,
+		block_import: <Self::BlockImportBuilder as self::BlockImportBuilder<Block, RuntimeApi, Executor>>::FullBlockImport,
+	) -> Result<Self::FullImportQueue, Error>;
+}
+
+use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair, AuthorityId as AuraPublic};
+
+#[derive(Default)]
+pub struct AuraImportQueueBuilder<BlockImportBuilder>(std::marker::PhantomData<BlockImportBuilder>);
+
+impl<Block: BlockT, RuntimeApi, Executor, BlockImportBuilder> ImportQueueBuilder<Block, RuntimeApi, Executor> for AuraImportQueueBuilder<BlockImportBuilder>
+	where
+		RuntimeApi:
+			sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>> +
+			sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>> +
+			Send + Sync + 'static,
+		<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>>>::RuntimeApi:
+			sp_consensus_aura::AuraApi<Block, AuraPublic, Error=sp_blockchain::Error> +
+			sp_block_builder::BlockBuilder<Block>,
+		//	sp_api::ApiExt<Block, StateBackend = <TFullBackend<Block> as sc_client_api::backend::Backend<Block>>::State>,
+		<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>>::RuntimeApi:
+			sp_consensus_aura::AuraApi<Block, AuraPublic, Error=sp_blockchain::Error> +
+			sp_block_builder::BlockBuilder<Block>,
+			//sp_block_builder::BlockBuilder<Block>,
+		Executor: NativeExecutionDispatch + 'static,
+		BlockImportBuilder: self::BlockImportBuilder<Block, RuntimeApi, Executor>,
+		<BlockImportBuilder as self::BlockImportBuilder<Block, RuntimeApi, Executor>>::FullBlockImport:
+			sp_consensus::JustificationImport<Block, Error=sp_consensus::Error> + Clone + Send + Sync + 'static,
+		<BlockImportBuilder as self::BlockImportBuilder<Block, RuntimeApi, Executor>>::LightBlockImport:
+			sp_consensus::FinalityProofImport<Block, Error=sp_consensus::Error> + Clone + Send + Sync + 'static,
+		/*BlockImport:
+			sp_consensus::FinalityProofImport<Block, Error=sp_consensus::Error> +
+			//sp_consensus::BlockImport<Block, Error=sp_consensus::Error, Transaction=sp_api::TransactionFor<TLightClient<Block, RuntimeApi, Executor>, Block>> +
+			//sp_consensus::BlockImport<Block, Error=sp_consensus::Error, Transaction=sp_api::TransactionFor<TFullClient<Block, RuntimeApi, Executor>, Block>> +
+			//sp_consensus::FinalityProofImport<Block, Error=sp_consensus::Error> +
+			Send + Sync + Clone + 'static,*/
+{
+	type LightImportQueue = sc_consensus_aura::AuraImportQueue<
+		Block, sp_api::TransactionFor<TLightClient<Block, RuntimeApi, Executor>, Block>
+	>;
+
+	type FullImportQueue = sc_consensus_aura::AuraImportQueue<
+		Block, sp_api::TransactionFor<TFullClient<Block, RuntimeApi, Executor>, Block>
+	>;
+
+	type BlockImportBuilder = BlockImportBuilder;
+
+	fn build_light(
+		config: &Configuration,
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+		inherent_data_providers: sp_inherents::InherentDataProviders,
+		task_manager: &TaskManager,
+		block_import: <Self::BlockImportBuilder as self::BlockImportBuilder<Block, RuntimeApi, Executor>>::LightBlockImport,
+	) -> Result<Self::LightImportQueue, Error> {
+		sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
+			sc_consensus_aura::slot_duration(&*client)?,
+			block_import.clone(),
+			None,
+			Some(Box::new(block_import)),
+			client.clone(),
+			inherent_data_providers,
+			&task_manager.spawn_handle(),
+			config.prometheus_registry(),
+		).map_err(|err| err.into())
+	}
+
+	fn build_full(
+		config: &Configuration,
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		inherent_data_providers: sp_inherents::InherentDataProviders,
+		task_manager: &TaskManager,
+		block_import: <Self::BlockImportBuilder as self::BlockImportBuilder<Block, RuntimeApi, Executor>>::FullBlockImport,
+	) -> Result<Self::FullImportQueue, Error> {
+		let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+			block_import.clone(), client.clone(),
+		);
+
+		sc_consensus_aura::import_queue::<_, _, TFullClient<Block, RuntimeApi, Executor>, AuraPair, _>(
+			sc_consensus_aura::slot_duration(&*client)?,
+			aura_block_import,
+			Some(Box::new(block_import)),
+			None,
+			client.clone(),
+			inherent_data_providers,
+			&task_manager.spawn_handle(),
+			config.prometheus_registry(),
+		).map_err(|err| err.into())
+	}
+}
+
+pub trait FinalityProofProviderBuilder<Block: BlockT, RuntimeApi, Executor> {
+	type LightFPP: sc_network::config::FinalityProofProvider<Block> + 'static;
+	type FullFPP: sc_network::config::FinalityProofProvider<Block> + 'static;
+
+	fn build_light(
+		backend: Arc<TLightBackend<Block>>,
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+	) -> Self::LightFPP;
+
+	fn build_full(
+		backend: Arc<TFullBackend<Block>>,
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+	) -> Self::FullFPP;
+}
+
+pub struct GrandpaFinalityProofProviderBuilder;
+
+impl<Block, RuntimeApi, Executor> FinalityProofProviderBuilder<Block, RuntimeApi, Executor> for GrandpaFinalityProofProviderBuilder
+	where
+		Block: BlockT,
+		RuntimeApi: Send + Sync + 'static,
+		Executor: NativeExecutionDispatch + 'static,
+		sp_api::NumberFor<Block>: grandpa::BlockNumberOps,
+{
+	type LightFPP = grandpa::FinalityProofProvider<TLightBackend<Block>, Block>;
+	type FullFPP = grandpa::FinalityProofProvider<TFullBackend<Block>, Block>;
+
+	fn build_light(
+		backend: Arc<TLightBackend<Block>>,
+		client: Arc<TLightClient<Block, RuntimeApi, Executor>>,
+	) -> Self::LightFPP {
+		grandpa::FinalityProofProvider::new(backend, client as Arc<_>)
+	}
+
+	fn build_full(
+		backend: Arc<TFullBackend<Block>>,
+		client: Arc<TFullClient<Block, RuntimeApi, Executor>>,
+	) -> Self::FullFPP {
+		grandpa::FinalityProofProvider::new(backend, client as Arc<_>)
+	}
+}
+
+pub trait SelectChainBuilder<Block: BlockT> {
+	type SelectChain: sp_consensus::SelectChain<Block>;
+
+	fn build(backend: Arc<TFullBackend<Block>>) -> Self::SelectChain;
+}
+
+pub struct LongestChainBuilder;
+
+impl<Block: BlockT> SelectChainBuilder<Block> for LongestChainBuilder {
+	type SelectChain = sc_consensus::LongestChain<TFullBackend<Block>, Block>;
+
+	fn build(backend: Arc<TFullBackend<Block>>) -> Self::SelectChain {
+		sc_consensus::LongestChain::new(backend)
+	}
+}
+
+pub trait Builder<
+	Block: BlockT,
+	RuntimeApi:
+		sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>> +
+		sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>,
+	Executor: NativeExecutionDispatch + 'static
+> {
+	type TransactionPoolBuilder: TransactionPoolBuilder<Block, RuntimeApi, Executor>;
+	type BlockImportBuilder: BlockImportBuilder<
+		Block, RuntimeApi, Executor,
+		SelectChain=<Self::SelectChainBuilder as SelectChainBuilder<Block>>::SelectChain
+	>;
+	type ImportQueueBuilder: ImportQueueBuilder<
+		Block, RuntimeApi, Executor,
+		BlockImportBuilder=Self::BlockImportBuilder
+	>;
+	type FinalityProofProviderBuilder: FinalityProofProviderBuilder<Block, RuntimeApi, Executor>;
+	type SelectChainBuilder: SelectChainBuilder<Block>;
+
+	fn build_light(config: Configuration) -> Result<TaskManager, Error>
+		where
+			Executor: NativeExecutionDispatch + 'static,
+			RuntimeApi:
+				sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>>
+				+ Send + Sync + 'static,
+			<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TLightClient<Block, RuntimeApi, Executor>>>::RuntimeApi:
+				sp_api::Metadata<Block> +
+				sc_offchain::OffchainWorkerApi<Block> +
+				sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> +
+				sp_session::SessionKeys<Block> +
+				sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+				sp_api::ApiExt<Block, StateBackend = <TLightBackend<Block> as sc_client_api::backend::Backend<Block>>::State>
+	{
+		use sc_client_api::RemoteBackend;
+
+		let (client, backend, keystore, task_manager, on_demand) =
+			new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
+
+		let transaction_pool = Self::TransactionPoolBuilder::build_light(
+			&config, client.clone(), &task_manager, on_demand.clone(),
+		);
+
+		let (block_import, finality_proof_request_builder) = Self::BlockImportBuilder::build_light(
+			client.clone(), backend.clone(), on_demand.clone(),
+		)?;
+
+		let import_queue = Self::ImportQueueBuilder::build_light(
+			&config, client.clone(), sp_inherents::InherentDataProviders::new(), &task_manager, block_import
+		)?;
+
+		let finality_proof_provider = Self::FinalityProofProviderBuilder::build_light(
+			backend.clone(), client.clone(),
+		);
+	
+		build(ServiceParams {	
+			block_announce_validator_builder: None,
+			finality_proof_request_builder: Some(finality_proof_request_builder),
+			finality_proof_provider: Some(Arc::new(finality_proof_provider)),
+			on_demand: Some(on_demand),
+			remote_blockchain: Some(backend.remote_blockchain()),
+			rpc_extensions_builder: Box::new(|_| ()),
+			transaction_pool,
+			config, client, import_queue, keystore, backend, task_manager
+		 }).map(|ServiceComponents { task_manager, .. }| task_manager)
+	}
+
+	fn build_full(config: Configuration) -> Result<TaskManager, Error>
+		where
+			Executor: NativeExecutionDispatch + 'static,
+			RuntimeApi:
+				sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>
+				+ Send + Sync + 'static,
+			<RuntimeApi as sp_api::ConstructRuntimeApi<Block, TFullClient<Block, RuntimeApi, Executor>>>::RuntimeApi:
+				sp_api::Metadata<Block> +
+				sc_offchain::OffchainWorkerApi<Block> +
+				sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> +
+				sp_session::SessionKeys<Block> +
+				sp_api::ApiErrorExt<Error = sp_blockchain::Error> +
+				sp_api::ApiExt<Block, StateBackend = <TFullBackend<Block> as sc_client_api::backend::Backend<Block>>::State>
+	{
+		let (client, backend, keystore, task_manager) =
+			new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
+		let client = Arc::new(client);
+
+		let select_chain = Self::SelectChainBuilder::build(backend.clone());
+
+		let transaction_pool = Self::TransactionPoolBuilder::build_full(
+			&config, client.clone(), &task_manager,
+		);
+
+		let block_import = Self::BlockImportBuilder::build_full(
+			client.clone(), select_chain.clone(),
+		)?;
+
+		let import_queue = Self::ImportQueueBuilder::build_full(
+			&config, client.clone(), sp_inherents::InherentDataProviders::new(),
+			&task_manager, block_import
+		)?;
+
+		let finality_proof_provider = Self::FinalityProofProviderBuilder::build_full(
+			backend.clone(), client.clone(),
+		);
+
+		build(ServiceParams {	
+			backend, client, import_queue, keystore, task_manager, transaction_pool,
+			config: config,
+			block_announce_validator_builder: None,
+			finality_proof_request_builder: None,
+			finality_proof_provider: Some(Arc::new(finality_proof_provider)),
+			on_demand: None,
+			remote_blockchain: None,
+			rpc_extensions_builder: Box::new(|_| ()),
+		 }).map(|ServiceComponents { task_manager, .. }| task_manager)
+	}
+
+	fn build_ops(config: Configuration) -> Result<(
+		Arc<TFullClient<Block, RuntimeApi, Executor>>,
+		Arc<TFullBackend<Block>>,
+		<Self::ImportQueueBuilder as ImportQueueBuilder<Block, RuntimeApi, Executor>>::FullImportQueue,
+		TaskManager,
+	), Error> {
+		let (client, backend, keystore, task_manager) =
+			new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
+		let client = Arc::new(client);
+
+		let select_chain = Self::SelectChainBuilder::build(backend.clone());
+
+		let block_import = Self::BlockImportBuilder::build_full(
+			client.clone(), select_chain,
+		)?;
+
+		let import_queue = Self::ImportQueueBuilder::build_full(
+			&config, client.clone(), sp_inherents::InherentDataProviders::new(),
+			&task_manager, block_import
+		)?;
+
+		Ok((client, backend, import_queue, task_manager))
+	}
+}
+
 
 /// Put together the components of a service from the parameters.
 pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(

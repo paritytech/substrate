@@ -204,52 +204,19 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	Ok(task_manager)
 }
 
+use sc_service::builder::{self, *, Builder as _};
+
+pub struct Builder;
+
+impl builder::Builder<Block, RuntimeApi, Executor> for Builder {
+	type TransactionPoolBuilder = BasicPoolBuilder;
+	type BlockImportBuilder = GrandpaBlockImportBuilder;
+	type ImportQueueBuilder = AuraImportQueueBuilder<Self::BlockImportBuilder>;
+	type FinalityProofProviderBuilder = GrandpaFinalityProofProviderBuilder;
+	type SelectChainBuilder = LongestChainBuilder;
+}
+
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	let (client, backend, keystore, task_manager, on_demand) =
-		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
-	
-	let transaction_pool_api = Arc::new(sc_transaction_pool::LightChainApi::new(
-		client.clone(), on_demand.clone(),
-	));
-	let transaction_pool = sc_transaction_pool::BasicPool::new_light(
-		config.transaction_pool.clone(),
-		transaction_pool_api,
-		config.prometheus_registry(),
-		task_manager.spawn_handle(),
-	);
-
-	let grandpa_block_import = sc_finality_grandpa::light_block_import(
-		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
-		Arc::new(on_demand.checker().clone()) as Arc<_>,
-	)?;
-	let finality_proof_import = grandpa_block_import.clone();
-	let finality_proof_request_builder =
-		finality_proof_import.create_finality_proof_request_builder();
-
-	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-		sc_consensus_aura::slot_duration(&*client)?,
-		grandpa_block_import,
-		None,
-		Some(Box::new(finality_proof_import)),
-		client.clone(),
-		InherentDataProviders::new(),
-		&task_manager.spawn_handle(),
-		config.prometheus_registry(),
-	)?;
-
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(
-		backend.clone(), client.clone() as Arc<_>
-	));
-
-	sc_service::build(sc_service::ServiceParams {	
-		block_announce_validator_builder: None,
-		finality_proof_request_builder: Some(finality_proof_request_builder),
-		finality_proof_provider: Some(finality_proof_provider),
-		on_demand: Some(on_demand),
-		remote_blockchain: Some(backend.remote_blockchain()),
-		rpc_extensions_builder: Box::new(|_| ()),
-		transaction_pool: Arc::new(transaction_pool),
-		config, client, import_queue, keystore, backend, task_manager
-	 }).map(|ServiceComponents { task_manager, .. }| task_manager)
+	Builder::build_light(config)
 }
