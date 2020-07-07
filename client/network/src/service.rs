@@ -541,8 +541,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Writes a message on an open notifications channel. Has no effect if the notifications
-	/// channel with this protocol name is closed.
+	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
+	/// Has no effect if the notifications channel with this protocol name is not open.
+	///
+	/// If the buffer of pending outgoing notifications with that peer is full, the notification
+	/// is silently dropped. This happens if you call this method at a higher rate than the rate
+	/// at which the peer processes these notifications, or if the available network bandwidth is
+	/// too low.
+	/// For this reason, this method is considered soft-deprecated. You are encouraged to use
+	/// [`NetworkService::send_notification`] instead.
 	///
 	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
 	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
@@ -550,7 +557,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			between the remote voluntarily closing a substream or a network error
 	/// >			preventing the message from being delivered.
 	///
-	/// The protocol must have been registered with `register_notifications_protocol`.
+	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// `NetworkConfiguration::notifications_protocols`.
 	///
 	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::WriteNotification {
@@ -558,6 +566,71 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			engine_id,
 			message,
 		});
+	}
+
+	/// Appends one or more notifications to the buffer of pending outgoing notifications with the
+	/// given peer.
+	///
+	/// The returned `Future` finishes only after all the notifications have been queued or the
+	/// substream has been closed.
+	///
+	/// This operation is atomic in the sense that either all or none of the notifications have
+	/// been enqueued. This is the case even if the operation is interrupted by dropping the
+	/// `Future`.
+	///
+	/// An error is returned if there exists no open notifications substream with that combination
+	/// of peer and protocol, or if the remote has asked to close the notifications substream.
+	///
+	/// If the remote requests to close the notifications substream, all notifications successfully
+	/// enqueued with this method will finish being sent out before the substream actually gets
+	/// closed, but attempting to enqueue more notifications will now return an error. It is also
+	/// possible for the entire connection to be abruptly closed, in which case enqueued
+	/// notifications will be lost.
+	///
+	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// `NetworkConfiguration::notifications_protocols`.
+	///
+	/// # Usage
+	///
+	/// This method waits until there space is available in the buffer of messages towards the
+	/// given peer. If the peer processes notifications at a slower rate than we send them, this
+	/// buffer will quickly fill up.
+	///
+	/// As such, you should never do something like this:
+	///
+	/// ```ignore
+	/// // Do NOT do this
+	/// for peer in peers {
+	///     network.send_notifications(peer, ..., notifications).await;
+	/// }
+	/// ```
+	///
+	/// Doing so would slow down all peers to the rate of the slowest one. A malicious or
+	/// malfunctioning peer could intentionally process notifications at a very slow rate.
+	///
+	/// Instead, you are encouraged to maintain your own buffer of notifications on top of the one
+	/// maintained by `sc-network`, and use `send_notifications` to progressively send out
+	/// elements from your buffer. If this additional buffer is full (which will happen at some
+	/// point if the peer is too slow to process notifications), appropriate measures can be taken,
+	/// such as removing non-critical notifications from the buffer or disconnecting the peer
+	/// using [`NetworkService::disconnect_peer`].
+	///
+	///
+	///  Notifications              Per-peer buffer
+	///    broadcast    +------->   of notifications   +-->  `send_notifications`  +-->  Internet
+	///                     ^
+	///                     |
+	///                     +
+	///       Notifications should be dropped
+	///              if buffer is full
+	///
+	pub async fn send_notifications(
+		&self,
+		target: PeerId,
+		engine_id: ConsensusEngineId,
+		notifications: impl ExactSizeIterator<Item = impl Into<Vec<u8>>>,
+	) -> Result<(), SendNotificationError> {
+		todo!()
 	}
 
 	/// Returns a stream containing the events that happen on the network.
@@ -810,6 +883,13 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
 	}
+}
+
+/// Error returned by [`NetworkService::send_notification`].
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+pub enum SendNotificationError {
+	/// No open notifications substream exists with this combination of peer and protocol.
+	NoSubstream,
 }
 
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
