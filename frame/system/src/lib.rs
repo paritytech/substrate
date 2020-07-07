@@ -127,7 +127,7 @@ use frame_support::{
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
-		extract_actual_weight, Pays, FunctionOf,
+		extract_actual_weight,
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -758,11 +758,9 @@ decl_module! {
 			Self::kill_account(&who);
 		}
 
-		#[weight = FunctionOf(
-			|(accounts,): (&Vec<T::AccountId>,)| accounts.len() as Weight * 10_000,
-			DispatchClass::Normal,
-			Pays::Yes,
-		)]
+		// TODO: Update the weight here to avoid DoS attacks. Alternatively: remove it quickly in
+		// another upgrade.
+		#[weight = accounts.len() as Weight * 10_000]
 		fn migrate_accounts(origin, accounts: Vec<T::AccountId>) {
 			let _ = ensure_signed(origin)?;
 			for a in &accounts {

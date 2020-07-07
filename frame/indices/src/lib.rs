@@ -28,7 +28,7 @@ use sp_runtime::traits::{
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_support::weights::constants::WEIGHT_PER_MICROS;
+use frame_support::weights::{constants::WEIGHT_PER_MICROS, Weight};
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
@@ -36,6 +36,7 @@ mod mock;
 pub mod address;
 mod tests;
 mod benchmarking;
+pub mod migration;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -103,6 +104,10 @@ decl_error! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate_enum_set::<T>()
+		}
 
 		/// Assign an previously unassigned index.
 		///
