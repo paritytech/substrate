@@ -464,7 +464,7 @@ define_env!(Env, <E: Ext>,
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
 	// - `out_ptr`: pointer to the linear memory where the value is written to.
 	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
-	//	is read from and the value length is written to.
+	//   is read from and the value length is written to.
 	//
 	// # Errors
 	//
@@ -535,7 +535,7 @@ define_env!(Env, <E: Ext>,
 	// - input_data_len: length of the input data buffer.
 	// - output_ptr: a pointer where the output buffer is copied to.
 	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
-	//		and the actual length is written to.
+	//   and the actual length is written to.
 	//
 	// # Errors
 	//
@@ -625,7 +625,7 @@ define_env!(Env, <E: Ext>,
 	//		and the actual length is written to.
 	// - output_ptr: a pointer where the output buffer is copied to.
 	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
-	//		and the actual length is written to.
+	//   and the actual length is written to.
 	//
 	// # Errors
 	//
