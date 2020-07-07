@@ -471,7 +471,7 @@ impl<T: Clone> SlotDuration<T> {
 
 				info!(
 					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
-					genesis_slot_duration
+					genesis_slot_duration.slot_duration()
 				);
 
 				genesis_slot_duration

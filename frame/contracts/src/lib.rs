@@ -106,16 +106,13 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use frame_support::dispatch::{
-	PostDispatchInfo, DispatchResult, Dispatchable, DispatchResultWithPostInfo
-};
 use frame_support::{
-	Parameter, decl_module, decl_event, decl_storage, decl_error,
-	parameter_types, IsSubType, storage::child::ChildInfo,
+	decl_module, decl_event, decl_storage, decl_error,
+	parameter_types, storage::child::ChildInfo,
+	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
-use frame_support::weights::GetDispatchInfo;
-use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 use frame_support::weights::Weight;
 
@@ -320,12 +317,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The currency in which fees are paid and contract balances are held.
 	type Currency: Currency<Self::AccountId>;
-
-	/// The outer call dispatch type.
-	type Call:
-		Parameter +
-		Dispatchable<PostInfo=PostDispatchInfo, Origin=<Self as frame_system::Trait>::Origin> +
-		IsSubType<Module<Self>, Self> + GetDispatchInfo;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -644,30 +635,7 @@ impl<T: Trait> Module<T> {
 		let vm = WasmVm::new(&cfg.schedule);
 		let loader = WasmLoader::new(&cfg.schedule);
 		let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
-
-		let result = func(&mut ctx, gas_meter);
-
-		// Execute deferred actions.
-		ctx.deferred.into_iter().for_each(|deferred| {
-			use self::exec::DeferredAction::*;
-			match deferred {
-				DispatchRuntimeCall {
-					origin: who,
-					call,
-				} => {
-					let info = call.get_dispatch_info();
-					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
-					let post_info = match result {
-						Ok(post_info) => post_info,
-						Err(err) => err.post_info,
-					};
-					gas_meter.refund(post_info.calc_unspent(&info));
-					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
-				}
-			}
-		});
-
-		result
+		func(&mut ctx, gas_meter)
 	}
 }
 

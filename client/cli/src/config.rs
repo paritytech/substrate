@@ -36,7 +36,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 /// The maximum number of characters for a node name.
-pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
+pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
@@ -413,7 +413,7 @@ pub trait CliConfiguration: Sized {
 		let chain_spec = cli.load_spec(chain_id.as_str())?;
 		let base_path = self
 			.base_path()?
-			.unwrap_or_else(|| BasePath::from_project("", "", C::executable_name()));
+			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
 		let config_dir = base_path
 			.path()
 			.to_path_buf()
@@ -498,7 +498,7 @@ pub trait CliConfiguration: Sized {
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
 
-		sp_panic_handler::set(C::support_url(), C::impl_version());
+		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
 		init_logger(&logger_pattern);

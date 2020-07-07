@@ -21,6 +21,7 @@ use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::hash::{Twox128, StorageHasher};
 use sp_runtime::generic::{Digest, DigestItem};
+pub use sp_runtime::TransactionOutcome;
 
 pub mod unhashed;
 pub mod hashed;
@@ -28,14 +29,6 @@ pub mod child;
 #[doc(hidden)]
 pub mod generator;
 pub mod migration;
-
-/// Describes whether a storage transaction should be committed or rolled back.
-pub enum TransactionOutcome<T> {
-	/// Transaction should be committed.
-	Commit(T),
-	/// Transaction should be rolled back.
-	Rollback(T),
-}
 
 /// Execute the supplied function in a new storage transaction.
 ///

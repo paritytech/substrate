@@ -17,37 +17,72 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf};
-use sp_arithmetic::PerThing;
+use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf, Error};
+use sp_arithmetic::{PerThing, InnerOf};
 use sp_std::prelude::*;
 
 /// Converts a vector of ratio assignments into ones with absolute budget value.
-pub fn assignment_ratio_to_staked<A: IdentifierT, T: PerThing, FS>(
-	ratio: Vec<Assignment<A, T>>,
+///
+/// Note that this will NOT attempt at normalizing the result.
+pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing, FS>(
+	ratio: Vec<Assignment<A, P>>,
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
-	T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
-	ExtendedBalance: From<<T as PerThing>::Inner>,
+	P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+	ExtendedBalance: From<InnerOf<P>>,
 {
 	ratio
 		.into_iter()
 		.map(|a| {
 			let stake = stake_of(&a.who);
-			a.into_staked(stake.into(), true)
+			a.into_staked(stake.into())
 		})
 		.collect()
 }
 
-/// Converts a vector of staked assignments into ones with ratio values.
-pub fn assignment_staked_to_ratio<A: IdentifierT, T: PerThing>(
-	staked: Vec<StakedAssignment<A>>,
-) -> Vec<Assignment<A, T>>
+/// Same as [`assignment_ratio_to_staked`] and try and do normalization.
+pub fn assignment_ratio_to_staked_normalized<A: IdentifierT, P: PerThing, FS>(
+	ratio: Vec<Assignment<A, P>>,
+	stake_of: FS,
+) -> Result<Vec<StakedAssignment<A>>, Error>
 where
-	ExtendedBalance: From<<T as PerThing>::Inner>,
+	for<'r> FS: Fn(&'r A) -> VoteWeight,
+	P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
+	ExtendedBalance: From<InnerOf<P>>,
 {
-	staked.into_iter().map(|a| a.into_assignment(true)).collect()
+	let mut staked = assignment_ratio_to_staked(ratio, &stake_of);
+	staked.iter_mut().map(|a|
+		a.try_normalize(stake_of(&a.who).into()).map_err(|err| Error::ArithmeticError(err))
+	).collect::<Result<_, _>>()?;
+	Ok(staked)
+}
+
+/// Converts a vector of staked assignments into ones with ratio values.
+///
+/// Note that this will NOT attempt at normalizing the result.
+pub fn assignment_staked_to_ratio<A: IdentifierT, P: PerThing>(
+	staked: Vec<StakedAssignment<A>>,
+) -> Vec<Assignment<A, P>>
+where
+	ExtendedBalance: From<InnerOf<P>>,
+{
+	staked.into_iter().map(|a| a.into_assignment()).collect()
+}
+
+/// Same as [`assignment_staked_to_ratio`] and try and do normalization.
+pub fn assignment_staked_to_ratio_normalized<A: IdentifierT, P: PerThing>(
+	staked: Vec<StakedAssignment<A>>,
+) -> Result<Vec<Assignment<A, P>>, Error>
+where
+	ExtendedBalance: From<InnerOf<P>>,
+{
+	let mut ratio = staked.into_iter().map(|a| a.into_assignment()).collect::<Vec<_>>();
+	ratio.iter_mut().map(|a|
+		a.try_normalize().map_err(|err| Error::ArithmeticError(err))
+	).collect::<Result<_, _>>()?;
+	Ok(ratio)
 }
 
 /// consumes a vector of winners with backing stake to just winners.
