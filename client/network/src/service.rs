@@ -568,15 +568,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		});
 	}
 
-	/// Appends one or more notifications to the buffer of pending outgoing notifications with the
-	/// given peer.
+	/// Waits until one or more slots are available in the buffer of pending outgoing notifications
+	/// with the given peer.
 	///
-	/// The returned `Future` finishes only after all the notifications have been queued or the
-	/// substream has been closed.
-	///
-	/// This operation is atomic in the sense that either all or none of the notifications have
-	/// been enqueued. In particular, it is guaranteed that no notifications have been transmitted
-	/// if the operation is interrupted by dropping the `Future`.
+	/// The returned `Future` finishes after the peer is ready to accept more notifications, or
+	/// after the substream has been closed. Use the returned [`NotificationsBufferSlots`] to
+	/// actually send the notifications.
 	///
 	/// An error is returned if there exists no open notifications substream with that combination
 	/// of peer and protocol, or if the remote has asked to close the notifications substream.
@@ -628,8 +625,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self,
 		target: PeerId,
 		engine_id: ConsensusEngineId,
-		notifications: impl ExactSizeIterator<Item = impl Into<Vec<u8>>>,
-	) -> Result<(), SendNotificationError> {
+		num_slots: usize,
+	) -> Result<NotificationsBufferSlots, SendNotificationError> {
 		todo!()
 	}
 
@@ -882,6 +879,24 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	/// Returns the local Peer ID.
 	fn local_peer_id(&self) -> PeerId {
 		self.local_peer_id.clone()
+	}
+}
+
+/// Reserved slots in the notifications buffer, ready to accept data.
+#[must_use]
+pub struct NotificationsBufferSlots<'a> {
+	_dummy: std::marker::PhantomData<'a>,
+}
+
+impl<'a> NotificationsBufferSlots<'a> {
+	/// Consumes this slots reservation and actually queues the notifications.
+	///
+	/// # Panic
+	///
+	/// Panics if the number of items in the `notifications` iterator is different from the number
+	/// of reserved slots.
+	pub send(self, notifications: impl Iterator<Item = Vec<u8>>) {
+		todo!()
 	}
 }
 
