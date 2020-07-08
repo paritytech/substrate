@@ -64,6 +64,32 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 /// Just a bunch of bytes, but they should decode to a valid `Call`.
 pub type OpaqueCall = Vec<u8>;
 
+pub trait WeightInfo {
+	fn as_multi_threshold_1(z: u32, ) -> Weight;
+	fn as_multi_create(s: u32, z: u32, ) -> Weight;
+	fn as_multi_create_store(s: u32, z: u32, ) -> Weight;
+	fn as_multi_approve(s: u32, z: u32, ) -> Weight;
+	fn as_multi_complete(s: u32, z: u32, ) -> Weight;
+	fn approve_as_multi_create(s: u32, z: u32, ) -> Weight;
+	fn approve_as_multi_approve(s: u32, z: u32, ) -> Weight;
+	fn approve_as_multi_complete(s: u32, z: u32, ) -> Weight;
+	fn cancel_as_multi(s: u32, z: u32, ) -> Weight;
+	fn cancel_as_multi_store(s: u32, z: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn as_multi_threshold_1(_z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_create(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_create_store(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_approve(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_complete(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_as_multi_create(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_as_multi_approve(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_as_multi_complete(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_as_multi(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_as_multi_store(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -91,6 +117,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that

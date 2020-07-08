@@ -579,7 +579,7 @@ mod tests {
 		let client = Arc::new(client);
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
+			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 		).0);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;

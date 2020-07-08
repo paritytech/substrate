@@ -30,12 +30,13 @@ use libp2p::swarm::{
 	PollParameters
 };
 use log::{debug, error, trace, warn};
+use parking_lot::RwLock;
 use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::task::{Context, Poll};
 use std::{borrow::Cow, cmp, collections::{hash_map::Entry, VecDeque}};
-use std::{error, mem, pin::Pin, str, time::Duration};
+use std::{error, mem, pin::Pin, str, sync::Arc, time::Duration};
 use wasm_timer::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other peers.
@@ -118,7 +119,7 @@ pub struct GenericProto {
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
+	notif_protocols: Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -220,20 +221,6 @@ enum PeerState {
 }
 
 impl PeerState {
-	/// True if there exists any established connection to the peer.
-	fn is_connected(&self) -> bool {
-		match self {
-			PeerState::Disabled { .. } |
-			PeerState::DisabledPendingEnable { .. } |
-			PeerState::Enabled { .. } |
-			PeerState::PendingRequest { .. } |
-			PeerState::Requested |
-			PeerState::Incoming { .. } => true,
-			PeerState::Poisoned |
-			PeerState::Banned { .. } => false,
-		}
-	}
-
 	/// True if there exists an established connection to the peer
 	/// that is open for custom protocol traffic.
 	fn is_open(&self) -> bool {
@@ -343,10 +330,12 @@ impl GenericProto {
 		local_peer_id: PeerId,
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
+		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
 		queue_size_report: Option<HistogramVec>,
 	) -> Self {
-		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
+		let legacy_handshake_message = Arc::new(RwLock::new(handshake_message));
+		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
 
 		GenericProto {
 			local_peer_id,
@@ -372,7 +361,7 @@ impl GenericProto {
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
-		self.notif_protocols.push((protocol_name.into(), handshake_msg.into()));
+		self.notif_protocols.push((protocol_name.into(), Arc::new(RwLock::new(handshake_msg.into()))));
 	}
 
 	/// Modifies the handshake of the given notifications protocol.
@@ -383,24 +372,17 @@ impl GenericProto {
 		protocol_name: &[u8],
 		handshake_message: impl Into<Vec<u8>>
 	) {
-		let handshake_message = handshake_message.into();
 		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
-			protocol.1 = handshake_message.clone();
-		} else {
-			return;
+			*protocol.1.write() = handshake_message.into();
 		}
+	}
 
-		// Send an event to all the peers we're connected to, updating the handshake message.
-		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_connected()) {
-			self.events.push_back(NetworkBehaviourAction::NotifyHandler {
-				peer_id: peer_id.clone(),
-				handler: NotifyHandler::All,
-				event: NotifsHandlerIn::UpdateHandshake {
-					protocol_name: Cow::Owned(protocol_name.to_owned()),
-					handshake_message: handshake_message.clone(),
-				},
-			});
-		}
+	/// Modifies the handshake of the legacy protocol.
+	pub fn set_legacy_handshake_message(
+		&mut self,
+		handshake_message: impl Into<Vec<u8>>
+	) {
+		*self.legacy_protocol.handshake_message().write() = handshake_message.into();
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.

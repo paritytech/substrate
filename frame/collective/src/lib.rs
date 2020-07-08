@@ -76,6 +76,30 @@ pub type MemberCount = u32;
 /// + This pallet assumes that dependents keep to the limit without enforcing it.
 pub const MAX_MEMBERS: MemberCount = 100;
 
+pub trait WeightInfo {
+	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
+	fn execute(m: u32, b: u32, ) -> Weight;
+	fn propose_execute(m: u32, b: u32, ) -> Weight;
+	fn propose_proposed(m: u32, p: u32, b: u32, ) -> Weight;
+	fn vote(m: u32, ) -> Weight;
+	fn close_early_disapproved(m: u32, p: u32, b: u32, ) -> Weight;
+	fn close_early_approved(m: u32, p: u32, b: u32, ) -> Weight;
+	fn close_disapproved(m: u32, p: u32, b: u32, ) -> Weight;
+	fn close_approved(m: u32, p: u32, b: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set_members(_m: u32, _n: u32, _p: u32, ) -> Weight { 1_000_000_000 }
+	fn execute(_m: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_execute(_m: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_proposed(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn vote(_m: u32, ) -> Weight { 1_000_000_000 }
+	fn close_early_disapproved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_early_approved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_disapproved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_approved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
@@ -94,6 +118,9 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 
 	/// Maximum number of proposals allowed to be active in parallel.
 	type MaxProposals: Get<u32>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Origin for the collective module.
@@ -1039,6 +1066,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
@@ -1046,6 +1074,7 @@ mod tests {
 		type Event = Event;
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Origin = Origin;
@@ -1053,6 +1082,7 @@ mod tests {
 		type Event = Event;
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
+		type WeightInfo = ();
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
