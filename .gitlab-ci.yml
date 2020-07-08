@@ -212,7 +212,7 @@ test-deterministic-wasm:
     - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
     # confirm checksum
     - sha256sum -c checksum.sha256
-   - sccache -s
+    - sccache -s
 
 test-linux-stable:                 &test-linux
   stage:                           test
