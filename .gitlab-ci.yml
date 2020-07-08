@@ -193,7 +193,7 @@ cargo-check-subkey:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
-test-deterministic-wasm:           &test-linux
+test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -212,7 +212,7 @@ test-deterministic-wasm:           &test-linux
     - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
     # confirm checksum
     - sha256sum -c checksum.sha256
-
+   - sccache -s
 
 test-linux-stable:                 &test-linux
   stage:                           test
