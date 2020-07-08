@@ -1029,6 +1029,8 @@ impl<T: Trait> Module<T> {
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
+		#[cfg(feature = "std")]
+		println!("#### {:?}", parent_hash);
 		let storage_changes_root = sp_io::storage::changes_root(&parent_hash.encode());
 
 		// we can't compute changes trie root earlier && put it to the Digest
@@ -1038,6 +1040,8 @@ impl<T: Trait> Module<T> {
 				T::Hash::decode(&mut &storage_changes_root[..])
 					.expect("Node is configured to use the same hash; qed")
 			);
+			#[cfg(feature = "std")]
+			println!("#### {:?}", item);
 			digest.push(item);
 		}
 

@@ -387,6 +387,9 @@ where
 		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
 		for (header_item, computed_item) in items_zip {
 			header_item.check_equal(&computed_item);
+			if header_item != computed_item {
+				panic!("{:?} != {:?}", header_item, computed_item);
+			}
 			assert!(header_item == computed_item, "Digest item must match that calculated.");
 		}
 
