@@ -351,6 +351,22 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	}
 }
 
+/// Builds a SCALE-encoded "Status" message to send as handshake for the legacy protocol.
+fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Vec<u8> {
+	let info = chain.info();
+	let status = message::generic::Status {
+		version: CURRENT_VERSION,
+		min_supported_version: MIN_VERSION,
+		genesis_hash: info.genesis_hash,
+		roles: protocol_config.roles.into(),
+		best_number: info.best_number,
+		best_hash: info.best_hash,
+		chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
+	};
+
+	Message::<B>::Status(status).encode()
+}
+
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
@@ -403,6 +419,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			local_peer_id,
 			protocol_id.clone(),
 			versions,
+			build_status_message(&config, &chain),
 			peerset,
 			queue_size_report
 		);
@@ -547,6 +564,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn update_chain(&mut self) {
 		let info = self.context_data.chain.info();
 		self.sync.update_chain_info(&info.best_hash, info.best_number);
+		self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
+		self.behaviour.set_notif_protocol_handshake(
+			&self.block_announces_protocol,
+			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+		);
 	}
 
 	/// Inform sync about an own imported block.
@@ -683,7 +705,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
 		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
-		self.send_status(who);
 	}
 
 	/// Called by peer when it is disconnecting
@@ -1329,22 +1350,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Send Status message
-	fn send_status(&mut self, who: PeerId) {
-		let info = self.context_data.chain.info();
-		let status = message::generic::Status {
-			version: CURRENT_VERSION,
-			min_supported_version: MIN_VERSION,
-			genesis_hash: info.genesis_hash,
-			roles: self.config.roles,
-			best_number: info.best_number,
-			best_hash: info.best_hash,
-			chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
-		};
-
-		self.send_message(&who, None, GenericMessage::Status(status))
-	}
-
 	fn on_block_announce(
 		&mut self,
 		who: PeerId,
@@ -1498,6 +1503,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		});
 		if let Some((best_num, best_hash)) = new_best {
 			self.sync.update_chain_info(&best_hash, best_num);
+			self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
 			self.behaviour.set_notif_protocol_handshake(
 				&self.block_announces_protocol,
 				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
