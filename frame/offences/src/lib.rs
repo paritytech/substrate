@@ -51,6 +51,20 @@ pub type DeferredOffenceOf<T> = (
 	SessionIndex,
 );
 
+pub trait WeightInfo {
+	fn report_offence_im_online(r: u32, o: u32, n: u32, ) -> Weight;
+	fn report_offence_grandpa(r: u32, n: u32, ) -> Weight;
+	fn report_offence_babe(r: u32, n: u32, ) -> Weight;
+	fn on_initialize(d: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn report_offence_im_online(_r: u32, _o: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn report_offence_grandpa(_r: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn report_offence_babe(_r: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_d: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Offences trait
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -63,6 +77,8 @@ pub trait Trait: frame_system::Trait {
 	/// `on_initialize`.
 	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
 	type WeightSoftLimit: Get<Weight>;
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
