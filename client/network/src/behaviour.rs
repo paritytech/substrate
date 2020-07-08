@@ -16,7 +16,7 @@
 
 use crate::{
 	config::{ProtocolId, Role}, block_requests, light_client_handler, finality_requests,
-	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	peer_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	protocol::{message::{self, Roles}, CustomMessageOutcome, Protocol},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
@@ -39,7 +39,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	substrate: Protocol<B, H>,
 	/// Periodically pings and identifies the nodes we are connected to, and store information in a
 	/// cache.
-	debug_info: debug_info::DebugInfoBehaviour,
+	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
 	/// Block request handling.
@@ -113,7 +113,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	) -> Self {
 		Behaviour {
 			substrate,
-			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key),
+			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
 			block_requests,
 			finality_proof_requests,
@@ -153,8 +153,8 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Returns `None` if we don't know anything about this node. Always returns `Some` for nodes
 	/// we're connected to, meaning that if `None` is returned then we're not connected to that
 	/// node.
-	pub fn node(&self, peer_id: &PeerId) -> Option<debug_info::Node> {
-		self.debug_info.node(peer_id)
+	pub fn node(&self, peer_id: &PeerId) -> Option<peer_info::Node> {
+		self.peer_info.node(peer_id)
 	}
 
 	/// Registers a new notifications protocol.
@@ -355,10 +355,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Even
 	}
 }
 
-impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<debug_info::DebugInfoEvent>
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
 	for Behaviour<B, H> {
-	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
-		let debug_info::DebugInfoEvent::Identified { peer_id, mut info } = event;
+	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
+		let peer_info::PeerInfoEvent::Identified { peer_id, mut info } = event;
 		if info.listen_addrs.len() > 30 {
 			debug!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
 				it is identified by {:?} and {:?}", peer_id, info.protocol_version,
@@ -380,8 +380,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
 				// Obtaining and reporting listen addresses for unroutable peers back
 				// to Kademlia is handled by the `Identify` protocol, part of the
-				// `DebugInfoBehaviour`. See the `NetworkBehaviourEventProcess`
-				// implementation for `DebugInfoEvent`.
+				// `PeerInfoBehaviour`. See the `NetworkBehaviourEventProcess`
+				// implementation for `PeerInfoEvent`.
 			}
 			DiscoveryOut::Discovered(peer_id) => {
 				self.substrate.add_discovered_nodes(iter::once(peer_id));
