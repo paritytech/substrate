@@ -25,6 +25,7 @@ mod deprecated {
 pub fn migrate_enum_set<T: Trait>() -> Weight {
     if deprecated::NextEnumSet::<T>::exists() {
         // migrations need doing.
+        sp_runtime::print("🕊️  Migrating Indices...");
         let set_count = deprecated::NextEnumSet::<T>::take();
         let set_size: T::AccountIndex = 64.into();
 
@@ -44,8 +45,10 @@ pub fn migrate_enum_set<T: Trait>() -> Weight {
             }
             set_index += One::one();
         }
+        sp_runtime::print("🕊️  Done Indices.");
         T::MaximumBlockWeight::get()
     } else {
+        sp_runtime::print("🕊️  No Indices to migrate.");
         0
     }
 }
