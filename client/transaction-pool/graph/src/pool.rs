@@ -125,6 +125,14 @@ impl Default for Options {
 	}
 }
 
+/// Should we check that the transaction exists
+/// in the pool, before we verify it?
+#[derive(Copy, Clone)]
+enum CheckBeforeVerify {
+	Yes,
+	No,
+}
+
 /// Extrinsics pool that performs validation.
 pub struct Pool<B: ChainApi> {
 	validated_pool: Arc<ValidatedPool<B>>,
@@ -156,11 +164,13 @@ impl<B: ChainApi> Pool<B> {
 		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
-		let validated_transactions = self.verify(at, xts, true).await?;
+		let validated_transactions = self.verify(at, xts, CheckBeforeVerify::Yes).await?;
 		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
 	}
 
 	/// Resubmit the given extrinsics to the pool.
+	///
+	/// This does not check if a transaction is banned, before we verify it again.
 	pub async fn resubmit_at(
 		&self,
 		at: &BlockId<B::Block>,
@@ -168,7 +178,7 @@ impl<B: ChainApi> Pool<B> {
 		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
-		let validated_transactions = self.verify(at, xts, false).await?;
+		let validated_transactions = self.verify(at, xts, CheckBeforeVerify::No).await?;
 		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
 	}
 
@@ -191,7 +201,7 @@ impl<B: ChainApi> Pool<B> {
 		xt: ExtrinsicFor<B>,
 	) -> Result<Watcher<ExtrinsicHash<B>, ExtrinsicHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
-		let (_, tx) = self.verify_one(at, block_number, source, xt, true).await;
+		let (_, tx) = self.verify_one(at, block_number, source, xt, CheckBeforeVerify::Yes).await;
 		self.validated_pool.submit_and_watch(tx)
 	}
 
@@ -326,7 +336,7 @@ impl<B: ChainApi> Pool<B> {
 			.into_iter()
 			.map(|tx| (tx.source, tx.data.clone()));
 
-		let reverified_transactions = self.verify(at, pruned_transactions, true).await?;
+		let reverified_transactions = self.verify(at, pruned_transactions, CheckBeforeVerify::Yes).await?;
 
 		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
@@ -356,14 +366,14 @@ impl<B: ChainApi> Pool<B> {
 		&self,
 		at: &BlockId<B::Block>,
 		xts: impl IntoIterator<Item=(TransactionSource, ExtrinsicFor<B>)>,
-		check_is_known: bool,
+		check: CheckBeforeVerify,
 	) -> Result<HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>, B::Error> {
 		// we need a block number to compute tx validity
 		let block_number = self.resolve_block_number(at)?;
 
 		let res = futures::future::join_all(
 			xts.into_iter()
-				.map(|(source, xt)| self.verify_one(at, block_number, source, xt, check_is_known))
+				.map(|(source, xt)| self.verify_one(at, block_number, source, xt, check))
 		).await.into_iter().collect::<HashMap<_, _>>();
 
 		Ok(res)
@@ -376,11 +386,11 @@ impl<B: ChainApi> Pool<B> {
 		block_number: NumberFor<B>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-		check_is_known: bool,
+		check: CheckBeforeVerify,
 	) -> (ExtrinsicHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 
-		if check_is_known {
+		if let CheckBeforeVerify::Yes = check {
 			if let Err(err) = self.validated_pool.check_is_known(&hash) {
 				return (hash.clone(), ValidatedTransaction::Invalid(hash, err.into()))
 			}
