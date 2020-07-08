@@ -1204,7 +1204,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Propagate one transaction.
 	///
-	/// Use this when new valid transsaction with `hash` becomes known.
+	/// Use this when new valid transaction with `hash` becomes known.
 	pub fn propagate_transaction(
 		&mut self,
 		hash: &H,
