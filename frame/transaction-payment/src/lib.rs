@@ -413,6 +413,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			Ok(imbalance) => Ok((fee, Some(imbalance))),
 			Err(_) => {
 				sp_runtime::print("withdraw_fee: InvalidTransaction::Payment");
+				panic!("withdraw_fee: InvalidTransaction::Payment");
 				Err(InvalidTransaction::Payment.into())
 			},
 		}
@@ -492,6 +493,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 						Ok(actual_payment) => actual_payment,
 						Err(_) => return {
 							sp_runtime::print("post_dispatch: InvalidTransaction::Payment");
+							panic!("post_dispatch: InvalidTransaction::Payment");
 							Err(InvalidTransaction::Payment.into())
 						},
 					}
