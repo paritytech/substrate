@@ -64,7 +64,7 @@
 //! ```
 //! use frame_support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
 //!

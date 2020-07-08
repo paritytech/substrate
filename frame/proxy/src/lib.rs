@@ -60,7 +60,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>
+		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Call<Self>>
 		+ IsType<<Self as frame_system::Trait>::Call>;
 
 	/// The currency mechanism.

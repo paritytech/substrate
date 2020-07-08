@@ -28,7 +28,7 @@ use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.

@@ -34,7 +34,7 @@ impl_outer_origin! {
 }
 impl_outer_event! {
 	pub enum TestEvent for Test {
-		system<T>,
+		frame_system<T>,
 		pallet_balances<T>,
 		utility,
 	}
@@ -132,7 +132,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> TestEvent {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<TestEvent>>(e: E) {

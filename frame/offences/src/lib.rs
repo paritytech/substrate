@@ -37,7 +37,6 @@ use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
-use frame_system as system;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
@@ -184,6 +183,15 @@ where
 		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
 
 		Ok(())
+	}
+
+	fn is_known_offence(offenders: &[T::IdentificationTuple], time_slot: &O::TimeSlot) -> bool {
+		let any_unknown = offenders.iter().any(|offender| {
+			let report_id = Self::report_id::<O>(time_slot, offender);
+			!<Reports<T>>::contains_key(&report_id)
+		});
+
+		!any_unknown
 	}
 }
 
