@@ -101,7 +101,7 @@ use frame_support::{
 	}
 };
 use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
 
@@ -1060,7 +1060,6 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections_phragmen;
-	use frame_system as system;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -1225,7 +1224,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event<T>},
+			System: frame_system::{Module, Call, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
 		}

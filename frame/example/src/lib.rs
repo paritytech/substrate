@@ -260,7 +260,7 @@ use frame_support::{
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{
@@ -611,7 +611,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 
 impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Trait>::Call: IsSubType<Module<T>, T>,
+	<T as frame_system::Trait>::Call: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
