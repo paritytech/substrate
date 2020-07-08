@@ -801,6 +801,23 @@ impl Drop for SignatureBatching {
 	}
 }
 
+/// Describes on what should happen with a storage transaction.
+pub enum TransactionOutcome<R> {
+	/// Commit the transaction.
+	Commit(R),
+	/// Rollback the transaction.
+	Rollback(R),
+}
+
+impl<R> TransactionOutcome<R> {
+	/// Convert into the inner type.
+	pub fn into_inner(self) -> R {
+		match self {
+			Self::Commit(r) => r,
+			Self::Rollback(r) => r,
+		}
+	}
+}
 
 #[cfg(test)]
 mod tests {

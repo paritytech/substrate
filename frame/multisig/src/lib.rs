@@ -61,6 +61,34 @@ mod tests;
 mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+/// Just a bunch of bytes, but they should decode to a valid `Call`.
+pub type OpaqueCall = Vec<u8>;
+
+pub trait WeightInfo {
+	fn as_multi_threshold_1(z: u32, ) -> Weight;
+	fn as_multi_create(s: u32, z: u32, ) -> Weight;
+	fn as_multi_create_store(s: u32, z: u32, ) -> Weight;
+	fn as_multi_approve(s: u32, z: u32, ) -> Weight;
+	fn as_multi_complete(s: u32, z: u32, ) -> Weight;
+	fn approve_as_multi_create(s: u32, z: u32, ) -> Weight;
+	fn approve_as_multi_approve(s: u32, z: u32, ) -> Weight;
+	fn approve_as_multi_complete(s: u32, z: u32, ) -> Weight;
+	fn cancel_as_multi(s: u32, z: u32, ) -> Weight;
+	fn cancel_as_multi_store(s: u32, z: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn as_multi_threshold_1(_z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_create(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_create_store(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_approve(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn as_multi_complete(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_as_multi_create(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_as_multi_approve(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_as_multi_complete(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_as_multi(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_as_multi_store(_s: u32, _z: u32, ) -> Weight { 1_000_000_000 }
+}
 
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
@@ -89,6 +117,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The maximum amount of signatories allowed in the multisig.
 	type MaxSignatories: Get<u16>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
@@ -122,7 +153,7 @@ decl_storage! {
 			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 
-		pub Calls: map hasher(identity) [u8; 32] => Option<(Vec<u8>, T::AccountId, BalanceOf<T>)>;
+		pub Calls: map hasher(identity) [u8; 32] => Option<(OpaqueCall, T::AccountId, BalanceOf<T>)>;
 	}
 }
 
@@ -224,7 +255,7 @@ mod weight_of {
 }
 
 enum CallOrHash {
-	Call(Vec<u8>, bool),
+	Call(OpaqueCall, bool),
 	Hash([u8; 32]),
 }
 
@@ -357,7 +388,7 @@ decl_module! {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: Vec<u8>,
+			call: OpaqueCall,
 			store_call: bool,
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
@@ -630,9 +661,12 @@ impl<T: Trait> Module<T> {
 	/// We store `data` here because storing `call` would result in needing another `.encode`.
 	///
 	/// Returns a `bool` indicating whether the data did end up being stored.
-	fn store_call_and_reserve(who: T::AccountId, hash: &[u8; 32], data: Vec<u8>, other_deposit: BalanceOf<T>)
-		-> DispatchResult
-	{
+	fn store_call_and_reserve(
+		who: T::AccountId,
+		hash: &[u8; 32],
+		data: OpaqueCall,
+		other_deposit: BalanceOf<T>,
+	) -> DispatchResult {
 		ensure!(!Calls::<T>::contains_key(hash), Error::<T>::AlreadyStored);
 		let deposit = other_deposit + T::DepositBase::get()
 			+ T::DepositFactor::get() * BalanceOf::<T>::from(((data.len() + 31) / 32) as u32);

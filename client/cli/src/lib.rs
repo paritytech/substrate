@@ -27,15 +27,13 @@ mod config;
 mod error;
 mod params;
 mod runner;
+mod logger;
 
 pub use arg_enums::*;
 pub use commands::*;
 pub use config::*;
 pub use error::*;
-use lazy_static::lazy_static;
-use log::info;
 pub use params::*;
-use regex::Regex;
 pub use runner::*;
 use sc_service::{Configuration, TaskExecutor};
 pub use sc_service::{ChainSpec, Role};
@@ -46,6 +44,7 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
+pub use crate::logger::{init_logger, LogRotationOpt};
 
 /// Substrate client CLI
 ///
@@ -57,25 +56,33 @@ use structopt::{
 /// its own implementation that will fill the necessary field based on the trait's functions.
 pub trait SubstrateCli: Sized {
 	/// Implementation name.
-	fn impl_name() -> &'static str;
+	fn impl_name() -> String;
 
 	/// Implementation version.
 	///
 	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
 	/// short commit hash of the commit of in the Git repository.
-	fn impl_version() -> &'static str;
+	fn impl_version() -> String;
 
 	/// Executable file name.
-	fn executable_name() -> &'static str;
+	///
+	/// Extracts the file name from `std::env::current_exe()`.
+	/// Resorts to the env var `CARGO_PKG_NAME` in case of Error.
+	fn executable_name() -> String {
+		std::env::current_exe().ok()
+			.and_then(|e| e.file_name().map(|s| s.to_os_string()))
+			.and_then(|w| w.into_string().ok())
+			.unwrap_or_else(|| env!("CARGO_PKG_NAME").into())
+	}
 
 	/// Executable file description.
-	fn description() -> &'static str;
+	fn description() -> String;
 
 	/// Executable file author.
-	fn author() -> &'static str;
+	fn author() -> String;
 
 	/// Support URL.
-	fn support_url() -> &'static str;
+	fn support_url() -> String;
 
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
@@ -116,13 +123,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -175,13 +185,16 @@ pub trait SubstrateCli: Sized {
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::impl_version().to_string();
+		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
 
+		let name = Self::executable_name();
+		let author = Self::author();
+		let about = Self::description();
 		let app = app
-			.name(Self::executable_name())
-			.author(Self::author())
-			.about(Self::description())
+			.name(name)
+			.author(author.as_str())
+			.about(about.as_str())
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;
@@ -212,80 +225,4 @@ pub trait SubstrateCli: Sized {
 
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
-}
-
-/// Initialize the logger
-pub fn init_logger(pattern: &str) {
-	use ansi_term::Colour;
-
-	let mut builder = env_logger::Builder::new();
-	// Disable info logging by default for some modules:
-	builder.filter(Some("ws"), log::LevelFilter::Off);
-	builder.filter(Some("yamux"), log::LevelFilter::Off);
-	builder.filter(Some("hyper"), log::LevelFilter::Warn);
-	builder.filter(Some("cranelift_wasm"), log::LevelFilter::Warn);
-	// Always log the special target `sc_tracing`, overrides global level
-	builder.filter(Some("sc_tracing"), log::LevelFilter::Info);
-	// Enable info for others.
-	builder.filter(None, log::LevelFilter::Info);
-
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse_filters(&lvl);
-	}
-
-	builder.parse_filters(pattern);
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
-
-	builder.format(move |buf, record| {
-		let now = time::now();
-		let timestamp =
-			time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
-
-		let mut output = if log::max_level() <= log::LevelFilter::Info {
-			format!(
-				"{} {}",
-				Colour::Black.bold().paint(timestamp),
-				record.args(),
-			)
-		} else {
-			let name = ::std::thread::current()
-				.name()
-				.map_or_else(Default::default, |x| {
-					format!("{}", Colour::Blue.bold().paint(x))
-				});
-			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-			let timestamp = format!("{}.{:03}", timestamp, millis);
-			format!(
-				"{} {} {} {}  {}",
-				Colour::Black.bold().paint(timestamp),
-				name,
-				record.level(),
-				record.target(),
-				record.args()
-			)
-		};
-
-		if !isatty && record.level() <= log::Level::Info && atty::is(atty::Stream::Stdout) {
-			// duplicate INFO/WARN output to console
-			println!("{}", output);
-		}
-
-		if !enable_color {
-			output = kill_color(output.as_ref());
-		}
-
-		writeln!(buf, "{}", output)
-	});
-
-	if builder.try_init().is_err() {
-		info!("💬 Not registering Substrate logger, as there is already a global logger registered!");
-	}
-}
-
-fn kill_color(s: &str) -> String {
-	lazy_static! {
-		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
-	}
-	RE.replace_all(s, "").to_string()
 }

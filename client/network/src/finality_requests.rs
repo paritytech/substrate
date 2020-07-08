@@ -234,7 +234,7 @@ where
 			marker: PhantomData,
 		};
 		let mut cfg = OneShotHandlerConfig::default();
-		cfg.inactive_timeout = self.config.inactivity_timeout;
+		cfg.keep_alive_timeout = self.config.inactivity_timeout;
 		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
