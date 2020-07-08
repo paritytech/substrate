@@ -84,6 +84,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -94,6 +95,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 thread_local! {
 	static TEN_TO_FOURTEEN: RefCell<Vec<u64>> = RefCell::new(vec![10,11,12,13,14]);
@@ -147,6 +149,7 @@ impl Trait for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
