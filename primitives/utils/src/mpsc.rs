@@ -437,5 +437,7 @@ mod inner {
 	}
 }
 
-pub use inner::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver,
-				tracing_channel, TracingSender, TracingReceiver};
+pub use inner::{
+	tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver,
+	tracing_channel, TracingSender, TracingReceiver
+};
