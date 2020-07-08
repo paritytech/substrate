@@ -156,8 +156,10 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 	// Add filters defined by RUST_LOG.
 	builder.insert_modules_from(LogSpecification::env()?);
 
+	// Dashes are to be replaced with underscores.
+	let pattern = pattern.replace("-", "_");
 	// Add filters passed in as argument.
-	builder.insert_modules_from(LogSpecification::parse(pattern)?);
+	builder.insert_modules_from(LogSpecification::parse(&pattern)?);
 
 	// Build the LogSpec.
 	let spec = builder.build();
@@ -247,14 +249,16 @@ mod tests {
 
 	#[test]
 	fn logger_default() {
-		let pattern = "";
+		let pattern = "sub-authority-discovery=trace";
 		let log_rotation_opt = LogRotationOpt {
 			log_directory: None,
 			log_age: None,
 			log_size: None,
 		};
+		let res = init_logger(pattern, &log_rotation_opt);
 
-		assert!(init_logger(pattern, &log_rotation_opt).is_ok());
+		dbg!(&res);
+		assert!(res.is_ok());
 	}
 
 	#[test]
@@ -265,7 +269,9 @@ mod tests {
 			log_age: Some(Age::Day),
 			log_size: Some(1337),
 		};
+		let res = init_logger(pattern, &log_rotation_opt);
 
-		assert!(init_logger(pattern, &log_rotation_opt).is_err());
+		dbg!(&res);
+		assert!(res.is_err());
 	}
 }
