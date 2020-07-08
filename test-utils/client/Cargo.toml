@@ -16,7 +16,7 @@ sc-client-api = { version = "2.0.0-rc4", path = "../../client/api" }
 sc-light = { version = "2.0.0-rc4", path = "../../client/light" }
 sc-client-db = { version = "0.8.0-rc4", features = ["test-helpers"], path = "../../client/db" }
 sp-consensus = { version = "0.8.0-rc4", path = "../../primitives/consensus/common" }
-sc-executor = { version = "0.8.0-rc4", path = "../../client/executor" }
+sc-executor = { version = "0.8.0-rc4", path = "../../client/executor", features = ["wasmtime"] }
 sc-consensus = { version = "0.8.0-rc4", path = "../../client/consensus/common" }
 sc-service = { version = "0.8.0-rc4", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
 futures = "0.3.4"
