@@ -26,7 +26,6 @@ use prometheus::{
 #[cfg(feature = "metered")]
 use prometheus::{core::GenericCounterVec, Opts};
 
-
 lazy_static! {
 	pub static ref TOKIO_THREADS_TOTAL: GenericCounter<AtomicU64> = GenericCounter::new(
 		"tokio_threads_total", "Total number of threads created"
@@ -44,8 +43,11 @@ lazy_static! {
 		&["entity", "action"] // 'name of channel, send|received|dropped
 	).expect("Creating of statics doesn't fail. qed");
 
+	pub static ref CHANNELS_COUNTER : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
+		Opts::new("channel_len", "Items in each mpsc::channel instance"),
+		&["entity", "action"] // 'name of channel, send|received|dropped
+	).expect("Creating of statics doesn't fail. qed");
 }
-
 
 /// Register the statics to report to registry
 pub fn register_globals(registry: &Registry) -> Result<(), PrometheusError> {
