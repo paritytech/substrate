@@ -51,6 +51,7 @@ mod module1 {
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where
 			origin: <T as system::Trait>::Origin,
+			system = system,
 			T::BlockNumber: From<u32>
 		{
 			fn offchain_worker() {}
@@ -129,7 +130,8 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Trait>::Origin
+			origin: <T as system::Trait>::Origin,
+			system = system
 		{
 			fn deposit_event() = default;
 		}
