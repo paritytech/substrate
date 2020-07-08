@@ -411,7 +411,10 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			ExistenceRequirement::KeepAlive,
 		) {
 			Ok(imbalance) => Ok((fee, Some(imbalance))),
-			Err(_) => Err(InvalidTransaction::Payment.into()),
+			Err(_) => {
+				sp_runtime::print("withdraw_fee: InvalidTransaction::Payment");
+				Err(InvalidTransaction::Payment.into())
+			},
 		}
 	}
 }
@@ -487,7 +490,10 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 					// `PostDispatchInfo::calc_unspent` guards against such a case.
 					match payed.offset(refund_imbalance) {
 						Ok(actual_payment) => actual_payment,
-						Err(_) => return Err(InvalidTransaction::Payment.into()),
+						Err(_) => return {
+							sp_runtime::print("post_dispatch: InvalidTransaction::Payment");
+							Err(InvalidTransaction::Payment.into())
+						},
 					}
 				}
 				// We do not recreate the account using the refund. The up front payment
