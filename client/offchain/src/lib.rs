@@ -250,7 +250,7 @@ mod tests {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(TestPool(BasicPool::new(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
+			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 		).0));
 		client.execution_extensions()

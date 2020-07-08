@@ -63,7 +63,7 @@ impl Default for TestSetup {
 
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
+			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 		).0);
 		TestSetup {
