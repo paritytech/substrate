@@ -199,6 +199,17 @@ impl Metrics {
 	}
 }
 
+/// Flood settings.
+///
+/// Rules how many peers are supposed to recieve the message.
+#[derive(Clone, Copy)]
+pub enum FloodSettings {
+	/// Send message to everyone.
+	Everyone,
+	/// Send message to sqrt(current peer count), but no less than `minimum`.
+	Sqrt { minimum: usize }
+}
+
 struct PendingTransaction {
 	validation: TransactionImportFuture,
 	peer_id: PeerId,
@@ -1192,6 +1203,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Propagate one transaction.
+	///
+	/// Use this when new valid transsaction with `hash` becomes known.
 	pub fn propagate_transaction(
 		&mut self,
 		hash: &H,
@@ -1202,7 +1215,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			return;
 		}
 		if let Some(transaction) = self.transaction_pool.transaction(hash) {
-			let propagated_to = self.do_propagate_transactions(&[(hash.clone(), transaction)]);
+			let propagated_to = self.do_propagate_transactions(
+				&[(hash.clone(), transaction)],
+				FloodSettings::Sqrt { minimum: 5 },
+			);
 			self.transaction_pool.on_broadcasted(propagated_to);
 		}
 	}
@@ -1210,13 +1226,34 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	fn do_propagate_transactions(
 		&mut self,
 		transactions: &[(H, B::Extrinsic)],
+		flood_settings: FloodSettings,
 	) -> HashMap<H, Vec<String>> {
+		use rand::seq::IteratorRandom;
+
 		let mut propagated_to = HashMap::new();
-		for (who, peer) in self.context_data.peers.iter_mut() {
-			// never send transactions to the light node
-			if !peer.info.roles.is_full() {
-				continue;
-			}
+
+		let (selected_peers, limit) = match flood_settings {
+			FloodSettings::Everyone => (
+				self.context_data.peers
+					.iter()
+					.filter(|(_, peer)| peer.info.roles.is_full())
+					.map(|(id, _)| id.clone())
+					.collect::<Vec<_>>(),
+				None,
+			),
+			FloodSettings::Sqrt { minimum } => (
+				self.context_data.peers
+					.iter()
+					.filter(|(_, peer)| peer.info.roles.is_full())
+					.map(|(id, _)| id.clone())
+					.choose_multiple(&mut rand::thread_rng(), self.context_data.peers.len()),
+				Some(std::cmp::max(minimum, (self.context_data.peers.len() as f64).sqrt().ceil() as u64 as _))
+			),
+		};
+
+		for who in selected_peers.into_iter() {
+			let peer = self.context_data.peers.get_mut(&who)
+				.expect("selected_peers has been chosen from existing entries only; qed");
 
 			let (hashes, to_send): (Vec<_>, Vec<_>) = transactions
 				.iter()
@@ -1239,7 +1276,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					&who,
 					Some((self.transactions_protocol.clone(), encoded)),
 					GenericMessage::Transactions(to_send)
-				)
+				);
+
+				if limit.map_or(false, |v| v >= propagated_to.len()) {
+					break;
+				}
 			}
 		}
 
@@ -1260,7 +1301,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			return;
 		}
 		let transactions = self.transaction_pool.transactions();
-		let propagated_to = self.do_propagate_transactions(&transactions);
+		let propagated_to = self.do_propagate_transactions(&transactions, FloodSettings::Everyone);
 		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
