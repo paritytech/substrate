@@ -329,6 +329,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;

@@ -134,6 +134,7 @@ impl frame_system::Trait for Runtime {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 parameter_types! {
@@ -155,6 +156,7 @@ impl pallet_session::Trait for Runtime {
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type WeightInfo = ();
 }
 
 impl pallet_session::historical::Trait for Runtime {
@@ -183,6 +185,7 @@ impl Trait for Runtime {
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
+	type WeightInfo = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where

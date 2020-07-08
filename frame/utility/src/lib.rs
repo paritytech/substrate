@@ -70,6 +70,16 @@ use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
 mod tests;
 mod benchmarking;
 
+pub trait WeightInfo {
+	fn batch(c: u32, ) -> Weight;
+	fn as_derivative(u: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn batch(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn as_derivative(_u: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -79,6 +89,9 @@ pub trait Trait: frame_system::Trait {
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
 		+ GetDispatchInfo + From<frame_system::Call<Self>>
 		+ UnfilteredDispatchable<Origin=Self::Origin>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
