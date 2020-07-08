@@ -113,7 +113,7 @@ use frame_support::{
 	dispatch::{self, DispatchResult, DispatchError},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 #[cfg(test)]
 mod mock;
@@ -434,7 +434,7 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				system::Module::<T>::inc_ref(&account);
+				frame_system::Module::<T>::inc_ref(&account);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -692,7 +692,7 @@ impl<T: Trait> Module<T> {
 
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_none() {
-			system::Module::<T>::inc_ref(&account);
+			frame_system::Module::<T>::inc_ref(&account);
 		}
 
 		Ok(())
@@ -740,7 +740,7 @@ impl<T: Trait> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		system::Module::<T>::dec_ref(&account);
+		frame_system::Module::<T>::dec_ref(&account);
 
 		Ok(())
 	}

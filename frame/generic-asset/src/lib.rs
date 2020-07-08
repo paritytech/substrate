@@ -171,7 +171,7 @@ use frame_support::{
 	},
 	Parameter, StorageMap,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
