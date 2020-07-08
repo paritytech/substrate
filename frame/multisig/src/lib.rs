@@ -241,11 +241,13 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			// Utility.Multisigs -> Multisig.Multisigs
 			use frame_support::migration::{StorageIterator, put_storage_value};
+			sp_runtime::print("🕊️  Migrating Multisigs...");
 			for (key, value) in StorageIterator::<
 				Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>
 			>::new(b"Utility", b"Multisigs").drain() {
 				put_storage_value(b"Multisig", b"Multisigs", &key, value);
 			}
+			sp_runtime::print("🕊️  Done Multisigs.");
 			1_000_000_000
 		}
 
