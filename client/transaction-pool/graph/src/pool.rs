@@ -125,10 +125,10 @@ impl Default for Options {
 	}
 }
 
-/// Should we check that the transaction exists
+/// Should we check that the transaction is banned
 /// in the pool, before we verify it?
 #[derive(Copy, Clone)]
-enum CheckBeforeVerify {
+enum CheckBannedBeforeVerify {
 	Yes,
 	No,
 }
@@ -164,7 +164,7 @@ impl<B: ChainApi> Pool<B> {
 		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
-		let validated_transactions = self.verify(at, xts, CheckBeforeVerify::Yes).await?;
+		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::Yes).await?;
 		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
 	}
 
@@ -178,7 +178,7 @@ impl<B: ChainApi> Pool<B> {
 		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
-		let validated_transactions = self.verify(at, xts, CheckBeforeVerify::No).await?;
+		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::No).await?;
 		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
 	}
 
@@ -201,7 +201,13 @@ impl<B: ChainApi> Pool<B> {
 		xt: ExtrinsicFor<B>,
 	) -> Result<Watcher<ExtrinsicHash<B>, ExtrinsicHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
-		let (_, tx) = self.verify_one(at, block_number, source, xt, CheckBeforeVerify::Yes).await;
+		let (_, tx) = self.verify_one(
+			at,
+			block_number,
+			source,
+			xt,
+			CheckBannedBeforeVerify::Yes,
+		).await;
 		self.validated_pool.submit_and_watch(tx)
 	}
 
@@ -336,7 +342,11 @@ impl<B: ChainApi> Pool<B> {
 			.into_iter()
 			.map(|tx| (tx.source, tx.data.clone()));
 
-		let reverified_transactions = self.verify(at, pruned_transactions, CheckBeforeVerify::Yes).await?;
+		let reverified_transactions = self.verify(
+			at,
+			pruned_transactions,
+			CheckBannedBeforeVerify::Yes,
+		).await?;
 
 		log::trace!(target: "txpool", "Pruning at {:?}. Resubmitting transactions.", at);
 		// And finally - submit reverified transactions back to the pool
@@ -366,7 +376,7 @@ impl<B: ChainApi> Pool<B> {
 		&self,
 		at: &BlockId<B::Block>,
 		xts: impl IntoIterator<Item=(TransactionSource, ExtrinsicFor<B>)>,
-		check: CheckBeforeVerify,
+		check: CheckBannedBeforeVerify,
 	) -> Result<HashMap<ExtrinsicHash<B>, ValidatedTransactionFor<B>>, B::Error> {
 		// we need a block number to compute tx validity
 		let block_number = self.resolve_block_number(at)?;
@@ -386,14 +396,13 @@ impl<B: ChainApi> Pool<B> {
 		block_number: NumberFor<B>,
 		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
-		check: CheckBeforeVerify,
+		check: CheckBannedBeforeVerify,
 	) -> (ExtrinsicHash<B>, ValidatedTransactionFor<B>) {
 		let (hash, bytes) = self.validated_pool.api().hash_and_length(&xt);
 
-		if let CheckBeforeVerify::Yes = check {
-			if let Err(err) = self.validated_pool.check_is_known(&hash) {
-				return (hash.clone(), ValidatedTransaction::Invalid(hash, err.into()))
-			}
+		let ignore_banned = matches!(check, CheckBannedBeforeVerify::No);
+		if let Err(err) = self.validated_pool.check_is_known(&hash, ignore_banned) {
+			return (hash.clone(), ValidatedTransaction::Invalid(hash, err.into()))
 		}
 
 		let validation_result = self.validated_pool.api().validate_transaction(

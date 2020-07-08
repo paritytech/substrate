@@ -139,9 +139,15 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 	/// A fast check before doing any further processing of a transaction, like validation.
 	///
+	/// If `ingore_banned` is `true`, it will not check if the transaction is banned.
+	///
 	/// It checks if the transaction is already imported or banned. If so, it returns an error.
-	pub fn check_is_known(&self, tx_hash: &ExtrinsicHash<B>) -> Result<(), B::Error> {
-		if self.is_banned(tx_hash) {
+	pub fn check_is_known(
+		&self,
+		tx_hash: &ExtrinsicHash<B>,
+		ignore_banned: bool,
+	) -> Result<(), B::Error> {
+		if !ignore_banned && self.is_banned(tx_hash) {
 			Err(error::Error::TemporarilyBanned.into())
 		} else if self.pool.read().is_imported(tx_hash) {
 			Err(error::Error::AlreadyImported(Box::new(tx_hash.clone())).into())
