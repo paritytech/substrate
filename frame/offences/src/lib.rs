@@ -37,7 +37,6 @@ use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
-use frame_system as system;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
