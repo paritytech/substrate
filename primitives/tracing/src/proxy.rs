@@ -17,8 +17,8 @@
 //! Proxy to allow entering tracing spans from wasm.
 //!
 //! Use `enter_span` and `exit_span` to surround the code that you wish to trace
-use rental;
 use tracing::info_span;
+use crate::proxied_span::ProxiedSpan;
 
 /// Used to identify a proxied WASM trace
 pub const WASM_TRACE_IDENTIFIER: &'static str = "WASM_TRACE";
@@ -29,21 +29,11 @@ pub const WASM_NAME_KEY: &'static str = "proxied_wasm_name";
 
 const MAX_SPANS_LEN: usize = 1000;
 
-rental! {
-	pub mod rent_span {
-		#[rental]
-		pub struct SpanAndGuard {
-			span: Box<tracing::Span>,
-			guard: tracing::span::Entered<'span>,
-		}
-	}
-}
-
 /// Requires a tracing::Subscriber to process span traces,
 /// this is available when running with client (and relevant cli params).
 pub struct TracingProxy {
 	next_id: u64,
-	spans: Vec<(u64, rent_span::SpanAndGuard)>,
+	spans: Vec<ProxiedSpan>,
 }
 
 impl Drop for TracingProxy {
@@ -53,8 +43,8 @@ impl Drop for TracingProxy {
 				target: "tracing",
 				"Dropping TracingProxy with {} un-exited spans, marking as not valid", self.spans.len()
 			);
-			while let Some((_, mut sg)) = self.spans.pop() {
-				sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
+			while let Some(proxied_trace) = self.spans.pop() {
+				proxied_trace.span().record("is_valid_trace", &false);
 			}
 		}
 	}
@@ -75,13 +65,17 @@ impl TracingProxy {
 	pub fn enter_span(&mut self, proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
 		// The identifiers `proxied_wasm_target` and `proxied_wasm_name` must match their associated const,
 		// WASM_TARGET_KEY and WASM_NAME_KEY.
-		let span = info_span!(WASM_TRACE_IDENTIFIER, is_valid_trace = true, proxied_wasm_target, proxied_wasm_name);
-		self.next_id += 1;
-		let sg = rent_span::SpanAndGuard::new(
-			Box::new(span),
-			|span| span.enter(),
+		let span = Box::pin(
+			info_span!(
+				WASM_TRACE_IDENTIFIER,
+				is_valid_trace = true,
+				proxied_wasm_target,
+				proxied_wasm_name
+			)
 		);
-		self.spans.push((self.next_id, sg));
+		self.next_id += 1;
+		let proxied_trace = ProxiedSpan::enter_span(self.next_id, span);
+		self.spans.push(proxied_trace);
 		if self.spans.len() > MAX_SPANS_LEN {
 			// This is to prevent unbounded growth of Vec and could mean one of the following:
 			// 1. Too many nested spans, or MAX_SPANS_LEN is too low.
@@ -90,29 +84,29 @@ impl TracingProxy {
 				target: "tracing",
 				"TracingProxy MAX_SPANS_LEN exceeded, removing oldest span."
 			);
-			let mut sg = self.spans.remove(0).1;
-			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
+			let proxied_trace = self.spans.remove(0);
+			proxied_trace.span().record("is_valid_trace", &false);
 		}
 		self.next_id
 	}
 
 	/// Exit a span by dropping it along with it's associated guard.
 	pub fn exit_span(&mut self, id: u64) {
-		if self.spans.last().map(|l| id > l.0).unwrap_or(true) {
+		if self.spans.last().map(|proxied_trace| id > proxied_trace.id()).unwrap_or(true) {
 			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
 			return;
 		}
-		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop; qed");
-		while id < last_span.0 {
+		let mut proxied_trace = self.spans.pop().expect("Just checked that there is an element to pop; qed");
+		while id < proxied_trace.id() {
 			log::warn!(
 				target: "tracing",
 				"TracingProxy Span ids not equal! id parameter given: {}, last span: {}",
 				id,
-				last_span.0,
+				proxied_trace.id(),
 			);
-			last_span.1.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
-			if let Some(s) = self.spans.pop() {
-				last_span = s;
+			proxied_trace.span().record("is_valid_trace", &false);
+			if let Some(pt) = self.spans.pop() {
+				proxied_trace = pt;
 			} else {
 				log::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
 				return;

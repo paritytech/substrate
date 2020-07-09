@@ -66,3 +66,7 @@
 
 # Prometheus endpoint
 /utils/prometheus/ @mxinden
+
+# Tracing
+/client/tracing/ @mattrutherford
+/primitives/tracing/ @mattrutherford

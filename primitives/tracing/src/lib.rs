@@ -31,15 +31,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate rental;
-
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use tracing;
 
 #[cfg(feature = "std")]
 pub mod proxy;
+
+#[cfg(feature = "std")]
+mod proxied_span;
 
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
