@@ -401,7 +401,6 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 		}
 
 		sp_runtime::print("withdraw_fee");
-		panic!("withdraw_fee");
 		match T::Currency::withdraw(
 			who,
 			fee,
