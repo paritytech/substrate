@@ -182,11 +182,6 @@ pub trait Ext {
 	/// Returns the maximum allowed size of a storage item.
 	fn max_value_size(&self) -> u32;
 
-	/// Returns the value of runtime under the given key.
-	///
-	/// Returns `None` if the value doesn't exist.
-	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
-
 	/// Returns the price for the specified amount of weight.
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T>;
 }
@@ -778,10 +773,6 @@ where
 
 	fn max_value_size(&self) -> u32 {
 		self.ctx.config.max_value_size
-	}
-
-	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		unhashed::get_raw(&key)
 	}
 
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {

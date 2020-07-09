@@ -358,18 +358,6 @@ mod tests {
 
 		fn max_value_size(&self) -> u32 { 16_384 }
 
-		fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-			let opt_value = self.runtime_storage_keys
-				.borrow_mut()
-				.remove(key);
-			opt_value.unwrap_or_else(||
-				panic!(
-					"{:?} doesn't exist. values that do exist {:?}",
-					key,
-					self.runtime_storage_keys
-				)
-			)
-		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
@@ -469,9 +457,6 @@ mod tests {
 		}
 		fn max_value_size(&self) -> u32 {
 			(**self).max_value_size()
-		}
-		fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-			(**self).get_runtime_storage(key)
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			(**self).get_weight_price(weight)
