@@ -333,11 +333,15 @@ impl<T: Trait> Module<T> where
 
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
+			frame_system::runtime_print!("unadjusted_weight_fee: {}, weight: {}",
+				unadjusted_weight_fee, weight);
 			let multiplier = Self::next_fee_multiplier();
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
+			frame_system::runtime_print!("base_fee: {}, len_fee: {}, weight_fee: {}, tip: {}",
+				base_fee, fixed_len_fee, adjusted_weight_fee, tip);
 			base_fee
 				.saturating_add(fixed_len_fee)
 				.saturating_add(adjusted_weight_fee)
@@ -400,7 +404,6 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			return Ok((fee, None));
 		}
 
-		sp_runtime::print("withdraw_fee");
 		match T::Currency::withdraw(
 			who,
 			fee,
@@ -414,7 +417,6 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			Ok(imbalance) => Ok((fee, Some(imbalance))),
 			Err(_) => {
 				sp_runtime::print("withdraw_fee: InvalidTransaction::Payment");
-				panic!("withdraw_fee: InvalidTransaction::Payment");
 				Err(InvalidTransaction::Payment.into())
 			},
 		}
@@ -494,7 +496,6 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 						Ok(actual_payment) => actual_payment,
 						Err(_) => return {
 							sp_runtime::print("post_dispatch: InvalidTransaction::Payment");
-							panic!("post_dispatch: InvalidTransaction::Payment");
 							Err(InvalidTransaction::Payment.into())
 						},
 					}
