@@ -333,14 +333,14 @@ impl<T: Trait> Module<T> where
 
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
-			frame_system::runtime_print!("unadjusted_weight_fee: {}, weight: {}",
+			frame_support::runtime_print!("unadjusted_weight_fee: {}, weight: {}",
 				unadjusted_weight_fee, weight);
 			let multiplier = Self::next_fee_multiplier();
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
-			frame_system::runtime_print!("base_fee: {}, len_fee: {}, weight_fee: {}, tip: {}",
+			frame_support::runtime_print!("base_fee: {}, len_fee: {}, weight_fee: {}, tip: {}",
 				base_fee, fixed_len_fee, adjusted_weight_fee, tip);
 			base_fee
 				.saturating_add(fixed_len_fee)
