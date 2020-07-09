@@ -24,7 +24,7 @@ use bitflags::bitflags;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert};
 use frame_support::{
-	storage::unhashed, dispatch::DispatchError,
+	dispatch::DispatchError,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
 	weights::Weight,
 };

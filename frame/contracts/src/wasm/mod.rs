@@ -151,7 +151,6 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a> {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use std::cell::RefCell;
 	use sp_core::H256;
 	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags};
 	use crate::gas::{Gas, GasMeter};
@@ -210,17 +209,6 @@ mod tests {
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		next_account_id: u64,
-
-		/// Runtime storage keys works the following way.
-		///
-		/// - If the test code requests a value and it doesn't exist in this storage map then a
-		///   panic happens.
-		/// - If the value does exist it is returned and then removed from the map. So a panic
-		///   happens if the same value is requested for the second time.
-		///
-		/// This behavior is used to prevent mixing up an access to unexpected location and empty
-		/// cell.
-		runtime_storage_keys: RefCell<HashMap<Vec<u8>, Option<Vec<u8>>>>,
 	}
 
 	impl Ext for MockExt {
