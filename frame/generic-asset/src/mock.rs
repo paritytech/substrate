@@ -55,7 +55,7 @@ impl frame_system::Trait for Test {
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<u64>;
-	type Header = Header;
+	type Header = Header<u64>;
 	type Event = TestEvent;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();

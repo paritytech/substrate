@@ -399,7 +399,7 @@ mod tests {
 	use super::*;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup}, testing::Header, generic::DigestItem, Perbill,
+		traits::{BlakeTwo256, IdentityLookup}, testing::Header as GenericHeader, generic::DigestItem, Perbill,
 	};
 	use frame_support::{parameter_types, impl_outer_origin, ConsensusEngineId, weights::Weight};
 
@@ -455,7 +455,7 @@ mod tests {
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}
-
+	type Header = GenericHeader<u64>;
 	type System = frame_system::Module<Test>;
 	type Authorship = Module<Test>;
 

@@ -60,7 +60,7 @@ impl frame_system::Trait for Test {
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Header = sp_runtime::testing::Header<u64>;
 	type Event = ();
 	type BlockHashCount = ();
 	type MaximumBlockWeight = ();

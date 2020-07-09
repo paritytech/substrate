@@ -18,7 +18,7 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
+use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell, hash, convert};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
@@ -160,9 +160,18 @@ pub type DigestItem = generic::DigestItem<H256>;
 pub type Digest = generic::Digest<H256>;
 
 /// Block Header
-pub type Header = generic::Header<u64, BlakeTwo256>;
+pub type Header<B> = generic::Header<B, BlakeTwo256>;
 
-impl Header {
+/// Trait bounds required by `traits::Header` for block number type.
+pub trait BlockNumberT: traits::Member + traits::MaybeSerializeDeserialize + Debug + hash::Hash +
+		traits::MaybeDisplay + traits::AtLeast32BitUnsigned + Codec + Copy + Into<U256> +
+		convert::TryFrom<U256> + sp_std::str::FromStr + parity_util_mem::MallocSizeOf {}
+impl<T: traits::Member + traits::MaybeSerializeDeserialize + Debug + hash::Hash +
+		traits::MaybeDisplay + traits::AtLeast32BitUnsigned + Codec + Copy + Into<U256> +
+		convert::TryFrom<U256> + sp_std::str::FromStr + parity_util_mem::MallocSizeOf
+	> BlockNumberT for T {}
+
+impl<B: BlockNumberT> Header<B> {
 	/// A new header with the given number and default hash for all other fields.
 	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {
 		Self {
@@ -212,19 +221,20 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 
 /// Testing block
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
-pub struct Block<Xt> {
+pub struct Block<Xt, B: BlockNumberT> {
 	/// Block header
-	pub header: Header,
+	pub header: Header<B>,
 	/// List of extrinsics
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic> traits::Block
-	for Block<Xt>
+impl<Xt, B> traits::Block for Block<Xt, B> where
+	Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic,
+	B: BlockNumberT,
 {
 	type Extrinsic = Xt;
-	type Header = Header;
-	type Hash = <Header as traits::Header>::Hash;
+	type Header = Header<B>;
+	type Hash = <Header<B> as traits::Header>::Hash;
 
 	fn header(&self) -> &Self::Header {
 		&self.header
@@ -243,7 +253,7 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	}
 }
 
-impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
+impl<'a, Xt, B: BlockNumberT> Deserialize<'a> for Block<Xt, B> where Block<Xt, B>: Decode {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
 		Decode::decode(&mut &r[..])

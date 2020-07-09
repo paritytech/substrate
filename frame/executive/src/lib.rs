@@ -554,7 +554,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
-		type Header = Header;
+		type Header = Header<u64>;
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
@@ -650,7 +650,7 @@ mod tests {
 
 	type Executive = super::Executive<
 		Runtime,
-		Block<TestXt>,
+		Block<TestXt, u64>,
 		ChainContext<Runtime>,
 		Runtime,
 		AllModules,

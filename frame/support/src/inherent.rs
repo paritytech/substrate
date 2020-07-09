@@ -219,7 +219,7 @@ mod tests {
 		}
 	}
 
-	type Block = testing::Block<Extrinsic>;
+	type Block = testing::Block<Extrinsic, u64>;
 
 	#[derive(codec::Encode, codec::Decode, Clone, PartialEq, Eq, Debug, serde::Serialize)]
 	struct Extrinsic {
