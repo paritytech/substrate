@@ -491,31 +491,30 @@ const CODE_TRANSFER: &str = r#"
 ;;    value_ptr: u32,
 ;;    value_len: u32,
 ;;    input_data_ptr: u32,
-;;    input_data_len: u32
+;;    input_data_len: u32,
+;;    output_ptr: u32,
+;;    output_len_ptr: u32
 ;; ) -> u32
-(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
-(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
-(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32 i32 i32) (result i32)))
+(import "env" "ext_input" (func $ext_input (param i32 i32)))
 (import "env" "memory" (memory 1 1))
 (func (export "deploy")
 )
 (func (export "call")
 	(block $fail
-		;; load and check the input data (which is stored in the scratch buffer).
+		;; Load input data to contract memory
+		(call $ext_input
+			(i32.const 0)
+			(i32.const 52)
+		)
+
 		;; fail if the input size is not != 4
 		(br_if $fail
 			(i32.ne
 				(i32.const 4)
-				(call $ext_scratch_size)
+				(i32.load (i32.const 52))
 			)
 		)
-
-		(call $ext_scratch_read
-			(i32.const 0)
-			(i32.const 0)
-			(i32.const 4)
-		)
-
 
 		(br_if $fail
 			(i32.ne
@@ -551,6 +550,8 @@ const CODE_TRANSFER: &str = r#"
 				(i32.const 16)   ;; Length of the buffer with value to transfer.
 				(i32.const 0)   ;; Pointer to input data buffer address
 				(i32.const 0)   ;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
 			)
 		)
 
@@ -571,6 +572,8 @@ const CODE_TRANSFER: &str = r#"
 	"\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
 	"\00\00"
 )
+;; Length of the input buffer
+(data (i32.const 52) "\04")
 )
 "#;
 

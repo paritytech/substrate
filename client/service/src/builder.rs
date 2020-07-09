@@ -45,15 +45,11 @@ use sc_network::NetworkService;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HashFor, Zero, BlockIdTo,
+	Block as BlockT, SaturatedConversion, HashFor, Zero, BlockIdTo,
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
-use std::{
-	collections::HashMap,
-	io::{Read, Write, Seek},
-	marker::PhantomData, sync::Arc, pin::Pin
-};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, pin::Pin};
 use wasm_timer::SystemTime;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{LocalTransactionPool, MaintainedTransactionPool};
@@ -67,11 +63,8 @@ use sc_client_api::{
 	proof_provider::ProofProvider,
 	execution_extensions::ExecutionExtensions
 };
-use sp_core::storage::Storage;
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 use crate::{ServiceComponents, TelemetryOnConnectSinks, RpcHandlers, NetworkStatusSinks};
-
-pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
 /// Aggregator for the components required to build a service.
 ///
@@ -523,6 +516,16 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		self.remote_backend.clone()
 	}
 
+	/// Returns a spawn handle created by the task manager.
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
+		self.task_manager.spawn_handle()
+	}
+
+	/// Consume the builder and return the parts needed for chain operations.
+	pub fn to_chain_ops_parts(self) -> (Arc<TCl>, Arc<Backend>, TImpQu, TaskManager) {
+		(self.client, self.backend, self.import_queue, self.task_manager)
+	}
+
 	/// Defines which head-of-chain strategy to use.
 	pub fn with_opt_select_chain<USc>(
 		self,
@@ -728,15 +731,11 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		self,
 		transaction_pool_builder: impl FnOnce(
 			&Self,
-		) -> Result<(UExPool, Option<BackgroundTask>), Error>,
+		) -> Result<Arc<UExPool>, Error>,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		UExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		let (transaction_pool, background_task) = transaction_pool_builder(&self)?;
-
-		if let Some(background_task) = background_task{
-			self.task_manager.spawn_handle().spawn("txpool-background", background_task);
-		}
+		let transaction_pool = transaction_pool_builder(&self)?;
 
 		Ok(ServiceBuilder {
 			config: self.config,
@@ -749,7 +748,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			import_queue: self.import_queue,
 			finality_proof_request_builder: self.finality_proof_request_builder,
 			finality_proof_provider: self.finality_proof_provider,
-			transaction_pool: Arc::new(transaction_pool),
+			transaction_pool: transaction_pool,
 			rpc_extensions_builder: self.rpc_extensions_builder,
 			remote_backend: self.remote_backend,
 			block_announce_validator_builder: self.block_announce_validator_builder,
@@ -838,50 +837,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			marker: self.marker,
 		})
 	}
-}
-
-/// Implemented on `ServiceBuilder`. Allows running block commands, such as import/export/validate
-/// components to the builder.
-pub trait ServiceBuilderCommand {
-	/// Block type this API operates on.
-	type Block: BlockT;
-	/// Native execution dispatch required by some commands.
-	type NativeDispatch: NativeExecutionDispatch + 'static;
-	/// Starts the process of importing blocks.
-	fn import_blocks(
-		self,
-		input: impl Read + Seek + Send + 'static,
-		force: bool,
-		binary: bool,
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
-
-	/// Performs the blocks export.
-	fn export_blocks(
-		self,
-		output: impl Write + 'static,
-		from: NumberFor<Self::Block>,
-		to: Option<NumberFor<Self::Block>>,
-		binary: bool
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>;
-
-	/// Performs a revert of `blocks` blocks.
-	fn revert_chain(
-		&self,
-		blocks: NumberFor<Self::Block>
-	) -> Result<(), Error>;
-
-	/// Re-validate known block.
-	fn check_block(
-		self,
-		block: BlockId<Self::Block>
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
-
-	/// Export the raw state at the given `block`. If `block` is `None`, the
-	/// best block will be used.
-	fn export_raw_state(
-		&self,
-		block: Option<BlockId<Self::Block>>,
-	) -> Result<Storage, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TSc, TImpQu, TExPool, TRpc, TCl>
@@ -1022,12 +977,7 @@ ServiceBuilder<
 		// Prometheus metrics.
 		let metrics_service = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
 			// Set static metrics.
-			let metrics = MetricsService::with_prometheus(
-				&registry,
-				&config.network.node_name,
-				&config.impl_version,
-				&config.role,
-			)?;
+			let metrics = MetricsService::with_prometheus(&registry, &config)?;
 			spawn_handle.spawn(
 				"prometheus-endpoint",
 				prometheus_endpoint::init_prometheus(port, registry).map(drop)
@@ -1166,10 +1116,6 @@ ServiceBuilder<
 
 	/// Builds the full service.
 	pub fn build_full(self) -> Result<ServiceComponents<TBl, TBackend, TSc, TExPool, TCl>, Error> {
-		// make transaction pool available for off-chain runtime calls.
-		self.client.execution_extensions()
-			.register_transaction_pool(Arc::downgrade(&self.transaction_pool) as _);
-
 		self.build_common()
 	}
 }
@@ -1201,7 +1147,7 @@ async fn telemetry_periodic_send<TBl, TExPool, TCl>(
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	mut metrics_service: MetricsService,
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>
+	network_status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>
 )
 	where
 		TBl: BlockT,
@@ -1209,7 +1155,7 @@ async fn telemetry_periodic_send<TBl, TExPool, TCl>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash>,
 {
 	let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
-	network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
+	network_status_sinks.push(std::time::Duration::from_millis(5000), state_tx);
 	state_rx.for_each(move |(net_status, _)| {
 		let info = client.usage_info();
 		metrics_service.tick(
@@ -1222,11 +1168,11 @@ async fn telemetry_periodic_send<TBl, TExPool, TCl>(
 }
 
 async fn telemetry_periodic_network_state<TBl: BlockT>(
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>
+	network_status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>
 ) {
 	// Periodically send the network state to the telemetry.
 	let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
-	network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
+	network_status_sinks.push(std::time::Duration::from_secs(30), netstat_tx);
 	netstat_rx.for_each(move |(_, network_state)| {
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -1247,8 +1193,8 @@ fn build_telemetry<TBl: BlockT>(
 	let is_authority = config.role.is_authority();
 	let network_id = network.local_peer_id().to_base58();
 	let name = config.network.node_name.clone();
-	let impl_name = config.impl_name.to_owned();
-	let version = config.impl_version;
+	let impl_name = config.impl_name.clone();
+	let impl_version = config.impl_version.clone();
 	let chain_name = config.chain_spec.name().to_owned();
 	let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 		endpoints,
@@ -1265,7 +1211,7 @@ fn build_telemetry<TBl: BlockT>(
 			telemetry!(SUBSTRATE_INFO; "system.connected";
 				"name" => name.clone(),
 				"implementation" => impl_name.clone(),
-				"version" => version,
+				"version" => impl_version.clone(),
 				"config" => "",
 				"chain" => chain_name.clone(),
 				"genesis_hash" => ?genesis_hash,
@@ -1314,8 +1260,8 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 
 	let system_info = sc_rpc::system::SystemInfo {
 		chain_name: config.chain_spec.name().into(),
-		impl_name: config.impl_name.into(),
-		impl_version: config.impl_version.into(),
+		impl_name: config.impl_name.clone(),
+		impl_version: config.impl_version.clone(),
 		properties: config.chain_spec.properties(),
 		chain_type: config.chain_spec.chain_type(),
 	};
@@ -1391,7 +1337,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-		Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>>,
+		Arc<status_sinks::StatusSinks<(NetworkStatus<TBl>, NetworkState)>>,
 		Pin<Box<dyn Future<Output = ()> + Send>>
 	),
 	Error
@@ -1426,7 +1372,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let block_announce_validator = if let Some(f) = block_announce_validator_builder {
 		f(client.clone())
 	} else {
-		Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+		Box::new(DefaultBlockAnnounceValidator)
 	};
 
 	let network_params = sc_network::config::Params {
@@ -1451,7 +1397,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
-	let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
+	let network_status_sinks = Arc::new(status_sinks::StatusSinks::new());
 
 	let future = build_network_future(
 		config.role.clone(),

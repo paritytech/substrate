@@ -254,8 +254,8 @@ impl DiscoveryBehaviour {
 
 	/// Call this method when a node reports an address for itself.
 	///
-	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
-	/// not properly work.
+	/// **Note**: It is important that you call this method. The discovery mechanism will not
+	/// automatically add connecting peers to the Kademlia DHTs.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, protocols: &[String], addr: Multiaddr) {
 		if self.allow_non_globals_in_dht || self.can_add_to_dht(&addr) {
 			let mut added = false;
@@ -303,7 +303,8 @@ impl DiscoveryBehaviour {
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
 	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
-		self.kademlias.iter_mut().map(|(id, kad)| (id, kad.kbuckets().map(|bucket| bucket.iter().count()).sum()))
+		self.kademlias.iter_mut()
+			.map(|(id, kad)| (id, kad.kbuckets().map(|bucket| bucket.iter().count()).sum()))
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
@@ -423,25 +424,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		if !list.is_empty() {
-			trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
-		} else {
-			let mut has_entry = false;
-			for k in self.kademlias.values_mut() {
-				// TODO: Can we do without the clone?
-				if let Some(bucket) = k.kbucket(peer_id.clone()) {
-					if bucket.iter().any(|entry| entry.node.key.preimage() == peer_id) {
-						has_entry = true;
-						break
-					}
-				}
-			}
-			if has_entry {
-				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer in k-buckets)", peer_id);
-			} else {
-				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer not in k-buckets)", peer_id);
-			}
-		}
+		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
 
 		list
 	}
@@ -588,6 +571,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			while let Poll::Ready(ev) = kademlia.poll(cx, params) {
 				match ev {
 					NetworkBehaviourAction::GenerateEvent(ev) => match ev {
+						KademliaEvent::RoutingUpdated { peer, .. } => {
+							let ev = DiscoveryOut::Discovered(peer);
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
 						KademliaEvent::UnroutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::UnroutablePeer(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
@@ -602,6 +589,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						KademliaEvent::RoutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::Discovered(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::PendingRoutablePeer { .. } => {
+							// We are not interested in these events at the moment.
 						}
 						// `KademliaBucketInserts::Manual` is configured for each Kademlia instance.
 						// Thus the `RoutingUpdated` event or the `PendingRoutablePeer` event was

@@ -19,7 +19,7 @@
 use crate::error;
 use crate::params::{DatabaseParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::Configuration;
+use sc_service::DatabaseConfig;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -43,8 +43,8 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = config.database.path()
+	pub fn run(&self, database_config: DatabaseConfig) -> error::Result<()> {
+		let db_path = database_config.path()
 			.ok_or_else(||
 				error::Error::Input("Cannot purge custom database implementation".into())
 		)?;

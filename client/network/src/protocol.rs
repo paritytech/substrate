@@ -51,7 +51,7 @@ use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use prometheus_endpoint::{Registry, Gauge, Counter, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque, hash_map::Entry};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
@@ -199,18 +199,21 @@ impl Metrics {
 	}
 }
 
-struct PendingTransaction {
+#[pin_project::pin_project]
+struct PendingTransaction<H> {
+	#[pin]
 	validation: TransactionImportFuture,
-	peer_id: PeerId,
+	tx_hash: H,
 }
 
-impl Future for PendingTransaction {
-	type Output = (PeerId, TransactionImport);
+impl<H: ExHashT> Future for PendingTransaction<H> {
+	type Output = (H, TransactionImport);
 
 	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-		if let Poll::Ready(import_result) = this.validation.poll_unpin(cx) {
-			return Poll::Ready((this.peer_id.clone(), import_result));
+		let mut this = self.project();
+
+		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
+			return Poll::Ready((this.tx_hash.clone(), import_result));
 		}
 
 		Poll::Pending
@@ -226,7 +229,12 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// Pending list of messages to return from `poll` as a priority.
 	pending_messages: VecDeque<CustomMessageOutcome<B>>,
 	/// Pending transactions verification tasks.
-	pending_transactions: FuturesUnordered<PendingTransaction>,
+	pending_transactions: FuturesUnordered<PendingTransaction<H>>,
+	/// As multiple peers can send us the same transaction, we group
+	/// these peers using the transaction hash while the transaction is
+	/// imported. This prevents that we import the same transaction
+	/// multiple times concurrently.
+	pending_transactions_peers: HashMap<H, Vec<PeerId>>,
 	config: ProtocolConfig,
 	genesis_hash: B::Hash,
 	sync: ChainSync<B>,
@@ -351,6 +359,22 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	}
 }
 
+/// Builds a SCALE-encoded "Status" message to send as handshake for the legacy protocol.
+fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Vec<u8> {
+	let info = chain.info();
+	let status = message::generic::Status {
+		version: CURRENT_VERSION,
+		min_supported_version: MIN_VERSION,
+		genesis_hash: info.genesis_hash,
+		roles: protocol_config.roles.into(),
+		best_number: info.best_number,
+		best_hash: info.best_hash,
+		chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
+	};
+
+	Message::<B>::Status(status).encode()
+}
+
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
@@ -403,6 +427,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			local_peer_id,
 			protocol_id.clone(),
 			versions,
+			build_status_message(&config, &chain),
 			peerset,
 			queue_size_report
 		);
@@ -435,6 +460,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			pending_messages: VecDeque::new(),
 			pending_transactions: FuturesUnordered::new(),
+			pending_transactions_peers: HashMap::new(),
 			config,
 			context_data: ContextData {
 				peers: HashMap::new(),
@@ -547,6 +573,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn update_chain(&mut self) {
 		let info = self.context_data.chain.info();
 		self.sync.update_chain_info(&info.best_hash, info.best_number);
+		self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
+		self.behaviour.set_notif_protocol_handshake(
+			&self.block_announces_protocol,
+			BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+		);
 	}
 
 	/// Inform sync about an own imported block.
@@ -683,7 +714,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_peer_connected(&mut self, who: PeerId) {
 		trace!(target: "sync", "Connecting {}", who);
 		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
-		self.send_status(who);
 	}
 
 	/// Called by peer when it is disconnecting
@@ -1141,7 +1171,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	fn on_transactions(
 		&mut self,
 		who: PeerId,
-		transactions: message::Transactions<B::Extrinsic>
+		transactions: message::Transactions<B::Extrinsic>,
 	) {
 		// sending transaction to light node is considered a bad behavior
 		if !self.config.roles.is_full() {
@@ -1170,14 +1200,22 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 
 				let hash = self.transaction_pool.hash_of(&t);
-				peer.known_transactions.insert(hash);
+				peer.known_transactions.insert(hash.clone());
 
 				self.peerset_handle.report_peer(who.clone(), rep::ANY_TRANSACTION);
 
-				self.pending_transactions.push(PendingTransaction {
-					peer_id: who.clone(),
-					validation: self.transaction_pool.import(t),
-				});
+				match self.pending_transactions_peers.entry(hash.clone()) {
+					Entry::Vacant(entry) => {
+						self.pending_transactions.push(PendingTransaction {
+							validation: self.transaction_pool.import(t),
+							tx_hash: hash,
+						});
+						entry.insert(vec![who.clone()]);
+					},
+					Entry::Occupied(mut entry) => {
+						entry.get_mut().push(who.clone());
+					}
+				}
 			}
 		}
 	}
@@ -1211,7 +1249,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		&mut self,
 		transactions: &[(H, B::Extrinsic)],
 	) -> HashMap<H, Vec<String>> {
-		let mut propagated_to = HashMap::new();
+		let mut propagated_to = HashMap::<_, Vec<_>>::new();
+		let mut propagated_transactions = 0;
+
 		for (who, peer) in self.context_data.peers.iter_mut() {
 			// never send transactions to the light node
 			if !peer.info.roles.is_full() {
@@ -1224,11 +1264,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				.cloned()
 				.unzip();
 
+			propagated_transactions += hashes.len();
+
 			if !to_send.is_empty() {
 				for hash in hashes {
 					propagated_to
 						.entry(hash)
-						.or_insert_with(Vec::new)
+						.or_default()
 						.push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
@@ -1243,10 +1285,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 		}
 
-		if propagated_to.len() > 0 {
-			if let Some(ref metrics) = self.metrics {
-				metrics.propagated_transactions.inc();
-			}
+		if let Some(ref metrics) = self.metrics {
+			metrics.propagated_transactions.inc_by(propagated_transactions as _)
 		}
 
 		propagated_to
@@ -1287,7 +1327,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let is_best = self.context_data.chain.info().best_hash == hash;
-		debug!(target: "sync", "Reannouncing block {:?}", hash);
+		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
 		self.send_announcement(&header, data, is_best, true)
 	}
 
@@ -1327,22 +1367,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				)
 			}
 		}
-	}
-
-	/// Send Status message
-	fn send_status(&mut self, who: PeerId) {
-		let info = self.context_data.chain.info();
-		let status = message::generic::Status {
-			version: CURRENT_VERSION,
-			min_supported_version: MIN_VERSION,
-			genesis_hash: info.genesis_hash,
-			roles: self.config.roles,
-			best_number: info.best_number,
-			best_hash: info.best_hash,
-			chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
-		};
-
-		self.send_message(&who, None, GenericMessage::Status(status))
 	}
 
 	fn on_block_announce(
@@ -1498,6 +1522,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		});
 		if let Some((best_num, best_hash)) = new_best {
 			self.sync.update_chain_info(&best_hash, best_num);
+			self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
 			self.behaviour.set_notif_protocol_handshake(
 				&self.block_announces_protocol,
 				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
@@ -2011,8 +2036,12 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			};
 			self.pending_messages.push_back(event);
 		}
-		if let Poll::Ready(Some((peer_id, result))) = self.pending_transactions.poll_next_unpin(cx) {
-			self.on_handle_transaction_import(peer_id, result);
+		if let Poll::Ready(Some((tx_hash, result))) = self.pending_transactions.poll_next_unpin(cx) {
+			if let Some(peers) = self.pending_transactions_peers.remove(&tx_hash) {
+				peers.into_iter().for_each(|p| self.on_handle_transaction_import(p, result));
+			} else {
+				warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
+			}
 		}
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
@@ -2160,7 +2189,7 @@ mod tests {
 				reserved_only: false,
 				priority_groups: Vec::new(),
 			},
-			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			Box::new(DefaultBlockAnnounceValidator),
 			None,
 			Default::default(),
 			None,
