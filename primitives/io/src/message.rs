@@ -50,6 +50,7 @@ fn epoll_wait(interest_list: &[MessageId]) -> MessageId {
 fn decode(id: MessageId) -> Message {
     // TODO: Handle FFI boundary and output bytes
     match id.kind() {
+        PollableKind::Timer => Message(Vec::new()),
         PollableKind::Http | _ => unimplemented!(),
     }
 }
