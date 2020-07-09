@@ -31,7 +31,11 @@
 //! # };
 //! # use sc_transaction_pool::{BasicPool, FullChainApi};
 //! # let client = Arc::new(substrate_test_runtime_client::new());
-//! # let txpool = Arc::new(BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())), None).0);
+//! # let txpool = Arc::new(BasicPool::new(
+//! #     Default::default(),
+//! #     Arc::new(FullChainApi::new(client.clone(), None)),
+//! #     None).0,
+//! # );
 //! // The first step is to create a `ProposerFactory`.
 //! let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
 //!

@@ -70,12 +70,14 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 impl Trait for Test {

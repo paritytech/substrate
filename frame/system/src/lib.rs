@@ -158,6 +158,28 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
+pub trait WeightInfo {
+	fn remark(b: u32, ) -> Weight;
+	fn set_heap_pages(i: u32, ) -> Weight;
+	fn set_code_without_checks(b: u32, ) -> Weight;
+	fn set_changes_trie_config(d: u32, ) -> Weight;
+	fn set_storage(i: u32, ) -> Weight;
+	fn kill_storage(i: u32, ) -> Weight;
+	fn kill_prefix(p: u32, ) -> Weight;
+	fn suicide(n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn remark(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn set_heap_pages(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn set_code_without_checks(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn set_changes_trie_config(_d: u32, ) -> Weight { 1_000_000_000 }
+	fn set_storage(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_storage(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_prefix(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn suicide(_n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
@@ -262,6 +284,8 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	type SystemWeightInfo: WeightInfo;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;

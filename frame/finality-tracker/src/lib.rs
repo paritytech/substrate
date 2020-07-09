@@ -277,6 +277,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

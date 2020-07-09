@@ -768,6 +768,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -778,6 +779,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();

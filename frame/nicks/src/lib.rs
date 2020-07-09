@@ -290,6 +290,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -300,6 +301,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;

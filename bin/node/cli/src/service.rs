@@ -61,6 +61,7 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|builder| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(
 					builder.client().clone(),
+					builder.prometheus_registry(),
 				);
 				Ok(sc_transaction_pool::BasicPool::new_full(
 					builder.config().transaction_pool.clone(),

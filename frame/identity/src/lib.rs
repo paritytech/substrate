@@ -85,6 +85,34 @@ mod benchmarking;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
+pub trait WeightInfo {
+	fn add_registrar(r: u32, ) -> Weight;
+	fn set_identity(r: u32, x: u32, ) -> Weight;
+	fn set_subs(p: u32, s: u32, ) -> Weight;
+	fn clear_identity(r: u32, s: u32, x: u32, ) -> Weight;
+	fn request_judgement(r: u32, x: u32, ) -> Weight;
+	fn cancel_request(r: u32, x: u32, ) -> Weight;
+	fn set_fee(r: u32, ) -> Weight;
+	fn set_account_id(r: u32, ) -> Weight;
+	fn set_fields(r: u32, ) -> Weight;
+	fn provide_judgement(r: u32, x: u32, ) -> Weight;
+	fn kill_identity(r: u32, s: u32, x: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn add_registrar(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn set_identity(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn set_subs(_p: u32, _s: u32, ) -> Weight { 1_000_000_000 }
+	fn clear_identity(_r: u32, _s: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn request_judgement(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_request(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn set_fee(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn set_account_id(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn set_fields(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn provide_judgement(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_identity(_r: u32, _s: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -122,6 +150,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The origin which may add or remove registrars. Root can always do this.
 	type RegistrarOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
@@ -1198,6 +1229,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -1208,6 +1240,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const BasicDeposit: u64 = 10;
@@ -1243,6 +1276,7 @@ mod tests {
 		type MaxRegistrars = MaxRegistrars;
 		type RegistrarOrigin = EnsureOneOrRoot;
 		type ForceOrigin = EnsureTwoOrRoot;
+		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
