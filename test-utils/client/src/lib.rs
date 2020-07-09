@@ -43,6 +43,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::collections::{HashSet, HashMap};
 use futures::{future::{Future, FutureExt}, stream::StreamExt};
+use serde::Deserialize;
 use sp_core::storage::ChildInfo;
 use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
@@ -259,32 +260,53 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	}
 }
 
+/// The output of an RPC transaction.
+pub struct RpcTransactionOutput {
+	/// The output string of the transaction if any.
+	pub result: Option<String>,
+	/// The session object.
+	pub session: RpcSession,
+	/// An async receiver if data will be returned via a callback.
+	pub receiver: futures01::sync::mpsc::Receiver<String>,
+}
+
+impl std::fmt::Debug for RpcTransactionOutput {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "RpcTransactionOutput {{ result: {:?}, session, receiver }}", self.result)
+	}
+}
+
+/// An error for when the RPC call fails.
+#[derive(Deserialize, Debug)]
+pub struct RpcTransactionError {
+	/// A Number that indicates the error type that occurred.
+	pub code: i64,
+	/// A String providing a short description of the error.
+	pub message: String,
+	/// A Primitive or Structured value that contains additional information about the error.
+	pub data: Option<serde_json::Value>,
+}
+
+impl std::fmt::Display for RpcTransactionError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		std::fmt::Debug::fmt(self, f)
+	}
+}
+
 /// An extension trait for `RpcHandlers`.
 pub trait RpcHandlersExt {
 	/// Send a transaction through the RpcHandlers.
 	fn send_transaction(
 		&self,
 		extrinsic: OpaqueExtrinsic,
-	) -> Pin<Box<dyn Future<
-		Output = (
-			Option<String>,
-			RpcSession,
-			futures01::sync::mpsc::Receiver<String>,
-		),
-	> + Send>>;
+	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>>;
 }
 
 impl RpcHandlersExt for RpcHandlers {
 	fn send_transaction(
 		&self,
 		extrinsic: OpaqueExtrinsic,
-	) -> Pin<Box<dyn Future<
-		Output = (
-			Option<String>,
-			RpcSession,
-			futures01::sync::mpsc::Receiver<String>,
-		),
-	> + Send>> {
+	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
 		let (tx, rx) = futures01::sync::mpsc::channel(0);
 		let mem = RpcSession::new(tx.into());
 		Box::pin(self
@@ -300,8 +322,37 @@ impl RpcHandlersExt for RpcHandlers {
 					hex::encode(extrinsic.encode())
 				),
 			)
-			.map(move |res| (res, mem, rx)))
+			.map(move |result| parse_rpc_result(result, mem, rx))
+		)
 	}
+}
+
+pub(crate) fn parse_rpc_result(
+	result: Option<String>,
+	session: RpcSession,
+	receiver: futures01::sync::mpsc::Receiver<String>,
+) -> Result<RpcTransactionOutput, RpcTransactionError> {
+	if let Some(ref result) = result {
+		let json: serde_json::Value = serde_json::from_str(result)
+			.expect("the result can only be a JSONRPC string; qed");
+		let error = json
+			.as_object()
+			.expect("JSON result is always an object; qed")
+			.get("error");
+
+		if let Some(error) = error {
+			return Err(
+				serde_json::from_value(error.clone())
+					.expect("the JSONRPC result's error is always valid; qed")
+			)
+		}
+	}
+
+	Ok(RpcTransactionOutput {
+		result,
+		session,
+		receiver,
+	})
 }
 
 /// An extension trait for `BlockchainEvents`.
@@ -334,5 +385,62 @@ where
 				}
 			}
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use sc_service::RpcSession;
+
+	fn create_session_and_receiver() -> (RpcSession, futures01::sync::mpsc::Receiver<String>) {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+
+		(mem, rx)
+	}
+
+	#[test]
+	fn parses_error_properly() {
+		let (mem, rx) = create_session_and_receiver();
+		assert!(super::parse_rpc_result(None, mem, rx).is_ok());
+
+		let (mem, rx) = create_session_and_receiver();
+		assert!(
+			super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"result": 19,
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.is_ok(),
+		);
+
+		let (mem, rx) = create_session_and_receiver();
+		let error = super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found"
+				},
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_none());
+
+		let (mem, rx) = create_session_and_receiver();
+		let error = super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found",
+					"data": 42
+				},
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_some());
 	}
 }
