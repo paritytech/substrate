@@ -30,7 +30,7 @@ use bytes::buf::ext::{Reader, BufExt};
 use fnv::FnvHashMap;
 use futures::{prelude::*, future, channel::mpsc};
 use log::error;
-use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
+use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError, PollableId};
 use std::{convert::TryFrom, fmt, io::Read as _, pin::Pin, task::{Context, Poll}};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use std::sync::Arc;
@@ -569,7 +569,7 @@ pub struct HttpWorker {
 	/// HTTP requests that are being worked on by the engine.
 	requests: Vec<(HttpRequestId, HttpWorkerRequest)>,
 	/// Broadcasts HTTP request IDs ready to progress.
-	ready_ids: Option<TracingUnboundedSender<HttpRequestId>>,
+	ready_ids: Option<TracingUnboundedSender<PollableId>>,
 }
 
 /// HTTP request being processed by the worker.
@@ -586,7 +586,7 @@ enum HttpWorkerRequest {
 }
 
 impl HttpWorker {
-	pub(super) fn ready_id_sender(&mut self, sender: TracingUnboundedSender<HttpRequestId>) {
+	pub(super) fn ready_id_sender(&mut self, sender: TracingUnboundedSender<PollableId>) {
 		self.ready_ids = Some(sender);
 	}
 }
@@ -636,7 +636,7 @@ impl Future for HttpWorker {
 					// FIXME: Do that in every case and not only when receiving
 					// the first part of the response.
 					if let Some(sender) = &mut me.ready_ids {
-						let _ = sender.unbounded_send(id);
+						let _ = sender.unbounded_send(id.into());
 					}
 					me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx: body_tx }));
 					cx.waker().wake_by_ref();	// reschedule in order to poll the new future

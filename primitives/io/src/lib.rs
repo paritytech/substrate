@@ -45,7 +45,7 @@ use sp_core::{
 	crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
-		PollableId,
+		PollableId, TimerId, Duration,
 	},
 };
 
@@ -809,6 +809,13 @@ pub trait Offchain {
 		self.extension::<OffchainExt>()
 			.expect("sleep_until can be called only in the offchain worker context")
 			.sleep_until(deadline)
+	}
+
+	/// Pause the execution until `deadline` is reached.
+	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+		self.extension::<OffchainExt>()
+			.expect("timer_until can be called only in the offchain worker context")
+			.timer_until(duration)
 	}
 
 	/// Returns a random seed.

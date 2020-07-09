@@ -28,8 +28,8 @@ use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
 use sp_core::offchain::{
 	self, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
-	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, PollableId, PollableKind,
-	StorageKind,
+	OpaqueNetworkState, OpaquePeerId, OpaqueMultiaddr, PollableId,
+	StorageKind, Duration, TimerId,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 pub use sp_offchain::STORAGE_PREFIX;
@@ -44,6 +44,7 @@ use http_dummy as http;
 mod http_dummy;
 
 mod timestamp;
+mod timer;
 
 /// Asynchronous offchain API.
 ///
@@ -59,7 +60,9 @@ pub(crate) struct Api<Storage> {
 	http: http::HttpApi,
 	/// Stream of HTTP request IDs that are ready to be processed. Used with
 	/// the pollable API.
-	http_ready_ids: TracingUnboundedReceiver<HttpRequestId>,
+	pollable_ready_ids: TracingUnboundedReceiver<PollableId>,
+	/// Timers are handled by a separate struct.
+	timer: timer::TimerApi,
 }
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
@@ -93,6 +96,10 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
 		sleep(timestamp::timestamp_from_now(deadline));
+	}
+
+	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+		self.timer.start_timer(duration)
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
@@ -191,25 +198,21 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 		ids: &[PollableId],
 		deadline: Option<Timestamp>
 	) -> Option<PollableId> {
-		// TODO: Handle more pollable kinds
-		assert!(ids.iter().all(|x| x.kind() == PollableKind::Http));
-
 		let mut deadline = timestamp::deadline_to_future(deadline);
 
 		use futures::StreamExt;
-
-		let simplistic_stream = self.http_ready_ids
+		let simplistic_stream = self.pollable_ready_ids
 			.by_ref()
 			.skip_while(|&x| {
-				let x = PollableId::try_from(x).expect("We verified above that all ids here are of HTTP kind; qed");
 				futures::future::ready(ids.iter().find(|&id| *id != x).is_some())
 			})
 			.into_future();
 
 		match futures::executor::block_on(futures::future::select(simplistic_stream, &mut deadline)) {
 			futures::future::Either::Left(((head, _), _)) => Some(
-				head.expect("The stream won't finish until HTTP worker is stopped \
-					but it won't as long as there is relevant OCW running")
+				head.expect("The pollable stream won't finish until relevant
+					HTTP/timer workers are stopped; they won't as long as the \
+					relevant OCW running")
 					.into()
 			),
 			futures::future::Either::Right(..) => None,
@@ -288,6 +291,7 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 pub(crate) struct AsyncApi {
 	/// Everything HTTP-related is handled by a different struct.
 	http: Option<http::HttpWorker>,
+	timer: Option<timer::TimerWorker>,
 }
 
 impl AsyncApi {
@@ -300,20 +304,24 @@ impl AsyncApi {
 	) -> (Api<S>, Self) {
 		let (http_api, http_worker) = http::http(shared_client);
 
-		let (send, recv) = tracing_unbounded("mpsc_http_ready_ids");
+		let (send, recv) = tracing_unbounded("mpsc_pollable_ready_ids");
 		let mut http_worker = http_worker;
-		http_worker.ready_id_sender(send);
+		http_worker.ready_id_sender(send.clone());
+
+		let (timer_api, timer_worker) = timer::timer(send.clone());
 
 		let api = Api {
 			db,
 			network_state,
 			is_validator,
 			http: http_api,
-			http_ready_ids: recv,
+			pollable_ready_ids: recv,
+			timer: timer_api,
 		};
 
 		let async_api = Self {
 			http: Some(http_worker),
+			timer: Some(timer_worker),
 		};
 
 		(api, async_api)
@@ -322,8 +330,10 @@ impl AsyncApi {
 	/// Run a processing task for the API
 	pub fn process(mut self) -> impl Future<Output = ()> {
 		let http = self.http.take().expect("Take invoked only once.");
+		let timer = self.timer.take().expect("Take invoked only once.");
 
-		http
+		use futures::FutureExt;
+		futures::future::join(http, timer).map(drop)
 	}
 }
 

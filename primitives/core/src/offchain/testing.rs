@@ -30,9 +30,11 @@ use crate::offchain::{
 	HttpError,
 	HttpRequestId as RequestId,
 	HttpRequestStatus as RequestStatus,
+	Duration,
 	Timestamp,
 	StorageKind,
 	PollableId,
+	TimerId,
 	OpaqueNetworkState,
 	TransactionPool,
 	OffchainStorage,
@@ -227,6 +229,10 @@ impl offchain::Externalities for TestOffchainExt {
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
 		self.0.write().timestamp = deadline;
+	}
+
+	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+		unimplemented!()
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {

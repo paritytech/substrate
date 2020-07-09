@@ -179,10 +179,22 @@ impl TryFrom<u32> for HttpRequestStatus {
 	}
 }
 
+/// Opaque type for offchain timers.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner)]
+#[cfg_attr(feature = "std", derive(Hash))]
+pub struct TimerId(pub u16);
+
+impl From<TimerId> for u32 {
+	fn from(c: TimerId) -> Self {
+		c.0 as u32
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PollableKind {
 	Http = 1,
+	Timer = 2,
 	Unknown,
 }
 
@@ -190,6 +202,7 @@ impl From<u32> for PollableKind {
 	fn from(value: u32) -> Self {
 		match value {
 			1 => PollableKind::Http,
+			2 => PollableKind::Timer,
 			_ => PollableKind::Unknown,
 		}
 	}
@@ -233,6 +246,22 @@ impl TryFrom<PollableId> for HttpRequestId {
 	fn try_from(value: PollableId) -> Result<HttpRequestId, Self::Error> {
 		match value.kind() {
 			PollableKind::Http => Ok(HttpRequestId(value.0 as _)),
+			_ => Err(()),
+		}
+	}
+}
+
+impl From<TimerId> for PollableId {
+	fn from(value: TimerId) -> PollableId {
+		PollableId::from_parts(PollableKind::Timer, u32::from(value.0))
+	}
+}
+
+impl TryFrom<PollableId> for TimerId {
+	type Error = ();
+	fn try_from(value: PollableId) -> Result<TimerId, Self::Error> {
+		match value.kind() {
+			PollableKind::Timer => Ok(TimerId(value.0 as _)),
 			_ => Err(()),
 		}
 	}
@@ -398,6 +427,10 @@ pub trait Externalities: Send {
 
 	/// Pause the execution until `deadline` is reached.
 	fn sleep_until(&mut self, deadline: Timestamp);
+
+	/// Creates a timer that resolves in `Duration`. Can be awaited with
+	/// `pollable_wait`.
+	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()>;
 
 	/// Returns a random seed.
 	///
@@ -580,6 +613,10 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).sleep_until(deadline)
 	}
 
+	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+		(&mut **self).timer_until(duration)
+	}
+
 	fn random_seed(&mut self) -> [u8; 32] {
 		(&mut **self).random_seed()
 	}
@@ -693,6 +730,10 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 	fn sleep_until(&mut self, deadline: Timestamp) {
 		self.check(Capability::Http, "sleep_until");
 		self.externalities.sleep_until(deadline)
+	}
+
+	fn timer_until(&mut self, duration: Duration) -> Result<TimerId, ()> {
+		self.externalities.timer_until(duration)
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
