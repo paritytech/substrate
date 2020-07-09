@@ -351,6 +351,16 @@ impl<T: Trait> ValidatorRegistration<T::ValidatorId> for Module<T> {
 	}
 }
 
+pub trait WeightInfo {
+	fn set_keys(n: u32, ) -> Weight;
+	fn purge_keys(n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn purge_keys(_n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -385,6 +395,9 @@ pub trait Trait: frame_system::Trait {
 	/// After the threshold is reached `disabled` method starts to return true,
 	/// which in combination with `pallet_staking` forces a new era.
 	type DisabledValidatorsThreshold: Get<Perbill>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {

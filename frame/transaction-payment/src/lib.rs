@@ -581,6 +581,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	parameter_types! {
@@ -593,6 +594,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	thread_local! {
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);

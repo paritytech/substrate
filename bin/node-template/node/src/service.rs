@@ -45,7 +45,9 @@ pub fn new_full_params(config: Configuration) -> Result<(
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-	let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+	let pool_api = sc_transaction_pool::FullChainApi::new(
+		client.clone(), config.prometheus_registry(),
+	);
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 		config.transaction_pool.clone(),
 		std::sync::Arc::new(pool_api),

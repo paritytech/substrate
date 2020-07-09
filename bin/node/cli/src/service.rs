@@ -57,7 +57,9 @@ pub fn new_full_params(config: Configuration) -> Result<(
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-	let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+	let pool_api = sc_transaction_pool::FullChainApi::new(
+		client.clone(), config.prometheus_registry(),
+	);
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 		config.transaction_pool.clone(),
 		std::sync::Arc::new(pool_api),
@@ -85,6 +87,7 @@ pub fn new_full_params(config: Configuration) -> Result<(
 		Some(Box::new(justification_import)),
 		None,
 		client.clone(),
+		select_chain.clone(),
 		inherent_data_providers.clone(),
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),
@@ -329,6 +332,8 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	let (client, backend, keystore, task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, node_executor::Executor>(&config)?;
 
+	let select_chain = sc_consensus::LongestChain::new(backend.clone());
+
 	let transaction_pool_api = Arc::new(sc_transaction_pool::LightChainApi::new(
 		client.clone(),
 		on_demand.clone(),
@@ -363,6 +368,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		None,
 		Some(Box::new(finality_proof_import)),
 		client.clone(),
+		select_chain.clone(),
 		inherent_data_providers.clone(),
 		&task_manager.spawn_handle(),
 		config.prometheus_registry(),

@@ -829,6 +829,68 @@ pub mod weight {
 	}
 }
 
+pub trait WeightInfo {
+	fn bond(u: u32, ) -> Weight;
+	fn bond_extra(u: u32, ) -> Weight;
+	fn unbond(u: u32, ) -> Weight;
+	fn withdraw_unbonded_update(s: u32, ) -> Weight;
+	fn withdraw_unbonded_kill(s: u32, ) -> Weight;
+	fn validate(u: u32, ) -> Weight;
+	fn nominate(n: u32, ) -> Weight;
+	fn chill(u: u32, ) -> Weight;
+	fn set_payee(u: u32, ) -> Weight;
+	fn set_controller(u: u32, ) -> Weight;
+	fn set_validator_count(c: u32, ) -> Weight;
+	fn force_no_eras(i: u32, ) -> Weight;
+	fn force_new_era(i: u32, ) -> Weight;
+	fn force_new_era_always(i: u32, ) -> Weight;
+	fn set_invulnerables(v: u32, ) -> Weight;
+	fn force_unstake(s: u32, ) -> Weight;
+	fn cancel_deferred_slash(s: u32, ) -> Weight;
+	fn payout_stakers(n: u32, ) -> Weight;
+	fn payout_stakers_alive_controller(n: u32, ) -> Weight;
+	fn rebond(l: u32, ) -> Weight;
+	fn set_history_depth(e: u32, ) -> Weight;
+	fn reap_stash(s: u32, ) -> Weight;
+	fn new_era(v: u32, n: u32, ) -> Weight;
+	fn do_slash(l: u32, ) -> Weight;
+	fn payout_all(v: u32, n: u32, ) -> Weight;
+	fn submit_solution_initial(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	fn submit_solution_weaker(v: u32, n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn bond(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn bond_extra(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn unbond(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn withdraw_unbonded_update(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn withdraw_unbonded_kill(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn validate(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn nominate(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn chill(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn set_payee(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn set_controller(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn set_validator_count(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn force_no_eras(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn force_new_era(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn force_new_era_always(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn set_invulnerables(_v: u32, ) -> Weight { 1_000_000_000 }
+	fn force_unstake(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_deferred_slash(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn payout_stakers(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn payout_stakers_alive_controller(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn rebond(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn set_history_depth(_e: u32, ) -> Weight { 1_000_000_000 }
+	fn reap_stash(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn new_era(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn do_slash(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn payout_all(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
@@ -915,6 +977,9 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Mode of era-forcing.

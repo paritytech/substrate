@@ -115,6 +115,16 @@ use sp_timestamp::{
 	OnTimestampSet,
 };
 
+pub trait WeightInfo {
+	fn set(t: u32, ) -> Weight;
+	fn on_finalize(t: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn on_finalize(_t: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
@@ -129,6 +139,9 @@ pub trait Trait: frame_system::Trait {
 	/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
 	/// period on default settings.
 	type MinimumPeriod: Get<Self::Moment>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_module! {
@@ -338,6 +351,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
@@ -346,6 +360,7 @@ mod tests {
 		type Moment = u64;
 		type OnTimestampSet = ();
 		type MinimumPeriod = MinimumPeriod;
+		type WeightInfo = ();
 	}
 	type Timestamp = Module<Test>;
 
