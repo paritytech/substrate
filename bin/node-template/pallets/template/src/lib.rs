@@ -75,7 +75,7 @@ decl_module! {
 		/// Just a dummy entry point.
 		/// function that can be called by the external world as an extrinsics call
 		/// takes a parameter of the type `AccountId`, stores it, and emits an event
-		#[weight = 10_000]
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let who = ensure_signed(origin)?;
@@ -91,7 +91,7 @@ decl_module! {
 
 		/// Another dummy entry point.
 		/// takes no parameters, attempts to increment storage value, and possibly throws an error
-		#[weight = 10_000]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cause_error(origin) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let _who = ensure_signed(origin)?;
