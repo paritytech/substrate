@@ -60,24 +60,20 @@ impl LocalStorage {
 }
 
 impl sp_core::offchain::OffchainStorage for LocalStorage {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> Result<(), OffchainError> {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
 
 		tx.set(columns::OFFCHAIN, &key, value);
-		self.db.commit(tx).map_err(|e| OffchainError(Box::new(e)))?;
-
-		Ok(())
+		self.db.commit(tx).map_err(|e| OffchainError(Box::new(e))).unwrap();
 	}
 
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) -> Result<(), OffchainError> {
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
 
 		tx.remove(columns::OFFCHAIN, &key);
-		self.db.commit(tx).map_err(|e| OffchainError(Box::new(e)))?;
-
-		Ok(())
+		self.db.commit(tx).map_err(|e| OffchainError(Box::new(e))).unwrap();
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -91,7 +87,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		item_key: &[u8],
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
-	) -> Result<bool, OffchainError> {
+	) -> bool {
 		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
 		let key_lock = {
 			let mut locks = self.locks.lock();
@@ -105,7 +101,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 			is_set = val.as_ref().map(|x| &**x) == old_value;
 
 			if is_set {
-				self.set(prefix, item_key, new_value)?;
+				self.set(prefix, item_key, new_value);
 			}
 		}
 
@@ -118,7 +114,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 				locks.remove(&key);
 			}
 		}
-		Ok(is_set)
+		is_set
 	}
 }
 

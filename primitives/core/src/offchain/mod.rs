@@ -36,10 +36,10 @@ pub const STORAGE_PREFIX : &'static [u8] = b"storage";
 /// Offchain workers local storage.
 pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> error::Result<()>;
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]);
 
 	/// Clear a storage entry under given key and prefix.
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) -> error::Result<()>;
+	fn remove(&mut self, prefix: &[u8], key: &[u8]);
 
 	/// Retrieve a value from storage under given key and prefix.
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>>;
@@ -53,7 +53,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 		key: &[u8],
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
-	) -> error::Result<bool>;
+	) -> bool;
 }
 
 /// A type of supported crypto.

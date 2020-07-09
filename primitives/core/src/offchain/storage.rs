@@ -46,16 +46,14 @@ impl InMemOffchainStorage {
 }
 
 impl OffchainStorage for InMemOffchainStorage {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> error::Result<()> {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key = prefix.iter().chain(key).cloned().collect();
 		self.storage.insert(key, value.to_vec());
-		Ok(())
 	}
 
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) -> error::Result<()> {
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.storage.remove(&key);
-		Ok(())
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -69,10 +67,10 @@ impl OffchainStorage for InMemOffchainStorage {
 		key: &[u8],
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
-	) -> error::Result<bool> {
+	) -> bool {
 		let key = prefix.iter().chain(key).cloned().collect();
 
-		Ok(match self.storage.entry(key) {
+		match self.storage.entry(key) {
 			Entry::Vacant(entry) => if old_value.is_none() {
 				entry.insert(new_value.to_vec());
 				true
@@ -82,7 +80,7 @@ impl OffchainStorage for InMemOffchainStorage {
 				true
 			},
 			_ => false,
-		})
+		}
 	}
 }
 

@@ -82,7 +82,7 @@ impl TestPersistentOffchainDB {
 		let mut me = self.persistent.write();
 		for ((_prefix, key), value_operation) in changes.drain() {
 			match value_operation {
-				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()).unwrap(),
+				OffchainOverlayedChange::SetValue(val) => me.set(b"", key.as_slice(), val.as_slice()),
 				OffchainOverlayedChange::Remove => me.remove(b"", key.as_slice()),
 			}
 		}
@@ -90,13 +90,12 @@ impl TestPersistentOffchainDB {
 }
 
 impl OffchainStorage for TestPersistentOffchainDB {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) -> error::Result<()> {
+	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		self.persistent.write().set(prefix, key, value)
 	}
 
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) -> error::Result<()> {
+	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		self.persistent.write().remove(prefix, key);
-		Ok(())
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -109,7 +108,7 @@ impl OffchainStorage for TestPersistentOffchainDB {
 		key: &[u8],
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
-	) -> error::Result<bool> {
+	) -> bool {
 		self.persistent.write().compare_and_set(prefix, key, old_value, new_value)
 	}
 }
@@ -246,7 +245,7 @@ impl offchain::Externalities for TestOffchainExt {
 		let mut state = self.0.write();
 		match kind {
 			StorageKind::LOCAL => state.local_storage.remove(b"", key),
-			StorageKind::PERSISTENT => state.persistent_storage.remove(b"", key).unwrap(),
+			StorageKind::PERSISTENT => state.persistent_storage.remove(b"", key),
 		};
 	}
 
@@ -259,8 +258,8 @@ impl offchain::Externalities for TestOffchainExt {
 	) -> bool {
 		let mut state = self.0.write();
 		match kind {
-			StorageKind::LOCAL => state.local_storage.compare_and_set(b"", key, old_value, new_value).unwrap(),
-			StorageKind::PERSISTENT => state.persistent_storage.compare_and_set(b"", key, old_value, new_value).unwrap(),
+			StorageKind::LOCAL => state.local_storage.compare_and_set(b"", key, old_value, new_value),
+			StorageKind::PERSISTENT => state.persistent_storage.compare_and_set(b"", key, old_value, new_value),
 		}
 	}
 
