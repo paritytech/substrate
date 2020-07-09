@@ -26,7 +26,6 @@ use std::{
 };
 use crate::offchain::{
 	self,
-	error,
 	storage::{InMemOffchainStorage, OffchainOverlayedChange, OffchainOverlayedChanges},
 	HttpError,
 	HttpRequestId as RequestId,
@@ -91,7 +90,7 @@ impl TestPersistentOffchainDB {
 
 impl OffchainStorage for TestPersistentOffchainDB {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		self.persistent.write().set(prefix, key, value)
+		self.persistent.write().set(prefix, key, value);
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
@@ -235,7 +234,7 @@ impl offchain::Externalities for TestOffchainExt {
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
 		let mut state = self.0.write();
-		let _ = match kind {
+		match kind {
 			StorageKind::LOCAL => state.local_storage.set(b"", key, value),
 			StorageKind::PERSISTENT => state.persistent_storage.set(b"", key, value),
 		};

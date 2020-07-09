@@ -24,8 +24,8 @@ use std::{
 };
 
 use crate::{columns, Database, DbHash, Transaction};
-use sp_core::offchain::error::OffchainError;
 use parking_lot::Mutex;
+use log::error;
 
 /// Offchain local storage
 #[derive(Clone)]
@@ -63,17 +63,21 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-
 		tx.set(columns::OFFCHAIN, &key, value);
-		self.db.commit(tx).map_err(|e| OffchainError(Box::new(e))).unwrap();
+
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error setting on local storage: {}", err)
+		}
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-
 		tx.remove(columns::OFFCHAIN, &key);
-		self.db.commit(tx).map_err(|e| OffchainError(Box::new(e))).unwrap();
+
+		if let Err(err) = self.db.commit(tx) {
+			error!("Error removing on local storage: {}", err)
+		}
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
@@ -101,7 +105,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 			is_set = val.as_ref().map(|x| &**x) == old_value;
 
 			if is_set {
-				self.set(prefix, item_key, new_value);
+				self.set(prefix, item_key, new_value)
 			}
 		}
 
@@ -130,10 +134,10 @@ mod tests {
 		let key = b"key";
 		let value = b"value";
 
-		storage.set(prefix, key, value).unwrap();
+		storage.set(prefix, key, value);
 		assert_eq!(storage.get(prefix, key), Some(value.to_vec()));
 
-		assert!(storage.compare_and_set(prefix, key, Some(value), b"asd").unwrap());
+		assert_eq!(storage.compare_and_set(prefix, key, Some(value), b"asd"), true);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}
@@ -144,7 +148,7 @@ mod tests {
 		let prefix = b"prefix";
 		let key = b"key";
 
-		assert!(storage.compare_and_set(prefix, key, None, b"asd").unwrap());
+		assert_eq!(storage.compare_and_set(prefix, key, None, b"asd"), true);
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}

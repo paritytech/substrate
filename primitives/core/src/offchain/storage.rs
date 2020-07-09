@@ -18,7 +18,7 @@
 //! In-memory implementation of offchain workers database.
 
 use std::collections::hash_map::{HashMap, Entry};
-use crate::offchain::{error, OffchainStorage};
+use crate::offchain::OffchainStorage;
 use std::iter::Iterator;
 
 /// In-memory storage for offchain workers.

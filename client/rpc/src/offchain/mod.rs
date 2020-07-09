@@ -60,7 +60,6 @@ impl<T: OffchainStorage + 'static> OffchainApi for Offchain<T> {
 			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
 		};
 		self.storage.write().set(prefix, &*key, &*value);
-
 		Ok(())
 	}
 
