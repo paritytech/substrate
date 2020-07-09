@@ -207,3 +207,14 @@ fn record_proof_works() {
 		&runtime_code,
 	).expect("Executes block while using the proof backend");
 }
+
+#[test]
+fn call_runtime_api_with_multiple_arguments() {
+	let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
+
+	let data = vec![1, 2, 4, 5, 6, 7, 8, 8, 10, 12];
+	let block_id = BlockId::Number(client.chain_info().best_number);
+	client.runtime_api()
+		.test_multiple_arguments(&block_id, data.clone(), data.clone(), data.len() as u32)
+		.unwrap();
+}

@@ -5,7 +5,7 @@ RETRY_ATTEMPT=0
 SLEEP_TIME=15
 TARGET_HOST="$1"
 COMMIT=$(cat artifacts/substrate/VERSION)
-DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/${COMMIT}/substrate"
+DOWNLOAD_URL="https://releases.parity.io/substrate/x86_64-debian:stretch/${COMMIT}/substrate/substrate"
 POST_DATA='{"extra_vars":{"artifact_path":"'${DOWNLOAD_URL}'","target_host":"'${TARGET_HOST}'"}}'
 
 JOB_ID=$(wget -O - --header "Authorization: Bearer ${AWX_TOKEN}" --header "Content-type: application/json" --post-data "${POST_DATA}" https://ansible-awx.parity.io/api/v2/job_templates/32/launch/ | jq .job)

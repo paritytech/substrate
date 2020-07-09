@@ -76,11 +76,11 @@ fn implement_common_api_traits(
 				#crate_::SimpleProof,
 			>;
 
-			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
+			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 				&self,
-				map_call: F,
-			) -> std::result::Result<R, E> where Self: Sized {
-				map_call(self)
+				call: F,
+			) -> R where Self: Sized {
+				call(self).into_inner()
 			}
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(

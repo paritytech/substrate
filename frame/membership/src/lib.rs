@@ -26,9 +26,9 @@
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
-	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
+	traits::{ChangeMembers, InitializeMembers, EnsureOrigin, Contains},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 	/// The overarching event type.
@@ -117,7 +117,7 @@ decl_module! {
 
 		/// Add a member `who` to the set.
 		///
-		/// May only be called from `AddOrigin` or root.
+		/// May only be called from `T::AddOrigin`.
 		#[weight = 50_000_000]
 		pub fn add_member(origin, who: T::AccountId) {
 			T::AddOrigin::ensure_origin(origin)?;
@@ -134,7 +134,7 @@ decl_module! {
 
 		/// Remove a member `who` from the set.
 		///
-		/// May only be called from `RemoveOrigin` or root.
+		/// May only be called from `T::RemoveOrigin`.
 		#[weight = 50_000_000]
 		pub fn remove_member(origin, who: T::AccountId) {
 			T::RemoveOrigin::ensure_origin(origin)?;
@@ -152,7 +152,7 @@ decl_module! {
 
 		/// Swap out one member `remove` for another `add`.
 		///
-		/// May only be called from `SwapOrigin` or root.
+		/// May only be called from `T::SwapOrigin`.
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
 		#[weight = 50_000_000]
@@ -181,7 +181,7 @@ decl_module! {
 		/// Change the membership to a new set, disregarding the existing membership. Be nice and
 		/// pass `members` pre-sorted.
 		///
-		/// May only be called from `ResetOrigin` or root.
+		/// May only be called from `T::ResetOrigin`.
 		#[weight = 50_000_000]
 		pub fn reset_members(origin, members: Vec<T::AccountId>) {
 			T::ResetOrigin::ensure_origin(origin)?;
@@ -231,6 +231,8 @@ decl_module! {
 		}
 
 		/// Set the prime member. Must be a current member.
+		///
+		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
 		pub fn set_prime(origin, who: T::AccountId) {
 			T::PrimeOrigin::ensure_origin(origin)?;
@@ -240,6 +242,8 @@ decl_module! {
 		}
 
 		/// Remove the prime member if it exists.
+		///
+		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
 		pub fn clear_prime(origin) {
 			T::PrimeOrigin::ensure_origin(origin)?;
@@ -257,6 +261,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				Err(_) => Prime::<T, I>::kill(),
 			}
 		}
+	}
+}
+
+impl<T: Trait<I>, I: Instance> Contains<T::AccountId> for Module<T, I> {
+	fn sorted_members() -> Vec<T::AccountId> {
+		Self::members()
+	}
+
+	fn count() -> usize {
+		Members::<T, I>::decode_len().unwrap_or(0)
 	}
 }
 
@@ -315,6 +329,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;

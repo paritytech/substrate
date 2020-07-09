@@ -26,7 +26,6 @@ use codec::{Encode, Decode};
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
-use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, Header as HeaderT, DigestFor, BlakeTwo256},
@@ -200,15 +199,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			record_proof,
 		)?;
 
-		// We don't check the API versions any further here since the dispatch compatibility
-		// check should be enough.
-		for inherent in self.client.runtime_api()
-			.inherent_extrinsics_with_context(
-				&self.parent_id,
-				ExecutionContext::BlockConstruction,
-				inherent_data
-			)?
-		{
+		for inherent in block_builder.create_inherents(inherent_data)? {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
@@ -371,7 +362,7 @@ mod tests {
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
+				Arc::new(FullChainApi::new(client.clone(), None)),
 				None,
 			).0
 		);
@@ -424,7 +415,7 @@ mod tests {
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
+				Arc::new(FullChainApi::new(client.clone(), None)),
 				None,
 			).0
 		);
@@ -459,7 +450,7 @@ mod tests {
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
+				Arc::new(FullChainApi::new(client.clone(), None)),
 				None,
 			).0
 		);
@@ -521,7 +512,7 @@ mod tests {
 		let txpool = Arc::new(
 			BasicPool::new(
 				Default::default(),
-				Arc::new(FullChainApi::new(client.clone())),
+				Arc::new(FullChainApi::new(client.clone(), None)),
 				None,
 			).0
 		);

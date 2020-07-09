@@ -87,7 +87,7 @@
 //! ```rust,ignore
 //! use pallet_assets as assets;
 //! use frame_support::{decl_module, dispatch, ensure};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: assets::Trait { }
 //!
@@ -134,8 +134,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
-use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
-use frame_system::{self as system, ensure_signed};
+use sp_runtime::traits::{Member, AtLeast32Bit, AtLeast32BitUnsigned, Zero, StaticLookup};
+use frame_system::ensure_signed;
 use sp_runtime::traits::One;
 
 /// The module configuration trait.
@@ -144,7 +144,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + AtLeast32Bit + Default + Copy;
+	type Balance: Member + Parameter + AtLeast32BitUnsigned + Default + Copy;
 
 	/// The arithmetic type of asset identifier.
 	type AssetId: Parameter + AtLeast32Bit + Default + Copy;
@@ -328,6 +328,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();

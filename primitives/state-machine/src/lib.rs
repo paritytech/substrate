@@ -82,6 +82,10 @@ pub use sp_core::traits::CloneableSpawn;
 
 use backend::{Backend, RecProofBackend, ProofCheckBackend, ProofRawFor};
 
+const PROOF_CLOSE_TRANSACTION: &str = "\
+	Closing a transaction that was started in this function. Client initiated transactions
+	are protected from being closed by the runtime. qed";
+
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
 /// Default handler of the execution manager.
@@ -306,6 +310,8 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			None => &mut cache,
 		};
 
+		self.overlay.enter_runtime().expect("StateMachine is never called from the runtime; qed");
+
 		let mut ext = Ext::new(
 			self.overlay,
 			self.offchain_overlay,
@@ -333,6 +339,9 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			native_call,
 		);
 
+		self.overlay.exit_runtime()
+			.expect("Runtime is not able to call this function in the overlay; qed");
+
 		trace!(
 			target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
 			id,
@@ -356,11 +365,11 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				CallResult<R, Exec::Error>,
 			) -> CallResult<R, Exec::Error>
 	{
-		let pending_changes = self.overlay.clone_pending();
+		self.overlay.start_transaction();
 		let (result, was_native) = self.execute_aux(true, native_call.take());
 
 		if was_native {
-			self.overlay.replace_pending(pending_changes);
+			self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -375,6 +384,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 				on_consensus_failure(wasm_result, result)
 			}
 		} else {
+			self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			result
 		}
 	}
@@ -387,16 +397,17 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			R: Decode + Encode + PartialEq,
 			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
 	{
-		let pending_changes = self.overlay.clone_pending();
+		self.overlay.start_transaction();
 		let (result, was_native) = self.execute_aux(
 			true,
 			native_call.take(),
 		);
 
 		if !was_native || result.is_ok() {
+			self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			result
 		} else {
-			self.overlay.replace_pending(pending_changes);
+			self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
 			let (wasm_result, _) = self.execute_aux(
 				false,
 				native_call,
@@ -1061,7 +1072,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(b"aba".to_vec(), Some(b"1312".to_vec()));
 		overlay.set_storage(b"bab".to_vec(), Some(b"228".to_vec()));
-		overlay.commit_prospective();
+		overlay.start_transaction();
 		overlay.set_storage(b"abd".to_vec(), Some(b"69".to_vec()));
 		overlay.set_storage(b"bbd".to_vec(), Some(b"42".to_vec()));
 
@@ -1078,10 +1089,10 @@ mod tests {
 			);
 			ext.clear_prefix(b"ab");
 		}
-		overlay.commit_prospective();
+		overlay.commit_transaction().unwrap();
 
 		assert_eq!(
-			overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned()))
+			overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned()))
 				.collect::<HashMap<_, _>>(),
 			map![
 				b"abc".to_vec() => None.into(),
@@ -1167,7 +1178,7 @@ mod tests {
 				Some(vec![reference_data[0].clone()].encode()),
 			);
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 		{
 			let mut ext = Ext::new(
 				&mut overlay,
@@ -1186,7 +1197,7 @@ mod tests {
 				Some(reference_data.encode()),
 			);
 		}
-		overlay.discard_prospective();
+		overlay.rollback_transaction().unwrap();
 		{
 			let ext = Ext::new(
 				&mut overlay,
@@ -1229,7 +1240,7 @@ mod tests {
 			ext.clear_storage(key.as_slice());
 			ext.storage_append(key.clone(), Item::InitializationItem.encode());
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 
 		// For example, first transaction resulted in panic during block building
 		{
@@ -1254,7 +1265,7 @@ mod tests {
 				Some(vec![Item::InitializationItem, Item::DiscardedItem].encode()),
 			);
 		}
-		overlay.discard_prospective();
+		overlay.rollback_transaction().unwrap();
 
 		// Then we apply next transaction which is valid this time.
 		{
@@ -1280,7 +1291,7 @@ mod tests {
 			);
 
 		}
-		overlay.commit_prospective();
+		overlay.start_transaction();
 
 		// Then only initlaization item and second (commited) item should persist.
 		{
@@ -1538,5 +1549,43 @@ mod tests {
 			}
 		}
 		assert!(!duplicate);
+	}
+
+	#[test]
+	fn set_storage_empty_allowed() {
+		let initial: BTreeMap<_, _> = map![
+			b"aaa".to_vec() => b"0".to_vec(),
+			b"bbb".to_vec() => b"".to_vec()
+		];
+		let state = InMemoryBackend::<BlakeTwo256, SimpleProof>::from(initial);
+		let backend = state.as_proof_backend().unwrap();
+
+		let mut overlay = OverlayedChanges::default();
+		overlay.start_transaction();
+		overlay.set_storage(b"ccc".to_vec(), Some(b"".to_vec()));
+		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
+		overlay.commit_transaction().unwrap();
+		overlay.start_transaction();
+		assert_eq!(overlay.storage(b"ccc"), Some(Some(&[][..])));
+		assert_eq!(overlay.storage(b"bbb"), None);
+
+		{
+			let mut offchain_overlay = Default::default();
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				&backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(ext.storage(b"bbb"), Some(vec![]));
+			assert_eq!(ext.storage(b"ccc"), Some(vec![]));
+			ext.clear_storage(b"ccc");
+			assert_eq!(ext.storage(b"ccc"), None);
+		}
+		overlay.commit_transaction().unwrap();
+		assert_eq!(overlay.storage(b"ccc"), Some(None));
 	}
 }

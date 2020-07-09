@@ -62,7 +62,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::{
 	borrow::{Borrow, Cow},
 	collections::HashSet,
-	fs, io,
+	fs,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -107,6 +107,24 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
+		// Ensure the listen addresses are consistent with the transport.
+		ensure_addresses_consistent_with_transport(
+			params.network_config.listen_addresses.iter(),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.boot_nodes.iter().map(|x| &x.multiaddr),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.reserved_nodes.iter().map(|x| &x.multiaddr),
+			&params.network_config.transport,
+		)?;
+		ensure_addresses_consistent_with_transport(
+			params.network_config.public_addresses.iter(),
+			&params.network_config.transport,
+		)?;
+
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
 		if let Some(path) = params.network_config.net_config_path {
@@ -224,7 +242,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
-			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -298,8 +315,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
 				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER)
-				.notify_handler_buffer_size(NonZeroUsize::new(16).expect("16 != 0; qed"))
-				.connection_event_buffer_size(128);
+				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
+				.connection_event_buffer_size(1024);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
@@ -473,17 +490,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let not_connected_peers = {
 			let swarm = &mut *swarm;
-			let list = swarm.known_peers().filter(|p| open.iter().all(|n| n != *p))
-				.cloned().collect::<Vec<_>>();
-			list.into_iter().map(move |peer_id| {
-				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
-					version_string: swarm.node(&peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())),
-					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
-					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
-						.into_iter().collect(),
+			swarm.known_peers().into_iter()
+				.filter(|p| open.iter().all(|n| n != p))
+				.map(move |peer_id| {
+					(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+						version_string: swarm.node(&peer_id)
+							.and_then(|i| i.client_version().map(|s| s.to_owned())),
+						latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
+						known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
+							.into_iter().collect(),
+					})
 				})
-			}).collect()
+				.collect()
 		};
 
 		NetworkState {
@@ -588,15 +606,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// All transactions will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration and propagated to peers.
 	pub fn trigger_repropagate(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsics);
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransactions);
 	}
 
 	/// You must call when new transaction is imported by the transaction pool.
 	///
 	/// This transaction will be fetched from the `TransactionPool` that was passed at
 	/// initialization as part of the configuration and propagated to peers.
-	pub fn propagate_extrinsic(&self, hash: H) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateExtrinsic(hash));
+	pub fn propagate_transaction(&self, hash: H) {
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
 	}
 
 	/// Make sure an important block is propagated to peers.
@@ -747,6 +765,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::UpdateChain);
 	}
 
+	/// Inform the network service about an own imported block.
+	pub fn own_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::OwnBlockImported(hash, number));
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
@@ -793,8 +817,8 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 ///
 /// Each entry corresponds to a method of `NetworkService`.
 enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
-	PropagateExtrinsic(H),
-	PropagateExtrinsics,
+	PropagateTransaction(H),
+	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
 	AnnounceBlock(B::Hash, Vec<u8>),
 	GetValue(record::Key),
@@ -813,6 +837,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	},
 	DisconnectPeer(PeerId),
 	UpdateChain,
+	OwnBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -848,6 +873,8 @@ struct Metrics {
 	// This list is ordered alphabetically
 	connections_closed_total: CounterVec<U64>,
 	connections_opened_total: CounterVec<U64>,
+	distinct_peers_connections_closed_total: Counter<U64>,
+	distinct_peers_connections_opened_total: Counter<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
@@ -883,16 +910,24 @@ impl Metrics {
 			connections_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by reason and direction"
+					"Total number of connections closed, by direction and reason"
 				),
 				&["direction", "reason"]
 			)?, registry)?,
 			connections_opened_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_opened_total",
-					"Total number of connections opened"
+					"Total number of connections opened by direction"
 				),
 				&["direction"]
+			)?, registry)?,
+			distinct_peers_connections_closed_total: register(Counter::new(
+					"sub_libp2p_distinct_peers_connections_closed_total",
+					"Total number of connections closed with distinct peers"
+			)?, registry)?,
+			distinct_peers_connections_opened_total: register(Counter::new(
+					"sub_libp2p_distinct_peers_connections_opened_total",
+					"Total number of connections opened with distinct peers"
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -1077,7 +1112,7 @@ impl Metrics {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
-	type Output = Result<(), io::Error>;
+	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
@@ -1104,7 +1139,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_worker.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
-				Poll::Ready(None) => return Poll::Ready(Ok(())),
+				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
 
@@ -1113,10 +1148,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().announce_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.user_protocol_mut().request_justification(&hash, number),
-				ServiceToWorkerMsg::PropagateExtrinsic(hash) =>
-					this.network_service.user_protocol_mut().propagate_extrinsic(&hash),
-				ServiceToWorkerMsg::PropagateExtrinsics =>
-					this.network_service.user_protocol_mut().propagate_extrinsics(),
+				ServiceToWorkerMsg::PropagateTransaction(hash) =>
+					this.network_service.user_protocol_mut().propagate_transaction(&hash),
+				ServiceToWorkerMsg::PropagateTransactions =>
+					this.network_service.user_protocol_mut().propagate_transactions(),
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.get_value(&key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1143,6 +1178,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
 				ServiceToWorkerMsg::UpdateChain =>
 					this.network_service.user_protocol_mut().update_chain(),
+				ServiceToWorkerMsg::OwnBlockImported(hash, number) =>
+					this.network_service.user_protocol_mut().own_block_imported(hash, number),
 			}
 		}
 
@@ -1206,40 +1243,44 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.event_streams.send(ev);
 				},
-				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. }) => {
+				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+
 					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections_opened_total.with_label_values(&["out"]).inc(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections_opened_total.with_label_values(&["in"]).inc(),
-						}
-					}
-				},
-				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
-					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
-					if let Some(metrics) = this.metrics.as_ref() {
-						let dir = match endpoint {
+						let direction = match endpoint {
 							ConnectedPoint::Dialer { .. } => "out",
 							ConnectedPoint::Listener { .. } => "in",
 						};
+						metrics.connections_opened_total.with_label_values(&[direction]).inc();
 
-						match cause {
-							ConnectionError::IO(_) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
+						if num_established.get() == 1 {
+							metrics.distinct_peers_connections_opened_total.inc();
+						}
+					}
+				},
+				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, num_established }) => {
+					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
+					if let Some(metrics) = this.metrics.as_ref() {
+						let direction = match endpoint {
+							ConnectedPoint::Dialer { .. } => "out",
+							ConnectedPoint::Listener { .. } => "in",
+						};
+						let reason = match cause {
+							ConnectionError::IO(_) => "transport-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
+								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								EitherError::B(LegacyConnectionKillError)))))))) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
+								EitherError::B(LegacyConnectionKillError)))))))) =>	"force-closed",
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
+							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
+						};
+						metrics.connections_closed_total.with_label_values(&[direction, reason]).inc();
+
+						// `num_established` represents the number of *remaining* connections.
+						if num_established == 0 {
+							metrics.distinct_peers_connections_closed_total.inc();
 						}
 					}
 				},
@@ -1446,4 +1487,41 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}
 	}
+}
+
+fn ensure_addresses_consistent_with_transport<'a>(
+	addresses: impl Iterator<Item = &'a Multiaddr>,
+	transport: &TransportConfig,
+) -> Result<(), Error> {
+	if matches!(transport, TransportConfig::MemoryOnly) {
+		let addresses: Vec<_> = addresses
+			.filter(|x| x.iter()
+				.any(|y| !matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
+			)
+			.cloned()
+			.collect();
+
+		if !addresses.is_empty() {
+			return Err(Error::AddressesForAnotherTransport {
+				transport: transport.clone(),
+				addresses,
+			});
+		}
+	} else {
+		let addresses: Vec<_> = addresses
+			.filter(|x| x.iter()
+				.any(|y| matches!(y, libp2p::core::multiaddr::Protocol::Memory(_)))
+			)
+			.cloned()
+			.collect();
+
+		if !addresses.is_empty() {
+			return Err(Error::AddressesForAnotherTransport {
+				transport: transport.clone(),
+				addresses,
+			});
+		}
+	}
+
+	Ok(())
 }

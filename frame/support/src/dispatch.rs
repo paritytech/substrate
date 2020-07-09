@@ -54,7 +54,7 @@ pub trait Callable<T> {
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, T> = <A as Callable<T>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
 
 /// A type that can be used as a parameter in a dispatchable function.
 ///
@@ -70,7 +70,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
@@ -112,7 +112,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -147,7 +147,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
-/// # use frame_system::{self as system, Trait, ensure_signed};
+/// # use frame_system::{Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
@@ -175,7 +175,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
+/// # use frame_system::{Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
@@ -283,7 +283,7 @@ macro_rules! decl_module {
 			$trait_instance:ident: $trait_name:ident
 			$( <I>, I: $instantiable:path $( = $module_default_instance:path )? )?
 		>
-		for enum $call_type:ident where origin: $origin_type:ty $(, $where_ty:ty: $where_bound:path )* {
+		for enum $call_type:ident where origin: $origin_type:ty $(, $where_ty:ty: $where_bound:path )* $(,)? {
 			$( $t:tt )*
 		}
 	) => {
@@ -292,7 +292,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<
 				$trait_instance: $trait_name $(<I>, I: $instantiable $(= $module_default_instance)?)?
 			>
-			for enum $call_type where origin: $origin_type, system = system
+			for enum $call_type where origin: $origin_type, system = frame_system
 			{ $( $where_ty: $where_bound ),* }
 			{}
 			{}
@@ -317,6 +317,7 @@ macro_rules! decl_module {
 			origin: $origin_type:ty,
 			system = $system:ident
 			$(, $where_ty:ty: $where_bound:path )*
+			$(,)?
 		{
 			$($t:tt)*
 		}
@@ -399,6 +400,29 @@ macro_rules! decl_module {
 			"`deposit_event` function is reserved and must follow the syntax: `$vis:vis fn deposit_event() = default;`"
 		);
 	};
+	// Compile error on `deposit_event` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )+ }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		$vis:vis fn deposit_event() = default;
+		$($rest:tt)*
+	) => {
+		compile_error!("`deposit_event` can only be passed once as input.");
+	};
 	// Add on_finalize
 	(@normalize
 		$(#[$attr:meta])*
@@ -461,6 +485,30 @@ macro_rules! decl_module {
 			"`on_finalize` can't be given weight attribute anymore, weight must be returned by \
 			`on_initialize` or `on_runtime_upgrade` instead"
 		);
+	};
+	// Compile error on `on_finalize` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )+ }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
+		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_finalize` can only be passed once as input.");
 	};
 	// compile_error on_runtime_upgrade, without a given weight removed syntax.
 	(@normalize
@@ -554,6 +602,29 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Compile error on `on_runtime_upgrade` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )+ }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_runtime_upgrade` can only be passed once as input.");
+	};
 	// Add integrity_test
 	(@normalize
 		$(#[$attr:meta])*
@@ -594,6 +665,29 @@ macro_rules! decl_module {
 			[ $( $dispatchables )* ]
 			$($rest)*
 		);
+	};
+	// Compile error on `integrity_test` being added a second time.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )+ }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn integrity_test() { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`integrity_test` can only be passed once as input.");
 	};
 	// compile_error on_initialize, without a given weight removed syntax.
 	(@normalize
@@ -687,6 +781,29 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// Compile error on trying to add a second `on_initialize`.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )+ }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`on_initialize` can only be passed once as input.");
+	};
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -727,7 +844,29 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-
+	// Compile error on trying to add a second `offchain_worker`.
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )+ }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		{ $( $integrity_test:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn offchain_worker( $( $param_name:ident : $param:ty ),* $(,)? ) -> $return:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("`offchain_worker` can only be passed once as input.");
+	};
 	// This puts a constant in the parsed constants list.
 	(@normalize
 		$(#[$attr:meta])*
@@ -1709,8 +1848,8 @@ macro_rules! decl_module {
 	}
 }
 
-pub trait IsSubType<T: Callable<R>, R> {
-	fn is_sub_type(&self) -> Option<&CallableCallFor<T, R>>;
+pub trait IsSubType<T> {
+	fn is_sub_type(&self) -> Option<&T>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -1809,7 +1948,7 @@ macro_rules! impl_outer_dispatch {
 		}
 
 		$(
-			impl $crate::dispatch::IsSubType<$camelcase, $runtime> for $call_type {
+			impl $crate::dispatch::IsSubType<$crate::dispatch::CallableCallFor<$camelcase, $runtime>> for $call_type {
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&$crate::dispatch::CallableCallFor<$camelcase, $runtime>> {
 					match *self {
@@ -2171,6 +2310,8 @@ mod tests {
 	}
 
 	pub mod system {
+		use codec::{Encode, Decode};
+
 		pub trait Trait {
 			type AccountId;
 			type Call;
@@ -2178,7 +2319,7 @@ mod tests {
 			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),
@@ -2198,7 +2339,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
@@ -2231,72 +2372,72 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_0"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[
-						" Hi, this is a comment."
-					])
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_0"),
+			arguments: DecodeDifferent::Encode(&[]),
+			documentation: DecodeDifferent::Encode(&[
+				" Hi, this is a comment."
+			])
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_1"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("Compact<u32>")
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_2"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("i32"),
 				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_1"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("Compact<u32>")
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data2"),
+					ty: DecodeDifferent::Encode("String"),
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_3"),
+			arguments: DecodeDifferent::Encode(&[]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_4"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("i32"),
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("aux_5"),
+			arguments: DecodeDifferent::Encode(&[
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data"),
+					ty: DecodeDifferent::Encode("i32"),
 				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_2"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						},
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data2"),
-							ty: DecodeDifferent::Encode("String"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_3"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_4"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_5"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						},
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data2"),
-							ty: DecodeDifferent::Encode("Compact<u32>")
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("operational"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-			];
+				FunctionArgumentMetadata {
+					name: DecodeDifferent::Encode("_data2"),
+					ty: DecodeDifferent::Encode("Compact<u32>")
+				}
+			]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		FunctionMetadata {
+			name: DecodeDifferent::Encode("operational"),
+			arguments: DecodeDifferent::Encode(&[]),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+	];
 
 	pub struct TraitImpl {}
 

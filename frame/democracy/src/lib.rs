@@ -160,7 +160,6 @@ use sp_runtime::{
 use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	storage::IterableStorageMap,
 	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -201,6 +200,66 @@ pub type ReferendumIndex = u32;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+
+pub trait WeightInfo {
+	fn propose(p: u32, ) -> Weight;
+	fn second(s: u32, ) -> Weight;
+	fn vote_new(r: u32, ) -> Weight;
+	fn vote_existing(r: u32, ) -> Weight;
+	fn emergency_cancel(r: u32, ) -> Weight;
+	fn external_propose(p: u32, v: u32, ) -> Weight;
+	fn external_propose_majority(p: u32, ) -> Weight;
+	fn external_propose_default(p: u32, ) -> Weight;
+	fn fast_track(p: u32, ) -> Weight;
+	fn veto_external(v: u32, ) -> Weight;
+	fn cancel_referendum(r: u32, ) -> Weight;
+	fn cancel_queued(r: u32, ) -> Weight;
+	fn on_initialize_external(r: u32, ) -> Weight;
+	fn on_initialize_public(r: u32, ) -> Weight;
+	fn on_initialize_no_launch_no_maturing(r: u32, ) -> Weight;
+	fn delegate(r: u32, ) -> Weight;
+	fn undelegate(r: u32, ) -> Weight;
+	fn clear_public_proposals(p: u32, ) -> Weight;
+	fn note_preimage(b: u32, ) -> Weight;
+	fn note_imminent_preimage(b: u32, ) -> Weight;
+	fn reap_preimage(b: u32, ) -> Weight;
+	fn unlock_remove(r: u32, ) -> Weight;
+	fn unlock_set(r: u32, ) -> Weight;
+	fn remove_vote(r: u32, ) -> Weight;
+	fn remove_other_vote(r: u32, ) -> Weight;
+	fn enact_proposal_execute(b: u32, ) -> Weight;
+	fn enact_proposal_slash(b: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn propose(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn second(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn vote_new(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn vote_existing(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn emergency_cancel(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn external_propose(_p: u32, _v: u32, ) -> Weight { 1_000_000_000 }
+	fn external_propose_majority(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn external_propose_default(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn fast_track(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn veto_external(_v: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_referendum(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_queued(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_external(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_public(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_no_launch_no_maturing(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn delegate(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn undelegate(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn clear_public_proposals(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn note_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn note_imminent_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn reap_preimage(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn unlock_remove(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn unlock_set(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_vote(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_other_vote(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn enact_proposal_execute(_b: u32, ) -> Weight { 1_000_000_000 }
+	fn enact_proposal_slash(_b: u32, ) -> Weight { 1_000_000_000 }
+}
 
 pub trait Trait: frame_system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + From<Call<Self>>;
@@ -280,13 +339,19 @@ pub trait Trait: frame_system::Trait + Sized {
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The Scheduler.
-	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
+	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal, Self::PalletsOrigin>;
+
+	/// Overarching type of all pallets origins.
+	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>>;
 
 	/// The maximum number of votes for an account.
 	///
 	/// Also used to compute weight, an overly big value can
 	/// lead to extrinsic with very big weight: see `delegate` for instance.
 	type MaxVotes: Get<u32>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 #[derive(Clone, Encode, Decode, RuntimeDebug)]
@@ -601,22 +666,6 @@ decl_module! {
 		const MaxVotes: u32 = T::MaxVotes::get();
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> Weight {
-			if let None = StorageVersion::get() {
-				StorageVersion::put(Releases::V1);
-
-				DepositOf::<T>::translate::<
-					(BalanceOf<T>, Vec<T::AccountId>), _
-				>(|_, (balance, accounts)| {
-					Some((accounts, balance))
-				});
-
-				T::MaximumBlockWeight::get()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
 
 		/// Propose a sensitive action to be taken.
 		///
@@ -1642,6 +1691,7 @@ impl<T: Trait> Module<T> {
 					when,
 					None,
 					63,
+					system::RawOrigin::Root.into(),
 					Call::enact_proposal(status.proposal_hash, index).into(),
 				).is_err() {
 					frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");

@@ -43,7 +43,7 @@ use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, traits::{
 		Get, ReservableCurrency, Currency, InstanceFilter,
 		OriginTrait, IsType,
-	}, weights::{GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+	}, weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
 use frame_system::{self as system, ensure_signed};
@@ -53,6 +53,24 @@ mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
+pub trait WeightInfo {
+	fn proxy(p: u32, ) -> Weight;
+	fn add_proxy(p: u32, ) -> Weight;
+	fn remove_proxy(p: u32, ) -> Weight;
+	fn remove_proxies(p: u32, ) -> Weight;
+	fn anonymous(p: u32, ) -> Weight;
+	fn kill_anonymous(p: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn proxy(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn add_proxy(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_proxy(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_proxies(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn anonymous(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_anonymous(_p: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Configuration trait.
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -60,7 +78,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Module<Self>, Self>
+		+ GetDispatchInfo + From<frame_system::Call<Self>> + IsSubType<Call<Self>>
 		+ IsType<<Self as frame_system::Trait>::Call>;
 
 	/// The currency mechanism.
@@ -68,6 +86,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// A kind of proxy; specified with the proxy and passed in to the `IsProxyable` fitler.
 	/// The instance filter determines whether a given call may be proxied under this type.
+	///
+	/// IMPORTANT: `Default` must be provided and MUST BE the the *most permissive* value.
 	type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Trait>::Call>
 		+ Default;
 
@@ -85,6 +105,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The maximum amount of proxies allowed for a single account.
 	type MaxProxies: Get<u16>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -133,6 +156,15 @@ decl_module! {
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
 
+		/// The base amount of currency needed to reserve for creating a proxy.
+		const ProxyDepositBase: BalanceOf<T> = T::ProxyDepositBase::get();
+
+		/// The amount of currency needed per proxy added.
+		const ProxyDepositFactor: BalanceOf<T> = T::ProxyDepositFactor::get();
+
+		/// The maximum amount of proxies allowed for a single account.
+		const MaxProxies: u16 = T::MaxProxies::get();
+
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
 		///
@@ -174,6 +206,8 @@ decl_module! {
 				match c.is_sub_type() {
 					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
 						if !proxy_type.is_superset(&pt) => false,
+					Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
+					    if proxy_type != T::ProxyType::default() => false,
 					_ => proxy_type.filter(c)
 				}
 			});
