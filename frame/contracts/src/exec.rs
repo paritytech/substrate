@@ -544,13 +544,13 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	}
 
 	// Only ext_terminate is allowed to bring the sender below the subsistence
-	// or even existential deposit.
+	// threshold or even existential deposit.
 	let existence_requirement = match cause {
 		Terminate => ExistenceRequirement::AllowDeath,
 		_ => {
 			ensure!(
-				T::Currency::total_balance(transactor) >=
-					value.saturating_add(ctx.config.subsistence_threshold()),
+				T::Currency::total_balance(transactor).saturating_sub(value) >=
+					ctx.config.subsistence_threshold(),
 				Error::<T>::InsufficientBalance,
 			);
 			ExistenceRequirement::KeepAlive
