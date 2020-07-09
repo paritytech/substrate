@@ -120,7 +120,7 @@ fn rent_budget<T: Trait>(
 ) -> Option<BalanceOf<T>> {
 	let subsistence_threshold = Config::<T>::subsistence_threshold_uncached();
 	// Reserved balance contributes towards the subsistence threshold to stay consistent
-	// with the exsistential deposit where the reserved balance is also counted.
+	// with the existential deposit where the reserved balance is also counted.
 	if *total_balance < subsistence_threshold {
 		return None;
 	}
