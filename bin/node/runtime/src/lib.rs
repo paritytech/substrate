@@ -580,6 +580,7 @@ parameter_types! {
 	pub const BountyValueMinimum: Balance = 10 * DOLLARS;
 	pub const BountyDuration: BlockNumber = 14 * DAYS;
 	pub const MaximumReasonLength: u32 = 16384;
+	pub const MaximumSubBountyDepth: u8 = 1;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -611,6 +612,7 @@ impl pallet_treasury::Trait for Runtime {
 	type BountyValueMinimum = BountyValueMinimum;
 	type BountyDuration = BountyDuration;
 	type MaximumReasonLength = MaximumReasonLength;
+	type MaximumSubBountyDepth = MaximumSubBountyDepth;
 	type WeightInfo = ();
 }
 
