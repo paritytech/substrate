@@ -16,17 +16,15 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator};
-use crate::gas::{Gas, GasMeter, Token};
-use crate::rent;
-use crate::storage;
+use crate::{gas::{Gas, GasMeter, Token}, rent, storage, Error};
 use bitflags::bitflags;
-
 use sp_std::prelude::*;
-use sp_runtime::traits::{Bounded, Zero, Convert};
+use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
 	dispatch::DispatchError,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
 	weights::Weight,
+	ensure,
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
@@ -545,10 +543,18 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		Err("not enough gas to pay transfer fee")?
 	}
 
-	// Only ext_terminate is allowed to bring the sender below the existential deposit
+	// Only ext_terminate is allowed to bring the sender below the subsistence
+	// or even existential deposit.
 	let existence_requirement = match cause {
 		Terminate => ExistenceRequirement::AllowDeath,
-		_ => ExistenceRequirement::KeepAlive,
+		_ => {
+			ensure!(
+				T::Currency::total_balance(transactor) >=
+					value.saturating_add(ctx.config.subsistence_threshold()),
+				Error::<T>::InsufficientBalance,
+			);
+			ExistenceRequirement::KeepAlive
+		},
 	};
 	T::Currency::transfer(transactor, dest, value, existence_requirement)?;
 
