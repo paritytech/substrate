@@ -38,7 +38,7 @@ use frame_support::{
 	}
 };
 use codec::{Encode, Decode};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod mock;
 mod tests;

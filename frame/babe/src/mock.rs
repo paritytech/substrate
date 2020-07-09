@@ -85,6 +85,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -111,6 +112,7 @@ impl pallet_session::Trait for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type WeightInfo = ();
 }
 
 impl pallet_session::historical::Trait for Test {
@@ -137,6 +139,7 @@ impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -149,6 +152,7 @@ impl pallet_balances::Trait for Test {
 	type Event = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -208,6 +212,7 @@ impl pallet_staking::Trait for Test {
 	type UnsignedPriority = StakingUnsignedPriority;
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -220,6 +225,7 @@ impl pallet_offences::Trait for Test {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+	type WeightInfo = ();
 }
 
 impl Trait for Test {

@@ -123,6 +123,7 @@ mod tests {
 		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+		type WeightInfo = ();
 	}
 
 	impl pallet_session::historical::Trait for Test {
@@ -162,6 +163,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	impl_outer_origin! {

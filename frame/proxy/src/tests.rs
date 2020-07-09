@@ -81,6 +81,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -91,10 +92,12 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 impl pallet_utility::Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ProxyDepositBase: u64 = 1;
@@ -139,6 +142,7 @@ impl Trait for Test {
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
+	type WeightInfo = ();
 }
 
 type System = frame_system::Module<Test>;

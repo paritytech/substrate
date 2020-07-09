@@ -113,6 +113,7 @@ impl frame_system::Trait for Test {
 	type AccountData = balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl<C> system::offchain::SendTransactionTypes<C> for Test
@@ -140,6 +141,7 @@ impl session::Trait for Test {
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type WeightInfo = ();
 }
 
 impl session::historical::Trait for Test {
@@ -157,6 +159,7 @@ impl balances::Trait for Test {
 	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -167,6 +170,7 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -226,6 +230,7 @@ impl staking::Trait for Test {
 	type UnsignedPriority = StakingUnsignedPriority;
 	type MaxIterations = ();
 	type MinSolutionScoreBump = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -237,6 +242,7 @@ impl offences::Trait for Test {
 	type IdentificationTuple = session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+	type WeightInfo = ();
 }
 
 impl Trait for Test {

@@ -47,7 +47,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -285,6 +285,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -295,6 +296,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;

@@ -81,6 +81,7 @@ impl frame_system::Trait for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type AccountData = pallet_balances::AccountData<u64>;
+	type SystemWeightInfo = ();
 }
 
 impl pallet_balances::Trait for Test {
@@ -89,6 +90,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 
 impl Trait for Test {

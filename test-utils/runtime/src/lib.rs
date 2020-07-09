@@ -445,6 +445,7 @@ impl frame_system::Trait for Runtime {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -452,6 +453,7 @@ impl pallet_timestamp::Trait for Runtime {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 parameter_types! {

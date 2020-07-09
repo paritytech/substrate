@@ -260,7 +260,7 @@ use frame_support::{
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{
@@ -762,6 +762,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -772,6 +773,7 @@ mod tests {
 		type Event = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Event = ();

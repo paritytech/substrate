@@ -39,7 +39,7 @@
 //!    `Yes`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!         #[weight = 1000]
@@ -52,7 +52,7 @@
 //! 2.1 Define weight and class, **in which case `PaysFee` would be `Yes`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::DispatchClass;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -66,7 +66,7 @@
 //! 2.2 Define weight and `PaysFee`, **in which case `ClassifyDispatch` would be `Normal`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::Pays;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -80,7 +80,7 @@
 //! 3. Define all 3 parameters.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -100,7 +100,7 @@
 //! all 3 are static values, providing a raw tuple is easier.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {

@@ -21,9 +21,10 @@
 use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
-	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
+	DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
+use crate::logger::{LogRotationOpt, init_logger};
 use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
@@ -488,6 +489,13 @@ pub trait CliConfiguration: Sized {
 		Ok(self.shared_params().log_filters().join(","))
 	}
 
+	/// Get the log directory for logging.
+	/// 
+	/// By default this is retrieved from `SharedParams`.
+	fn log_rotation_opt(&self) -> Result<&LogRotationOpt> {
+		Ok(self.shared_params().log_rotation_opt())
+	}
+
 	/// Initialize substrate. This must be done only once.
 	///
 	/// This method:
@@ -497,11 +505,12 @@ pub trait CliConfiguration: Sized {
 	/// 3. Initialize the logger
 	fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log_filters()?;
+		let log_rotation_opt = self.log_rotation_opt()?;
 
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(&logger_pattern);
+		init_logger(&logger_pattern, log_rotation_opt)?;
 
 		Ok(())
 	}

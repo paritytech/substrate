@@ -137,10 +137,30 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.rotator.is_banned(hash)
 	}
 
+	/// A fast check before doing any further processing of a transaction, like validation.
+	///
+	/// If `ingore_banned` is `true`, it will not check if the transaction is banned.
+	///
+	/// It checks if the transaction is already imported or banned. If so, it returns an error.
+	pub fn check_is_known(
+		&self,
+		tx_hash: &ExtrinsicHash<B>,
+		ignore_banned: bool,
+	) -> Result<(), B::Error> {
+		if !ignore_banned && self.is_banned(tx_hash) {
+			Err(error::Error::TemporarilyBanned.into())
+		} else if self.pool.read().is_imported(tx_hash) {
+			Err(error::Error::AlreadyImported(Box::new(tx_hash.clone())).into())
+		} else {
+			Ok(())
+		}
+	}
+
 	/// Imports a bunch of pre-validated transactions to the pool.
-	pub fn submit<T>(&self, txs: T) -> Vec<Result<ExtrinsicHash<B>, B::Error>> where
-		T: IntoIterator<Item=ValidatedTransactionFor<B>>
-	{
+	pub fn submit(
+		&self,
+		txs: impl IntoIterator<Item=ValidatedTransactionFor<B>>,
+	) -> Vec<Result<ExtrinsicHash<B>, B::Error>> {
 		let results = txs.into_iter()
 			.map(|validated_tx| self.submit_one(validated_tx))
 			.collect::<Vec<_>>();
