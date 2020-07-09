@@ -126,8 +126,10 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	/// extension to be a `Weak` reference.
 	/// That's also the reason why it's being registered lazily instead of
 	/// during initialization.
-	pub fn register_transaction_pool(&self, pool: Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>) {
-		*self.transaction_pool.write() = Some(pool);
+	pub fn register_transaction_pool<T>(&self, pool: &Arc<T>)
+		where T: sp_transaction_pool::OffchainSubmitTransaction<Block> + 'static
+	{
+		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
 	}
 
 	/// Create `ExecutionManager` and `Extensions` for given offchain call.
