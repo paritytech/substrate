@@ -108,9 +108,7 @@ pub trait Database<H: Clone>: Send + Sync {
 				ChangeRef::Release(hash) => tx.release(hash),
 			}
 		}
-		self.commit(tx)?;
-
-		Ok(())
+		self.commit(tx)
 	}
 
 	/// Retrieve the value previously stored against `key` or `None` if
@@ -129,17 +127,13 @@ pub trait Database<H: Clone>: Send + Sync {
 	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.set(col, key, value);
-		self.commit(t)?;
-
-		Ok(())
+		self.commit(t)
 	}
 	/// Remove the value of `key` in `col`.
 	fn remove(&self, col: ColumnId, key: &[u8]) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.remove(col, key);
-		self.commit(t)?;
-
-		Ok(())
+		self.commit(t)
 	}
 
 	/// Retrieve the first preimage previously `store`d for `hash` or `None` if no preimage is
@@ -161,9 +155,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	fn store(&self, hash: &H, preimage: &[u8]) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.store(hash.clone(), preimage);
-		self.commit(t)?;
-
-		Ok(())
+		self.commit(t)
 	}
 
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
@@ -172,9 +164,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	fn release(&self, hash: &H) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.release(hash.clone());
-		self.commit(t)?;
-
-		Ok(())
+		self.commit(t)
 	}
 }
 
