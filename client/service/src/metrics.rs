@@ -18,7 +18,7 @@
 
 use std::{convert::TryFrom, time::SystemTime};
 
-use crate::NetworkStatus;
+use crate::{NetworkStatus, config::Configuration};
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
@@ -261,17 +261,17 @@ impl MetricsService {
 
 
 impl MetricsService {
-	pub fn with_prometheus(registry: &Registry, name: &str, version: &str, role: &Role)
+	pub fn with_prometheus(registry: &Registry, config: &Configuration)
 		-> Result<Self, PrometheusError>
 	{
-		let role_bits = match role {
+		let role_bits = match config.role {
 			Role::Full => 1u64,
 			Role::Light => 2u64,
 			Role::Sentry { .. } => 3u64,
 			Role::Authority { .. } => 4u64,
 		};
 
-		PrometheusMetrics::setup(registry, name, version, role_bits).map(|p| {
+		PrometheusMetrics::setup(registry, &config.network.node_name, &config.impl_version, role_bits).map(|p| {
 			Self::inner_new(Some(p))
 		})
 	}

@@ -577,11 +577,14 @@ mod tests {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(BasicPool::new(
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
-		).0);
+			spawner,
+			client.clone(),
+		);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
