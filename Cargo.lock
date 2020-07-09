@@ -7312,9 +7312,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.51"
+version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da07b57ee2623368351e9a0488bb0b261322a15a6e0ae53e243cbdc0f4208da9"
+checksum = "3433e879a558dde8b5e8feb2a04899cf34fdde1fafb894687e52105fc1162ac3"
 dependencies = [
  "itoa",
  "ryu",
@@ -8473,6 +8473,8 @@ dependencies = [
  "sc-executor",
  "sc-light",
  "sc-service",
+ "serde",
+ "serde_json",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
