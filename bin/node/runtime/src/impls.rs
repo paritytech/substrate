@@ -130,7 +130,7 @@ mod multiplier_tests {
 				assert_eq_error_rate!(
 					truth_value_update(w, fm),
 					runtime_multiplier_update(fm),
-					Multiplier::from_inner(500_000_000_000),
+					Multiplier::from_inner(2_000_000_000_000),
 				);
 			})
 		})
@@ -243,7 +243,7 @@ mod multiplier_tests {
 			assert_eq_error_rate!(
 				next,
 				truth_value_update(target() / 4 , fm),
-				Multiplier::from_inner(100_000_000_000),
+				Multiplier::from_inner(1_000_000_000_000),
 			);
 
 			// Light block. Multiplier is reduced a little.
@@ -255,7 +255,7 @@ mod multiplier_tests {
 			assert_eq_error_rate!(
 				next,
 				truth_value_update(target() / 2 , fm),
-				Multiplier::from_inner(100),
+				Multiplier::from_inner(1_000_000_000_000),
 			);
 			// Light block. Multiplier is reduced a little.
 			assert!(next < fm);
@@ -266,7 +266,7 @@ mod multiplier_tests {
 			assert_eq_error_rate!(
 				next,
 				truth_value_update(target(), fm),
-				Multiplier::from_inner(100),
+				Multiplier::from_inner(500_000_000_000),
 			);
 			// ideal. No changes.
 			assert_eq!(next, fm)
@@ -347,7 +347,11 @@ mod multiplier_tests {
 			run_with_system_weight(i, || {
 				let next = runtime_multiplier_update(Multiplier::one());
 				let truth = truth_value_update(i, Multiplier::one());
-				assert_eq_error_rate!(truth, next, Multiplier::from_inner(5_000_000_000));
+				assert_eq_error_rate!(
+					truth,
+					next,
+					Multiplier::from_inner(3_000_000_000_000)
+				);
 			});
 		});
 

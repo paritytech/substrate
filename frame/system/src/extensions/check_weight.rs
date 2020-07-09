@@ -537,9 +537,8 @@ mod tests {
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
 			BlockWeight::mutate(|current_weight| {
-				current_weight
-					.put(0, DispatchClass::Mandatory)
-					.put(256 - base_extrinsic, DispatchClass::Normal)
+				current_weight.put(0, DispatchClass::Mandatory);
+				current_weight.put(256 - base_extrinsic, DispatchClass::Normal);
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
@@ -564,9 +563,8 @@ mod tests {
 			let len = 0_usize;
 
 			BlockWeight::mutate(|current_weight| {
-				current_weight
-					.put(0, DispatchClass::Mandatory)
-					.put(128, DispatchClass::Normal)
+				current_weight.put(0, DispatchClass::Mandatory);
+				current_weight.put(128, DispatchClass::Normal);
 			});
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
