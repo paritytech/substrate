@@ -31,7 +31,7 @@ Once the development environment is setup, build the node template. This command
 cargo build --release
 ```
 
-## Playground [![Try on playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
+## Playground [![Substrate Playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
 
 [The Substrate Playground](https://playground-staging.substrate.dev/?deploy=node-template) is an
 online development environment that supplies a pre-configured container with pre-compiled build
