@@ -29,7 +29,7 @@
 
 use crate::{
 	ExHashT, NetworkStateInfo,
-	behaviour::{Behaviour, BehaviourOut},
+	behaviour::{self, Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -41,7 +41,7 @@ use crate::{
 	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
-use futures::prelude::*;
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{PeerId, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
@@ -61,7 +61,7 @@ use sp_runtime::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::{Borrow, Cow},
-	collections::HashSet,
+	collections::{HashMap, HashSet},
 	fs,
 	marker::PhantomData,
 	num:: NonZeroUsize,
@@ -73,6 +73,9 @@ use std::{
 	},
 	task::Poll,
 };
+use wasm_timer::Instant;
+
+pub use behaviour::{InboundError, InboundFailure, OutboundFailure};
 
 mod out_events;
 #[cfg(test)]
@@ -291,16 +294,28 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config
 			};
 
-			let mut behaviour = Behaviour::new(
-				protocol,
-				params.role,
-				user_agent,
-				local_public,
-				block_requests,
-				finality_proof_requests,
-				light_client_handler,
-				discovery_config
-			);
+			let mut behaviour = {
+				let result = Behaviour::new(
+					protocol,
+					params.role,
+					user_agent,
+					local_public,
+					block_requests,
+					finality_proof_requests,
+					light_client_handler,
+					discovery_config,
+					params.network_config.request_response_protocols,
+				);
+
+				match result {
+					Ok(b) => b,
+					Err(crate::request_responses::RegisterError::DuplicateProtocol(proto)) => {
+						return Err(Error::DuplicateRequestResponseProtocol {
+							protocol: proto,
+						})
+					},
+				}
+			};
 
 			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
@@ -366,6 +381,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			metrics,
 			boot_node_ids,
+			pending_requests: HashMap::with_capacity(128),
 		})
 	}
 
@@ -571,10 +587,48 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
 	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
 	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
-		// Note: when transitioning to stable futures, remove the `Error` entirely
 		let (tx, rx) = out_events::channel(name);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
+	}
+
+	/// Sends a single targeted request to a specific peer. On success, returns the response of
+	/// the peer.
+	///
+	/// Request-response protocols are a way to complement notifications protocols, but
+	/// notifications should remain the default ways of communicating information. For example, a
+	/// peer can announce something through a notification, after which the recipient can obtain
+	/// more information by performing a request.
+	/// As such, this function is meant be called only with peers we are already connected to.
+	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
+	/// to said peer.
+	///
+	/// Contrary to notifications, requests are guaranteed to not be interrupted under normal
+	/// circumstances.
+	///
+	/// The protocol must have been registered through
+	/// [`NetworkConfiguration::request_response_protocols`].
+	pub async fn request(
+		&self,
+		target: PeerId,
+		protocol: impl Into<Cow<'static, str>>,
+		request: Vec<u8>
+	) -> Result<Vec<u8>, OutboundFailure> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
+			target,
+			protocol: protocol.into(),
+			request,
+			response: tx
+		});
+
+		match rx.await {
+			Ok(v) => v,
+			// The channel can only be closed if the network worker no longer exists. If the
+			// network worker no longer exists, then all connections to `target` are necessarily
+			// closed, and we legitimately report this situation as a "ConnectionClosed".
+			Err(_) => Err(OutboundFailure::ConnectionClosed),
+		}
 	}
 
 	/// Registers a new notifications protocol.
@@ -831,6 +885,12 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		engine_id: ConsensusEngineId,
 		target: PeerId,
 	},
+	Request {
+		target: PeerId,
+		protocol: Cow<'static, str>,
+		request: Vec<u8>,
+		response: oneshot::Sender<Result<Vec<u8>, OutboundFailure>>,
+	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
 		protocol_name: Cow<'static, [u8]>,
@@ -867,6 +927,13 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// Requests started using [`NetworkService::request`]. Includes the channel to send back the
+	/// response, when the request has started, and the name of the protocol for diagnostic
+	/// purposes.
+	pending_requests: HashMap<
+		behaviour::RequestId,
+		(oneshot::Sender<Result<Vec<u8>, OutboundFailure>>, Instant, String)
+	>,
 }
 
 struct Metrics {
@@ -898,8 +965,10 @@ struct Metrics {
 	peerset_num_requested: Gauge<U64>,
 	pending_connections: Gauge<U64>,
 	pending_connections_errors_total: CounterVec<U64>,
-	requests_in_total: HistogramVec,
-	requests_out_finished: HistogramVec,
+	requests_in_failure_total: CounterVec<U64>,
+	requests_in_success_total: HistogramVec,
+	requests_out_failure_total: CounterVec<U64>,
+	requests_out_success_total: HistogramVec,
 	requests_out_started_total: CounterVec<U64>,
 }
 
@@ -1057,10 +1126,17 @@ impl Metrics {
 				),
 				&["reason"]
 			)?, registry)?,
-			requests_in_total: register(HistogramVec::new(
+			requests_in_failure_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_requests_in_failure_total",
+					"Total number of incoming requests that the node has failed to answer"
+				),
+				&["protocol", "reason"]
+			)?, registry)?,
+			requests_in_success_total: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
-						"sub_libp2p_requests_in_total",
+						"sub_libp2p_requests_in_success_total",
 						"Total number of requests received and answered"
 					),
 					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
@@ -1068,11 +1144,18 @@ impl Metrics {
 				},
 				&["protocol"]
 			)?, registry)?,
-			requests_out_finished: register(HistogramVec::new(
+			requests_out_failure_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_requests_out_failure_total",
+					"Total number of requests that have resulted in a failure"
+				),
+				&["protocol", "reason"]
+			)?, registry)?,
+			requests_out_success_total: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
-						"sub_libp2p_requests_out_finished",
-						"Time between a request's start and finish (successful or not)"
+						"sub_libp2p_requests_out_success_total",
+						"For successful requests, time between a request's start and finish"
 					),
 					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
@@ -1168,7 +1251,31 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
 							.observe(message.len() as f64);
 					}
-					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
+					this.network_service.user_protocol_mut()
+						.write_notification(target, engine_id, message);
+				},
+				ServiceToWorkerMsg::Request { target, protocol, request, response } => {
+					// Calling `send_request` can fail immediately in some circumstances.
+					// This is handled by sending back an error on the channel.
+					match this.network_service.send_request(&target, &protocol, request) {
+						Ok(request_id) => {
+							if let Some(metrics) = this.metrics.as_ref() {
+								metrics.requests_out_started_total
+									.with_label_values(&[&protocol])
+									.inc();
+							}
+							this.pending_requests.insert(
+								request_id,
+								(response, Instant::now(), protocol.to_string())
+							);
+						},
+						Err(behaviour::SendRequestError::NotConnected) => {
+							let _ = response.send(Err(OutboundFailure::ConnectionClosed));
+						},
+						Err(behaviour::SendRequestError::UnknownProtocol) => {
+							let _ = response.send(Err(OutboundFailure::UnsupportedProtocols));
+						},
+					}
 				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
 					this.network_service
@@ -1209,23 +1316,67 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::AnsweredRequest { protocol, build_time, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, outcome, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_in_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
-							.observe(build_time.as_secs_f64());
+						match outcome {
+							Ok(serve_time) => {
+								metrics.requests_in_success_total
+									.with_label_values(&[&protocol])
+									.observe(serve_time.as_secs_f64());
+							}
+							Err(err) => {
+								let reason = match err {
+									InboundError::Busy => "busy",
+									InboundError::Network(InboundFailure::Timeout) => "timeout",
+									InboundError::Network(InboundFailure::UnsupportedProtocols) =>
+										"unsupported",
+								};
+
+								metrics.requests_in_failure_total
+									.with_label_values(&[&protocol, reason])
+									.inc();
+							}
+						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestStarted { protocol, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, outcome })) => {
+					if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
+						if let Some(metrics) = this.metrics.as_ref() {
+							match &outcome {
+								Ok(_) => {
+									metrics.requests_out_success_total
+										.with_label_values(&[&protocol])
+										.observe(started.elapsed().as_secs_f64());
+								}
+								Err(err) => {
+									let reason = match err {
+										OutboundFailure::DialFailure => "dial-failure",
+										OutboundFailure::Timeout => "timeout",
+										OutboundFailure::ConnectionClosed => "connection-closed",
+										OutboundFailure::UnsupportedProtocols => "unsupported",
+									};
+
+									metrics.requests_out_failure_total
+										.with_label_values(&[&protocol, reason])
+										.inc();
+								}
+							}
+						}
+						let _ = send_back.send(outcome);
+					} else {
+						error!("Request not in pending_requests");
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestStarted { protocol, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.requests_out_started_total
 							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, request_duration, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::OpaqueRequestFinished { protocol, request_duration, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.requests_out_finished
+						metrics.requests_out_success_total
 							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
 							.observe(request_duration.as_secs_f64());
 					}
@@ -1268,11 +1419,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							ConnectionError::IO(_) => "transport-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								EitherError::B(LegacyConnectionKillError)))))))) =>	"force-closed",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								EitherError::B(LegacyConnectionKillError))))))))) => "force-closed",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};
@@ -1434,7 +1585,7 @@ impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
 /// Turns bytes that are potentially UTF-8 into a reasonable representable string.
 ///
 /// Meant to be used only for debugging or metrics-reporting purposes.
-fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
+pub(crate) fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 	if let Ok(s) = std::str::from_utf8(&id[..]) {
 		Cow::Borrowed(s)
 	} else {

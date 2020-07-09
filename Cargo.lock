@@ -266,6 +266,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a265e3abeffdce30b2e26b7a11b222fe37c6067404001b434101457d0385eb92"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.6",
+ "syn 1.0.33",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2743,6 +2754,7 @@ dependencies = [
  "libp2p-mplex",
  "libp2p-noise",
  "libp2p-ping",
+ "libp2p-request-response",
  "libp2p-secio",
  "libp2p-swarm",
  "libp2p-tcp",
@@ -2926,6 +2938,20 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "void",
+ "wasm-timer",
+]
+
+[[package]]
+name = "libp2p-request-response"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f1a4cc57489fa519b98c068277b9032f04d382e8da8c0ca040d5aa872d3bfd7"
+dependencies = [
+ "async-trait",
+ "futures 0.3.5",
+ "libp2p-core",
+ "libp2p-swarm",
+ "smallvec 1.4.1",
  "wasm-timer",
 ]
 
@@ -6637,6 +6663,7 @@ version = "0.8.0-rc4"
 dependencies = [
  "assert_matches",
  "async-std",
+ "async-trait",
  "bitflags",
  "bs58",
  "bytes 0.5.4",
