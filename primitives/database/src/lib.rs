@@ -17,11 +17,10 @@
 
 //! The main database trait, allowing Substrate to store data persistently.
 
-mod error;
+pub mod error;
 mod mem;
 mod kvdb;
 
-pub use error::*;
 pub use mem::MemDb;
 pub use crate::kvdb::as_database;
 
@@ -84,7 +83,7 @@ impl<H> Transaction<H> {
 pub trait Database<H: Clone>: Send + Sync {
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
-	fn commit(&self, transaction: Transaction<H>) -> Result<()> {
+	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
 		for change in transaction.0.into_iter() {
 			match change {
 				Change::Set(col, key, value) => self.set(col, &key, &value),
@@ -99,7 +98,7 @@ pub trait Database<H: Clone>: Send + Sync {
 
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
-	fn commit_ref<'a>(&self, transaction: &mut dyn Iterator<Item=ChangeRef<'a, H>>) -> Result<()> {
+	fn commit_ref<'a>(&self, transaction: &mut dyn Iterator<Item=ChangeRef<'a, H>>) -> error::Result<()> {
 		let mut tx = Transaction::new();
 		for change in transaction {
 			match change {
@@ -127,7 +126,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	}
 
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
-	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) -> Result<()> {
+	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.set(col, key, value);
 		self.commit(t)?;
@@ -135,7 +134,7 @@ pub trait Database<H: Clone>: Send + Sync {
 		Ok(())
 	}
 	/// Remove the value of `key` in `col`.
-	fn remove(&self, col: ColumnId, key: &[u8]) -> Result<()> {
+	fn remove(&self, col: ColumnId, key: &[u8]) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.remove(col, key);
 		self.commit(t)?;
@@ -159,7 +158,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
 	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
-	fn store(&self, hash: &H, preimage: &[u8]) -> Result<()> {
+	fn store(&self, hash: &H, preimage: &[u8]) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.store(hash.clone(), preimage);
 		self.commit(t)?;
@@ -170,7 +169,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
 	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
 	/// be unable to provide the preimage.
-	fn release(&self, hash: &H) -> Result<()> {
+	fn release(&self, hash: &H) -> error::Result<()> {
 		let mut t = Transaction::new();
 		t.release(hash.clone());
 		self.commit(t)?;
