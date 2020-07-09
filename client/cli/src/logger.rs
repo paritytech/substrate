@@ -38,7 +38,7 @@ pub struct LogRotationOpt {
 	/// Specify the path of the directory which will contain the log files.
 	/// Defaults to never rotating logs.
 	#[structopt(long, parse(from_os_str))]
-	log_directory: Option<PathBuf>,
+	pub log_directory: Option<PathBuf>,
 
 	/// Rotate the log file when the local clock has started a new day/hour/minute/second
 	/// since the current file has been created.
@@ -47,11 +47,11 @@ pub struct LogRotationOpt {
 		possible_values(&["day", "hour", "minute", "second"]),
 		parse(from_str = age_from_str))
 	]
-	log_age: Option<Age>,
+	pub log_age: Option<Age>,
 
 	/// Rotate the log file when it exceeds this size (in bytes).
 	#[structopt(long, conflicts_with("log-age"))]
-	log_size: Option<u64>,
+	pub log_size: Option<u64>,
 }
 
 /// Utility for parsing an Age from a &str.
