@@ -591,13 +591,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
 						KademliaEvent::PendingRoutablePeer { .. } => {
-							// We are not interested in these events at the moment.
+							// We are not interested in this event at the moment.
 						}
-						// `KademliaBucketInserts::Manual` is configured for each Kademlia instance.
-						// Thus the `RoutingUpdated` event or the `PendingRoutablePeer` event was
-						// preceded by a call to `Kademlia::add_address`. This implies that we are
-						// already aware of the node and thereby don't need to take any actions.
-						KademliaEvent::RoutingUpdated { .. } | KademliaEvent::PendingRoutablePeer { .. } => {},
 						KademliaEvent::QueryResult { result: QueryResult::GetClosestPeers(res), .. } => {
 							match res {
 								Err(GetClosestPeersError::Timeout { key, peers }) => {
