@@ -28,7 +28,7 @@
 
 use std::collections::HashMap;
 
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor, BlakeTwo256}};
+use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 
 use crate::{
 	error::Error as ConsensusError,
