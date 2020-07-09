@@ -410,6 +410,7 @@ where
 
 		sp_tracing::enter_span!("validate_transaction");
 		sp_runtime::print("validate_transaction");
+		panic!("validate_transaction");
 
 		let encoded_len = tracing_span!{ "using_encoded"; uxt.using_encoded(|d| d.len()) };
 
