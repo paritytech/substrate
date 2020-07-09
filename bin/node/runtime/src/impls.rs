@@ -59,8 +59,9 @@ mod multiplier_tests {
 	};
 	use frame_support::weights::{Weight, WeightToFeePolynomial};
 
-	fn max() -> Weight {
-		BlockWeights::get().max_block
+	fn max_normal() -> Weight {
+		BlockWeights::get().max_for_class.normal
+			.unwrap_or_else(|| BlockWeights::get().max_block)
 	}
 
 	fn min_multiplier() -> Multiplier {
@@ -68,7 +69,7 @@ mod multiplier_tests {
 	}
 
 	fn target() -> Weight {
-		TargetBlockFullness::get() * max()
+		TargetBlockFullness::get() * max_normal()
 	}
 
 	// update based on runtime impl.
@@ -89,7 +90,7 @@ mod multiplier_tests {
 		let previous_float = previous_float.max(min_multiplier().into_inner() as f64 / accuracy);
 
 		// maximum tx weight
-		let m = max() as f64;
+		let m = max_normal() as f64;
 		// block weight always truncated to max weight
 		let block_weight = (block_weight as f64).min(m);
 		let v: f64 = AdjustmentVariable::get().to_fraction();
@@ -122,15 +123,16 @@ mod multiplier_tests {
 			(100, fm.clone()),
 			(1000, fm.clone()),
 			(target(), fm.clone()),
-			(max() / 2, fm.clone()),
-			(max(), fm.clone()),
+			(max_normal() / 2, fm.clone()),
+			(max_normal(), fm.clone()),
 		];
 		test_set.into_iter().for_each(|(w, fm)| {
 			run_with_system_weight(w, || {
 				assert_eq_error_rate!(
 					truth_value_update(w, fm),
 					runtime_multiplier_update(fm),
-					Multiplier::from_inner(2_000_000_000_000),
+					// Error is only 1 in 100^18
+					Multiplier::from_inner(100),
 				);
 			})
 		})
@@ -183,7 +185,7 @@ mod multiplier_tests {
 
 	#[test]
 	fn min_change_per_day() {
-		run_with_system_weight(max(), || {
+		run_with_system_weight(max_normal(), || {
 			let mut fm = Multiplier::one();
 			// See the example in the doc of `TargetedFeeAdjustment`. are at least 0.234, hence
 			// `fm > 1.234`.
@@ -243,7 +245,7 @@ mod multiplier_tests {
 			assert_eq_error_rate!(
 				next,
 				truth_value_update(target() / 4 , fm),
-				Multiplier::from_inner(1_000_000_000_000),
+				Multiplier::from_inner(100),
 			);
 
 			// Light block. Multiplier is reduced a little.
@@ -255,7 +257,7 @@ mod multiplier_tests {
 			assert_eq_error_rate!(
 				next,
 				truth_value_update(target() / 2 , fm),
-				Multiplier::from_inner(1_000_000_000_000),
+				Multiplier::from_inner(100),
 			);
 			// Light block. Multiplier is reduced a little.
 			assert!(next < fm);
@@ -266,7 +268,7 @@ mod multiplier_tests {
 			assert_eq_error_rate!(
 				next,
 				truth_value_update(target(), fm),
-				Multiplier::from_inner(500_000_000_000),
+				Multiplier::from_inner(100),
 			);
 			// ideal. No changes.
 			assert_eq!(next, fm)
@@ -296,7 +298,7 @@ mod multiplier_tests {
 				assert_eq_error_rate!(
 					next,
 					truth_value_update(target() * 2, original),
-					Multiplier::from_inner(2000),
+					Multiplier::from_inner(100),
 				);
 				// must always increase
 				assert!(next > original, "{:?} !>= {:?}", next, original);
@@ -350,7 +352,7 @@ mod multiplier_tests {
 				assert_eq_error_rate!(
 					truth,
 					next,
-					Multiplier::from_inner(3_000_000_000_000)
+					Multiplier::from_inner(50_000_000)
 				);
 			});
 		});

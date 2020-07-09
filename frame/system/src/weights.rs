@@ -247,10 +247,10 @@ impl BlockWeights {
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(
-				self.max_extrinsic.get(class).unwrap_or(0) <= max_for_class - base_extrinsic,
+				self.max_extrinsic.get(class).unwrap_or(0) <= max_for_class.saturating_sub(base_extrinsic),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
-				class, self.max_extrinsic.get(class), max_for_class - base_extrinsic
+				class, self.max_extrinsic.get(class), max_for_class.saturating_sub(base_extrinsic)
 			);
 			// Make sure that if reserved is set it's greater than base_extrinsic.
 			error_assert!(
@@ -289,6 +289,8 @@ impl BlockWeights {
 	/// is not suitable for production deployments.
 	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
+			.base_block(0)
+			.base_extrinsic(0, ExtrinsicDispatchClass::All)
 			.max_for_non_mandatory(block_weight)
 			.build()
 			.expect("We only specify max_for_class and leave base values as defaults; qed")

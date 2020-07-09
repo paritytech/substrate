@@ -562,6 +562,7 @@ mod tests {
 		fn get() -> frame_system::weights::BlockWeights {
 			frame_system::weights::BlockWeights::builder()
 				.max_for_non_mandatory(1024)
+				.base_block(0)
 				.base_extrinsic(
 					EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()),
 					frame_system::weights::ExtrinsicDispatchClass::All,
