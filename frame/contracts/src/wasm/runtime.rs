@@ -544,14 +544,14 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::CalleeReverted`: The callee ran to completion but decided to have its
-	//		changes reverted. The delivery of the output buffer is still possible.
+	//  changes reverted. The delivery of the output buffer is still possible.
 	// `ReturnCode::CalleeTrapped`: The callee trapped during execution. All changes are reverted
-	//		and no output buffer is delivered.
+	//  and no output buffer is delivered.
 	//
 	// # Traps
 	//
 	// - Transfer of balance failed. This call can not bring the sender below the existential
-	//		deposit. Use `ext_terminate` to remove the caller.
+	//   deposit. Use `ext_terminate` to remove the caller.
 	// - Callee does not exist.
 	// - Supplied output buffer is too small.
 	ext_call(
@@ -643,7 +643,7 @@ define_env!(Env, <E: Ext>,
 	// # Traps
 	//
 	// - Transfer of balance failed. This call can not bring the sender below the existential
-	//		deposit. Use `ext_terminate` to remove the caller.
+	//   deposit. Use `ext_terminate` to remove the caller.
 	// - Code hash does not exist.
 	// - Supplied output buffers are too small.
 	ext_instantiate(
