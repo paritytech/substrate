@@ -17,18 +17,17 @@
 
 //! Offchain workers types
 
-#[cfg(feature = "std")]
-pub mod storage;
-#[cfg(feature = "std")]
-pub mod testing;
-pub mod error;
-
 use codec::{Encode, Decode};
 use sp_std::{prelude::{Vec, Box}, convert::TryFrom};
 use crate::RuntimeDebug;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByInner, PassByEnum};
 
 pub use crate::crypto::KeyTypeId;
+
+#[cfg(feature = "std")]
+pub mod storage;
+#[cfg(feature = "std")]
+pub mod testing;
 
 /// Local storage prefix used by the Offchain Worker API to
 pub const STORAGE_PREFIX : &'static [u8] = b"storage";
