@@ -23,7 +23,7 @@ Find manual setup instructions at the [Substrate Developer Hub](https://substrat
 
 ### Build
 
-Once the development environment is setup, build the node template. This command will build the
+Once the development environment is set up, build the node template. This command will build the
 [Wasm](https://substrate.dev/docs/en/knowledgebase/advanced/executor#wasm-execution) and
 [native](https://substrate.dev/docs/en/knowledgebase/advanced/executor#native-execution) code:
 
