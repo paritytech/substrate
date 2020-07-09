@@ -934,6 +934,7 @@ decl_module! {
 
 		/// Weight: see `begin_block`
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			panic!("DEMOCRACY!");
 			Self::begin_block(n).unwrap_or_else(|e| {
 				sp_runtime::print(e);
 				0
