@@ -110,7 +110,7 @@ pub(crate) struct Runtime<'a, E: Ext + 'a> {
 	schedule: &'a Schedule,
 	memory: sp_sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
-	special_trap: Option<TrapReason>,
+	trap_reason: Option<TrapReason>,
 }
 impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub(crate) fn new(
@@ -126,7 +126,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			schedule,
 			memory,
 			gas_meter,
-			special_trap: None,
+			trap_reason: None,
 		}
 	}
 }
@@ -135,7 +135,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
 ) -> ExecResult {
-	match runtime.special_trap {
+	match runtime.trap_reason {
 		// The trap was the result of the execution `return` host function.
 		Some(TrapReason::Return(ReturnData{ flags, data })) => {
 			let flags = ReturnFlags::from_bits(flags).ok_or_else(||
@@ -247,13 +247,13 @@ impl<T: Trait> Token<T> for RuntimeToken {
 fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
 	metadata: &Tok::Metadata,
-	special_trap: &mut Option<TrapReason>,
+	trap_reason: &mut Option<TrapReason>,
 	token: Tok,
 ) -> Result<(), sp_sandbox::HostError> {
 	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
 		GasMeterResult::OutOfGas =>  {
-			*special_trap = Some(TrapReason::SupervisorError(Error::<T>::OutOfGas.into()));
+			*trap_reason = Some(TrapReason::SupervisorError(Error::<T>::OutOfGas.into()));
 			Err(sp_sandbox::HostError)
 		},
 	}
@@ -275,7 +275,7 @@ fn read_sandbox_memory<E: Ext>(
 	charge_gas(
 		ctx.gas_meter,
 		ctx.schedule,
-		&mut ctx.special_trap,
+		&mut ctx.trap_reason,
 		RuntimeToken::ReadMemory(len),
 	)?;
 
@@ -300,7 +300,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 	charge_gas(
 		ctx.gas_meter,
 		ctx.schedule,
-		&mut ctx.special_trap,
+		&mut ctx.trap_reason,
 		RuntimeToken::ReadMemory(buf.len() as u32),
 	)?;
 
@@ -341,7 +341,7 @@ fn write_sandbox_memory<E: Ext>(
 	charge_gas(
 		ctx.gas_meter,
 		ctx.schedule,
-		&mut ctx.special_trap,
+		&mut ctx.trap_reason,
 		RuntimeToken::WriteMemory(buf.len() as u32),
 	)?;
 
@@ -379,7 +379,7 @@ fn write_sandbox_output<E: Ext>(
 	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
 
 	if len < buf_len {
-		ctx.special_trap = Some(TrapReason::SupervisorError(
+		ctx.trap_reason = Some(TrapReason::SupervisorError(
 			Error::<E::T>::OutputBufferTooSmall.into()
 		));
 		return Err(sp_sandbox::HostError);
@@ -388,7 +388,7 @@ fn write_sandbox_output<E: Ext>(
 	charge_gas(
 		ctx.gas_meter,
 		ctx.schedule,
-		&mut ctx.special_trap,
+		&mut ctx.trap_reason,
 		RuntimeToken::WriteMemory(buf_len.saturating_add(4)),
 	)?;
 
@@ -416,7 +416,7 @@ define_env!(Env, <E: Ext>,
 		charge_gas(
 			&mut ctx.gas_meter,
 			ctx.schedule,
-			&mut ctx.special_trap,
+			&mut ctx.trap_reason,
 			RuntimeToken::Explicit(amount)
 		)?;
 		Ok(())
@@ -721,7 +721,7 @@ define_env!(Env, <E: Ext>,
 			read_sandbox_memory_as(ctx, beneficiary_ptr, beneficiary_len)?;
 
 		if let Ok(_) = ctx.ext.terminate(&beneficiary, ctx.gas_meter) {
-			ctx.special_trap = Some(TrapReason::Termination);
+			ctx.trap_reason = Some(TrapReason::Termination);
 		}
 		Err(sp_sandbox::HostError)
 	},
@@ -755,11 +755,11 @@ define_env!(Env, <E: Ext>,
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
-			&mut ctx.special_trap,
+			&mut ctx.trap_reason,
 			RuntimeToken::ReturnData(data_len)
 		)?;
 
-		ctx.special_trap = Some(TrapReason::Return(ReturnData {
+		ctx.trap_reason = Some(TrapReason::Return(ReturnData {
 			flags,
 			data: read_sandbox_memory(ctx, data_ptr, data_len)?,
 		}));
@@ -973,7 +973,7 @@ define_env!(Env, <E: Ext>,
 			rent_allowance,
 			delta,
 		) {
-			ctx.special_trap = Some(TrapReason::Restoration);
+			ctx.trap_reason = Some(TrapReason::Restoration);
 		}
 		Err(sp_sandbox::HostError)
 	},
@@ -1007,7 +1007,7 @@ define_env!(Env, <E: Ext>,
 		charge_gas(
 			ctx.gas_meter,
 			ctx.schedule,
-			&mut ctx.special_trap,
+			&mut ctx.trap_reason,
 			RuntimeToken::DepositEvent(topics.len() as u32, data_len)
 		)?;
 		ctx.ext.deposit_event(topics, event_data);
