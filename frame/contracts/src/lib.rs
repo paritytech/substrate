@@ -112,7 +112,7 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	traits::{OnUnbalanced, Currency, Get, Time, Randomness},
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 use frame_support::weights::Weight;
 
