@@ -364,8 +364,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Even
 
 impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
 	for Behaviour<B, H> {
-	fn inject_event(&mut self, event: debug_info::DebugInfoEvent) {
-		let debug_info::DebugInfoEvent::Identified {
+	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
+		let peer_info::PeerInfoEvent::Identified {
 			peer_id,
 			info: IdentifyInfo {
 				protocol_version,
