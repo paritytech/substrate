@@ -490,10 +490,10 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the log directory for logging.
-	/// 
+	///
 	/// By default this is retrieved from `SharedParams`.
-	fn log_rotation_opt(&self) -> Result<&LogRotationOpt> {
-		Ok(self.shared_params().log_rotation_opt())
+	fn log_rotation_opt(&self) -> Result<LogRotationOpt> {
+		Ok(self.shared_params().log_rotation_opt().clone())
 	}
 
 	/// Initialize substrate. This must be done only once.
@@ -510,7 +510,7 @@ pub trait CliConfiguration: Sized {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(&logger_pattern, log_rotation_opt)?;
+		init_logger(&logger_pattern, Some(log_rotation_opt))?;
 
 		Ok(())
 	}
