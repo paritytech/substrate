@@ -516,7 +516,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		self.remote_backend.clone()
 	}
 
-	/// Returns a spawn handle created by the  task manager.
+	/// Returns a spawn handle created by the task manager.
 	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		self.task_manager.spawn_handle()
 	}
