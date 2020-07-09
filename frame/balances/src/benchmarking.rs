@@ -40,7 +40,7 @@ benchmarks! {
 	// Benchmark `transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.
 	// * Transfer will create the recipient account.
-	transfer {
+	transfer_worst_case {
 		let u in ...;
 		let e in ...;
 
@@ -55,7 +55,7 @@ benchmarks! {
 		let recipient: T::AccountId = account("recipient", u, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
-	}: _(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
+	}: transfer(RawOrigin::Signed(caller.clone()), recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&caller), Zero::zero());
 		assert_eq!(Balances::<T>::free_balance(&recipient), transfer_amount);
@@ -105,7 +105,7 @@ benchmarks! {
 	}
 
 	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
-	set_balance {
+	set_balance_creating {
 		let u in ...;
 		let e in ...;
 
@@ -116,7 +116,7 @@ benchmarks! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let balance_amount = existential_deposit.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amount);
-	}: _(RawOrigin::Root, user_lookup, balance_amount, balance_amount)
+	}: set_balance(RawOrigin::Root, user_lookup, balance_amount, balance_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&user), balance_amount);
 		assert_eq!(Balances::<T>::reserved_balance(&user), balance_amount);
@@ -142,7 +142,7 @@ benchmarks! {
 	// Benchmark `force_transfer` extrinsic with the worst possible conditions:
 	// * Transfer will kill the sender account.
 	// * Transfer will create the recipient account.
-	force_transfer {
+	force_transfer_worst_case {
 		let u in ...;
 		let e in ...;
 
@@ -158,10 +158,34 @@ benchmarks! {
 		let recipient: T::AccountId = account("recipient", u, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
-	}: _(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
+	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
 	verify {
 		assert_eq!(Balances::<T>::free_balance(&source), Zero::zero());
 		assert_eq!(Balances::<T>::free_balance(&recipient), transfer_amount);
+	}
+
+	// Benchmark `force_transfer` with the best possible condition:
+	// * Both accounts exist and will continue to exist.
+	force_transfer_best_case {
+		let u in ...;
+		let e in ...;
+
+		let source: T::AccountId = account("source", u, SEED);
+		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
+		let recipient: T::AccountId = account("recipient", u, SEED);
+		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
+
+		// Give the sender account max funds for transfer (their account will never reasonably be killed).
+		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&source, T::Balance::max_value());
+
+		// Give the recipient account existential deposit (thus their account already exists).
+		let existential_deposit = T::ExistentialDeposit::get();
+		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&recipient, existential_deposit);
+		let transfer_amount = existential_deposit.saturating_mul(e.into());
+	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
+	verify {
+		assert!(!Balances::<T>::free_balance(&source).is_zero());
+		assert!(!Balances::<T>::free_balance(&recipient).is_zero());
 	}
 }
 
@@ -172,9 +196,9 @@ mod tests {
 	use frame_support::assert_ok;
 
 	#[test]
-	fn transfer() {
+	fn transfer_worst_case() {
 		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_transfer::<Test>());
+			assert_ok!(test_benchmark_transfer_worst_case::<Test>());
 		});
 	}
 
@@ -193,9 +217,9 @@ mod tests {
 	}
 
 	#[test]
-	fn transfer_set_balance() {
+	fn transfer_set_balance_creating() {
 		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_set_balance::<Test>());
+			assert_ok!(test_benchmark_set_balance_creating::<Test>());
 		});
 	}
 
@@ -207,9 +231,16 @@ mod tests {
 	}
 
 	#[test]
-	fn force_transfer() {
+	fn force_transfer_best_case() {
 		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_force_transfer::<Test>());
+			assert_ok!(test_benchmark_force_transfer_worst_case::<Test>());
+		});
+	}
+
+	#[test]
+	fn force_transfer_worst_case() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_force_transfer_worst_case::<Test>());
 		});
 	}
 }

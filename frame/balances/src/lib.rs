@@ -180,19 +180,23 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
 pub trait WeightInfo {
-	fn transfer(u: u32, e: u32, ) -> Weight;
+	fn transfer_worst_case(u: u32, e: u32, ) -> Weight;
 	fn transfer_best_case(u: u32, e: u32, ) -> Weight;
 	fn transfer_keep_alive(u: u32, e: u32, ) -> Weight;
-	fn set_balance(u: u32, e: u32, ) -> Weight;
+	fn set_balance_creating(u: u32, e: u32, ) -> Weight;
 	fn set_balance_killing(u: u32, e: u32, ) -> Weight;
+	fn force_transfer_best_case(u: u32, e: u32, ) -> Weight;
+	fn force_transfer_worst_case(u: u32, e: u32, ) -> Weight;
 }
 
 impl WeightInfo for () {
-	fn transfer(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer_worst_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
-	fn set_balance(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn set_balance_creating(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 	fn set_balance_killing(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn force_transfer_best_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn force_transfer_worst_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
@@ -461,7 +465,9 @@ decl_module! {
 		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 70_000_000]
+		#[weight = T::WeightInfo::transfer_worst_case(0,0) // Caller is killed, destination is created
+			.max(T::WeightInfo::transfer_best_case(0,0)) // Caller and destination are already created and stay alive
+		]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -490,7 +496,9 @@ decl_module! {
 		///     - Killing: 35.11 µs
 		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 35_000_000]
+		#[weight = T::WeightInfo::set_balance_creating(0,0) // Creates a new account.
+			.max(T::WeightInfo::set_balance_killing(0,0)) // Kills an existing account.
+		]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -532,7 +540,9 @@ decl_module! {
 		/// - Same as transfer, but additional read and write because the source account is
 		///   not assumed to be in the overlay.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(2, 2) + 70_000_000]
+		#[weight = T::WeightInfo::force_transfer_worst_case(0,0)
+			.max(T::WeightInfo::force_transfer_best_case(0,0))
+		]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -556,7 +566,7 @@ decl_module! {
 		/// - Base Weight: 51.4 µs
 		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
 		/// #</weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 50_000_000]
+		#[weight = T::WeightInfo::transfer_keep_alive(0,0)]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
