@@ -221,9 +221,6 @@ pub trait Trait: frame_system::Trait {
 	/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
 
-	/// Minimum value for a bounty.
-	type BountyValueMinimum: Get<BalanceOf<Self>>;
-
 	/// Bounty duration in blocks.
 	type BountyDuration: Get<Self::BlockNumber>;
 
@@ -370,6 +367,9 @@ decl_storage! {
 
 		/// Bounty indices that have been approved but not yet funded.
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
+
+		/// Minimum value for a bounty or sub-bounty.
+		pub BountyValueMinimum get(fn bounty_value_minimum): BalanceOf<T>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -957,6 +957,13 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
 		}
 
+		#[weight = 100_000_000]
+		fn update_bounty_value_minimum(origin, #[compact] new_value: BalanceOf<T>) {
+			T::ApproveOrigin::ensure_origin(origin)?;
+
+			BountyValueMinimum::<T>::put(new_value);
+		}
+
 		/// # <weight>
 		/// - Complexity: `O(A)` where `A` is the number of approvals
 		/// - Db reads and writes: `Approvals`, `pot account data`
@@ -1186,7 +1193,7 @@ impl<T: Trait> Module<T> {
 		parent_bounty_id: Option<BountyIndex>,
 	) -> DispatchResult {
 		ensure!(description.len() <= T::MaximumReasonLength::get() as usize, Error::<T>::ReasonTooBig);
-		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
+		ensure!(value >= Self::bounty_value_minimum(), Error::<T>::InvalidValue);
 		ensure!(fee < value, Error::<T>::InvalidFee);
 
 		let index = Self::bounty_count();

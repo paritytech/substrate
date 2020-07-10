@@ -128,8 +128,8 @@ fn setup_bounty<T: Trait>(u: u32, r: u32) -> (
 	Vec<u8>,
 ) {
 	let caller = account("caller", u, SEED);
-	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(100.into());
-	let fee = T::BountyValueMinimum::get();
+	let value: BalanceOf<T> = T::Currency::minimum_balance().saturating_mul(100.into());
+	let fee = T::Currency::minimum_balance().saturating_mul(2.into());
 	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator", u, SEED);
@@ -168,8 +168,8 @@ fn setup_sub_bounty<T: Trait>(u: u32, r: u32) -> Result<(
 	Treasury::<T>::on_initialize(T::BlockNumber::zero());
 
 	let caller = account("curator", u, SEED);
-	let value: BalanceOf<T> = T::BountyValueMinimum::get().saturating_mul(50.into());
-	let fee = T::BountyValueMinimum::get() / 2.into();
+	let value: BalanceOf<T> = T::Currency::minimum_balance().saturating_mul(50.into());
+	let fee = T::Currency::minimum_balance();
 	let deposit = T::BountyDepositBase::get() + T::DataDepositPerByte::get() * MAX_BYTES.into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator2", u, SEED);
