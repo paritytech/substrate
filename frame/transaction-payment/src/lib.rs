@@ -111,6 +111,39 @@ type NegativeImbalanceOf<T> =
 /// https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html
 pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
 
+/// Something that can convert the current multiplier to the next one.
+pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
+	fn min() -> Multiplier;
+	fn target() -> Perquintill;
+	fn v() -> Multiplier;
+}
+
+impl MultiplierUpdate for () {
+	fn min() -> Multiplier {
+		Default::default()
+	}
+	fn target() -> Perquintill {
+		Default::default()
+	}
+	fn v() -> Multiplier {
+		Default::default()
+	}
+}
+
+impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
+	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
+{
+	fn min() -> Multiplier {
+		 M::get()
+	}
+	fn target() -> Perquintill {
+		  S::get()
+	}
+	fn v() -> Multiplier {
+		 V::get()
+	}
+}
+
 impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
 	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
 {
@@ -192,7 +225,7 @@ pub trait Trait: frame_system::Trait {
 	type WeightToFee: WeightToFeePolynomial<Balance=BalanceOf<Self>>;
 
 	/// Update the multiplier of the next block, based on the previous block's weight.
-	type FeeMultiplierUpdate: Convert<Multiplier, Multiplier>;
+	type FeeMultiplierUpdate: MultiplierUpdate;
 }
 
 decl_storage! {
@@ -229,6 +262,24 @@ decl_module! {
 					<T as frame_system::Trait>::MaximumBlockWeight::get().try_into().unwrap()
 				).unwrap(),
 			);
+
+			// This is the minimum value of the multiplier. Make sure that if we collapse to this
+			// value, we can recover with a reasonable amount of traffic. For this test we assert
+			// that if we collapse to minimum, we the trend will be positive with a weight value
+			// which is 1% more than the target.
+			let min_value = T::FeeMultiplierUpdate::min();
+			let mut target = T::FeeMultiplierUpdate::target() * (T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
+
+			// add 1 percent;
+			let addition = target / 100;
+			assert!(addition > 0);
+			target += addition;
+
+			sp_io::TestExternalities::new_empty().execute_with(|| {
+				<frame_system::Module<T>>::set_block_limits(target, 0);
+				let next = T::FeeMultiplierUpdate::convert(min_value);
+				assert!(next > min_value);
+			})
 		}
 	}
 }
