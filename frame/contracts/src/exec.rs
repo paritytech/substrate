@@ -44,11 +44,11 @@ bitflags! {
 	}
 }
 
-/// Describes where a call originated.
-pub enum CallOrigin {
-	/// Call was initiated from an externally owned account. That can be either a
+/// Describes whether we deal with a contract or a plain account.
+pub enum TransactorKind {
+	/// Transacrion was initiated from a plain account. That can be either be through a
 	/// signed transaction or through RPC.
-	ExternallyOwned,
+	PlainAccount,
 	/// The call was initiated by a contract account.
 	Contract,
 }
@@ -327,7 +327,7 @@ where
 			Err("contract has been evicted")?
 		};
 
-		let call_origin = self.call_origin();
+		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
@@ -336,7 +336,7 @@ where
 				transfer(
 					gas_meter,
 					TransferCause::Call,
-					call_origin,
+					transactor_kind,
 					&caller,
 					&dest,
 					value,
@@ -381,7 +381,7 @@ where
 			Err("not enough gas to pay base instantiate fee")?
 		}
 
-		let call_origin = self.call_origin();
+		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
@@ -409,7 +409,7 @@ where
 			transfer(
 				gas_meter,
 				TransferCause::Instantiate,
-				call_origin,
+				transactor_kind,
 				&caller,
 				&dest,
 				endowment,
@@ -478,8 +478,8 @@ where
 			self.caller.map_or(false, |caller| caller.is_live(account))
 	}
 
-	fn call_origin(&self) -> CallOrigin {
-		if self.depth == 0 { CallOrigin::ExternallyOwned } else { CallOrigin::Contract }
+	fn transactor_kind(&self) -> TransactorKind {
+		if self.depth == 0 { TransactorKind::PlainAccount } else { TransactorKind::Contract }
 	}
 }
 
@@ -534,7 +534,7 @@ enum TransferCause {
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	gas_meter: &mut GasMeter<T>,
 	cause: TransferCause,
-	origin: CallOrigin,
+	origin: TransactorKind,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
@@ -542,7 +542,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 ) -> Result<(), DispatchError> {
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
-	use self::CallOrigin::*;
+	use self::TransactorKind::*;
 
 	let token = {
 		let kind: TransferFeeKind = match cause {
@@ -574,7 +574,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 			);
 			ExistenceRequirement::KeepAlive
 		},
-		(_, ExternallyOwned) => ExistenceRequirement::KeepAlive,
+		(_, PlainAccount) => ExistenceRequirement::KeepAlive,
 	};
 	T::Currency::transfer(transactor, dest, value, existence_requirement)?;
 
@@ -656,7 +656,7 @@ where
 		transfer(
 			gas_meter,
 			TransferCause::Call,
-			CallOrigin::Contract,
+			TransactorKind::Contract,
 			&self.ctx.self_account.clone(),
 			&to,
 			value,
@@ -681,7 +681,7 @@ where
 		transfer(
 			gas_meter,
 			TransferCause::Terminate,
-			CallOrigin::Contract,
+			TransactorKind::Contract,
 			&self_id,
 			beneficiary,
 			value,
