@@ -32,73 +32,12 @@ type FullPool = sc_transaction_pool::BasicPool<
 	sc_transaction_pool::FullChainApi<FullClient, Block>, Block
 >;
 
-pub fn new_full_params(config: Configuration) -> Result<(
-	sc_service::ServiceParams<
-		Block, FullClient, DefaultQueue<Block>, FullPool, (), FullBackend,
-	>,
-	SelectChain, sp_inherents::InherentDataProviders, GrandpaBlockImport, GrandpaLink
-), ServiceError> {
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
-	let (client, backend, keystore, task_manager) = sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
-	let client = Arc::new(client);
-
-	let select_chain = sc_consensus::LongestChain::new(backend.clone());
-
-	let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
-		config.transaction_pool.clone(),
-		std::sync::Arc::new(pool_api),
-		config.prometheus_registry(),
-		task_manager.spawn_handle(),
-		client.clone(),
-	);
-
-	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
-	)?;
-
-	let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
-		grandpa_block_import.clone(), client.clone(),
-	);
-
-	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
-		sc_consensus_aura::slot_duration(&*client)?,
-		aura_block_import,
-		Some(Box::new(grandpa_block_import.clone())),
-		None,
-		client.clone(),
-		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
-		config.prometheus_registry(),
-	)?;
-
-	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
-	
-	let params = sc_service::ServiceParams {
-		backend, client, import_queue, keystore, task_manager, transaction_pool,
-		config: config,
-		block_announce_validator_builder: None,
-		finality_proof_request_builder: None,
-		finality_proof_provider: Some(finality_proof_provider),
-		on_demand: None,
-		remote_blockchain: None,
-		rpc_extensions_builder: Box::new(|_| ()),
-	};
-
-	Ok((
-		params, select_chain, inherent_data_providers,
-		grandpa_block_import, grandpa_link,
-	))
-}
-
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {	
 	let (
 		params, select_chain, inherent_data_providers,
-		block_import, grandpa_link,
-	) = new_full_params(config)?;
+		block_import, grandpa_link, ..,
+	) = Builder::build_full(config, NoRpc::default())?;
 
 	let (
 		role, force_authoring, name, enable_grandpa, prometheus_registry,
@@ -208,12 +147,16 @@ use sc_service::builder::{self, *, Builder as _};
 
 pub struct Builder;
 
-impl builder::Builder<Block, RuntimeApi, Executor> for Builder {
+impl builder::Builder for Builder {
+	type Block = Block;
+	type RuntimeApi = RuntimeApi;
+	type Executor = Executor;
 	type TransactionPoolBuilder = BasicPoolBuilder;
-	type BlockImportBuilder = GrandpaBlockImportBuilder;
+	type BlockImportBuilder = GrandpaBlockImportBuilder<Self::SelectChainBuilder>;
 	type ImportQueueBuilder = AuraImportQueueBuilder<Self::BlockImportBuilder>;
 	type FinalityProofProviderBuilder = GrandpaFinalityProofProviderBuilder;
 	type SelectChainBuilder = LongestChainBuilder;
+	type RpcExtensions = NoRpc<Self>;
 }
 
 /// Builds a new service for a light client.

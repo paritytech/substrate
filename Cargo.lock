@@ -6942,6 +6942,7 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-consensus-aura",
+ "sc-consensus-babe",
  "sc-executor",
  "sc-finality-grandpa",
  "sc-informant",

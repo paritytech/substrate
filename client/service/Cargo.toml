@@ -43,6 +43,7 @@ sysinfo = "0.13.3"
 sc-keystore = { version = "2.0.0-rc4", path = "../keystore" }
 sc-consensus = { version = "0.8.0-rc4", path = "../consensus/common" }
 sc-consensus-aura = { version = "0.8.0-rc4", path = "../consensus/aura" }
+sc-consensus-babe = { version = "0.8.0-rc4", path = "../consensus/babe" }
 grandpa = { package = "sc-finality-grandpa", version = "0.8.0-rc4", path = "../finality-grandpa" }
 sp-io = { version = "2.0.0-rc4", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
@@ -57,6 +58,7 @@ sp-state-machine = { version = "0.8.0-rc4", path = "../../primitives/state-machi
 sp-application-crypto = { version = "2.0.0-rc4", path = "../../primitives/application-crypto" }
 sp-consensus = { version = "0.8.0-rc4", path = "../../primitives/consensus/common" }
 sp-consensus-aura = { version = "0.8.0-rc4", path = "../../primitives/consensus/aura" }
+sp-consensus-babe = { version = "0.8.0-rc4", path = "../../primitives/consensus/babe" }
 sp-inherents = { version = "2.0.0-rc4", path = "../../primitives/inherents" }
 sc-network = { version = "0.8.0-rc4", path = "../network" }
 sc-chain-spec = { version = "2.0.0-rc4", path = "../chain-spec" }

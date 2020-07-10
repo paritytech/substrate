@@ -40,118 +40,10 @@ use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_consensus::import_queue::DefaultQueue;
 
-pub fn new_full_params(config: Configuration) -> Result<(
-	sc_service::ServiceParams<
-		Block, FullClient, DefaultQueue<Block>, FullPool, node_rpc::IoHandler, FullBackend
-	>,
-	(BabeBlockImport, GrandpaLink, BabeLink),
-	grandpa::SharedVoterState,
-	sc_consensus::LongestChain<FullBackend, Block>,
-	InherentDataProviders
-), ServiceError> {
-	use node_executor::Executor;
-
-	let (client, backend, keystore, task_manager) =
-		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
-	let client = Arc::new(client);
-
-	let select_chain = sc_consensus::LongestChain::new(backend.clone());
-
-	let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
-		config.transaction_pool.clone(),
-		std::sync::Arc::new(pool_api),
-		config.prometheus_registry(),
-		task_manager.spawn_handle(),
-		client.clone(),
-	);
-
-	let (grandpa_block_import, grandpa_link) = grandpa::block_import(
-		client.clone(), &(client.clone() as Arc<_>), select_chain.clone(),
-	)?;
-	let justification_import = grandpa_block_import.clone();
-
-	let (block_import, babe_link) = sc_consensus_babe::block_import(
-		sc_consensus_babe::Config::get_or_compute(&*client)?,
-		grandpa_block_import,
-		client.clone(),
-	)?;
-
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
-	let import_queue = sc_consensus_babe::import_queue(
-		babe_link.clone(),
-		block_import.clone(),
-		Some(Box::new(justification_import)),
-		None,
-		client.clone(),
-		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
-		config.prometheus_registry(),
-	)?;
-
-	let import_setup = (block_import, grandpa_link, babe_link);
-
-	let (rpc_extensions_builder, rpc_setup) = {
-		let (_, grandpa_link, babe_link) = &import_setup;
-
-		let shared_authority_set = grandpa_link.shared_authority_set().clone();
-		let shared_voter_state = grandpa::SharedVoterState::empty();
-
-		let rpc_setup = shared_voter_state.clone();
-
-		let babe_config = babe_link.config().clone();
-		let shared_epoch_changes = babe_link.epoch_changes().clone();
-
-		let client = client.clone();
-		let pool = transaction_pool.clone();
-		let select_chain = select_chain.clone();
-		let keystore = keystore.clone();
-
-		let rpc_extensions_builder = Box::new(move |deny_unsafe| {
-			let deps = node_rpc::FullDeps {
-				client: client.clone(),
-				pool: pool.clone(),
-				select_chain: select_chain.clone(),
-				deny_unsafe,
-				babe: node_rpc::BabeDeps {
-					babe_config: babe_config.clone(),
-					shared_epoch_changes: shared_epoch_changes.clone(),
-					keystore: keystore.clone(),
-				},
-				grandpa: node_rpc::GrandpaDeps {
-					shared_voter_state: shared_voter_state.clone(),
-					shared_authority_set: shared_authority_set.clone(),
-				},
-			};
-
-			node_rpc::create_full(deps)
-		});
-
-		(rpc_extensions_builder, rpc_setup)
-	};
-
-	let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider)) as _;
-
-	let params = sc_service::ServiceParams {
-		config, backend, client, import_queue, keystore, task_manager, rpc_extensions_builder,
-		transaction_pool,
-		block_announce_validator_builder: None,
-		finality_proof_request_builder: None,
-		finality_proof_provider: Some(finality_proof_provider),
-		on_demand: None,
-		remote_blockchain: None,
-	};
-
-	Ok((params, import_setup, rpc_setup, select_chain, inherent_data_providers))
-}
-
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, node_executor::Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type GrandpaBlockImport = grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, SelectChain>;
 type SelectChain = sc_consensus::LongestChain<FullBackend, Block>;
-type GrandpaLink = grandpa::LinkHalf<Block, FullClient, SelectChain>;
 type BabeLink = sc_consensus_babe::BabeLink<Block>;
 type BabeBlockImport = sc_consensus_babe::BabeBlockImport<Block, FullClient, GrandpaBlockImport>;
 type FullPool = sc_transaction_pool::BasicPool<sc_transaction_pool::FullChainApi<FullClient, Block>, Block>;
@@ -163,9 +55,9 @@ pub fn new_full_base(
 ) -> Result<(
 	TaskManager, InherentDataProviders, Arc<FullClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>, Arc<FullPool>
-), ServiceError> {
-	let (params, import_setup, rpc_setup, select_chain, inherent_data_providers)
-		= new_full_params(config)?;
+), ServiceError> {	
+	let (params, select_chain, inherent_data_providers, block_import, grandpa_link, babe_link, babe_block_import, rpc_setup)
+		= Builder::build_full(config, RpcFunction(rpc_extensions))?;
 
 	let (
 		role, force_authoring, name, enable_grandpa, prometheus_registry,
@@ -190,10 +82,9 @@ pub fn new_full_base(
 		task_manager, network, telemetry_on_connect_sinks, ..
 	} = sc_service::build(params)?;
 	
-	let (block_import, grandpa_link, babe_link) = import_setup;
 	let shared_voter_state = rpc_setup;
 
-	(with_startup_data)(&block_import, &babe_link);
+	(with_startup_data)(&babe_block_import, &babe_link);
 
 	if let sc_service::config::Role::Authority { .. } = &role {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
@@ -308,6 +199,51 @@ pub fn new_full_base(
 	Ok((task_manager, inherent_data_providers, client, network, transaction_pool))
 }
 
+fn rpc_extensions(
+	client: Arc<FullClientFor<Builder>>,
+	transaction_pool: Arc<FullTransactionPoolFor<Builder>>,
+	select_chain: SelectChainFor<Builder>,
+	keystore: KeystorePtr,
+	grandpa_link: &BlockImportLinkFor<Builder>,
+	babe_link: &ImportQueueLinkFor<Builder>,
+) -> (Box<dyn RpcExtensionBuilder<Output = node_rpc::IoHandler> + Send>, grandpa::SharedVoterState) {
+	let shared_authority_set = grandpa_link.shared_authority_set().clone();
+	let shared_voter_state = grandpa::SharedVoterState::empty();
+
+	let rpc_setup = shared_voter_state.clone();
+
+	let babe_config = babe_link.config().clone();
+	let shared_epoch_changes = babe_link.epoch_changes().clone();
+
+	let client = client.clone();
+	let pool = transaction_pool.clone();
+	let select_chain = select_chain.clone();
+	let keystore = keystore.clone();
+
+	let rpc_extensions_builder = Box::new(move |deny_unsafe| {
+		let deps = node_rpc::FullDeps {
+			client: client.clone(),
+			pool: pool.clone(),
+			select_chain: select_chain.clone(),
+			deny_unsafe,
+			babe: node_rpc::BabeDeps {
+				babe_config: babe_config.clone(),
+				shared_epoch_changes: shared_epoch_changes.clone(),
+				keystore: keystore.clone(),
+			},
+			grandpa: node_rpc::GrandpaDeps {
+				shared_voter_state: shared_voter_state.clone(),
+				shared_authority_set: shared_authority_set.clone(),
+			},
+		};
+
+		node_rpc::create_full(deps)
+	});
+
+	(rpc_extensions_builder, rpc_setup)
+	
+}
+
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
 -> Result<TaskManager, ServiceError> {
@@ -316,91 +252,49 @@ pub fn new_full(config: Configuration)
 	})
 }
 
-type LightClient = sc_service::TLightClient<Block, RuntimeApi, node_executor::Executor>;
-type LightFetcher = sc_network::config::OnDemand<Block>;
+use sc_service::builder::{self, *, Builder as _};
+
+pub struct Builder;
+
+impl builder::Builder for Builder {
+	type Block = Block;
+	type RuntimeApi = RuntimeApi;
+	type Executor = node_executor::Executor;
+	type TransactionPoolBuilder = BasicPoolBuilder;
+	type BlockImportBuilder = GrandpaBlockImportBuilder<Self::SelectChainBuilder>;
+	type ImportQueueBuilder = BabeImportQueueBuilder<Self::BlockImportBuilder>;
+	type FinalityProofProviderBuilder = GrandpaFinalityProofProviderBuilder;
+	type SelectChainBuilder = LongestChainBuilder;
+
+	type RpcExtensions = RpcFunction<Self, node_rpc::IoHandler, grandpa::SharedVoterState>;
+}
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
+	TaskManager, Arc<RpcHandlers>, Arc<LightClientFor<Builder>>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	Arc<sc_transaction_pool::BasicPool<
-		sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block
-	>>
+	Arc<LightTransactionPoolFor<Builder>>
 ), ServiceError> {
-	let (client, backend, keystore, task_manager, on_demand) =
-		sc_service::new_light_parts::<Block, RuntimeApi, node_executor::Executor>(&config)?;
+	let params = Builder::build_light(config)?;
+	let client = params.client.clone();
+	let transaction_pool = params.transaction_pool.clone();
 
-	let transaction_pool_api = Arc::new(sc_transaction_pool::LightChainApi::new(
-		client.clone(),
-		on_demand.clone(),
-	));
-	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
-		config.transaction_pool.clone(),
-		transaction_pool_api,
-		config.prometheus_registry(),
-		task_manager.spawn_handle(),
-	));
-
-	let grandpa_block_import = grandpa::light_block_import(
-		client.clone(), backend.clone(), &(client.clone() as Arc<_>),
-		Arc::new(on_demand.checker().clone()),
-	)?;
-
-	let finality_proof_import = grandpa_block_import.clone();
-	let finality_proof_request_builder =
-		finality_proof_import.create_finality_proof_request_builder();
-
-	let (babe_block_import, babe_link) = sc_consensus_babe::block_import(
-		sc_consensus_babe::Config::get_or_compute(&*client)?,
-		grandpa_block_import,
-		client.clone(),
-	)?;
-
-	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-
-	let import_queue = sc_consensus_babe::import_queue(
-		babe_link,
-		babe_block_import,
-		None,
-		Some(Box::new(finality_proof_import)),
-		client.clone(),
-		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
-		config.prometheus_registry(),
-	)?;
-
-	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
-
-	let light_deps = node_rpc::LightDeps {
+	/*let light_deps = node_rpc::LightDeps {
 		remote_blockchain: backend.remote_blockchain(),
 		fetcher: on_demand.clone(),
 		client: client.clone(),
 		pool: transaction_pool.clone(),
 	};
 
-	let rpc_extensions = node_rpc::create_light(light_deps);
+	let rpc_extensions = node_rpc::create_light(light_deps);*/
 
-	let ServiceComponents { task_manager, rpc_handlers, network, .. } = sc_service::build(sc_service::ServiceParams {	
-		block_announce_validator_builder: None,
-		finality_proof_request_builder: Some(finality_proof_request_builder),
-		finality_proof_provider: Some(finality_proof_provider),
-		on_demand: Some(on_demand),
-		remote_blockchain: Some(backend.remote_blockchain()),
-		rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
-		client: client.clone(),
-		transaction_pool: transaction_pool.clone(),
-		config, import_queue, keystore, backend, task_manager,
-	})?;
+	let ServiceComponents { task_manager, rpc_handlers, network, .. } = sc_service::build(params)?;
 	
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {	
-	new_light_base(config).map(|(task_manager, _, _, _, _)| {
-		task_manager
-	})
+	Ok(new_light_base(config)?.0)
 }
 
 #[cfg(test)]
