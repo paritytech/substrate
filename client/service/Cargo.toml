@@ -70,8 +70,7 @@ sp-block-builder = { version = "2.0.0-rc4", path = "../../primitives/block-build
 sc-informant = { version = "0.8.0-rc2", path = "../informant" }
 sc-telemetry = { version = "2.0.0-rc4", path = "../telemetry" }
 sc-offchain = { version = "2.0.0-rc4", path = "../offchain" }
-parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-rc4"}
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-rc4"}
 sc-tracing = { version = "2.0.0-rc4", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }

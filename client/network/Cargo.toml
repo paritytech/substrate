@@ -29,7 +29,7 @@ fnv = "1.0.6"
 fork-tree = { version = "2.0.0-rc4", path = "../../utils/fork-tree" }
 futures = "0.3.4"
 futures-timer = "3.0.1"
-futures_codec = "0.3.3"
+futures_codec = "0.4.0"
 hex = "0.4.0"
 ip_network = "0.3.4"
 linked-hash-map = "0.5.2"
@@ -57,7 +57,7 @@ sp-core = { version = "2.0.0-rc4", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-rc4", path = "../../primitives/utils" }
 thiserror = "1"
-unsigned-varint = { version = "0.3.1", features = ["futures", "futures-codec"] }
+unsigned-varint = { version = "0.4.0", features = ["futures", "futures-codec"] }
 void = "1.0.2"
 wasm-timer = "0.2"
 zeroize = "1.0.0"
