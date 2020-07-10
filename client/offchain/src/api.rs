@@ -218,11 +218,14 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 		let simplistic_stream = stream
 			.by_ref()
 			.skip_while(|&x| {
-				let skip = ids.iter().find(|&id| *id != x).is_some();
-				if skip {
+				let found = ids.iter().find(|&id| *id == x).is_some();
+				// Even if we're not interested in this ready ID, make sure to
+				// remember it for the possible subsequent calls asking about it
+				// can be succesful
+				if !found {
 					buffer.insert(x);
 				}
-				futures::future::ready(skip)
+				futures::future::ready(!found)
 			})
 			.into_future();
 
