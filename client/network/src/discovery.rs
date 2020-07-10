@@ -255,18 +255,16 @@ impl DiscoveryBehaviour {
 	/// Call this method when a node reports an address for itself.
 	///
 	/// **Note**: It is important that you call this method. The discovery mechanism will not
-	/// automatically add connecting peers to the Kademlia DHTs.
+	/// automatically add connecting peers to the Kademlia k-buckets.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, protocols: &[String], addr: Multiaddr) {
 		if self.allow_non_globals_in_dht || self.can_add_to_dht(&addr) {
 			let mut added = false;
-			for (protocol_id, kademlia) in self.kademlias.iter_mut() {
-				// TODO: Look into way around generating the protocol name each time.
-				if protocols.iter().any(|p| p.as_bytes() == protocol_name_from_protocol_id(protocol_id).as_slice()) {
+			for kademlia in self.kademlias.values_mut() {
+				if protocols.iter().any(|p| p.as_bytes() == kademlia.protocol_name()) {
 					log::trace!(
 						target: "sub-libp2p",
 						"Adding self-reported address {} from {} to Kademlia DHT {}.",
-						// TODO: Maybe rework string conversion here.
-						addr, peer_id, String::from_utf8_lossy(protocol_id.as_bytes()),
+						addr, peer_id, String::from_utf8_lossy(kademlia.protocol_name()),
 					);
 					kademlia.add_address(peer_id, addr.clone());
 					added = true;
@@ -741,8 +739,7 @@ mod tests {
 	#[test]
 	fn discovery_working() {
 		let mut first_swarm_peer_id_and_addr = None;
-		// TODO: Should this not be something like `dot` or `sub`?
-		let protocol_id = ProtocolId::from(b"/test/kad/1.0.0".as_ref());
+		let protocol_id = ProtocolId::from(b"dot".as_ref());
 
 		// Build swarms whose behaviour is `DiscoveryBehaviour`, each aware of
 		// the first swarm via `with_user_defined`.
