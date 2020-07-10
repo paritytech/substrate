@@ -157,7 +157,6 @@ mod tests {
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
 	use crate::{CodeHash, BalanceOf};
-	use wabt;
 	use hex_literal::hex;
 	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
@@ -459,7 +458,7 @@ mod tests {
 	) -> ExecResult {
 		use crate::exec::Vm;
 
-		let wasm = wabt::wat2wasm(wat).unwrap();
+		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
 		let prefab_module =
 			prepare_contract::<super::runtime::Env>(&wasm, &schedule).unwrap();

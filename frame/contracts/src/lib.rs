@@ -85,6 +85,7 @@ mod storage;
 mod exec;
 mod wasm;
 mod rent;
+mod benchmarking;
 
 #[cfg(test)]
 mod tests;
