@@ -19,7 +19,6 @@
 use sc_service::config::BasePath;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use crate::logger::LogRotationOpt;
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt)]
@@ -42,10 +41,6 @@ pub struct SharedParams {
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub log_rotation_opt: LogRotationOpt,
 }
 
 impl SharedParams {
@@ -76,10 +71,5 @@ impl SharedParams {
 	/// Get the filters for the logging
 	pub fn log_filters(&self) -> &[String] {
 		&self.log
-	}
-
-	/// Get the file rotation options for the logging
-	pub fn log_rotation_opt(&self) -> &LogRotationOpt {
-		&self.log_rotation_opt
 	}
 }
