@@ -43,6 +43,9 @@ fn rename_and_convert<T: Trait>() -> Weight {
 	// and replace with the default initialization
 	NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
 
+	// put on record that we migrated to most recent version
+	StorageVersion::put(Releases::V2);
+
 	sp_runtime::print("🕊️  Done Transaction Payment.");
 	T::DbWeight::get().reads_writes(1, 2)
 }
