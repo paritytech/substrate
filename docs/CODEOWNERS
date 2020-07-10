@@ -69,5 +69,5 @@
 
 # Tracing
 /client/tracing/ @mattrutherford
-/primitives/tracing/proxy.rs @mattrutherford
-/primitives/tracing/proxied_span.rs @mattrutherford
+/primitives/tracing/src/proxy.rs @mattrutherford
+/primitives/tracing/src/proxied_span.rs @mattrutherford
