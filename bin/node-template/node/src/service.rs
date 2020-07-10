@@ -12,7 +12,6 @@ use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{
 	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
 };
-use sp_consensus::import_queue::DefaultQueue;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -20,17 +19,6 @@ native_executor_instance!(
 	node_template_runtime::api::dispatch,
 	node_template_runtime::native_version,
 );
-
-type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
-type FullBackend = sc_service::TFullBackend<Block>;
-type GrandpaBlockImport = sc_finality_grandpa::GrandpaBlockImport<
-	FullBackend, Block, FullClient, SelectChain
->;
-type SelectChain = sc_consensus::LongestChain<FullBackend, Block>;
-type GrandpaLink = sc_finality_grandpa::LinkHalf<Block, FullClient, SelectChain>;
-type FullPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<FullClient, Block>, Block
->;
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {	
@@ -161,5 +149,6 @@ impl builder::Builder for Builder {
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	Builder::build_light(config)
+	let params = Builder::build_light(config)?;
+	Ok(sc_service::build(params)?.task_manager)
 }

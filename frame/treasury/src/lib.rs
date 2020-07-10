@@ -111,6 +111,30 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
+pub trait WeightInfo {
+	fn propose_spend(u: u32, ) -> Weight;
+	fn reject_proposal(u: u32, ) -> Weight;
+	fn approve_proposal(u: u32, ) -> Weight;
+	fn report_awesome(r: u32, ) -> Weight;
+	fn retract_tip(r: u32, ) -> Weight;
+	fn tip_new(r: u32, t: u32, ) -> Weight;
+	fn tip(t: u32, ) -> Weight;
+	fn close_tip(t: u32, ) -> Weight;
+	fn on_initialize(p: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn propose_spend(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn reject_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn report_awesome(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn retract_tip(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn tip_new(_r: u32, _t: u32, ) -> Weight { 1_000_000_000 }
+	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_p: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
@@ -159,6 +183,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// An index of a proposal. Just a `u32`.

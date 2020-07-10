@@ -548,7 +548,7 @@ impl<Builder: self::Builder> TransactionPoolBuilder<Builder> for BasicPoolBuilde
 		client: Arc<FullClientFor<Builder>>,
 		task_manager: &TaskManager,
 	) -> Arc<Self::FullTransactionPool> {
-		let transaction_pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
+		let transaction_pool_api = sc_transaction_pool::FullChainApi::new(client.clone(), None);
 
 		sc_transaction_pool::BasicPool::new_full(
 			config.transaction_pool.clone(),

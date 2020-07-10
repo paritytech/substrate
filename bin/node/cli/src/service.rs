@@ -38,7 +38,6 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
-use sp_consensus::import_queue::DefaultQueue;
 
 type FullClient = sc_service::TFullClient<Block, RuntimeApi, node_executor::Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;

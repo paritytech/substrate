@@ -33,19 +33,38 @@ use sp_runtime::{
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use sp_api::{ProvideRuntimeApi, ApiExt};
+use prometheus_endpoint::Registry as PrometheusRegistry;
 
-use crate::error::{self, Error};
+use crate::{metrics::{ApiMetrics, ApiMetricsExt}, error::{self, Error}};
 
 /// The transaction pool logic for full client.
 pub struct FullChainApi<Client, Block> {
 	client: Arc<Client>,
 	pool: ThreadPool,
 	_marker: PhantomData<Block>,
+	metrics: Option<Arc<ApiMetrics>>,
 }
 
 impl<Client, Block> FullChainApi<Client, Block> {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<Client>) -> Self {
+	pub fn new(
+		client: Arc<Client>,
+		prometheus: Option<&PrometheusRegistry>,
+	) -> Self {
+		let metrics = prometheus.map(ApiMetrics::register).and_then(|r| {
+			match r {
+				Err(err) => {
+					log::warn!(
+						target: "txpool",
+						"Failed to register transaction pool api prometheus metrics: {:?}",
+						err,
+					);
+					None
+				},
+				Ok(api) => Some(Arc::new(api))
+			}
+		});
+
 		FullChainApi {
 			client,
 			pool: ThreadPoolBuilder::new()
@@ -54,6 +73,7 @@ impl<Client, Block> FullChainApi<Client, Block> {
 				.create()
 				.expect("Failed to spawn verifier threads, that are critical for node operation."),
 			_marker: Default::default(),
+			metrics,
 		}
 	}
 }
@@ -87,6 +107,9 @@ where
 		let client = self.client.clone();
 		let at = at.clone();
 
+		let metrics = self.metrics.clone();
+		metrics.report(|m| m.validations_scheduled.inc());
+
 		self.pool.spawn_ok(futures_diagnose::diagnose(
 			"validate-transaction",
 			async move {
@@ -94,6 +117,7 @@ where
 				if let Err(e) = tx.send(res) {
 					log::warn!("Unable to send a validate transaction result: {:?}", e);
 				}
+				metrics.report(|m| m.validations_finished.inc());
 			},
 		));
 

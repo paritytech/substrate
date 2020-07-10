@@ -427,6 +427,8 @@ ss58_address_format!(
 		(11, "laminar", "Laminar mainnet, standard account (*25519).")
 	PolymathAccount =>
 		(12, "polymath", "Polymath network, standard account (*25519).")
+	SubstraTeeAccount =>
+		(13, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarwiniaAccount =>
@@ -443,8 +445,8 @@ ss58_address_format!(
 		(42, "substrate", "Any Substrate network, standard account (*25519).")
 	Reserved43 =>
 		(43, "reserved43", "Reserved for future use (43).")
-	SubstraTeeAccount =>
-		(44, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	ChainXAccount =>
+		(44, "chainx", "ChainX mainnet, standard account (*25519).")
 	Reserved46 =>
 		(46, "reserved46", "Reserved for future use (46).")
 	Reserved47 =>

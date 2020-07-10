@@ -28,7 +28,7 @@
 
 use std::collections::HashMap;
 
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor, BlakeTwo256}};
+use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 
 use crate::{
 	error::Error as ConsensusError,
@@ -42,8 +42,6 @@ pub use basic_queue::BasicQueue;
 
 mod basic_queue;
 pub mod buffered_link;
-
-pub type DefaultQueue<Block> = BasicQueue<Block, sp_trie::PrefixedMemoryDB<BlakeTwo256>>;
 
 /// Shared block import struct used by the queue.
 pub type BoxBlockImport<B, Transaction> = Box<

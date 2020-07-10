@@ -250,7 +250,7 @@ mod tests {
 		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
 		let pool = TestPool(BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
+			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),
