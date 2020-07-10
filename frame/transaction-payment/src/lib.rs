@@ -272,13 +272,16 @@ decl_module! {
 
 			// add 1 percent;
 			let addition = target / 100;
-			assert!(addition > 0);
+			if addition == 0 {
+				// this is most likely because in a test setup we set everything to ().
+				return;
+			}
 			target += addition;
 
 			sp_io::TestExternalities::new_empty().execute_with(|| {
 				<frame_system::Module<T>>::set_block_limits(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
-				assert!(next > min_value);
+				assert!(next > min_value, "The minimum bound of the multiplier is too low.");
 			})
 		}
 	}
