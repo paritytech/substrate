@@ -652,18 +652,13 @@ impl sp_std::str::FromStr for AccountId32 {
 	type Err = &'static str;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		if &s[..2] == "0x" && s.len() == 66 {
-			// try and parse 0x hex string
+		let hex_or_ss58_without_prefix = s.trim_start_matches("0x");
+		if hex_or_ss58_without_prefix.len() == 64 {
 			let mut bytes = [0u8; 32];
-			hex::decode_to_slice(&s[2..], &mut bytes).map_err(|_| "invalid hex address.")?;
-			Ok(bytes.into())
-		} else if s.len() == 64 {
-			// or string without 0x
-			let mut bytes = [0u8; 32];
-			hex::decode_to_slice(s, &mut bytes).map_err(|_| "invalid hex address.")?;
-			Ok(bytes.into())
+			hex::decode_to_slice(hex_or_ss58_without_prefix, &mut bytes)
+				.map_err(|_| "invalid hex address.")
+				.map(|_| Self::from(bytes))
 		} else {
-			// or ss58
 			Self::from_ss58check(s).map_err(|_| "invalid ss58 address.")
 		}
 	}
@@ -1200,6 +1195,12 @@ mod tests {
 		assert_eq!(
 			AccountId32::from_str("0xgc55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
 			"invalid hex address.",
+		);
+
+		// valid hex but invalid length will be treated as ss58.
+		assert_eq!(
+			AccountId32::from_str("55c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid ss58 address.",
 		);
 	}
 }
