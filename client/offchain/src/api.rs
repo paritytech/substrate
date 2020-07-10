@@ -19,10 +19,11 @@ use std::{
 	sync::Arc,
 	convert::TryFrom,
 	thread::sleep,
+	collections::BTreeSet,
 };
 
 use sp_core::offchain::OffchainStorage;
-use futures::Future;
+use futures::{Future, FutureExt, StreamExt};
 use log::error;
 use sc_network::{PeerId, Multiaddr, NetworkStateInfo};
 use codec::{Encode, Decode};
@@ -61,6 +62,10 @@ pub(crate) struct Api<Storage> {
 	/// Stream of HTTP request IDs that are ready to be processed. Used with
 	/// the pollable API.
 	pollable_ready_ids: TracingUnboundedReceiver<PollableId>,
+	/// Buffered pollable IDs. Incoming IDs ready to be processed are buffered
+	/// here whenever they arrive while the offchain worker is waiting for other
+	/// IDs.
+	buffered_ready_ids: BTreeSet<PollableId>,
 	/// Timers are handled by a separate struct.
 	timer: timer::TimerApi,
 }
@@ -198,13 +203,26 @@ impl<Storage: OffchainStorage> offchain::Externalities for Api<Storage> {
 		ids: &[PollableId],
 		deadline: Option<Timestamp>
 	) -> Option<PollableId> {
+		// TODO: Prefer epoll-like approach over linearly scanning each ID
+		// we're interested in
+		let (stream, buffer) = (&mut self.pollable_ready_ids, &mut self.buffered_ready_ids);
+
+		for id in ids {
+			if buffer.remove(id) {
+				return Some(*id);
+			}
+		}
+
 		let mut deadline = timestamp::deadline_to_future(deadline);
 
-		use futures::StreamExt;
-		let simplistic_stream = self.pollable_ready_ids
+		let simplistic_stream = stream
 			.by_ref()
 			.skip_while(|&x| {
-				futures::future::ready(ids.iter().find(|&id| *id != x).is_some())
+				let skip = ids.iter().find(|&id| *id != x).is_some();
+				if skip {
+					buffer.insert(x);
+				}
+				futures::future::ready(skip)
 			})
 			.into_future();
 
@@ -317,6 +335,7 @@ impl AsyncApi {
 			http: http_api,
 			pollable_ready_ids: recv,
 			timer: timer_api,
+			buffered_ready_ids: Default::default(),
 		};
 
 		let async_api = Self {
@@ -332,7 +351,6 @@ impl AsyncApi {
 		let http = self.http.take().expect("Take invoked only once.");
 		let timer = self.timer.take().expect("Take invoked only once.");
 
-		use futures::FutureExt;
 		futures::future::join(http, timer).map(drop)
 	}
 }
