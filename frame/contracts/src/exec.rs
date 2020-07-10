@@ -44,6 +44,15 @@ bitflags! {
 	}
 }
 
+/// Describes where a call originated.
+pub enum CallOrigin {
+	/// Call was initiated from an externally owned account. That can be either a
+	/// signed transaction or through RPC.
+	ExternallyOwned,
+	/// The call was initiated by a contract account.
+	Contract,
+}
+
 /// Output of a contract call or instantiation which ran to completion.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ExecReturnValue {
@@ -318,6 +327,7 @@ where
 			Err("contract has been evicted")?
 		};
 
+		let call_origin = self.call_origin();
 		let caller = self.self_account.clone();
 		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
@@ -326,6 +336,7 @@ where
 				transfer(
 					gas_meter,
 					TransferCause::Call,
+					call_origin,
 					&caller,
 					&dest,
 					value,
@@ -370,6 +381,7 @@ where
 			Err("not enough gas to pay base instantiate fee")?
 		}
 
+		let call_origin = self.call_origin();
 		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
@@ -397,6 +409,7 @@ where
 			transfer(
 				gas_meter,
 				TransferCause::Instantiate,
+				call_origin,
 				&caller,
 				&dest,
 				endowment,
@@ -464,6 +477,10 @@ where
 		&self.self_account == account ||
 			self.caller.map_or(false, |caller| caller.is_live(account))
 	}
+
+	fn call_origin(&self) -> CallOrigin {
+		if self.depth == 0 { CallOrigin::ExternallyOwned } else { CallOrigin::Contract }
+	}
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
@@ -517,6 +534,7 @@ enum TransferCause {
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	gas_meter: &mut GasMeter<T>,
 	cause: TransferCause,
+	origin: CallOrigin,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
@@ -524,6 +542,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 ) -> Result<(), DispatchError> {
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
+	use self::CallOrigin::*;
 
 	let token = {
 		let kind: TransferFeeKind = match cause {
@@ -545,9 +564,9 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 
 	// Only ext_terminate is allowed to bring the sender below the subsistence
 	// threshold or even existential deposit.
-	let existence_requirement = match cause {
-		Terminate => ExistenceRequirement::AllowDeath,
-		_ => {
+	let existence_requirement = match (cause, origin) {
+		(Terminate, _) => ExistenceRequirement::AllowDeath,
+		(_, Contract) => {
 			ensure!(
 				T::Currency::total_balance(transactor).saturating_sub(value) >=
 					ctx.config.subsistence_threshold(),
@@ -555,6 +574,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 			);
 			ExistenceRequirement::KeepAlive
 		},
+		(_, ExternallyOwned) => ExistenceRequirement::KeepAlive,
 	};
 	T::Currency::transfer(transactor, dest, value, existence_requirement)?;
 
@@ -636,6 +656,7 @@ where
 		transfer(
 			gas_meter,
 			TransferCause::Call,
+			CallOrigin::Contract,
 			&self.ctx.self_account.clone(),
 			&to,
 			value,
@@ -660,6 +681,7 @@ where
 		transfer(
 			gas_meter,
 			TransferCause::Terminate,
+			CallOrigin::Contract,
 			&self_id,
 			beneficiary,
 			value,
