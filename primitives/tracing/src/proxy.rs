@@ -43,8 +43,8 @@ impl Drop for TracingProxy {
 				target: "tracing",
 				"Dropping TracingProxy with {} un-exited spans, marking as not valid", self.spans.len()
 			);
-			while let Some(proxied_trace) = self.spans.pop() {
-				proxied_trace.span().record("is_valid_trace", &false);
+			while let Some(proxied_span) = self.spans.pop() {
+				proxied_span.span().record("is_valid_trace", &false);
 			}
 		}
 	}
@@ -74,8 +74,8 @@ impl TracingProxy {
 			)
 		);
 		self.next_id += 1;
-		let proxied_trace = ProxiedSpan::enter_span(self.next_id, span);
-		self.spans.push(proxied_trace);
+		let proxied_span = ProxiedSpan::enter_span(self.next_id, span);
+		self.spans.push(proxied_span);
 		if self.spans.len() > MAX_SPANS_LEN {
 			// This is to prevent unbounded growth of Vec and could mean one of the following:
 			// 1. Too many nested spans, or MAX_SPANS_LEN is too low.
@@ -84,29 +84,29 @@ impl TracingProxy {
 				target: "tracing",
 				"TracingProxy MAX_SPANS_LEN exceeded, removing oldest span."
 			);
-			let proxied_trace = self.spans.remove(0);
-			proxied_trace.span().record("is_valid_trace", &false);
+			let proxied_span = self.spans.remove(0);
+			proxied_span.span().record("is_valid_trace", &false);
 		}
 		self.next_id
 	}
 
 	/// Exit a span by dropping it along with it's associated guard.
 	pub fn exit_span(&mut self, id: u64) {
-		if self.spans.last().map(|proxied_trace| id > proxied_trace.id()).unwrap_or(true) {
+		if self.spans.last().map(|proxied_span| id > proxied_span.id()).unwrap_or(true) {
 			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
 			return;
 		}
-		let mut proxied_trace = self.spans.pop().expect("Just checked that there is an element to pop; qed");
-		while id < proxied_trace.id() {
+		let mut proxied_span = self.spans.pop().expect("Just checked that there is an element to pop; qed");
+		while id < proxied_span.id() {
 			log::warn!(
 				target: "tracing",
 				"TracingProxy Span ids not equal! id parameter given: {}, last span: {}",
 				id,
-				proxied_trace.id(),
+				proxied_span.id(),
 			);
-			proxied_trace.span().record("is_valid_trace", &false);
-			if let Some(pt) = self.spans.pop() {
-				proxied_trace = pt;
+			proxied_span.span().record("is_valid_trace", &false);
+			if let Some(ps) = self.spans.pop() {
+				proxied_span = ps;
 			} else {
 				log::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
 				return;
@@ -134,7 +134,7 @@ mod tests {
 		let _spans = create_spans(&mut proxy, MAX_SPANS_LEN + 10);
 		assert_eq!(proxy.spans.len(), MAX_SPANS_LEN);
 		// ensure oldest spans removed
-		assert_eq!(proxy.spans[0].0, 11);
+		assert_eq!(proxy.spans[0].id(), 11);
 	}
 
 	#[test]
