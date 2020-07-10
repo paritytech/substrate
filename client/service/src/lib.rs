@@ -156,7 +156,7 @@ pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, 
 	pub client: Arc<TCl>,
 	/// A shared transaction pool instance.
 	pub transaction_pool: Arc<TExPool>,
-	/// The chain task manager. 
+	/// The chain task manager.
 	pub task_manager: TaskManager,
 	/// A keystore that stores keys.
 	pub keystore: sc_keystore::KeyStorePtr,
@@ -216,8 +216,6 @@ async fn build_network_future<
 	};
 
 	loop {
-		let before_polling = Instant::now();
-
 		futures::select!{
 			// List of blocks that the client has imported.
 			notification = imported_blocks_stream.next() => {
@@ -334,15 +332,6 @@ async fn build_network_future<
 				ready_sink.send((status, state));
 			}
 		}
-
-		// Now some diagnostic for performances.
-		let polling_dur = before_polling.elapsed();
-		log!(
-			target: "service",
-			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
-			"⚠️  Polling the network future took {:?}",
-			polling_dur
-		);
 	}
 }
 
