@@ -13,11 +13,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
-prometheus = "0.8"
-futures-util = { version = "0.3.1", default-features = false, features = ["io"] }
-derive_more = "0.99"
+prometheus = "0.8.0"
+futures-util = { version = "0.3.5", default-features = false, features = ["io"] }
+derive_more = "0.99.9"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 async-std = { version = "1.6.2", features = ["unstable"] }
-hyper = { version = "0.13.1", default-features = false, features = ["stream"] }
-tokio = "0.2"
+hyper = { version = "0.13.6", default-features = false, features = ["stream"] }
+tokio = "0.2.21"

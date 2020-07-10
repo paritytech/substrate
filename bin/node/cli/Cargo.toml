@@ -35,15 +35,15 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "1.3.1" }
-serde = { version = "1.0.102", features = ["derive"] }
-futures = { version = "0.3.1", features = ["compat"] }
+serde = { version = "1.0.114", features = ["derive"] }
+futures = { version = "0.3.5", features = ["compat"] }
 hex-literal = "0.2.1"
 jsonrpc-core = "14.2.0"
 log = "0.4.8"
-rand = "0.7.2"
-structopt = { version = "0.3.8", optional = true }
-tracing = "0.1.10"
-parking_lot = "0.10.0"
+rand = "0.7.3"
+structopt = { version = "0.3.15", optional = true }
+tracing = "0.1.16"
+parking_lot = "0.10.2"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0-rc4",  path = "../../../primitives/authority-discovery" }
@@ -101,8 +101,8 @@ frame-benchmarking-cli = { version = "2.0.0-rc4", optional = true, path = "../..
 node-inspect = { version = "0.8.0-rc4", optional = true, path = "../inspect" }
 
 # WASM-specific dependencies
-wasm-bindgen = { version = "0.2.57", optional = true }
-wasm-bindgen-futures = { version = "0.4.7", optional = true }
+wasm-bindgen = { version = "0.2.62", optional = true }
+wasm-bindgen-futures = { version = "0.4.12", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0-rc4"}
 
 [target.'cfg(target_arch="x86_64")'.dependencies]
@@ -116,16 +116,16 @@ sc-consensus = { version = "0.8.0-rc4", path = "../../../client/consensus/common
 sc-consensus-babe = { version = "0.8.0-rc4", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.8.0-rc4", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0-rc4", path = "../../../client/service/test" }
-futures = "0.3.4"
+futures = "0.3.5"
 tempfile = "3.1.0"
-assert_cmd = "1.0"
-nix = "0.17"
-serde_json = "1.0"
-regex = "1"
+assert_cmd = "1.0.1"
+nix = "0.17.0"
+serde_json = "1.0.56"
+regex = "1.3.9"
 platforms = "0.2.1"
 
 [build-dependencies]
-structopt = { version = "0.3.8", optional = true }
+structopt = { version = "0.3.15", optional = true }
 node-inspect = { version = "0.8.0-rc4", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-rc4", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "2.0.0-rc4", optional = true, path = "../../../utils/build-script-utils" }

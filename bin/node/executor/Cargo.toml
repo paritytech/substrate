@@ -24,7 +24,7 @@ trie-root = "0.16.0"
 frame-benchmarking = { version = "2.0.0-rc4", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
-criterion = "0.3.0"
+criterion = "0.3.3"
 frame-support = { version = "2.0.0-rc4", path = "../../../frame/support" }
 frame-system = { version = "2.0.0-rc4", path = "../../../frame/system" }
 node-testing = { version = "2.0.0-rc4", path = "../testing" }

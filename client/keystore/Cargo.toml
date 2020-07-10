@@ -14,15 +14,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-derive_more = "0.99.2"
+derive_more = "0.99.9"
 sp-core = { version = "2.0.0-rc4", path = "../../primitives/core" }
 sp-application-crypto = { version = "2.0.0-rc4", path = "../../primitives/application-crypto" }
-hex = "0.4.0"
-merlin = { version = "2.0", default-features = false }
-parking_lot = "0.10.0"
-rand = "0.7.2"
-serde_json = "1.0.41"
-subtle = "2.1.1"
+hex = "0.4.2"
+merlin = { version = "2.0.0", default-features = false }
+parking_lot = "0.10.2"
+rand = "0.7.3"
+serde_json = "1.0.56"
+subtle = "2.2.3"
 
 [dev-dependencies]
 tempfile = "3.1.0"

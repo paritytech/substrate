@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.7", features = ["full", "visit"] }
-quote = "1.0.3"
-proc-macro2 = "1.0.6"
-proc-macro-crate = "0.1.4"
+syn = { version = "1.0.33", features = ["full", "visit"] }
+quote = "1.0.7"
+proc-macro2 = "1.0.18"
+proc-macro-crate = "0.1.5"
 
 [dev-dependencies]
 sp-runtime = { version = "2.0.0-rc4", path = "../../../primitives/runtime" }

@@ -9,8 +9,8 @@ repository = "https://github.com/paritytech/substrate/"
 description = "I/O for Substrate runtimes"
 
 [dependencies]
-futures = "0.3.4"
-futures-core = "0.3.4"
+futures = "0.3.5"
+futures-core = "0.3.5"
 lazy_static = "1.4.0"
 prometheus = "0.8.0"
 futures-timer = "3.0.2"

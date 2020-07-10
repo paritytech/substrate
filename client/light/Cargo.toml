@@ -10,7 +10,7 @@ repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-light"
 
 [dependencies]
-parking_lot = "0.10.0"
+parking_lot = "0.10.2"
 lazy_static = "1.4.0"
 hash-db = "0.15.2"
 sp-runtime = { version = "2.0.0-rc2", path = "../../primitives/runtime" }

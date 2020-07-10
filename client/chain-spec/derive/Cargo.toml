@@ -15,9 +15,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-proc-macro-crate = "0.1.4"
-proc-macro2 = "1.0.6"
-quote = "1.0.3"
-syn = "1.0.7"
+proc-macro-crate = "0.1.5"
+proc-macro2 = "1.0.18"
+quote = "1.0.7"
+syn = "1.0.33"
 
 [dev-dependencies]

@@ -46,7 +46,7 @@ sc-service = { version = "0.8.0-rc4", default-features = false, optional = true,
 # 3rd party
 cfg-if = "0.1.10"
 log = { version = "0.4.8", optional = true }
-serde = { version = "1.0.101", optional = true, features = ["derive"] }
+serde = { version = "1.0.114", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.8.0-rc4", path = "../../client/block-builder" }

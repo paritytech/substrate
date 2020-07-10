@@ -14,17 +14,17 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-futures = "0.3.4"
-futures-timer = "3.0.1"
+futures = "0.3.5"
+futures-timer = "3.0.2"
 libp2p = { version = "0.21.1", default-features = false }
 log = "0.4.8"
 lru = "0.4.3"
 sc-network = { version = "0.8.0-rc4", path = "../network" }
 sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
-wasm-timer = "0.2"
+wasm-timer = "0.2.4"
 
 [dev-dependencies]
 async-std = "1.6.2"
-quickcheck = "0.9.0"
-rand = "0.7.2"
+quickcheck = "0.9.2"
+rand = "0.7.3"
 substrate-test-runtime-client = { version = "2.0.0-rc4", path = "../../test-utils/runtime/client" }

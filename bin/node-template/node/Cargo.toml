@@ -16,10 +16,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 name = "node-template"
 
 [dependencies]
-futures = "0.3.4"
+futures = "0.3.5"
 log = "0.4.8"
-structopt = "0.3.8"
-parking_lot = "0.10.0"
+structopt = "0.3.15"
+parking_lot = "0.10.2"
 
 sc-cli = { version = "0.8.0-rc4", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "2.0.0-rc4", path = "../../../primitives/core" }

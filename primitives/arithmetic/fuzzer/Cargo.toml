@@ -16,9 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sp-arithmetic = { version = "2.0.0-rc4", path = ".." }
 honggfuzz = "0.5.49"
-primitive-types = "0.7.0"
-num-bigint = "0.2"
-num-traits = "0.2"
+primitive-types = "0.7.2"
+num-bigint = "0.2.6"
+num-traits = "0.2.12"
 
 [[bin]]
 name = "biguint"

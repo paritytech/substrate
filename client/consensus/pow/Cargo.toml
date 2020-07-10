@@ -23,7 +23,7 @@ sp-inherents = { version = "2.0.0-rc4", path = "../../../primitives/inherents" }
 sp-consensus-pow = { version = "0.8.0-rc4", path = "../../../primitives/consensus/pow" }
 sp-consensus = { version = "0.8.0-rc4", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
-futures = { version = "0.3.1", features = ["compat"] }
+futures = { version = "0.3.5", features = ["compat"] }
 sp-timestamp = { version = "2.0.0-rc4", path = "../../../primitives/timestamp" }
-derive_more = "0.99.2"
+derive_more = "0.99.9"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.8.0-rc4"}

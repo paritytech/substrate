@@ -16,8 +16,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.5", features = ["full", "visit", "fold", "extra-traits"] }
-quote = "1.0.3"
-proc-macro2 = "1.0.3"
+syn = { version = "1.0.33", features = ["full", "visit", "fold", "extra-traits"] }
+quote = "1.0.7"
+proc-macro2 = "1.0.18"
 Inflector = "0.11.4"
-proc-macro-crate = "0.1.4"
+proc-macro-crate = "0.1.5"

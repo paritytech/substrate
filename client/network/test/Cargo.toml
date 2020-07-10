@@ -15,10 +15,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sc-network = { version = "0.8.0-rc4", path = "../" }
 log = "0.4.8"
-parking_lot = "0.10.0"
-futures = "0.3.4"
-futures-timer = "3.0.1"
-rand = "0.7.2"
+parking_lot = "0.10.2"
+futures = "0.3.5"
+futures-timer = "3.0.2"
+rand = "0.7.3"
 libp2p = { version = "0.21.1", default-features = false }
 sp-consensus = { version = "0.8.0-rc4", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.8.0-rc4", path = "../../../client/consensus/common" }
@@ -28,7 +28,7 @@ sp-runtime = { version = "2.0.0-rc4", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0-rc4", path = "../../../primitives/core" }
 sc-block-builder = { version = "0.8.0-rc4", path = "../../block-builder" }
 sp-consensus-babe = { version = "0.8.0-rc4", path = "../../../primitives/consensus/babe" }
-env_logger = "0.7.0"
+env_logger = "0.7.1"
 substrate-test-runtime-client = { version = "2.0.0-rc4", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0-rc4", path = "../../../test-utils/runtime" }
 tempfile = "3.1.0"

@@ -14,12 +14,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sc-client-api = { version = "2.0.0-rc4", path = "../../../../client/api" }
 codec = { package = "parity-scale-codec", version = "1.3.1" }
-futures = { version = "0.3.4", features = ["compat"] }
+futures = { version = "0.3.5", features = ["compat"] }
 jsonrpc-core = "14.2.0"
 jsonrpc-core-client = "14.2.0"
 jsonrpc-derive = "14.2.1"
 log = "0.4.8"
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.114", features = ["derive"] }
 sp-runtime = { version = "2.0.0-rc4", path = "../../../../primitives/runtime" }
 sp-api = { version = "2.0.0-rc4", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "2.0.0-rc4", path = "../../../../frame/system/rpc/runtime-api" }
@@ -31,5 +31,5 @@ sc-rpc-api = { version = "0.8.0-rc4", path = "../../../../client/rpc-api" }
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-rc4", path = "../../../../test-utils/runtime/client" }
-env_logger = "0.7.0"
+env_logger = "0.7.1"
 sc-transaction-pool = { version = "2.0.0-rc4", path = "../../../../client/transaction-pool" }

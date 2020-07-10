@@ -17,9 +17,9 @@ tempfile = "3.1.0"
 tokio = "0.1.22"
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
-env_logger = "0.7.0"
+env_logger = "0.7.1"
 fdlimit = "0.1.4"
-parking_lot = "0.10.0"
+parking_lot = "0.10.2"
 sc-light = { version = "2.0.0-rc4", path = "../../light" }
 sp-blockchain = { version = "2.0.0-rc4", path = "../../../primitives/blockchain" }
 sp-api = { version = "2.0.0-rc4", path = "../../../primitives/api" }
@@ -28,7 +28,7 @@ sp-externalities = { version = "0.8.0-rc4", path = "../../../primitives/external
 sp-trie = { version = "2.0.0-rc4", path = "../../../primitives/trie" }
 sp-storage = { version = "2.0.0-rc4", path = "../../../primitives/storage" }
 sc-client-db = { version = "0.8.0-rc4", default-features = false, path = "../../db" }
-futures = { version = "0.3.1", features = ["compat"] }
+futures = { version = "0.1.29", features = ["compat"] }
 sc-service = { version = "0.8.0-rc4", default-features = false, features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.8.0-rc4", path = "../../network" }
 sp-consensus = { version = "0.8.0-rc4", path = "../../../primitives/consensus/common" }

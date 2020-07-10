@@ -18,7 +18,7 @@ jsonrpc-core-client = "14.2.0"
 jsonrpc-derive = "14.2.1"
 sp-core = { version = "2.0.0-rc4", path = "../../../primitives/core" }
 sp-rpc = { version = "2.0.0-rc4", path = "../../../primitives/rpc" }
-serde = { version = "1.0.101", features = ["derive"] }
+serde = { version = "1.0.114", features = ["derive"] }
 sp-runtime = { version = "2.0.0-rc4", path = "../../../primitives/runtime" }
 sp-api = { version = "2.0.0-rc4", path = "../../../primitives/api" }
 sp-blockchain = { version = "2.0.0-rc4", path = "../../../primitives/blockchain" }

@@ -18,12 +18,12 @@ jsonrpc-core = "14.2.0"
 jsonrpc-core-client = "14.2.0"
 jsonrpc-derive = "14.2.1"
 sp-consensus-babe = { version = "0.8.0-rc4", path = "../../../../primitives/consensus/babe" }
-serde = { version = "1.0.104", features=["derive"] }
+serde = { version = "1.0.114", features = ["derive"] }
 sp-blockchain = { version = "2.0.0-rc4", path = "../../../../primitives/blockchain" }
 sp-runtime = { version = "2.0.0-rc4", path = "../../../../primitives/runtime" }
 sc-consensus-epochs = { version = "0.8.0-rc4", path = "../../epochs" }
-futures = { version = "0.3.4", features = ["compat"] }
-derive_more = "0.99.2"
+futures = { version = "0.3.5", features = ["compat"] }
+derive_more = "0.99.9"
 sp-api = { version = "2.0.0-rc4", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.8.0-rc4", path = "../../../../primitives/consensus/common" }
 sp-core = { version = "2.0.0-rc4", path = "../../../../primitives/core" }
@@ -32,7 +32,7 @@ sc-keystore = { version = "2.0.0-rc4", path = "../../../keystore" }
 
 [dev-dependencies]
 sc-consensus = { version = "0.8.0-rc4", path = "../../../consensus/common" }
-serde_json = "1.0.50"
+serde_json = "1.0.56"
 sp-keyring = { version = "2.0.0-rc4", path = "../../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0-rc4", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"
