@@ -46,7 +46,7 @@ bitflags! {
 
 /// Describes whether we deal with a contract or a plain account.
 pub enum TransactorKind {
-	/// Transacrion was initiated from a plain account. That can be either be through a
+	/// Transaction was initiated from a plain account. That can be either be through a
 	/// signed transaction or through RPC.
 	PlainAccount,
 	/// The call was initiated by a contract account.
