@@ -30,7 +30,7 @@ use sp_runtime::{
 use frame_system::EnsureSignedBy;
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 // For testing the pallet, we construct most of a mock runtime. This means
