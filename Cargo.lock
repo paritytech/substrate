@@ -1455,20 +1455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "flexi_logger"
-version = "0.15.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33897654c23a50cebab45e18356f69fb771c9949a6928344fb1f01ffccc7c5f3"
-dependencies = [
- "chrono",
- "glob 0.3.0",
- "log",
- "regex",
- "thiserror",
- "yansi",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6113,8 +6099,8 @@ dependencies = [
  "atty",
  "chrono",
  "derive_more",
+ "env_logger 0.7.1",
  "fdlimit",
- "flexi_logger",
  "futures 0.3.5",
  "lazy_static",
  "log",
@@ -9892,12 +9878,6 @@ dependencies = [
  "rand 0.7.3",
  "static_assertions",
 ]
-
-[[package]]
-name = "yansi"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fc79f4a1e39857fc00c3f662cbf2651c771f00e9c15fe2abc341806bd46bd71"
 
 [[package]]
 name = "zeroize"
