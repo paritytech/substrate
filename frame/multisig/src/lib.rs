@@ -59,6 +59,7 @@ use sp_runtime::{DispatchError, DispatchResult, traits::{Dispatchable, Zero}};
 
 mod tests;
 mod benchmarking;
+pub mod migration;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -234,6 +235,10 @@ decl_module! {
 
 		/// Deposit one of this module's events by using the default implementation.
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() -> Weight {
+			migration::migrate_utility_to_multisigs::<T>()
+		}
 
 		/// Immediately dispatch a multi-signature call using a single approval from the caller.
 		///

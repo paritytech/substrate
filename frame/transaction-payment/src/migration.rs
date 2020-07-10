@@ -38,20 +38,14 @@ pub fn on_runtime_upgrade<T: Trait>() -> Weight {
 fn rename_and_convert<T: Trait>() -> Weight {
 	sp_runtime::print("🕊️  Migrating Transaction Payment.");
 
-	let mut reads = 0;
-	let mut writes = 0;
-	if let Some(next_fee_multiplier) =
-		take_storage_value::<OldMultiplier>(b"Balances", b"NextFeeMultiplier", &[])
-	{
-		let raw_multiplier = next_fee_multiplier.into_inner() as u128;
-		// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
-		let new_raw_multiplier = raw_multiplier.saturating_mul(1_000_000_000);
-		let new_multiplier = Multiplier::from_inner(new_raw_multiplier);
-		NextFeeMultiplier::put(new_multiplier);
-		writes += 2;
-	}
-	reads += 1;
+	// remove the old storage value
+	take_storage_value::<OldMultiplier>(b"Balances", b"NextFeeMultiplier", &[]);
+	// and replace with the default initialization
+	NextFeeMultiplier::put(Multiplier::saturating_from_integer(1));
+
+	// put on record that we migrated to most recent version
+	StorageVersion::put(Releases::V2);
 
 	sp_runtime::print("🕊️  Done Transaction Payment.");
-	T::DbWeight::get().reads_writes(reads, writes)
+	T::DbWeight::get().reads_writes(1, 2)
 }
