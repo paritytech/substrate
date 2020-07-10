@@ -1132,12 +1132,6 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			account.free = new_free_account;
 
 			Ok(NegativeImbalance::new(value))
-		}).map_err(|e| {
-			use sp_runtime::traits::Printable;
-			sp_runtime::print("Withdraw Error:");
-			frame_support::runtime_print!("{:?}", e);
-			e.print();
-			e
 		})
 	}
 
