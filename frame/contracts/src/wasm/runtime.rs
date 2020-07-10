@@ -379,10 +379,7 @@ fn write_sandbox_output<E: Ext>(
 	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
 
 	if len < buf_len {
-		ctx.trap_reason = Some(TrapReason::SupervisorError(
-			Error::<E::T>::OutputBufferTooSmall.into()
-		));
-		return Err(sp_sandbox::HostError);
+		Err(map_err(ctx, Error::<E::T>::OutputBufferTooSmall))?
 	}
 
 	charge_gas(
@@ -396,6 +393,17 @@ fn write_sandbox_output<E: Ext>(
 	ctx.memory.set(out_len_ptr, &buf_len.encode())?;
 
 	Ok(())
+}
+
+/// Stores a DispatchError returned from an Ext function into the trap_reason.
+///
+/// This allows through supervisor generated errors to the caller.
+fn map_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError where
+	E: Ext,
+	Error: Into<DispatchError>,
+{
+	ctx.trap_reason = Some(TrapReason::SupervisorError(err.into()));
+	sp_sandbox::HostError
 }
 
 // ***********************************************************
@@ -517,7 +525,7 @@ define_env!(Env, <E: Ext>,
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 
-		ctx.ext.transfer(&callee, value, ctx.gas_meter).map_err(|_| sp_sandbox::HostError)
+		ctx.ext.transfer(&callee, value, ctx.gas_meter).map_err(|e| map_err(ctx, e))
 	},
 
 	// Make a call to another contract.
