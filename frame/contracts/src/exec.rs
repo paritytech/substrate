@@ -16,7 +16,7 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator};
-use crate::{gas::{Gas, GasMeter, Token}, rent, storage, Error};
+use crate::{gas::{Gas, GasMeter, Token}, rent, storage, Error, ContractInfoOf};
 use bitflags::bitflags;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
@@ -24,7 +24,7 @@ use frame_support::{
 	dispatch::DispatchError,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
 	weights::Weight,
-	ensure,
+	ensure, StorageMap,
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
@@ -479,7 +479,14 @@ where
 	}
 
 	fn transactor_kind(&self) -> TransactorKind {
-		if self.depth == 0 { TransactorKind::PlainAccount } else { TransactorKind::Contract }
+		if self.depth == 0 {
+			debug_assert!(self.self_trie_id.is_none());
+			debug_assert!(self.caller.is_none());
+			debug_assert!(ContractInfoOf::<T>::get(&self.self_account).is_none());
+			TransactorKind::PlainAccount
+		} else {
+			TransactorKind::Contract
+		}
 	}
 }
 
