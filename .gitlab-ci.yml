@@ -393,8 +393,6 @@ check-polkadot-companion-build:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
   after_script:
     - cd polkadot && git rev-parse --abbrev-ref HEAD
-    - echo hello
-    - echo world > /dev/stderr
   allow_failure:                   true
 
 test-browser-node:
