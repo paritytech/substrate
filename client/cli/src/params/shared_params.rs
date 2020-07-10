@@ -22,7 +22,6 @@ use structopt::StructOpt;
 use crate::logger::LogRotationOpt;
 
 /// Shared parameters used by all `CoreParams`.
-#[allow(missing_docs)]
 #[derive(Debug, StructOpt)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
@@ -44,6 +43,7 @@ pub struct SharedParams {
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 
+	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub log_rotation_opt: LogRotationOpt,
 }
