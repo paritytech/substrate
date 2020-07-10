@@ -17,6 +17,7 @@
 use crate::{
 	BalanceOf, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator, gas::Gas,
+	Error,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -478,7 +479,7 @@ fn run_out_of_gas() {
 					67_500_000,
 					vec![],
 				),
-				"ran out of gas during contract execution"
+				Error::<Test>::OutOfGas,
 			);
 		});
 }
@@ -1169,7 +1170,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					DJANGO,
 					0,
 					GAS_LIMIT,
-					vec![],
+					set_rent_code_hash.as_ref().to_vec(),
 				)
 			};
 
@@ -1294,7 +1295,7 @@ fn storage_max_value_limit() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				GAS_LIMIT,
+				GAS_LIMIT * 2, // we are copying a huge buffer
 				Encode::encode(&self::MaxValueSize::get()),
 			));
 
@@ -1594,8 +1595,8 @@ fn crypto_hashes() {
 					0,
 					GAS_LIMIT,
 					params,
-				).unwrap();
-				assert_eq!(result.status, 0);
+				).0.unwrap();
+				assert!(result.is_success());
 				let expected = hash_fn(input.as_ref());
 				assert_eq!(&result.data[..*expected_size], &*expected);
 			}

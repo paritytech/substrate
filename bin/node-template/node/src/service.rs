@@ -12,7 +12,6 @@ use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_finality_grandpa::{
 	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
 };
-use sp_consensus::import_queue::DefaultQueue;
 
 // Our native executor instance.
 native_executor_instance!(
@@ -31,10 +30,11 @@ type GrandpaLink = sc_finality_grandpa::LinkHalf<Block, FullClient, SelectChain>
 type FullPool = sc_transaction_pool::BasicPool<
 	sc_transaction_pool::FullChainApi<FullClient, Block>, Block
 >;
+type ImportQueue = sc_consensus_aura::AuraImportQueue<Block, sp_api::TransactionFor<FullClient, Block>>;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, FullClient, DefaultQueue<Block>, FullPool, (), FullBackend,
+		Block, FullClient, ImportQueue, FullPool, (), FullBackend,
 	>,
 	SelectChain, sp_inherents::InherentDataProviders, GrandpaBlockImport, GrandpaLink
 ), ServiceError> {

@@ -12,20 +12,22 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-client-api = { version = "2.0.0-rc4", path = "../../client/api" }
-sc-light = { version = "2.0.0-rc4", path = "../../client/light" }
-sc-client-db = { version = "0.8.0-rc4", features = ["test-helpers"], path = "../../client/db" }
-sp-consensus = { version = "0.8.0-rc4", path = "../../primitives/consensus/common" }
-sc-executor = { version = "0.8.0-rc4", path = "../../client/executor" }
-sc-consensus = { version = "0.8.0-rc4", path = "../../client/consensus/common" }
-sc-service = { version = "0.8.0-rc4", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
+codec = { package = "parity-scale-codec", version = "1.3.1" }
 futures = "0.3.4"
 futures01 = { package = "futures", version = "0.1.29" }
 hash-db = "0.15.2"
 hex = "0.4"
-sp-keyring = { version = "2.0.0-rc4", path = "../../primitives/keyring" }
-codec = { package = "parity-scale-codec", version = "1.3.1" }
-sp-core = { version = "2.0.0-rc4", path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
+serde = "1.0.55"
+serde_json = "1.0.55"
+sc-client-api = { version = "2.0.0-rc4", path = "../../client/api" }
+sc-client-db = { version = "0.8.0-rc4", features = ["test-helpers"], path = "../../client/db" }
+sc-consensus = { version = "0.8.0-rc4", path = "../../client/consensus/common" }
+sc-executor = { version = "0.8.0-rc4", path = "../../client/executor" }
+sc-light = { version = "2.0.0-rc4", path = "../../client/light" }
+sc-service = { version = "0.8.0-rc4", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
 sp-blockchain = { version = "2.0.0-rc4", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.8.0-rc4", path = "../../primitives/consensus/common" }
+sp-core = { version = "2.0.0-rc4", path = "../../primitives/core" }
+sp-keyring = { version = "2.0.0-rc4", path = "../../primitives/keyring" }
+sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.8.0-rc4", path = "../../primitives/state-machine" }

@@ -43,8 +43,6 @@ pub use basic_queue::BasicQueue;
 mod basic_queue;
 pub mod buffered_link;
 
-pub type DefaultQueue<Block> = BasicQueue<Block, sp_trie::PrefixedMemoryDB<BlakeTwo256>>;
-
 /// Shared block import struct used by the queue.
 pub type BoxBlockImport<B, Transaction> = Box<
 	dyn BlockImport<B, Error = ConsensusError, Transaction = Transaction> + Send + Sync

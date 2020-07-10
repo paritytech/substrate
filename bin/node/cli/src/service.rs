@@ -38,11 +38,10 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
-use sp_consensus::import_queue::DefaultQueue;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, FullClient, DefaultQueue<Block>, FullPool, node_rpc::IoHandler, FullBackend
+		Block, FullClient, ImportQueue, FullPool, node_rpc::IoHandler, FullBackend
 	>,
 	(BabeBlockImport, GrandpaLink, BabeLink),
 	grandpa::SharedVoterState,
@@ -158,6 +157,7 @@ type GrandpaLink = grandpa::LinkHalf<Block, FullClient, SelectChain>;
 type BabeLink = sc_consensus_babe::BabeLink<Block>;
 type BabeBlockImport = sc_consensus_babe::BabeBlockImport<Block, FullClient, GrandpaBlockImport>;
 type FullPool = sc_transaction_pool::BasicPool<sc_transaction_pool::FullChainApi<FullClient, Block>, Block>;
+type ImportQueue = sc_consensus_babe::BabeImportQueue<Block, sp_api::TransactionFor<FullClient, Block>>;
 
 /// Creates a full service from the configuration.
 pub fn new_full_base(

@@ -402,7 +402,8 @@ impl<Block> AuxStore for LightStorage<Block>
 		for k in delete {
 			transaction.remove(columns::AUX, k);
 		}
-		self.db.commit(transaction);
+		self.db.commit(transaction)?;
+
 		Ok(())
 	}
 
@@ -495,7 +496,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
 
-			self.db.commit(transaction);
+			self.db.commit(transaction)?;
 			cache.commit(cache_ops)
 				.expect("only fails if cache with given name isn't loaded yet;\
 						cache is already loaded because there are cache_ops; qed");
@@ -513,8 +514,9 @@ impl<Block> Storage<Block> for LightStorage<Block>
 
 			let mut transaction = Transaction::new();
 			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
-			self.db.commit(transaction);
+			self.db.commit(transaction)?;
 			self.update_meta(hash, header.number().clone(), true, false);
+
 			Ok(())
 		} else {
 			Err(ClientError::UnknownBlock(format!("Cannot set head {:?}", id)))
@@ -552,7 +554,7 @@ impl<Block> Storage<Block> for LightStorage<Block>
 					)?
 					.into_ops();
 
-				self.db.commit(transaction);
+				self.db.commit(transaction)?;
 				cache.commit(cache_ops)
 					.expect("only fails if cache with given name isn't loaded yet;\
 							cache is already loaded because there are cache_ops; qed");
