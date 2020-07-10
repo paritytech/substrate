@@ -20,23 +20,19 @@ native_executor_instance!(
 	node_template_runtime::native_version,
 );
 
-type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
-type FullBackend = sc_service::TFullBackend<Block>;
-type GrandpaBlockImport = sc_finality_grandpa::GrandpaBlockImport<
-	FullBackend, Block, FullClient, SelectChain
->;
-type SelectChain = sc_consensus::LongestChain<FullBackend, Block>;
-type GrandpaLink = sc_finality_grandpa::LinkHalf<Block, FullClient, SelectChain>;
-type FullPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<FullClient, Block>, Block
->;
-type ImportQueue = sc_consensus_aura::AuraImportQueue<Block, sp_api::TransactionFor<FullClient, Block>>;
+mod prelude {
+	use super::*;
+	sc_prelude::prelude!(Block, RuntimeApi, Executor);
+}
+
+use prelude::*;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, FullClient, ImportQueue, FullPool, (), FullBackend,
+		Block, FullClient, FullAuraImportQueue, FullBasicPool, (), FullBackend,
 	>,
-	SelectChain, sp_inherents::InherentDataProviders, GrandpaBlockImport, GrandpaLink
+	FullLongestChain, sp_inherents::InherentDataProviders, FullGrandpaBlockImport<FullLongestChain>,
+	FullGrandpaLink<FullLongestChain>
 ), ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 

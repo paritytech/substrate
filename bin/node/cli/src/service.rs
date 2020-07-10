@@ -41,11 +41,11 @@ use sp_core::traits::BareCryptoStorePtr;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, FullClient, ImportQueue, FullPool, node_rpc::IoHandler, FullBackend
+		Block, FullClient, FullBabeImportQueue, FullBasicPool, node_rpc::IoHandler, FullBackend
 	>,
-	(BabeBlockImport, GrandpaLink, BabeLink),
+	(FullBabeBlockImport<FullGrandpaBlockImport<FullLongestChain>>, FullGrandpaLink<FullLongestChain>, BabeLink),
 	grandpa::SharedVoterState,
-	sc_consensus::LongestChain<FullBackend, Block>,
+	FullLongestChain,
 	InherentDataProviders
 ), ServiceError> {
 	use node_executor::Executor;
@@ -149,23 +149,20 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	Ok((params, import_setup, rpc_setup, select_chain, inherent_data_providers))
 }
 
-type FullClient = sc_service::TFullClient<Block, RuntimeApi, node_executor::Executor>;
-type FullBackend = sc_service::TFullBackend<Block>;
-type GrandpaBlockImport = grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, SelectChain>;
-type SelectChain = sc_consensus::LongestChain<FullBackend, Block>;
-type GrandpaLink = grandpa::LinkHalf<Block, FullClient, SelectChain>;
-type BabeLink = sc_consensus_babe::BabeLink<Block>;
-type BabeBlockImport = sc_consensus_babe::BabeBlockImport<Block, FullClient, GrandpaBlockImport>;
-type FullPool = sc_transaction_pool::BasicPool<sc_transaction_pool::FullChainApi<FullClient, Block>, Block>;
-type ImportQueue = sc_consensus_babe::BabeImportQueue<Block, sp_api::TransactionFor<FullClient, Block>>;
+mod prelude {
+	use super::*;
+	sc_prelude::prelude!(Block, RuntimeApi, node_executor::Executor);
+}
+
+use prelude::*;
 
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	config: Configuration,
-	with_startup_data: impl FnOnce(&BabeBlockImport, &BabeLink)
+	with_startup_data: impl FnOnce(&FullBabeBlockImport<FullGrandpaBlockImport<FullLongestChain>>, &BabeLink)
 ) -> Result<(
 	TaskManager, InherentDataProviders, Arc<FullClient>,
-	Arc<NetworkService<Block, <Block as BlockT>::Hash>>, Arc<FullPool>
+	Arc<NetworkService<Block, <Block as BlockT>::Hash>>, Arc<FullBasicPool>
 ), ServiceError> {
 	let (params, import_setup, rpc_setup, select_chain, inherent_data_providers)
 		= new_full_params(config)?;

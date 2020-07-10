@@ -3535,6 +3535,7 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-offchain",
+ "sc-prelude",
  "sc-rpc",
  "sc-service",
  "sc-service-test",
@@ -3754,6 +3755,7 @@ dependencies = [
  "sc-executor",
  "sc-finality-grandpa",
  "sc-network",
+ "sc-prelude",
  "sc-service",
  "sc-transaction-pool",
  "sp-api",
@@ -6796,6 +6798,18 @@ dependencies = [
  "serde_json",
  "sp-utils",
  "wasm-timer",
+]
+
+[[package]]
+name = "sc-prelude"
+version = "0.8.0-rc4"
+dependencies = [
+ "sc-consensus",
+ "sc-consensus-aura",
+ "sc-consensus-babe",
+ "sc-finality-grandpa",
+ "sc-service",
+ "sc-transaction-pool",
 ]
 
 [[package]]
