@@ -262,6 +262,12 @@ impl DiscoveryBehaviour {
 			for (protocol_id, kademlia) in self.kademlias.iter_mut() {
 				// TODO: Look into way around generating the protocol name each time.
 				if protocols.iter().any(|p| p.as_bytes() == protocol_name_from_protocol_id(protocol_id).as_slice()) {
+					log::trace!(
+						target: "sub-libp2p",
+						"Adding self-reported address {} from {} to Kademlia DHT {}.",
+						// TODO: Maybe rework string conversion here.
+						addr, peer_id, String::from_utf8_lossy(protocol_id.as_bytes()),
+					);
 					kademlia.add_address(peer_id, addr.clone());
 					added = true;
 				}
