@@ -176,7 +176,7 @@ decl_module! {
 		///    - Writes: Indices Accounts, System Account (recipient)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(2, 2) + 35 * WEIGHT_PER_MICROS]
-		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
+		fn transfer(origin, new: <T::Lookup as StaticLookup>::Source, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
@@ -247,7 +247,7 @@ decl_module! {
 		///    - Writes: Indices Accounts, System Account (original owner)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(2, 2) + 25 * WEIGHT_PER_MICROS]
-		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex, freeze: bool) {
+		fn force_transfer(origin, new: <T::Lookup as StaticLookup>::Source, index: T::AccountIndex, freeze: bool) {
 			ensure_root(origin)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {

@@ -204,7 +204,7 @@ decl_module! {
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
 		#[weight = 50_000_000]
-		pub fn change_key(origin, new: T::AccountId) {
+		pub fn change_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			let remove = ensure_signed(origin)?;
 
 			if remove != new {
