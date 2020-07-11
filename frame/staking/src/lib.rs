@@ -1967,7 +1967,7 @@ decl_module! {
 			// if slashing spans is non-zero, add 1 more write
 			.saturating_add(T::DbWeight::get().writes(Weight::from(*num_slashing_spans > 0)))
 		]
-		fn force_unstake(origin, stash: T::AccountId, num_slashing_spans: u32) {
+		fn force_unstake(origin, stash: <T::Lookup as StaticLookup>::Source, num_slashing_spans: u32) {
 			ensure_root(origin)?;
 
 			// remove all staking-related information.
