@@ -600,7 +600,7 @@ decl_module! {
 		/// Total Complexity: O(V + X)
 		/// # </weight>
 		#[weight = 30_000_000]
-		fn close_recovery(origin, rescuer: T::AccountId) {
+		fn close_recovery(origin, rescuer: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
 			// Take the active recovery process started by the rescuer for this account.
 			let active_recovery = <ActiveRecoveries<T>>::take(&who, &rescuer).ok_or(Error::<T>::NotStarted)?;
