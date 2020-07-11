@@ -1004,7 +1004,7 @@ decl_module! {
 		]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
-			new: T::AccountId,
+			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
