@@ -226,7 +226,7 @@ decl_module! {
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn create_swap(
 			origin,
-			target: T::AccountId,
+			target: <T::Lookup as StaticLookup>::Source,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
 			duration: T::BlockNumber,
@@ -300,7 +300,7 @@ decl_module! {
 		#[weight = T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000)]
 		fn cancel_swap(
 			origin,
-			target: T::AccountId,
+			target: <T::Lookup as StaticLookup>::Source,
 			hashed_proof: HashedProof,
 		) {
 			let source = ensure_signed(origin)?;
