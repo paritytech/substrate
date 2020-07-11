@@ -1025,7 +1025,7 @@ decl_module! {
 		#[weight = weight_for::delegate::<T>(T::MaxVotes::get().into())]
 		pub fn delegate(
 			origin,
-			to: T::AccountId,
+			to: <T::Lookup as StaticLookup>::Source,
 			conviction: Conviction,
 			balance: BalanceOf<T>
 		) -> DispatchResultWithPostInfo {
