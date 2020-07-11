@@ -561,7 +561,7 @@ decl_module! {
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
 		#[weight = 0]
-		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
+		fn claim_surcharge(origin, dest: <T::Lookup as StaticLookup>::Source, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
 				(Ok(frame_system::RawOrigin::Signed(account)), None) => {
