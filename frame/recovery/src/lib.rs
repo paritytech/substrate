@@ -375,7 +375,7 @@ decl_module! {
 		/// - One event
 		/// # </weight>
 		#[weight = 0]
-		fn set_recovered(origin, lost: T::AccountId, rescuer: T::AccountId) {
+		fn set_recovered(origin, lost: <T::Lookup as StaticLookup>::Source, rescuer: T::AccountId) {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
 			<Proxy<T>>::insert(&rescuer, &lost);
@@ -516,7 +516,7 @@ decl_module! {
 		/// Total Complexity: O(F + logF + V + logV)
 		/// # </weight>
 		#[weight = 100_000_000]
-		fn vouch_recovery(origin, lost: T::AccountId, rescuer: T::AccountId) {
+		fn vouch_recovery(origin, lost: <T::Lookup as StaticLookup>::Source, rescuer: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account.
 			let recovery_config = Self::recovery_config(&lost).ok_or(Error::<T>::NotRecoverable)?;
