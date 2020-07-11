@@ -156,7 +156,7 @@ decl_module! {
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
 		#[weight = 50_000_000]
-		pub fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
+		pub fn swap_member(origin, remove: <T::Lookup as StaticLookup>::Source, add: T::AccountId) {
 			T::SwapOrigin::ensure_origin(origin)?;
 
 			if remove == add { return Ok(()) }
