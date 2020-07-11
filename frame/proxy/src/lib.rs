@@ -378,7 +378,7 @@ decl_module! {
 			.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
 		fn kill_anonymous(origin,
-			spawner: T::AccountId,
+			spawner: <T::Lookup as StaticLookup>::Source,
 			proxy_type: T::ProxyType,
 			index: u16,
 			#[compact] height: T::BlockNumber,
