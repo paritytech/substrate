@@ -443,7 +443,7 @@ decl_module! {
 		/// - DbWrites: `Tips`, `who account data`
 		/// # </weight>
 		#[weight = 140_000_000 + 4_000 * reason.len() as Weight + T::DbWeight::get().reads_writes(3, 2)]
-		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
+		fn report_awesome(origin, reason: Vec<u8>, who: <T::Lookup as StaticLookup>::Source) {
 			let finder = ensure_signed(origin)?;
 
 			const MAX_SENSIBLE_REASON_LENGTH: usize = 16384;
@@ -531,7 +531,7 @@ decl_module! {
 			+ 4_000 * reason.len() as Weight
 			+ 480_000 * T::Tippers::max_len() as Weight
 			+ T::DbWeight::get().reads_writes(2, 2)]
-		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
+		fn tip_new(origin, reason: Vec<u8>, who: <T::Lookup as StaticLookup>::Source, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
