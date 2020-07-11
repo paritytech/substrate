@@ -80,13 +80,13 @@ pub(crate) fn register_message_waker(message_id: MessageId, waker: Waker) {
     if let Some(pos) = state
         .message_ids
         .iter()
-        .position(|msg| *msg == From::from(message_id))
+        .position(|msg| *msg == message_id)
     {
         state.wakers[pos] = waker;
         return;
     }
 
-    state.message_ids.push(From::from(message_id));
+    state.message_ids.push(message_id);
     state.wakers.push(waker);
 }
 
@@ -170,7 +170,7 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
                 Poll::Ready(value) => return value,
                 // If the waker has been used during the polling of this future,
                 // then we have to poll again.
-                Poll::Pending if mem::replace(&mut *woken_up.0.borrow_mut(), false) => {},
+                Poll::Pending if mem::replace(&mut *woken_up.0.borrow_mut(), false) => continue,
                 // Otherwise, we need to wait for an external notification for
                 // this future to make progress.
                 Poll::Pending => break,
