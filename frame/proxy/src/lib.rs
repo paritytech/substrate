@@ -190,7 +190,7 @@ decl_module! {
 			di.class)
 		}]
 		fn proxy(origin,
-			real: T::AccountId,
+			real: <T::Lookup as StaticLookup>::Source,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Trait>::Call>
 		) {
