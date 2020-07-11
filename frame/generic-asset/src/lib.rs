@@ -359,7 +359,7 @@ decl_module! {
 
 		/// Transfer some liquid free balance to another account.
 		#[weight = 0]
-		pub fn transfer(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, #[compact] amount: T::Balance) {
+		pub fn transfer(origin, #[compact] asset_id: T::AssetId, to: <T::Lookup as StaticLookup>::Source, #[compact] amount: T::Balance) {
 			let origin = ensure_signed(origin)?;
 			ensure!(!amount.is_zero(), Error::<T>::ZeroAmount);
 			Self::make_transfer_with_event(&asset_id, &origin, &to, amount)?;
@@ -392,7 +392,7 @@ decl_module! {
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
 		#[weight = 0]
-		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
+		fn mint(origin, #[compact] asset_id: T::AssetId, to: <T::Lookup as StaticLookup>::Source, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::mint_free(&asset_id, &who, &to, &amount)?;
 			Self::deposit_event(RawEvent::Minted(asset_id, to, amount));
@@ -402,7 +402,7 @@ decl_module! {
 		/// Burns an asset, decreases its total issuance.
 		/// The `origin` must have `burn` permissions.
 		#[weight = 0]
-		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
+		fn burn(origin, #[compact] asset_id: T::AssetId, to: <T::Lookup as StaticLookup>::Source, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::burn_free(&asset_id, &who, &to, &amount)?;
 			Self::deposit_event(RawEvent::Burned(asset_id, to, amount));
