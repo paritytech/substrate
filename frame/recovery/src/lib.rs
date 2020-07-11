@@ -350,7 +350,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
 		fn as_recovered(origin,
-			account: T::AccountId,
+			account: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Trait>::Call>
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
