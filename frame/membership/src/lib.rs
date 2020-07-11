@@ -119,7 +119,7 @@ decl_module! {
 		///
 		/// May only be called from `T::AddOrigin`.
 		#[weight = 50_000_000]
-		pub fn add_member(origin, who: T::AccountId) {
+		pub fn add_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			T::AddOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
@@ -136,7 +136,7 @@ decl_module! {
 		///
 		/// May only be called from `T::RemoveOrigin`.
 		#[weight = 50_000_000]
-		pub fn remove_member(origin, who: T::AccountId) {
+		pub fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
 			let mut members = <Members<T, I>>::get();
@@ -234,7 +234,7 @@ decl_module! {
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[weight = 50_000_000]
-		pub fn set_prime(origin, who: T::AccountId) {
+		pub fn set_prime(origin, who: <T::Lookup as StaticLookup>::Source) {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			Self::members().binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			Prime::<T, I>::put(&who);

@@ -642,7 +642,7 @@ decl_module! {
 		/// Total Complexity: O(M + B + C + logM + logB + X)
 		/// # </weight>
 		#[weight = T::MaximumBlockWeight::get() / 10]
-		pub fn vouch(origin, who: T::AccountId, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
+		pub fn vouch(origin, who: <T::Lookup as StaticLookup>::Source, value: BalanceOf<T, I>, tip: BalanceOf<T, I>) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
 			// Check user is not suspended.
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -895,7 +895,7 @@ decl_module! {
 		/// Total Complexity: O(M + logM + B)
 		/// # </weight>
 		#[weight = T::MaximumBlockWeight::get() / 10]
-		fn judge_suspended_member(origin, who: T::AccountId, forgive: bool) {
+		fn judge_suspended_member(origin, who: <T::Lookup as StaticLookup>::Source, forgive: bool) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
 
@@ -966,7 +966,7 @@ decl_module! {
 		/// Total Complexity: O(M + logM + B + X)
 		/// # </weight>
 		#[weight = T::MaximumBlockWeight::get() / 10]
-		fn judge_suspended_candidate(origin, who: T::AccountId, judgement: Judgement) {
+		fn judge_suspended_candidate(origin, who: <T::Lookup as StaticLookup>::Source, judgement: Judgement) {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
