@@ -665,7 +665,7 @@ decl_module! {
 		/// - One event.
 		/// # </weight>
 		#[weight = weight_for::add_registrar::<T>(T::MaxRegistrars::get().into()) ]
-		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
+		fn add_registrar(origin, account: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::ensure_origin(origin)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(

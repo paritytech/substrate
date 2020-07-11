@@ -470,7 +470,7 @@ decl_module! {
 		/// Total Complexity: O(F + X)
 		/// # </weight>
 		#[weight = 100_000_000]
-		fn initiate_recovery(origin, account: T::AccountId) {
+		fn initiate_recovery(origin, account: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
 			// Check that the account is recoverable
 			ensure!(<Recoverable<T>>::contains_key(&account), Error::<T>::NotRecoverable);
@@ -555,7 +555,7 @@ decl_module! {
 		/// Total Complexity: O(F + V)
 		/// # </weight>
 		#[weight = 100_000_000]
-		fn claim_recovery(origin, account: T::AccountId) {
+		fn claim_recovery(origin, account: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
 			// Get the recovery configuration for the lost account
 			let recovery_config = Self::recovery_config(&account).ok_or(Error::<T>::NotRecoverable)?;
@@ -657,7 +657,7 @@ decl_module! {
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
 		#[weight = 0]
-		fn cancel_recovered(origin, account: T::AccountId) {
+		fn cancel_recovered(origin, account: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
