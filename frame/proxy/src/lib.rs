@@ -232,7 +232,7 @@ decl_module! {
 			.saturating_add(18 * WEIGHT_PER_MICROS)
 			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
-		fn add_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
+		fn add_proxy(origin, proxy: <T::Lookup as StaticLookup>::Source, proxy_type: T::ProxyType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
 				ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
@@ -268,7 +268,7 @@ decl_module! {
 			.saturating_add(14 * WEIGHT_PER_MICROS)
 			.saturating_add((160 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
-		fn remove_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
+		fn remove_proxy(origin, proxy: <T::Lookup as StaticLookup>::Source, proxy_type: T::ProxyType) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate_exists(&who, |x| {
 				let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
