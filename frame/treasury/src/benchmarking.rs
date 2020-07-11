@@ -360,6 +360,10 @@ benchmarks! {
 		let curator = T::Lookup::lookup(curator_lookup)?;
 	}: _(RawOrigin::Signed(curator), bounty_id)
 
+	update_bounty_value_minimum {
+
+	}: _(RawOrigin::Root, 100.into())
+
 	on_initialize {
 		let p in 0 .. 100;
 		let q in 0 .. 100;
@@ -396,6 +400,7 @@ mod tests {
 			assert_ok!(test_benchmark_claim_bounty::<Test>());
 			assert_ok!(test_benchmark_cancel_bounty::<Test>());
 			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
+			assert_ok!(test_benchmark_update_bounty_value_minimum::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}

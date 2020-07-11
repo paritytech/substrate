@@ -127,7 +127,7 @@ use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
 	ReservableCurrency, WithdrawReason
 };
-use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, DispatchResult, DispatchError, traits::{
+use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, DispatchResult, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
 use frame_support::weights::{Weight, DispatchClass};
@@ -297,8 +297,8 @@ pub struct Bounty<AccountId, Balance, BlockNumber> {
 	bond: Balance,
 	/// The status of this bounty.
 	status: BountyStatus<AccountId, BlockNumber>,
-	/// Number of levels from top level bounty. 0 means this is top level bounty.
-	depth: u8,
+	/// The parent bounty id. None if this is top level bounty.
+	parent: Option<BountyIndex>,
 }
 
 /// The status of a bounty proposal.
@@ -1184,6 +1184,17 @@ impl<T: Trait> Module<T> {
 			.saturating_sub(T::Currency::minimum_balance())
 	}
 
+	fn check_bounty_depth(parent_bounty_id: Option<BountyIndex>, depth: u8) -> bool {
+		if let Some(id) = parent_bounty_id {
+			if depth == 0 {
+				return false
+			}
+			Self::check_bounty_depth(Self::bounties(id).and_then(|b| b.parent), depth - 1)
+		} else {
+			true
+		}
+	}
+
 	fn create_bounty(
 		proposer: T::AccountId,
 		curator: T::AccountId,
@@ -1198,17 +1209,20 @@ impl<T: Trait> Module<T> {
 
 		let index = Self::bounty_count();
 
-		let (bond, status, depth) = if let Some(parent_bounty_id) = parent_bounty_id {
+		let (bond, status, is_sub) = if let Some(parent_bounty_id) = parent_bounty_id {
 			// this is a sub bounty
-			let depth = Bounties::<T>::try_mutate_exists(
+			Bounties::<T>::try_mutate_exists(
 				parent_bounty_id,
-				|bounty| -> sp_std::result::Result<u8, DispatchError> {
+				|bounty| -> DispatchResult {
 					let parent = bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 					ensure!(parent.status.is_active(), Error::<T>::UnexpectedStatus);
 					ensure!(proposer == parent.curator, Error::<T>::RequireCurator);
 					ensure!(fee < parent.fee, Error::<T>::InvalidFee);
 					ensure!(value < parent.value, Error::<T>::InvalidValue);
-					ensure!(parent.depth < T::MaximumSubBountyDepth::get(), Error::<T>::ExceedDepthLimit);
+					ensure!(
+						Self::check_bounty_depth(Some(parent_bounty_id), T::MaximumSubBountyDepth::get()),
+						Error::<T>::ExceedDepthLimit
+					);
 
 					let bounty_acc = Self::bounty_account_id(index);
 					let parent_acc = Self::bounty_account_id(parent_bounty_id);
@@ -1220,12 +1234,13 @@ impl<T: Trait> Module<T> {
 					parent.fee -= fee;
 					parent.value -= value;
 
-					Ok(parent.depth + 1)
-				})?;
+					Ok(())
+				}
+			)?;
 
 			// we trust bounty duration is configured with a sane value
 			let expires = system::Module::<T>::block_number() + T::BountyDuration::get();
-			(0.into(), BountyStatus::Active { expires }, depth)
+			(0.into(), BountyStatus::Active { expires }, true)
 		} else {
 			// reserve deposit for new bounty
 			let bond = T::BountyDepositBase::get()
@@ -1233,20 +1248,20 @@ impl<T: Trait> Module<T> {
 			T::Currency::reserve(&proposer, bond)
 				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
-			(bond, BountyStatus::Proposed, 0u8)
+			(bond, BountyStatus::Proposed, false)
 		};
 
 		BountyCount::put(index + 1);
 
 		let bounty = Bounty {
-			proposer, curator, value, fee, bond, status, depth,
+			proposer, curator, value, fee, bond, status, parent: parent_bounty_id,
 		};
 
 		Bounties::<T>::insert(index, &bounty);
 		BountyDescriptions::insert(index, description);
 
 		Self::deposit_event(RawEvent::BountyProposed(index));
-		if depth != 0 {
+		if is_sub {
 			Self::deposit_event(RawEvent::BountyBecameActive(index));
 		}
 

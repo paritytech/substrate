@@ -579,7 +579,7 @@ parameter_types! {
 	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 	pub const BountyDuration: BlockNumber = 14 * DAYS;
 	pub const MaximumReasonLength: u32 = 16384;
-	pub const MaximumSubBountyDepth: u8 = 1;
+	pub const MaximumSubBountyDepth: u8 = 2;
 }
 
 impl pallet_treasury::Trait for Runtime {
