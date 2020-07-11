@@ -1195,7 +1195,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 43_000_000 + 330_000 * Weight::from(T::MaxVotes::get())
 			+ T::DbWeight::get().reads_writes(3, 3)]
-		fn unlock(origin, target: T::AccountId) {
+		fn unlock(origin, target: <T::Lookup as StaticLookup>::Source) {
 			ensure_signed(origin)?;
 			Self::update_lock(&target);
 		}
@@ -1259,7 +1259,7 @@ decl_module! {
 		/// - Base Weight: 19.15 + .372 * R
 		/// # </weight>
 		#[weight = 19_000_000 + 370_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
-		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
+		fn remove_other_vote(origin, target: <T::Lookup as StaticLookup>::Source, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, scope)?;
