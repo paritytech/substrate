@@ -134,7 +134,7 @@ pub trait Storage {
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns the SCALE encoded hash.
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
 		self.storage_root()
 	}
@@ -144,7 +144,7 @@ pub trait Storage {
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns an `Some(_)` which holds the SCALE encoded hash or `None` when
+	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
 		self.storage_changes_root(parent_hash)
@@ -306,7 +306,7 @@ pub trait DefaultChildStorage {
 	/// "Commit" all existing operations and compute the resulting child storage root.
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns the SCALE encoded hash.
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(
 		&mut self,
 		storage_key: &[u8],
@@ -379,7 +379,8 @@ pub trait Misc {
 
 	/// Extract the runtime version of the given wasm blob by calling `Core_version`.
 	///
-	/// Returns the SCALE encoded runtime version and `None` if the call failed.
+	/// Returns `None` if calling the function failed for any reason or `Some(Vec<u8>)` where
+	/// the `Vec<u8>` holds the SCALE encoded runtime version.
 	///
 	/// # Performance
 	///
