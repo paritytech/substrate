@@ -826,7 +826,7 @@ decl_module! {
 		/// Total Complexity: O(1)
 		/// # </weight>
 		#[weight = T::MaximumBlockWeight::get() / 10]
-		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
+		fn found(origin, founder: <T::Lookup as StaticLookup>::Source, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
