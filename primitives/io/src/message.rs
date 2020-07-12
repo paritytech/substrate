@@ -177,13 +177,12 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
         while let Some((message_id, index_in_list)) = next_notification(&mut state.message_ids, block) {
             block = false;
 
-            let _was_in = state.message_ids.remove(index_in_list as usize);
-
-            let waker = state.wakers.remove(index_in_list as usize);
+            state.message_ids.remove(index_in_list);
+            let waker = state.wakers.remove(index_in_list);
             waker.wake();
 
-            let _was_not_in = state.pending_messages.insert(message_id);
-            debug_assert!(_was_not_in);
+            let _new_msg_id = state.pending_messages.insert(message_id);
+            debug_assert!(_new_msg_id);
         }
 
         debug_assert!(!block);
@@ -223,7 +222,8 @@ struct BlockOnState {
     pending_messages: BTreeSet<MessageId>,
 }
 
-/// Future that drives `message_response` to completion.
+/// Future that's resolved whenever the `PollableId` is signalled as ready by
+/// the Substrate host.
 #[must_use = "futures do nothing unless polled"]
 pub struct HostFuture {
     msg_id: MessageId,
