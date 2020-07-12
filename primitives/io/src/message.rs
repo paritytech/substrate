@@ -19,7 +19,7 @@ macro_rules! pin_mut {
 }
 
 use sp_core::offchain::{PollableId, PollableKind};
-use sp_std::{rc::Rc, collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{rc::Rc, collections::btree_set::BTreeSet, vec::Vec};
 use sp_std::cell::RefCell;
 
 use core::future::Future;
@@ -30,9 +30,6 @@ use core::{task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable}};
 use spin::Mutex;
 
 pub(crate) type MessageId = PollableId;
-
-// TODO: Decode actual events
-pub(crate) struct Message(Vec<u8>);
 
 fn epoll_peek(interest_list: &[MessageId]) -> Option<MessageId> {
     let deadline = super::offchain::timestamp();
@@ -47,15 +44,7 @@ fn epoll_wait(interest_list: &[MessageId]) -> MessageId {
         )
 }
 
-fn decode(id: MessageId) -> Message {
-    // TODO: Handle FFI boundary and output bytes
-    match id.kind() {
-        PollableKind::Timer => Message(Vec::new()),
-        PollableKind::Http | _ => unimplemented!(),
-    }
-}
-
-pub(crate) fn next_notification(interest_list: &[MessageId], block: bool) -> Option<(Message, MessageId, usize)> {
+pub(crate) fn next_notification(interest_list: &[MessageId], block: bool) -> Option<(MessageId, usize)> {
     let id = if !block {
         epoll_peek(interest_list)
     } else {
@@ -65,7 +54,7 @@ pub(crate) fn next_notification(interest_list: &[MessageId], block: bool) -> Opt
     let pos = interest_list.iter().position(|&x| x == id)
         .expect("pollable API should only return an ID from the interest list; qed");
 
-    Some((decode(id), id, pos))
+    Some((id, pos))
 }
 
 /// Registers a message ID and a waker. The `block_on` function will
@@ -185,7 +174,7 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
         let mut block = true;
 
         // We process in a loop all pending messages.
-        while let Some((msg, message_id, index_in_list)) = next_notification(&mut state.message_ids, block) {
+        while let Some((message_id, index_in_list)) = next_notification(&mut state.message_ids, block) {
             block = false;
 
             let _was_in = state.message_ids.remove(index_in_list as usize);
@@ -193,8 +182,8 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
             let waker = state.wakers.remove(index_in_list as usize);
             waker.wake();
 
-            let _was_in = state.pending_messages.insert(message_id, msg);
-            debug_assert!(_was_in.is_none());
+            let _was_not_in = state.pending_messages.insert(message_id);
+            debug_assert!(_was_not_in);
         }
 
         debug_assert!(!block);
@@ -208,7 +197,7 @@ lazy_static::lazy_static! {
         Mutex::new(BlockOnState {
             message_ids: Vec::new(),
             wakers: Vec::new(),
-            pending_messages: BTreeMap::new(),
+            pending_messages: BTreeSet::new(),
         })
     };
 }
@@ -231,24 +220,33 @@ struct BlockOnState {
     /// > **Note**: We have to maintain this queue as a global variable rather than a per-future
     /// >           channel, otherwise dropping a `Future` would silently drop messages that have
     /// >           already been received.
-    pending_messages: BTreeMap<MessageId, Message>,
+    pending_messages: BTreeSet<MessageId>,
 }
 
 /// Future that drives `message_response` to completion.
 #[must_use = "futures do nothing unless polled"]
-pub(crate) struct MessageResponseFuture {
+pub struct HostFuture {
     msg_id: MessageId,
     finished: bool,
 }
 
-impl Future for MessageResponseFuture {
-    type Output = Message;
+impl HostFuture {
+    pub fn from_pollable(id: impl Into<PollableId>) -> Self {
+        Self {
+            msg_id: id.into(),
+            finished: false,
+        }
+    }
+}
+
+impl Future for HostFuture {
+    type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         assert!(!self.finished);
-        if let Some(response) = peek_response(self.msg_id) {
+        if peek_response(self.msg_id) {
             self.finished = true;
-            Poll::Ready(response)
+            Poll::Ready(())
         } else {
             register_message_waker(self.msg_id, cx.waker().clone());
             Poll::Pending
@@ -257,7 +255,7 @@ impl Future for MessageResponseFuture {
 }
 
 /// If a response to this message ID has previously been obtained, extracts it for processing.
-pub(crate) fn peek_response(msg_id: MessageId) -> Option<Message> {
+pub(crate) fn peek_response(msg_id: MessageId) -> bool {
     let mut state = (&*STATE).lock();
     state.pending_messages.remove(&msg_id)
 }
