@@ -201,7 +201,6 @@ pub trait Storage {
 /// from within the runtime.
 #[runtime_interface]
 pub trait DefaultChildStorage {
-
 	/// Get a default child storage value for a given key.
 	///
 	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
@@ -455,68 +454,63 @@ pub trait Crypto {
 
 	/// Verify `ed25519` signature.
 	///
-	/// Returns `true` when the verification is either successful or batched.
-	/// If no batching verification extension registered, this will return the result
-	/// of verification immediately. If batching verification extension is registered
-	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
-	/// signatures.
+	/// Returns `true` when the verification was successful.
 	fn ed25519_verify(
 		sig: &ed25519::Signature,
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
-		// `with_externalities`.
-		//
-		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
-		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
-		let evaluated = sp_externalities::with_externalities(|mut instance|
-			instance.extension::<VerificationExt>().map(
-				|extension| extension.push_ed25519(
-					sig.clone(),
-					pub_key.clone(),
-					msg.to_vec(),
-				)
-			)
-		);
+		ed25519::Pair::verify(sig, msg, pub_key)
+	}
 
-		match evaluated {
-			Some(Some(val)) => val,
-			_ => ed25519::Pair::verify(sig, msg, pub_key),
-		}
+	/// Register a `ed25519` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn ed25519_batch_verify(
+		&mut self,
+		sig: &ed25519::Signature,
+		msg: &[u8],
+		pub_key: &ed25519::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
 	/// Verify `sr25519` signature.
 	///
-	/// Returns `true` when the verification is either successful or batched.
-	/// If no batching verification extension registered, this will return the result
-	/// of verification immediately. If batching verification extension is registered,
-	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
+	/// Returns `true` when the verification was successful.
 	#[version(2)]
 	fn sr25519_verify(
 		sig: &sr25519::Signature,
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
-		// `with_externalities`.
-		//
-		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
-		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
-		let evaluated = sp_externalities::with_externalities(|mut instance|
-			instance.extension::<VerificationExt>().map(
-				|extension| extension.push_sr25519(
-					sig.clone(),
-					pub_key.clone(),
-					msg.to_vec(),
-				)
-			)
-		);
+		sr25519::Pair::verify(sig, msg, pub_key)
+	}
 
-		match evaluated {
-			Some(Some(val)) => val,
-			_ => sr25519::Pair::verify(sig, msg, pub_key),
-		}
+	/// Register a `sr25519` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn sr25519_batch_verify(
+		&mut self,
+		sig: &sr25519::Signature,
+		msg: &[u8],
+		pub_key: &sr25519::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
 	/// Start verification extension.
@@ -639,35 +633,32 @@ pub trait Crypto {
 
 	/// Verify `ecdsa` signature.
 	///
-	/// Returns `true` when the verification is either successful or batched.
-	/// If no batching verification extension registered, this will return the result
-	/// of verification immediately. If batching verification extension is registered
-	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
-	/// signatures.
+	/// Returns `true` when the verification was successful.
 	fn ecdsa_verify(
 		sig: &ecdsa::Signature,
 		msg: &[u8],
 		pub_key: &ecdsa::Public,
 	) -> bool {
-		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
-		// `with_externalities`.
-		//
-		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
-		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
-		let evaluated = sp_externalities::with_externalities(|mut instance|
-			instance.extension::<VerificationExt>().map(
-				|extension| extension.push_ecdsa(
-					sig.clone(),
-					pub_key.clone(),
-					msg.to_vec(),
-				)
-			)
-		);
+		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
 
-		match evaluated {
-			Some(Some(val)) => val,
-			_ => ecdsa::Pair::verify(sig, msg, pub_key),
-		}
+	/// Register a `ecdsa` signature for batch verification.
+	///
+	/// Batch verification must be enabled by calling [`start_batch_verify`].
+	/// If batch verification is not enabled, the signature will be verified immediatley.
+	/// To get the result of the batch verification, [`finish_batch_verify`]
+	/// needs to be called.
+	///
+	/// Returns `true` when the verification is either successful or batched.
+	fn ecdsa_batch_verify(
+		&mut self,
+		sig: &ecdsa::Signature,
+		msg: &[u8],
+		pub_key: &ecdsa::Public,
+	) -> bool {
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
@@ -1282,7 +1273,7 @@ mod tests {
 	}
 
 	#[test]
-	fn dynamic_extensions_work() {
+	fn batch_verify_start_finish_works() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
 			crypto::start_batch_verify();
@@ -1291,7 +1282,7 @@ mod tests {
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_some());
 
 		ext.execute_with(|| {
-			crypto::finish_batch_verify();
+			assert!(crypto::finish_batch_verify());
 		});
 
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
@@ -1306,11 +1297,11 @@ mod tests {
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
 				let signature = pair.sign(msg.as_bytes());
-				crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
+				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 
 			// push invlaid
-			crypto::sr25519_verify(
+			crypto::sr25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
@@ -1321,7 +1312,7 @@ mod tests {
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
 				let signature = pair.sign(msg.as_bytes());
-				crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
+				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 			assert!(crypto::finish_batch_verify());
 		});
@@ -1333,7 +1324,7 @@ mod tests {
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();
-			crypto::ed25519_verify(
+			crypto::ed25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
@@ -1346,12 +1337,12 @@ mod tests {
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Even more important message";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
 			assert!(crypto::finish_batch_verify());
 
@@ -1361,9 +1352,9 @@ mod tests {
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::ed25519_verify(
+			crypto::ed25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
@@ -1377,17 +1368,17 @@ mod tests {
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Ed25519 batching";
 			let signature = pair.sign(msg);
-			crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkel rules";
 			let signature = pair.sign(msg);
-			crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkel batches!";
 			let signature = pair.sign(msg);
-			crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
 			assert!(crypto::finish_batch_verify());
 
@@ -1397,9 +1388,9 @@ mod tests {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkcel!";
 			let signature = pair.sign(msg);
-			crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::sr25519_verify(
+			crypto::sr25519_batch_verify(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
