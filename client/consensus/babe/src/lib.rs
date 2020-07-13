@@ -550,7 +550,19 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
 		self.slot_notification_sinks.lock()
-			.retain_mut(|sink| sink.try_send((slot_number, epoch_descriptor.clone())).is_ok());
+			.retain_mut(|sink| {
+				match sink.try_send((slot_number, epoch_descriptor.clone())) {
+					Ok(()) => true,
+					Err(e) => {
+						if e.is_full() {
+							warn!(target: "babe", "Trying to notify a slot but the channel is full");
+							true
+						} else {
+							false
+						}
+					},
+				}
+			});
 	}
 
 	fn pre_digest_data(
