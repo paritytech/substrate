@@ -244,7 +244,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 
 		struct Adapter;
 
-		impl<'a> sandbox::SandboxCapabiliesHolder<'a> for Adapter {
+		impl sandbox::SandboxCapabiliesHolder for Adapter {
 			type SupervisorFuncRef = wasmi::FuncRef;
 			type SC = FunctionExecutor<'static>;
 

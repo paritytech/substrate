@@ -362,9 +362,7 @@ impl<FR> SandboxInstance<FR> {
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
-	pub fn invoke
-	//<FE: SandboxCapabilities<SupervisorFuncRef=FR>>
-	(
+	pub fn invoke(
 		&self,
 
 		// function to call that is exported from the module
@@ -379,53 +377,53 @@ impl<FR> SandboxInstance<FR> {
 		// arbitraty context data of the call
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
+		// SCH::with_sandbox_capabilities( |supervisor_externals| {
+		// 	with_guest_externals(
+		// 		supervisor_externals,
+		// 		self,
+		// 		state,
+		// 		|guest_externals| {
 
-		SCH::with_sandbox_capabilities( |supervisor_externals| {
-			with_guest_externals(
-				supervisor_externals,
-				self,
-				state,
-				|guest_externals| {
+		// 			let wasmi_result = self.wasmi_instance
+		// 				.invoke_export(export_name, args, guest_externals)?;
 
-					let wasmi_result = self.wasmi_instance
-						.invoke_export(export_name, args, guest_externals)?;
+		// 			let wasmtime_function = self
+		// 				.wasmtime_instance
+		// 				.get_func(export_name)
+		// 				.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
 
-					let wasmtime_function = self
-						.wasmtime_instance
-						.get_func(export_name)
-						.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
+		// 			let args: Vec<Val> = args
+		// 				.iter()
+		// 				.map(|v| match *v {
+		// 					RuntimeValue::I32(val) => Val::I32(val),
+		// 					RuntimeValue::I64(val) => Val::I64(val),
+		// 					RuntimeValue::F32(val) => Val::F32(val.into()),
+		// 					RuntimeValue::F64(val) => Val::F64(val.into()),
+		// 				})
+		// 				.collect();
 
-					let args: Vec<Val> = args
-						.iter()
-						.map(|v| match *v {
-							RuntimeValue::I32(val) => Val::I32(val),
-							RuntimeValue::I64(val) => Val::I64(val),
-							RuntimeValue::F32(val) => Val::F32(val.into()),
-							RuntimeValue::F64(val) => Val::F64(val.into()),
-						})
-						.collect();
+		// 			let wasmtime_result = wasmtime_function
+		// 				.call(&args)
+		// 				.map_err(|e| wasmi::Error::Function(e.to_string()))?;
 
-					let wasmtime_result = wasmtime_function
-						.call(&args)
-						.map_err(|e| wasmi::Error::Function(e.to_string()))?;
+		// 			assert_eq!(wasmtime_result.len(), 1, "multiple return types are not supported yet");
+		// 			if let Some(wasmi_value) = wasmi_result {
+		// 				let wasmtime_value = match *wasmtime_result.first().unwrap() {
+		// 					Val::I32(val) => RuntimeValue::I32(val),
+		// 					Val::I64(val) => RuntimeValue::I64(val),
+		// 					Val::F32(val) => RuntimeValue::F32(val.into()),
+		// 					Val::F64(val) => RuntimeValue::F64(val.into()),
+		// 					_ => unreachable!(),
+		// 				};
 
-					assert_eq!(wasmtime_result.len(), 1, "multiple return types are not supported yet");
-					if let Some(wasmi_value) = wasmi_result {
-						let wasmtime_value = match *wasmtime_result.first().unwrap() {
-							Val::I32(val) => RuntimeValue::I32(val),
-							Val::I64(val) => RuntimeValue::I64(val),
-							Val::F32(val) => RuntimeValue::F32(val.into()),
-							Val::F64(val) => RuntimeValue::F64(val.into()),
-							_ => unreachable!(),
-						};
+		// 				assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
+		// 			}
 
-						assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
-					}
-
-					Ok(wasmi_result)
-				},
-			)
-		})
+		// 			Ok(wasmi_result)
+		// 		},
+		// 	)
+		// })
+		todo!()
 	}
 
 	/// Get the value from a global with the given `name`.
@@ -552,9 +550,9 @@ impl<FR> UnregisteredInstance<FR> {
 	}
 }
 
-pub trait SandboxCapabiliesHolder<'a> {
+pub trait SandboxCapabiliesHolder {
 	type SupervisorFuncRef;
-	type SC: SandboxCapabilities<SupervisorFuncRef = Self::SupervisorFuncRef> + 'a;
+	type SC: SandboxCapabilities<SupervisorFuncRef = Self::SupervisorFuncRef>;
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R;
 }
@@ -573,10 +571,10 @@ pub fn instantiate<'a, FE, SCH>(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
 	state: u32,
-) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> 
+) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError>
 where
 	FE: SandboxCapabilities + 'a,
-	SCH: SandboxCapabiliesHolder<'a, SupervisorFuncRef = FE::SupervisorFuncRef, SC = FE>,
+	SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FE::SupervisorFuncRef, SC = FE>,
 {
 	let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
@@ -603,7 +601,7 @@ where
 
 						Ok(())
 					}
-					
+
 					// Err(wasmtime::Trap::new(format!(
 					// 	"Sandbox function stub",
 					// 	// func_ty.to_string(),
