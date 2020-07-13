@@ -671,7 +671,6 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-			pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
 			debug::warn!("Unable to create signed payload: {:?}", e);
@@ -734,12 +733,8 @@ impl pallet_grandpa::Trait for Runtime {
 		GrandpaId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
-		Self::KeyOwnerIdentification,
-		node_primitives::report::ReporterAppCrypto,
-		Runtime,
-		Offences,
-	>;
+	type HandleEquivocation =
+		pallet_grandpa::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
 }
 
 parameter_types! {
@@ -898,7 +893,6 @@ pub type SignedExtra = (
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-	pallet_grandpa::ValidateEquivocationReport<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
@@ -972,7 +966,7 @@ impl_runtime_apis! {
 			Grandpa::grandpa_authorities()
 		}
 
-		fn submit_report_equivocation_extrinsic(
+		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof: fg_primitives::EquivocationProof<
 				<Block as BlockT>::Hash,
 				NumberFor<Block>,
@@ -981,7 +975,7 @@ impl_runtime_apis! {
 		) -> Option<()> {
 			let key_owner_proof = key_owner_proof.decode()?;
 
-			Grandpa::submit_report_equivocation_extrinsic(
+			Grandpa::submit_unsigned_equivocation_report(
 				equivocation_proof,
 				key_owner_proof,
 			)

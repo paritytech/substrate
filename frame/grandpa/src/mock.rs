@@ -19,10 +19,7 @@
 
 #![cfg(test)]
 
-use crate::{
-	equivocation::ValidateEquivocationReport, AuthorityId, AuthorityList, Call as GrandpaCall,
-	ConsensusLog, Module, Trait,
-};
+use crate::{AuthorityId, AuthorityList, Call as GrandpaCall, ConsensusLog, Module, Trait};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
 use frame_support::{

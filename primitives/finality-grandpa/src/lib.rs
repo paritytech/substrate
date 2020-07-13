@@ -497,16 +497,15 @@ sp_api::decl_runtime_apis! {
 		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> AuthorityList;
 
-		/// Submits an extrinsic to report an equivocation. The caller must
-		/// provide the equivocation proof and a key ownership proof (should be
-		/// obtained using `generate_key_ownership_proof`). This method will
-		/// sign the extrinsic with any reporting keys available in the keystore
-		/// and will push the transaction to the pool. This method returns `None`
-		/// when creation of the extrinsic fails, either due to unavailability
-		/// of keys to sign, or because equivocation reporting is disabled for
-		/// the given runtime (i.e. this method is hardcoded to return `None`).
-		/// Only useful in an offchain context.
-		fn submit_report_equivocation_extrinsic(
+		/// Submits an unsigned extrinsic to report an equivocation. The caller
+		/// must provide the equivocation proof and a key ownership proof
+		/// (should be obtained using `generate_key_ownership_proof`). The
+		/// extrinsic will be unsigned and should only be accepted for local
+		/// authorship (not to be broadcast to the network). This method returns
+		/// `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is
+		/// hardcoded to return `None`). Only useful in an offchain context.
+		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
