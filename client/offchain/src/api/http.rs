@@ -631,14 +631,10 @@ impl Future for HttpWorker {
 						body: body_rx,
 					});
 
-					// Make sure to announce that HTTP response can be further
-					// processed.
-					// FIXME: Do that in every case and not only when receiving
-					// the first part of the response.
+					me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx: body_tx }));
 					if let Some(sender) = &mut me.ready_ids {
 						let _ = sender.unbounded_send(id.into());
 					}
-					me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx: body_tx }));
 					cx.waker().wake_by_ref();	// reschedule in order to poll the new future
 					continue
 				}
@@ -660,6 +656,9 @@ impl Future for HttpWorker {
 						Poll::Ready(Some(Ok(chunk))) => {
 							let _ = tx.start_send(Ok(chunk));
 							me.requests.push((id, HttpWorkerRequest::ReadBody { body, tx }));
+							if let Some(sender) = &mut me.ready_ids {
+								let _ = sender.unbounded_send(id.into());
+							}
 							cx.waker().wake_by_ref();	// reschedule in order to continue reading
 						}
 						Poll::Ready(Some(Err(err))) => {
