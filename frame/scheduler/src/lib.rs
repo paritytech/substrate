@@ -64,6 +64,22 @@ use frame_support::{
 };
 use frame_system::{self as system};
 
+pub trait WeightInfo {
+	fn schedule(s: u32, ) -> Weight;
+	fn cancel(s: u32, ) -> Weight;
+	fn schedule_named(s: u32, ) -> Weight;
+	fn cancel_named(s: u32, ) -> Weight;
+	fn on_initialize(s: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn schedule(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn schedule_named(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_named(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_s: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
 /// should be added to our implied traits list.
@@ -89,6 +105,9 @@ pub trait Trait: system::Trait {
 
 	/// Required origin to schedule or cancel calls.
 	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Just a simple index for naming period tasks.
@@ -537,8 +556,6 @@ mod tests {
 		weights::constants::RocksDbWeight,
 	};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
@@ -619,9 +636,6 @@ mod tests {
 		}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -655,6 +669,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl logger::Trait for Test {
 		type Event = ();
@@ -673,13 +688,12 @@ mod tests {
 		type Call = Call;
 		type MaximumWeight = MaximumSchedulerWeight;
 		type ScheduleOrigin = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+		type WeightInfo = ();
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;
 	type Scheduler = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()

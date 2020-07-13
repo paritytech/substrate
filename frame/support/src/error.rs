@@ -47,7 +47,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     }
 /// }
 ///
-/// # use frame_system::{self as system, Trait};
+/// # use frame_system::Trait;
 ///
 /// // You need to register the error type in `decl_module!` as well to make the error
 /// // exported in the metadata.
