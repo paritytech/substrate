@@ -340,6 +340,24 @@ impl Verify for MultiSignature {
 	}
 }
 
+impl BatchVerify for MultiSignature {
+	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
+		match (self, signer) {
+			(MultiSignature::Ed25519(ref sig), who) => sig.batch_verify(msg, &ed25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Sr25519(ref sig), who) => sig.batch_verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(MultiSignature::Ecdsa(ref sig), who) => {
+				let m = sp_io::hashing::blake2_256(msg.get());
+				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
+					Ok(pubkey) =>
+						&sp_io::hashing::blake2_256(pubkey.as_ref())
+							== <dyn AsRef<[u8; 32]>>::as_ref(who),
+					_ => false,
+				}
+			}
+		}
+	}
+}
+
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
