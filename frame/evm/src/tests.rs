@@ -7,8 +7,6 @@ use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch,
 };
 use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
 	Perbill,
 	testing::Header,
@@ -25,9 +23,6 @@ impl_outer_dispatch! {
 	}
 }
 
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -111,8 +106,6 @@ type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type EVM = Module<Test>;
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
@@ -140,7 +133,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		}
 	);
 
-	// We use default for brevity, but you can configure as desired if needed.
 	pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
 	GenesisConfig { accounts }.assimilate_storage(&mut t).unwrap();
 	t.into()
