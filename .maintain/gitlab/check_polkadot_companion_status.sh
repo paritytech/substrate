@@ -91,10 +91,12 @@ curl -H "${github_header}" -sS -o companion_pr_reviews.json \
   ${github_api_polkadot_pull_url}/${pr_companion}/reviews
 
 # If there are any 'CHANGES_REQUESTED' reviews for the *current* review
-if [ "$(jq -r -e '.[] | select(.state == "CHANGES_REQUESTED").commit_id' < companion_pr_reviews.json)" = "$pr_head_sha" ]; then
-  boldprint "polkadot pr #${pr_companion} has CHANGES_REQUESTED for the latest commit"
-  exit 1
-fi
+while IFS= read -r line; do
+  if [ "$line" = "$pr_head_sha" ]; then
+    boldprint "polkadot pr #${pr_companion} has CHANGES_REQUESTED for the latest commit"
+    exit 1
+  fi
+done <<< $(jq -r -e '.[] | select(.state == "CHANGES_REQUESTED").commit_id' < companion_pr_reviews.json)
 
 # Then we check for at least 1 APPROVED
 if [ -z "$(jq -r -e '.[].state | select(. == "APPROVED")' < companion_pr_reviews.json)" ]; then
