@@ -115,7 +115,7 @@ for
 where
 	Address: Member + MaybeDisplay,
 	Call: Encode + Member,
-	Signature: Member + traits::Verify,
+	Signature: Member + traits::BatchVerify,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId=AccountId>,
 	Extra: SignedExtension<AccountId=AccountId>,
 	AccountId: Member + MaybeDisplay,
@@ -128,7 +128,7 @@ where
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
-				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
+				if !raw_payload.using_encoded(|payload| signature.batch_verify(payload, &signed)) {
 					return Err(InvalidTransaction::BadProof.into())
 				}
 

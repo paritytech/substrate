@@ -153,6 +153,12 @@ impl traits::Verify for TestSignature {
 	}
 }
 
+impl traits::BatchVerify for TestSignature {
+	fn batch_verify<L: traits::Lazy<[u8]>>(&self, msg: L, signer: &u64) -> bool {
+		traits::Verify::verify(self, msg, signer)
+	}
+}
+
 /// Digest item
 pub type DigestItem = generic::DigestItem<H256>;
 
@@ -161,7 +167,7 @@ pub type Digest = generic::Digest<H256>;
 
 /// Block Header
 pub type Header = generic::Header<u64, BlakeTwo256>;
-
+	
 impl Header {
 	/// A new header with the given number and default hash for all other fields.
 	pub fn new_from_number(number: <Self as traits::Header>::Number) -> Self {

@@ -478,7 +478,7 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>().map(
-			|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
+			|extension| { extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec()); true }
 		).unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
@@ -509,7 +509,7 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>().map(
-			|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
+			|extension| { extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec()); true }
 		).unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
@@ -657,7 +657,7 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 	) -> bool {
 		self.extension::<VerificationExt>().map(
-			|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
+			|extension| { extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec()); true }
 		).unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
