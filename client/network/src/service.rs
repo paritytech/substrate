@@ -621,12 +621,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///       Notifications should be dropped
 	///              if buffer is full
 	///
-	pub async fn send_notifications(
-		&self,
+	pub async fn send_notifications<'a>(
+		&'a self,
 		target: PeerId,
 		engine_id: ConsensusEngineId,
 		num_slots: usize,
-	) -> Result<NotificationsBufferSlots, SendNotificationsError> {
+	) -> Result<NotificationsBufferSlots<'a>, SendNotificationsError> {
 		todo!()
 	}
 
@@ -885,7 +885,7 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 /// Reserved slots in the notifications buffer, ready to accept data.
 #[must_use]
 pub struct NotificationsBufferSlots<'a> {
-	_dummy: std::marker::PhantomData<'a>,
+	_dummy: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a> NotificationsBufferSlots<'a> {
@@ -895,7 +895,7 @@ impl<'a> NotificationsBufferSlots<'a> {
 	///
 	/// Panics if the number of items in the `notifications` iterator is different from the number
 	/// of reserved slots.
-	pub send(self, notifications: impl Iterator<Item = impl Into<Vec<u8>>>) {
+	pub fn send(self, notifications: impl Iterator<Item = impl Into<Vec<u8>>>) {
 		todo!()
 	}
 }
