@@ -5833,6 +5833,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "retain_mut"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e005d658ad26eacc2b6c506dfde519f4e277e328d0eb3379ca61647d70a8f531"
+
+[[package]]
 name = "ring"
 version = "0.16.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6270,6 +6276,7 @@ dependencies = [
  "pdqselect",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
+ "retain_mut",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus-epochs",

@@ -106,7 +106,8 @@ use sc_client_api::{
 	BlockchainEvents, ProvideUncles,
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use futures::channel::mpsc::{channel, Sender, Receiver};
+use retain_mut::RetainMut;
 
 use futures::prelude::*;
 use log::{debug, info, log, trace, warn};
@@ -428,7 +429,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()>>>,
-	slot_notification_sinks: Arc<Mutex<Vec<TracingUnboundedSender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
+	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
 }
 
 impl<B: BlockT> BabeWorker<B> {
@@ -436,8 +437,10 @@ impl<B: BlockT> BabeWorker<B> {
 	/// epoch descriptor.
 	pub fn slot_notification_stream(
 		&self
-	) -> TracingUnboundedReceiver<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
-		let (sink, stream) = tracing_unbounded("mpsc_babe_slot_notifications");
+	) -> Receiver<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+		const CHANNEL_BUFFER_SIZE: usize = 1024;
+
+		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
 		self.slot_notification_sinks.lock().push(sink);
 		stream
 	}
@@ -462,7 +465,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
-	slot_notification_sinks: Arc<Mutex<Vec<TracingUnboundedSender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
+	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
 	config: Config,
 }
 
@@ -547,7 +550,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeSlot
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
 		self.slot_notification_sinks.lock()
-			.retain(|sink| sink.unbounded_send((slot_number, epoch_descriptor.clone())).is_ok());
+			.retain_mut(|sink| sink.try_send((slot_number, epoch_descriptor.clone())).is_ok());
 	}
 
 	fn pre_digest_data(
