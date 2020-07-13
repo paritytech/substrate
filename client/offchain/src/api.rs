@@ -19,7 +19,7 @@ use std::{
 	sync::Arc,
 	convert::TryFrom,
 	thread::sleep,
-	collections::BTreeSet,
+	collections::HashSet,
 };
 
 use sp_core::offchain::OffchainStorage;
@@ -65,7 +65,7 @@ pub(crate) struct Api<Storage> {
 	/// Buffered pollable IDs. Incoming IDs ready to be processed are buffered
 	/// here whenever they arrive while the offchain worker is waiting for other
 	/// IDs.
-	buffered_ready_ids: BTreeSet<PollableId>,
+	buffered_ready_ids: HashSet<PollableId>,
 	/// Timers are handled by a separate struct.
 	timer: timer::TimerApi,
 }
