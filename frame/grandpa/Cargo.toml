@@ -23,6 +23,7 @@ sp-runtime = { version = "2.0.0-rc4", default-features = false, path = "../../pr
 sp-staking = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "2.0.0-rc4", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc4", default-features = false, path = "../system" }
+pallet-authorship = { version = "2.0.0-rc4", default-features = false, path = "../authorship" }
 pallet-session = { version = "2.0.0-rc4", default-features = false, path = "../session" }
 pallet-finality-tracker = { version = "2.0.0-rc4", default-features = false, path = "../finality-tracker" }
 
@@ -50,6 +51,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"frame-system/std",
+	"pallet-authorship/std",
 	"pallet-session/std",
 	"pallet-finality-tracker/std",
 ]

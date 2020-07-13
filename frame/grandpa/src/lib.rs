@@ -43,7 +43,7 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
 	Parameter,
 };
-use frame_system::{ensure_signed, DigestOf};
+use frame_system::{ensure_none, ensure_signed, DigestOf};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::Zero,
@@ -60,7 +60,7 @@ mod tests;
 
 pub use equivocation::{
 	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
-	HandleEquivocation, ValidateEquivocationReport,
+	HandleEquivocation,
 };
 
 pub trait Trait: frame_system::Trait {
@@ -90,9 +90,8 @@ pub trait Trait: frame_system::Trait {
 	/// offence (after the equivocation has been validated) and for submitting a
 	/// transaction to report an equivocation (from an offchain context).
 	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-	/// `()`) you must add the `equivocation::ValidateEquivocationReport` signed
-	/// extension to the runtime's `SignedExtra` definition, otherwise
-	/// equivocation reports won't be properly validated.
+	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
@@ -190,6 +189,8 @@ decl_error! {
 		TooSoon,
 		/// A key ownership proof provided as part of an equivocation report is invalid.
 		InvalidKeyOwnershipProof,
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
 	}
@@ -238,40 +239,81 @@ decl_module! {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		///
-		/// Since the weight of the extrinsic is 0, in order to avoid DoS by
-		/// submission of invalid equivocation reports, a mandatory pre-validation of
-		/// the extrinsic is implemented in a `SignedExtension`.
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
 		#[weight = 0]
-		fn report_equivocation(
+		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
 		) {
-			let reporter_id = ensure_signed(origin)?;
+			ensure_none(origin)?;
 
-			let (session_index, validator_set_count) = (
-				key_owner_proof.session(),
-				key_owner_proof.validator_count(),
-			);
+			// we check the equivocation within the context of its set id (and
+			// associated session) and round. we also need to know the validator
+			// set count when the offence since it is required to calculate the
+			// slash amount.
+			let set_id = equivocation_proof.set_id();
+			let round = equivocation_proof.round();
+			let session_index = key_owner_proof.session();
+			let validator_count = key_owner_proof.validator_count();
 
-			// we have already checked this proof in `SignedExtension`, we to
-			// check it again to get the full identification of the offender.
+			// validate the key ownership proof extracting the id of the offender.
 			let offender =
 				T::KeyOwnerProofSystem::check_proof(
 					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
 					key_owner_proof,
 				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
-			// the set id and round when the offence happened
-			let set_id = equivocation_proof.set_id();
-			let round = equivocation_proof.round();
+			// validate equivocation proof (check votes are different and
+			// signatures are valid).
+			if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+				return Err(Error::<T>::InvalidEquivocationProof.into());
+			}
+
+			// fetch the current and previous sets last session index. on the
+			// genesis set there's no previous set.
+			let previous_set_id_session_index = if set_id == 0 {
+				None
+			} else {
+				let session_index =
+					if let Some(session_id) = Self::session_for_set(set_id - 1) {
+						session_id
+					} else {
+						return Err(Error::<T>::InvalidEquivocationProof.into());
+					};
+
+				Some(session_index)
+			};
+
+			let set_id_session_index =
+				if let Some(session_id) = Self::session_for_set(set_id) {
+					session_id
+				} else {
+					return Err(Error::<T>::InvalidEquivocationProof.into());
+				};
+
+			// check that the session id for the membership proof is within the
+			// bounds of the set id reported in the equivocation.
+			if session_index > set_id_session_index ||
+				previous_set_id_session_index
+				.map(|previous_index| session_index <= previous_index)
+				.unwrap_or(false)
+			{
+				return Err(Error::<T>::InvalidEquivocationProof.into());
+			}
+
+			// use block author (if defined) as the only reporter
+			let reporters = T::HandleEquivocation::block_author().into_iter().collect();
 
 			// report to the offences module rewarding the sender.
 			T::HandleEquivocation::report_offence(
-				vec![reporter_id],
+				reporters,
 				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
 					session_index,
-					validator_set_count,
+					validator_count,
 					offender,
 					set_id,
 					round,
@@ -457,15 +499,19 @@ impl<T: Trait> Module<T> {
 		SetIdSession::insert(0, 0);
 	}
 
-	/// Submits an extrinsic to report an equivocation. This method will sign an
-	/// extrinsic with a call to `report_equivocation` with any reporting keys
-	/// available in the keystore and will push the transaction to the pool.
-	/// Only useful in an offchain context.
-	pub fn submit_report_equivocation_extrinsic(
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain
+	/// context.
+	pub fn submit_unsigned_equivocation_report(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof).ok()
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
 	}
 }
 

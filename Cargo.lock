@@ -4357,6 +4357,7 @@ dependencies = [
  "finality-grandpa",
  "frame-support",
  "frame-system",
+ "pallet-authorship",
  "pallet-balances",
  "pallet-finality-tracker",
  "pallet-offences",
