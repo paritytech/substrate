@@ -362,7 +362,9 @@ impl<FR> SandboxInstance<FR> {
 	///
 	/// The `state` parameter can be used to provide custom data for
 	/// these syscall implementations.
-	pub fn invoke<FE: SandboxCapabilities<SupervisorFuncRef=FR>>(
+	pub fn invoke
+	//<FE: SandboxCapabilities<SupervisorFuncRef=FR>>
+	(
 		&self,
 
 		// function to call that is exported from the module
@@ -372,55 +374,58 @@ impl<FR> SandboxInstance<FR> {
 		args: &[RuntimeValue],
 
 		// supervisor environment provided to the module
-		supervisor_externals: &mut FE,
+		// supervisor_externals: &mut FE,
 
 		// arbitraty context data of the call
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error> {
-		with_guest_externals(
-			supervisor_externals,
-			self,
-			state,
-			|guest_externals| {
 
-				let wasmi_result = self.wasmi_instance
-					.invoke_export(export_name, args, guest_externals)?;
+		SCH::with_sandbox_capabilities( |supervisor_externals| {
+			with_guest_externals(
+				supervisor_externals,
+				self,
+				state,
+				|guest_externals| {
 
-				let wasmtime_function = self
-					.wasmtime_instance
-					.get_func(export_name)
-					.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
+					let wasmi_result = self.wasmi_instance
+						.invoke_export(export_name, args, guest_externals)?;
 
-				let args: Vec<Val> = args
-					.iter()
-					.map(|v| match *v {
-						RuntimeValue::I32(val) => Val::I32(val),
-						RuntimeValue::I64(val) => Val::I64(val),
-						RuntimeValue::F32(val) => Val::F32(val.into()),
-						RuntimeValue::F64(val) => Val::F64(val.into()),
-					})
-					.collect();
+					let wasmtime_function = self
+						.wasmtime_instance
+						.get_func(export_name)
+						.ok_or(wasmi::Error::Function("wasmtime function failed".to_string()))?;
 
-				let wasmtime_result = wasmtime_function
-					.call(&args)
-					.map_err(|e| wasmi::Error::Function(e.to_string()))?;
+					let args: Vec<Val> = args
+						.iter()
+						.map(|v| match *v {
+							RuntimeValue::I32(val) => Val::I32(val),
+							RuntimeValue::I64(val) => Val::I64(val),
+							RuntimeValue::F32(val) => Val::F32(val.into()),
+							RuntimeValue::F64(val) => Val::F64(val.into()),
+						})
+						.collect();
 
-				assert_eq!(wasmtime_result.len(), 1, "multiple return types are not supported yet");
-				if let Some(wasmi_value) = wasmi_result {
-					let wasmtime_value = match *wasmtime_result.first().unwrap() {
-						Val::I32(val) => RuntimeValue::I32(val),
-						Val::I64(val) => RuntimeValue::I64(val),
-						Val::F32(val) => RuntimeValue::F32(val.into()),
-						Val::F64(val) => RuntimeValue::F64(val.into()),
-						_ => unreachable!(),
-					};
+					let wasmtime_result = wasmtime_function
+						.call(&args)
+						.map_err(|e| wasmi::Error::Function(e.to_string()))?;
 
-					assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
-				}
+					assert_eq!(wasmtime_result.len(), 1, "multiple return types are not supported yet");
+					if let Some(wasmi_value) = wasmi_result {
+						let wasmtime_value = match *wasmtime_result.first().unwrap() {
+							Val::I32(val) => RuntimeValue::I32(val),
+							Val::I64(val) => RuntimeValue::I64(val),
+							Val::F32(val) => RuntimeValue::F32(val.into()),
+							Val::F64(val) => RuntimeValue::F64(val.into()),
+							_ => unreachable!(),
+						};
 
-				Ok(wasmi_result)
-			},
-		)
+						assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
+					}
+
+					Ok(wasmi_result)
+				},
+			)
+		})
 	}
 
 	/// Get the value from a global with the given `name`.
@@ -547,6 +552,13 @@ impl<FR> UnregisteredInstance<FR> {
 	}
 }
 
+pub trait SandboxCapabiliesHolder<'a> {
+	type SupervisorFuncRef;
+	type SC: SandboxCapabilities<SupervisorFuncRef = Self::SupervisorFuncRef> + 'a;
+
+	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R;
+}
+
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -555,13 +567,17 @@ impl<FR> UnregisteredInstance<FR> {
 /// normally created by `sp_sandbox::Instance` primitive.
 ///
 /// Returns uninitialized sandboxed module instance or an instantiation error.
-pub fn instantiate<'a, FE: SandboxCapabilities>(
-	supervisor_externals: &mut FE,
+pub fn instantiate<'a, FE, SCH>(
+	// supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
 	state: u32,
-) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> {
+) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> 
+where
+	FE: SandboxCapabilities + 'a,
+	SCH: SandboxCapabiliesHolder<'a, SupervisorFuncRef = FE::SupervisorFuncRef, SC = FE>,
+{
 	let wasmi_module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 	let wasmi_instance = ModuleInstance::new(&wasmi_module, &guest_env.imports)
 		.map_err(|_| InstantiationError::Instantiation)?;
@@ -580,11 +596,19 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 		.filter_map(|import| {
 			if let wasmtime::ExternType::Func(func_ty) = import.ty() {
 				Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
-					move |_, _, _| Err(wasmtime::Trap::new(format!(
-						"Sandbox function stub",
-						// func_ty.to_string(),
-						// func_ty.name().to_string()
-					)))
+					move |_, _, _| {
+						SCH::with_sandbox_capabilities(|sc| {
+							// sc.invoke();
+						});
+
+						Ok(())
+					}
+					
+					// Err(wasmtime::Trap::new(format!(
+					// 	"Sandbox function stub",
+					// 	// func_ty.to_string(),
+					// 	// func_ty.name().to_string()
+					// )))
 				)))
 			} else {
 				None
@@ -604,18 +628,20 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 		guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 	});
 
-	with_guest_externals(
-		supervisor_externals,
-		&sandbox_instance,
-		state,
-		|guest_externals| {
-			wasmi_instance
-				.run_start(guest_externals)
-				.map_err(|_| InstantiationError::StartTrapped)
+	SCH::with_sandbox_capabilities( |supervisor_externals| {
+		with_guest_externals(
+			supervisor_externals,
+			&sandbox_instance,
+			state,
+			|guest_externals| {
+				wasmi_instance
+					.run_start(guest_externals)
+					.map_err(|_| InstantiationError::StartTrapped)
 
-			// Note: no need to run start on wasmtime instance, since it's done automatically
-		},
-	)?;
+				// Note: no need to run start on wasmtime instance, since it's done automatically
+			},
+		)
+	})?;
 
 	Ok(UnregisteredInstance { sandbox_instance })
 }

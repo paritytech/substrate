@@ -28,6 +28,7 @@ use sc_executor_common::sandbox::{self, SandboxCapabilities, SupervisorFuncIndex
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 use wasmtime::{Func, Val};
+use sandbox::SandboxCapabiliesHolder;
 
 /// Wrapper type for pointer to a Wasm table entry.
 ///
@@ -74,6 +75,36 @@ impl HostState {
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
 pub struct HostContext<'a>(&'a HostState);
+
+scoped_tls::scoped_thread_local!(static HOST_CONTEXT: *mut HostContext<'_>);
+
+impl<'a> SandboxCapabiliesHolder<'a> for HostContext<'a> {
+	type SupervisorFuncRef = SupervisorFuncRef;
+	type SC = HostContext<'static>;
+
+	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
+		use std::ops::DerefMut;
+
+		HOST_CONTEXT.with(|fe| {
+			// Safe because of a limited scope in which the value exists
+			let fe = unsafe { &mut **fe };
+
+			f(fe)
+		})
+	}
+}
+
+impl<'a> HostContext<'a> {
+	fn set_sandbox_capabilities<R, F: FnOnce() -> R>(&mut self, f: F) -> R {
+		unsafe {
+			// Erasing lifetime of `HostContext` to put it into scoped TLS. This is safe because
+			// the pointer will never leave this scope and is semantically equivalent to `&'a mut`.
+			let self_ptr: *mut HostContext<'static> = std::mem::transmute(self as *mut HostContext<'a>);
+
+			HOST_CONTEXT.set(&self_ptr, f)
+		}
+	}
+}
 
 impl<'a> std::ops::Deref for HostContext<'a> {
 	type Target = HostState;
@@ -262,7 +293,20 @@ impl<'a> Sandbox for HostContext<'a> {
 			.borrow()
 			.instance(instance_id)
 			.map_err(|e| e.to_string())?;
-		let result = instance.invoke(export_name, &args, self, state);
+
+		let result = self.set_sandbox_capabilities(|| {
+			instance.invoke(export_name, &args, state)
+		});
+
+		// let result = unsafe {
+		// 	// Erasing lifetime of `HostContext` to put it into scoped TLS. This is safe because
+		// 	// the pointer will never leave this scope and is semantically equivalent to `&'a mut`.
+		// 	let self_ptr: *mut HostContext<'static> = std::mem::transmute(self as *mut HostContext<'a>);
+
+		// 	HOST_CONTEXT.set(&self_ptr, || {
+		// 		instance.invoke(export_name, &args, self, state)
+		// 	})
+		// };
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -319,7 +363,7 @@ impl<'a> Sandbox for HostContext<'a> {
 			};
 
 		let instance_idx_or_err_code =
-			match sandbox::instantiate(self, dispatch_thunk, wasm, guest_env, state)
+			match sandbox::instantiate::<_, Self>(dispatch_thunk, wasm, guest_env, state)
 				.map(|i| i.register(&mut *self.sandbox_store.borrow_mut()))
 			{
 				Ok(instance_idx) => instance_idx,
