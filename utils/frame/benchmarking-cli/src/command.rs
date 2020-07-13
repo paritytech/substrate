@@ -89,78 +89,81 @@ impl BenchmarkCmd {
 		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
-		if self.output {
-			if self.weight_trait {
-				let mut file = crate::writer::open_file("traits.rs")?;
-				crate::writer::write_trait(&mut file, results.clone())?;
-			} else {
-				let mut file = crate::writer::open_file("benchmarks.rs")?;
-				crate::writer::write_results(&mut file, results.clone())?;
-			}
-		}
-
 		match results {
-			Ok(batches) => for batch in batches.into_iter() {
-				// Print benchmark metadata
-				println!(
-					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
-					self.lowest_range_values,
-					self.highest_range_values,
-					self.steps,
-					self.repeat,
-				);
-
-				// Skip raw data + analysis if there are no results
-				if batch.results.len() == 0 { continue }
-
-				if self.raw_data {
-					// Print the table header
-					batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
-
-					print!("extrinsic_time,storage_root_time,reads,repeat_reads,writes,repeat_writes\n");
-					// Print the values
-					batch.results.iter().for_each(|result| {
-						let parameters = &result.components;
-						parameters.iter().for_each(|param| print!("{:?},", param.1));
-						// Print extrinsic time and storage root time
-						print!("{:?},{:?},{:?},{:?},{:?},{:?}\n",
-							result.extrinsic_time,
-							result.storage_root_time,
-							result.reads,
-							result.repeat_reads,
-							result.writes,
-							result.repeat_writes,
-						);
-					});
-
-					println!();
-				}
-
-				// Conduct analysis.
-				if !self.no_median_slopes {
-					println!("Median Slopes Analysis\n========");
-					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
-						println!("-- Extrinsic Time --\n{}", analysis);
-					}
-					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
-						println!("Reads = {:?}", analysis);
-					}
-					if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
-						println!("Writes = {:?}", analysis);
+			Ok(batches) => {
+				// If we are going to output results to a file...
+				if self.output {
+					if self.weight_trait {
+						let mut file = crate::writer::open_file("traits.rs")?;
+						crate::writer::write_trait(&mut file, batches.clone())?;
+					} else {
+						let mut file = crate::writer::open_file("benchmarks.rs")?;
+						crate::writer::write_results(&mut file, batches.clone())?;
 					}
 				}
-				if !self.no_min_squares {
-					println!("Min Squares Analysis\n========");
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
-						println!("-- Extrinsic Time --\n{}", analysis);
+
+				for batch in batches.into_iter() {
+					// Print benchmark metadata
+					println!(
+						"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+						String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+						String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
+						self.lowest_range_values,
+						self.highest_range_values,
+						self.steps,
+						self.repeat,
+					);
+
+					// Skip raw data + analysis if there are no results
+					if batch.results.is_empty() { continue }
+
+					if self.raw_data {
+						// Print the table header
+						batch.results[0].components.iter().for_each(|param| print!("{:?},", param.0));
+
+						print!("extrinsic_time,storage_root_time,reads,repeat_reads,writes,repeat_writes\n");
+						// Print the values
+						batch.results.iter().for_each(|result| {
+							let parameters = &result.components;
+							parameters.iter().for_each(|param| print!("{:?},", param.1));
+							// Print extrinsic time and storage root time
+							print!("{:?},{:?},{:?},{:?},{:?},{:?}\n",
+								result.extrinsic_time,
+								result.storage_root_time,
+								result.reads,
+								result.repeat_reads,
+								result.writes,
+								result.repeat_writes,
+							);
+						});
+
+						println!();
 					}
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
-						println!("Reads = {:?}", analysis);
+
+					// Conduct analysis.
+					if !self.no_median_slopes {
+						println!("Median Slopes Analysis\n========");
+						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+							println!("-- Extrinsic Time --\n{}", analysis);
+						}
+						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Reads) {
+							println!("Reads = {:?}", analysis);
+						}
+						if let Some(analysis) = Analysis::median_slopes(&batch.results, BenchmarkSelector::Writes) {
+							println!("Writes = {:?}", analysis);
+						}
 					}
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
-						println!("Writes = {:?}", analysis);
+					if !self.no_min_squares {
+						println!("Min Squares Analysis\n========");
+						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime) {
+							println!("-- Extrinsic Time --\n{}", analysis);
+						}
+						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads) {
+							println!("Reads = {:?}", analysis);
+						}
+						if let Some(analysis) = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes) {
+							println!("Writes = {:?}", analysis);
+						}
 					}
 				}
 			},
