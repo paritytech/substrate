@@ -64,8 +64,9 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{debug, error};
+use parking_lot::RwLock;
 use prometheus_endpoint::HistogramVec;
-use std::{borrow::Cow, error, io, str, task::{Context, Poll}};
+use std::{borrow::Cow, error, io, str, sync::Arc, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -77,10 +78,10 @@ use std::{borrow::Cow, error, io, str, task::{Context, Poll}};
 pub struct NotifsHandlerProto {
 	/// Prototypes for handlers for inbound substreams, and the message we respond with in the
 	/// handshake.
-	in_handlers: Vec<(NotifsInHandlerProto, Vec<u8>)>,
+	in_handlers: Vec<(NotifsInHandlerProto, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Prototypes for handlers for outbound substreams, and the initial handshake message we send.
-	out_handlers: Vec<(NotifsOutHandlerProto, Vec<u8>)>,
+	out_handlers: Vec<(NotifsOutHandlerProto, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Prototype for handler for backwards-compatibility.
 	legacy: LegacyProtoHandlerProto,
@@ -91,10 +92,10 @@ pub struct NotifsHandlerProto {
 /// See the documentation at the module level for more information.
 pub struct NotifsHandler {
 	/// Handlers for inbound substreams, and the message we respond with in the handshake.
-	in_handlers: Vec<(NotifsInHandler, Vec<u8>)>,
+	in_handlers: Vec<(NotifsInHandler, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Handlers for outbound substreams, and the initial handshake message we send.
-	out_handlers: Vec<(NotifsOutHandler, Vec<u8>)>,
+	out_handlers: Vec<(NotifsOutHandler, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Handler for backwards-compatibility.
 	legacy: LegacyProtoHandler,
@@ -159,18 +160,6 @@ pub enum NotifsHandlerIn {
 	SendLegacy {
 		/// The message to send.
 		message: Vec<u8>,
-	},
-
-	/// Modifies the handshake message of a notifications protocol.
-	UpdateHandshake {
-		/// Name of the protocol for the message.
-		///
-		/// Must match one of the registered protocols.
-		protocol_name: Cow<'static, [u8]>,
-
-		/// The new handshake message to send if we open a substream or if the remote opens a
-		/// substream towards us.
-		handshake_message: Vec<u8>,
 	},
 
 	/// Sends a notifications message.
@@ -253,7 +242,7 @@ impl NotifsHandlerProto {
 	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
 		legacy: RegisteredProtocol,
-		list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>,
+		list: impl Into<Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>>,
 		queue_size_report: Option<HistogramVec>
 	) -> Self {
 		let list = list.into();
@@ -346,12 +335,17 @@ impl ProtocolsHandler for NotifsHandler {
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for (handler, initial_message) in &mut self.out_handlers {
+					// We create `initial_message` on a separate line to be sure that the lock
+					// is released as soon as possible.
+					let initial_message = initial_message.read().clone();
 					handler.inject_event(NotifsOutHandlerIn::Enable {
-						initial_message: initial_message.clone(),
+						initial_message,
 					});
 				}
 				for num in self.pending_in.drain(..) {
-					let handshake_message = self.in_handlers[num].1.clone();
+					// We create `handshake_message` on a separate line to be sure
+					// that the lock is released as soon as possible.
+					let handshake_message = self.in_handlers[num].1.read().clone();
 					self.in_handlers[num].0
 						.inject_event(NotifsInHandlerIn::Accept(handshake_message));
 				}
@@ -375,18 +369,6 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::UpdateHandshake { protocol_name, handshake_message } => {
-				for (handler, current_handshake) in &mut self.in_handlers {
-					if handler.protocol_name() == &*protocol_name {
-						*current_handshake = handshake_message.clone();
-					}
-				}
-				for (handler, current_handshake) in &mut self.out_handlers {
-					if handler.protocol_name() == &*protocol_name {
-						*current_handshake = handshake_message.clone();
-					}
-				}
-			}
 			NotifsHandlerIn::SendNotification { message, encoded_fallback_message, protocol_name } => {
 				for (handler, _) in &mut self.out_handlers {
 					if handler.protocol_name() != &protocol_name[..] {
@@ -524,8 +506,12 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(_)) =>
 						match self.enabled {
 							EnabledState::Initial => self.pending_in.push(handler_num),
-							EnabledState::Enabled =>
-								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message.clone())),
+							EnabledState::Enabled => {
+								// We create `handshake_message` on a separate line to be sure
+								// that the lock is released as soon as possible.
+								let handshake_message = handshake_message.read().clone();
+								handler.inject_event(NotifsInHandlerIn::Accept(handshake_message))
+							},
 							EnabledState::Disabled =>
 								handler.inject_event(NotifsInHandlerIn::Refuse),
 						},

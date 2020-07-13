@@ -98,7 +98,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
 	spec_version: 255,
-	impl_version: 0,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
 };
@@ -171,11 +171,13 @@ impl frame_system::Trait for Runtime {
 	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl pallet_utility::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -193,6 +195,7 @@ impl pallet_multisig::Trait for Runtime {
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
 	type MaxSignatories = MaxSignatories;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -246,6 +249,7 @@ impl pallet_proxy::Trait for Runtime {
 	type ProxyDepositBase = ProxyDepositBase;
 	type ProxyDepositFactor = ProxyDepositFactor;
 	type MaxProxies = MaxProxies;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -259,6 +263,7 @@ impl pallet_scheduler::Trait for Runtime {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<AccountId>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -296,6 +301,7 @@ impl pallet_indices::Trait for Runtime {
 	type Currency = Balances;
 	type Deposit = IndexDeposit;
 	type Event = Event;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -308,6 +314,7 @@ impl pallet_balances::Trait for Runtime {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Module<Runtime>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -334,6 +341,7 @@ impl pallet_timestamp::Trait for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = Babe;
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -370,6 +378,7 @@ impl pallet_session::Trait for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type WeightInfo = ();
 }
 
 impl pallet_session::historical::Trait for Runtime {
@@ -426,6 +435,7 @@ impl pallet_staking::Trait for Runtime {
 	type MinSolutionScoreBump = MinSolutionScoreBump;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -474,6 +484,7 @@ impl pallet_democracy::Trait for Runtime {
 	type Scheduler = Scheduler;
 	type PalletsOrigin = OriginCaller;
 	type MaxVotes = MaxVotes;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -488,6 +499,7 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Event = Event;
 	type MotionDuration = CouncilMotionDuration;
 	type MaxProposals = CouncilMaxProposals;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -519,6 +531,7 @@ impl pallet_elections_phragmen::Trait for Runtime {
 	type DesiredMembers = DesiredMembers;
 	type DesiredRunnersUp = DesiredRunnersUp;
 	type TermDuration = TermDuration;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -533,6 +546,7 @@ impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Event = Event;
 	type MotionDuration = TechnicalMotionDuration;
 	type MaxProposals = TechnicalMaxProposals;
+	type WeightInfo = ();
 }
 
 type EnsureRootOrHalfCouncil = EnsureOneOf<
@@ -587,6 +601,7 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -688,6 +703,7 @@ impl pallet_im_online::Trait for Runtime {
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ImOnlineUnsignedPriority;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -699,6 +715,7 @@ impl pallet_offences::Trait for Runtime {
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 	type WeightSoftLimit = OffencesWeightSoftLimit;
+	type WeightInfo = ();
 }
 
 impl pallet_authority_discovery::Trait for Runtime {}
@@ -757,6 +774,7 @@ impl pallet_identity::Trait for Runtime {
 	type Slashed = Treasury;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type RegistrarOrigin = EnsureRootOrHalfCouncil;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -813,6 +831,7 @@ impl pallet_vesting::Trait for Runtime {
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
+	type WeightInfo = ();
 }
 
 construct_runtime!(
@@ -823,7 +842,7 @@ construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Utility: pallet_utility::{Module, Call, Event},
-		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp), ValidateUnsigned},
+		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent, ValidateUnsigned},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},
@@ -1047,12 +1066,13 @@ impl_runtime_apis! {
 			gas_limit: u64,
 			input_data: Vec<u8>,
 		) -> ContractExecResult {
-			let exec_result =
+			let (exec_result, gas_consumed) =
 				Contracts::bare_call(origin, dest.into(), value, gas_limit, input_data);
 			match exec_result {
 				Ok(v) => ContractExecResult::Success {
-					status: v.status,
+					flags: v.flags.bits(),
 					data: v.data,
+					gas_consumed: gas_consumed,
 				},
 				Err(_) => ContractExecResult::Error,
 			}
@@ -1118,7 +1138,6 @@ impl_runtime_apis! {
 
 			let whitelist: Vec<Vec<u8>> = vec![
 				// Block Number
-				// frame_system::Number::<Runtime>::hashed_key().to_vec(),
 				hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec(),
 				// Total Issuance
 				hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec(),
@@ -1137,25 +1156,25 @@ impl_runtime_apis! {
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat, &whitelist);
 
-			add_benchmark!(params, batches, b"babe", Babe);
-			add_benchmark!(params, batches, b"balances", Balances);
-			add_benchmark!(params, batches, b"collective", Council);
-			add_benchmark!(params, batches, b"democracy", Democracy);
-			add_benchmark!(params, batches, b"elections", Elections);
-			add_benchmark!(params, batches, b"identity", Identity);
-			add_benchmark!(params, batches, b"im-online", ImOnline);
-			add_benchmark!(params, batches, b"indices", Indices);
-			add_benchmark!(params, batches, b"multisig", Multisig);
-			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
-			add_benchmark!(params, batches, b"proxy", Proxy);
-			add_benchmark!(params, batches, b"scheduler", Scheduler);
-			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
-			add_benchmark!(params, batches, b"staking", Staking);
-			add_benchmark!(params, batches, b"system", SystemBench::<Runtime>);
-			add_benchmark!(params, batches, b"timestamp", Timestamp);
-			add_benchmark!(params, batches, b"treasury", Treasury);
-			add_benchmark!(params, batches, b"utility", Utility);
-			add_benchmark!(params, batches, b"vesting", Vesting);
+			add_benchmark!(params, batches, pallet_babe, Babe);
+			add_benchmark!(params, batches, pallet_balances, Balances);
+			add_benchmark!(params, batches, pallet_collective, Council);
+			add_benchmark!(params, batches, pallet_democracy, Democracy);
+			add_benchmark!(params, batches, pallet_elections_phragmen, Elections);
+			add_benchmark!(params, batches, pallet_identity, Identity);
+			add_benchmark!(params, batches, pallet_im_online, ImOnline);
+			add_benchmark!(params, batches, pallet_indices, Indices);
+			add_benchmark!(params, batches, pallet_multisig, Multisig);
+			add_benchmark!(params, batches, pallet_offences, OffencesBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_proxy, Proxy);
+			add_benchmark!(params, batches, pallet_scheduler, Scheduler);
+			add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_staking, Staking);
+			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
+			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
+			add_benchmark!(params, batches, pallet_treasury, Treasury);
+			add_benchmark!(params, batches, pallet_utility, Utility);
+			add_benchmark!(params, batches, pallet_vesting, Vesting);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

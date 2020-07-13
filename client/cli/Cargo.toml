@@ -42,7 +42,7 @@ names = "0.11.0"
 structopt = "0.3.8"
 sc-tracing = { version = "2.0.0-rc4", path = "../tracing" }
 chrono = "0.4.10"
-parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 serde = "1.0.111"
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]

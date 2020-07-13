@@ -116,6 +116,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
@@ -127,6 +128,7 @@ impl pallet_scheduler::Trait for Test {
 	type Call = Call;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -137,6 +139,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const LaunchPeriod: u64 = 2;
@@ -199,6 +202,7 @@ impl super::Trait for Test {
 	type MaxVotes = MaxVotes;
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

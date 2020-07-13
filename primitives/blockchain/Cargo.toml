@@ -22,3 +22,4 @@ sp-consensus = { version = "0.8.0-rc4", path = "../consensus/common" }
 sp-runtime = { version = "2.0.0-rc4", path = "../runtime" }
 sp-block-builder = { version = "2.0.0-rc4", path = "../block-builder" }
 sp-state-machine = { version = "0.8.0-rc4", path = "../state-machine" }
+sp-database = { version = "2.0.0-rc4", path = "../database" }
