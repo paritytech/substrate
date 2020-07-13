@@ -428,7 +428,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
 pub struct BabeWorker<B: BlockT> {
-	inner: Pin<Box<dyn futures::Future<Output=()>>>,
+	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
 	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
 }
 
