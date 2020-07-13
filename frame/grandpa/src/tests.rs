@@ -25,7 +25,7 @@ use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize, UnfilteredDispatchable},
+	traits::{Currency, OnFinalize},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -375,8 +375,13 @@ fn report_equivocation_current_set_works() {
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
-		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
+		assert_ok!(
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+		);
 
 		start_era(2);
 
@@ -456,8 +461,13 @@ fn report_equivocation_old_set_works() {
 
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
-		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
+		assert_ok!(
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+		);
 
 		start_era(3);
 
@@ -516,10 +526,14 @@ fn report_equivocation_invalid_set_id() {
 			(1, H256::random(), 10, &equivocation_keyring),
 		);
 
-		// it should be filtered by the signed extension validation
+		// the call for reporting the equivocation should error
 		assert_err!(
-			report_equivocation(equivocation_proof, key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidSetId,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
 		);
 	});
 }
@@ -555,8 +569,12 @@ fn report_equivocation_invalid_session() {
 		// report an equivocation for the current set using an key ownership
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
-			report_equivocation(equivocation_proof, key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidSession,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
 		);
 	});
 }
@@ -596,8 +614,12 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// report an equivocation for the current set using a key ownership
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
-			report_equivocation(equivocation_proof, invalid_key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidKeyOwnershipProof,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				invalid_key_owner_proof,
+			),
+			Error::<Test>::InvalidKeyOwnershipProof,
 		);
 	});
 }
@@ -623,8 +645,12 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
-				report_equivocation(equivocation_proof, key_owner_proof.clone()),
-				equivocation::ReportEquivocationValidityError::InvalidEquivocationProof,
+				Grandpa::report_equivocation_unsigned(
+					Origin::none(),
+					equivocation_proof,
+					key_owner_proof.clone(),
+				),
+				Error::<Test>::InvalidEquivocationProof,
 			);
 		};
 
