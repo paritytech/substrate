@@ -238,6 +238,25 @@ decl_module! {
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
+		#[weight = 0]
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			let reporter = ensure_signed(origin)?;
+
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
+		}
+
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
 		///
 		/// This extrinsic must be called unsigned and it is expected that only
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
@@ -251,74 +270,11 @@ decl_module! {
 		) {
 			ensure_none(origin)?;
 
-			// we check the equivocation within the context of its set id (and
-			// associated session) and round. we also need to know the validator
-			// set count when the offence since it is required to calculate the
-			// slash amount.
-			let set_id = equivocation_proof.set_id();
-			let round = equivocation_proof.round();
-			let session_index = key_owner_proof.session();
-			let validator_count = key_owner_proof.validator_count();
-
-			// validate the key ownership proof extracting the id of the offender.
-			let offender =
-				T::KeyOwnerProofSystem::check_proof(
-					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
-					key_owner_proof,
-				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-			// validate equivocation proof (check votes are different and
-			// signatures are valid).
-			if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
-				return Err(Error::<T>::InvalidEquivocationProof.into());
-			}
-
-			// fetch the current and previous sets last session index. on the
-			// genesis set there's no previous set.
-			let previous_set_id_session_index = if set_id == 0 {
-				None
-			} else {
-				let session_index =
-					if let Some(session_id) = Self::session_for_set(set_id - 1) {
-						session_id
-					} else {
-						return Err(Error::<T>::InvalidEquivocationProof.into());
-					};
-
-				Some(session_index)
-			};
-
-			let set_id_session_index =
-				if let Some(session_id) = Self::session_for_set(set_id) {
-					session_id
-				} else {
-					return Err(Error::<T>::InvalidEquivocationProof.into());
-				};
-
-			// check that the session id for the membership proof is within the
-			// bounds of the set id reported in the equivocation.
-			if session_index > set_id_session_index ||
-				previous_set_id_session_index
-				.map(|previous_index| session_index <= previous_index)
-				.unwrap_or(false)
-			{
-				return Err(Error::<T>::InvalidEquivocationProof.into());
-			}
-
-			// use block author (if defined) as the only reporter
-			let reporters = T::HandleEquivocation::block_author().into_iter().collect();
-
-			// report to the offences module rewarding the sender.
-			T::HandleEquivocation::report_offence(
-				reporters,
-				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
-					session_index,
-					validator_count,
-					offender,
-					set_id,
-					round,
-				),
-			).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -497,6 +453,78 @@ impl<T: Trait> Module<T> {
 		// the genesis set and session since we only update the set -> session
 		// mapping whenever a new session starts, i.e. through `on_new_session`.
 		SetIdSession::insert(0, 0);
+	}
+
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Result<(), Error<T>> {
+		// we check the equivocation within the context of its set id (and
+		// associated session) and round. we also need to know the validator
+		// set count when the offence since it is required to calculate the
+		// slash amount.
+		let set_id = equivocation_proof.set_id();
+		let round = equivocation_proof.round();
+		let session_index = key_owner_proof.session();
+		let validator_count = key_owner_proof.validator_count();
+
+		// validate the key ownership proof extracting the id of the offender.
+		let offender =
+			T::KeyOwnerProofSystem::check_proof(
+				(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
+				key_owner_proof,
+			).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+
+		// validate equivocation proof (check votes are different and
+		// signatures are valid).
+		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		// fetch the current and previous sets last session index. on the
+		// genesis set there's no previous set.
+		let previous_set_id_session_index = if set_id == 0 {
+			None
+		} else {
+			let session_index =
+				if let Some(session_id) = Self::session_for_set(set_id - 1) {
+					session_id
+				} else {
+					return Err(Error::<T>::InvalidEquivocationProof.into());
+				};
+
+			Some(session_index)
+		};
+
+		let set_id_session_index =
+			if let Some(session_id) = Self::session_for_set(set_id) {
+				session_id
+			} else {
+				return Err(Error::<T>::InvalidEquivocationProof.into());
+			};
+
+		// check that the session id for the membership proof is within the
+		// bounds of the set id reported in the equivocation.
+		if session_index > set_id_session_index ||
+			previous_set_id_session_index
+			.map(|previous_index| session_index <= previous_index)
+			.unwrap_or(false)
+		{
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		// report to the offences module rewarding the sender.
+		T::HandleEquivocation::report_offence(
+			reporter.into_iter().collect(),
+			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
+				session_index,
+				validator_count,
+				offender,
+				set_id,
+				round,
+			),
+		).map_err(|_| Error::<T>::DuplicateOffenceReport)
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will create
