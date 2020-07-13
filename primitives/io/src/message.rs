@@ -28,6 +28,7 @@ use core::pin::Pin;
 use core::{task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable}};
 
 use spin::Mutex;
+use pin_project::pin_project;
 
 pub(crate) type MessageId = PollableId;
 
@@ -225,6 +226,7 @@ struct BlockOnState {
 /// Future that's resolved whenever the `PollableId` is signalled as ready by
 /// the Substrate host.
 #[must_use = "futures do nothing unless polled"]
+#[derive(Debug)]
 pub struct HostFuture {
     msg_id: MessageId,
     finished: bool,
@@ -258,4 +260,84 @@ impl Future for HostFuture {
 pub(crate) fn peek_response(msg_id: MessageId) -> bool {
     let mut state = STATE.lock();
     state.pending_messages.remove(&msg_id)
+}
+
+/// TODO: Resolve when the body is ready to be read? When we received header/request?
+/// Maybe two futures - one for the code/headers and the other one for body?
+#[pin_project]
+pub struct HttpFuture {
+    #[pin] inner: HostFuture,
+}
+
+impl core::convert::TryFrom<HostFuture> for HttpFuture {
+    type Error = HostFuture;
+    fn try_from(value: HostFuture) -> Result<HttpFuture, HostFuture> {
+        match value.msg_id.kind() {
+            PollableKind::Http => Ok(HttpFuture { inner: value }),
+            other => Err(value),
+        }
+    }
+}
+
+impl Future for HttpFuture {
+    type Output = Result<HttpResponse, sp_core::offchain::HttpError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        use sp_core::offchain::HttpRequestId;
+        use sp_core::offchain::HttpRequestStatus;
+        use sp_core::offchain::HttpError;
+        use core::convert::TryInto;
+
+        let id: HttpRequestId = self.inner.msg_id.try_into()
+            .expect("HttpFuture can be only constructed with HTTP HostFuture");
+        let this = self.project();
+        let inner = this.inner;
+
+        match Future::poll(inner, cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(()) => {
+                let now = super::offchain::timestamp();
+                let status = super::offchain::http_response_wait(&[id], Some(now));
+                let code = match status.as_slice() {
+                    &[HttpRequestStatus::Finished(code)] => code,
+                    &[HttpRequestStatus::IoError] => return Poll::Ready(Err(HttpError::IoError)),
+                    &[HttpRequestStatus::Invalid] => return Poll::Ready(Err(HttpError::Invalid)),
+                    &[HttpRequestStatus::DeadlineReached] => {
+                        // Internal logic error: We were signaled as ready but
+                        // the request somehow internally timed out.
+                        // Return an error instead of panicking
+                        return Poll::Ready(Err(HttpError::IoError));
+                    },
+                    other => return Poll::Ready(Err(HttpError::Invalid)),
+                };
+
+                let headers = super::offchain::http_response_headers(id);
+                // TODO: Support chunked response
+                // Ideally should piggy back on AsyncRead but we can't have sth
+                // similar due to Cargo feature unification bug and `futures`
+                // being compiled in `std` contexts in the dep graph
+                let mut buf = [0u8; 1024];
+                let len = match super::offchain::http_response_read_body(id, &mut buf, Some(now)) {
+                    Ok(read_len) => read_len,
+                    // TODO: Needs more data, can't be handled as a single future as of now
+                    Err(HttpError::DeadlineReached) => 0,
+                    other => panic!("The state of the http request is finished, as checked above; qed"),
+                };
+
+                // TODO: Implement initial response buffering
+                Poll::Ready(Ok(HttpResponse {
+                    code,
+                    headers,
+                    body: buf[..len as usize].to_vec(),
+                }))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct HttpResponse {
+    code: u16,
+    headers: Vec<(Vec<u8>, Vec<u8>)>,
+    body: Vec<u8>,
 }
