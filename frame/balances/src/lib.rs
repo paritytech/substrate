@@ -160,6 +160,7 @@ use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
+	weights::Weight,
 	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
@@ -178,6 +179,22 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
+pub trait WeightInfo {
+	fn transfer(u: u32, e: u32, ) -> Weight;
+	fn transfer_best_case(u: u32, e: u32, ) -> Weight;
+	fn transfer_keep_alive(u: u32, e: u32, ) -> Weight;
+	fn set_balance(u: u32, e: u32, ) -> Weight;
+	fn set_balance_killing(u: u32, e: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn transfer(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer_best_case(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer_keep_alive(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn set_balance(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn set_balance_killing(_u: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32BitUnsigned + Codec + Default + Copy +
@@ -188,6 +205,9 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+
+	/// Weight information for the extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
@@ -206,12 +226,16 @@ pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 
 	/// The means of storing the balances of an account.
 	type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 impl<T: Trait<I>, I: Instance> Subtrait<I> for T {
 	type Balance = T::Balance;
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type WeightInfo = <T as Trait<I>>::WeightInfo;
 }
 
 decl_event!(
@@ -872,6 +896,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type OnNewAccount = T::OnNewAccount;
 	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
+	type SystemWeightInfo = T::SystemWeightInfo;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type Balance = T::Balance;
@@ -879,6 +904,7 @@ impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
 	type DustRemoval = ();
 	type ExistentialDeposit = T::ExistentialDeposit;
 	type AccountStore = T::AccountStore;
+	type WeightInfo = <T as Subtrait<I>>::WeightInfo;
 }
 
 impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where

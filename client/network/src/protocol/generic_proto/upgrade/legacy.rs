@@ -311,7 +311,9 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
 			framed.send(handshake).await?;
 			let received_handshake = framed.next().await
-				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
+				.ok_or_else(|| {
+					io::Error::new(io::ErrorKind::UnexpectedEof, "Failed to receive handshake")
+				})??;
 
 			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
