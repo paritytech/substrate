@@ -30,6 +30,7 @@ futures = { version = "0.3.1", default-features = false, features = ["thread-poo
 parking_lot = { version = "0.10.0", optional = true }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 spin = "0.5"
+pin-project = "0.4"
 
 [features]
 default = ["std"]
