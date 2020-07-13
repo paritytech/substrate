@@ -64,7 +64,7 @@ pub(crate) fn next_notification(interest_list: &[MessageId], block: bool) -> Opt
 /// For non-interface messages, there can only ever be one registered `Waker`. Registering a
 /// `Waker` a second time overrides the one previously registered.
 pub(crate) fn register_message_waker(message_id: MessageId, waker: Waker) {
-    let mut state = (&*STATE).lock();
+    let mut state = STATE.lock();
 
     if let Some(pos) = state
         .message_ids
@@ -166,7 +166,7 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
             }
         }
 
-        let mut state = (&*STATE).lock();
+        let mut state = STATE.lock();
         debug_assert_eq!(state.message_ids.len(), state.wakers.len());
 
         // `block` indicates whether we should block the thread or just peek.
@@ -256,6 +256,6 @@ impl Future for HostFuture {
 
 /// If a response to this message ID has previously been obtained, extracts it for processing.
 pub(crate) fn peek_response(msg_id: MessageId) -> bool {
-    let mut state = (&*STATE).lock();
+    let mut state = STATE.lock();
     state.pending_messages.remove(&msg_id)
 }
