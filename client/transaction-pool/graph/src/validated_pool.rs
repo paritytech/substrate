@@ -192,7 +192,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 								Ok(()) => true,
 								Err(e) => {
 									if e.is_full() {
-										log::warn!(target: "txpool", "Trying to notify an import but the channel is full");
+										log::warn!(target: "txpool", "[{:?}] Trying to notify an import but the channel is full", hash);
 										true
 									} else {
 										false
