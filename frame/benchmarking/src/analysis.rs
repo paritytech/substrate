@@ -38,7 +38,7 @@ pub enum BenchmarkSelector {
 
 impl Analysis {
 	// Useful for when there are no components, and we just need an mean value of the benchmark results.
-	pub fn mean_value(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
+	fn mean_value(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
 		if r.is_empty() { return None }
 
 		let total: u128 = r.iter().map(|result|
@@ -61,7 +61,7 @@ impl Analysis {
 	}
 
 	// Useful for when there are no components, and we just need an median value of the benchmark results.
-	pub fn median_value(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
+	fn median_value(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
 		if r.is_empty() { return None }
 
 		let mut values: Vec<u128> = r.iter().map(|result|
