@@ -29,7 +29,7 @@
 //! - Requests have a certain time limit before they time out. This time includes the time it
 //! takes to send/receive the request and response.
 //!
-//! - If provided, a ["requests processing"](RequestResponseConfig::requests_processing) channel
+//! - If provided, a ["requests processing"](RequestResponseConfig::inbound_queue) channel
 //! is used to handle incoming requests.
 //!
 
@@ -98,7 +98,7 @@ pub struct ProtocolConfig {
     /// other peers. If this is `Some` but the channel is closed, then the local node will
     /// advertise support for this protocol, but any incoming request will lead to an error being
     /// sent back.
-    pub requests_processing: Option<mpsc::Sender<IncomingRequest>>,
+    pub inbound_queue: Option<mpsc::Sender<IncomingRequest>>,
 }
 
 /// A single request received by a peer on a request-response protocol.
@@ -181,7 +181,7 @@ impl RequestResponsesBehaviour {
 			cfg.set_connection_keep_alive(Duration::from_secs(10));
 			cfg.set_request_timeout(protocol.request_timeout);
 
-			let protocol_support = if protocol.requests_processing.is_some() {
+			let protocol_support = if protocol.inbound_queue.is_some() {
 				ProtocolSupport::Full
 			} else {
 				ProtocolSupport::Outbound
@@ -193,7 +193,7 @@ impl RequestResponsesBehaviour {
 			}, iter::once((protocol.name.as_bytes().to_vec(), protocol_support)), cfg);
 
 			match protocols.entry(protocol.name) {
-				Entry::Vacant(e) => e.insert((rq_rp, protocol.requests_processing)),
+				Entry::Vacant(e) => e.insert((rq_rp, protocol.inbound_queue)),
 				Entry::Occupied(e) =>
 					return Err(RegisterError::DuplicateProtocol(e.key().clone())),
 			};
@@ -672,7 +672,7 @@ mod tests {
 						max_request_size: 1024,
 						max_response_size: 1024 * 1024,
 						request_timeout: Duration::from_secs(30),
-						requests_processing: Some(tx),
+						inbound_queue: Some(tx),
 					})).unwrap();
 
 					async_std::task::spawn(async move {
@@ -784,7 +784,7 @@ mod tests {
 						max_request_size: 1024,
 						max_response_size: 8,  // <-- important for the test
 						request_timeout: Duration::from_secs(30),
-						requests_processing: Some(tx),
+						inbound_queue: Some(tx),
 					})).unwrap();
 
 					async_std::task::spawn(async move {
