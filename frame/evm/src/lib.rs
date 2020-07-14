@@ -33,14 +33,15 @@ use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::Weight;
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 use sp_runtime::ModuleId;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
 use sha3::{Digest, Keccak256};
-use evm::{ExitReason, ExitSucceed, ExitError, Config};
+pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
+use evm::Config;
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
