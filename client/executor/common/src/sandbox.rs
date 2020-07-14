@@ -580,7 +580,7 @@ pub fn instantiate<'a, FR, FE, SCH>(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
 	state: u32,
-) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError>
+) -> std::result::Result<UnregisteredInstance<FR>, InstantiationError>
 where
 	FR: Clone + 'static,
 	FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
@@ -648,7 +648,7 @@ where
 							}
 
 							let result = supervisor_externals.invoke(
-								&dispatch_thunk.clone(),
+								&dispatch_thunk,
 								invoke_args_ptr,
 								invoke_args_len,
 								state,
