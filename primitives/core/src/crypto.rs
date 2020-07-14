@@ -243,10 +243,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 			// Invalid length.
 			return Err(PublicError::BadLength);
 		}
-		let ver = d[0]
-			.try_into()
-			.or_else(|_| d[0].to_string().as_str().try_into())
-			.map_err(|_: ()| PublicError::UnknownVersion)?;
+		let ver = d[0].try_into().map_err(|_: ()| PublicError::UnknownVersion)?;
 
 		if d[len + 1..len + 3] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
 			// Invalid checksum.
@@ -369,7 +366,16 @@ macro_rules! ss58_address_format {
 			fn try_from(x: u8) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
-					_ => Err(()),
+					_ => {
+						let custom = match *DEFAULT_VERSION.lock() {
+							Ss58AddressFormat::Custom(n) => n,
+							_ => return Err(())
+						};
+						if custom != x {
+							return Err(())
+						}
+						Ok(Ss58AddressFormat::Custom(x))
+					},
 				}
 			}
 		}
@@ -380,7 +386,7 @@ macro_rules! ss58_address_format {
 			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, ()> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
-					a => a.parse::<u8>().map(Ss58AddressFormat::Custom).map_err(|_| ()),
+					a => a.parse::<u8>().map_err(|_| ()).and_then(TryFrom::try_from),
 				}
 			}
 		}

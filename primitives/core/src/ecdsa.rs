@@ -682,8 +682,7 @@ mod test {
 		// temp save default format version
 		let default_format = Ss58AddressFormat::default();
 		// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
-		set_default_ss58_version(Ss58AddressFormat::try_from("200")
-			.expect("parse str to u8 must success"));
+		set_default_ss58_version(Ss58AddressFormat::Custom(200));
 		// custom addr encoded by version 200
 		let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
 		assert!(Public::from_ss58check(&addr).is_ok());
