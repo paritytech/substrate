@@ -38,7 +38,7 @@ use std::{
 };
 
 pub use crate::request_responses::{
-	InboundError, InboundFailure, OutboundFailure, RequestId, SendRequestError
+	ResponseFailure, InboundFailure, OutboundFailure, RequestId, SendRequestError
 };
 
 /// General behaviour of the network. Combines all protocols together.
@@ -89,7 +89,7 @@ pub enum BehaviourOut<B: BlockT> {
 		protocol: Cow<'static, str>,
 		/// If `Ok`, contains the time elapsed between when we received the request and when we
 		/// sent back the response. If `Err`, the error that happened.
-		outcome: Result<Duration, InboundError>,
+		result: Result<Duration, ResponseFailure>,
 	},
 
 	/// A request initiated using [`Behaviour::send_request`] has succeeded or failed.
@@ -97,7 +97,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Request that has succeeded.
 		request_id: RequestId,
 		/// Response sent by the remote or reason for failure.
-		outcome: Result<Vec<u8>, OutboundFailure>,
+		result: Result<Vec<u8>, OutboundFailure>,
 	},
 
 	/// Started a new request with the given node.
@@ -347,18 +347,18 @@ Behaviour<B, H> {
 impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, H> {
 	fn inject_event(&mut self, event: request_responses::Event) {
 		match event {
-			request_responses::Event::InboundRequest { peer, protocol, outcome } => {
+			request_responses::Event::InboundRequest { peer, protocol, result } => {
 				self.events.push_back(BehaviourOut::InboundRequest {
 					peer,
 					protocol,
-					outcome,
+					result,
 				});
 			}
 
-			request_responses::Event::OutboundFinished { request_id, outcome } => {
+			request_responses::Event::RequestFinished { request_id, result } => {
 				self.events.push_back(BehaviourOut::RequestFinished {
 					request_id,
-					outcome,
+					result,
 				});
 			},
 		}
@@ -374,7 +374,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				self.events.push_back(BehaviourOut::InboundRequest {
 					peer,
 					protocol: From::from(protocol),
-					outcome: Ok(total_handling_time),
+					result: Ok(total_handling_time),
 				});
 			},
 			block_requests::Event::Response { peer, original_request: _, response, request_duration } => {

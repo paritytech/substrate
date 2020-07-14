@@ -75,7 +75,7 @@ use std::{
 };
 use wasm_timer::Instant;
 
-pub use behaviour::{InboundError, InboundFailure, OutboundFailure};
+pub use behaviour::{ResponseFailure, InboundFailure, OutboundFailure};
 
 mod out_events;
 #[cfg(test)]
@@ -619,7 +619,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			target,
 			protocol: protocol.into(),
 			request,
-			response: tx
+			pending_response: tx
 		});
 
 		match rx.await {
@@ -889,7 +889,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		target: PeerId,
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
-		response: oneshot::Sender<Result<Vec<u8>, OutboundFailure>>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, OutboundFailure>>,
 	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
@@ -1254,7 +1254,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut()
 						.write_notification(target, engine_id, message);
 				},
-				ServiceToWorkerMsg::Request { target, protocol, request, response } => {
+				ServiceToWorkerMsg::Request { target, protocol, request, pending_response } => {
 					// Calling `send_request` can fail immediately in some circumstances.
 					// This is handled by sending back an error on the channel.
 					match this.network_service.send_request(&target, &protocol, request) {
@@ -1266,14 +1266,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							}
 							this.pending_requests.insert(
 								request_id,
-								(response, Instant::now(), protocol.to_string())
+								(pending_response, Instant::now(), protocol.to_string())
 							);
 						},
 						Err(behaviour::SendRequestError::NotConnected) => {
-							let _ = response.send(Err(OutboundFailure::ConnectionClosed));
+							let _ = pending_response.send(Err(OutboundFailure::ConnectionClosed));
 						},
 						Err(behaviour::SendRequestError::UnknownProtocol) => {
-							let _ = response.send(Err(OutboundFailure::UnsupportedProtocols));
+							let _ = pending_response.send(Err(OutboundFailure::UnsupportedProtocols));
 						},
 					}
 				},
@@ -1316,9 +1316,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, outcome, .. })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest { protocol, result, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						match outcome {
+						match result {
 							Ok(serve_time) => {
 								metrics.requests_in_success_total
 									.with_label_values(&[&protocol])
@@ -1326,9 +1326,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							}
 							Err(err) => {
 								let reason = match err {
-									InboundError::Busy => "busy",
-									InboundError::Network(InboundFailure::Timeout) => "timeout",
-									InboundError::Network(InboundFailure::UnsupportedProtocols) =>
+									ResponseFailure::Busy => "busy",
+									ResponseFailure::Network(InboundFailure::Timeout) => "timeout",
+									ResponseFailure::Network(InboundFailure::UnsupportedProtocols) =>
 										"unsupported",
 								};
 
@@ -1339,10 +1339,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						}
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, outcome })) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { request_id, result })) => {
 					if let Some((send_back, started, protocol)) = this.pending_requests.remove(&request_id) {
 						if let Some(metrics) = this.metrics.as_ref() {
-							match &outcome {
+							match &result {
 								Ok(_) => {
 									metrics.requests_out_success_total
 										.with_label_values(&[&protocol])
@@ -1362,7 +1362,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								}
 							}
 						}
-						let _ = send_back.send(outcome);
+						let _ = send_back.send(result);
 					} else {
 						error!("Request not in pending_requests");
 					}
