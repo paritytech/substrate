@@ -28,7 +28,7 @@
 //! Additionally, we have a const: `WASM_TRACE_IDENTIFIER`, which holds a span name used
 //! to signal that the 'actual' span name and target should be retrieved instead from
 //! the associated Fields mentioned above.
-#![cfg_attr(not(feature = "std"), no_std)]ta
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
