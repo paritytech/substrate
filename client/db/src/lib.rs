@@ -1243,7 +1243,7 @@ impl<Block: BlockT> Backend<Block> {
 			None
 		};
 
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 
 		if let Some((
 			number,
@@ -1356,7 +1356,7 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 		for k in delete {
 			transaction.remove(columns::AUX, k);
 		}
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		Ok(())
 	}
 
@@ -1438,7 +1438,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
@@ -1536,7 +1536,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
-						self.storage.db.commit(transaction);
+						self.storage.db.commit(transaction)?;
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
 					}
@@ -1555,7 +1555,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 			leaves.revert(best_hash, best_number);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-			self.storage.db.commit(transaction);
+			self.storage.db.commit(transaction)?;
 
 			Ok(())
 		};
