@@ -46,7 +46,7 @@ test-case = "0.3.3"
 sp-runtime = { version = "2.0.0-rc4", path = "../../primitives/runtime" }
 sp-tracing = { version = "2.0.0-rc4", path = "../../primitives/tracing" }
 sc-tracing = { version = "2.0.0-rc4", path = "../tracing" }
-tracing = "0.1.14"
+tracing = "0.1.16"
 
 [features]
 default = [ "std" ]
