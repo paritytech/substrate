@@ -19,20 +19,22 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use hash_db::Prefix;
-use kvdb::{KeyValueDB, DBTransaction};
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_trie::MemoryDB;
 use sc_client_api::backend::PrunableStateChangesTrieStorage;
-use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
+use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache, HeaderMetadataCache};
 use sp_core::{ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
+use sp_core::storage::PrefixedStorageKey;
+use sp_database::Transaction;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, HashFor, NumberFor, One, Zero, CheckedSub,
 };
 use sp_runtime::generic::{BlockId, DigestItem, ChangesTrieSignal};
-use sp_state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
-use crate::utils::{self, Meta, meta_keys, db_err};
+use sp_state_machine::{ChangesTrieBuildCache, ChangesTrieCacheAction};
+use crate::{Database, DbHash};
+use crate::utils::{self, Meta, meta_keys};
 use crate::cache::{
 	DbCacheSync, DbCache, DbCacheTransactionOps,
 	ComplexBlockId, EntryType as CacheEntryType,
@@ -76,7 +78,7 @@ impl<Block: BlockT> From<DbCacheTransactionOps<Block>> for DbChangesTrieStorageT
 /// Stores all tries in separate DB column.
 /// Lock order: meta, tries_meta, cache, build_cache.
 pub struct DbChangesTrieStorage<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	meta_column: u32,
 	changes_tries_column: u32,
 	key_lookup_column: u32,
@@ -111,7 +113,8 @@ struct ChangesTriesMeta<Block: BlockT> {
 impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Create new changes trie storage.
 	pub fn new(
-		db: Arc<dyn KeyValueDB>,
+		db: Arc<dyn Database<DbHash>>,
+		header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 		meta_column: u32,
 		changes_tries_column: u32,
 		key_lookup_column: u32,
@@ -135,6 +138,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			min_blocks_to_keep,
 			cache: DbCacheSync(RwLock::new(DbCache::new(
 				db.clone(),
+				header_metadata_cache,
 				key_lookup_column,
 				header_column,
 				cache_column,
@@ -149,7 +153,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Commit new changes trie.
 	pub fn commit(
 		&self,
-		tx: &mut DBTransaction,
+		tx: &mut Transaction<DbHash>,
 		mut changes_trie: MemoryDB<HashFor<Block>>,
 		parent_block: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
@@ -160,7 +164,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		// insert changes trie, associated with block, into DB
 		for (key, (val, _)) in changes_trie.drain() {
-			tx.put(self.changes_tries_column, key.as_ref(), &val);
+			tx.set(self.changes_tries_column, key.as_ref(), &val);
 		}
 
 		// if configuration has not been changed AND block is not finalized => nothing to do here
@@ -205,7 +209,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Called when block is finalized.
 	pub fn finalize(
 		&self,
-		tx: &mut DBTransaction,
+		tx: &mut Transaction<DbHash>,
 		parent_block_hash: Block::Hash,
 		block_hash: Block::Hash,
 		block_num: NumberFor<Block>,
@@ -254,7 +258,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// When block is reverted.
 	pub fn revert(
 		&self,
-		tx: &mut DBTransaction,
+		tx: &mut Transaction<DbHash>,
 		block: &ComplexBlockId<Block>,
 	) -> ClientResult<DbChangesTrieStorageTransaction<Block>> {
 		Ok(self.cache.0.write().transaction(tx)
@@ -280,7 +284,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	/// Prune obsolete changes tries.
 	fn prune(
 		&self,
-		tx: &mut DBTransaction,
+		tx: &mut Transaction<DbHash>,
 		block_hash: Block::Hash,
 		block_num: NumberFor<Block>,
 		new_header: Option<&Block::Header>,
@@ -313,7 +317,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 						hash: convert_hash(&block_hash),
 						number: block_num,
 					},
-					|node| tx.delete(self.changes_tries_column, node.as_ref()),
+					|node| tx.remove(self.changes_tries_column, node.as_ref()),
 				);
 
 				next_digest_range_start = end + One::one();
@@ -481,23 +485,22 @@ where
 	fn with_cached_changed_keys(
 		&self,
 		root: &Block::Hash,
-		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<Vec<u8>>>),
 	) -> bool {
 		self.build_cache.read().with_changed_keys(root, functor)
 	}
 
-	fn get(&self, key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
-		self.db.get(self.changes_tries_column, key.as_ref())
-			.map_err(|err| format!("{}", err))
+	fn get(&self, key: &Block::Hash, _prefix: Prefix) -> Result<Option<Vec<u8>>, String> {
+		Ok(self.db.get(self.changes_tries_column, key.as_ref()))
 	}
 }
 
 /// Read changes tries metadata from database.
 fn read_tries_meta<Block: BlockT>(
-	db: &dyn KeyValueDB,
+	db: &dyn Database<DbHash>,
 	meta_column: u32,
 ) -> ClientResult<ChangesTriesMeta<Block>> {
-	match db.get(meta_column, meta_keys::CHANGES_TRIES_META).map_err(db_err)? {
+	match db.get(meta_column, meta_keys::CHANGES_TRIES_META) {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Ok(h) => Ok(h),
 			Err(err) => Err(ClientError::Backend(format!("Error decoding changes tries metadata: {}", err))),
@@ -511,11 +514,11 @@ fn read_tries_meta<Block: BlockT>(
 
 /// Write changes tries metadata from database.
 fn write_tries_meta<Block: BlockT>(
-	tx: &mut DBTransaction,
+	tx: &mut Transaction<DbHash>,
 	meta_column: u32,
 	meta: &ChangesTriesMeta<Block>,
 ) {
-	tx.put(meta_column, meta_keys::CHANGES_TRIES_META, &meta.encode());
+	tx.set_from_vec(meta_column, meta_keys::CHANGES_TRIES_META, meta.encode());
 }
 
 #[cfg(test)]
@@ -707,7 +710,7 @@ mod tests {
 
 		let finalize_block = |number| {
 			let header = backend.blockchain().header(BlockId::Number(number)).unwrap().unwrap();
-			let mut tx = DBTransaction::new();
+			let mut tx = Transaction::new();
 			let cache_ops = backend.changes_tries_storage.finalize(
 				&mut tx,
 				*header.parent_hash(),
@@ -716,7 +719,7 @@ mod tests {
 				None,
 				None,
 			).unwrap();
-			backend.storage.db.write(tx).unwrap();
+			backend.storage.db.commit(tx).unwrap();
 			backend.changes_tries_storage.post_commit(Some(cache_ops));
 		};
 

@@ -1,0 +1,120 @@
+// Schema definition for light client messages.
+
+syntax = "proto3";
+
+package api.v1.light;
+
+// A pair of arbitrary bytes.
+message Pair {
+	// The first element of the pair.
+	bytes fst = 1;
+	// The second element of the pair.
+	bytes snd = 2;
+}
+
+// Enumerate all possible light client request messages.
+message Request {
+	oneof request {
+		RemoteCallRequest remote_call_request = 1;
+		RemoteReadRequest remote_read_request = 2;
+		RemoteHeaderRequest remote_header_request = 3;
+		RemoteReadChildRequest remote_read_child_request = 4;
+		RemoteChangesRequest remote_changes_request = 5;
+	}
+}
+
+// Enumerate all possible light client response messages.
+message Response {
+	oneof response {
+		RemoteCallResponse remote_call_response = 1;
+		RemoteReadResponse remote_read_response = 2;
+		RemoteHeaderResponse remote_header_response = 3;
+		RemoteChangesResponse remote_changes_response = 4;
+	}
+}
+
+// Remote call request.
+message RemoteCallRequest {
+	// Block at which to perform call.
+	bytes block = 2;
+	// Method name.
+	string method = 3;
+	// Call data.
+	bytes data = 4;
+}
+
+// Remote call response.
+message RemoteCallResponse {
+	// Execution proof.
+	bytes proof = 2;
+}
+
+// Remote storage read request.
+message RemoteReadRequest {
+	// Block at which to perform call.
+	bytes block = 2;
+	// Storage keys.
+	repeated bytes keys = 3;
+}
+
+// Remote read response.
+message RemoteReadResponse {
+	// Read proof.
+	bytes proof = 2;
+}
+
+// Remote storage read child request.
+message RemoteReadChildRequest {
+	// Block at which to perform call.
+	bytes block = 2;
+	// Child Storage key, this is relative
+	// to the child type storage location.
+	bytes storage_key = 3;
+	// Storage keys.
+	repeated bytes keys = 6;
+}
+
+// Remote header request.
+message RemoteHeaderRequest {
+	// Block number to request header for.
+	bytes block = 2;
+}
+
+// Remote header response.
+message RemoteHeaderResponse {
+	// Header. None if proof generation has failed (e.g. header is unknown).
+	bytes header = 2; // optional
+	// Header proof.
+	bytes proof = 3;
+}
+
+/// Remote changes request.
+message RemoteChangesRequest {
+	// Hash of the first block of the range (including first) where changes are requested.
+	bytes first = 2;
+	// Hash of the last block of the range (including last) where changes are requested.
+	bytes last = 3;
+	// Hash of the first block for which the requester has the changes trie root. All other
+	// affected roots must be proved.
+	bytes min = 4;
+	// Hash of the last block that we can use when querying changes.
+	bytes max = 5;
+	// Storage child node key which changes are requested.
+	bytes storage_key = 6; // optional
+	// Storage key which changes are requested.
+	bytes key = 7;
+}
+
+// Remote changes response.
+message RemoteChangesResponse {
+	// Proof has been generated using block with this number as a max block. Should be
+	// less than or equal to the RemoteChangesRequest::max block number.
+	bytes max = 2;
+	// Changes proof.
+	repeated bytes proof = 3;
+	// Changes tries roots missing on the requester' node.
+	repeated Pair roots = 4;
+	// Missing changes tries roots proof.
+	bytes roots_proof = 5;
+}
+

@@ -18,7 +18,7 @@
 
 use futures::{prelude::*, ready};
 use codec::{Encode, Decode};
-use libp2p::core::nodes::listeners::ListenerId;
+use libp2p::core::connection::{ConnectionId, ListenerId};
 use libp2p::core::ConnectedPoint;
 use libp2p::swarm::{Swarm, ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{PollParameters, NetworkBehaviour, NetworkBehaviourAction};
@@ -42,6 +42,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 	for index in 0 .. 2 {
 		let keypair = keypairs[index].clone();
+		let local_peer_id = keypair.public().into_peer_id();
 		let transport = libp2p::core::transport::MemoryTransport
 			.and_then(move |out, endpoint| {
 				let secio = libp2p::secio::SecioConfig::new(keypair);
@@ -82,7 +83,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(&b"test"[..], &[1], peerset, None),
+			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], vec![], peerset, None),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -148,20 +149,29 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		list
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.inner.inject_connected(peer_id, endpoint)
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		self.inner.inject_connected(peer_id)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.inner.inject_disconnected(peer_id, endpoint)
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		self.inner.inject_disconnected(peer_id)
 	}
 
-	fn inject_node_event(
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.inner.inject_connection_established(peer_id, conn, endpoint)
+	}
+
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.inner.inject_connection_closed(peer_id, conn, endpoint)
+	}
+
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent
 	) {
-		self.inner.inject_node_event(peer_id, event)
+		self.inner.inject_event(peer_id, connection, event)
 	}
 
 	fn poll(
@@ -175,10 +185,6 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		>
 	> {
 		self.inner.poll(cx, params)
-	}
-
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.inner.inject_replaced(peer_id, closed_endpoint, new_endpoint)
 	}
 
 	fn inject_addr_reach_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn std::error::Error) {
@@ -205,8 +211,8 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		self.inner.inject_listener_error(id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		self.inner.inject_listener_closed(id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		self.inner.inject_listener_closed(id, reason);
 	}
 }
 
@@ -235,6 +241,8 @@ fn two_nodes_transfer_lots_of_packets() {
 						);
 					}
 				},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				_ => panic!(),
 			}
 		}
@@ -245,6 +253,8 @@ fn two_nodes_transfer_lots_of_packets() {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
 				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				Some(GenericProtoOut::LegacyMessage { message, .. }) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
 						Message::<Block>::BlockResponse(BlockResponse { id: _, blocks }) => {
@@ -306,6 +316,8 @@ fn basic_two_nodes_requests_in_parallel() {
 						service1.send_packet(&peer_id, msg.encode());
 					}
 				},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				_ => panic!(),
 			}
 		}
@@ -315,6 +327,8 @@ fn basic_two_nodes_requests_in_parallel() {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
 				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				Some(GenericProtoOut::LegacyMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);

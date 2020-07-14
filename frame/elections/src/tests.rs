@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Tests for election module.
 
@@ -670,7 +671,7 @@ fn retracting_active_voter_should_slash_reporter() {
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(8);
-		assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
+		assert_ok!(Elections::set_desired_seats(Origin::root(), 3));
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(10);
@@ -862,45 +863,6 @@ fn election_voting_should_work() {
 		assert_eq!(Elections::all_approvals_of(&4), vec![true]);
 		assert_eq!(Elections::all_approvals_of(&2), vec![false, true, true]);
 		assert_eq!(Elections::all_approvals_of(&3), vec![false, true, true]);
-
-		assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
-	});
-}
-
-#[test]
-fn election_proxy_voting_should_work() {
-	ExtBuilder::default().build().execute_with(|| {
-		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
-
-		<Proxy<Test>>::insert(11, 1);
-		<Proxy<Test>>::insert(12, 2);
-		<Proxy<Test>>::insert(13, 3);
-		<Proxy<Test>>::insert(14, 4);
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(11), vec![true], 0, 0, 10)
-		);
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(14), vec![true], 0, 1, 40)
-		);
-
-		assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-		assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-		assert_eq!(voter_ids(), vec![1, 4]);
-
-		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
-		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 2));
-
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(12), vec![false, true], 0, 2, 20)
-		);
-		assert_ok!(
-			Elections::proxy_set_approvals(Origin::signed(13), vec![false, true], 0, 3, 30)
-		);
-
-		assert_eq!(Elections::all_approvals_of(&1), vec![true]);
-		assert_eq!(Elections::all_approvals_of(&4), vec![true]);
-		assert_eq!(Elections::all_approvals_of(&2), vec![false, true]);
-		assert_eq!(Elections::all_approvals_of(&3), vec![false, true]);
 
 		assert_eq!(voter_ids(), vec![1, 4, 2, 3]);
 	});
@@ -1283,7 +1245,7 @@ fn election_second_tally_should_use_runners_up() {
 
 		System::set_block_number(8);
 		assert_ok!(Elections::set_approvals(Origin::signed(6), vec![false, false, true, false], 1, 0, 60));
-		assert_ok!(Elections::set_desired_seats(Origin::ROOT, 3));
+		assert_ok!(Elections::set_desired_seats(Origin::root(), 3));
 		assert_ok!(Elections::end_block(System::block_number()));
 
 		System::set_block_number(10);

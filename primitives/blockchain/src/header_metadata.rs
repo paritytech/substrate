@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Implements tree backend, cached header metadata and algorithms
 //! to compute routes efficiently over the tree of headers.
@@ -136,7 +137,8 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 		from = backend.header_metadata(from.parent)?;
 	}
 
-	// add the pivot block. and append the reversed to-branch (note that it's reverse order originals)
+	// add the pivot block. and append the reversed to-branch
+	// (note that it's reverse order originals)
 	let pivot = from_branch.len();
 	from_branch.push(HashAndNumber {
 		number: to.number,
@@ -181,16 +183,22 @@ pub struct HashAndNumber<Block: BlockT> {
 /// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TreeRoute<Block: BlockT> {
 	route: Vec<HashAndNumber<Block>>,
 	pivot: usize,
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
-	/// Get a slice of all retracted blocks in reverse order (towards common ancestor)
+	/// Get a slice of all retracted blocks in reverse order (towards common ancestor).
 	pub fn retracted(&self) -> &[HashAndNumber<Block>] {
 		&self.route[..self.pivot]
+	}
+
+	/// Convert into all retracted blocks in reverse order (towards common ancestor).
+	pub fn into_retracted(mut self) -> Vec<HashAndNumber<Block>> {
+		self.route.truncate(self.pivot);
+		self.route
 	}
 
 	/// Get the common ancestor block. This might be one of the two blocks of the
@@ -212,8 +220,15 @@ pub trait HeaderMetadata<Block: BlockT> {
 	/// Error used in case the header metadata is not found.
 	type Error;
 
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
-	fn insert_header_metadata(&self, hash: Block::Hash, header_metadata: CachedHeaderMetadata<Block>);
+	fn header_metadata(
+		&self,
+		hash: Block::Hash,
+	) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
+	fn insert_header_metadata(
+		&self,
+		hash: Block::Hash,
+		header_metadata: CachedHeaderMetadata<Block>,
+	);
 	fn remove_header_metadata(&self, hash: Block::Hash);
 }
 
@@ -239,19 +254,16 @@ impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	}
 }
 
-impl<Block: BlockT> HeaderMetadata<Block> for HeaderMetadataCache<Block> {
-	type Error = String;
-
-	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
+impl<Block: BlockT> HeaderMetadataCache<Block> {
+	pub fn header_metadata(&self, hash: Block::Hash) -> Option<CachedHeaderMetadata<Block>> {
 		self.cache.write().get(&hash).cloned()
-			.ok_or("header metadata not found in cache".to_owned())
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+	pub fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
 		self.cache.write().put(hash, metadata);
 	}
 
-	fn remove_header_metadata(&self, hash: Block::Hash) {
+	pub fn remove_header_metadata(&self, hash: Block::Hash) {
 		self.cache.write().pop(&hash);
 	}
 }
@@ -265,6 +277,8 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 	pub number: NumberFor<Block>,
 	/// Hash of parent header.
 	pub parent: Block::Hash,
+	/// Block state root.
+	pub state_root: Block::Hash,
 	/// Hash of an ancestor header. Used to jump through the tree.
 	ancestor: Block::Hash,
 }
@@ -275,6 +289,7 @@ impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {
 			hash: header.hash().clone(),
 			number: header.number().clone(),
 			parent: header.parent_hash().clone(),
+			state_root: header.state_root().clone(),
 			ancestor: header.parent_hash().clone(),
 		}
 	}

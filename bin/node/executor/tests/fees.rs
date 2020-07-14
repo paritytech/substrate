@@ -1,33 +1,33 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use codec::{Encode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::GetDispatchInfo,
+	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight, IdentityFee, WeightToFeePolynomial},
 };
-use sp_core::{NeverNativeValue, map, storage::Storage};
-use sp_runtime::{Fixed64, Perbill, traits::{Convert, BlakeTwo256}};
+use sp_core::NeverNativeValue;
+use sp_runtime::{Perbill, FixedPointNumber};
 use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, TransactionBaseFee,
-	TransactionByteFee, WeightFeeCoefficient,
+	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, Multiplier,
+	TransactionByteFee,
 	constants::currency::*,
 };
-use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
 use node_testing::keyring::*;
 
@@ -38,8 +38,8 @@ use self::common::{*, sign};
 fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut t = new_test_ext(COMPACT_CODE, false);
 
-	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed64::from_parts(0);
+	// initial fee multiplier must be one.
+	let mut prev_multiplier = Multiplier::one();
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
@@ -59,7 +59,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(90))),
+				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(60))),
 			}
 		]
 	);
@@ -122,7 +122,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 }
 
 #[test]
-fn transaction_fee_is_correct_ultimate() {
+fn transaction_fee_is_correct() {
 	// This uses the exact values of substrate-node.
 	//
 	// weight of transfer call as of now: 1_000_000
@@ -130,21 +130,20 @@ fn transaction_fee_is_correct_ultimate() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
-		top: map![
-			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-			},
-			<frame_system::Account<Runtime>>::hashed_key_for(bob()) => {
-				(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
-			},
-			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
-				(110 * DOLLARS).encode()
-			},
-			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
-		],
-		children: map![],
-	});
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
+		(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+	);
+	t.insert(
+		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
+		(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+	);
+	t.insert(
+		<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(),
+		(110 * DOLLARS).encode()
+	);
+	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
 	let tip = 1_000_000;
 	let xt = sign(CheckedExtrinsic {
@@ -173,22 +172,27 @@ fn transaction_fee_is_correct_ultimate() {
 	t.execute_with(|| {
 		assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
 		// Components deducted from alice's balances:
+		// - Base fee
 		// - Weight fee
 		// - Length fee
 		// - Tip
 		// - Creation-fee of bob's account.
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
-		let length_fee = TransactionBaseFee::get() +
-			TransactionByteFee::get() *
-			(xt.clone().encode().len() as Balance);
+		let base_weight = ExtrinsicBaseWeight::get();
+		let base_fee = IdentityFee::<Balance>::calc(&base_weight);
+
+		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
+		let weight_fee = IdentityFee::<Balance>::calc(&weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
-		assert_eq!(weight_fee as Balance, MILLICENTS);
+		// current weight of transfer = 200_000_000
+		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
+		assert_eq!(weight_fee, weight as Balance);
+		balance_alice -= base_fee;
 		balance_alice -= weight_fee;
 		balance_alice -= tip;
 

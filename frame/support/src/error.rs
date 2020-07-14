@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Macro for declaring a module error.
 
@@ -35,7 +36,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///
 /// ```
 /// # use frame_support::{decl_error, decl_module};
-/// # use frame_support::weights::SimpleDispatchInfo;
+/// #
 /// decl_error! {
 ///     /// Errors that can occur in my module.
 ///     pub enum MyError for Module<T: Trait> {
@@ -46,7 +47,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     }
 /// }
 ///
-/// # use frame_system::{self as system, Trait};
+/// # use frame_system::Trait;
 ///
 /// // You need to register the error type in `decl_module!` as well to make the error
 /// // exported in the metadata.
@@ -55,7 +56,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///         type Error = MyError<T>;
 ///
-/// 		#[weight = SimpleDispatchInfo::default()]
+///         #[weight = 0]
 ///         fn do_something(origin) -> frame_support::dispatch::DispatchResult {
 ///             Err(MyError::<T>::YouAreNotCoolEnough.into())
 ///         }
@@ -89,7 +90,7 @@ macro_rules! decl_error {
 			#[doc(hidden)]
 			__Ignore(
 				$crate::sp_std::marker::PhantomData<($generic, $( $inst_generic)?)>,
-				$crate::dispatch::Never,
+				$crate::Never,
 			),
 			$(
 				$( #[doc = $doc_attr] )*

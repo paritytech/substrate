@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! # Nicks Module
 //!
@@ -45,9 +46,8 @@ use sp_runtime::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
-	weights::SimpleDispatchInfo,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -110,7 +110,7 @@ decl_error! {
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
+	/// Nicks module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
@@ -141,7 +141,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = 50_000_000]
 		fn set_name(origin, name: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
@@ -171,7 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
+		#[weight = 70_000_000]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -187,7 +187,7 @@ decl_module! {
 		/// Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`
 		/// imbalance handler.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -195,11 +195,9 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
+		#[weight = 70_000_000]
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
 			let target = T::Lookup::lookup(target)?;
@@ -215,7 +213,7 @@ decl_module! {
 		///
 		/// No length checking is done on the name.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// # <weight>
 		/// - O(1).
@@ -223,11 +221,9 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
+		#[weight = 70_000_000]
 		fn force_name(origin, target: <T::Lookup as StaticLookup>::Source, name: Vec<u8>) {
-			T::ForceOrigin::try_origin(origin)
-				.map(|_| ())
-				.or_else(ensure_root)?;
+			T::ForceOrigin::ensure_origin(origin)?;
 
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
@@ -248,8 +244,6 @@ mod tests {
 	};
 	use sp_core::H256;
 	use frame_system::EnsureSignedBy;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 	};
@@ -258,9 +252,6 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -270,6 +261,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -282,6 +274,10 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
+		type MaximumExtrinsicWeight = MaximumBlockWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -289,6 +285,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -299,6 +296,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const ReservationFee: u64 = 2;
@@ -321,11 +319,8 @@ mod tests {
 	type Balances = pallet_balances::Module<Test>;
 	type Nicks = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		// We use default for brevity, but you can configure as desired if needed.
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
 				(1, 10),

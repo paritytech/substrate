@@ -18,15 +18,7 @@
 #   are more recognizable on GitHub, you can use them for mentioning unlike an email.
 # - The latest matching rule, if multiple, takes precedence.
 
-# Wasm execution and the wasm side of Substrate Runtime Interface
-/client/executor/ @pepyakin
-/primitives/io/ @pepyakin @NikVolf
-
-# Crypto, execution extensions, etc.
-/primitives/core/ @NikVolf
-
 # Block production
-/primitives/authorship/ @NikVolf
 /client/basic-authorship/ @NikVolf
 
 # Sandboxing capability of Substrate Runtime
@@ -34,55 +26,39 @@
 /primitives/core/src/sandbox.rs @pepyakin
 
 # Transaction pool
-/client/transaction-pool/ @tomusdrw @NikVolf
-/primitives/transaction-pool/ @tomusdrw @NikVolf
+/client/transaction-pool/ @NikVolf
+/primitives/transaction-pool/ @NikVolf
 
 # Offchain
 /client/offchain/ @tomusdrw
 /primitives/offchain/ @tomusdrw
 
-# Everything that has RPC in it
-/bin/node/rpc/ @tomusdrw
-/bin/node/rpc-client/ @tomusdrw
-/client/rpc/ @tomusdrw
-/primitives/rpc/ @tomusdrw
-
 # GRANDPA, BABE, consensus stuff
-/frame/babe/ @andresilva @DemiMarie-parity
-/frame/grandpa/ @andresilva @DemiMarie-parity
-/client/finality-grandpa/ @andresilva @DemiMarie-parity
-/client/consensus/babe/ @andresilva @DemiMarie-parity
-/client/consensus/slots/ @andresilva @DemiMarie-parity
+/frame/babe/ @andresilva
+/frame/grandpa/ @andresilva
+/client/finality-grandpa/ @andresilva
+/client/consensus/babe/ @andresilva
+/client/consensus/slots/ @andresilva
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere
-/frame/contracts/src/wasm/runtime.rs @Robbepop
+/frame/contracts/ @pepyakin
 
 # EVM
 /frame/evm/ @sorpaas
 
-# Inflation points
-/frame/staking/src/inflation.rs @thiolliere
-
-# NPoS and Governance and Phragmén
+# NPoS and election
 /frame/staking/ @kianenigma
 /frame/elections/ @kianenigma
 /frame/elections-phragmen/ @kianenigma
-/primitives/phragmen/ @kianenigma
+/primitives/npos-elections/ @kianenigma
 
 # Fixed point arithmetic
-/primitives/sp-arithmetic/ @kianenigma @thiolliere
-
-# End to end testing of substrate node
-/bin/node/executor/ @kianenigma
+/primitives/sp-arithmetic/ @kianenigma
 
 # Transaction weight stuff
-/frame/support/src/weights.rs @kianenigma
-
-# Support crates
-/frame/support/ @thiolliere @kianenigma
+/frame/support/src/weights.rs @shawntabrizi
 
 # Authority discovery
 /client/authority-discovery/ @mxinden

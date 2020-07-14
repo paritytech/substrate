@@ -1,23 +1,25 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate block builder
 //!
 //! This crate provides the [`BlockBuilder`] utility and the corresponding runtime api
-//! [`BlockBuilder`](api::BlockBuilder).Error
+//! [`BlockBuilder`](sp_block_builder::BlockBuilder).Error
 //!
 //! The block builder utility is used in the node as an abstraction over the runtime api to
 //! initialize a block, to push extrinsics and to finalize a block.
@@ -32,7 +34,10 @@ use sp_runtime::{
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
-use sp_api::{Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof};
+use sp_api::{
+	Core, ApiExt, ApiErrorFor, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof,
+	TransactionOutcome,
+};
 use sp_consensus::RecordProof;
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -154,17 +159,22 @@ where
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		self.api.map_api_result(|api| {
+		self.api.execute_in_transaction(|api| {
 			match api.apply_extrinsic_with_context(
 				block_id,
 				ExecutionContext::BlockConstruction,
 				xt.clone(),
-			)? {
-				Ok(_) => {
+			) {
+				Ok(Ok(_)) => {
 					extrinsics.push(xt);
-					Ok(())
+					TransactionOutcome::Commit(Ok(()))
 				}
-				Err(tx_validity) => Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+				Ok(Err(tx_validity)) => {
+					TransactionOutcome::Rollback(
+						Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
+					)
+				},
+				Err(e) => TransactionOutcome::Rollback(Err(e)),
 			}
 		})
 	}
@@ -208,6 +218,25 @@ where
 			block: <Block as BlockT>::new(header, self.extrinsics),
 			storage_changes,
 			proof,
+		})
+	}
+
+	/// Create the inherents for the block.
+	///
+	/// Returns the inherents created by the runtime or an error if something failed.
+	pub fn create_inherents(
+		&mut self,
+		inherent_data: sp_inherents::InherentData,
+	) -> Result<Vec<Block::Extrinsic>, ApiErrorFor<A, Block>> {
+		let block_id = self.block_id;
+		self.api.execute_in_transaction(move |api| {
+			// `create_inherents` should not change any state, to ensure this we always rollback
+			// the transaction.
+			TransactionOutcome::Rollback(api.inherent_extrinsics_with_context(
+				&block_id,
+				ExecutionContext::BlockConstruction,
+				inherent_data
+			))
 		})
 	}
 }

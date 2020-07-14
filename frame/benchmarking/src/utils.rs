@@ -1,18 +1,19 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
@@ -43,7 +44,16 @@ pub struct BenchmarkBatch {
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128, u128);
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkResults {
+	pub components: Vec<(BenchmarkParameter, u32)>,
+	pub extrinsic_time: u128,
+	pub storage_root_time: u128,
+	pub reads: u32,
+	pub repeat_reads: u32,
+	pub writes: u32,
+	pub repeat_writes: u32,
+}
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
@@ -82,6 +92,20 @@ pub trait Benchmarking {
 	fn commit_db(&mut self) {
 		self.commit()
 	}
+
+	/// Get the read/write count
+	fn read_write_count(&self) -> (u32, u32, u32, u32) {
+		self.read_write_count()
+	}
+
+	/// Reset the read/write count
+	fn reset_read_write_count(&mut self) {
+		self.reset_read_write_count()
+	}
+
+	fn set_whitelist(&mut self, new: Vec<Vec<u8>>) {
+		self.set_whitelist(new)
+	}
 }
 
 /// The pallet benchmarking trait.
@@ -105,6 +129,7 @@ pub trait Benchmarking<T> {
 		highest_range_values: &[u32],
 		steps: &[u32],
 		repeat: u32,
+		whitelist: &[Vec<u8>]
 	) -> Result<Vec<T>, &'static str>;
 }
 
@@ -113,8 +138,11 @@ pub trait BenchmarkingSetup<T> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
-	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
+	/// Set up the storage, and prepare a closure to run the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// Set up the storage, and prepare a closure to test and verify the benchmark
+	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// The required setup for creating a benchmark.
@@ -122,8 +150,11 @@ pub trait BenchmarkingSetupInstance<T, I> {
 	/// Return the components and their ranges which should be tested in this benchmark.
 	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
 
-	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
+	/// Set up the storage, and prepare a closure to run the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// Set up the storage, and prepare a closure to test and verify the benchmark
+	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.

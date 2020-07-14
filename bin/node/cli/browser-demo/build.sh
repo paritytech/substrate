@@ -1,3 +1,4 @@
 #!/usr/bin/env sh
-wasm-pack build --target web --out-dir ./browser-demo/pkg --no-typescript --release ./.. -- --no-default-features --features "browser"
+cargo +nightly build --release -p node-cli --target wasm32-unknown-unknown --no-default-features --features browser -Z features=itarget
+wasm-bindgen ../../../../target/wasm32-unknown-unknown/release/node_cli.wasm --out-dir pkg --target web
 python -m http.server 8000

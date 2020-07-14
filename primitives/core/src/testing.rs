@@ -1,35 +1,39 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Types that should only be used for testing!
 
-use crate::crypto::{KeyTypeId, CryptoTypePublicPair};
+use crate::crypto::KeyTypeId;
 #[cfg(feature = "std")]
 use crate::{
-	crypto::{Pair, Public},
-	ed25519, sr25519,
-	traits::BareCryptoStoreError
+	crypto::{Pair, Public, CryptoTypePublicPair},
+	ed25519, sr25519, ecdsa,
+	traits::Error,
+	vrf::{VRFTranscriptData, VRFSignature, make_transcript},
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-use codec::Encode;
+
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
+/// Key type for generic Sr 25519 key.
+pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
 
 /// A keystore implementation usable in tests.
 #[cfg(feature = "std")]
@@ -62,11 +66,19 @@ impl KeyStore {
 			)
 	}
 
+	fn ecdsa_key_pair(&self, id: KeyTypeId, pub_key: &ecdsa::Public) -> Option<ecdsa::Pair> {
+		self.keys.get(&id)
+			.and_then(|inner|
+				inner.get(pub_key.as_slice())
+					.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
+			)
+	}
+
 }
 
 #[cfg(feature = "std")]
 impl crate::traits::BareCryptoStore for KeyStore {
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
 		self.keys
 			.get(&id)
 			.map(|map| {
@@ -74,6 +86,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 					.fold(Vec::new(), |mut v, k| {
 						v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
 						v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+						v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k.clone()));
 						v
 					}))
 			})
@@ -95,11 +108,11 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, BareCryptoStoreError> {
+	) -> Result<sr25519::Public, Error> {
 		match seed {
 			Some(seed) => {
 				let pair = sr25519::Pair::from_string(seed, None)
-					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `sr25519` pair.".to_owned()))?;
+					.map_err(|_| Error::ValidationError("Generates an `sr25519` pair.".to_owned()))?;
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
@@ -126,16 +139,47 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, BareCryptoStoreError> {
+	) -> Result<ed25519::Public, Error> {
 		match seed {
 			Some(seed) => {
 				let pair = ed25519::Pair::from_string(seed, None)
-					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `ed25519` pair.".to_owned()))?;
+					.map_err(|_| Error::ValidationError("Generates an `ed25519` pair.".to_owned()))?;
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
 			None => {
 				let (pair, phrase, _) = ed25519::Pair::generate_with_phrase(None);
+				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
+				Ok(pair.public())
+			}
+		}
+	}
+
+	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+		self.keys.get(&id)
+			.map(|keys|
+				keys.values()
+					.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
+					.map(|p| p.public())
+					.collect()
+			)
+			.unwrap_or_default()
+	}
+
+	fn ecdsa_generate_new(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<ecdsa::Public, Error> {
+		match seed {
+			Some(seed) => {
+				let pair = ecdsa::Pair::from_string(seed, None)
+					.map_err(|_| Error::ValidationError("Generates an `ecdsa` pair.".to_owned()))?;
+				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
+				Ok(pair.public())
+			},
+			None => {
+				let (pair, phrase, _) = ecdsa::Pair::generate_with_phrase(None);
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), phrase);
 				Ok(pair.public())
 			}
@@ -159,7 +203,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
-	) -> std::result::Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
 		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
 		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
 
@@ -171,22 +215,47 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, BareCryptoStoreError> {
+	) -> Result<Vec<u8>, Error> {
+		use codec::Encode;
+
 		match key.0 {
 			ed25519::CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self
 					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
-					.ok_or(BareCryptoStoreError::PairNotFound("ed25519".to_owned()))?;
+					.ok_or(Error::PairNotFound("ed25519".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
 			sr25519::CRYPTO_ID => {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
-					.ok_or(BareCryptoStoreError::PairNotFound("sr25519".to_owned()))?;
+					.ok_or(Error::PairNotFound("sr25519".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
-			_ => Err(BareCryptoStoreError::KeyNotSupported(id))
+			ecdsa::CRYPTO_ID => {
+				let key_pair: ecdsa::Pair = self
+					.ecdsa_key_pair(id, &ecdsa::Public::from_slice(key.1.as_slice()))
+					.ok_or(Error::PairNotFound("ecdsa".to_owned()))?;
+				return Ok(key_pair.sign(msg).encode());
+			}
+			_ => Err(Error::KeyNotSupported(id))
 		}
+	}
+
+	fn sr25519_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &sr25519::Public,
+		transcript_data: VRFTranscriptData,
+	) -> Result<VRFSignature, Error> {
+		let transcript = make_transcript(transcript_data);
+		let pair = self.sr25519_key_pair(key_type, public)
+			.ok_or(Error::PairNotFound("Not found".to_owned()))?;
+
+		let (inout, proof, _) = pair.as_ref().vrf_sign(transcript);
+		Ok(VRFSignature {
+			output: inout.to_output(),
+			proof,
+		})
 	}
 }
 
@@ -290,11 +359,39 @@ macro_rules! wasm_export_functions {
 	};
 }
 
+/// An executor that supports spawning blocking futures in tests.
+///
+/// Internally this just wraps a `ThreadPool` with a pool size of `8`. This
+/// should ensure that we have enough threads in tests for spawning blocking futures.
+#[cfg(feature = "std")]
+#[derive(Clone)]
+pub struct SpawnBlockingExecutor(futures::executor::ThreadPool);
+
+#[cfg(feature = "std")]
+impl SpawnBlockingExecutor {
+	/// Create a new instance of `Self`.
+	pub fn new() -> Self {
+		let mut builder = futures::executor::ThreadPoolBuilder::new();
+		Self(builder.pool_size(8).create().expect("Failed to create thread pool"))
+	}
+}
+
+#[cfg(feature = "std")]
+impl crate::traits::SpawnNamed for SpawnBlockingExecutor {
+	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.0.spawn_ok(future);
+	}
+	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.0.spawn_ok(future);
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
+	use crate::vrf::VRFTranscriptValue;
 
 	#[test]
 	fn store_key_and_extract() {
@@ -325,5 +422,43 @@ mod tests {
 		let public_keys = store.read().keys(SR25519).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
+	}
+
+	#[test]
+	fn vrf_sign() {
+		let store = KeyStore::new();
+
+		let secret_uri = "//Alice";
+		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		let transcript_data = VRFTranscriptData {
+			label: b"Test",
+			items: vec![
+				("one", VRFTranscriptValue::U64(1)),
+				("two", VRFTranscriptValue::U64(2)),
+				("three", VRFTranscriptValue::Bytes("test".as_bytes())),
+			]
+		};
+
+		let result = store.read().sr25519_vrf_sign(
+			SR25519,
+			&key_pair.public(),
+			transcript_data.clone(),
+		);
+		assert!(result.is_err());
+
+		store.write().insert_unknown(
+			SR25519,
+			secret_uri,
+			key_pair.public().as_ref(),
+		).expect("Inserts unknown key");
+
+		let result = store.read().sr25519_vrf_sign(
+			SR25519,
+			&key_pair.public(),
+			transcript_data,
+		);
+
+		assert!(result.is_ok());
 	}
 }

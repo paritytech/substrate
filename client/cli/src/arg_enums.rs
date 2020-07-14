@@ -1,19 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 // NOTE: we allow missing docs here because arg_enum! creates the function variants without doc
 #![allow(missing_docs)]
 
@@ -45,7 +46,9 @@ impl WasmExecutionMethod {
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
+			WasmExecutionMethod::Interpreted => {
+				sc_service::config::WasmExecutionMethod::Interpreted
+			}
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
@@ -120,10 +123,63 @@ impl ExecutionStrategy {
 	}
 }
 
+arg_enum! {
+	/// Available RPC methods.
+	#[allow(missing_docs)]
+	#[derive(Debug, Copy, Clone, PartialEq)]
+	pub enum RpcMethods {
+		// Expose every RPC method only when RPC is listening on `localhost`,
+		// otherwise serve only safe RPC methods.
+		Auto,
+		// Allow only a safe subset of RPC methods.
+		Safe,
+		// Expose every RPC method (even potentially unsafe ones).
+		Unsafe,
+	}
+}
+
+impl Into<sc_service::config::RpcMethods> for RpcMethods {
+	fn into(self) -> sc_service::config::RpcMethods {
+		match self {
+			RpcMethods::Auto => sc_service::config::RpcMethods::Auto,
+			RpcMethods::Safe => sc_service::config::RpcMethods::Safe,
+			RpcMethods::Unsafe => sc_service::config::RpcMethods::Unsafe,
+		}
+	}
+}
+
+arg_enum! {
+	/// Database backend
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum Database {
+		// Facebooks RocksDB
+		RocksDb,
+		// Subdb. https://github.com/paritytech/subdb/
+		SubDb,
+		// ParityDb. https://github.com/paritytech/parity-db/
+		ParityDb,
+	}
+}
+
+
+arg_enum! {
+	/// Whether off-chain workers are enabled.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone)]
+	pub enum OffchainWorkerEnabled {
+		Always,
+		Never,
+		WhenValidating,
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.
 pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+/// Default value for the `--execution-import-block` parameter when the node is a validator.
+pub const DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-block-construction` parameter.
 pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-offchain-worker` parameter.

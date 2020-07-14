@@ -84,6 +84,10 @@ pub struct ExecutionExtensions<Block: traits::Block> {
 	keystore: Option<BareCryptoStorePtr>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
+	// To break retain cycle between `Client` and `TransactionPool` we require this
+	// extension to be a `Weak` reference.
+	// That's also the reason why it's being registered lazily instead of
+	// during initialization.
 	transaction_pool: RwLock<Option<Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory>>,
 }
@@ -121,13 +125,10 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	}
 
 	/// Register transaction pool extension.
-	///
-	/// To break retain cycle between `Client` and `TransactionPool` we require this
-	/// extension to be a `Weak` reference.
-	/// That's also the reason why it's being registered lazily instead of
-	/// during initialization.
-	pub fn register_transaction_pool(&self, pool: Weak<dyn sp_transaction_pool::OffchainSubmitTransaction<Block>>) {
-		*self.transaction_pool.write() = Some(pool);
+	pub fn register_transaction_pool<T>(&self, pool: &Arc<T>)
+		where T: sp_transaction_pool::OffchainSubmitTransaction<Block> + 'static
+	{
+		*self.transaction_pool.write() = Some(Arc::downgrade(&pool) as _);
 	}
 
 	/// Create `ExecutionManager` and `Extensions` for given offchain call.
@@ -177,7 +178,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		if let ExecutionContext::OffchainCall(Some(ext)) = context {
 			extensions.register(
 				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
-			)
+			);
 		}
 
 		(manager, extensions)

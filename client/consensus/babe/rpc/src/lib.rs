@@ -1,18 +1,20 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! RPC api for babe.
 
@@ -30,13 +32,18 @@ use sp_consensus_babe::{
 	digests::PreDigest,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::{
+	crypto::Public,
+	traits::BareCryptoStore,
+};
+use sp_application_crypto::AppKey;
 use sc_keystore::KeyStorePtr;
+use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
-use sp_core::crypto::Pair;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
@@ -49,8 +56,8 @@ pub trait BabeApi {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>>;
 }
 
-/// Implements the BabeRPC trait for interacting with Babe.
-pub struct BabeRPCHandler<B: BlockT, C, SC> {
+/// Implements the BabeRpc trait for interacting with Babe.
+pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to EpochChanges
@@ -61,9 +68,11 @@ pub struct BabeRPCHandler<B: BlockT, C, SC> {
 	babe_config: Config,
 	/// The SelectChain strategy
 	select_chain: SC,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
 }
 
-impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
+impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	/// Creates a new instance of the BabeRpc handler.
 	pub fn new(
 		client: Arc<C>,
@@ -71,6 +80,7 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 		keystore: KeyStorePtr,
 		babe_config: Config,
 		select_chain: SC,
+		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Self {
 			client,
@@ -78,19 +88,23 @@ impl<B: BlockT, C, SC> BabeRPCHandler<B, C, SC> {
 			keystore,
 			babe_config,
 			select_chain,
+			deny_unsafe,
 		}
 	}
 }
 
-impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
+impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 	where
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
 		C::Api: BabeRuntimeApi<B>,
-		<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 		SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(rpc_future::err(err.into()));
+		}
+
 		let (
 			babe_config,
 			keystore,
@@ -116,16 +130,34 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
+			let keys = {
+				let ks = keystore.read();
+				epoch.authorities.iter()
+					.enumerate()
+					.filter_map(|(i, a)| {
+						if ks.has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
+							Some((a.0.clone(), i))
+						} else {
+							None
+						}
+					})
+					.collect::<Vec<_>>()
+			};
+
 			for slot_number in epoch_start..epoch_end {
-				let epoch = epoch_data(&shared_epoch, &client, &babe_config, slot_number, &select_chain)?;
-				if let Some((claim, key)) = authorship::claim_slot(slot_number, &epoch, &babe_config, &keystore) {
+				if let Some((claim, key)) =
+					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
+				{
 					match claim {
 						PreDigest::Primary { .. } => {
-							claims.entry(key.public()).or_default().primary.push(slot_number);
+							claims.entry(key).or_default().primary.push(slot_number);
 						}
-						PreDigest::Secondary { .. } => {
-							claims.entry(key.public()).or_default().secondary.push(slot_number);
+						PreDigest::SecondaryPlain { .. } => {
+							claims.entry(key).or_default().secondary.push(slot_number);
 						}
+						PreDigest::SecondaryVRF { .. } => {
+							claims.entry(key).or_default().secondary_vrf.push(slot_number);
+						},
 					};
 				}
 			}
@@ -144,6 +176,8 @@ pub struct EpochAuthorship {
 	primary: Vec<u64>,
 	/// the array of secondary slots that can be claimed
 	secondary: Vec<u64>,
+	/// The array of secondary VRF slots that can be claimed.
+	secondary_vrf: Vec<u64>,
 }
 
 /// Errors encountered by the RPC
@@ -158,7 +192,7 @@ pub enum Error {
 impl From<Error> for jsonrpc_core::Error {
 	fn from(error: Error) -> Self {
 		jsonrpc_core::Error {
-			message: format!("{}", error).into(),
+			message: format!("{}", error),
 			code: jsonrpc_core::ErrorCode::ServerError(1234),
 			data: None,
 		}
@@ -184,7 +218,7 @@ fn epoch_data<B, C, SC>(
 		&parent.hash(),
 		parent.number().clone(),
 		slot_number,
-		|slot| babe_config.genesis_epoch(slot),
+		|slot| Epoch::genesis(&babe_config, slot),
 	)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
@@ -194,7 +228,10 @@ fn epoch_data<B, C, SC>(
 mod tests {
 	use super::*;
 	use substrate_test_runtime_client::{
+		runtime::Block,
+		Backend,
 		DefaultTestClientBuilderExt,
+		TestClient,
 		TestClientBuilderExt,
 		TestClientBuilder,
 	};
@@ -216,8 +253,9 @@ mod tests {
 		(keystore, keystore_path)
 	}
 
-	#[test]
-	fn rpc() {
+	fn test_babe_rpc_handler(
+		deny_unsafe: DenyUnsafe
+	) -> BabeRpcHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -229,15 +267,42 @@ mod tests {
 		).expect("can initialize block-import");
 
 		let epoch_changes = link.epoch_changes().clone();
-		let select_chain = longest_chain;
 		let keystore = create_temp_keystore::<AuthorityPair>(Ed25519Keyring::Alice).0;
-		let handler = BabeRPCHandler::new(client.clone(), epoch_changes, keystore, config, select_chain);
+
+		BabeRpcHandler::new(
+			client.clone(),
+			epoch_changes,
+			keystore,
+			config,
+			longest_chain,
+			deny_unsafe,
+		)
+	}
+
+	#[test]
+	fn epoch_authorship_works() {
+		let handler = test_babe_rpc_handler(DenyUnsafe::No);
 		let mut io = IoHandler::new();
 
 		io.extend_with(BabeApi::to_delegate(handler));
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4]}},"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+	}
+
+	#[test]
+	fn epoch_authorship_is_unsafe() {
+		let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
+		let mut io = IoHandler::new();
+
+		io.extend_with(BabeApi::to_delegate(handler));
+		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
+
+		let response = io.handle_request_sync(request).unwrap();
+		let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();
+		let error: RpcError = serde_json::from_value(response["error"].take()).unwrap();
+
+		assert_eq!(error, RpcError::method_not_found())
 	}
 }

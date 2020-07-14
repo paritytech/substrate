@@ -1,18 +1,20 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
@@ -49,7 +51,6 @@ fn to_tag(nonce: u64, from: AccountId) -> Tag {
 
 impl ChainApi for TestApi {
 	type Block = Block;
-	type Hash = H256;
 	type Error = sp_transaction_pool::error::Error;
 	type ValidationFuture = Ready<sp_transaction_pool::error::Result<TransactionValidity>>;
 	type BodyFuture = Ready<sp_transaction_pool::error::Result<Option<Vec<Extrinsic>>>>;
@@ -105,7 +106,7 @@ impl ChainApi for TestApi {
 		})
 	}
 
-	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (H256, usize) {
 		let encoded = uxt.encode();
 		(blake2_256(&encoded).into(), encoded.len())
 	}

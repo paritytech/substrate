@@ -1,40 +1,42 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::NetworkStatus;
+use std::{convert::TryFrom, time::SystemTime};
+
+use crate::{NetworkStatus, config::Configuration};
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
-use sc_client::ClientInfo;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use std::convert::TryFrom;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
+use sc_client_api::ClientInfo;
+use sc_network::config::Role;
 
-#[cfg(any(windows, unix))]
 use sysinfo::{self, ProcessExt, SystemExt};
 
-#[cfg(any(unix, windows))]
-use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
-
-#[cfg(target_os = "linux")]
-use procfs;
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
+use netstat2::{
+	TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags,
+};
 
 struct PrometheusMetrics {
 	// system
-	#[cfg(any(unix, windows))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	load_avg: GaugeVec<F64>,
 
 	// process
@@ -42,8 +44,8 @@ struct PrometheusMetrics {
 	memory_usage_bytes: Gauge<U64>,
 	threads: Gauge<U64>,
 	open_files: GaugeVec<U64>,
-	
-	#[cfg(any(unix, windows))]
+
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	netstat: GaugeVec<U64>,
 
 	// -- inner counters
@@ -71,16 +73,23 @@ impl PrometheusMetrics {
 				.const_label("name", name)
 				.const_label("version", version)
 		)?, &registry)?.set(1);
-		
+
 		register(Gauge::<U64>::new(
 			"node_roles", "The roles the node is running as",
 		)?, &registry)?.set(roles);
 
 		register_globals(registry)?;
-		
+
+		let start_time_since_epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap_or_default();
+		register(Gauge::<U64>::new(
+			"process_start_time_seconds",
+			"Number of seconds between the UNIX epoch and the moment the process started",
+		)?, registry)?.set(start_time_since_epoch.as_secs());
+
 		Ok(Self {
 			// system
-			#[cfg(any(unix, windows))]
+			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			load_avg: register(GaugeVec::new(
 				Opts::new("load_avg", "System load average"),
 				&["over"]
@@ -95,7 +104,7 @@ impl PrometheusMetrics {
 				"cpu_usage_percentage", "Node CPU usage",
 			)?, registry)?,
 
-			#[cfg(any(unix, windows))]
+			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			netstat: register(GaugeVec::new(
 				Opts::new("netstat_tcp", "Current TCP connections "),
 				&["status"]
@@ -113,7 +122,6 @@ impl PrometheusMetrics {
 			// --- internal
 
 			// generic internals
-
 			block_height: register(GaugeVec::new(
 				Opts::new("block_height", "Block height info of the chain"),
 				&["status"]
@@ -128,7 +136,6 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			// I/ O
-			
 			network_per_sec_bytes: register(GaugeVec::new(
 				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
 				&["direction"]
@@ -147,7 +154,7 @@ impl PrometheusMetrics {
 	}
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 #[derive(Default)]
 struct ConnectionsCount {
 	listen: u64,
@@ -179,9 +186,9 @@ struct ProcessInfo {
 
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
-	#[cfg(any(windows, unix))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	system: sysinfo::System,
-	pid: Option<i32>,
+	pid: Option<sysinfo::Pid>,
 }
 
 #[cfg(target_os = "linux")]
@@ -196,12 +203,14 @@ impl MetricsService {
 			pid: Some(process.pid),
 		}
 	}
+
 	fn process_info(&mut self) -> ProcessInfo {
 		let pid = self.pid.clone().expect("unix always has a pid. qed");
-		let mut info = self._process_info_for(&pid);
+		let mut info = self.process_info_for(&pid);
 		let process = procfs::process::Process::new(pid).expect("Our process exists. qed.");
 		info.threads = process.stat().ok().map(|s|
-			u64::try_from(s.num_threads).expect("There are no negative thread counts. qed"));
+			u64::try_from(s.num_threads).expect("There are no negative thread counts. qed"),
+		);
 		info.open_fd = process.fd().ok().map(|i|
 			i.into_iter().fold(FdCounter::default(), |mut f, info| {
 				match info.target {
@@ -218,33 +227,33 @@ impl MetricsService {
 		);
 		info
 	}
-	
 }
 
-#[cfg(all(any(unix, windows), not(target_os = "linux")))]
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
 			system: sysinfo::System::new(),
-			pid: sysinfo::get_current_pid().ok()
+			pid: sysinfo::get_current_pid().ok(),
 		}
 	}
-	
+
 	fn process_info(&mut self) -> ProcessInfo {
-		self.pid.map(|pid| self._process_info_for(&pid)).unwrap_or_else(ProcessInfo::default)
+		self.pid.map(|pid| self.process_info_for(&pid)).unwrap_or_default()
 	}
 }
 
-#[cfg(not(any(unix, windows)))]
+
+#[cfg(not(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"))))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
-			pid: None
+			pid: None,
 		}
 	}
-	
+
 	fn process_info(&mut self) -> ProcessInfo {
 		ProcessInfo::default()
 	}
@@ -252,11 +261,17 @@ impl MetricsService {
 
 
 impl MetricsService {
-
-	pub fn with_prometheus(registry: &Registry, name: &str, version: &str, roles: u64)
+	pub fn with_prometheus(registry: &Registry, config: &Configuration)
 		-> Result<Self, PrometheusError>
 	{
-		PrometheusMetrics::setup(registry, name, version, roles).map(|p| {
+		let role_bits = match config.role {
+			Role::Full => 1u64,
+			Role::Light => 2u64,
+			Role::Sentry { .. } => 3u64,
+			Role::Authority { .. } => 4u64,
+		};
+
+		PrometheusMetrics::setup(registry, &config.network.node_name, &config.impl_version, role_bits).map(|p| {
 			Self::inner_new(Some(p))
 		})
 	}
@@ -265,8 +280,8 @@ impl MetricsService {
 		Self::inner_new(None)
 	}
 
-	#[cfg(any(windows, unix))]
-	fn _process_info_for(&mut self, pid: &i32) -> ProcessInfo {
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
+	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
 		let mut info = ProcessInfo::default();
 		if self.system.refresh_process(*pid) {
 			let prc = self.system.get_process(*pid)
@@ -277,7 +292,7 @@ impl MetricsService {
 		info
 	}
 
-	#[cfg(any(unix, windows))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	fn connections_info(&self) -> Option<ConnectionsCount> {
 		self.pid.as_ref().and_then(|pid| {
 			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
@@ -285,15 +300,12 @@ impl MetricsService {
 			let netstat_pid = *pid as u32;
 
 			iterate_sockets_info(af_flags, proto_flags).ok().map(|iter|
-				iter.filter_map(|r| 
+				iter.filter_map(|r|
 					r.ok().and_then(|s| {
-						if s.associated_pids.contains(&netstat_pid) {
-							match s.protocol_socket_info {
-								ProtocolSocketInfo::Tcp(info) => Some(info.state),
-								_ => None
-							}
-						} else {
-							None
+						match s.protocol_socket_info {
+							ProtocolSocketInfo::Tcp(info)
+								if s.associated_pids.contains(&netstat_pid) => Some(info.state),
+							_ => None
 						}
 					})
 				).fold(ConnectionsCount::default(), |mut counter, socket_state| {
@@ -317,7 +329,7 @@ impl MetricsService {
 		&mut self,
 		info: &ClientInfo<T>,
 		txpool_status: &PoolStatus,
-		net_status: &NetworkStatus<T>
+		net_status: &NetworkStatus<T>,
 	) {
 
 		let best_number = info.chain.best_number.saturated_into::<u64>();
@@ -377,8 +389,12 @@ impl MetricsService {
 			}
 
 
-			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
-			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
+			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(
+				net_status.average_download_per_sec,
+			);
+			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(
+				net_status.average_upload_per_sec,
+			);
 
 			metrics.block_height.with_label_values(&["finalized"]).set(finalized_number);
 			metrics.block_height.with_label_values(&["best"]).set(best_number);
@@ -396,14 +412,18 @@ impl MetricsService {
 				metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
 				metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
 
-				metrics.state_db.with_label_values(&["non_canonical"]).set(info.memory.state_db.non_canonical.as_bytes() as u64);
+				metrics.state_db.with_label_values(&["non_canonical"]).set(
+					info.memory.state_db.non_canonical.as_bytes() as u64,
+				);
 				if let Some(pruning) = info.memory.state_db.pruning {
 					metrics.state_db.with_label_values(&["pruning"]).set(pruning.as_bytes() as u64);
 				}
-				metrics.state_db.with_label_values(&["pinned"]).set(info.memory.state_db.pinned.as_bytes() as u64);
+				metrics.state_db.with_label_values(&["pinned"]).set(
+					info.memory.state_db.pinned.as_bytes() as u64,
+				);
 			}
 
-			#[cfg(any(unix, windows))]
+			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			{
 				let load = self.system.get_load_average();
 				metrics.load_avg.with_label_values(&["1min"]).set(load.one);

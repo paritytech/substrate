@@ -1,18 +1,19 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
@@ -26,8 +27,6 @@ use crate::SessionIndex;
 
 /// The kind of an offence, is a byte string representing some kind identifier
 /// e.g. `b"im-online:offlin"`, `b"babe:equivocatio"`
-// TODO [slashing]: Is there something better we can have here that is more natural but still
-// flexible? as you see in examples, they get cut off with long names.
 pub type Kind = [u8; 16];
 
 /// Number of times the offence of this authority was already reported in the past.
@@ -118,17 +117,28 @@ impl sp_runtime::traits::Printable for OffenceError {
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
 	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
+
+	/// Returns true iff all of the given offenders have been previously reported
+	/// at the given time slot. This function is useful to prevent the sending of
+	/// duplicate offence reports.
+	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool;
 }
 
 impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> { Ok(()) }
+	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> {
+		Ok(())
+	}
+
+	fn is_known_offence(_offenders: &[Offender], _time_slot: &O::TimeSlot) -> bool {
+		true
+	}
 }
 
 /// A trait to take action on an offence.
 ///
 /// Used to decouple the module that handles offences and
 /// the one that should punish for those offences.
-pub trait OnOffenceHandler<Reporter, Offender> {
+pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	/// A handler for an offence of a particular kind.
 	///
 	/// Note that this contains a list of all previous offenders
@@ -149,7 +159,7 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	) -> Result<(), ()>;
+	) -> Result<Res, ()>;
 
 	/// Can an offence be reported now or not. This is an method to short-circuit a call into
 	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
@@ -158,12 +168,14 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	fn can_report() -> bool;
 }
 
-impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
+impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) -> Result<(), ()> { Ok(()) }
+	) -> Result<Res, ()> {
+		Ok(Default::default())
+	}
 
 	fn can_report() -> bool { true }
 }
