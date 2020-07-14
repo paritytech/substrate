@@ -71,15 +71,14 @@ impl core::Benchmark for PoolBenchmark {
 			std::thread::park_timeout(std::time::Duration::from_secs(3));
 		}
 
-		let (txpool, background_task) =
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(context.client.clone())),
-				None,
-			);
-
-		let thread_pool = futures::executor::ThreadPool::new().expect("Failed to start thread pool");
-		thread_pool.spawn_ok(background_task.expect("There should be a background task for full chain api"));
+		let executor = sp_core::testing::SpawnBlockingExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(context.client.clone(), None)),
+			None,
+			executor,
+			context.client.clone(),
+		);
 
 		let generated_transactions = self.database.block_content(
 			BlockType::RandomTransfersKeepAlive.to_content(Some(100)),
