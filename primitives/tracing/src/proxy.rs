@@ -31,19 +31,21 @@ static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Create and enter a `tracing` Span, returning the span id,
 /// which should be passed to `exit_span(id)` to signal that the span should exit.
+// fn parameter identifiers should match the const values above
 pub fn enter_span(proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
 	tracing::event!(
 		tracing::Level::INFO,
-		WASM_TARGET_KEY = proxied_wasm_target,
-		WASM_NAME_KEY = proxied_wasm_name
+		proxied_wasm_target,
+		proxied_wasm_name
 	);
 	NEXT_ID.fetch_add(1, Relaxed)
 }
 
 /// Exit a span by dropping it along with it's associated guard.
-pub fn exit_span(id: u64) {
+// fn parameter identifier should match the const value above
+pub fn exit_span(proxied_wasm_trace_id: u64) {
 	tracing::event!(
 		tracing::Level::INFO,
-		WASM_PROXY_ID = id
+		proxied_wasm_trace_id
 	);
 }
