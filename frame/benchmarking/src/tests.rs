@@ -114,8 +114,6 @@ impl OtherTrait for Test {
 	type OtherEvent = ();
 }
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
 fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
