@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use super::*;
+use super::{Call, *};
 use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
@@ -684,5 +684,84 @@ fn report_equivocation_invalid_equivocation_proof() {
 			(1, H256::random(), 10, &equivocation_keyring),
 			(1, H256::random(), 10, &Ed25519Keyring::Dave),
 		));
+	});
+}
+
+#[test]
+fn report_equivocation_validate_unsigned_prevents_duplicates() {
+	use sp_runtime::transaction_validity::{
+		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
+		TransactionValidity, ValidTransaction,
+	};
+
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		// generate and report an equivocation for the validator at index 0
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+		let set_id = Grandpa::current_set_id();
+
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let call = Call::report_equivocation_unsigned(
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		);
+
+		// only local/inblock reports are allowed
+		assert_eq!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&call,
+			),
+			InvalidTransaction::Call.into(),
+		);
+
+		// the transaction is valid when passed as local
+		let tx_tag = (
+			equivocation_key,
+			set_id,
+			1u64,
+		);
+
+		assert_eq!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			TransactionValidity::Ok(ValidTransaction {
+				priority: TransactionPriority::max_value(),
+				requires: vec![],
+				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
+				longevity: TransactionLongevity::max_value(),
+				propagate: false,
+			})
+		);
+
+		// the pre dispatch checks should also pass
+		assert_ok!(<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
+
+		// we submit the report
+		Grandpa::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
+			.unwrap();
+
+		// the report should now be considered stale and the transaction is invalid
+		assert_err!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
+			InvalidTransaction::Stale,
+		);
 	});
 }
