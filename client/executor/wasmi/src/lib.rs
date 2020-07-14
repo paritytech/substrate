@@ -198,7 +198,7 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			.collect::<Vec<_>>();
 
 		let instance = self.sandbox_store.instance(instance_id).map_err(|e| e.to_string())?;
-		let result = instance.invoke(export_name, &args, state);
+		let result = instance.invoke::<_, Holder>(export_name, &args, state);
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -242,24 +242,8 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
-		struct Adapter;
-
-		impl sandbox::SandboxCapabiliesHolder for Adapter {
-			type SupervisorFuncRef = wasmi::FuncRef;
-			type SC = FunctionExecutor<'static>;
-
-			fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
-				todo!();
-
-				// FOO.with(|fe| {
-				// 	let mut fe = fe.borrow_mut();
-				// 	f(fe.deref_mut())
-				// });
-			}
-		}
-
 		let instance_idx_or_err_code =
-			match sandbox::instantiate::<_, Adapter>(dispatch_thunk, wasm, guest_env, state)
+			match sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state)
 				.map(|i| i.register(&mut self.sandbox_store))
 			{
 				Ok(instance_idx) => instance_idx,
@@ -280,6 +264,22 @@ impl<'a> Sandbox for FunctionExecutor<'a> {
 			.instance(instance_idx)
 			.map(|i| i.get_global_val(name))
 			.map_err(|e| e.to_string())
+	}
+}
+
+struct Holder;
+
+impl sandbox::SandboxCapabiliesHolder for Holder {
+	type SupervisorFuncRef = wasmi::FuncRef;
+	type SC = FunctionExecutor<'static>;
+
+	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
+		todo!();
+
+		// FOO.with(|fe| {
+		// 	let mut fe = fe.borrow_mut();
+		// 	f(fe.deref_mut())
+		// });
 	}
 }
 

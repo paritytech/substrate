@@ -262,17 +262,7 @@ impl Sandbox for HostState {
 			.instance(instance_id)
 			.map_err(|e| e.to_string())?;
 
-		let result = instance.invoke(export_name, &args, state);
-
-		// let result = unsafe {
-		// 	// Erasing lifetime of `HostContext` to put it into scoped TLS. This is safe because
-		// 	// the pointer will never leave this scope and is semantically equivalent to `&'a mut`.
-		// 	let self_ptr: *mut HostContext<'static> = std::mem::transmute(self as *mut HostContext<'a>);
-
-		// 	HOST_CONTEXT.set(&self_ptr, || {
-		// 		instance.invoke(export_name, &args, self, state)
-		// 	})
-		// };
+		let result = instance.invoke::<_, Holder>(export_name, &args, state);
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -333,7 +323,7 @@ impl Sandbox for HostState {
 		};
 
 		let instance_idx_or_err_code =
-			match sandbox::instantiate::<_, Holder>(dispatch_thunk, wasm, guest_env, state)
+			match sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state)
 				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
 			{
 				Ok(instance_idx) => instance_idx,
