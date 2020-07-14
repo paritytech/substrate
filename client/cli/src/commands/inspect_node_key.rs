@@ -17,7 +17,7 @@
 
 //! Implementation of the `inspect-node-key` subcommand
 
-use crate::{Error, SharedParams, NetworkSchemeFlag, CliConfiguration};
+use crate::{Error, NetworkSchemeFlag};
 use std::fs;
 use libp2p::identity::{PublicKey, ed25519};
 use std::path::PathBuf;
@@ -33,10 +33,6 @@ pub struct InspectNodeKeyCmd {
 	/// Name of file to read the secret key from.
 	#[structopt(long)]
 	file: PathBuf,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -57,12 +53,6 @@ impl InspectNodeKeyCmd {
 		println!("{}", peer_id);
 
 		Ok(())
-	}
-}
-
-impl CliConfiguration for InspectNodeKeyCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
 	}
 }
 

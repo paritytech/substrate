@@ -18,8 +18,8 @@
 //! Implementation of the `inspect` subcommand
 
 use crate::{
-	utils, CliConfiguration, KeystoreParams, SharedParams,
-	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag, Error,
+	utils, KeystoreParams, with_crypto_scheme, NetworkSchemeFlag,
+	OutputTypeFlag, CryptoSchemeFlag, Error,
 };
 use structopt::StructOpt;
 /// The `inspect` command
@@ -39,10 +39,6 @@ pub struct InspectCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keystore_params: KeystoreParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -75,16 +71,6 @@ impl InspectCmd {
 		);
 
 		Ok(())
-	}
-}
-
-impl CliConfiguration for InspectCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn keystore_params(&self) -> Option<&KeystoreParams> {
-		Some(&self.keystore_params)
 	}
 }
 

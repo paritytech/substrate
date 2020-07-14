@@ -17,7 +17,7 @@
 
 //! Implementation of the `generate-node-key` subcommand
 
-use crate::{Error, SharedParams, CliConfiguration};
+use crate::Error;
 use structopt::StructOpt;
 use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
@@ -32,10 +32,6 @@ pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
 	#[structopt(long)]
 	file: PathBuf,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
 }
 
 impl GenerateNodeKeyCmd {
@@ -52,12 +48,6 @@ impl GenerateNodeKeyCmd {
 		println!("{}", peer_id);
 
 		Ok(())
-	}
-}
-
-impl CliConfiguration for GenerateNodeKeyCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
 	}
 }
 

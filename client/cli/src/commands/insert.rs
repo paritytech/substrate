@@ -17,7 +17,7 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{Error, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag, SharedParams, utils};
+use crate::{Error, KeystoreParams, CryptoSchemeFlag, SharedParams, utils, with_crypto_scheme};
 use structopt::StructOpt;
 use sp_core::{crypto::KeyTypeId, traits::BareCryptoStore};
 use std::convert::TryFrom;
@@ -84,16 +84,6 @@ impl InsertCmd {
 			.map_err(|e| Error::Other(format!("{:?}", e)))?;
 
 		Ok(())
-	}
-}
-
-impl CliConfiguration for InsertCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn keystore_params(&self) -> Option<&KeystoreParams> {
-		Some(&self.keystore_params)
 	}
 }
 

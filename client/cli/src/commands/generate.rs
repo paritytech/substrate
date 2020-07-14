@@ -19,7 +19,7 @@
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
 use crate::{
-	utils::print_from_uri, CliConfiguration, KeystoreParams, SharedParams, Error,
+	utils::print_from_uri, KeystoreParams, Error,
 	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
 };
 
@@ -34,10 +34,6 @@ pub struct GenerateCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keystore_params: KeystoreParams,
-
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -79,16 +75,6 @@ impl GenerateCmd {
 			)
 		);
 		Ok(())
-	}
-}
-
-impl CliConfiguration for GenerateCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
-
-	fn keystore_params(&self) -> Option<&KeystoreParams> {
-		Some(&self.keystore_params)
 	}
 }
 

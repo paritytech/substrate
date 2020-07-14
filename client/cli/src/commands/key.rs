@@ -17,7 +17,7 @@
 
 //! Key related CLI utilities
 
-use crate::{Error, substrate_cli_subcommands};
+use crate::Error;
 use structopt::StructOpt;
 
 use super::{
@@ -59,13 +59,3 @@ impl KeySubcommand {
 		}
 	}
 }
-
-// CliConfiguration implementation
-substrate_cli_subcommands!(
-	KeySubcommand =>
-	GenerateNodeKey,
-	InspectNodeKey,
-	Generate,
-	InspectKey,
-	Insert
-);
