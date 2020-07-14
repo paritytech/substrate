@@ -53,6 +53,9 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
 #[cfg(all(feature = "std", test))]
 mod mock;
 #[cfg(all(feature = "std", test))]

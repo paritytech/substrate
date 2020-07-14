@@ -316,7 +316,9 @@ fn time_slot_have_sane_ord() {
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
 }
 
-fn test_authorities() -> AuthorityList {
+/// Returns a list with 3 authorities with known keys:
+/// Alice, Bob and Charlie.
+pub fn test_authorities() -> AuthorityList {
 	let authorities = vec![
 		Ed25519Keyring::Alice,
 		Ed25519Keyring::Bob,
