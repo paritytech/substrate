@@ -345,27 +345,24 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 			Self::OutEvent,
 		>,
 	> {
-		loop {
+		'poll_all: loop {
 			// Poll to see if any response is ready to be sent back.
-			// We need to check `is_empty` first, otherwise polling would return `None`.
-			if !self.pending_responses.is_empty() {
-				while let Poll::Ready(Some(result)) = self.pending_responses.poll_next_unpin(cx) {
-					match result {
-						RequestProcessingOutcome::Response {
-							protocol, inner_channel, response
-						} => {
-							if let Some((protocol, _)) = self.protocols.get_mut(&*protocol) {
-								protocol.send_response(inner_channel, response);
-							}
+			while let Poll::Ready(Some(result)) = self.pending_responses.poll_next_unpin(cx) {
+				match result {
+					RequestProcessingOutcome::Response {
+						protocol, inner_channel, response
+					} => {
+						if let Some((protocol, _)) = self.protocols.get_mut(&*protocol) {
+							protocol.send_response(inner_channel, response);
 						}
-						RequestProcessingOutcome::Busy { peer, protocol } => {
-							let out = Event::InboundRequest {
-								peer,
-								protocol,
-								result: Err(ResponseFailure::Busy),
-							};
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
-						}
+					}
+					RequestProcessingOutcome::Busy { peer, protocol } => {
+						let out = Event::InboundRequest {
+							peer,
+							protocol,
+							result: Err(ResponseFailure::Busy),
+						};
+						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 					}
 				}
 			}
@@ -442,7 +439,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 							// This `continue` makes sure that `pending_responses` gets polled
 							// after we have added the new element.
-							continue;
+							continue 'poll_all;
 						}
 
 						// Received a response from a remote to one of our requests.
