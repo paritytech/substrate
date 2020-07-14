@@ -819,11 +819,11 @@ macro_rules! impl_benchmark {
 						// Reset the read/write counter so we don't count operations in the setup process.
 						$crate::benchmarking::reset_read_write_count();
 
-						// // Time the extrinsic logic.
-						// frame_support::debug::trace!(
-						// 	target: "benchmark",
-						// 	"Start Benchmark: {:?} {:?}", name, component_value
-						// );
+						// Time the extrinsic logic.
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"Start Benchmark: {:?}", c
+						);
 
 						let start_extrinsic = $crate::benchmarking::current_time();
 						closure_to_benchmark()?;
@@ -978,11 +978,11 @@ macro_rules! impl_benchmark {
 						// Reset the read/write counter so we don't count operations in the setup process.
 						$crate::benchmarking::reset_read_write_count();
 
-						// // Time the extrinsic logic.
-						// frame_support::debug::trace!(
-						// 	target: "benchmark",
-						// 	"Start Benchmark: {:?} {:?}", name, component_value
-						// );
+						// Time the extrinsic logic.
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"Start Benchmark: {:?}", c
+						);
 
 						let start_extrinsic = $crate::benchmarking::current_time();
 						closure_to_benchmark()?;
