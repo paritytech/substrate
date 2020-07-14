@@ -88,7 +88,7 @@ impl ModuleIdCmd {
 			self.crypto_scheme.scheme,
 			print_from_uri(
 				&account_id.to_ss58check_with_version(network),
-				password.as_ref().map(String::as_str),
+				password,
 				network,
 				self.output_scheme.output_type.clone()
 			)

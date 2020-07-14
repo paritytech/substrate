@@ -51,7 +51,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf, UniqueSaturatedFrom, UniqueSaturatedInto,
+		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -230,38 +230,6 @@ decl_module! {
 				).unwrap(),
 			);
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			use frame_support::migration::take_storage_value;
-			use sp_std::convert::TryInto;
-			use frame_support::debug::native::error;
-
-			type OldMultiplier = sp_runtime::FixedI128;
-			type OldInner = <OldMultiplier as FixedPointNumber>::Inner;
-			type Inner = <Multiplier as FixedPointNumber>::Inner;
-
-			if let Releases::V1Ancient = StorageVersion::get() {
-				StorageVersion::put(Releases::V2);
-
-				if let Some(old) = take_storage_value::<OldMultiplier>(
-					b"TransactionPayment",
-					b"NextFeeMultiplier",
-					&[],
-				) {
-					let inner = old.into_inner();
-					let new_inner = <OldInner as TryInto<Inner>>::try_into(inner)
-						.unwrap_or_default();
-					let new = Multiplier::from_inner(new_inner);
-					NextFeeMultiplier::put(new);
-					T::DbWeight::get().reads_writes(1, 1)
-				} else {
-					error!("transaction-payment migration failed.");
-					T::DbWeight::get().reads(1)
-				}
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
 	}
 }
 
@@ -372,29 +340,26 @@ impl<T: Trait> Module<T> where
 			tip
 		}
 	}
-}
-
-impl<T: Trait> Module<T> {
-	/// Compute the fee for the specified weight.
-	///
-	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
-	/// share that the weight contributes to the overall fee of a transaction.
-	///
-	/// This function is generic in order to supply the contracts module with a way to calculate the
-	/// gas price. The contracts module is not able to put the necessary `BalanceOf<T>` constraints
-	/// on its trait. This function is not to be used by this module.
-	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
-		Balance: UniqueSaturatedFrom<u128>
-	{
-		let fee: u128 = Self::weight_to_fee(weight).unique_saturated_into();
-		Balance::unique_saturated_from(NextFeeMultiplier::get().saturating_mul_acc_int(fee))
-	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 		T::WeightToFee::calc(&capped_weight)
+	}
+}
+
+impl<T> Convert<Weight, BalanceOf<T>> for Module<T> where
+	T: Trait,
+	BalanceOf<T>: FixedPointOperand,
+{
+	/// Compute the fee for the specified weight.
+	///
+	/// This fee is already adjusted by the per block fee adjustment factor and is therefore the
+	/// share that the weight contributes to the overall fee of a transaction. It is mainly
+	/// for informational purposes and not used in the actual fee calculation.
+	fn convert(weight: Weight) -> BalanceOf<T> {
+		NextFeeMultiplier::get().saturating_mul_int(Self::weight_to_fee(weight))
 	}
 }
 
@@ -616,6 +581,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	parameter_types! {
@@ -628,6 +594,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	thread_local! {
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
@@ -738,37 +705,6 @@ mod tests {
 
 	fn default_post_info() -> PostDispatchInfo {
 		PostDispatchInfo { actual_weight: None, }
-	}
-
-	#[test]
-	fn migration_to_v2_works() {
-		use sp_runtime::FixedI128;
-		use frame_support::traits::OnRuntimeUpgrade;
-
-		let with_old_multiplier = |mul: FixedI128, expected: FixedU128| {
-			ExtBuilder::default().build().execute_with(|| {
-				frame_support::migration::put_storage_value(
-					b"TransactionPayment",
-					b"NextFeeMultiplier",
-					&[],
-					mul,
-				);
-
-				assert_eq!(StorageVersion::get(), Releases::V1Ancient);
-
-				TransactionPayment::on_runtime_upgrade();
-
-				assert_eq!(StorageVersion::get(), Releases::V2);
-				assert_eq!(NextFeeMultiplier::get(), expected);
-			})
-		};
-
-		with_old_multiplier(FixedI128::saturating_from_integer(-1), FixedU128::zero());
-		with_old_multiplier(FixedI128::saturating_from_rational(-1, 2), FixedU128::zero());
-		with_old_multiplier(
-			FixedI128::saturating_from_rational(1, 2),
-			FixedU128::saturating_from_rational(1, 2),
-		);
 	}
 
 	#[test]

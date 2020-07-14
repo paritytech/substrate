@@ -71,7 +71,7 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16,
+	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
 	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
 };
 /// Re-export 128 bit helpers.
@@ -714,7 +714,14 @@ macro_rules! assert_eq_error_rate {
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-pub struct OpaqueExtrinsic(pub Vec<u8>);
+pub struct OpaqueExtrinsic(Vec<u8>);
+
+impl OpaqueExtrinsic {
+	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
+	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
+		OpaqueExtrinsic::decode(&mut bytes)
+	}
+}
 
 #[cfg(feature = "std")]
 impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
@@ -794,6 +801,23 @@ impl Drop for SignatureBatching {
 	}
 }
 
+/// Describes on what should happen with a storage transaction.
+pub enum TransactionOutcome<R> {
+	/// Commit the transaction.
+	Commit(R),
+	/// Rollback the transaction.
+	Rollback(R),
+}
+
+impl<R> TransactionOutcome<R> {
+	/// Convert into the inner type.
+	pub fn into_inner(self) -> R {
+		match self {
+			Self::Commit(r) => r,
+			Self::Rollback(r) => r,
+		}
+	}
+}
 
 #[cfg(test)]
 mod tests {

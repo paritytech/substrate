@@ -26,6 +26,7 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
+use sp_core::crypto::ExposeSecret;
 
 /// The `insert` command
 #[derive(Debug, StructOpt)]
@@ -69,10 +70,11 @@ impl InsertCmd {
 	{
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
+		let password = password.as_ref().map(|s| s.expose_secret().as_str());
 
 		let public = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			to_vec(&suri, password.as_ref().map(String::as_str))
+			to_vec(&suri, password)
 		)?;
 
 		let node_url = self.node_url.as_ref()

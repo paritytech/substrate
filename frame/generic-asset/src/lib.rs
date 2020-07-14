@@ -157,7 +157,7 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, AtLeast32Bit,
-	Zero, Bounded,
+	Zero, Bounded, AtLeast32BitUnsigned
 };
 
 use sp_std::prelude::*;
@@ -165,12 +165,13 @@ use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	traits::{
-		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
-		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
+		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency,
+		ReservableCurrency, SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop,
+		BalanceStatus,
 	},
 	Parameter, StorageMap,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
@@ -178,25 +179,15 @@ mod tests;
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 
 pub trait Trait: frame_system::Trait {
-	type Balance: Parameter
-		+ Member
-		+ AtLeast32Bit
-		+ Default
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+		MaybeSerializeDeserialize;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 }
 
 pub trait Subtrait: frame_system::Trait {
-	type Balance: Parameter
-		+ Member
-		+ AtLeast32Bit
-		+ Default
-		+ Copy
-		+ MaybeSerializeDeserialize
-		+ Debug;
+	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug +
+		MaybeSerializeDeserialize;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 }
 
@@ -1144,6 +1135,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

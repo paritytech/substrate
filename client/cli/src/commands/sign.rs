@@ -20,6 +20,7 @@
 use crate::{error, utils, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
 use super::SharedParams;
 use structopt::StructOpt;
+use sp_core::crypto::ExposeSecret;
 
 /// The `sign` command
 #[derive(Debug, StructOpt)]
@@ -63,10 +64,11 @@ impl SignCmd {
 		let message = utils::read_message(self.message.as_ref(), self.hex)?;
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
+		let password = password.as_ref().map(|s| s.expose_secret().as_str());
 
 		let signature = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			sign(&suri, password.as_ref().map(String::as_str), message)
+			sign(&suri, password, message)
 		)?;
 
 		println!("{}", signature);

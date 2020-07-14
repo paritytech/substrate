@@ -90,6 +90,9 @@ pub trait BlockBackend<Block: BlockT> {
 
 	/// Get block justification set by id.
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>>;
+
+	/// Get block hash by number.
+	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.

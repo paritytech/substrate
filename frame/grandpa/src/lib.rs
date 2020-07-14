@@ -43,21 +43,24 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
 	Parameter,
 };
-use frame_system::{self as system, ensure_signed, DigestOf};
+use frame_system::{ensure_signed, DigestOf};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::Zero,
 	DispatchResult, KeyTypeId,
 };
+use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
+#[cfg(all(feature = "std", test))]
 mod mock;
+#[cfg(all(feature = "std", test))]
 mod tests;
 
 pub use equivocation::{
-	EquivocationHandler, GetSessionNumber, GetValidatorCount, GrandpaEquivocationOffence,
-	GrandpaOffence, GrandpaTimeSlot, HandleEquivocation, ValidateEquivocationReport,
+	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
+	HandleEquivocation, ValidateEquivocationReport,
 };
 
 pub trait Trait: frame_system::Trait {

@@ -22,7 +22,6 @@ use crate::{
 	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag, Error,
 };
 use structopt::StructOpt;
-
 /// The `inspect` command
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -69,7 +68,7 @@ impl InspectCmd {
 			self.crypto_scheme.scheme,
 			print_from_uri(
 				&uri,
-				password.as_ref().map(String::as_str),
+				password,
 				self.network_scheme.network.clone(),
 				self.output_scheme.output_type.clone()
 			)

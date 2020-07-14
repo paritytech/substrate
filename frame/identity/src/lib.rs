@@ -78,12 +78,40 @@ use frame_support::{
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
 	weights::Weight,
 };
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+
+pub trait WeightInfo {
+	fn add_registrar(r: u32, ) -> Weight;
+	fn set_identity(r: u32, x: u32, ) -> Weight;
+	fn set_subs(p: u32, s: u32, ) -> Weight;
+	fn clear_identity(r: u32, s: u32, x: u32, ) -> Weight;
+	fn request_judgement(r: u32, x: u32, ) -> Weight;
+	fn cancel_request(r: u32, x: u32, ) -> Weight;
+	fn set_fee(r: u32, ) -> Weight;
+	fn set_account_id(r: u32, ) -> Weight;
+	fn set_fields(r: u32, ) -> Weight;
+	fn provide_judgement(r: u32, x: u32, ) -> Weight;
+	fn kill_identity(r: u32, s: u32, x: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn add_registrar(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn set_identity(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn set_subs(_p: u32, _s: u32, ) -> Weight { 1_000_000_000 }
+	fn clear_identity(_r: u32, _s: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn request_judgement(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_request(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn set_fee(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn set_account_id(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn set_fields(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn provide_judgement(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn kill_identity(_r: u32, _s: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+}
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -122,6 +150,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The origin which may add or remove registrars. Root can always do this.
 	type RegistrarOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Either underlying data blob if it is at most 32 bytes, or a hash of it. If the data is greater
@@ -622,7 +653,7 @@ decl_module! {
 
 		/// Add a registrar to the system.
 		///
-		/// The dispatch origin for this call must be `RegistrarOrigin` or `Root`.
+		/// The dispatch origin for this call must be `T::RegistrarOrigin`.
 		///
 		/// - `account`: the account of the registrar.
 		///
@@ -1087,7 +1118,7 @@ decl_module! {
 		/// `Slash`. Verification request deposits are not returned; they should be cancelled
 		/// manually using `cancel_request`.
 		///
-		/// The dispatch origin for this call must be _Root_ or match `T::ForceOrigin`.
+		/// The dispatch origin for this call must match `T::ForceOrigin`.
 		///
 		/// - `target`: the account whose identity the judgement is upon. This must be an account
 		///   with a registered identity.
@@ -1151,9 +1182,7 @@ mod tests {
 		ord_parameter_types,
 	};
 	use sp_core::H256;
-	use frame_system::EnsureSignedBy;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
+	use frame_system::{EnsureSignedBy, EnsureOneOf, EnsureRoot};
 	use sp_runtime::{
 		Perbill, testing::Header, traits::{BlakeTwo256, IdentityLookup},
 	};
@@ -1162,9 +1191,6 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -1198,6 +1224,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -1208,6 +1235,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 	parameter_types! {
 		pub const BasicDeposit: u64 = 10;
@@ -1221,6 +1249,16 @@ mod tests {
 		pub const One: u64 = 1;
 		pub const Two: u64 = 2;
 	}
+	type EnsureOneOrRoot = EnsureOneOf<
+		u64,
+		EnsureRoot<u64>,
+		EnsureSignedBy<One, u64>
+	>;
+	type EnsureTwoOrRoot = EnsureOneOf<
+		u64,
+		EnsureRoot<u64>,
+		EnsureSignedBy<Two, u64>
+	>;
 	impl Trait for Test {
 		type Event = ();
 		type Currency = Balances;
@@ -1231,18 +1269,16 @@ mod tests {
 		type MaxSubAccounts = MaxSubAccounts;
 		type MaxAdditionalFields = MaxAdditionalFields;
 		type MaxRegistrars = MaxRegistrars;
-		type RegistrarOrigin = EnsureSignedBy<One, u64>;
-		type ForceOrigin = EnsureSignedBy<Two, u64>;
+		type RegistrarOrigin = EnsureOneOrRoot;
+		type ForceOrigin = EnsureTwoOrRoot;
+		type WeightInfo = ();
 	}
 	type System = frame_system::Module<Test>;
 	type Balances = pallet_balances::Module<Test>;
 	type Identity = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		// We use default for brevity, but you can configure as desired if needed.
 		pallet_balances::GenesisConfig::<Test> {
 			balances: vec![
 				(1, 10),

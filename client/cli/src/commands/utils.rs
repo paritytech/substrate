@@ -25,6 +25,7 @@ use sp_core::{
 use sp_runtime::{MultiSigner, traits::IdentifyAccount};
 use crate::{OutputType, error::{self, Error}};
 use serde_json::json;
+use sp_core::crypto::{SecretString, ExposeSecret};
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
@@ -52,7 +53,7 @@ pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 /// print formatted pair from uri
 pub fn print_from_uri<Pair>(
 	uri: &str,
-	password: Option<&str>,
+	password: Option<SecretString>,
 	network_override: Ss58AddressFormat,
 	output: OutputType,
 )
@@ -60,7 +61,8 @@ pub fn print_from_uri<Pair>(
 		Pair: sp_core::Pair,
 		Pair::Public: Into<MultiSigner>,
 {
-	if let Ok((pair, seed)) = Pair::from_phrase(uri, password) {
+	let password = password.as_ref().map(|s| s.expose_secret().as_str());
+	if let Ok((pair, seed)) = Pair::from_phrase(uri, password.clone()) {
 		let public_key = pair.public();
 
 		match output {
@@ -88,7 +90,7 @@ pub fn print_from_uri<Pair>(
 				);
 			},
 		}
-	} else if let Ok((pair, seed)) = Pair::from_string_with_seed(uri, password) {
+	} else if let Ok((pair, seed)) = Pair::from_string_with_seed(uri, password.clone()) {
 		let public_key = pair.public();
 
 		match output {

@@ -39,7 +39,7 @@
 //!    `Yes`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!         #[weight = 1000]
@@ -52,7 +52,7 @@
 //! 2.1 Define weight and class, **in which case `PaysFee` would be `Yes`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::DispatchClass;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -66,7 +66,7 @@
 //! 2.2 Define weight and `PaysFee`, **in which case `ClassifyDispatch` would be `Normal`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::Pays;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -80,7 +80,7 @@
 //! 3. Define all 3 parameters.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -100,7 +100,7 @@
 //! all 3 are static values, providing a raw tuple is easier.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -136,7 +136,7 @@ use sp_runtime::{
 };
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 use sp_runtime::traits::SaturatedConversion;
-use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating}};
+use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
 use smallvec::{smallvec, SmallVec};
 
 /// Re-export priority as type
@@ -571,7 +571,7 @@ pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 /// An implementor should only implement the `polynomial` function.
 pub trait WeightToFeePolynomial {
 	/// The type that is returned as result from polynomial evaluation.
-	type Balance: BaseArithmetic + From<u32> + Copy;
+	type Balance: BaseArithmetic + From<u32> + Copy + Unsigned;
 
 	/// Returns a polynomial that describes the weight to fee conversion.
 	///
@@ -589,7 +589,7 @@ pub trait WeightToFeePolynomial {
 		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
 			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
 
-			// The sum could get negative. Therefore we only sum with the accumulator. 
+			// The sum could get negative. Therefore we only sum with the accumulator.
 			// The Perbill Mul implementation is non overflowing.
 			let frac = args.coeff_frac * w;
 			let integer = args.coeff_integer.saturating_mul(w);
@@ -611,7 +611,7 @@ pub trait WeightToFeePolynomial {
 pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> WeightToFeePolynomial for IdentityFee<T> where
-	T: BaseArithmetic + From<u32> + Copy
+	T: BaseArithmetic + From<u32> + Copy + Unsigned
 {
 	type Balance = T;
 

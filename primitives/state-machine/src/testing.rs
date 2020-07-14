@@ -153,15 +153,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 
 	/// Return a new backend with all pending value.
 	pub fn commit_all(&self) -> InMemoryBackend<H> {
-		let top: Vec<_> = self.overlay.changes(None)
+		let top: Vec<_> = self.overlay.changes()
 			.map(|(k, v)| (k.clone(), v.value().cloned()))
 			.collect();
 		let mut transaction = vec![(None, top)];
 
-		for child_info in self.overlay.child_infos() {
+		for (child_changes, child_info) in self.overlay.children() {
 			transaction.push((
 				Some(child_info.clone()),
-				self.overlay.changes(Some(child_info))
+				child_changes
 					.map(|(k, v)| (k.clone(), v.value().cloned()))
 					.collect(),
 			))

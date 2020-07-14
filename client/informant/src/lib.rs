@@ -29,17 +29,39 @@ use sp_runtime::traits::{Block as BlockT, Header};
 use sp_transaction_pool::TransactionPool;
 use sp_utils::{status_sinks, mpsc::tracing_unbounded};
 use std::{fmt::Display, sync::Arc, time::Duration, collections::VecDeque};
-use parking_lot::Mutex;
 
 mod display;
 
 /// The format to print telemetry output in.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OutputFormat {
-	/// Enable color output in logs.
+	/// Enable color output in logs. True by default.
 	pub enable_color: bool,
-	/// Add a prefix before every log line
+	/// Defines the informant's prefix for the logs. An empty string by default.
+	///
+	/// By default substrate will show logs without a prefix. Example:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
+	///
+	/// But you can define a prefix by setting this string. This will output:
+	///
+	/// ```text
+	/// 2020-05-28 15:11:06 ✨ [Prefix] Imported #2 (0xc21c…2ca8)
+	/// 2020-05-28 15:11:07 💤 [Prefix] Idle (0 peers), best: #2 (0xc21c…2ca8), finalized #0 (0x7299…e6df), ⬇ 0 ⬆ 0
+	/// ```
 	pub prefix: String,
+}
+
+impl Default for OutputFormat {
+	fn default() -> Self {
+		Self {
+			enable_color: true,
+			prefix: String::new(),
+		}
+	}
 }
 
 /// Marker trait for a type that implements `TransactionPool` and `MallocSizeOf` on `not(target_os = "unknown")`.
@@ -59,7 +81,7 @@ impl<T: TransactionPool + MallocSizeOf> TransactionPoolAndMaybeMallogSizeOf for 
 /// Builds the informant and returns a `Future` that drives the informant.
 pub fn build<B: BlockT, C>(
 	client: Arc<C>,
-	network_status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
+	network_status_sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>,
 	pool: Arc<impl TransactionPoolAndMaybeMallogSizeOf>,
 	format: OutputFormat,
 ) -> impl futures::Future<Output = ()>
@@ -71,7 +93,7 @@ where
 
 	let client_1 = client.clone();
 	let (network_status_sink, network_status_stream) = tracing_unbounded("mpsc_network_status");
-	network_status_sinks.lock().push(Duration::from_millis(5000), network_status_sink);
+	network_status_sinks.push(Duration::from_millis(5000), network_status_sink);
 
 	let display_notifications = network_status_stream
 		.for_each(move |(net_status, _)| {
