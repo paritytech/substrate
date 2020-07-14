@@ -310,15 +310,6 @@ pub enum GenericProtoOut {
 		/// Message that has been received.
 		message: BytesMut,
 	},
-
-	/// The substream used by the protocol is pretty large. We should print avoid sending more
-	/// messages on it if possible.
-	Clogged {
-		/// Id of the peer which is clogged.
-		peer_id: PeerId,
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
-	},
 }
 
 impl GenericProto {
@@ -1310,18 +1301,6 @@ impl NetworkBehaviour for GenericProto {
 				};
 
 				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-			}
-
-			NotifsHandlerOut::Clogged { messages } => {
-				debug_assert!(self.is_open(&source));
-				trace!(target: "sub-libp2p", "Handler({:?}) => Clogged", source);
-				trace!(target: "sub-libp2p", "External API <= Clogged({:?})", source);
-				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
-					pretty large", source);
-				self.events.push_back(NetworkBehaviourAction::GenerateEvent(GenericProtoOut::Clogged {
-					peer_id: source,
-					messages,
-				}));
 			}
 
 			// Don't do anything for non-severe errors except report them.

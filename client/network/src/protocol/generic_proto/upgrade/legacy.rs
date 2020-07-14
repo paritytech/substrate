@@ -142,10 +142,7 @@ pub enum RegisteredProtocolEvent {
 
 	/// Diagnostic event indicating that the connection is clogged and we should avoid sending too
 	/// many messages to it.
-	Clogged {
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
-	},
+	Clogged,
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
@@ -183,11 +180,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 				// 	if you remove the fuse, then we will always return early from this function and
 				//	thus never read any message from the network.
 				self.clogged_fuse = true;
-				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged {
-					messages: self.send_queue.iter()
-						.map(|m| m.clone().to_vec())
-						.collect(),
-				})))
+				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged)))
 			}
 		} else {
 			self.clogged_fuse = false;
