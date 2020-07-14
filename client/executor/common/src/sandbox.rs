@@ -384,7 +384,6 @@ impl<FR> SandboxInstance<FR> {
 		state: u32,
 	) -> std::result::Result<Option<wasmi::RuntimeValue>, wasmi::Error>
 	where
-		FR: 'a,
 		FE: SandboxCapabilities<SupervisorFuncRef = FR> + 'a,
 		SCH: SandboxCapabiliesHolder<SupervisorFuncRef = FR, SC = FE>
 	{
