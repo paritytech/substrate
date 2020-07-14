@@ -215,13 +215,6 @@ pub enum NotifsHandlerOut {
 		message: BytesMut,
 	},
 
-	/// A substream to the remote is clogged. The send buffer is very large, and we should print
-	/// a diagnostic message and/or avoid sending more data.
-	Clogged {
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
-	},
-
 	/// An error has happened on the protocol level with this node.
 	ProtocolError {
 		/// If true the error is severe, such as a protocol violation.
@@ -483,10 +476,6 @@ impl ProtocolsHandler for NotifsHandler {
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
 						NotifsHandlerOut::CustomMessage { message }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
-					Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Clogged { messages }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(

@@ -236,13 +236,6 @@ pub enum LegacyProtoHandlerOut {
 		message: BytesMut,
 	},
 
-	/// A substream to the remote is clogged. The send buffer is very large, and we should print
-	/// a diagnostic message and/or avoid sending more data.
-	Clogged {
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
-	},
-
 	/// An error has happened on the protocol level with this node.
 	ProtocolError {
 		/// If true the error is severe, such as a protocol violation.
@@ -395,13 +388,19 @@ impl LegacyProtoHandler {
 							self.state = ProtocolState::Normal { substreams, shutdown };
 							return Some(ProtocolsHandlerEvent::Custom(event));
 						},
-						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged { messages }))) => {
-							let event = LegacyProtoHandlerOut::Clogged {
-								messages,
-							};
-							substreams.push(substream);
-							self.state = ProtocolState::Normal { substreams, shutdown };
-							return Some(ProtocolsHandlerEvent::Custom(event));
+						Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged))) => {
+							shutdown.push(substream);
+							if substreams.is_empty() {
+								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
+									reason: "Legacy substream clogged".into(),
+									endpoint: self.endpoint.clone()
+								};
+								self.state = ProtocolState::Disabled {
+									shutdown: shutdown.into_iter().collect(),
+									reenable: true
+								};
+								return Some(ProtocolsHandlerEvent::Custom(event));
+							}
 						}
 						Poll::Ready(None) => {
 							shutdown.push(substream);

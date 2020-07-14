@@ -99,9 +99,6 @@ const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
-	/// Reputation change when a peer is "clogged", meaning that it's not fast enough to process our
-	/// messages.
-	pub const CLOGGED_PEER: Rep = Rep::new(-(1 << 12), "Clogged message queue");
 	/// Reputation change when a peer doesn't respond in time to our messages.
 	pub const TIMEOUT: Rep = Rep::new(-(1 << 10), "Request timeout");
 	/// Reputation change when we are a light client and a peer is behind us.
@@ -739,22 +736,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 		} else {
 			CustomMessageOutcome::None
-		}
-	}
-
-	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
-	/// our messaging rate fast enough.
-	pub fn on_clogged_peer(&self, who: PeerId, _msg: Option<Message<B>>) {
-		self.peerset_handle.report_peer(who.clone(), rep::CLOGGED_PEER);
-
-		// Print some diagnostics.
-		if let Some(peer) = self.context_data.peers.get(&who) {
-			debug!(target: "sync", "Clogged peer {} (protocol_version: {:?}; roles: {:?}; \
-				known_transactions: {:?}; known_blocks: {:?}; best_hash: {:?}; best_number: {:?})",
-				who, peer.info.protocol_version, peer.info.roles, peer.known_transactions, peer.known_blocks,
-				peer.info.best_hash, peer.info.best_number);
-		} else {
-			debug!(target: "sync", "Peer clogged before being properly connected");
 		}
 	}
 
@@ -2101,15 +2082,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 						CustomMessageOutcome::None
 					}
 				}
-			GenericProtoOut::Clogged { peer_id, messages } => {
-				debug!(target: "sync", "{} clogging messages:", messages.len());
-				for msg in messages.into_iter().take(5) {
-					let message: Option<Message<B>> = Decode::decode(&mut &msg[..]).ok();
-					debug!(target: "sync", "{:?}", message);
-					self.on_clogged_peer(peer_id.clone(), message);
-				}
-				CustomMessageOutcome::None
-			}
 		};
 
 		if let CustomMessageOutcome::None = outcome {
