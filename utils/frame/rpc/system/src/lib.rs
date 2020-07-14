@@ -298,12 +298,13 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
@@ -337,12 +338,13 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
@@ -360,12 +362,13 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let accounts = FullSystem::new(client, pool, DenyUnsafe::No);
@@ -392,12 +395,13 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let pool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let accounts = FullSystem::new(client, pool, DenyUnsafe::No);

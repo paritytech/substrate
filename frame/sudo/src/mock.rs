@@ -23,8 +23,6 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys.
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
