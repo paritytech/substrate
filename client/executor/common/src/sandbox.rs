@@ -647,15 +647,45 @@ where
 								return Err(wasmtime::Trap::new("Can't write invoke args into memory"));
 							}
 
-							let result = supervisor_externals.invoke(
+							let serialized_result = supervisor_externals.invoke(
 								&dispatch_thunk,
 								invoke_args_ptr,
 								invoke_args_len,
 								state,
 								supervisor_func_index,
-							);
+							)
+								.map_err(|e| wasmtime::Trap::new(e.to_string()))?;
 
-							// todo deallocate and parse result
+							// dispatch_thunk returns pointer to serialized arguments.
+							// Unpack pointer and len of the serialized result data.
+							let (serialized_result_val_ptr, serialized_result_val_len) = {
+								// Cast to u64 to use zero-extension.
+								let v = serialized_result as u64;
+								let ptr = (v as u64 >> 32) as u32;
+								let len = (v & 0xFFFFFFFF) as u32;
+								(Pointer::new(ptr), len)
+							};
+
+							let serialized_result_val = supervisor_externals
+								.read_memory(serialized_result_val_ptr, serialized_result_val_len)
+								.map_err(|_| wasmtime::Trap::new("Can't read the serialized result from dispatch thunk"));
+
+							let deserialized_result = deallocate(supervisor_externals, serialized_result_val_ptr, "Can't deallocate memory for dispatch thunk's result")
+								.and_then(|_| serialized_result_val)
+								.and_then(|serialized_result_val| {
+									deserialize_result(&serialized_result_val)
+										.map_err(|e| wasmtime::Trap::new(e.to_string()))
+								})?;
+
+							if let Some(value) = deserialized_result {
+								result[0] = match value {
+									RuntimeValue::I32(val) => Val::I32(val),
+									RuntimeValue::I64(val) => Val::I64(val),
+									RuntimeValue::F32(val) => Val::F32(val.into()),
+									RuntimeValue::F64(val) => Val::F64(val.into()),
+								}
+							}
+
 							Ok(())
 						})
 					}
