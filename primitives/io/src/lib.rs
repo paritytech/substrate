@@ -1045,13 +1045,6 @@ pub trait Logging {
 		}
 	}
 }
-
-#[cfg(feature = "std")]
-sp_externalities::decl_extension! {
-	/// Extension to allow running traces in wasm via Proxy
-	pub struct TracingProxyExt(sp_tracing::proxy::TracingProxy);
-}
-
 /// Interface that provides functions for profiling the runtime.
 #[runtime_interface]
 pub trait WasmTracing {
@@ -1059,39 +1052,14 @@ pub trait WasmTracing {
 	/// Returns 0 value to indicate that no further traces should be attempted
 	fn enter_span(&mut self, target: &str, name: &str) -> u64 {
 		if sp_tracing::wasm_tracing_enabled() {
-			match self.extension::<TracingProxyExt>() {
-				Some(proxy) => return proxy.enter_span(target, name),
-				None => {
-					if self.register_extension(TracingProxyExt(sp_tracing::proxy::TracingProxy::new())).is_ok() {
-						if let Some(proxy) = self.extension::<TracingProxyExt>() {
-							return proxy.enter_span(target, name);
-						}
-					} else {
-						log::warn!(
-							target: "tracing",
-							"Unable to register extension: TracingProxyExt"
-						);
-					}
-				}
-			}
+			return sp_tracing::proxy::enter_span(target, name);
 		}
-		log::debug!(
-			target: "tracing",
-			"Notify to runtime that tracing is disabled."
-		);
 		0
 	}
 
 	/// Exit a `tracing` span, using `sp_tracing::proxy`
 	fn exit_span(&mut self, id: u64) {
-		if let Some(proxy) = self.extension::<TracingProxyExt>() {
-			proxy.exit_span(id)
-		} else {
-			log::warn!(
-				target: "tracing",
-				"Unable to load extension: TracingProxyExt"
-			);
-		}
+		sp_tracing::proxy::exit_span(id);
 	}
 }
 

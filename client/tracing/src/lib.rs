@@ -32,7 +32,7 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use slog::{SerdeValue, Value};
-use tracing_core::{
+use tracing::{
 	event::Event,
 	field::{Visit, Field},
 	Level,
@@ -40,12 +40,16 @@ use tracing_core::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
+use tracing_subscriber::CurrentSpan;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_PROXY_ID};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
+// Used to ensure we don't accumulate too many proxied spans,
+// or associated events
+const LEN_LIMIT: usize = 128;
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -66,12 +70,16 @@ impl Default for TracingReceiver {
 pub trait TraceHandler: Send + Sync {
 	/// Process a `SpanDatum`
 	fn process_span(&self, span: SpanDatum);
+	/// Process a `TraceEvent`
+	fn process_event(&self, event: TraceEvent);
 }
 
-/// Represents a single instance of a tracing span
+/// Represents a single instance of a tracing span, complete with values
+/// and direct child events
 #[derive(Debug)]
 pub struct SpanDatum {
 	pub id: u64,
+	pub parent_id: Option<u64>,
 	pub name: String,
 	pub target: String,
 	pub level: Level,
@@ -79,6 +87,32 @@ pub struct SpanDatum {
 	pub start_time: Instant,
 	pub overall_time: Duration,
 	pub values: Visitor,
+	pub events: Vec<TraceEvent>,
+}
+
+struct ProxiedSpanDatum {
+	span_datum: SpanDatum,
+	proxy_id: u64,
+}
+
+/// Represents a tracing event, complete with values
+#[derive(Debug)]
+pub struct TraceEvent {
+	pub name: &'static str,
+	pub target: String,
+	pub level: Level,
+	pub visitor: Visitor,
+	pub parent_id: Option<u64>,
+}
+
+/// Responsible for assigning ids to new spans, which are not re-used.
+pub struct ProfilingSubscriber {
+	next_id: AtomicU64,
+	targets: Vec<(String, Level)>,
+	trace_handler: Box<dyn TraceHandler>,
+	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
+	current_span: CurrentSpan,
+	proxied_spans: Mutex<Vec<ProxiedSpanDatum>>,
 }
 
 /// Holds associated values for a tracing span
@@ -154,14 +188,6 @@ impl Value for Visitor {
 	}
 }
 
-/// Responsible for assigning ids to new spans, which are not re-used.
-pub struct ProfilingSubscriber {
-	next_id: AtomicU64,
-	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
-}
-
 impl ProfilingSubscriber {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
@@ -183,7 +209,7 @@ impl ProfilingSubscriber {
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str)
-		-> ProfilingSubscriber
+							-> ProfilingSubscriber
 	{
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
 		ProfilingSubscriber {
@@ -191,6 +217,8 @@ impl ProfilingSubscriber {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
+			current_span: CurrentSpan::new(),
+			proxied_spans: Mutex::default(),
 		}
 	}
 
@@ -201,6 +229,69 @@ impl ProfilingSubscriber {
 			}
 		}
 		false
+	}
+
+	fn enter_proxied_span(&self, name: String, target: String, proxy_id: u64) {
+		let span_datum = SpanDatum {
+			id: self.next_id.fetch_add(1, Ordering::Relaxed),
+			parent_id: self.current_span.id().map(|p| p.into_u64()),
+			name,
+			target,
+			level: Level::INFO,
+			line: 0,
+			start_time: Instant::now(),
+			overall_time: Default::default(),
+			values: Visitor(FxHashMap::default()),
+			events: vec![],
+		};
+		self.current_span.enter(Id::from_u64(span_datum.id));
+		// Ensure we don't leak spans that are lost due to misconfiguration or panic in runtime
+		let mut proxied_spans = self.proxied_spans.lock();
+		while proxied_spans.len() > LEN_LIMIT {
+			// Just checked len so safe to remove first element
+			let proxied_span = proxied_spans.remove(0);
+			log::warn!(
+					target: "tracing",
+					"Dropping proxied span because LOCAL_PROXY_LIMIT exceeded"
+				);
+			self.emit_proxied_span(proxied_span, false);
+		}
+		proxied_spans.push(ProxiedSpanDatum{
+			span_datum,
+			proxy_id
+		});
+	}
+
+	fn exit_proxied_span(&self, id: u64) {
+		let mut proxied_spans = self.proxied_spans.lock();
+		if proxied_spans.last().map(|last| id > last.proxy_id).unwrap_or(true) {
+			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
+			return;
+		}
+
+		while let Some(ps) = proxied_spans.pop() {
+			if id < ps.proxy_id {
+				// Span was not exited implicitly, so we exit it now, recording non-valid trace
+				log::warn!(
+						target: "tracing",
+						"TracingProxy Span ids not equal! id parameter given: {}, last span: {}",
+						id,
+						ps.proxy_id,
+					);
+				self.emit_proxied_span(ps, false);
+			} else {
+				// Span found, exit normally
+				self.emit_proxied_span(ps, true);
+				return;
+			}
+		}
+		// Span not found
+		log::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
+	}
+
+	fn emit_proxied_span(&self, mut proxied_span: ProxiedSpanDatum, valid: bool) {
+		proxied_span.span_datum.values.0.insert("wasm_trace_valid".to_string(), valid.to_string());
+		self.trace_handler.process_span(proxied_span.span_datum);
 	}
 }
 
@@ -236,14 +327,9 @@ impl Subscriber for ProfilingSubscriber {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let mut values = Visitor(FxHashMap::default());
 		attrs.record(&mut values);
-		// If this is a wasm trace, check if target/level is enabled
-		if let Some(wasm_target) = values.0.get(WASM_TARGET_KEY) {
-			if !self.check_target(wasm_target, attrs.metadata().level()) {
-				return Id::from_u64(id);
-			}
-		}
 		let span_datum = SpanDatum {
 			id,
+			parent_id: self.current_span.id().map(|p| p.into_u64()),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: attrs.metadata().level().clone(),
@@ -251,6 +337,7 @@ impl Subscriber for ProfilingSubscriber {
 			start_time: Instant::now(),
 			overall_time: ZERO_DURATION,
 			values,
+			events: Vec::new(),
 		};
 		self.span_data.lock().insert(id, span_datum);
 		Id::from_u64(id)
@@ -265,7 +352,56 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
 
-	fn event(&self, _event: &Event<'_>) {}
+	fn event(&self, event: &Event<'_>) {
+		let mut visitor = Visitor(FxHashMap::default());
+		event.record(&mut visitor);
+		// Check case for proxy span enter
+		if let (Some(name), Some(target), Some(proxy_id)) = (
+			visitor.0.remove(WASM_NAME_KEY),
+			visitor.0.remove(WASM_TARGET_KEY),
+			visitor.0.remove(WASM_PROXY_ID)
+		) {
+			if let Ok(proxy_id) = proxy_id.parse() {
+				self.enter_proxied_span(name, target, proxy_id);
+				return;
+			}
+		}
+		// Check case for Proxy span exit
+		if let Some(proxy_id) = visitor.0.remove(WASM_PROXY_ID) {
+			if let Ok(proxy_id) = proxy_id.parse() {
+				self.exit_proxied_span(proxy_id);
+				return;
+			}
+		}
+		let trace_event = TraceEvent {
+			name: event.metadata().name(),
+			target: event.metadata().target().to_owned(),
+			level: event.metadata().level().clone(),
+			visitor,
+			parent_id: self.current_span.id().map(|id| id.into_u64()),
+		};
+		// Q: Should all events be emitted immediately, rather than grouping with parent span?
+		match trace_event.parent_id {
+			Some(parent_id) => {
+				if let Some(mut span) = self.span_data.lock().get_mut(&parent_id) {
+					if span.events.len() > LEN_LIMIT {
+						log::warn!(
+							target: "tracing",
+							"Accumulated too many events for span id: {}, sending event separately",
+							parent_id
+						);
+						self.trace_handler.process_event(trace_event);
+					} else {
+						span.events.push(trace_event);
+					}
+				} else {
+					log::warn!("Parent span missing - may have been discarded");
+					self.trace_handler.process_event(trace_event);
+				}
+			}
+			None => self.trace_handler.process_event(trace_event),
+		}
+	}
 
 	fn enter(&self, span: &Id) {
 		let mut span_data = self.span_data.lock();
@@ -273,6 +409,7 @@ impl Subscriber for ProfilingSubscriber {
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
 			s.start_time = start_time;
 		}
+		self.current_span.enter(span.clone());
 	}
 
 	fn exit(&self, span: &Id) {
@@ -281,27 +418,11 @@ impl Subscriber for ProfilingSubscriber {
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
 			s.overall_time = end_time - s.start_time + s.overall_time;
 		}
+		self.current_span.exit();
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		let span_datum = {
-			let mut span_data = self.span_data.lock();
-			span_data.remove(&span.into_u64())
-		};
-		if let Some(mut span_datum) = span_datum {
-			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.0.insert("wasm".to_owned(), "true".to_owned());
-				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
-				}
-				if let Some(t) = span_datum.values.0.remove(WASM_TARGET_KEY) {
-					span_datum.target = t;
-				}
-			}
-			if self.check_target(&span_datum.target, &span_datum.level) {
-				self.trace_handler.process_span(span_datum);
-			}
-		};
+		self.span_data.lock().remove(&span.into_u64());
 		true
 	}
 }
@@ -323,22 +444,39 @@ impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
 			log::log!(
-				log_level(span_datum.level), 
-				"{}: {}, time: {}",
+				log_level(span_datum.level),
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
+				span_datum.id,
+				span_datum.parent_id,
+				span_datum.events,
 			);
 		} else {
 			log::log!(
 				log_level(span_datum.level),
-				"{}: {}, time: {}, {}",
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
+				span_datum.id,
+				span_datum.parent_id,
 				span_datum.values,
+				span_datum.events,
 			);
 		}
+	}
+
+	fn process_event(&self, event: TraceEvent) {
+		log::log!(
+			log_level(event.level),
+			"{}: {}, parent_id: {:?}, values: {}",
+			event.name,
+			event.target,
+			event.parent_id,
+			event.visitor
+		);
 	}
 }
 
@@ -349,12 +487,22 @@ pub struct TelemetryTraceHandler;
 
 impl TraceHandler for TelemetryTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
-		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
+		telemetry!(SUBSTRATE_INFO; "tracing.span";
 			"name" => span_datum.name,
 			"target" => span_datum.target,
-			"line" => span_datum.line,
 			"time" => span_datum.overall_time.as_nanos(),
+			"id" => span_datum.id,
+			"parent_id" => span_datum.parent_id,
 			"values" => span_datum.values
+		);
+	}
+
+	fn process_event(&self, event: TraceEvent) {
+		telemetry!(SUBSTRATE_INFO; "tracing.event";
+			"name" => event.name,
+			"target" => event.target,
+			"parent_id" => event.parent_id,
+			"values" => event.visitor
 		);
 	}
 }
