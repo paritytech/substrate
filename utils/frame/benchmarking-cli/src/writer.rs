@@ -36,9 +36,9 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 	// Skip writing if there are no batches
 	if batches.is_empty() { return Ok(()) }
 
-	batches.iter().for_each(|batch| {
+	for batch in &batches {
 		// Skip writing if there are no results
-		if batch.results.is_empty() { return }
+		if batch.results.is_empty() { continue }
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
@@ -67,7 +67,7 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 		}
 		// return value
 		write!(file, ") -> Weight;\n").unwrap();
-	});
+	}
 
 	// final close trait
 	write!(file, "}}\n").unwrap();
@@ -75,7 +75,8 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 	// Reset
 	current_pallet = Vec::<u8>::new();
 
-	batches.iter().for_each(|batch| {
+	for batch in &batches {
+		if batch.results.is_empty() { continue }
 
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
 
@@ -103,7 +104,7 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 		}
 		// return value
 		write!(file, ") -> Weight {{ 1_000_000_000 }}\n").unwrap();
-	});
+	}
 
 	// final close trait
 	write!(file, "}}\n").unwrap();
@@ -120,9 +121,9 @@ pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<()
 	// general imports
 	write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n").unwrap();
 
-	batches.iter().for_each(|batch| {
+	for batch in &batches {
 		// Skip writing if there are no results
-		if batch.results.is_empty() { return }
+		if batch.results.is_empty() { continue }
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
@@ -188,7 +189,7 @@ pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<()
 
 		// close function
 		write!(file, "\t}}\n").unwrap();
-	});
+	}
 
 	// final close trait
 	write!(file, "}}\n").unwrap();
