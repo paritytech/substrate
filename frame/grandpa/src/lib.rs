@@ -371,7 +371,7 @@ mod weight_for {
 			.saturating_add(95 * WEIGHT_PER_MICROS)
 			// report offence
 			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_NANOS * MAX_NOMINATORS)
+			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
 			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
 			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 			// fetching set id -> session index mappings
