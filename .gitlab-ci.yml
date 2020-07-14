@@ -27,7 +27,7 @@ stages:
   - build
   - post-build-test
   - publish
-  - kubernetes
+  - deploy
   - flaming-fir
 
 variables:                         &default-vars
@@ -632,74 +632,32 @@ publish-to-crates-io:
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
   allow_failure:                   true
 
-.deploy-template:                  &deploy
-  stage:                           kubernetes
-  when:                            manual
+
+
+deploy-kubernetes-alerting-rules:
+  stage:                           deploy
+  interruptible:                   true
   retry:                           1
-  image:                           paritytech/kubetools:latest
-  <<:                              *build-only
   tags:
-    # this is the runner that is used to deploy it
     - kubernetes-parity-build
-  before_script:
-    - test -z "${DEPLOY_TAG}" &&
-        test -f ./artifacts/substrate/VERSION &&
-        DEPLOY_TAG="$(cat ./artifacts/substrate/VERSION)"
-    - test "${DEPLOY_TAG}" || ( echo "Neither DEPLOY_TAG nor VERSION information available"; exit 1 )
+  image:                           paritytech/kubetools:latest
+  environment:
+    name: parity-mgmt-polkadot-alerting
+  variables:
+    NAMESPACE:                     monitoring
+    PROMETHEUSRULE:                prometheus-k8s-rules-polkadot-alerting
+    RULES:                         .maintain/monitoring/alerting-rules/alerting-rules.yaml
   script:
-    - echo "Substrate version = ${DEPLOY_TAG}"
-    # or use helm to render the template
-    - helm template
-        --values ./.maintain/kubernetes/values.yaml
-        --set image.tag=${DEPLOY_TAG}
-        --set validator.keys=${VALIDATOR_KEYS}
-        ./.maintain/kubernetes | kubectl apply -f - --dry-run=false
-    - echo "# substrate namespace ${KUBE_NAMESPACE}"
-    - kubectl -n ${KUBE_NAMESPACE} get all
-    - echo "# substrate's nodes' external ip addresses:"
-    - kubectl get nodes -l node=substrate
-        -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range @.status.addresses[?(@.type=="ExternalIP")]}{.address}{"\n"}{end}'
-    - echo "# substrate' nodes"
-    - kubectl -n ${KUBE_NAMESPACE} get pods
-        -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}{end}'
-    - echo "# wait for the rollout to complete"
-    - kubectl -n ${KUBE_NAMESPACE} rollout status statefulset/substrate
-
-# have environment:url eventually point to the logs
-
-.deploy-cibuild:                   &deploy-cibuild
-  <<:                              *deploy
-  needs:
-    - job:                         publish-docker-substrate
-      artifacts:                   false
-
-.deploy-tag:                       &deploy-tag
-  <<:                              *deploy
+    - echo "deploying prometheus alerting rules"
+    - kubectl -n ${NAMESPACE} patch prometheusrule ${PROMETHEUSRULE} 
+        --type=merge --patch "$(sed 's/^/  /;1s/^/spec:\n/' ${RULES})"
   only:
-    variables:
-      - $DEPLOY_TAG
+    refs:
+      - master
+    changes:
+      - "${RULES}"
 
-# have environment:url eventually point to the logs
 
-deploy-ew3:
-  <<:                              *deploy-cibuild
-  environment:
-    name:                          parity-prod-ew3
-
-deploy-ue1:
-  <<:                              *deploy-cibuild
-  environment:
-    name:                          parity-prod-ue1
-
-deploy-ew3-tag:
-  <<:                              *deploy-tag
-  environment:
-    name:                          parity-prod-ew3
-
-deploy-ue1-tag:
-  <<:                              *deploy-tag
-  environment:
-    name:                          parity-prod-ue1
 
 .validator-deploy:                 &validator-deploy
   <<:                              *build-only
