@@ -15,7 +15,7 @@
 
 use std::{panic, result::Result, pin::Pin};
 use exit_future::Signal;
-use log::debug;
+use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture},
@@ -30,7 +30,7 @@ use prometheus_endpoint::{
 };
 use sc_client_api::CloneableSpawn;
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
-use crate::{config::{TaskExecutor, TaskType}, Error};
+use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
 
 mod prometheus_future;
 
@@ -40,6 +40,7 @@ pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
 	executor: TaskExecutor,
 	metrics: Option<Metrics>,
+	task_notifier: TracingUnboundedSender<JoinFuture>,
 }
 
 impl SpawnTaskHandle {
@@ -67,6 +68,11 @@ impl SpawnTaskHandle {
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
+		if self.task_notifier.is_closed() {
+			debug!("Attempt to spawn a new task has been prevented: {}", name);
+			return;
+		}
+
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
 
@@ -111,7 +117,15 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		self.executor.spawn(Box::pin(future), task_type);
+		let join_handle = self.executor.spawn(Box::pin(future), task_type);
+		let mut task_notifier = self.task_notifier.clone();
+		self.executor.spawn(Box::pin(async move {
+				if let Err(err) = task_notifier.send(join_handle).await {
+					error!("Could not send spawned task handle to queue: {}", err);
+				}
+			}),
+			TaskType::Async,
+		);
 	}
 }
 
@@ -223,6 +237,8 @@ pub struct TaskManager {
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	/// Things to keep alive until the task manager is dropped.
 	keep_alive: Box<dyn std::any::Any + Send + Sync>,
+	task_notifier: TracingUnboundedSender<JoinFuture>,
+	completion_future: JoinFuture,
 }
 
 impl TaskManager {
@@ -233,10 +249,18 @@ impl TaskManager {
 		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
+
 		// A side-channel for essential tasks to communicate shutdown.
 		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
+
+		let (task_notifier, mut background_tasks) = tracing_unbounded("mpsc_background_tasks");
+		let completion_future = executor.spawn(Box::pin(async move {
+			while let Some(handle) = background_tasks.next().await {
+				handle.await;
+			}
+		}), TaskType::Async);
 
 		Ok(Self {
 			on_exit,
@@ -246,6 +270,8 @@ impl TaskManager {
 			essential_failed_tx,
 			essential_failed_rx,
 			keep_alive: Box::new(()),
+			task_notifier,
+			completion_future,
 		})
 	}
 
@@ -256,12 +282,26 @@ impl TaskManager {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
+			task_notifier: self.task_notifier.clone(),
 		}
 	}
 
 	/// Get a handle for spawning essential tasks.
 	pub fn spawn_essential_handle(&self) -> SpawnEssentialTaskHandle {
 		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
+	}
+
+	/// Send the signal for termination, prevent new tasks to be created, await for all the existing
+	/// tasks to finished.
+	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		self.terminate();
+		let keep_alive = self.keep_alive;
+		let completion_future = self.completion_future;
+
+		Box::pin(async move {
+			completion_future.await;
+			drop(keep_alive)
+		})
 	}
 
 	/// Return a future that will end if an essential task fails.
@@ -277,19 +317,13 @@ impl TaskManager {
 	pub fn terminate(&mut self) {
 		if let Some(signal) = self.signal.take() {
 			let _ = signal.fire();
+			self.task_notifier.close_channel();
 		}
 	}
 
 	/// Set what the task manager should keep alivei
 	pub(super) fn keep_alive<T: 'static + Send + Sync>(&mut self, to_keep_alive: T) {
 		self.keep_alive = Box::new(to_keep_alive);
-	}
-}
-
-impl Drop for TaskManager {
-	fn drop(&mut self) {
-		debug!(target: "service", "Tasks manager shutdown");
-		self.terminate();
 	}
 }
 
