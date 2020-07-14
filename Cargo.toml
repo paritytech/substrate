@@ -171,6 +171,7 @@ members = [
 	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
+	"test-utils/derive",
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
