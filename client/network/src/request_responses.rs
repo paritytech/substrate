@@ -64,13 +64,13 @@ pub struct ProtocolConfig {
     /// Maximum allowed size, in bytes, of a request.
     ///
     /// Any request larger than this value will be declined as a way to avoid allocating too
-    /// much memory for the it.
+    /// much memory for it.
     pub max_request_size: usize,
 
     /// Maximum allowed size, in bytes, of a response.
     ///
     /// Any response larger than this value will be declined as a way to avoid allocating too
-    /// much memory for the it.
+    /// much memory for it.
     pub max_response_size: usize,
 
     /// Duration after which emitted requests are considered timed out.
@@ -108,7 +108,7 @@ pub struct IncomingRequest {
 	pub origin: PeerId,
 
 	/// Request sent by the remote. Will always be smaller than
-	/// [`RequestResponseConfig::max_response_size`].
+	/// [`RequestResponseConfig::max_request_size`].
 	pub request_bytes: Vec<u8>,
 
 	/// Channel to send back the response to.
@@ -145,7 +145,7 @@ pub enum Event {
 pub struct RequestResponsesBehaviour {
 	/// The multiple sub-protocols, by name.
 	/// Contains the underlying libp2p `RequestResponse` behaviour, plus an optional
-	/// "response builder" used to build responses to incoming requests.
+	/// "response builder" used to build responses for incoming requests.
 	protocols: HashMap<
 		Cow<'static, str>,
 		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)
@@ -207,7 +207,7 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// An error is returned if we are not connected to the target peer of if the protocol doesn't
+	/// An error is returned if we are not connected to the target peer or if the protocol doesn't
 	/// match one that has been registered.
 	pub fn send_request(&mut self, target: &PeerId, protocol: &str, request: Vec<u8>)
 		-> Result<RequestId, SendRequestError>
@@ -439,7 +439,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								}
 							}));
 
-							// This `continue` makres sure that `pending_responses` gets polled
+							// This `continue` makes sure that `pending_responses` gets polled
 							// after we have added the new element.
 							continue;
 						}

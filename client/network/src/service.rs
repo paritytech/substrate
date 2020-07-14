@@ -599,7 +599,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// notifications should remain the default ways of communicating information. For example, a
 	/// peer can announce something through a notification, after which the recipient can obtain
 	/// more information by performing a request.
-	/// As such, this function is meant be called only with peers we are already connected to.
+	/// As such, this function is meant to be called only with peers we are already connected to.
 	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
 	/// to said peer.
 	///
@@ -1147,7 +1147,7 @@ impl Metrics {
 			requests_out_failure_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_requests_out_failure_total",
-					"Total number of requests that have resulted in a failure"
+					"Total number of requests that have failed"
 				),
 				&["protocol", "reason"]
 			)?, registry)?,
