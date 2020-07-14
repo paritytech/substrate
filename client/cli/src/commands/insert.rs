@@ -19,14 +19,11 @@
 
 use crate::{Error, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag, SharedParams, utils};
 use structopt::StructOpt;
-use sp_core::{crypto::KeyTypeId, Bytes};
+use sp_core::{crypto::KeyTypeId, traits::BareCryptoStore};
 use std::convert::TryFrom;
-use futures01::Future;
-use hyper::rt;
-use sc_rpc::author::AuthorClient;
-use jsonrpc_core_client::transports::http;
-use serde::{de::DeserializeOwned, Serialize};
-use sp_core::crypto::ExposeSecret;
+use sc_service::config::KeystoreConfig;
+use sc_keystore::Store as KeyStore;
+use sp_core::crypto::SecretString;
 
 /// The `insert` command
 #[derive(Debug, StructOpt)]
@@ -45,10 +42,6 @@ pub struct InsertCmd {
 	#[structopt(long)]
 	key_type: String,
 
-	/// Node JSON-RPC endpoint, default "http://localhost:9933"
-	#[structopt(long)]
-	node_url: Option<String>,
-
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keystore_params: KeystoreParams,
@@ -64,37 +57,31 @@ pub struct InsertCmd {
 
 impl InsertCmd {
 	/// Run the command
-	pub fn run<H>(&self) -> Result<(), Error>
-		where
-			H: DeserializeOwned + Serialize + Send + Sync + 'static,
-	{
+	pub fn run(&self) -> Result<(), Error> {
 		let suri = utils::read_uri(self.suri.as_ref())?;
-		let password = self.keystore_params.read_password()?;
-		let password = password.as_ref().map(|s| s.expose_secret().as_str());
+		let base_path = self.shared_params.base_path.as_ref()
+			.ok_or_else(|| Error::Other("please supply base path".into()))?;
 
-		let public = with_crypto_scheme!(
-			self.crypto_scheme.scheme,
-			to_vec(&suri, password)
-		)?;
+		let (keystore, public) = match self.keystore_params.keystore_config(base_path)? {
+			KeystoreConfig::Path { path, password } => {
+				let public = with_crypto_scheme!(
+					self.crypto_scheme.scheme,
+					to_vec(&suri, password.clone())
+				)?;
+				let keystore = KeyStore::open(path, password)
+					.map_err(|e| format!("{}", e))?;
+				(keystore, public)
+			},
+			_ => unreachable!("keystore_config always returns path and password; qed")
+		};
 
-		let node_url = self.node_url.as_ref()
-			.map(String::as_str)
-			.unwrap_or("http://localhost:9933");
-		let key_type = &self.key_type;
-
-		// Just checking
-		let _key_type_id = KeyTypeId::try_from(key_type.as_str())
+		let key_type = KeyTypeId::try_from(self.key_type.as_str())
 			.map_err(|_| {
 				Error::Other("Cannot convert argument to keytype: argument should be 4-character string".into())
 			})?;
 
-
-		insert_key::<H>(
-			&node_url,
-			key_type.to_string(),
-			suri,
-			sp_core::Bytes(public),
-		);
+		keystore.write().insert_unknown(key_type, &suri, &public[..])
+			.map_err(|e| Error::Other(format!("{:?}", e)))?;
 
 		Ok(())
 	}
@@ -110,23 +97,7 @@ impl CliConfiguration for InsertCmd {
 	}
 }
 
-fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<&str>) -> Result<Vec<u8>, Error> {
+fn to_vec<P: sp_core::Pair>(uri: &str, pass: Option<SecretString>) -> Result<Vec<u8>, Error> {
 	let p = utils::pair_from_suri::<P>(uri, pass)?;
 	Ok(p.public().as_ref().to_vec())
 }
-
-fn insert_key<H>(url: &str, key_type: String, suri: String, public: Bytes)
-	where
-		H: DeserializeOwned + Serialize + Send + Sync + 'static,
-{
-	rt::run(
-		http::connect(&url)
-			.and_then(|client: AuthorClient<H, H>| {
-				client.insert_key(key_type, suri, public).map(|_| ())
-			})
-			.map_err(|e| {
-				println!("Error inserting key: {:?}", e);
-			})
-	);
-}
-

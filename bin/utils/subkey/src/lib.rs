@@ -22,7 +22,6 @@ use sc_cli::{
 	GenerateNodeKeyCmd, GenerateCmd, InspectCmd, InspectNodeKeyCmd
 };
 use substrate_frame_cli::ModuleIdCmd;
-use frame_system::extras::HashFor;
 use sp_core::crypto::Ss58Codec;
 
 #[derive(Debug, StructOpt)]
@@ -71,7 +70,7 @@ pub fn run<R>() -> Result<(), Error>
 		Subkey::Generate(cmd) => cmd.run()?,
 		Subkey::InspectKey(cmd) => cmd.run()?,
 		Subkey::InspectNodeKey(cmd) => cmd.run()?,
-		Subkey::Insert(cmd) => cmd.run::<HashFor<R>>()?,
+		Subkey::Insert(cmd) => cmd.run()?,
 		Subkey::ModuleId(cmd) => cmd.run::<R>()?,
 		Subkey::Vanity(cmd) => cmd.run()?,
 		Subkey::Verify(cmd) => cmd.run()?,

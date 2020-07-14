@@ -19,7 +19,6 @@
 
 use crate::{Error, substrate_cli_subcommands};
 use structopt::StructOpt;
-use serde::{de::DeserializeOwned, Serialize};
 
 use super::{
 	insert::InsertCmd,
@@ -50,15 +49,12 @@ pub enum KeySubcommand {
 
 impl KeySubcommand {
 	/// run the key subcommands
-	pub fn run<Hash>(&self) -> Result<(), Error>
-		where
-			Hash: DeserializeOwned + Serialize + Send + Sync + 'static,
-	{
+	pub fn run(&self) -> Result<(), Error> {
 		match self {
 			KeySubcommand::GenerateNodeKey(cmd) => cmd.run(),
 			KeySubcommand::Generate(cmd) => cmd.run(),
 			KeySubcommand::InspectKey(cmd) => cmd.run(),
-			KeySubcommand::Insert(cmd) => cmd.run::<Hash>(),
+			KeySubcommand::Insert(cmd) => cmd.run(),
 			KeySubcommand::InspectNodeKey(cmd) => cmd.run(),
 		}
 	}

@@ -132,7 +132,6 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
-pub mod extras;
 #[cfg(test)]
 pub(crate) mod mock;
 

@@ -25,7 +25,7 @@ use sp_core::{
 use sp_runtime::{MultiSigner, traits::IdentifyAccount};
 use crate::{OutputType, error::{self, Error}};
 use serde_json::json;
-use sp_core::crypto::{SecretString, ExposeSecret};
+use sp_core::crypto::{SecretString, Zeroize, ExposeSecret};
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
@@ -152,10 +152,17 @@ pub fn print_from_uri<Pair>(
 }
 
 /// generate a pair from suri
-pub fn pair_from_suri<P: Pair>(suri: &str, password: Option<&str>) -> Result<P, Error> {
-	let pair = P::from_string(suri, password)
-		.map_err(|err| format!("Invalid phrase {:?}", err))?;
-	Ok(pair)
+pub fn pair_from_suri<P: Pair>(suri: &str, password: Option<SecretString>) -> Result<P, Error> {
+	let result = if let Some(pass) = password {
+		let mut pass_str = pass.expose_secret().clone();
+		let pair = P::from_string(suri, Some(&pass_str));
+		pass_str.zeroize();
+		pair
+	} else {
+		P::from_string(suri, None)
+	};
+
+	Ok(result.map_err(|err| format!("Invalid phrase {:?}", err))?)
 }
 
 /// formats seed as hex

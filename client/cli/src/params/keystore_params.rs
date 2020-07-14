@@ -22,9 +22,8 @@ use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::error;
-use sp_core::crypto::SecretString;
+use sp_core::crypto::{SecretString, Zeroize};
 use std::str::FromStr;
-use zeroize::Zeroize;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";

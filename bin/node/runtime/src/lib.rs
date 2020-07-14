@@ -32,10 +32,7 @@ use frame_support::{
 	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
-use frame_system::{
-	EnsureRoot, EnsureOneOf,
-	extras::{SignedExtensionProvider, ExtrasParamsBuilder, SignedExtensionData},
-};
+use frame_system::{EnsureRoot, EnsureOneOf};
 use frame_support::traits::InstanceFilter;
 use codec::{Encode, Decode};
 use sp_core::{
@@ -646,96 +643,6 @@ parameter_types! {
 	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
-#[derive(Default)]
-pub struct RuntimeExtrasBuilder {
-	tip: u128,
-	genesis_hash: Option<<Runtime as frame_system::Trait>::Hash>,
-	era_start_hash: Option<<Runtime as frame_system::Trait>::Hash>,
-}
-
-pub struct RuntimeExtrasParams {
-	era: Era,
-	tip: u128,
-	index: <Runtime as frame_system::Trait>::Index,
-	genesis_hash: Option<<Runtime as frame_system::Trait>::Hash>,
-	era_start_hash: Option<<Runtime as frame_system::Trait>::Hash>,
-}
-
-impl ExtrasParamsBuilder<Runtime> for RuntimeExtrasBuilder {
-	type ExtrasParams = RuntimeExtrasParams;
-
-	fn set_tip(mut self, tip: u128) -> Self {
-		self.tip = tip;
-		self
-	}
-
-	fn set_starting_era_hash(mut self, hash: <Runtime as frame_system::Trait>::Hash) -> Self {
-		self.era_start_hash = Some(hash);
-		self
-	}
-
-	fn set_genesis_hash(mut self, hash: <Runtime as frame_system::Trait>::Hash) -> Self {
-		self.genesis_hash = Some(hash);
-		self
-	}
-
-	fn build(self, index: <Runtime as frame_system::Trait>::Index, era: Era) -> Self::ExtrasParams {
-		RuntimeExtrasParams {
-			era,
-			index,
-			tip: self.tip,
-			genesis_hash: self.genesis_hash,
-			era_start_hash: self.era_start_hash,
-		}
-	}
-}
-
-
-impl SignedExtensionProvider for Runtime {
-	type Extra = SignedExtra;
-	type Builder = RuntimeExtrasBuilder;
-
-	fn extras_params_builder() -> RuntimeExtrasBuilder {
-		RuntimeExtrasBuilder::default()
-	}
-
-	fn construct_extras(params: RuntimeExtrasParams) -> SignedExtensionData<Self::Extra> {
-		let RuntimeExtrasParams {
-			tip,
-			era,
-			index,
-			era_start_hash,
-			genesis_hash
-		} = params;
-		
-		SignedExtensionData {
-			extra: (
-				frame_system::CheckSpecVersion::<Runtime>::new(),
-				frame_system::CheckTxVersion::<Runtime>::new(),
-				frame_system::CheckGenesis::<Runtime>::new(),
-				frame_system::CheckEra::<Runtime>::from(era),
-				frame_system::CheckNonce::<Runtime>::from(index),
-				frame_system::CheckWeight::<Runtime>::new(),
-				pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-				pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
-			),
-			additional: match (genesis_hash, era_start_hash) {
-				(Some(genesis), Some(era)) => Some((
-					VERSION.spec_version,
-					VERSION.transaction_version,
-					genesis,
-					era,
-					(),
-					(),
-					(),
-					(),
-				)),
-				_ => None
-			}
-		}
-	}
-}
-
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
 	where
 		Call: From<LocalCall>,
@@ -757,18 +664,21 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			// so the actual block number is `n`.
 			.saturating_sub(1);
 		let era = Era::mortal(period, current_block);
-		let builder = Runtime::extras_params_builder();
-		let input = builder.build(nonce, era);
-		let SignedExtensionData { extra, additional } = Runtime::construct_extras(input);
-		let raw_payload = if let Some(additional_signed) = additional {
-			SignedPayload::from_raw(call, extra, additional_signed)
-		} else {
-			SignedPayload::new(call, extra)
-				.map_err(|e| {
-					debug::warn!("Unable to create signed payload: {:?}", e);
-				})
-				.ok()?
-		};
+		let extra = (
+			frame_system::CheckSpecVersion::<Runtime>::new(),
+			frame_system::CheckTxVersion::<Runtime>::new(),
+			frame_system::CheckGenesis::<Runtime>::new(),
+			frame_system::CheckEra::<Runtime>::from(era),
+			frame_system::CheckNonce::<Runtime>::from(nonce),
+			frame_system::CheckWeight::<Runtime>::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(0),
+			pallet_grandpa::ValidateEquivocationReport::<Runtime>::new(),
+		);
+		let raw_payload = SignedPayload::new(call, extra)
+			.map_err(|e| {
+				debug::warn!("Unable to create signed payload: {:?}", e);
+			})
+			.ok()?;
 		let signature = raw_payload
 			.using_encoded(|payload| {
 				C::sign(payload, public)

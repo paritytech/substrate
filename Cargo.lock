@@ -6693,11 +6693,8 @@ dependencies = [
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
- "futures 0.1.29",
  "futures 0.3.5",
  "hex",
- "hyper 0.12.35",
- "jsonrpc-core-client",
  "lazy_static",
  "libp2p 0.18.1",
  "log",
@@ -6710,12 +6707,11 @@ dependencies = [
  "rpassword",
  "sc-client-api",
  "sc-informant",
+ "sc-keystore",
  "sc-network",
- "sc-rpc",
  "sc-service",
  "sc-telemetry",
  "sc-tracing",
- "secrecy 0.7.0",
  "serde",
  "serde_json",
  "sp-application-crypto",
@@ -6733,7 +6729,6 @@ dependencies = [
  "tempfile",
  "time",
  "tokio 0.2.21",
- "zeroize",
 ]
 
 [[package]]
@@ -7776,15 +7771,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "secrecy"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0673d6a6449f5e7d12a1caf424fd9363e2af3a4953023ed455e3c4beef4597c0"
-dependencies = [
- "zeroize",
-]
-
-[[package]]
 name = "security-framework"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8387,7 +8373,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "regex",
  "schnorrkel",
- "secrecy 0.6.0",
+ "secrecy",
  "serde",
  "serde_json",
  "sha2",
