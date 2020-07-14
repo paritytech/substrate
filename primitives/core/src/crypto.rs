@@ -367,7 +367,7 @@ macro_rules! ss58_address_format {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
 					_ => {
-						let custom = match *DEFAULT_VERSION.lock() {
+						let custom = match Ss58AddressFormat::default() {
 							Ss58AddressFormat::Custom(n) => n,
 							_ => return Err(())
 						};
