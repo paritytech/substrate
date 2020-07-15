@@ -123,6 +123,14 @@ impl TelemetryEndpoints {
 	}
 }
 
+impl std::ops::Deref for TelemetryEndpoints {
+	type Target = Vec<(Multiaddr, u8)>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
 /// Parses a WebSocket URL into a libp2p `Multiaddr`.
 fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 	// First, assume that we have a `Multiaddr`.
