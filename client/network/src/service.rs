@@ -490,17 +490,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let not_connected_peers = {
 			let swarm = &mut *swarm;
-			let list = swarm.known_peers().filter(|p| open.iter().all(|n| n != *p))
-				.cloned().collect::<Vec<_>>();
-			list.into_iter().map(move |peer_id| {
-				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
-					version_string: swarm.node(&peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())),
-					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
-					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
-						.into_iter().collect(),
+			swarm.known_peers().into_iter()
+				.filter(|p| open.iter().all(|n| n != p))
+				.map(move |peer_id| {
+					(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+						version_string: swarm.node(&peer_id)
+							.and_then(|i| i.client_version().map(|s| s.to_owned())),
+						latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
+						known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
+							.into_iter().collect(),
+					})
 				})
-			}).collect()
+				.collect()
 		};
 
 		NetworkState {
