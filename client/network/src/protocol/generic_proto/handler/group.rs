@@ -187,6 +187,9 @@ pub enum NotifsHandlerOut {
 	Open {
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
+		/// Handshake that was sent to us.
+		/// This is normally a "Status" message, but this out of the concern of this code.
+		received_handshake: Vec<u8>,
 	},
 
 	/// The connection is closed for custom protocols.
@@ -465,9 +468,9 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, received_handshake, .. }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open { endpoint }
+						NotifsHandlerOut::Open { endpoint, received_handshake }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
