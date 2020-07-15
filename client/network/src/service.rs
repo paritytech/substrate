@@ -603,8 +603,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// Calling this method with a `target` we are not connected to will *not* attempt to connect
 	/// to said peer.
 	///
-	/// Contrary to notifications, requests are guaranteed to not be interrupted under normal
-	/// circumstances.
+	/// No limit or throttling of concurrent outbound requests per peer and protocol are enforced.
+	/// Such restrictions, if desired, need to be enforced at the call site(s).
 	///
 	/// The protocol must have been registered through
 	/// [`NetworkConfiguration::request_response_protocols`].
