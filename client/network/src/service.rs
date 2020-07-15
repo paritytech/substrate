@@ -75,7 +75,7 @@ use std::{
 };
 use wasm_timer::Instant;
 
-pub use behaviour::{ResponseFailure, InboundFailure, OutboundFailure};
+pub use behaviour::{ResponseFailure, InboundFailure, RequestFailure, OutboundFailure};
 
 mod out_events;
 #[cfg(test)]
@@ -613,7 +613,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		target: PeerId,
 		protocol: impl Into<Cow<'static, str>>,
 		request: Vec<u8>
-	) -> Result<Vec<u8>, OutboundFailure> {
+	) -> Result<Vec<u8>, RequestFailure> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::Request {
 			target,
@@ -627,7 +627,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			// The channel can only be closed if the network worker no longer exists. If the
 			// network worker no longer exists, then all connections to `target` are necessarily
 			// closed, and we legitimately report this situation as a "ConnectionClosed".
-			Err(_) => Err(OutboundFailure::ConnectionClosed),
+			Err(_) => Err(RequestFailure::Network(OutboundFailure::ConnectionClosed)),
 		}
 	}
 
@@ -889,7 +889,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 		target: PeerId,
 		protocol: Cow<'static, str>,
 		request: Vec<u8>,
-		pending_response: oneshot::Sender<Result<Vec<u8>, OutboundFailure>>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
@@ -932,7 +932,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// purposes.
 	pending_requests: HashMap<
 		behaviour::RequestId,
-		(oneshot::Sender<Result<Vec<u8>, OutboundFailure>>, Instant, String)
+		(oneshot::Sender<Result<Vec<u8>, RequestFailure>>, Instant, String)
 	>,
 }
 
@@ -1270,10 +1270,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							);
 						},
 						Err(behaviour::SendRequestError::NotConnected) => {
-							let _ = pending_response.send(Err(OutboundFailure::ConnectionClosed));
+							let err = RequestFailure::Network(OutboundFailure::ConnectionClosed);
+							let _ = pending_response.send(Err(err));
 						},
 						Err(behaviour::SendRequestError::UnknownProtocol) => {
-							let _ = pending_response.send(Err(OutboundFailure::UnsupportedProtocols));
+							let err = RequestFailure::Network(OutboundFailure::UnsupportedProtocols);
+							let _ = pending_response.send(Err(err));
 						},
 					}
 				},
@@ -1350,10 +1352,15 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								}
 								Err(err) => {
 									let reason = match err {
-										OutboundFailure::DialFailure => "dial-failure",
-										OutboundFailure::Timeout => "timeout",
-										OutboundFailure::ConnectionClosed => "connection-closed",
-										OutboundFailure::UnsupportedProtocols => "unsupported",
+										RequestFailure::Refused => "refused",
+										RequestFailure::Network(OutboundFailure::DialFailure) =>
+											"dial-failure",
+										RequestFailure::Network(OutboundFailure::Timeout) =>
+											"timeout",
+										RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
+											"connection-closed",
+										RequestFailure::Network(OutboundFailure::UnsupportedProtocols) =>
+											"unsupported",
 									};
 
 									metrics.requests_out_failure_total

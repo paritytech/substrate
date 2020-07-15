@@ -38,7 +38,7 @@ use std::{
 };
 
 pub use crate::request_responses::{
-	ResponseFailure, InboundFailure, OutboundFailure, RequestId, SendRequestError
+	ResponseFailure, InboundFailure, RequestFailure, OutboundFailure, RequestId, SendRequestError
 };
 
 /// General behaviour of the network. Combines all protocols together.
@@ -97,7 +97,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Request that has succeeded.
 		request_id: RequestId,
 		/// Response sent by the remote or reason for failure.
-		result: Result<Vec<u8>, OutboundFailure>,
+		result: Result<Vec<u8>, RequestFailure>,
 	},
 
 	/// Started a new request with the given node.

@@ -137,7 +137,7 @@ pub enum Event {
 		/// Request that has succeeded.
 		request_id: RequestId,
 		/// Response sent by the remote or reason for failure.
-		result: Result<Vec<u8>, OutboundFailure>,
+		result: Result<Vec<u8>, RequestFailure>,
 	},
 }
 
@@ -162,7 +162,7 @@ pub struct RequestResponsesBehaviour {
 enum RequestProcessingOutcome {
 	Response {
 		protocol: Cow<'static, str>,
-		inner_channel: ResponseChannel<Vec<u8>>,
+		inner_channel: ResponseChannel<Result<Vec<u8>, ()>>,
 		response: Vec<u8>,
 	},
 	Busy {
@@ -353,7 +353,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						protocol, inner_channel, response
 					} => {
 						if let Some((protocol, _)) = self.protocols.get_mut(&*protocol) {
-							protocol.send_response(inner_channel, response);
+							protocol.send_response(inner_channel, Ok(response));
 						}
 					}
 					RequestProcessingOutcome::Busy { peer, protocol } => {
@@ -454,7 +454,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						} => {
 							let out = Event::RequestFinished {
 								request_id,
-								result: Ok(response),
+								result: response.map_err(|()| RequestFailure::Refused),
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
@@ -467,7 +467,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 						} => {
 							let out = Event::RequestFinished {
 								request_id,
-								result: Err(error),
+								result: Err(RequestFailure::Network(error)),
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(out));
 						}
@@ -506,6 +506,17 @@ pub enum SendRequestError {
 	UnknownProtocol,
 }
 
+/// Error in a request.
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+pub enum RequestFailure {
+	/// Remote has closed the substream before answering, thereby signaling that it considers the
+	/// request as valid, but refused to answer it.
+	Refused,
+	/// Problem on the network.
+	#[display(fmt = "Problem on the network")]
+	Network(#[error(ignore)] OutboundFailure),
+}
+
 /// Error when processing a request sent by a remote.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
 pub enum ResponseFailure {
@@ -529,7 +540,7 @@ pub struct GenericCodec {
 impl RequestResponseCodec for GenericCodec {
 	type Protocol = Vec<u8>;
 	type Request = Vec<u8>;
-	type Response = Vec<u8>;
+	type Response = Result<Vec<u8>, ()>;
 
 	async fn read_request<T>(
 		&mut self,
@@ -563,9 +574,22 @@ impl RequestResponseCodec for GenericCodec {
 	where
 		T: AsyncRead + Unpin + Send,
 	{
+		// Note that this function returns a `Result<Result<...>>`. Returning an `Err` is
+		// considered as a protocol error and will result in the entire connection being closed.
+		// Returning `Ok(Err(_))` signifies that a response has successfully been fetched, and
+		// that this response is an error.
+
 		// Read the length.
-		let length = unsigned_varint::aio::read_usize(&mut io).await
-			.map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
+		let length = match unsigned_varint::aio::read_usize(&mut io).await {
+			Ok(l) => l,
+			Err(unsigned_varint::io::ReadError::Io(err))
+				if matches!(err.kind(), io::ErrorKind::UnexpectedEof) =>
+			{
+				return Ok(Err(()));
+			}
+			Err(err) => return Err(io::Error::new(io::ErrorKind::InvalidInput, err)),
+		};
+
 		if length > usize::try_from(self.max_response_size).unwrap_or(usize::max_value()) {
 			return Err(io::Error::new(
 				io::ErrorKind::InvalidInput,
@@ -576,7 +600,7 @@ impl RequestResponseCodec for GenericCodec {
 		// Read the payload.
 		let mut buffer = vec![0; length];
 		io.read_exact(&mut buffer).await?;
-		Ok(buffer)
+		Ok(Ok(buffer))
 	}
 
 	async fn write_request<T>(
@@ -611,15 +635,18 @@ impl RequestResponseCodec for GenericCodec {
 	where
 		T: AsyncWrite + Unpin + Send,
 	{
-		// TODO: check the length?
-		// Write the length.
-		{
-			let mut buffer = unsigned_varint::encode::usize_buffer();
-			io.write_all(unsigned_varint::encode::usize(res.len(), &mut buffer)).await?;
-		}
+		// If `res` is an `Err`, we jump to closing the substream without writing anything on it.
+		if let Ok(res) = res {
+			// TODO: check the length?
+			// Write the length.
+			{
+				let mut buffer = unsigned_varint::encode::usize_buffer();
+				io.write_all(unsigned_varint::encode::usize(res.len(), &mut buffer)).await?;
+			}
 
-		// Write the payload.
-		io.write_all(&res).await?;
+			// Write the payload.
+			io.write_all(&res).await?;
+		}
 
 		io.close().await?;
 		Ok(())
@@ -852,7 +879,7 @@ mod tests {
 					}) => {
 						assert_eq!(Some(request_id), sent_request_id);
 						match result {
-							Err(super::OutboundFailure::ConnectionClosed) => {},
+							Err(super::RequestFailure::Network(super::OutboundFailure::ConnectionClosed)) => {},
 							_ => panic!()
 						}
 						break;
