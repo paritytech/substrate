@@ -94,8 +94,8 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 }
 
 fn run_until_exit<FUT, ERR>(
-	mut tokio_runtime: tokio::runtime::Runtime, 
-	future: FUT, 
+	mut tokio_runtime: tokio::runtime::Runtime,
+	future: FUT,
 	mut task_manager: TaskManager,
 ) -> Result<()>
 where
@@ -235,8 +235,7 @@ impl<C: SubstrateCli> Runner<C> {
 		let mut task_manager = initialise(self.config)?;
 		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
 			.map_err(|e| e.to_string())?;
-		task_manager.terminate();
-		drop(self.tokio_runtime);
+		task_manager.clean_shutdown();
 		Ok(())
 	}
 
