@@ -277,22 +277,13 @@ pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 ///
 /// ```
 /// # use sc_service::TaskExecutor;
-/// # mod tokio { pub mod runtime {
-/// # #[derive(Clone)]
-/// # pub struct Runtime;
-/// # impl Runtime {
-/// # pub fn new() -> Result<Self, ()> { Ok(Runtime) }
-/// # pub fn handle(&self) -> &Self { &self }
-/// # pub fn spawn(&self, _: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>)
-/// # -> std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>> { Box::pin(async {}) }
-/// # }
-/// # } }
+/// use futures::future::FutureExt;
 /// use tokio::runtime::Runtime;
 ///
 /// let runtime = Runtime::new().unwrap();
 /// let handle = runtime.handle().clone();
 /// let task_executor: TaskExecutor = (move |future, _task_type| {
-///		handle.spawn(future)
+///		handle.spawn(future).map(|_| ())
 ///	}).into();
 /// ```
 ///
@@ -300,11 +291,8 @@ pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 ///
 /// ```
 /// # use sc_service::TaskExecutor;
-/// # mod async_std { pub mod task {
-/// # pub fn spawn(_: std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>>)
-/// # -> std::pin::Pin<Box<dyn futures::future::Future<Output = ()> + Send>> { Box::pin(async {}) }
-/// # } }
 /// let task_executor: TaskExecutor = (|future, _task_type| {
+///		// NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
 ///		async_std::task::spawn(future)
 ///	}).into();
 /// ```
@@ -317,12 +305,13 @@ impl std::fmt::Debug for TaskExecutor {
 	}
 }
 
-impl<F> std::convert::From<F> for TaskExecutor
+impl<F, FUT> std::convert::From<F> for TaskExecutor
 where
-	F: Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync + 'static,
+	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
+	FUT: Future<Output = ()> + Send + 'static,
 {
-	fn from(x: F) -> Self {
-		Self(Arc::new(x))
+	fn from(func: F) -> Self {
+		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
 	}
 }
 

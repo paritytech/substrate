@@ -33,6 +33,8 @@ use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_u
 use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
 
 mod prometheus_future;
+#[cfg(test)]
+mod tests;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -119,7 +121,8 @@ impl SpawnTaskHandle {
 
 		let join_handle = self.executor.spawn(Box::pin(future), task_type);
 		let mut task_notifier = self.task_notifier.clone();
-		self.executor.spawn(Box::pin(async move {
+		self.executor.spawn(
+			Box::pin(async move {
 				if let Err(err) = task_notifier.send(join_handle).await {
 					error!("Could not send spawned task handle to queue: {}", err);
 				}
@@ -256,9 +259,10 @@ impl TaskManager {
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
 		let (task_notifier, background_tasks) = tracing_unbounded("mpsc_background_tasks");
-		let completion_future = executor.spawn(Box::pin(
-			background_tasks.for_each_concurrent(None, |x| x)
-		), TaskType::Async);
+		let completion_future = executor.spawn(
+			Box::pin(background_tasks.for_each_concurrent(None, |x| x)),
+			TaskType::Async,
+		);
 
 		Ok(Self {
 			on_exit,
@@ -272,7 +276,6 @@ impl TaskManager {
 			completion_future,
 		})
 	}
-
 
 	/// Get a handle for spawning tasks.
 	pub fn spawn_handle(&self) -> SpawnTaskHandle {
@@ -290,7 +293,7 @@ impl TaskManager {
 	}
 
 	/// Send the signal for termination, prevent new tasks to be created, await for all the existing
-	/// tasks to finished.
+	/// tasks to be finished and drop the object. You can consider this as an async drop.
 	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		self.terminate();
 		let keep_alive = self.keep_alive;

@@ -6883,6 +6883,7 @@ dependencies = [
 name = "sc-service"
 version = "0.8.0-rc4"
 dependencies = [
+ "async-std",
  "derive_more",
  "directories",
  "exit-future",
@@ -6940,6 +6941,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "sysinfo",
  "tempfile",
+ "tokio 0.2.18",
  "tracing",
  "wasm-timer",
 ]
