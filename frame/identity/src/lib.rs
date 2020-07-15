@@ -1199,7 +1199,7 @@ decl_module! {
 			)).into())
 		}
 
-		/// Remove the given account from the sender's subs.
+		/// Add the given account to the sender's subs.
 		///
 		/// Payment: Balance reserved by a previous `set_subs` call for one sub will be repatriated
 		/// to the sender.
