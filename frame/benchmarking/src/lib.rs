@@ -981,7 +981,8 @@ macro_rules! impl_benchmark {
 						// Time the extrinsic logic.
 						frame_support::debug::trace!(
 							target: "benchmark",
-							"Start Benchmark: {:?}", c
+							"Start Benchmark: {:?}", 
+							c,
 						);
 
 						let start_extrinsic = $crate::benchmarking::current_time();
@@ -992,12 +993,14 @@ macro_rules! impl_benchmark {
 						$crate::benchmarking::commit_db();
 						frame_support::debug::trace!(
 							target: "benchmark",
-							"End Benchmark: {} ns", elapsed_extrinsic
+							"End Benchmark: {} ns", 
+							elapsed_extrinsic,
 						);
 						let read_write_count = $crate::benchmarking::read_write_count();
 						frame_support::debug::trace!(
 							target: "benchmark",
-							"Read/Write Count {:?}", read_write_count
+							"Read/Write Count {:?}", 
+							read_write_count,
 						);
 
 						// Time the storage root recalculation.
@@ -1114,8 +1117,7 @@ macro_rules! impl_benchmark_test {
 				};
 
 				if components.is_empty() {
-					let c = Vec::new();
-					execute_benchmark(c)?;
+					execute_benchmark(Default::default())?;
 				} else {
 					for (_, (name, low, high)) in components.iter().enumerate() {
 						// Test only the low and high value, assuming values in the middle won't break
