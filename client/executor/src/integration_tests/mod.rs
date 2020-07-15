@@ -32,6 +32,7 @@ use sp_wasm_interface::HostFunctions as _;
 use sp_runtime::traits::BlakeTwo256;
 
 use crate::WasmExecutionMethod;
+use sc_tracing::TraceEvent;
 
 pub type TestExternalities = CoreTestExternalities<BlakeTwo256, u64>;
 type HostFunctions = sp_io::SubstrateHostFunctions;
@@ -669,6 +670,8 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 		fn process_span(&self, sd: SpanDatum) {
 			self.0.lock().unwrap().push(sd);
 		}
+
+		fn process_event(&self, event: TraceEvent) {}
 	}
 
 	let traces = Arc::new(Mutex::new(Vec::new()));

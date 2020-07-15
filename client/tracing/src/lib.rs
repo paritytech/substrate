@@ -31,7 +31,7 @@ use crossbeam::channel::{bounded, Sender, Receiver};
 use rustc_hash::FxHashMap;
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use slog::{SerdeValue, Value};
-use tracing::{
+use tracing_core::{
 	event::Event,
 	field::{Visit, Field},
 	Level,
@@ -129,7 +129,6 @@ enum TraceMessage {
 struct TraceQueue {
 	trace_receiver: Receiver<TraceMessage>,
 	span_data: FxHashMap<u64, SpanDatum>,
-	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
 }
 
@@ -207,15 +206,6 @@ impl TraceQueue {
 			None => self.trace_handler.process_event(trace_event),
 		}
 	}
-}
-
-fn check_target(targets: &Vec<(String, Level)>, target: &str, level: &Level) -> bool {
-	for t in targets {
-		if target.starts_with(t.0.as_str()) && level <= &t.1 {
-			return true;
-		}
-	}
-	false
 }
 
 /// Holds associated values for a tracing span
@@ -321,7 +311,6 @@ impl ProfilingSubscriber {
 		let mut trace_queue = TraceQueue {
 			trace_receiver,
 			span_data: Default::default(),
-			targets: targets.clone(),
 			trace_handler
 		};
 		std::thread::spawn(move || trace_queue.recv());
@@ -343,6 +332,9 @@ impl ProfilingSubscriber {
 	}
 
 	fn enter_proxied_span(&self, name: String, target: String, proxy_id: u64) {
+		if !self.check_target(&target, &Level::ERROR) {
+			return;
+		}
 		let span_datum = SpanDatum {
 			id: proxy_id,
 			parent_id: self.current_span.id().map(|p| p.into_u64()),

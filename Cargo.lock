@@ -7040,7 +7040,7 @@ dependencies = [
  "serde_json",
  "slog",
  "sp-tracing",
- "tracing",
+ "tracing-core",
  "tracing-subscriber",
 ]
 
