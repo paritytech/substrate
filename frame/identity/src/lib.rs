@@ -462,6 +462,13 @@ decl_event!(
 		JudgementGiven(AccountId, RegistrarIndex),
 		/// A registrar was added.
 		RegistrarAdded(RegistrarIndex),
+		/// A sub-identity (first) was added to an identity (second) and the deposit paid.
+		SubIdentityAdded(AccountId, AccountId, Balance),
+		/// A sub-identity (first) was removed from an identity (second) and the deposit freed.
+		SubIdentityRemoved(AccountId, AccountId, Balance),
+		/// A sub-identity (first arg) was cleared, and the given deposit repatriated from the
+		/// main identity account (second arg) to the sub-identity account.
+		SubIdentityRevoked(AccountId, AccountId, Balance),
 	}
 );
 
@@ -494,7 +501,13 @@ decl_error! {
 		TooManyFields,
 		/// Maximum amount of registrars reached. Cannot add any more.
 		TooManyRegistrars,
-}
+		/// Account ID is already named.
+		AlreadyClaimed,
+		/// Sender is not a sub-account.
+		NotSub,
+		/// Sub-account isn't owned by sender.
+		NotOwned
+	}
 }
 
 /// Functions for calcuating the weight of dispatchables.
@@ -774,6 +787,9 @@ decl_module! {
 			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
 
+			let not_other_sub = subs.iter().filter_map(|i| SuperOf::<T>::get(i)).all(|i| i == &sender);
+			ensure!(not_other_sub, Error::<T>::AlreadyClaimed);
+
 			if old_deposit < new_deposit {
 				T::Currency::reserve(&sender, new_deposit - old_deposit)?;
 			}
@@ -831,8 +847,7 @@ decl_module! {
 
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
 			let id = <IdentityOf<T>>::take(&sender).ok_or(Error::<T>::NotNamed)?;
-			let deposit = id.total_deposit()
-				+ subs_deposit;
+			let deposit = id.total_deposit() + subs_deposit;
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
 			}
@@ -1158,6 +1173,90 @@ decl_module! {
 				sub_ids.len() as Weight, // S
 				id.info.additional.len() as Weight // X
 			)).into())
+		}
+
+		/// Remove the given account from the sender's subs.
+		///
+		/// Payment: Balance reserved by a previous `set_subs` call for one sub will be repatriated
+		/// to the sender.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// sub identity of `sub`.
+		#[weight = weight_for::clear_identity::<T>(
+			T::MaxSubAccounts::get().into(), // S
+		)]
+		fn add_sub(origin, sub: T::AccountId, d: Data) {
+			let sender = ensure_signed(origin)?;
+
+			// Check if it's already claimed as sub-identity.
+			let deposit = if let Some((sup, _)) = SuperOf::<T>::get(&sub) {
+				// It is - ensure that it's the sender that claimed it.
+				ensure!(sup == sender, Error::<T>::AlreadyClaimed);
+				Zero::zero()
+			} else {
+				// If not, then ensure there is space and that the deposit is paid.
+				T::SubAccountDeposit::get()
+			};
+
+			SubsOf::<T>::try_mutate(&sender, |subs_deposit, sub_ids| {
+				ensure!(sub_ids.len() < T::MaxSubAccounts::get(), Error::<T>::TooManySubAccounts);
+				if !deposit.is_zero() {
+					T::Currency::reserve(&sender, deposit)?;
+				}
+				sub_ids.push(&sub);
+				subs_deposit = subs_deposit.saturating_add(deposit);
+			});
+			SuperOf::<T>::insert(&sub, (sender.clone(), data));
+			Self::deposit_event(RawEvent::SubIdentityAdded(sender, sender, deposit));
+		}
+
+		/// Remove the given account from the sender's subs.
+		///
+		/// Payment: Balance reserved by a previous `set_subs` call for one sub will be repatriated
+		/// to the sender.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// sub identity of `sub`.
+		#[weight = weight_for::clear_identity::<T>(
+			T::MaxSubAccounts::get().into(), // S
+		)]
+		fn remove_sub(origin, sub: T::AccountId) {
+			let sender = ensure_signed(origin)?;
+			let (sup, _) = SuperOf::<T>::get(&sub).ok_or(Error::<T>::NotSub)?;
+			ensure!(sup == sender, Error::<T>::NotOwner);
+			SuperOf::<T>::remove(&sub);
+			SubsOf::<T>::mutate(&sup, |subs_deposit, sub_ids| {
+				sub_ids.remove_item(&sender);
+				let deposit = subs_deposit.min(T::SubAccountDeposit::get());
+				subs_deposit -= deposit;
+				let _ = T::Currency::unreserve(&sender, deposit);
+			});
+			Self::deposit_event(RawEvent::SubIdentityRemoved(sender, sup, deposit));
+		}
+
+		/// Remove the sender as a sub-account.
+		///
+		/// Payment: Balance reserved by a previous `set_subs` call for one sub will be repatriated
+		/// to the sender (*not* the original depositor).
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// super-identity.
+		///
+		/// NOTE: This should not normally be used, but is provided in the case that the non-
+		/// controller of an account is maliciously registered as a sub-account.
+		#[weight = weight_for::clear_identity::<T>(
+			T::MaxSubAccounts::get().into(), // S
+		)]
+		fn revoke_sub(origin) {
+			let sender = ensure_signed(origin)?;
+			let (sup, _) = SuperOf::<T>::take(&sender).ok_or(Error::<T>::NotSub)?;
+			SubsOf::<T>::mutate(&sup, |subs_deposit, sub_ids| {
+				sub_ids.remove_item(&sender);
+				let deposit = subs_deposit.min(T::SubAccountDeposit::get());
+				subs_deposit -= deposit;
+				let _ = T::Currency::repatriate_reserved(&sup, &sender, deposit, BalanceStatus::Free);
+			});
+			Self::deposit_event(RawEvent::SubIdentityRevoked(sender, sup, deposit));
 		}
 	}
 }
