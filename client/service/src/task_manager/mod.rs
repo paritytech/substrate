@@ -255,12 +255,10 @@ impl TaskManager {
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
-		let (task_notifier, mut background_tasks) = tracing_unbounded("mpsc_background_tasks");
-		let completion_future = executor.spawn(Box::pin(async move {
-			while let Some(handle) = background_tasks.next().await {
-				handle.await;
-			}
-		}), TaskType::Async);
+		let (task_notifier, background_tasks) = tracing_unbounded("mpsc_background_tasks");
+		let completion_future = executor.spawn(Box::pin(
+			background_tasks.for_each_concurrent(None, |x| x)
+		), TaskType::Async);
 
 		Ok(Self {
 			on_exit,
@@ -300,7 +298,7 @@ impl TaskManager {
 
 		Box::pin(async move {
 			completion_future.await;
-			drop(keep_alive)
+			drop(keep_alive);
 		})
 	}
 
