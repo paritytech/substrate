@@ -102,11 +102,13 @@ macro_rules! if_tracing {
 	( $if:expr ) => {{}}
 }
 
+/// Indicates if wasm tracing is enabled
 #[cfg(feature = "std")]
 pub fn wasm_tracing_enabled() -> bool {
 	WASM_TRACING_ENABLED.load(Ordering::Relaxed)
 }
 
+/// Enable/disable wasm tracing
 #[cfg(feature = "std")]
 pub fn set_wasm_tracing(b: bool) {
 	WASM_TRACING_ENABLED.store(b, Ordering::Relaxed)

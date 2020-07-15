@@ -43,7 +43,7 @@ use tracing::{
 use tracing_subscriber::CurrentSpan;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_PROXY_ID};
+use sp_tracing::proxy::{next_id, WASM_NAME_KEY, WASM_TARGET_KEY, WASM_PROXY_ID};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
@@ -90,11 +90,6 @@ pub struct SpanDatum {
 	pub events: Vec<TraceEvent>,
 }
 
-struct ProxiedSpanDatum {
-	span_datum: SpanDatum,
-	proxy_id: u64,
-}
-
 /// Represents a tracing event, complete with values
 #[derive(Debug)]
 pub struct TraceEvent {
@@ -112,7 +107,6 @@ pub struct ProfilingSubscriber {
 	trace_handler: Box<dyn TraceHandler>,
 	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
 	current_span: CurrentSpan,
-	proxied_spans: Mutex<Vec<ProxiedSpanDatum>>,
 }
 
 /// Holds associated values for a tracing span
@@ -210,7 +204,7 @@ impl ProfilingSubscriber {
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str, wasm_tracing: bool)
-		-> ProfilingSubscriber
+							-> ProfilingSubscriber
 	{
 		sp_tracing::set_wasm_tracing(wasm_tracing);
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
@@ -220,7 +214,6 @@ impl ProfilingSubscriber {
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
 			current_span: CurrentSpan::new(),
-			proxied_spans: Mutex::default(),
 		}
 	}
 
@@ -235,7 +228,7 @@ impl ProfilingSubscriber {
 
 	fn enter_proxied_span(&self, name: String, target: String, proxy_id: u64) {
 		let span_datum = SpanDatum {
-			id: self.next_id.fetch_add(1, Ordering::Relaxed),
+			id: proxy_id,
 			parent_id: self.current_span.id().map(|p| p.into_u64()),
 			name,
 			target,
@@ -248,52 +241,23 @@ impl ProfilingSubscriber {
 		};
 		self.current_span.enter(Id::from_u64(span_datum.id));
 		// Ensure we don't leak spans that are lost due to misconfiguration or panic in runtime
-		let mut proxied_spans = self.proxied_spans.lock();
-		while proxied_spans.len() > LEN_LIMIT {
-			// Just checked len so safe to remove first element
-			let proxied_span = proxied_spans.remove(0);
-			log::warn!(
-					target: "tracing",
-					"Dropping proxied span because LOCAL_PROXY_LIMIT exceeded"
-				);
-			self.emit_proxied_span(proxied_span, false);
-		}
-		proxied_spans.push(ProxiedSpanDatum{
-			span_datum,
-			proxy_id
-		});
+		// TODO len check
+		self.span_data.lock().insert(span_datum.id, span_datum);
 	}
 
-	fn exit_proxied_span(&self, id: u64) {
-		let mut proxied_spans = self.proxied_spans.lock();
-		if proxied_spans.last().map(|last| id > last.proxy_id).unwrap_or(true) {
-			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
+	fn exit_proxied_span(&self, proxy_id: u64) {
+		self.current_span.exit();
+		if let Some(span) = self.span_data.lock().remove(&proxy_id) {
+			self.emit_proxied_span(span, true);
 			return;
 		}
-
-		while let Some(ps) = proxied_spans.pop() {
-			if id < ps.proxy_id {
-				// Span was not exited implicitly, so we exit it now, recording non-valid trace
-				log::warn!(
-						target: "tracing",
-						"TracingProxy Span ids not equal! id parameter given: {}, last span: {}",
-						id,
-						ps.proxy_id,
-					);
-				self.emit_proxied_span(ps, false);
-			} else {
-				// Span found, exit normally
-				self.emit_proxied_span(ps, true);
-				return;
-			}
-		}
-		// Span not found
-		log::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
+		log::warn!(target: "tracing", "Span id not found {}", proxy_id);
 	}
 
-	fn emit_proxied_span(&self, mut proxied_span: ProxiedSpanDatum, valid: bool) {
-		proxied_span.span_datum.values.0.insert("wasm_trace_valid".to_string(), valid.to_string());
-		self.trace_handler.process_span(proxied_span.span_datum);
+	fn emit_proxied_span(&self, mut span: SpanDatum, valid: bool) {
+		span.values.0.insert("wasm_trace_valid".to_string(), valid.to_string());
+		span.overall_time = Instant::now() - span.start_time;
+		self.trace_handler.process_span(span);
 	}
 }
 
@@ -326,7 +290,7 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		let id = next_id();
 		let mut values = Visitor(FxHashMap::default());
 		attrs.record(&mut values);
 		let span_datum = SpanDatum {
@@ -358,12 +322,11 @@ impl Subscriber for ProfilingSubscriber {
 		let mut visitor = Visitor(FxHashMap::default());
 		event.record(&mut visitor);
 		// Check case for proxy span enter
-		if let (Some(name), Some(target), Some(proxy_id)) = (
+		if let (Some(name), Some(target)) = (
 			visitor.0.remove(WASM_NAME_KEY),
-			visitor.0.remove(WASM_TARGET_KEY),
-			visitor.0.remove(WASM_PROXY_ID)
+			visitor.0.remove(WASM_TARGET_KEY)
 		) {
-			if let Ok(proxy_id) = proxy_id.parse() {
+			if let Some(proxy_id) = visitor.0.remove(WASM_PROXY_ID).map(|x| x.parse().ok()).flatten() {
 				self.enter_proxied_span(name, target, proxy_id);
 				return;
 			}
@@ -397,7 +360,10 @@ impl Subscriber for ProfilingSubscriber {
 						span.events.push(trace_event);
 					}
 				} else {
-					log::warn!("Parent span missing - may have been discarded");
+					log::warn!(
+						target: "tracing",
+						"Parent span missing"
+					);
 					self.trace_handler.process_event(trace_event);
 				}
 			}
@@ -446,39 +412,39 @@ impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
 			log::log!(
-				log_level(span_datum.level),
-				"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
-				span_datum.target,
-				span_datum.name,
-				span_datum.overall_time.as_nanos(),
-				span_datum.id,
-				span_datum.parent_id,
-				span_datum.events,
-			);
+log_level(span_datum.level),
+"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
+span_datum.target,
+span_datum.name,
+span_datum.overall_time.as_nanos(),
+span_datum.id,
+span_datum.parent_id,
+span_datum.events,
+);
 		} else {
 			log::log!(
-				log_level(span_datum.level),
-				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
-				span_datum.target,
-				span_datum.name,
-				span_datum.overall_time.as_nanos(),
-				span_datum.id,
-				span_datum.parent_id,
-				span_datum.values,
-				span_datum.events,
-			);
+log_level(span_datum.level),
+"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
+span_datum.target,
+span_datum.name,
+span_datum.overall_time.as_nanos(),
+span_datum.id,
+span_datum.parent_id,
+span_datum.values,
+span_datum.events,
+);
 		}
 	}
 
 	fn process_event(&self, event: TraceEvent) {
 		log::log!(
-			log_level(event.level),
-			"{}: {}, parent_id: {:?}, values: {}",
-			event.name,
-			event.target,
-			event.parent_id,
-			event.visitor
-		);
+log_level(event.level),
+"{}: {}, parent_id: {:?}, values: {}",
+event.name,
+event.target,
+event.parent_id,
+event.visitor
+);
 	}
 }
 
@@ -490,21 +456,21 @@ pub struct TelemetryTraceHandler;
 impl TraceHandler for TelemetryTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		telemetry!(SUBSTRATE_INFO; "tracing.span";
-			"name" => span_datum.name,
-			"target" => span_datum.target,
-			"time" => span_datum.overall_time.as_nanos(),
-			"id" => span_datum.id,
-			"parent_id" => span_datum.parent_id,
-			"values" => span_datum.values
-		);
+"name" => span_datum.name,
+"target" => span_datum.target,
+"time" => span_datum.overall_time.as_nanos(),
+"id" => span_datum.id,
+"parent_id" => span_datum.parent_id,
+"values" => span_datum.values
+);
 	}
 
 	fn process_event(&self, event: TraceEvent) {
 		telemetry!(SUBSTRATE_INFO; "tracing.event";
-			"name" => event.name,
-			"target" => event.target,
-			"parent_id" => event.parent_id,
-			"values" => event.visitor
-		);
+"name" => event.name,
+"target" => event.target,
+"parent_id" => event.parent_id,
+"values" => event.visitor
+);
 	}
 }

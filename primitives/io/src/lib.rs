@@ -64,9 +64,6 @@ mod batch_verifier;
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
-#[cfg(feature = "std")]
-use tracing::{event, Level};
-
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
 pub enum EcdsaVerifyError {

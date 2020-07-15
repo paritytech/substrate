@@ -33,12 +33,15 @@ static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 /// which should be passed to `exit_span(id)` to signal that the span should exit.
 // fn parameter identifiers should match the const values above
 pub fn enter_span(proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
+	let proxied_wasm_trace_id = next_id();
 	tracing::event!(
 		tracing::Level::INFO,
 		proxied_wasm_target,
-		proxied_wasm_name
+		proxied_wasm_name,
+		proxied_wasm_trace_id,
+		"proxy_enter_span"
 	);
-	NEXT_ID.fetch_add(1, Relaxed)
+	proxied_wasm_trace_id
 }
 
 /// Exit a span by dropping it along with it's associated guard.
@@ -46,6 +49,12 @@ pub fn enter_span(proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
 pub fn exit_span(proxied_wasm_trace_id: u64) {
 	tracing::event!(
 		tracing::Level::INFO,
-		proxied_wasm_trace_id
+		proxied_wasm_trace_id,
+		"proxy_exit_span"
 	);
+}
+
+/// Universal source for tracing span ids
+pub fn next_id() -> u64 {
+	NEXT_ID.fetch_add(1, Relaxed)
 }
