@@ -24,12 +24,11 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
-use rustc_hash::FxHashMap;
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use parking_lot::Mutex;
+use crossbeam::channel::{bounded, Sender, Receiver};
+use rustc_hash::FxHashMap;
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use slog::{SerdeValue, Value};
 use tracing::{
@@ -102,11 +101,121 @@ pub struct TraceEvent {
 
 /// Responsible for assigning ids to new spans, which are not re-used.
 pub struct ProfilingSubscriber {
-	next_id: AtomicU64,
+	targets: Vec<(String, Level)>,
+	trace_sender: Sender<TraceMessage>,
+	current_span: CurrentSpan,
+}
+
+struct TraceMoment {
+	id: Id,
+	ts: Instant,
+}
+
+struct TraceRecord {
+	id: Id,
+	visitor: Visitor,
+}
+
+enum TraceMessage {
+	NewSpan(SpanDatum),
+	Enter(TraceMoment),
+	Record(TraceRecord),
+	Exit(TraceMoment),
+	Close(Id),
+	ExitClose(TraceMoment),
+	Event(TraceEvent),
+}
+
+struct TraceQueue {
+	trace_receiver: Receiver<TraceMessage>,
+	span_data: FxHashMap<u64, SpanDatum>,
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
-	current_span: CurrentSpan,
+}
+
+impl TraceQueue {
+	fn recv(&mut self) {
+		// TODO check spans len() not too big, discard spans if so
+		for msg in &self.trace_receiver.clone() {
+			match msg {
+				TraceMessage::NewSpan(span_datum) => self.handle_new_span(span_datum),
+				TraceMessage::Enter(tm) => self.handle_enter(tm),
+				TraceMessage::Record(tr) => self.handle_record(tr),
+				TraceMessage::Exit(tm) => self.handle_exit(tm),
+				TraceMessage::Close(id) => self.handle_close(id),
+				TraceMessage::ExitClose(tm) => {
+					let id = tm.id.clone();
+					self.handle_exit(tm);
+					self.handle_close(id);
+				},
+				TraceMessage::Event(event) => self.handle_event(event),
+			}
+		}
+	}
+
+	fn handle_new_span(&mut self, span_datum: SpanDatum) {
+		self.span_data.insert(span_datum.id, span_datum);
+	}
+
+	fn handle_enter(&mut self, tm: TraceMoment) {
+		if let Some(mut span) = self.span_data.get_mut(&tm.id.into_u64()) {
+			span.start_time = tm.ts;
+		}
+	}
+
+	fn handle_record(&mut self, tr: TraceRecord) {
+		if let Some(span) = self.span_data.get_mut(&tr.id.into_u64()) {
+			span.values.0.extend(tr.visitor.0);
+		}
+	}
+
+	fn handle_exit(&mut self, tm: TraceMoment) {
+		if let Some(mut span) = self.span_data.get_mut(&tm.id.into_u64()) {
+			span.overall_time = tm.ts - span.start_time + span.overall_time;
+		}
+	}
+
+	fn handle_close(&mut self, id: Id) {
+		if let Some(span) = self.span_data.remove(&id.into_u64()) {
+			self.trace_handler.process_span(span);
+		}
+	}
+
+	fn handle_event(&mut self, trace_event: TraceEvent) {
+		// Q: Should all events be emitted immediately, rather than grouping with parent span?
+		match trace_event.parent_id {
+			Some(parent_id) => {
+				if let Some(span) = self.span_data.get_mut(&parent_id) {
+					if span.events.len() > LEN_LIMIT {
+						log::warn!(
+							target: "tracing",
+							"Accumulated too many events for span id: {}, sending event separately",
+							parent_id
+						);
+						self.trace_handler.process_event(trace_event);
+					} else {
+						span.events.push(trace_event);
+					}
+				} else {
+					log::warn!(
+						target: "tracing",
+						"Parent span missing"
+					);
+					self.trace_handler.process_event(trace_event);
+				}
+			}
+			None => self.trace_handler.process_event(trace_event),
+		}
+	}
+}
+
+fn check_target(targets: &Vec<(String, Level)>, target: &str, level: &Level) -> bool {
+	for t in targets {
+		if target.starts_with(t.0.as_str()) && level <= &t.1 {
+			return true;
+		}
+	}
+	false
 }
 
 /// Holds associated values for a tracing span
@@ -208,12 +317,19 @@ impl ProfilingSubscriber {
 	{
 		sp_tracing::set_wasm_tracing(wasm_tracing);
 		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
+		let (trace_sender, trace_receiver) = bounded(256);
+		let mut trace_queue = TraceQueue {
+			trace_receiver,
+			span_data: Default::default(),
+			targets: targets.clone(),
+			trace_handler
+		};
+		std::thread::spawn(move || trace_queue.recv());
+		sp_tracing::set_wasm_tracing(wasm_tracing);
 		ProfilingSubscriber {
-			next_id: AtomicU64::new(1),
 			targets,
-			trace_handler,
-			span_data: Mutex::new(FxHashMap::default()),
-			current_span: CurrentSpan::new(),
+			trace_sender,
+			current_span: Default::default()
 		}
 	}
 
@@ -240,24 +356,20 @@ impl ProfilingSubscriber {
 			events: vec![],
 		};
 		self.current_span.enter(Id::from_u64(span_datum.id));
-		// Ensure we don't leak spans that are lost due to misconfiguration or panic in runtime
-		// TODO len check
-		self.span_data.lock().insert(span_datum.id, span_datum);
+		if let Err(e) = self.trace_sender.send(TraceMessage::NewSpan(span_datum)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
+		}
 	}
 
 	fn exit_proxied_span(&self, proxy_id: u64) {
 		self.current_span.exit();
-		if let Some(span) = self.span_data.lock().remove(&proxy_id) {
-			self.emit_proxied_span(span, true);
-			return;
+		let trace_moment = TraceMoment {
+			id: Id::from_u64(proxy_id),
+			ts: Instant::now(),
+		};
+		if let Err(e) = self.trace_sender.send(TraceMessage::ExitClose(trace_moment)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
 		}
-		log::warn!(target: "tracing", "Span id not found {}", proxy_id);
-	}
-
-	fn emit_proxied_span(&self, mut span: SpanDatum, valid: bool) {
-		span.values.0.insert("wasm_trace_valid".to_string(), valid.to_string());
-		span.overall_time = Instant::now() - span.start_time;
-		self.trace_handler.process_span(span);
 	}
 }
 
@@ -305,14 +417,21 @@ impl Subscriber for ProfilingSubscriber {
 			values,
 			events: Vec::new(),
 		};
-		self.span_data.lock().insert(id, span_datum);
+		if let Err(e) = self.trace_sender.send(TraceMessage::NewSpan(span_datum)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
+		}
 		Id::from_u64(id)
 	}
 
 	fn record(&self, span: &Id, values: &Record<'_>) {
-		let mut span_data = self.span_data.lock();
-		if let Some(s) = span_data.get_mut(&span.into_u64()) {
-			values.record(&mut s.values);
+		let mut visitor = Visitor(FxHashMap::default());
+		values.record(&mut visitor);
+		let trace_record = TraceRecord {
+			id: span.clone(),
+			visitor
+		};
+		if let Err(e) = self.trace_sender.send(TraceMessage::Record(trace_record)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
 		}
 	}
 
@@ -345,52 +464,36 @@ impl Subscriber for ProfilingSubscriber {
 			visitor,
 			parent_id: self.current_span.id().map(|id| id.into_u64()),
 		};
-		// Q: Should all events be emitted immediately, rather than grouping with parent span?
-		match trace_event.parent_id {
-			Some(parent_id) => {
-				if let Some(mut span) = self.span_data.lock().get_mut(&parent_id) {
-					if span.events.len() > LEN_LIMIT {
-						log::warn!(
-							target: "tracing",
-							"Accumulated too many events for span id: {}, sending event separately",
-							parent_id
-						);
-						self.trace_handler.process_event(trace_event);
-					} else {
-						span.events.push(trace_event);
-					}
-				} else {
-					log::warn!(
-						target: "tracing",
-						"Parent span missing"
-					);
-					self.trace_handler.process_event(trace_event);
-				}
-			}
-			None => self.trace_handler.process_event(trace_event),
+
+		if let Err(e) = self.trace_sender.send(TraceMessage::Event(trace_event)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
 		}
 	}
 
 	fn enter(&self, span: &Id) {
-		let mut span_data = self.span_data.lock();
-		let start_time = Instant::now();
-		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
-			s.start_time = start_time;
+		let trace_moment = TraceMoment {
+			id: span.clone(),
+			ts: Instant::now(),
+		};
+		if let Err(e) = self.trace_sender.send(TraceMessage::Enter(trace_moment)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
 		}
-		self.current_span.enter(span.clone());
 	}
 
 	fn exit(&self, span: &Id) {
-		let end_time = Instant::now();
-		let mut span_data = self.span_data.lock();
-		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
-			s.overall_time = end_time - s.start_time + s.overall_time;
+		let trace_moment = TraceMoment {
+			id: span.clone(),
+			ts: Instant::now(),
+		};
+		if let Err(e) = self.trace_sender.send(TraceMessage::Exit(trace_moment)) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
 		}
-		self.current_span.exit();
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		self.span_data.lock().remove(&span.into_u64());
+		if let Err(e) = self.trace_sender.send(TraceMessage::Close(span.clone())) {
+			log::error!(target: "tracing", "Unable to send TraceMessage: {}", e.to_string());
+		}
 		true
 	}
 }
@@ -412,39 +515,39 @@ impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
 			log::log!(
-log_level(span_datum.level),
-"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
-span_datum.target,
-span_datum.name,
-span_datum.overall_time.as_nanos(),
-span_datum.id,
-span_datum.parent_id,
-span_datum.events,
-);
+				log_level(span_datum.level),
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
+				span_datum.target,
+				span_datum.name,
+				span_datum.overall_time.as_nanos(),
+				span_datum.id,
+				span_datum.parent_id,
+				span_datum.events,
+			);
 		} else {
 			log::log!(
-log_level(span_datum.level),
-"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
-span_datum.target,
-span_datum.name,
-span_datum.overall_time.as_nanos(),
-span_datum.id,
-span_datum.parent_id,
-span_datum.values,
-span_datum.events,
-);
+				log_level(span_datum.level),
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
+				span_datum.target,
+				span_datum.name,
+				span_datum.overall_time.as_nanos(),
+				span_datum.id,
+				span_datum.parent_id,
+				span_datum.values,
+				span_datum.events,
+			);
 		}
 	}
 
 	fn process_event(&self, event: TraceEvent) {
 		log::log!(
-log_level(event.level),
-"{}: {}, parent_id: {:?}, values: {}",
-event.name,
-event.target,
-event.parent_id,
-event.visitor
-);
+			log_level(event.level),
+			"{}: {}, parent_id: {:?}, values: {}",
+			event.name,
+			event.target,
+			event.parent_id,
+			event.visitor
+		);
 	}
 }
 
@@ -456,21 +559,21 @@ pub struct TelemetryTraceHandler;
 impl TraceHandler for TelemetryTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		telemetry!(SUBSTRATE_INFO; "tracing.span";
-"name" => span_datum.name,
-"target" => span_datum.target,
-"time" => span_datum.overall_time.as_nanos(),
-"id" => span_datum.id,
-"parent_id" => span_datum.parent_id,
-"values" => span_datum.values
-);
+			"name" => span_datum.name,
+			"target" => span_datum.target,
+			"time" => span_datum.overall_time.as_nanos(),
+			"id" => span_datum.id,
+			"parent_id" => span_datum.parent_id,
+			"values" => span_datum.values
+		);
 	}
 
 	fn process_event(&self, event: TraceEvent) {
 		telemetry!(SUBSTRATE_INFO; "tracing.event";
-"name" => event.name,
-"target" => event.target,
-"parent_id" => event.parent_id,
-"values" => event.visitor
-);
+			"name" => event.name,
+			"target" => event.target,
+			"parent_id" => event.parent_id,
+			"values" => event.visitor
+		);
 	}
 }
