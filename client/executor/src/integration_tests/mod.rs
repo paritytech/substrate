@@ -671,7 +671,7 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 			self.0.lock().unwrap().push(sd);
 		}
 
-		fn process_event(&self, event: TraceEvent) {}
+		fn process_event(&self, _event: TraceEvent) {}
 	}
 
 	let traces = Arc::new(Mutex::new(Vec::new()));
