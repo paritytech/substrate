@@ -6,7 +6,7 @@ use std::{str::FromStr, collections::BTreeMap};
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch,
 };
-use sp_core::H256;
+use sp_core::{Blake2Hasher, H256};
 use sp_runtime::{
 	Perbill,
 	testing::Header,
@@ -39,7 +39,7 @@ impl frame_system::Trait for Test {
 	type Hash = H256;
 	type Call = OuterCall;
 	type Hashing = BlakeTwo256;
-	type AccountId = H256;
+	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
@@ -89,17 +89,19 @@ impl FeeCalculator for FixedGasPrice {
 		0.into()
 	}
 }
-parameter_types! {
-	pub const EVMModuleId: ModuleId = ModuleId(*b"py/evmpa");
-}
+
 impl Trait for Test {
-	type ChainId = SystemChainId;
-	type ModuleId = EVMModuleId;
 	type FeeCalculator = FixedGasPrice;
-	type ConvertAccountId = HashTruncateConvertAccountId<BlakeTwo256>;
+
+	type CallOrigin = EnsureAddressRoot<Self::AccountId>;
+	type WithdrawOrigin = EnsureAddressNever<Self::AccountId>;
+
+	type AddressMapping = HashedAddressMapping<Blake2Hasher>;
 	type Currency = Balances;
+
 	type Event = Event<Test>;
 	type Precompiles = ();
+	type ChainId = SystemChainId;
 }
 
 type System = frame_system::Module<Test>;
@@ -134,7 +136,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	);
 
 	pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
-	GenesisConfig { accounts }.assimilate_storage(&mut t).unwrap();
+	GenesisConfig { accounts }.assimilate_storage::<Test>(&mut t).unwrap();
 	t.into()
 }
 
@@ -142,7 +144,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn fail_call_return_ok() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(EVM::call(
-			Origin::signed(H256::default()),
+			Origin::root(),
+			H160::default(),
 			H160::from_str("1000000000000000000000000000000000000001").unwrap(),
 			Vec::new(),
 			U256::default(),
@@ -152,7 +155,8 @@ fn fail_call_return_ok() {
 		));
 
 		assert_ok!(EVM::call(
-			Origin::signed(H256::default()),
+			Origin::root(),
+			H160::default(),
 			H160::from_str("1000000000000000000000000000000000000002").unwrap(),
 			Vec::new(),
 			U256::default(),
