@@ -865,8 +865,7 @@ macro_rules! impl_benchmark {
 				};
 
 				if components.is_empty() {
-					let c = Vec::new();
-					repeat_benchmark(repeat, c, &mut results)?;
+					repeat_benchmark(repeat, Default::default(), &mut results)?;
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
@@ -981,7 +980,7 @@ macro_rules! impl_benchmark {
 						// Time the extrinsic logic.
 						frame_support::debug::trace!(
 							target: "benchmark",
-							"Start Benchmark: {:?}", 
+							"Start Benchmark: {:?}",
 							c,
 						);
 
@@ -993,13 +992,13 @@ macro_rules! impl_benchmark {
 						$crate::benchmarking::commit_db();
 						frame_support::debug::trace!(
 							target: "benchmark",
-							"End Benchmark: {} ns", 
+							"End Benchmark: {} ns",
 							elapsed_extrinsic,
 						);
 						let read_write_count = $crate::benchmarking::read_write_count();
 						frame_support::debug::trace!(
 							target: "benchmark",
-							"Read/Write Count {:?}", 
+							"Read/Write Count {:?}",
 							read_write_count,
 						);
 
@@ -1027,8 +1026,7 @@ macro_rules! impl_benchmark {
 				};
 
 				if components.is_empty() {
-					let c = Vec::new();
-					repeat_benchmark(repeat, c, &mut results)?;
+					repeat_benchmark(repeat, Default::default(), &mut results)?;
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
