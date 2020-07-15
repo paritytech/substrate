@@ -248,7 +248,7 @@ impl ProtocolName for RegisteredProtocolName {
 impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
 where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-	type Output = RegisteredProtocolSubstream<TSubstream>;
+	type Output = (RegisteredProtocolSubstream<TSubstream>, Vec<u8>);
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Output, io::Error>> + Send>>;
 	type Error = io::Error;
 
@@ -266,8 +266,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
 			framed.send(handshake).await?;
+			let received_handshake = framed.next().await
+				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
 
-			Ok(RegisteredProtocolSubstream {
+			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
 				endpoint: Endpoint::Listener,
 				send_queue: VecDeque::new(),
@@ -275,7 +277,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				inner: framed.fuse(),
 				protocol_version: info.version,
 				clogged_fuse: false,
-			})
+			}, received_handshake.to_vec()))
 		})
 	}
 }
@@ -301,8 +303,12 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
 			framed.send(handshake).await?;
+			let received_handshake = framed.next().await
+				.ok_or_else(|| {
+					io::Error::new(io::ErrorKind::UnexpectedEof, "Failed to receive handshake")
+				})??;
 
-			Ok(RegisteredProtocolSubstream {
+			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
 				endpoint: Endpoint::Dialer,
 				send_queue: VecDeque::new(),
@@ -310,7 +316,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				inner: framed.fuse(),
 				protocol_version: info.version,
 				clogged_fuse: false,
-			})
+			}, received_handshake.to_vec()))
 		})
 	}
 }
