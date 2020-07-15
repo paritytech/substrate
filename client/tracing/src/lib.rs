@@ -331,10 +331,12 @@ impl ProfilingSubscriber {
 		false
 	}
 
-	fn enter_proxied_span(&self, name: String, target: String, proxy_id: u64) {
+	fn enter_wasm_span(&self, name: String, target: String, proxy_id: u64) {
 		if !self.check_target(&target, &Level::ERROR) {
 			return;
 		}
+		let mut map = FxHashMap::default();
+		map.insert("wasm".to_owned(), "true".to_owned());
 		let span_datum = SpanDatum {
 			id: proxy_id,
 			parent_id: self.current_span.id().map(|p| p.into_u64()),
@@ -344,7 +346,7 @@ impl ProfilingSubscriber {
 			line: 0,
 			start_time: Instant::now(),
 			overall_time: Default::default(),
-			values: Visitor(FxHashMap::default()),
+			values: Visitor(map),
 			events: vec![],
 		};
 		self.current_span.enter(Id::from_u64(span_datum.id));
@@ -353,7 +355,7 @@ impl ProfilingSubscriber {
 		}
 	}
 
-	fn exit_proxied_span(&self, proxy_id: u64) {
+	fn exit_wasm_span(&self, proxy_id: u64) {
 		self.current_span.exit();
 		let trace_moment = TraceMoment {
 			id: Id::from_u64(proxy_id),
@@ -438,14 +440,14 @@ impl Subscriber for ProfilingSubscriber {
 			visitor.0.remove(WASM_TARGET_KEY)
 		) {
 			if let Some(proxy_id) = visitor.0.remove(WASM_PROXY_ID).map(|x| x.parse().ok()).flatten() {
-				self.enter_proxied_span(name, target, proxy_id);
+				self.enter_wasm_span(name, target, proxy_id);
 				return;
 			}
 		}
 		// Check case for Proxy span exit
 		if let Some(proxy_id) = visitor.0.remove(WASM_PROXY_ID) {
 			if let Ok(proxy_id) = proxy_id.parse() {
-				self.exit_proxied_span(proxy_id);
+				self.exit_wasm_span(proxy_id);
 				return;
 			}
 		}
