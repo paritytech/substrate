@@ -233,7 +233,7 @@ impl<C: SubstrateCli> Runner<C> {
 		let mut task_manager = initialise(self.config)?;
 		self.tokio_runtime.block_on(main(task_manager.future().fuse()))
 			.map_err(|e| e.to_string())?;
-		task_manager.clean_shutdown();
+		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		Ok(())
 	}
 
