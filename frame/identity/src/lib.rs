@@ -70,8 +70,8 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{DispatchError, RuntimeDebug};
-use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
+use sp_runtime::{DispatchError, RuntimeDebug, DispatchResult};
+use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput, Saturating};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	dispatch::DispatchResultWithPostInfo,
@@ -633,6 +633,30 @@ mod weight_for {
 			+ 2_600_000 * subs // S
 			+ 900_000 * extra_fields // X
 	}
+
+	/// Weight calculation for `add_sub`.
+	pub(crate) fn add_sub<T: Trait>(
+		subs: Weight,
+	) -> Weight {
+		let db = T::DbWeight::get();
+		db.reads_writes(2, 2) + subs * 10_000_000
+	}
+
+	/// Weight calculation for `remove_sub`.
+	pub(crate) fn remove_sub<T: Trait>(
+		subs: Weight,
+	) -> Weight {
+		let db = T::DbWeight::get();
+		db.reads_writes(2, 2) + subs * 10_000_000
+	}
+
+	/// Weight calculation for `revoke_sub`.
+	pub(crate) fn revoke_sub<T: Trait>(
+		subs: Weight,
+	) -> Weight {
+		let db = T::DbWeight::get();
+		db.reads_writes(2, 2) + subs * 10_000_000
+	}
 }
 
 decl_module! {
@@ -787,7 +811,7 @@ decl_module! {
 			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
 
-			let not_other_sub = subs.iter().filter_map(|i| SuperOf::<T>::get(i)).all(|i| i == &sender);
+			let not_other_sub = subs.iter().filter_map(|i| SuperOf::<T>::get(&i.0)).all(|i| &i.0 == &sender);
 			ensure!(not_other_sub, Error::<T>::AlreadyClaimed);
 
 			if old_deposit < new_deposit {
@@ -1182,10 +1206,10 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
-		#[weight = weight_for::clear_identity::<T>(
+		#[weight = weight_for::add_sub::<T>(
 			T::MaxSubAccounts::get().into(), // S
 		)]
-		fn add_sub(origin, sub: T::AccountId, d: Data) {
+		fn add_sub(origin, sub: T::AccountId, data: Data) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			// Check if it's already claimed as sub-identity.
@@ -1198,16 +1222,17 @@ decl_module! {
 				T::SubAccountDeposit::get()
 			};
 
-			SubsOf::<T>::try_mutate(&sender, |subs_deposit, sub_ids| {
-				ensure!(sub_ids.len() < T::MaxSubAccounts::get(), Error::<T>::TooManySubAccounts);
+			SubsOf::<T>::try_mutate(&sender, |(ref mut subs_deposit, ref mut sub_ids)| {
+				ensure!(sub_ids.len() < T::MaxSubAccounts::get() as usize, Error::<T>::TooManySubAccounts);
 				if !deposit.is_zero() {
 					T::Currency::reserve(&sender, deposit)?;
 				}
-				sub_ids.push(&sub);
-				subs_deposit = subs_deposit.saturating_add(deposit);
-			});
-			SuperOf::<T>::insert(&sub, (sender.clone(), data));
-			Self::deposit_event(RawEvent::SubIdentityAdded(sender, sender, deposit));
+				SuperOf::<T>::insert(&sub, (sender.clone(), data));
+				sub_ids.push(sub.clone());
+				*subs_deposit = subs_deposit.saturating_add(deposit);
+				Self::deposit_event(RawEvent::SubIdentityAdded(sub, sender.clone(), deposit));
+				Ok(())
+			})
 		}
 
 		/// Remove the given account from the sender's subs.
@@ -1217,21 +1242,21 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
-		#[weight = weight_for::clear_identity::<T>(
+		#[weight = weight_for::remove_sub::<T>(
 			T::MaxSubAccounts::get().into(), // S
 		)]
 		fn remove_sub(origin, sub: T::AccountId) {
 			let sender = ensure_signed(origin)?;
 			let (sup, _) = SuperOf::<T>::get(&sub).ok_or(Error::<T>::NotSub)?;
-			ensure!(sup == sender, Error::<T>::NotOwner);
+			ensure!(sup == sender, Error::<T>::NotOwned);
 			SuperOf::<T>::remove(&sub);
-			SubsOf::<T>::mutate(&sup, |subs_deposit, sub_ids| {
-				sub_ids.remove_item(&sender);
-				let deposit = subs_deposit.min(T::SubAccountDeposit::get());
-				subs_deposit -= deposit;
+			SubsOf::<T>::mutate(&sup, |(ref mut subs_deposit, ref mut sub_ids)| {
+				sub_ids.retain(|x| x != &sender);
+				let deposit = T::SubAccountDeposit::get().min(*subs_deposit);
+				*subs_deposit -= deposit;
 				let _ = T::Currency::unreserve(&sender, deposit);
+				Self::deposit_event(RawEvent::SubIdentityRemoved(sub, sender, deposit));
 			});
-			Self::deposit_event(RawEvent::SubIdentityRemoved(sender, sup, deposit));
 		}
 
 		/// Remove the sender as a sub-account.
@@ -1244,19 +1269,19 @@ decl_module! {
 		///
 		/// NOTE: This should not normally be used, but is provided in the case that the non-
 		/// controller of an account is maliciously registered as a sub-account.
-		#[weight = weight_for::clear_identity::<T>(
+		#[weight = weight_for::revoke_sub::<T>(
 			T::MaxSubAccounts::get().into(), // S
 		)]
 		fn revoke_sub(origin) {
 			let sender = ensure_signed(origin)?;
 			let (sup, _) = SuperOf::<T>::take(&sender).ok_or(Error::<T>::NotSub)?;
-			SubsOf::<T>::mutate(&sup, |subs_deposit, sub_ids| {
-				sub_ids.remove_item(&sender);
-				let deposit = subs_deposit.min(T::SubAccountDeposit::get());
-				subs_deposit -= deposit;
+			SubsOf::<T>::mutate(&sup, |(ref mut subs_deposit, ref mut sub_ids)| {
+				sub_ids.retain(|x| x != &sender);
+				let deposit = T::SubAccountDeposit::get().min(*subs_deposit);
+				*subs_deposit -= deposit;
 				let _ = T::Currency::repatriate_reserved(&sup, &sender, deposit, BalanceStatus::Free);
+				Self::deposit_event(RawEvent::SubIdentityRevoked(sender, sup.clone(), deposit));
 			});
-			Self::deposit_event(RawEvent::SubIdentityRevoked(sender, sup, deposit));
 		}
 	}
 }
