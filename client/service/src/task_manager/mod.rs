@@ -210,12 +210,12 @@ impl SpawnEssentialTaskHandle {
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
-		let mut essential_failed = self.essential_failed_tx.clone();
+		let essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
 			.map(move |_| {
 				log::error!("Essential task `{}` failed. Shutting down service.", name);
-				let _ = essential_failed.send(());
+				let _ = essential_failed.close_channel();
 			});
 
 		let _ = self.inner.spawn_inner(name, essential_task, task_type);
@@ -305,12 +305,22 @@ impl TaskManager {
 		})
 	}
 
-	/// Return a future that will end if an essential task fails.
+	/// Return a future that will end with success if the signal to terminate was sent
+	/// (`self.terminate()`) or with an error if an essential task fails.
+	///
+	/// # Warning
+	///
+	/// This function will not end the remaining task. You must call and await `clean_shutdown()`
+	/// after this.
 	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
 		Box::pin(async move {
-			self.essential_failed_rx.next().await;
+			let mut t1 = self.essential_failed_rx.next().fuse();
+			let mut t2 = self.on_exit.clone().fuse();
 
-			Err(Error::Other("Essential task failed.".into()))
+			futures::select! {
+				_ = t1 => Err(Error::Other("Essential task failed.".into())),
+				_ = t2 => Ok(()),
+			}
 		})
 	}
 

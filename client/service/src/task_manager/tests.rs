@@ -146,3 +146,48 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 	runtime.block_on(task_manager.clean_shutdown());
 	drop_tester.assert_eq(0);
 }
+
+#[test]
+fn ensure_task_manager_future_ends_when_task_manager_terminated() {
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let handle = runtime.handle().clone();
+	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
+
+	let mut task_manager = TaskManager::new(task_executor, None).unwrap();
+	let spawn_handle = task_manager.spawn_handle();
+	let drop_tester = DropTester::new();
+	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
+	drop_tester.assert_eq(2);
+	// allow the tasks to even start
+	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	drop_tester.assert_eq(2);
+	task_manager.terminate();
+	runtime.block_on(task_manager.future()).expect("future has ended without error");
+	drop_tester.assert_eq(2);
+	runtime.block_on(task_manager.clean_shutdown());
+	drop_tester.assert_eq(0);
+}
+
+#[test]
+fn ensure_task_manager_future_ends_with_error_when_essential_task_ends() {
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let handle = runtime.handle().clone();
+	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
+
+	let mut task_manager = TaskManager::new(task_executor, None).unwrap();
+	let spawn_handle = task_manager.spawn_handle();
+	let spawn_essential_handle = task_manager.spawn_essential_handle();
+	let drop_tester = DropTester::new();
+	spawn_handle.spawn("task1", run_background_task(drop_tester.new_ref()));
+	spawn_handle.spawn("task2", run_background_task(drop_tester.new_ref()));
+	drop_tester.assert_eq(2);
+	// allow the tasks to even start
+	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
+	drop_tester.assert_eq(2);
+	spawn_essential_handle.spawn("task3", async { panic!("task failed") });
+	runtime.block_on(task_manager.future()).expect_err("future()'s Result must be Err");
+	drop_tester.assert_eq(2);
+	runtime.block_on(task_manager.clean_shutdown());
+	drop_tester.assert_eq(0);
+}
