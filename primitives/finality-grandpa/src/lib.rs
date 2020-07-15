@@ -31,7 +31,6 @@ use sp_std::borrow::Cow;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_core::traits::BareCryptoStorePtr;
-use sp_std::convert::TryInto;
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -385,6 +384,7 @@ where
 {
 	use sp_core::crypto::Public;
 	use sp_application_crypto::AppKey;
+	use sp_std::convert::TryInto;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = keystore.read()

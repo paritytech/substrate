@@ -51,26 +51,39 @@ impl BatchVerifier {
 		}
 	}
 
+	/// Spawn a verification task.
+	///
+	/// Returns `false` if there was already an invalid verification or if
+	/// the verification could not be spawned.
 	fn spawn_verification_task(
 		&mut self, f: impl FnOnce() -> bool + Send + 'static,
-	) -> Result<(), ()> {
+	) -> bool {
 		// there is already invalid transaction encountered
-		if self.invalid.load(AtomicOrdering::Relaxed) { return Err(()); }
+		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
 
 		let invalid_clone = self.invalid.clone();
 		let (sender, receiver) = oneshot::channel();
 		self.pending_tasks.push(receiver);
 
-		self.scheduler.spawn_obj(FutureObj::new(async move {
-			if !f() {
-				invalid_clone.store(true, AtomicOrdering::Relaxed);
-			}
-			if sender.send(()).is_err() {
-				// sanity
-				log::warn!("Verification halted while result was pending");
-				invalid_clone.store(true, AtomicOrdering::Relaxed);
-			}
-		}.boxed())).map_err(drop)
+		self.scheduler.spawn_obj(FutureObj::new(
+			async move {
+				if !f() {
+					invalid_clone.store(true, AtomicOrdering::Relaxed);
+				}
+				if sender.send(()).is_err() {
+					// sanity
+					log::warn!("Verification halted while result was pending");
+					invalid_clone.store(true, AtomicOrdering::Relaxed);
+				}
+			}.boxed()
+		))
+		.map_err(|_| {
+			log::debug!(
+				target: "runtime",
+				"Batch-verification returns false because failed to spawn background task.",
+			)
+		})
+		.is_ok()
 	}
 
 	/// Push ed25519 signature to verify.
@@ -83,17 +96,7 @@ impl BatchVerifier {
 		pub_key: ed25519::Public,
 		message: Vec<u8>,
 	) -> bool {
-		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
-
-		if self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key)).is_err() {
-			log::debug!(
-				target: "runtime",
-				"Batch-verification returns false because failed to spawn background task.",
-			);
-
-			return false;
-		}
-		true
+		self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key))
 	}
 
 	/// Push sr25519 signature to verify.
@@ -111,17 +114,10 @@ impl BatchVerifier {
 
 		if self.sr25519_items.len() >= 128 {
 			let items = std::mem::take(&mut self.sr25519_items);
-			if self.spawn_verification_task(move || Self::verify_sr25519_batch(items)).is_err() {
-				log::debug!(
-					target: "runtime",
-					"Batch-verification returns false because failed to spawn background task.",
-				);
-
-				return false;
-			}
+			self.spawn_verification_task(move || Self::verify_sr25519_batch(items))
+		} else {
+			true
 		}
-
-		true
 	}
 
 	/// Push ecdsa signature to verify.
@@ -134,17 +130,7 @@ impl BatchVerifier {
 		pub_key: ecdsa::Public,
 		message: Vec<u8>,
 	) -> bool {
-		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
-
-		if self.spawn_verification_task(move || ecdsa::Pair::verify(&signature, &message, &pub_key)).is_err() {
-			log::debug!(
-				target: "runtime",
-				"Batch-verification returns false because failed to spawn background task.",
-			);
-
-			return false;
-		}
-		true
+		self.spawn_verification_task(move || ecdsa::Pair::verify(&signature, &message, &pub_key))
 	}
 
 	fn verify_sr25519_batch(items: Vec<Sr25519BatchItem>) -> bool {
