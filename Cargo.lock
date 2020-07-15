@@ -2035,7 +2035,7 @@ dependencies = [
  "indexmap",
  "log",
  "slab",
- "tokio 0.2.18",
+ "tokio 0.2.21",
  "tokio-util",
 ]
 
@@ -2257,7 +2257,7 @@ dependencies = [
  "net2",
  "pin-project",
  "time",
- "tokio 0.2.18",
+ "tokio 0.2.21",
  "tower-service",
  "want 0.3.0",
 ]
@@ -2275,7 +2275,7 @@ dependencies = [
  "log",
  "rustls",
  "rustls-native-certs",
- "tokio 0.2.18",
+ "tokio 0.2.21",
  "tokio-rustls",
  "webpki",
 ]
@@ -6129,7 +6129,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "tempfile",
  "time",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -6369,7 +6369,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "tempfile",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -6560,7 +6560,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -6765,7 +6765,7 @@ dependencies = [
  "sp-utils",
  "substrate-test-runtime-client",
  "threadpool",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -6941,7 +6941,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "sysinfo",
  "tempfile",
- "tokio 0.2.18",
+ "tokio 0.2.21",
  "tracing",
  "wasm-timer",
 ]
@@ -8362,7 +8362,7 @@ dependencies = [
  "sc-rpc-api",
  "serde",
  "sp-storage",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -8400,7 +8400,7 @@ dependencies = [
  "hyper 0.13.4",
  "log",
  "prometheus",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -8875,9 +8875,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "0.2.18"
+version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34ef16d072d2b6dc8b4a56c70f5c5ced1a37752116f8e7c1e80c659aa7cb6713"
+checksum = "d099fa27b9702bed751524694adbe393e18b36b204da91eb1cbbbbb4a5ee2d58"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -9022,7 +9022,7 @@ checksum = "15cb62a0d2770787abc96e99c1cd98fcf17f94959f3af63ca85bdfb203f051b4"
 dependencies = [
  "futures-core",
  "rustls",
- "tokio 0.2.18",
+ "tokio 0.2.21",
  "webpki",
 ]
 
@@ -9143,7 +9143,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite",
- "tokio 0.2.18",
+ "tokio 0.2.21",
 ]
 
 [[package]]
