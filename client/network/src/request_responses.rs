@@ -49,8 +49,8 @@ use libp2p::{
 	},
 };
 use std::{
-	borrow::Cow, collections::{hash_map::Entry, HashMap}, io, iter, pin::Pin,
-	task::{Context, Poll}, time::Duration,
+	borrow::Cow, collections::{hash_map::Entry, HashMap}, convert::TryFrom as _, io, iter,
+	pin::Pin, task::{Context, Poll}, time::Duration,
 };
 
 pub use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
@@ -65,13 +65,13 @@ pub struct ProtocolConfig {
     ///
     /// Any request larger than this value will be declined as a way to avoid allocating too
     /// much memory for it.
-    pub max_request_size: usize,
+    pub max_request_size: u64,
 
     /// Maximum allowed size, in bytes, of a response.
     ///
     /// Any response larger than this value will be declined as a way to avoid allocating too
     /// much memory for it.
-    pub max_response_size: usize,
+    pub max_response_size: u64,
 
     /// Duration after which emitted requests are considered timed out.
     ///
@@ -521,8 +521,8 @@ pub enum ResponseFailure {
 #[derive(Debug, Clone)]
 #[doc(hidden)]  // Needs to be public in order to satisfy the Rust compiler.
 pub struct GenericCodec {
-	max_request_size: usize,
-	max_response_size: usize,
+	max_request_size: u64,
+	max_response_size: u64,
 }
 
 #[async_trait::async_trait]
@@ -542,7 +542,7 @@ impl RequestResponseCodec for GenericCodec {
 		// Read the length.
 		let length = unsigned_varint::aio::read_usize(&mut io).await
 			.map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
-		if length > self.max_request_size {
+		if length > usize::try_from(self.max_request_size).unwrap_or(usize::max_value()) {
 			return Err(io::Error::new(
 				io::ErrorKind::InvalidInput,
 				format!("Request size exceeds limit: {} > {}", length, self.max_request_size)
@@ -566,7 +566,7 @@ impl RequestResponseCodec for GenericCodec {
 		// Read the length.
 		let length = unsigned_varint::aio::read_usize(&mut io).await
 			.map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
-		if length > self.max_response_size {
+		if length > usize::try_from(self.max_response_size).unwrap_or(usize::max_value()) {
 			return Err(io::Error::new(
 				io::ErrorKind::InvalidInput,
 				format!("Response size exceeds limit: {} > {}", length, self.max_response_size)
