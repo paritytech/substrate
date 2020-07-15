@@ -126,7 +126,8 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class, call.get_dispatch_info().pays_fee)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class,
+			call.get_dispatch_info().pays_fee)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -187,7 +188,8 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class, call.get_dispatch_info().pays_fee)]
+		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class,
+			call.get_dispatch_info().pays_fee)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
