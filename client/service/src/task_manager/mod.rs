@@ -259,6 +259,9 @@ impl TaskManager {
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
 		let (task_notifier, background_tasks) = tracing_unbounded("mpsc_background_tasks");
+		// NOTE: for_each_concurrent will await on all the JoinHandle futures at the same time. It
+		// is possible to limit this but it's actually better for the memory foot print to await
+		// them all to not accumulate anything on that stream.
 		let completion_future = executor.spawn(
 			Box::pin(background_tasks.for_each_concurrent(None, |x| x)),
 			TaskType::Async,
@@ -310,8 +313,8 @@ impl TaskManager {
 	///
 	/// # Warning
 	///
-	/// This function will not end the remaining task. You must call and await `clean_shutdown()`
-	/// after this.
+	/// This function will not wait until the end of the remaining task. You must call and await
+	/// `clean_shutdown()` after this.
 	pub fn future<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
 		Box::pin(async move {
 			let mut t1 = self.essential_failed_rx.next().fuse();
@@ -328,6 +331,7 @@ impl TaskManager {
 	pub fn terminate(&mut self) {
 		if let Some(signal) = self.signal.take() {
 			let _ = signal.fire();
+			// NOTE: task will prevent new tasks to be spawned
 			self.task_notifier.close_channel();
 		}
 	}
