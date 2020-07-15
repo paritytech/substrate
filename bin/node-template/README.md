@@ -1,54 +1,76 @@
+[![Substrate Playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
+
 # Substrate Node Template
 
-A new FRAME-based Substrate node, ready for hacking.
+A new FRAME-based Substrate node, ready for hacking :rocket:
 
-## Build
+## Local Development
 
-Install Rust:
+Follow these steps to prepare a local Substrate development environment :hammer_and_wrench:
+
+### Simple Setup
+
+Install all the required dependencies with a single command (be patient, this can take up
+to 30 minutes).
 
 ```bash
-curl https://sh.rustup.rs -sSf | sh
+curl https://getsubstrate.io -sSf | bash -s -- --fast
 ```
 
-Initialize your Wasm Build environment:
+### Manual Setup
 
-```bash
-./scripts/init.sh
-```
+Find manual setup instructions at the [Substrate Developer Hub](https://substrate.dev/docs/en/knowledgebase/getting-started/#manual-installation).
 
-Build Wasm and native code:
+### Build
+
+Once the development environment is set up, build the node template. This command will build the
+[Wasm](https://substrate.dev/docs/en/knowledgebase/advanced/executor#wasm-execution) and
+[native](https://substrate.dev/docs/en/knowledgebase/advanced/executor#native-execution) code:
 
 ```bash
 cargo build --release
 ```
 
+## Playground [![Substrate Playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
+
+[The Substrate Playground](https://playground-staging.substrate.dev/?deploy=node-template) is an
+online development environment that supplies a pre-configured container with pre-compiled build
+artifacts :cartwheeling:
+
 ## Run
 
-### Single node development chain
+### Single Node Development Chain
 
-Purge any existing developer chain state:
+Purge any existing dev chain state:
 
 ```bash
 ./target/release/node-template purge-chain --dev
 ```
 
-Start a development chain with:
+Start a dev chain:
 
 ```bash
 ./target/release/node-template --dev
 ```
 
-Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
+Or, start a dev chain with detailed logging:
 
-### Multi-node local testnet
+```bash
+RUST_LOG=debug RUST_BACKTRACE=1 ./target/release/node-template -lruntime=debug --dev
+```
 
-If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain that have been endowed with testnet units.
+### Multi-Node Local Testnet
 
-Optionally, give each node a name and expose them so they are listed on the Polkadot [telemetry site](https://telemetry.polkadot.io/#/Local%20Testnet).
+To see the multi-node consensus algorithm in action, run a local testnet with two validator nodes,
+Alice and Bob, that have been [configured](/bin/node-template/node/src/chain_spec.rs) as the
+initial authorities of the `local` testnet chain and endowed with testnet units.
 
-You'll need two terminal windows open.
+Note: this will require two terminal sessions (one for each node).
 
-We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The bootnode ID of her node is `QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`, which is generated from the `--node-key` value that we specify below:
+Start Alice's node first. The command below uses the default TCP port (30333) and specifies
+`/tmp/alice` as the chain database location. Alice's node ID will be
+`12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp` (legacy representation:
+`QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`); this is determined by the `node-key`.
 
 ```bash
 cargo run -- \
@@ -60,17 +82,42 @@ cargo run -- \
   --validator
 ```
 
-In the second terminal, we'll start Bob's substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's bootnode ID on TCP port 30333:
+In another terminal, use the following command to start Bob's node on a different TCP port (30334)
+and with a chain database location of `/tmp/bob`. The `--bootnodes` option will connect his node to
+Alice's on TCP port 30333:
 
 ```bash
 cargo run -- \
   --base-path /tmp/bob \
-  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR \
+  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp \
   --chain=local \
   --bob \
   --port 30334 \
+  --ws-port 9945 \
   --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
   --validator
 ```
 
-Additional CLI usage options are available and may be shown by running `cargo run -- --help`.
+Execute `cargo run -- --help` to learn more about the template node's CLI options.
+
+## Generate a Custom Node Template
+
+Generate a Substrate node template based on a particular commit by running the following commands:
+
+```bash
+# Clone from the main Substrate repo
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+
+# Switch to the branch or commit to base the template on
+git checkout <branch/tag/sha1>
+
+# Run the helper script to generate a node template. This script compiles Substrate, so it will take
+# a while to complete. It expects a single parameter: the location for the script's output expressed
+# as a relative path.
+.maintain/node-template-release.sh ../node-template.tar.gz
+```
+
+Custom node templates are not supported. Please use a recently tagged version of the
+[Substrate Developer Node Template](https://github.com/substrate-developer-hub/substrate-node-template)
+in order to receive support.

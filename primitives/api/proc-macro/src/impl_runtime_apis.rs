@@ -253,18 +253,18 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		{
 			type StateBackend = C::StateBackend;
 
-			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
+			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 				&self,
-				map_call: F,
-			) -> std::result::Result<R, E> where Self: Sized {
+				call: F,
+			) -> R where Self: Sized {
 				self.changes.borrow_mut().start_transaction();
 				*self.commit_on_success.borrow_mut() = false;
-				let res = map_call(self);
+				let res = call(self);
 				*self.commit_on_success.borrow_mut() = true;
 
-				self.commit_on_ok(&res);
+				self.commit_or_rollback(matches!(res, #crate_::TransactionOutcome::Commit(_)));
 
-				res
+				res.into_inner()
 			}
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
@@ -380,21 +380,21 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.recorder,
 				);
 
-				self.commit_on_ok(&res);
+				self.commit_or_rollback(res.is_ok());
 				res
 			}
 
-			fn commit_on_ok<R, E>(&self, res: &std::result::Result<R, E>) {
+			fn commit_or_rollback(&self, commit: bool) {
 				let proof = "\
 					We only close a transaction when we opened one ourself.
 					Other parts of the runtime that make use of transactions (state-machine)
 					also balance their transactions. The runtime cannot close client initiated
 					transactions. qed";
 				if *self.commit_on_success.borrow() {
-					if res.is_err() {
-						self.changes.borrow_mut().rollback_transaction().expect(proof);
-					} else {
+					if commit {
 						self.changes.borrow_mut().commit_transaction().expect(proof);
+					} else {
+						self.changes.borrow_mut().rollback_transaction().expect(proof);
 					}
 				}
 			}

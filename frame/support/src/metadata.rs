@@ -316,7 +316,7 @@ mod tests {
 			}
 		);
 
-		#[derive(Clone, PartialEq, Eq, Debug)]
+		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
 		pub enum RawOrigin<AccountId> {
 			Root,
 			Signed(AccountId),

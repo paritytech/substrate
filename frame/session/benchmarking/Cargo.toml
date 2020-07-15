@@ -13,12 +13,14 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-std = { version = "2.0.0-rc4", default-features = false, path = "../../../primitives/std" }
+sp-session = { version = "2.0.0-rc4", default-features = false, path = "../../../primitives/session" }
 sp-runtime = { version = "2.0.0-rc4", default-features = false, path = "../../../primitives/runtime" }
 frame-system = { version = "2.0.0-rc4", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "2.0.0-rc4", default-features = false, path = "../../benchmarking" }
 frame-support = { version = "2.0.0-rc4", default-features = false, path = "../../support" }
 pallet-staking = { version = "2.0.0-rc4", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 pallet-session = { version = "2.0.0-rc4", default-features = false, path = "../../session" }
+rand = { version = "0.7.2", default-features = false }
 
 [dev-dependencies]
 serde = { version = "1.0.101" }
@@ -33,6 +35,7 @@ pallet-balances = { version = "2.0.0-rc4", path = "../../balances" }
 default = ["std"]
 std = [
 	"sp-std/std",
+	"sp-session/std",
 	"sp-runtime/std",
 	"frame-system/std",
 	"frame-benchmarking/std",

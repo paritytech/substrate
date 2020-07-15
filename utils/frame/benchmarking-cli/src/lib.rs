@@ -16,6 +16,7 @@
 // limitations under the License.
 
 mod command;
+mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;
@@ -58,6 +59,18 @@ pub struct BenchmarkCmd {
 	/// Don't print the min-squares linear regression analysis.
 	#[structopt(long)]
 	pub no_min_squares: bool,
+
+	/// Output the benchmarks to a Rust file.
+	#[structopt(long)]
+	pub output: bool,
+
+	/// Output the trait definition to a Rust file.
+	#[structopt(long)]
+	pub weight_trait: bool,
+
+	/// Set the heap pages while running benchmarks.
+	#[structopt(long)]
+	pub heap_pages: Option<u64>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
