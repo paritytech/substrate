@@ -152,32 +152,6 @@ pub enum NotifsHandlerIn {
 
 	/// The node should stop using custom protocols.
 	Disable,
-
-	/// Sends a message through the custom protocol substream.
-	///
-	/// > **Note**: This must **not** be a `ConsensusMessage`, `Transactions`, or
-	/// > 			`BlockAnnounce` message.
-	SendLegacy {
-		/// The message to send.
-		message: Vec<u8>,
-	},
-
-	/// Sends a notifications message.
-	SendNotification {
-		/// Name of the protocol for the message.
-		///
-		/// Must match one of the registered protocols. For backwards-compatibility reasons, if
-		/// the remote doesn't support this protocol, we use the legacy substream.
-		protocol_name: Cow<'static, [u8]>,
-
-		/// Message to send on the legacy substream if the protocol isn't available.
-		///
-		/// This corresponds to what you would have sent with `SendLegacy`.
-		encoded_fallback_message: Vec<u8>,
-
-		/// The message to send.
-		message: Vec<u8>,
-	},
 }
 
 /// Event that can be emitted by a `NotifsHandler`.
@@ -190,6 +164,8 @@ pub enum NotifsHandlerOut {
 		/// Handshake that was sent to us.
 		/// This is normally a "Status" message, but this out of the concern of this code.
 		received_handshake: Vec<u8>,
+		/// How notifications can be sent to this node.
+		notifications_sink: NotificationsSink,
 	},
 
 	/// The connection is closed for custom protocols.
@@ -225,6 +201,45 @@ pub enum NotifsHandlerOut {
 		/// The error that happened.
 		error: Box<dyn error::Error + Send + Sync>,
 	},
+}
+
+/// Sink connected directly to the node background task. Allows sending notifications to the peer.
+///
+/// Can be cloned in order to obtain multiple references to the same peer.
+#[derive(Debug, Clone)]
+pub struct NotificationsSink {
+
+}
+
+impl NotificationsSink {
+	/// Sends a message through the legacy substream.
+	///
+	/// > **Note**: This must **not** be a `ConsensusMessage`, `Transactions`, or
+	/// > 			`BlockAnnounce` message.
+	///
+	/// This method will be removed in a future version.
+	pub fn send_legacy(&self, message: impl AsRef<[u8]>) {
+		todo!()
+	}
+
+	/// Wait until the remote is ready to accept a notification.
+	pub async fn reserve_notification<'a>(&'a self, protocol_name: &[u8]) -> Ready<'a> {
+		todo!()
+	}
+}
+
+/// Notification slot is reserved and the notification can actually be sent.
+#[must_use]
+#[derive(Debug)]
+pub struct Ready<'a> {
+	tmp: std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a> Ready<'a> {
+	/// Consumes this slots reservation and actually queues the notification.
+	pub fn send(self, notification: impl Into<Vec<u8>>) {
+		todo!()
+	}
 }
 
 impl NotifsHandlerProto {
@@ -363,24 +378,6 @@ impl ProtocolsHandler for NotifsHandler {
 					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
-			NotifsHandlerIn::SendLegacy { message } =>
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::SendNotification { message, encoded_fallback_message, protocol_name } => {
-				for (handler, _) in &mut self.out_handlers {
-					if handler.protocol_name() != &protocol_name[..] {
-						continue;
-					}
-
-					if handler.is_open() {
-						handler.inject_event(NotifsOutHandlerIn::Send(message));
-						return;
-					}
-				}
-
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
-					message: encoded_fallback_message,
-				});
-			},
 		}
 	}
 
@@ -468,10 +465,19 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, received_handshake, .. }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen {
+					endpoint,
+					received_handshake,
+					..
+				}) => {
+					let notifications_sink = NotificationsSink {
+
+					};
+
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open { endpoint, received_handshake }
-					)),
+						NotifsHandlerOut::Open { endpoint, received_handshake, notifications_sink }
+					))
+				},
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
 						NotifsHandlerOut::Closed { endpoint, reason }

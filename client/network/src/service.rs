@@ -38,7 +38,7 @@ use crate::{
 	},
 	on_demand_layer::AlwaysBadChecker,
 	light_client_handler, block_requests, finality_requests,
-	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
+	protocol::{self, event::Event, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
@@ -61,7 +61,7 @@ use sp_runtime::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::{Borrow, Cow},
-	collections::HashSet,
+	collections::{HashMap, HashSet},
 	fs,
 	marker::PhantomData,
 	num:: NonZeroUsize,
@@ -95,6 +95,9 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
+	/// For each peer and protocol combination, an object that allows sending notifications to
+	/// that peer. Updated by the [`NetworkWorker`].
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -342,6 +345,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
+		let peers_notifications_sinks = Arc::new(Mutex::new(HashMap::new()));
 
 		let service = Arc::new(NetworkService {
 			bandwidth,
@@ -351,6 +355,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peerset: peerset_handle,
 			local_peer_id,
 			to_worker,
+			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			_marker: PhantomData,
 		});
 
@@ -364,6 +369,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
+			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
 		})
@@ -550,7 +556,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// at which the peer processes these notifications, or if the available network bandwidth is
 	/// too low.
 	/// For this reason, this method is considered soft-deprecated. You are encouraged to use
-	/// [`NetworkService::send_notification`] instead.
+	/// [`NetworkService::prepare_notification`] instead.
 	///
 	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
 	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
@@ -573,7 +579,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// with the given peer.
 	///
 	/// The returned `Future` finishes after the peer is ready to accept more notifications, or
-	/// after the substream has been closed. Use the returned [`NotificationsBufferSlots`] to
+	/// after the substream has been closed. Use the returned [`NotificationsBufferSlot`] to
 	/// actually send the notifications.
 	///
 	/// An error is returned if there exists no open notifications substream with that combination
@@ -599,7 +605,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// ```ignore
 	/// // Do NOT do this
 	/// for peer in peers {
-	///     network.send_notifications(peer, ..., notifications).await;
+	/// 	if let Ok(n) = network.prepare_notification(peer, ...).await {
+	///			n.send(...);
+	/// 	}
 	/// }
 	/// ```
 	///
@@ -607,28 +615,41 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// malfunctioning peer could intentionally process notifications at a very slow rate.
 	///
 	/// Instead, you are encouraged to maintain your own buffer of notifications on top of the one
-	/// maintained by `sc-network`, and use `send_notifications` to progressively send out
+	/// maintained by `sc-network`, and use `prepare_notification` to progressively send out
 	/// elements from your buffer. If this additional buffer is full (which will happen at some
 	/// point if the peer is too slow to process notifications), appropriate measures can be taken,
 	/// such as removing non-critical notifications from the buffer or disconnecting the peer
 	/// using [`NetworkService::disconnect_peer`].
 	///
 	///
-	///  Notifications              Per-peer buffer
-	///    broadcast    +------->   of notifications   +-->  `send_notifications`  +-->  Internet
-	///                     ^       (not covered by
-	///                     |         sc-network)
-	///                     +
-	///       Notifications should be dropped
-	///              if buffer is full
+	/// Notifications              Per-peer buffer
+	///   broadcast    +------->   of notifications   +-->  `prepare_notification`  +-->  Internet
+	///                    ^       (not covered by
+	///                    |         sc-network)
+	///                    +
+	///      Notifications should be dropped
+	///             if buffer is full
 	///
-	pub async fn send_notifications<'a>(
+	pub async fn prepare_notification<'a>(
 		&'a self,
 		target: PeerId,
 		engine_id: ConsensusEngineId,
-		num_slots: usize,
-	) -> Result<NotificationsBufferSlots<'a>, SendNotificationsError> {
-		todo!()
+	) -> Result<NotificationsBufferSlot<'a>, SendNotificationsError> {
+		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
+		// `peers_notifications_sinks` mutex as soon as possible.
+		let sink = {
+			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
+			if let Some(sink) = peers_notifications_sinks.get(&(target, engine_id)) {
+				sink.clone()
+			} else {
+				return Err(SendNotificationsError::NoSubstream);
+			}
+		};
+
+		let ready = sink.reserve_notification(todo!()).await;
+		Ok(NotificationsBufferSlot {
+			ready,
+		})
 	}
 
 	/// Returns a stream containing the events that happen on the network.
@@ -883,21 +904,16 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	}
 }
 
-/// Reserved slots in the notifications buffer, ready to accept data.
+/// Reserved slot in the notifications buffer, ready to accept data.
 #[must_use]
-pub struct NotificationsBufferSlots<'a> {
-	_dummy: std::marker::PhantomData<&'a ()>,
+pub struct NotificationsBufferSlot<'a> {
+	ready: Ready<'a>,
 }
 
-impl<'a> NotificationsBufferSlots<'a> {
-	/// Consumes this slots reservation and actually queues the notifications.
-	///
-	/// # Panic
-	///
-	/// Panics if the number of items in the `notifications` iterator is different from the number
-	/// of reserved slots.
-	pub fn send(self, notifications: impl Iterator<Item = impl Into<Vec<u8>>>) {
-		todo!()
+impl<'a> NotificationsBufferSlot<'a> {
+	/// Consumes this slots reservation and actually queues the notification.
+	pub fn send(self, notification: impl Into<Vec<u8>>) {
+		self.ready.send(notification)
 	}
 }
 
@@ -962,6 +978,9 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// For each peer and protocol combination, an object that allows sending notifications to
+	/// that peer. Shared with the [`NetworkService`].
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 }
 
 struct Metrics {
@@ -1332,11 +1351,61 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened { remote, engine_id, notifications_sink, role })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.update_with_network_event(&ev);
+						metrics.notifications_streams_opened_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&engine_id)]).inc();
 					}
-					this.event_streams.send(ev);
+					{
+						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						peers_notifications_sinks.insert((remote.clone(), engine_id), notifications_sink);
+					}
+					this.event_streams.send(Event::NotificationStreamOpened {
+						remote,
+						engine_id,
+						role,
+					});
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamReplaced { remote, engine_id, notifications_sink })) => {
+					let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, engine_id)) {
+						*s = notifications_sink;
+					} else {
+						log::error!(
+							target: "sub-libp2p",
+							"NotificationStreamReplaced for non-existing substream"
+						);
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamClosed { remote, engine_id })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.notifications_streams_closed_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&engine_id[..])]).inc();
+					}
+					this.event_streams.send(Event::NotificationStreamClosed {
+						remote: remote.clone(),
+						engine_id,
+					});
+					{
+						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						peers_notifications_sinks.remove(&(remote.clone(), engine_id));
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationsReceived { remote, messages })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						for (engine_id, message) in &messages {
+							metrics.notifications_sizes
+								.with_label_values(&["in", &maybe_utf8_bytes_to_string(engine_id)])
+								.observe(message.len() as f64);
+						}
+					}
+					this.event_streams.send(Event::NotificationsReceived {
+						remote,
+						messages,
+					});
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(ev))) => {
+					this.event_streams.send(Event::Dht(ev));
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);

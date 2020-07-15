@@ -67,7 +67,7 @@ pub mod message;
 pub mod event;
 pub mod sync;
 
-pub use generic_proto::LegacyConnectionKillError;
+pub use generic_proto::{NotificationsSink, Ready, LegacyConnectionKillError};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
@@ -939,7 +939,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called on receipt of a status message via the legacy protocol on the first connection between two peers.
-	pub fn on_peer_connected(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
+	pub fn on_peer_connected(
+		&mut self,
+		who: PeerId,
+		status: message::Status<B>,
+		notifications_sink: NotificationsSink,
+	) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
@@ -1051,6 +1056,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			remote: who,
 			protocols: self.protocol_name_by_engine.keys().cloned().collect(),
 			roles: info.roles,
+			notifications_sink,
 		}
 	}
 
@@ -1829,7 +1835,18 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Notification protocols have been opened with a remote.
-	NotificationStreamOpened { remote: PeerId, protocols: Vec<ConsensusEngineId>, roles: Roles },
+	NotificationStreamOpened {
+		remote: PeerId,
+		protocols: Vec<ConsensusEngineId>,
+		roles: Roles,
+		notifications_sink: NotificationsSink
+	},
+	/// The [`NotificationsSink`] of some notification protocols need an update.
+	NotificationStreamReplaced {
+		remote: PeerId,
+		protocols: Vec<ConsensusEngineId>,
+		notifications_sink: NotificationsSink,
+	},
 	/// Notification protocols have been closed with a remote.
 	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
@@ -1994,9 +2011,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		};
 
 		let outcome = match event {
-			GenericProtoOut::CustomProtocolOpen { peer_id, received_handshake, .. } => {
+			GenericProtoOut::CustomProtocolOpen { peer_id, received_handshake, notifications_sink, .. } => {
 				match <Message<B> as Decode>::decode(&mut &received_handshake[..]) {
-					Ok(GenericMessage::Status(handshake)) => self.on_peer_connected(peer_id, handshake),
+					Ok(GenericMessage::Status(handshake)) =>
+						self.on_peer_connected(peer_id, handshake, notifications_sink),
 					Ok(msg) => {
 						debug!(
 							target: "sync",
@@ -2020,6 +2038,13 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					}
 				}
 			}
+			GenericProtoOut::CustomProtocolReplaced { peer_id, notifications_sink, .. } => {
+				CustomMessageOutcome::NotificationStreamReplaced {
+					remote: peer_id,
+					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+					notifications_sink,
+				}
+			},
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id)
 			},
