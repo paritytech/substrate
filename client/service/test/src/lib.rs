@@ -317,6 +317,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let executor = executor.clone();
 			(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>, _| {
 				executor.spawn(fut.unit_error().compat());
+				async {}
 			}).into()
 		};
 
