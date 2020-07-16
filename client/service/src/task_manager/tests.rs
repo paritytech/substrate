@@ -184,7 +184,6 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 	assert_eq!(drop_tester, 2);
 	task_manager.terminate();
 	runtime.block_on(task_manager.future()).expect("future has ended without error");
-	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
 }
