@@ -254,3 +254,70 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+# Enable debug assertions since we are running optimized builds for testing
+# but still want to have debug assertions.
+debug-assertions = true
+# debug = false
+
+# default profile.release to optimize tests.
+[profile.test]
+opt-level = 3
+debug = false
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+
+# # default profile.release to optimize tests with --release.
+[profile.bench]
+# opt-level = 3
+# debug = false
+# debug-assertions = false
+# overflow-checks = false
+# lto = false
+# panic = 'unwind'
+# incremental = false
+# codegen-units = 16
+# rpath = false
+
+[profile.bench] # release
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+
+
+=====
+debug = false
+debug-assertions = true
+
+# default profile.release to optimize tests.
+[profile.test]
+opt-level = 3
+debug = false
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+
+[profile.bench]
+opt-level = 3
+debug = false
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
