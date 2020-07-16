@@ -70,16 +70,6 @@ pub trait PerThing:
 		Self::from_parts(a / 100.into() * b + c)
 	}
 
-	/// Build this type from a permill (parts per 1000). Equivalent to
-	/// `Self::from_parts(x * Self::ACCURACY / 1000)` but more accurate.
-	fn from_permill(x: Self::Inner) -> Self {
-		let a = x.min(1000.into());
-		let b = Self::ACCURACY;
-		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
-		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 1000.into(), Rounding::Nearest);
-		Self::from_parts(a / 1000.into() * b + c)
-	}
-
 	/// Return the product of multiplication of this value by itself.
 	fn square(self) -> Self {
 		let p = Self::Upper::from(self.deconstruct());
@@ -319,6 +309,30 @@ where
 	rem_mul_div_inner.into()
 }
 
+macro_rules! implement_per_thing_with_permill {
+	(
+		$name:ident,
+		$test_mod:ident,
+		[$($test_units:tt),+],
+		$max:tt,
+		$type:ty,
+		$upper_type:ty,
+		$title:expr $(,)?
+	) => {
+		implement_per_thing! {
+			$name, $test_mod, [ $( $test_units ),+ ], $max, $type, $upper_type, $title
+		}
+		impl $name {
+			/// Converts a percent into `Self`. Equal to `x / 1000`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_perthousand(x: $type) -> Self {
+				Self(([x, 1000][(x > 1000) as usize] as $upper_type * $max as $upper_type / 1000) as $type)
+			}
+		}
+	}
+}
+
 macro_rules! implement_per_thing {
 	(
 		$name:ident,
@@ -417,13 +431,6 @@ macro_rules! implement_per_thing {
 			/// This can be created at compile time.
 			pub const fn from_percent(x: $type) -> Self {
 				Self(([x, 100][(x > 100) as usize] as $upper_type * $max as $upper_type / 100) as $type)
-			}
-
-			/// Converts a percent into `Self`. Equal to `x / 1000`.
-			///
-			/// This can be created at compile time.
-			pub const fn from_permill(x: $type) -> Self {
-				Self(([x, 1000][(x > 1000) as usize] as $upper_type * $max as $upper_type / 1000) as $type)
 			}
 
 			/// See [`PerThing::one`]
@@ -708,10 +715,10 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(100), $name::from_parts($max));
 				assert_eq!($name::from_percent(200), $name::from_parts($max));
 
-				assert_eq!($name::from_permill(00), $name::from_parts(Zero::zero()));
-				assert_eq!($name::from_permill(100), $name::from_parts($max / 10));
-				assert_eq!($name::from_permill(1000), $name::from_parts($max));
-				assert_eq!($name::from_permill(2000), $name::from_parts($max));
+				assert_eq!($name::from_perthousand(00), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_perthousand(100), $name::from_parts($max / 10));
+				assert_eq!($name::from_perthousand(1000), $name::from_parts($max));
+				assert_eq!($name::from_perthousand(2000), $name::from_parts($max));
 
 				assert_eq!($name::from_fraction(0.0), $name::from_parts(Zero::zero()));
 				assert_eq!($name::from_fraction(0.1), $name::from_parts($max / 10));
@@ -1181,7 +1188,7 @@ macro_rules! implement_per_thing {
 			#[allow(unused)]
 			fn const_fns_work() {
 				const C1: $name = $name::from_percent(50);
-				const C1: $name = $name::from_permill(500);
+				const C1: $name = $name::from_perthousand(500);
 				const C2: $name = $name::one();
 				const C3: $name = $name::zero();
 				const C4: $name = $name::from_parts(1);
@@ -1202,7 +1209,7 @@ implement_per_thing!(
 	u16,
 	"_Percent_",
 );
-implement_per_thing!(
+implement_per_thing_with_permill!(
 	PerU16,
 	test_peru16,
 	[u32, u64, u128],
@@ -1211,7 +1218,7 @@ implement_per_thing!(
 	u32,
 	"_Parts per 65535_",
 );
-implement_per_thing!(
+implement_per_thing_with_permill!(
 	Permill,
 	test_permill,
 	[u32, u64, u128],
@@ -1220,7 +1227,7 @@ implement_per_thing!(
 	u64,
 	"_Parts per Million_",
 );
-implement_per_thing!(
+implement_per_thing_with_permill!(
 	Perbill,
 	test_perbill,
 	[u32, u64, u128],
@@ -1229,7 +1236,7 @@ implement_per_thing!(
 	u64,
 	"_Parts per Billion_",
 );
-implement_per_thing!(
+implement_per_thing_with_permill!(
 	Perquintill,
 	test_perquintill,
 	[u64, u128],
