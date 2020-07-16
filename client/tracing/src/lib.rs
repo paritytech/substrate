@@ -442,3 +442,110 @@ impl TraceHandler for TelemetryTraceHandler {
 		);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::sync::Arc;
+
+	struct TestTraceHandler{
+		spans: Arc<Mutex<Vec<SpanDatum>>>,
+		events: Arc<Mutex<Vec<TraceEvent>>>,
+	}
+
+	impl TraceHandler for TestTraceHandler {
+		fn process_span(&self, sd: SpanDatum) {
+			self.spans.lock().push(sd);
+		}
+
+		fn process_event(&self, event: TraceEvent) {
+			self.events.lock().push(event);
+		}
+	}
+
+	fn setup_subscriber() -> (ProfilingSubscriber, Arc<Mutex<Vec<SpanDatum>>>, Arc<Mutex<Vec<TraceEvent>>>) {
+		let spans = Arc::new(Mutex::new(Vec::new()));
+		let events = Arc::new(Mutex::new(Vec::new()));
+		let handler = TestTraceHandler {
+			spans: spans.clone(),
+			events: events.clone(),
+		};
+		let test_subscriber = ProfilingSubscriber::new_with_handler(
+			Box::new(handler),
+			"test_target"
+		);
+		(test_subscriber, spans, events)
+	}
+
+	#[test]
+	fn test_span() {
+		let (sub, spans, events) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		let span = tracing::info_span!(target: "test_target", "test_span1");
+		assert_eq!(spans.lock().len(), 0);
+		assert_eq!(events.lock().len(), 0);
+		let _guard = span.enter();
+		assert_eq!(spans.lock().len(), 0);
+		assert_eq!(events.lock().len(), 0);
+		drop(_guard);
+		drop(span);
+		assert_eq!(spans.lock().len(), 1);
+		assert_eq!(events.lock().len(), 0);
+		let sd = spans.lock().remove(0);
+		assert_eq!(sd.name, "test_span1");
+		assert_eq!(sd.target, "test_target");
+		let time: u128 = sd.overall_time.as_nanos();
+		assert!(time > 0);
+	}
+
+	#[test]
+	fn test_span_parent_id() {
+		let (sub, spans, _events) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		let span1 = tracing::info_span!(target: "test_target", "test_span1");
+		let _guard1 = span1.enter();
+		let span2 = tracing::info_span!(target: "test_target", "test_span2");
+		let _guard2 = span2.enter();
+		drop(_guard2);
+		drop(span2);
+		let sd2 = spans.lock().remove(0);
+		drop(_guard1);
+		drop(span1);
+		let sd1 = spans.lock().remove(0);
+		assert_eq!(sd1.id, sd2.parent_id.unwrap())
+	}
+
+	#[test]
+	fn test_event() {
+		let (sub, _spans, events) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
+		let mut te1 = events.lock().remove(0);
+		assert_eq!(te1.visitor.0.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
+	}
+
+	#[test]
+	fn test_event_parent_id() {
+		let (sub, spans, events) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+
+		// enter span
+		let span1 = tracing::info_span!(target: "test_target", "test_span1");
+		let _guard1 = span1.enter();
+
+		// emit event
+		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
+
+		//exit span
+		drop(_guard1);
+		drop(span1);
+
+		// check span is not emitted separately
+		assert!(events.lock().is_empty());
+
+		let sd1 = spans.lock().remove(0);
+
+		// Check span contains the event
+		assert_eq!(sd1.events.len(), 1);
+	}
+}
