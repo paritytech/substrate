@@ -102,7 +102,7 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_runtime::{
 	traits::{
-		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, Convert,
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, Convert, Saturating,
 	},
 	RuntimeDebug,
 };
@@ -415,6 +415,11 @@ decl_error! {
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
 		OutputBufferTooSmall,
+		/// Performing the requested transfer would have brought the contract below
+		/// the subsistence threshold. No transfer is allowed to do this in order to allow
+		/// for a tombstone to be created. Use `ext_terminate` to remove a contract without
+		/// leaving a tombstone behind.
+		InsufficientBalance,
 	}
 }
 
@@ -725,6 +730,25 @@ impl<T: Trait> Config<T> {
 			max_depth: T::MaxDepth::get(),
 			max_value_size: T::MaxValueSize::get(),
 		}
+	}
+
+	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit) by the
+	/// tombstone deposit, required for leaving a tombstone.
+	///
+	/// Rent or any contract initiated balance transfer mechanism cannot make the balance lower
+	/// than the subsistence threshold in order to guarantee that a tombstone is created.
+	///
+	/// The only way to completely kill a contract without a tombstone is calling `ext_terminate`.
+	fn subsistence_threshold(&self) -> BalanceOf<T> {
+		self.existential_deposit.saturating_add(self.tombstone_deposit)
+	}
+
+	/// The same as `subsistence_threshold` but without the need for a preloaded instance.
+	///
+	/// This is for cases where this value is needed in rent calculation rather than
+	/// during contract execution.
+	fn subsistence_threshold_uncached() -> BalanceOf<T> {
+		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
 	}
 }
 

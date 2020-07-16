@@ -32,8 +32,6 @@ use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use sp_core::traits::BareCryptoStorePtr;
 #[cfg(feature = "std")]
-use sp_std::convert::TryInto;
-#[cfg(feature = "std")]
 use log::debug;
 
 /// Key type for GRANDPA module.
@@ -385,6 +383,7 @@ where
 {
 	use sp_core::crypto::Public;
 	use sp_application_crypto::AppKey;
+	use sp_std::convert::TryInto;
 
 	let encoded = localized_payload(round, set_id, &message);
 	let signature = keystore.read()

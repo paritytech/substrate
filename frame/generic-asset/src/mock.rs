@@ -33,9 +33,6 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -142,8 +139,6 @@ impl ExtBuilder {
 	}
 }
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default()
 		.build_storage::<Test>()
