@@ -83,7 +83,7 @@ async fn run_background_task_blocking(duration: Duration, _keep_alive: impl Any)
 
 #[test]
 fn ensure_futures_are_awaited_on_shutdown() {
-	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -102,7 +102,7 @@ fn ensure_futures_are_awaited_on_shutdown() {
 
 #[test]
 fn ensure_keep_alive_during_shutdown() {
-	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -121,7 +121,7 @@ fn ensure_keep_alive_during_shutdown() {
 
 #[test]
 fn ensure_blocking_futures_are_awaited_on_shutdown() {
-	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -146,7 +146,7 @@ fn ensure_blocking_futures_are_awaited_on_shutdown() {
 
 #[test]
 fn ensure_no_task_can_be_spawn_after_terminate() {
-	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -169,7 +169,7 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 
 #[test]
 fn ensure_task_manager_future_ends_when_task_manager_terminated() {
-	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -191,7 +191,7 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 
 #[test]
 fn ensure_task_manager_future_ends_with_error_when_essential_task_ends() {
-	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
