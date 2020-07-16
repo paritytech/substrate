@@ -206,7 +206,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --locked -p sc-service --lib
     - sccache -s
 
 unleash-check:
