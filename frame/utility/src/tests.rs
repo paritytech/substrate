@@ -34,7 +34,7 @@ impl_outer_origin! {
 }
 impl_outer_event! {
 	pub enum TestEvent for Test {
-		system<T>,
+		frame_system<T>,
 		pallet_balances<T>,
 		utility,
 	}
@@ -83,6 +83,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -93,6 +94,7 @@ impl pallet_balances::Trait for Test {
 	type Event = TestEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
@@ -104,6 +106,8 @@ impl Filter<Call> for TestBaseCallFilter {
 	fn filter(c: &Call) -> bool {
 		match *c {
 			Call::Balances(_) => true,
+			// For benchmarking, this acts as a noop call
+			Call::System(frame_system::Call::remark(..)) => true,
 			_ => false,
 		}
 	}
@@ -111,6 +115,7 @@ impl Filter<Call> for TestBaseCallFilter {
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call;
+	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
@@ -130,7 +135,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> TestEvent {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	frame_system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<TestEvent>>(e: E) {
@@ -163,7 +168,7 @@ fn as_derivative_filters() {
 		assert_noop!(Utility::as_derivative(
 			Origin::signed(1),
 			1,
-			Box::new(Call::System(frame_system::Call::remark(vec![]))),
+			Box::new(Call::System(frame_system::Call::suicide())),
 		), DispatchError::BadOrigin);
 	});
 }
@@ -208,7 +213,7 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(
 			Utility::batch(Origin::signed(1), vec![
-				Call::System(frame_system::Call::remark(vec![]))
+				Call::System(frame_system::Call::suicide())
 			]),
 		);
 		expect_event(Event::BatchInterrupted(0, DispatchError::BadOrigin));

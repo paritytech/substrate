@@ -22,11 +22,11 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionMode
 use crate::BenchmarkResults;
 
 pub struct Analysis {
-	base: u128,
-	slopes: Vec<u128>,
-	names: Vec<String>,
-	value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
-	model: Option<RegressionModel>,
+	pub base: u128,
+	pub slopes: Vec<u128>,
+	pub names: Vec<String>,
+	pub value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
+	pub model: Option<RegressionModel>,
 }
 
 pub enum BenchmarkSelector {
@@ -37,7 +37,35 @@ pub enum BenchmarkSelector {
 }
 
 impl Analysis {
+	// Useful for when there are no components, and we just need an median value of the benchmark results.
+	// Note: We choose the median value because it is more robust to outliers.
+	fn median_value(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
+		if r.is_empty() { return None }
+
+		let mut values: Vec<u128> = r.iter().map(|result|
+			match selector {
+				BenchmarkSelector::ExtrinsicTime => result.extrinsic_time,
+				BenchmarkSelector::StorageRootTime => result.storage_root_time,
+				BenchmarkSelector::Reads => result.reads.into(),
+				BenchmarkSelector::Writes => result.writes.into(),
+			}
+		).collect();
+
+		values.sort();
+		let mid = values.len() / 2;
+
+		Some(Self {
+			base: values[mid],
+			slopes: Vec::new(),
+			names: Vec::new(),
+			value_dists: None,
+			model: None,
+		})
+	}
+
 	pub fn median_slopes(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
+		if r[0].components.is_empty() { return Self::median_value(r, selector) }
+
 		let results = r[0].components.iter().enumerate().map(|(i, &(param, _))| {
 			let mut counted = BTreeMap::<Vec<u32>, usize>::new();
 			for result in r.iter() {
@@ -114,6 +142,8 @@ impl Analysis {
 	}
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResults>, selector: BenchmarkSelector) -> Option<Self> {
+		if r[0].components.is_empty() { return Self::median_value(r, selector) }
+
 		let mut results = BTreeMap::<Vec<u32>, Vec<u128>>::new();
 		for result in r.iter() {
 			let p = result.components.iter().map(|x| x.1).collect::<Vec<_>>();
