@@ -193,6 +193,27 @@ cargo-check-subkey:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
 
+test-deterministic-wasm:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    <<:                            *default-vars
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    # build runtime
+    - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
+    # make checksum
+    - sha256sum target/release/wbuild/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    # clean up – FIXME: can we reuse some of the artifacts?
+    - cargo clean
+    # build again
+    - WASM_BUILD_NO_COLOR=1 cargo build --verbose --release -p node-runtime
+    # confirm checksum
+    - sha256sum -c checksum.sha256
+    - sccache -s
+
 test-linux-stable:                 &test-linux
   stage:                           test
   <<:                              *docker-env
