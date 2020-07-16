@@ -57,6 +57,7 @@ benchmarks! {
 
 	// Benchmark `transfer` with the best possible condition:
 	// * Both accounts exist and will continue to exist.
+	#[extra]
 	transfer_best_case {
 		let caller = account("caller", 0, SEED);
 		let recipient: T::AccountId = account("recipient", 0, SEED);
@@ -142,27 +143,6 @@ benchmarks! {
 		assert_eq!(Balances::<T>::free_balance(&source), Zero::zero());
 		assert_eq!(Balances::<T>::free_balance(&recipient), transfer_amount);
 	}
-
-	// Benchmark `force_transfer` with the best possible condition:
-	// * Both accounts exist and will continue to exist.
-	force_transfer_best_case {
-		let source: T::AccountId = account("source", 0, SEED);
-		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
-		let recipient: T::AccountId = account("recipient", 0, SEED);
-		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
-
-		// Give the sender account max funds for transfer (their account will never reasonably be killed).
-		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&source, T::Balance::max_value());
-
-		// Give the recipient account existential deposit (thus their account already exists).
-		let existential_deposit = T::ExistentialDeposit::get();
-		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&recipient, existential_deposit);
-		let transfer_amount = existential_deposit.saturating_mul(ED_MULTIPLIER.into());
-	}: force_transfer(RawOrigin::Root, source_lookup, recipient_lookup, transfer_amount)
-	verify {
-		assert!(!Balances::<T>::free_balance(&source).is_zero());
-		assert!(!Balances::<T>::free_balance(&recipient).is_zero());
-	}
 }
 
 #[cfg(test)]
@@ -172,7 +152,7 @@ mod tests {
 	use frame_support::assert_ok;
 
 	#[test]
-	fn transfer_worst_case() {
+	fn transfer() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_transfer::<Test>());
 		});
@@ -207,14 +187,7 @@ mod tests {
 	}
 
 	#[test]
-	fn force_transfer_best_case() {
-		ExtBuilder::default().build().execute_with(|| {
-			assert_ok!(test_benchmark_force_transfer_best_case::<Test>());
-		});
-	}
-
-	#[test]
-	fn force_transfer_worst_case() {
+	fn force_transfer() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(test_benchmark_force_transfer::<Test>());
 		});
