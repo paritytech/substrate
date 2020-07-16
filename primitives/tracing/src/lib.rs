@@ -93,6 +93,24 @@ macro_rules! enter_span {
 	}
 }
 
+/// Create a tracing Event
+///
+/// See the documentation for the tracing::event! macro for details
+///
+/// # Example
+///
+/// ```
+/// sp_tracing::tracing_event!(key = "value", "test-event");
+/// ```
+#[macro_export]
+macro_rules! tracing_event {
+	( $( $code:tt )* ) => {
+		$crate::if_tracing!(
+			$crate::tracing::event!( $( $code )* )
+		);
+	}
+}
+
 /// Generates the given code if the tracing dependency is enabled.
 #[macro_export]
 #[cfg(feature = "std")]

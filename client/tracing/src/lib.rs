@@ -40,12 +40,15 @@ use tracing_core::{
 	span::{Attributes, Id, Record},
 	subscriber::Subscriber,
 };
+use tracing_subscriber::CurrentSpan;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
+// To ensure we don't accumulate too many associated events
+const LEN_LIMIT: usize = 128;
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -66,12 +69,25 @@ impl Default for TracingReceiver {
 pub trait TraceHandler: Send + Sync {
 	/// Process a `SpanDatum`
 	fn process_span(&self, span: SpanDatum);
+	/// Process a `TraceEvent`
+	fn process_event(&self, event: TraceEvent);
+}
+
+/// Represents a tracing event, complete with values
+#[derive(Debug)]
+pub struct TraceEvent {
+	pub name: &'static str,
+	pub target: String,
+	pub level: Level,
+	pub visitor: Visitor,
+	pub parent_id: Option<u64>,
 }
 
 /// Represents a single instance of a tracing span
 #[derive(Debug)]
 pub struct SpanDatum {
 	pub id: u64,
+	pub parent_id: Option<u64>,
 	pub name: String,
 	pub target: String,
 	pub level: Level,
@@ -79,6 +95,16 @@ pub struct SpanDatum {
 	pub start_time: Instant,
 	pub overall_time: Duration,
 	pub values: Visitor,
+	pub events: Vec<TraceEvent>,
+}
+
+/// Responsible for assigning ids to new spans, which are not re-used.
+pub struct ProfilingSubscriber {
+	next_id: AtomicU64,
+	targets: Vec<(String, Level)>,
+	trace_handler: Box<dyn TraceHandler>,
+	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
+	current_span: CurrentSpan,
 }
 
 /// Holds associated values for a tracing span
@@ -154,14 +180,6 @@ impl Value for Visitor {
 	}
 }
 
-/// Responsible for assigning ids to new spans, which are not re-used.
-pub struct ProfilingSubscriber {
-	next_id: AtomicU64,
-	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
-}
-
 impl ProfilingSubscriber {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
@@ -191,6 +209,7 @@ impl ProfilingSubscriber {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
+			current_span: Default::default()
 		}
 	}
 
@@ -244,6 +263,7 @@ impl Subscriber for ProfilingSubscriber {
 		}
 		let span_datum = SpanDatum {
 			id,
+			parent_id: self.current_span.id().map(|p| p.into_u64()),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: attrs.metadata().level().clone(),
@@ -251,6 +271,7 @@ impl Subscriber for ProfilingSubscriber {
 			start_time: Instant::now(),
 			overall_time: ZERO_DURATION,
 			values,
+			events: Vec::new(),
 		};
 		self.span_data.lock().insert(id, span_datum);
 		Id::from_u64(id)
@@ -265,9 +286,44 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
 
-	fn event(&self, _event: &Event<'_>) {}
+	fn event(&self, event: &Event<'_>) {
+		let mut visitor = Visitor(FxHashMap::default());
+		event.record(&mut visitor);
+		let trace_event = TraceEvent {
+			name: event.metadata().name(),
+			target: event.metadata().target().to_owned(),
+			level: event.metadata().level().clone(),
+			visitor,
+			parent_id: self.current_span.id().map(|id| id.into_u64()),
+		};
+		// Q: Should all events be emitted immediately, rather than grouping with parent span?
+		match trace_event.parent_id {
+			Some(parent_id) => {
+				if let Some(span) = self.span_data.lock().get_mut(&parent_id) {
+					if span.events.len() > LEN_LIMIT {
+						log::warn!(
+							target: "tracing",
+							"Accumulated too many events for span id: {}, sending event separately",
+							parent_id
+						);
+						self.trace_handler.process_event(trace_event);
+					} else {
+						span.events.push(trace_event);
+					}
+				} else {
+					log::warn!(
+						target: "tracing",
+						"Parent span missing"
+					);
+					self.trace_handler.process_event(trace_event);
+				}
+			}
+			None => self.trace_handler.process_event(trace_event),
+		}
+	}
 
 	fn enter(&self, span: &Id) {
+		self.current_span.enter(span.clone());
 		let mut span_data = self.span_data.lock();
 		let start_time = Instant::now();
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
@@ -276,6 +332,7 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn exit(&self, span: &Id) {
+		self.current_span.exit();
 		let end_time = Instant::now();
 		let mut span_data = self.span_data.lock();
 		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
@@ -323,22 +380,39 @@ impl TraceHandler for LogTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
 			log::log!(
-				log_level(span_datum.level), 
-				"{}: {}, time: {}",
+				log_level(span_datum.level),
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
+				span_datum.id,
+				span_datum.parent_id,
+				span_datum.events,
 			);
 		} else {
 			log::log!(
 				log_level(span_datum.level),
-				"{}: {}, time: {}, {}",
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
+				span_datum.id,
+				span_datum.parent_id,
 				span_datum.values,
+				span_datum.events,
 			);
 		}
+	}
+
+	fn process_event(&self, event: TraceEvent) {
+		log::log!(
+			log_level(event.level),
+			"{}: {}, parent_id: {:?}, values: {}",
+			event.name,
+			event.target,
+			event.parent_id,
+			event.visitor
+		);
 	}
 }
 
@@ -349,12 +423,22 @@ pub struct TelemetryTraceHandler;
 
 impl TraceHandler for TelemetryTraceHandler {
 	fn process_span(&self, span_datum: SpanDatum) {
-		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
+		telemetry!(SUBSTRATE_INFO; "tracing.span";
 			"name" => span_datum.name,
 			"target" => span_datum.target,
-			"line" => span_datum.line,
 			"time" => span_datum.overall_time.as_nanos(),
+			"id" => span_datum.id,
+			"parent_id" => span_datum.parent_id,
 			"values" => span_datum.values
+		);
+	}
+
+	fn process_event(&self, event: TraceEvent) {
+		telemetry!(SUBSTRATE_INFO; "tracing.event";
+			"name" => event.name,
+			"target" => event.target,
+			"parent_id" => event.parent_id,
+			"values" => event.visitor
 		);
 	}
 }
