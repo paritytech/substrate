@@ -83,11 +83,7 @@ async fn run_background_task_blocking(duration: Duration, _keep_alive: impl Any)
 
 #[test]
 fn ensure_futures_are_awaited_on_shutdown() {
-	let mut runtime = tokio::runtime::Builder::new()
-		.basic_scheduler()
-		.enable_time()
-		.build()
-		.unwrap();
+	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -106,11 +102,7 @@ fn ensure_futures_are_awaited_on_shutdown() {
 
 #[test]
 fn ensure_keep_alive_during_shutdown() {
-	let mut runtime = tokio::runtime::Builder::new()
-		.basic_scheduler()
-		.enable_time()
-		.build()
-		.unwrap();
+	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -129,11 +121,7 @@ fn ensure_keep_alive_during_shutdown() {
 
 #[test]
 fn ensure_blocking_futures_are_awaited_on_shutdown() {
-	let mut runtime = tokio::runtime::Builder::new()
-		.basic_scheduler()
-		.enable_time()
-		.build()
-		.unwrap();
+	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -158,11 +146,7 @@ fn ensure_blocking_futures_are_awaited_on_shutdown() {
 
 #[test]
 fn ensure_no_task_can_be_spawn_after_terminate() {
-	let mut runtime = tokio::runtime::Builder::new()
-		.basic_scheduler()
-		.enable_time()
-		.build()
-		.unwrap();
+	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -185,11 +169,7 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 
 #[test]
 fn ensure_task_manager_future_ends_when_task_manager_terminated() {
-	let mut runtime = tokio::runtime::Builder::new()
-		.basic_scheduler()
-		.enable_time()
-		.build()
-		.unwrap();
+	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -203,9 +183,7 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	task_manager.terminate();
-	runtime
-		.block_on(task_manager.future())
-		.expect("future has ended without error");
+	runtime.block_on(task_manager.future()).expect("future has ended without error");
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
@@ -213,11 +191,7 @@ fn ensure_task_manager_future_ends_when_task_manager_terminated() {
 
 #[test]
 fn ensure_task_manager_future_ends_with_error_when_essential_task_ends() {
-	let mut runtime = tokio::runtime::Builder::new()
-		.basic_scheduler()
-		.enable_time()
-		.build()
-		.unwrap();
+	let mut runtime = tokio::runtime::Builder::new().basic_scheduler().build().unwrap();
 	let handle = runtime.handle().clone();
 	let task_executor: TaskExecutor = (move |future, _| handle.spawn(future).map(|_| ())).into();
 
@@ -232,9 +206,7 @@ fn ensure_task_manager_future_ends_with_error_when_essential_task_ends() {
 	runtime.block_on(async { tokio::time::delay_for(Duration::from_secs(1)).await });
 	assert_eq!(drop_tester, 2);
 	spawn_essential_handle.spawn("task3", async { panic!("task failed") });
-	runtime
-		.block_on(task_manager.future())
-		.expect_err("future()'s Result must be Err");
+	runtime.block_on(task_manager.future()).expect_err("future()'s Result must be Err");
 	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
