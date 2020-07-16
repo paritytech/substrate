@@ -124,9 +124,10 @@ impl TelemetryEndpoints {
 }
 
 impl TelemetryEndpoints {
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
+	/// Return `true` if there are telemetry endpoints, `false` otherwise.
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
 }
 
 /// Parses a WebSocket URL into a libp2p `Multiaddr`.
