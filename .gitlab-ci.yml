@@ -391,6 +391,8 @@ check-polkadot-companion-build:
       artifacts:                   false
   script:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
+  after_script:
+    - cd polkadot && git rev-parse --abbrev-ref HEAD
   allow_failure:                   true
 
 test-browser-node:
