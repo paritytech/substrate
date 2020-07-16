@@ -24,8 +24,7 @@ this job checks if there is a string in the description of the pr like
 
 polkadot companion: paritytech/polkadot#567
 
-or any other polkadot pr is mentioned in this pr's description and checks its
-status.
+and checks its status.
 
 
 EOT
@@ -47,14 +46,6 @@ pr_companion="$(echo "${pr_body}" | sed -n -r \
     -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
     -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
   | tail -n 1)"
-
-# get companion mentioned in the description
-if [ -z "${pr_companion}" ]
-then
-  pr_companion="$(echo "${pr_body}" | sed -n -r \
-    's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
-    | tail -n 1)"
-fi
 
 if [ -z "${pr_companion}" ]
 then
