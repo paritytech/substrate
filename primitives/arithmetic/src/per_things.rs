@@ -70,6 +70,16 @@ pub trait PerThing:
 		Self::from_parts(a / 100.into() * b + c)
 	}
 
+	/// Build this type from a permill (parts per 1000). Equivalent to
+	/// `Self::from_parts(x * Self::ACCURACY / 1000)` but more accurate.
+	fn from_permill(x: Self::Inner) -> Self {
+		let a = x.min(1000.into());
+		let b = Self::ACCURACY;
+		// if Self::ACCURACY % 100 > 0 then we need the correction for accuracy
+		let c = rational_mul_correction::<Self::Inner, Self>(b, a, 1000.into(), Rounding::Nearest);
+		Self::from_parts(a / 1000.into() * b + c)
+	}
+
 	/// Return the product of multiplication of this value by itself.
 	fn square(self) -> Self {
 		let p = Self::Upper::from(self.deconstruct());
@@ -409,6 +419,13 @@ macro_rules! implement_per_thing {
 				Self(([x, 100][(x > 100) as usize] as $upper_type * $max as $upper_type / 100) as $type)
 			}
 
+			/// Converts a percent into `Self`. Equal to `x / 1000`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_permill(x: $type) -> Self {
+				Self(([x, 1000][(x > 1000) as usize] as $upper_type * $max as $upper_type / 1000) as $type)
+			}
+
 			/// See [`PerThing::one`]
 			pub const fn one() -> Self {
 				Self::from_parts($max)
@@ -690,6 +707,11 @@ macro_rules! implement_per_thing {
 				assert_eq!($name::from_percent(10), $name::from_parts($max / 10));
 				assert_eq!($name::from_percent(100), $name::from_parts($max));
 				assert_eq!($name::from_percent(200), $name::from_parts($max));
+
+				assert_eq!($name::from_permill(00), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_permill(100), $name::from_parts($max / 10));
+				assert_eq!($name::from_permill(1000), $name::from_parts($max));
+				assert_eq!($name::from_permill(2000), $name::from_parts($max));
 
 				assert_eq!($name::from_fraction(0.0), $name::from_parts(Zero::zero()));
 				assert_eq!($name::from_fraction(0.1), $name::from_parts($max / 10));
@@ -1159,6 +1181,7 @@ macro_rules! implement_per_thing {
 			#[allow(unused)]
 			fn const_fns_work() {
 				const C1: $name = $name::from_percent(50);
+				const C1: $name = $name::from_permill(500);
 				const C2: $name = $name::one();
 				const C3: $name = $name::zero();
 				const C4: $name = $name::from_parts(1);
