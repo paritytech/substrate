@@ -113,8 +113,11 @@ pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, 
 
 /// Something that can convert the current multiplier to the next one.
 pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
+	/// Minimum multiplier
 	fn min() -> Multiplier;
+	/// Target block saturation level
 	fn target() -> Perquintill;
+	/// Variability factor
 	fn v() -> Multiplier;
 }
 
@@ -134,13 +137,13 @@ impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
 	where T: frame_system::Trait, S: Get<Perquintill>, V: Get<Multiplier>, M: Get<Multiplier>,
 {
 	fn min() -> Multiplier {
-		 M::get()
+		M::get()
 	}
 	fn target() -> Perquintill {
-		  S::get()
+		S::get()
 	}
 	fn v() -> Multiplier {
-		 V::get()
+		V::get()
 	}
 }
 
@@ -281,7 +284,7 @@ decl_module! {
 			sp_io::TestExternalities::new_empty().execute_with(|| {
 				<frame_system::Module<T>>::set_block_limits(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
-				assert!(next > min_value, "The minimum bound of the multiplier is too low.");
+				assert!(next > min_value, "The minimum bound of the multiplier is too low. When block saturation is more than target by 1% and multiplier is minimal then multiplier don't increased.");
 			})
 		}
 	}
