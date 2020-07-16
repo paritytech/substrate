@@ -662,12 +662,14 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use std::sync::{Arc, Mutex};
 
-	use sc_tracing::SpanDatum;
+	use sc_tracing::{SpanDatum, TraceEvent};
 
 	impl sc_tracing::TraceHandler for TestTraceHandler {
 		fn process_span(&self, sd: SpanDatum) {
 			self.0.lock().unwrap().push(sd);
 		}
+
+		fn process_event(&self, _event: TraceEvent) {}
 	}
 
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
