@@ -23,8 +23,6 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H256;
-// The testing primitives are very useful for avoiding having to work with signatures
-// or public keys.
 use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
@@ -145,6 +143,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 // Implement the logger module's `Trait` on the Test runtime.

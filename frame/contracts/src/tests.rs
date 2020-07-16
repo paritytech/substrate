@@ -17,6 +17,7 @@
 use crate::{
 	BalanceOf, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator, gas::Gas,
+	Error,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -132,6 +133,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -139,6 +141,7 @@ impl pallet_balances::Trait for Test {
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
@@ -147,6 +150,7 @@ impl pallet_timestamp::Trait for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
+	type WeightInfo = ();
 }
 parameter_types! {
 	pub const SignedClaimHandicap: u64 = 2;
@@ -475,7 +479,7 @@ fn run_out_of_gas() {
 					67_500_000,
 					vec![],
 				),
-				"ran out of gas during contract execution"
+				Error::<Test>::OutOfGas,
 			);
 		});
 }
@@ -793,6 +797,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 /// * if balance is reached and balance > subsistence threshold
 /// * if allowance is exceeded
 /// * if balance is reached and balance < subsistence threshold
+///	    * this case cannot be triggered by a contract: we check whether a tombstone is left
 fn removals(trigger_call: impl Fn() -> bool) {
 	let (wasm, code_hash) = compile_module::<Test>("set_rent").unwrap();
 
@@ -894,10 +899,12 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		.execute_with(|| {
 			// Create
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let subsistence_threshold =
+				Balances::minimum_balance() + <Test as Trait>::TombstoneDeposit::get();
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm.clone()));
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
-				50 + Balances::minimum_balance(),
+				50 + subsistence_threshold,
 				GAS_LIMIT,
 				code_hash.into(),
 				<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
@@ -915,7 +922,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 			);
 			assert_eq!(
 				Balances::free_balance(BOB),
-				50 + Balances::minimum_balance()
+				50 + subsistence_threshold,
 			);
 
 			// Transfer funds
@@ -934,23 +941,23 @@ fn removals(trigger_call: impl Fn() -> bool) {
 					.rent_allowance,
 				1_000
 			);
-			assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
+			assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 
 			// Advance blocks
 			initialize_block(10);
 
 			// Trigger rent through call
 			assert!(trigger_call());
-			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-			assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
+			assert_matches!(ContractInfoOf::<Test>::get(BOB), Some(ContractInfo::Tombstone(_)));
+			assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 
 			// Advance blocks
 			initialize_block(20);
 
 			// Trigger rent must have no effect
 			assert!(trigger_call());
-			assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-			assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
+			assert_matches!(ContractInfoOf::<Test>::get(BOB), Some(ContractInfo::Tombstone(_)));
+			assert_eq!(Balances::free_balance(BOB), subsistence_threshold);
 		});
 }
 
@@ -1166,7 +1173,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					DJANGO,
 					0,
 					GAS_LIMIT,
-					vec![],
+					set_rent_code_hash.as_ref().to_vec(),
 				)
 			};
 
@@ -1291,7 +1298,7 @@ fn storage_max_value_limit() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				GAS_LIMIT,
+				GAS_LIMIT * 2, // we are copying a huge buffer
 				Encode::encode(&self::MaxValueSize::get()),
 			));
 
@@ -1591,8 +1598,8 @@ fn crypto_hashes() {
 					0,
 					GAS_LIMIT,
 					params,
-				).unwrap();
-				assert_eq!(result.status, 0);
+				).0.unwrap();
+				assert!(result.is_success());
 				let expected = hash_fn(input.as_ref());
 				assert_eq!(&result.data[..*expected_size], &*expected);
 			}

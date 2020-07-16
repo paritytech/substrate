@@ -226,6 +226,18 @@ pub struct Heartbeat<BlockNumber>
 	pub validators_len: u32,
 }
 
+pub trait WeightInfo {
+	fn heartbeat(k: u32, e: u32, ) -> Weight;
+	fn validate_unsigned(k: u32, e: u32, ) -> Weight;
+	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn validate_unsigned(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+	fn validate_unsigned_and_then_heartbeat(_k: u32, _e: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
@@ -254,6 +266,9 @@ pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_event!(

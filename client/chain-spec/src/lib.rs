@@ -29,10 +29,9 @@
 //!
 //! ```rust
 //! use std::collections::HashMap;
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{GenericChainSpec, ChainSpecExtension};
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
 //!		pub known_blocks: HashMap<u64, String>,
 //! }
@@ -48,21 +47,20 @@
 //! block number.
 //!
 //! ```rust
-//! use serde::{Serialize, Deserialize};
 //! use sc_chain_spec::{Forks, ChainSpecGroup, ChainSpecExtension, GenericChainSpec};
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
 //!		max_block_size: usize,
 //!		max_extrinsic_size: usize,
 //! }
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
 //!		max_transaction_size: usize,
 //! }
 //!
-//! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup, ChainSpecExtension)]
+//! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
 //!		pub client: ClientParams,
 //!		pub pool: PoolParams,
