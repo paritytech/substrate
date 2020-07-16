@@ -642,6 +642,12 @@ mod weight_for {
 		db.reads_writes(2, 2) + subs * 10_000_000
 	}
 
+	/// Weight calculation for `rename_sub`.
+	pub(crate) fn rename_sub<T: Trait>() -> Weight {
+		let db = T::DbWeight::get();
+		db.reads_writes(2, 2) + 100_000_000
+	}
+
 	/// Weight calculation for `remove_sub`.
 	pub(crate) fn remove_sub<T: Trait>(
 		subs: Weight,
@@ -650,8 +656,8 @@ mod weight_for {
 		db.reads_writes(2, 2) + subs * 10_000_000
 	}
 
-	/// Weight calculation for `revoke_sub`.
-	pub(crate) fn revoke_sub<T: Trait>(
+	/// Weight calculation for `quit_sub`.
+	pub(crate) fn quit_sub<T: Trait>(
 		subs: Weight,
 	) -> Weight {
 		let db = T::DbWeight::get();
@@ -1199,7 +1205,7 @@ decl_module! {
 			)).into())
 		}
 
-		/// Remove the given account from the sender's subs.
+		/// Add the given account to the sender's subs.
 		///
 		/// Payment: Balance reserved by a previous `set_subs` call for one sub will be repatriated
 		/// to the sender.
@@ -1209,30 +1215,40 @@ decl_module! {
 		#[weight = weight_for::add_sub::<T>(
 			T::MaxSubAccounts::get().into(), // S
 		)]
-		fn add_sub(origin, sub: T::AccountId, data: Data) -> DispatchResult {
+		fn add_sub(origin, sub: <T::Lookup as StaticLookup>::Source, data: Data) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			let sub = T::Lookup::lookup(sub)?;
+			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
 
 			// Check if it's already claimed as sub-identity.
-			let deposit = if let Some((sup, _)) = SuperOf::<T>::get(&sub) {
-				// It is - ensure that it's the sender that claimed it.
-				ensure!(sup == sender, Error::<T>::AlreadyClaimed);
-				Zero::zero()
-			} else {
-				// If not, then ensure there is space and that the deposit is paid.
-				T::SubAccountDeposit::get()
-			};
+			ensure!(!SuperOf::<T>::contains_key(&sub), Error::<T>::AlreadyClaimed);
 
 			SubsOf::<T>::try_mutate(&sender, |(ref mut subs_deposit, ref mut sub_ids)| {
+				// Ensure there is space and that the deposit is paid.
 				ensure!(sub_ids.len() < T::MaxSubAccounts::get() as usize, Error::<T>::TooManySubAccounts);
-				if !deposit.is_zero() {
-					T::Currency::reserve(&sender, deposit)?;
-				}
+				let deposit = T::SubAccountDeposit::get();
+				T::Currency::reserve(&sender, deposit)?;
+
 				SuperOf::<T>::insert(&sub, (sender.clone(), data));
 				sub_ids.push(sub.clone());
 				*subs_deposit = subs_deposit.saturating_add(deposit);
+
 				Self::deposit_event(RawEvent::SubIdentityAdded(sub, sender.clone(), deposit));
 				Ok(())
 			})
+		}
+
+		/// Alter the associated name of the given sub-account.
+		///
+		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
+		/// sub identity of `sub`.
+		#[weight = weight_for::rename_sub::<T>()]
+		fn rename_sub(origin, sub: <T::Lookup as StaticLookup>::Source, data: Data) {
+			let sender = ensure_signed(origin)?;
+			let sub = T::Lookup::lookup(sub)?;
+			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
+			ensure!(SuperOf::<T>::get(&sub).map_or(false, |x| x.0 == sender), Error::<T>::NotOwned);
+			SuperOf::<T>::insert(&sub, (sender, data));
 		}
 
 		/// Remove the given account from the sender's subs.
@@ -1245,13 +1261,15 @@ decl_module! {
 		#[weight = weight_for::remove_sub::<T>(
 			T::MaxSubAccounts::get().into(), // S
 		)]
-		fn remove_sub(origin, sub: T::AccountId) {
+		fn remove_sub(origin, sub: <T::Lookup as StaticLookup>::Source) {
 			let sender = ensure_signed(origin)?;
+			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
+			let sub = T::Lookup::lookup(sub)?;
 			let (sup, _) = SuperOf::<T>::get(&sub).ok_or(Error::<T>::NotSub)?;
 			ensure!(sup == sender, Error::<T>::NotOwned);
 			SuperOf::<T>::remove(&sub);
 			SubsOf::<T>::mutate(&sup, |(ref mut subs_deposit, ref mut sub_ids)| {
-				sub_ids.retain(|x| x != &sender);
+				sub_ids.retain(|x| x != &sub);
 				let deposit = T::SubAccountDeposit::get().min(*subs_deposit);
 				*subs_deposit -= deposit;
 				let _ = T::Currency::unreserve(&sender, deposit);
@@ -1269,10 +1287,10 @@ decl_module! {
 		///
 		/// NOTE: This should not normally be used, but is provided in the case that the non-
 		/// controller of an account is maliciously registered as a sub-account.
-		#[weight = weight_for::revoke_sub::<T>(
+		#[weight = weight_for::quit_sub::<T>(
 			T::MaxSubAccounts::get().into(), // S
 		)]
-		fn revoke_sub(origin) {
+		fn quit_sub(origin) {
 			let sender = ensure_signed(origin)?;
 			let (sup, _) = SuperOf::<T>::take(&sender).ok_or(Error::<T>::NotSub)?;
 			SubsOf::<T>::mutate(&sup, |(ref mut subs_deposit, ref mut sub_ids)| {
@@ -1422,6 +1440,84 @@ mod tests {
 			legal: Data::Raw(b"The Right Ordinal Ten, Esq.".to_vec()),
 			.. Default::default()
 		}
+	}
+
+	fn twenty() -> IdentityInfo {
+		IdentityInfo {
+			display: Data::Raw(b"twenty".to_vec()),
+			legal: Data::Raw(b"The Right Ordinal Twenty, Esq.".to_vec()),
+			.. Default::default()
+		}
+	}
+
+	#[test]
+	fn editing_subaccounts_should_work() {
+		new_test_ext().execute_with(|| {
+			let data = |x| Data::Raw(vec![x; 1]);
+
+			assert_noop!(Identity::add_sub(Origin::signed(10), 20, data(1)), Error::<Test>::NoIdentity);
+
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+
+			// first sub account
+			assert_ok!(Identity::add_sub(Origin::signed(10), 1, data(1)));
+			assert_eq!(SuperOf::<Test>::get(1), Some((10, data(1))));
+			assert_eq!(Balances::free_balance(10), 80);
+
+			// second sub account
+			assert_ok!(Identity::add_sub(Origin::signed(10), 2, data(2)));
+			assert_eq!(SuperOf::<Test>::get(1), Some((10, data(1))));
+			assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
+			assert_eq!(Balances::free_balance(10), 70);
+
+			// third sub account is too many
+			assert_noop!(Identity::add_sub(Origin::signed(10), 3, data(3)), Error::<Test>::TooManySubAccounts);
+
+			// rename first sub account
+			assert_ok!(Identity::rename_sub(Origin::signed(10), 1, data(11)));
+			assert_eq!(SuperOf::<Test>::get(1), Some((10, data(11))));
+			assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
+			assert_eq!(Balances::free_balance(10), 70);
+
+			// remove first sub account
+			assert_ok!(Identity::remove_sub(Origin::signed(10), 1));
+			assert_eq!(SuperOf::<Test>::get(1), None);
+			assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
+			assert_eq!(Balances::free_balance(10), 80);
+
+			// add third sub account
+			assert_ok!(Identity::add_sub(Origin::signed(10), 3, data(3)));
+			assert_eq!(SuperOf::<Test>::get(1), None);
+			assert_eq!(SuperOf::<Test>::get(2), Some((10, data(2))));
+			assert_eq!(SuperOf::<Test>::get(3), Some((10, data(3))));
+			assert_eq!(Balances::free_balance(10), 70);
+		});
+	}
+
+	#[test]
+	fn resolving_subaccount_ownership_works() {
+		new_test_ext().execute_with(|| {
+			let data = |x| Data::Raw(vec![x; 1]);
+
+			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
+			assert_ok!(Identity::set_identity(Origin::signed(20), twenty()));
+
+			// 10 claims 1 as a subaccount
+			assert_ok!(Identity::add_sub(Origin::signed(10), 1, data(1)));
+			assert_eq!(Balances::free_balance(1), 10);
+			assert_eq!(Balances::free_balance(10), 80);
+			assert_eq!(Balances::reserved_balance(10), 20);
+			// 20 cannot claim 1 now
+			assert_noop!(Identity::add_sub(Origin::signed(20), 1, data(1)), Error::<Test>::AlreadyClaimed);
+			// 1 wants to be with 20 so it quits from 10
+			assert_ok!(Identity::quit_sub(Origin::signed(1)));
+			// 1 gets the 10 that 10 paid.
+			assert_eq!(Balances::free_balance(1), 20);
+			assert_eq!(Balances::free_balance(10), 80);
+			assert_eq!(Balances::reserved_balance(10), 10);
+			// 20 can claim 1 now
+			assert_ok!(Identity::add_sub(Origin::signed(20), 1, data(1)));
+		});
 	}
 
 	#[test]
