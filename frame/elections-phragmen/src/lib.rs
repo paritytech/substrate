@@ -101,7 +101,7 @@ use frame_support::{
 	}
 };
 use sp_npos_elections::{build_support_map, ExtendedBalance, VoteWeight, ElectionResult};
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod benchmarking;
 
@@ -135,6 +135,38 @@ pub struct DefunctVoter<AccountId> {
 	/// The number of current active candidates.
 	#[codec(compact)]
 	pub candidate_count: u32
+}
+
+pub trait WeightInfo {
+	fn vote(u: u32, ) -> Weight;
+	fn vote_update(u: u32, ) -> Weight;
+	fn remove_voter(u: u32, ) -> Weight;
+	fn report_defunct_voter_correct(c: u32, v: u32, ) -> Weight;
+	fn report_defunct_voter_incorrect(c: u32, v: u32, ) -> Weight;
+	fn submit_candidacy(c: u32, ) -> Weight;
+	fn renounce_candidacy_candidate(c: u32, ) -> Weight;
+	fn renounce_candidacy_member_runner_up(u: u32, ) -> Weight;
+	fn remove_member_without_replacement(c: u32, ) -> Weight;
+	fn remove_member_with_replacement(u: u32, ) -> Weight;
+	fn remove_member_wrong_refund(u: u32, ) -> Weight;
+	fn on_initialize(c: u32, ) -> Weight;
+	fn phragmen(c: u32, v: u32, e: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn vote(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn vote_update(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_voter(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn report_defunct_voter_correct(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
+	fn report_defunct_voter_incorrect(_c: u32, _v: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_candidacy(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn renounce_candidacy_candidate(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn renounce_candidacy_member_runner_up(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_member_without_replacement(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_member_with_replacement(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn remove_member_wrong_refund(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn phragmen(_c: u32, _v: u32, _e: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
@@ -184,6 +216,9 @@ pub trait Trait: frame_system::Trait {
 	/// round will happen. If set to zero, no elections are ever triggered and the module will
 	/// be in passive mode.
 	type TermDuration: Get<Self::BlockNumber>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -1060,7 +1095,6 @@ mod tests {
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
 	use crate as elections_phragmen;
-	use frame_system as system;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
@@ -1094,6 +1128,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	parameter_types! {
@@ -1106,7 +1141,8 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = frame_system::Module<Test>;
-}
+		type WeightInfo = ();
+	}
 
 	parameter_types! {
 		pub const CandidacyBond: u64 = 3;
@@ -1214,6 +1250,7 @@ mod tests {
 		type LoserCandidate = ();
 		type KickedMember = ();
 		type BadReport = ();
+		type WeightInfo = ();
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -1225,7 +1262,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic
 		{
-			System: system::{Module, Call, Event<T>},
+			System: frame_system::{Module, Call, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
 			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
 		}
