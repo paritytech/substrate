@@ -23,6 +23,7 @@ use syn::{
 	spanned::Spanned,
 	token, Error, Ident, Result, Token,
 };
+use core::convert::TryFrom;
 
 mod keyword {
 	syn::custom_keyword!(Block);
@@ -174,6 +175,14 @@ impl Parse for WhereDefinition {
 }
 
 #[derive(Debug, Clone)]
+pub struct ExpandedModuleDeclaration {
+	pub name: Ident,
+	pub module: Ident,
+	pub instance: Option<Ident>,
+	pub module_parts: Vec<ModulePart>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ModuleDeclaration {
 	pub name: Ident,
 	pub module: Ident,
@@ -214,14 +223,30 @@ impl Parse for ModuleDeclaration {
 	}
 }
 
-impl ModuleDeclaration {
+impl TryFrom<ModuleDeclaration> for ExpandedModuleDeclaration {
+	type Error = ();
+	fn try_from(m: ModuleDeclaration) -> core::result::Result<Self, Self::Error> {
+		if m.module_parts.is_some() {
+			Ok(ExpandedModuleDeclaration {
+				name: m.name,
+				module: m.module,
+				instance: m.instance,
+				module_parts: m.module_parts.unwrap(),
+			})
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl ExpandedModuleDeclaration {
 	/// Get resolved module parts
-	pub fn module_parts(&self) -> Option<&Vec<ModulePart>> {
-		self.module_parts.as_ref()
+	pub fn module_parts(&self) -> &[ModulePart] {
+		&self.module_parts
 	}
 
 	pub fn find_part(&self, name: &str) -> Option<&ModulePart> {
-		self.module_parts.as_ref().and_then(|p| p.iter().find(|part| part.name() == name))
+		self.module_parts.iter().find(|part| part.name() == name)
 	}
 
 	pub fn exists_part(&self, name: &str) -> bool {

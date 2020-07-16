@@ -19,11 +19,12 @@ mod parse;
 
 use frame_support_procedural_tools::syn_ext as ext;
 use frame_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
-use parse::{ModuleDeclaration, RuntimeDefinition, WhereSection};
+use parse::{RuntimeDefinition, WhereSection, ExpandedModuleDeclaration};
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{TokenStream as TokenStream2, Span};
 use quote::{quote, quote_spanned};
 use syn::{Ident, Result, TypePath};
+use core::convert::TryFrom;
 
 /// The fixed name of the system module.
 const SYSTEM_MODULE_NAME: &str = "System";
@@ -43,6 +44,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 		.into()
 }
 
+/// Module define with `MyModule: mymodule` expand to their full definition
+/// `MyModule: mymodule::{..}` by calling `mymodule::construct_runtime_args!`
 fn construct_runtime_preprocess(
 	def: &RuntimeDefinition,
 	input_clone: TokenStream2,
@@ -95,6 +98,7 @@ fn construct_runtime_preprocess(
 	}
 }
 
+/// All module must have been expanded, i.e. as `MyModule: mymodule::{...}`
 fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream2> {
 	let RuntimeDefinition {
 		name,
@@ -111,6 +115,15 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 			},
 		..
 	} = definition;
+
+	// All modules have been expanded, thus we convert to the expanded definition.
+	let modules: Vec<ExpandedModuleDeclaration> = modules.into_iter()
+		.map(TryFrom::try_from)
+		.collect::<core::result::Result<_, _>>()
+		.map_err(|_| syn::Error::new(
+			Span::call_site(),
+			"Internal Error: all module must be expanded"
+		))?;
 
 	// Assert we have system module declared
 	let system_module = match find_system_module(modules.iter()) {
@@ -137,7 +150,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 	let outer_origin = decl_outer_origin(
 		&name,
-		all_but_system_modules.clone(),
+		all_but_system_modules,
 		&system_module,
 		&scrate,
 	)?;
@@ -194,7 +207,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 
 fn decl_validate_unsigned<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
@@ -212,7 +225,7 @@ fn decl_validate_unsigned<'a>(
 fn decl_outer_inherent<'a>(
 	block: &'a syn::TypePath,
 	unchecked_extrinsic: &'a syn::TypePath,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations.filter_map(|module_declaration| {
@@ -242,7 +255,7 @@ fn decl_outer_inherent<'a>(
 
 fn decl_outer_config<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
@@ -281,7 +294,7 @@ fn decl_outer_config<'a>(
 
 fn decl_runtime_metadata<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	scrate: &'a TokenStream2,
 	extrinsic: &TypePath,
 ) -> TokenStream2 {
@@ -290,7 +303,6 @@ fn decl_runtime_metadata<'a>(
 			module_declaration.find_part("Module").map(|_| {
 				let filtered_names: Vec<_> = module_declaration
 					.module_parts()
-					.expect("Preprocessing has expanded module parts")
 					.into_iter()
 					.filter(|part| part.name() != "Module")
 					.map(|part| part.ident())
@@ -318,7 +330,7 @@ fn decl_runtime_metadata<'a>(
 
 fn decl_outer_dispatch<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> TokenStream2 {
 	let modules_tokens = module_declarations
@@ -339,7 +351,7 @@ fn decl_outer_dispatch<'a>(
 
 fn decl_outer_origin<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	system_name: &'a Ident,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
@@ -376,7 +388,7 @@ fn decl_outer_origin<'a>(
 
 fn decl_outer_event<'a>(
 	runtime_name: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	scrate: &'a TokenStream2,
 ) -> syn::Result<TokenStream2> {
 	let mut modules_tokens = TokenStream2::new();
@@ -412,7 +424,7 @@ fn decl_outer_event<'a>(
 
 fn decl_all_modules<'a>(
 	runtime: &'a Ident,
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 ) -> TokenStream2 {
 	let mut types = TokenStream2::new();
 	let mut names = Vec::new();
@@ -445,7 +457,7 @@ fn decl_all_modules<'a>(
 }
 
 fn decl_module_to_index<'a>(
-	module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 	num_modules: usize,
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
@@ -473,7 +485,7 @@ fn decl_module_to_index<'a>(
 }
 
 fn find_system_module<'a>(
-	mut module_declarations: impl Iterator<Item = &'a ModuleDeclaration>,
+	mut module_declarations: impl Iterator<Item = &'a ExpandedModuleDeclaration>,
 ) -> Option<&'a Ident> {
 	module_declarations
 		.find(|decl| decl.name == SYSTEM_MODULE_NAME)
