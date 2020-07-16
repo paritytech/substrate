@@ -48,7 +48,7 @@ use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
 // To ensure we don't accumulate too many associated events
-const LEN_LIMIT: usize = 128;
+const LEN_LIMIT: usize = 256;
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
