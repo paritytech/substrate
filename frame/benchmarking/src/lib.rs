@@ -818,7 +818,7 @@ macro_rules! impl_benchmark {
 			fn benchmarks(extra: bool) -> Vec<&'static [u8]> {
 				let mut all = vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
-					let extra = vec![ $( stringify!($name_extra).as_ref() ),* ];
+					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
 					all.retain(|x| !extra.contains(x));
 				}
 				all
@@ -981,7 +981,7 @@ macro_rules! impl_benchmark {
 			fn benchmarks(extra: bool) -> Vec<&'static [u8]> {
 				let mut all = vec![ $( stringify!($name).as_ref() ),* ];
 				if !extra {
-					let extra = vec![ $( stringify!($name_extra).as_ref() ),* ];
+					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
 					all.retain(|x| !extra.contains(x));
 				}
 				all
@@ -1313,7 +1313,7 @@ macro_rules! add_benchmark {
 		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist, extra) = $params;
 		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
-				for benchmark in $( $location )*::benchmarks(extra).into_iter() {
+				for benchmark in $( $location )*::benchmarks(extra) {
 					$batches.push($crate::BenchmarkBatch {
 						results: $( $location )*::run_benchmark(
 							benchmark,
