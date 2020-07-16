@@ -124,7 +124,7 @@ impl TelemetryEndpoints {
 }
 
 impl TelemetryEndpoints {
-	/// Return `true` if there are telemetry endpoints, `false` otherwise.
+	/// Return `true` if there are no telemetry endpoints, `false` otherwise.
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
