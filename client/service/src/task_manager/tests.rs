@@ -161,8 +161,6 @@ fn ensure_no_task_can_be_spawn_after_terminate() {
 	assert_eq!(drop_tester, 2);
 	task_manager.terminate();
 	spawn_handle.spawn("task3", run_background_task(drop_tester.new_ref()));
-	// NOTE: task3 will not increase the count because it has been ignored
-	assert_eq!(drop_tester, 2);
 	runtime.block_on(task_manager.clean_shutdown());
 	assert_eq!(drop_tester, 0);
 }
