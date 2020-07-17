@@ -47,10 +47,16 @@
 //! #### For general users
 //! * `set_identity` - Set the associated identity of an account; a small deposit is reserved if not
 //!   already taken.
-//! * `set_subs` - Set the sub-accounts of an identity.
 //! * `clear_identity` - Remove an account's associated identity; the deposit is returned.
 //! * `request_judgement` - Request a judgement from a registrar, paying a fee.
 //! * `cancel_request` - Cancel the previous request for a judgement.
+//!
+//! #### For general users with sub-identities
+//! * `set_subs` - Set the sub-accounts of an identity.
+//! * `add_sub` - Add a sub-identity to an identity.
+//! * `remove_sub` - Remove a sub-identity of an identity.
+//! * `rename_sub` - Rename a sub-identity of an identity.
+//! * `quit_sub` - Remove a sub-identity of an identity (called by the sub-identity).
 //!
 //! #### For registrars
 //! * `set_fee` - Set the fee required to be paid for a judgement to be given by the registrar.
