@@ -70,7 +70,6 @@ use futures::{
 };
 use log::{debug, error};
 use parking_lot::{Mutex, RwLock};
-use prometheus_endpoint::HistogramVec;
 use std::{borrow::Cow, collections::HashSet, error, io, str, sync::Arc, task::{Context, Poll}};
 
 /// Number of pending notifications in asynchronous contexts.
@@ -364,13 +363,9 @@ impl NotifsHandlerProto {
 	/// `list` is a list of notification protocols names, and the message to send as part of the
 	/// handshake. At the moment, the message is always the same whether we open a substream
 	/// ourselves or respond to handshake from the remote.
-	///
-	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
-	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
 		legacy: RegisteredProtocol,
 		list: impl Into<Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>>,
-		queue_size_report: Option<HistogramVec>
 	) -> Self {
 		let list = list.into();
 
@@ -378,16 +373,7 @@ impl NotifsHandlerProto {
 			.clone()
 			.into_iter()
 			.map(|(proto_name, initial_message)| {
-				let queue_size_report = queue_size_report.as_ref().and_then(|qs| {
-					if let Ok(utf8) = str::from_utf8(&proto_name) {
-						Some(qs.with_label_values(&[utf8]))
-					} else {
-						log::warn!("Ignoring Prometheus metric because {:?} isn't UTF-8", proto_name);
-						None
-					}
-				});
-
-				(NotifsOutHandlerProto::new(proto_name, queue_size_report), initial_message)
+				(NotifsOutHandlerProto::new(proto_name), initial_message)
 			}).collect();
 
 		let in_handlers = list.clone()
@@ -584,8 +570,6 @@ impl ProtocolsHandler for NotifsHandler {
 						Poll::Pending => break,
 					}
 				}
-
-				// TODO: check if legacy's ready as well
 
 				let message = match notifications_sink_rx.0.poll_next_unpin(cx) {
 					Poll::Ready(Some(msg)) => msg,

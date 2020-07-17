@@ -655,6 +655,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			}
 		};
 
+		// TODO:
 		let ready = sink.reserve_notification(todo!()).await;
 		Ok(NotificationsBufferSlot {
 			ready,

@@ -34,7 +34,6 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{debug, warn, error};
-use prometheus_endpoint::Histogram;
 use std::{borrow::Cow, collections::VecDeque, fmt, mem, pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
 
@@ -56,17 +55,14 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
 	protocol_name: Cow<'static, [u8]>,
-	/// Optional Prometheus histogram to report message queue size variations.
-	queue_size_report: Option<Histogram>,
 }
 
 impl NotifsOutHandlerProto {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>, queue_size_report: Option<Histogram>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
 		NotifsOutHandlerProto {
 			protocol_name: protocol_name.into(),
-			queue_size_report,
 		}
 	}
 }
@@ -82,7 +78,6 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 		NotifsOutHandler {
 			protocol_name: self.protocol_name,
 			when_connection_open: Instant::now(),
-			queue_size_report: self.queue_size_report,
 			state: State::Disabled,
 			events_queue: VecDeque::new(),
 			peer_id: peer_id.clone(),
@@ -107,9 +102,6 @@ pub struct NotifsOutHandler {
 
 	/// When the connection with the remote has been successfully established.
 	when_connection_open: Instant,
-
-	/// Optional prometheus histogram to report message queue sizes variations.
-	queue_size_report: Option<Histogram>,
 
 	/// Queue of events to send to the outside.
 	///
@@ -173,11 +165,6 @@ pub enum NotifsOutHandlerIn {
 
 	/// Disables the notifications substream for this node. This is the default state.
 	Disable,
-
-	/// Sends a message on the notifications substream. Ignored if the substream isn't open.
-	///
-	/// It is only valid to send this if the notifications substream has been enabled.
-	Send(Vec<u8>),
 }
 
 /// Event that can be emitted by a `NotifsOutHandler`.
@@ -324,27 +311,6 @@ impl ProtocolsHandler for NotifsOutHandler {
 					State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
 				}
 			}
-
-			NotifsOutHandlerIn::Send(msg) =>
-				if let State::Open { substream, .. } = &mut self.state {
-					if substream.push_message(msg).is_err() {
-						warn!(
-							target: "sub-libp2p",
-							"📞 Notifications queue with peer {} is full, dropped message (protocol: {:?})",
-							self.peer_id,
-							self.protocol_name,
-						);
-					}
-					if let Some(metric) = &self.queue_size_report {
-						metric.observe(substream.queue_len() as f64);
-					}
-				} else {
-					// This is an API misuse.
-					warn!(
-						target: "sub-libp2p",
-						"📞 Tried to send a notification on a disabled handler"
-					);
-				},
 		}
 	}
 
