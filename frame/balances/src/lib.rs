@@ -188,11 +188,11 @@ pub trait WeightInfo {
 }
 
 impl WeightInfo for () {
-	fn transfer() -> Weight { 100_000_000 }
-	fn transfer_keep_alive() -> Weight { 100_000_000 }
-	fn set_balance_creating() -> Weight { 100_000_000 }
-	fn set_balance_killing() -> Weight { 100_000_000 }
-	fn force_transfer() -> Weight { 100_000_000 }
+	fn transfer() -> Weight { 1_000_000_000 }
+	fn transfer_keep_alive() -> Weight { 1_000_000_000 }
+	fn set_balance_creating() -> Weight { 1_000_000_000 }
+	fn set_balance_killing() -> Weight { 1_000_000_000 }
+	fn force_transfer() -> Weight { 1_000_000_000 }
 }
 
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
