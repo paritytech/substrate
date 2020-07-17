@@ -30,7 +30,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use serde::ser::{Serialize, Serializer, SerializeMap};
+use serde::ser::{Serialize, Serializer};
 use serde_json::{Map, Value};
 use tracing_core::{
 	event::Event,
@@ -65,7 +65,7 @@ impl Default for TracingReceiver {
 /// A handler for tracing `SpanDatum`
 pub trait TraceHandler: Send + Sync {
 	/// Process a `SpanDatum`
-	fn process_span(&self, span: SpanDatum);
+	fn handle_span(&self, span: SpanDatum);
 }
 
 /// Represents a single instance of a tracing span
@@ -78,21 +78,21 @@ pub struct SpanDatum {
 	pub line: u32,
 	pub start_time: Instant,
 	pub overall_time: Duration,
-	pub values: Visitor,
+	pub values: Values,
 }
 
 /// Holds associated values for a tracing span
 #[derive(Clone, Debug)]
-pub struct Visitor(Map<String, Value>);
+pub struct Values(Map<String, Value>);
 
-impl Visitor {
+impl Values {
 	/// Consume the Visitor, returning the inner FxHashMap
 	pub fn into_inner(self) -> Map<String, Value> {
 		self.0
 	}
 }
 
-impl Visit for Visitor {
+impl Visit for Values {
 	fn record_i64(&mut self, field: &Field, value: i64) {
 		self.0.insert(field.name().to_string(), Value::Number(value.into()));
 	}
@@ -114,7 +114,7 @@ impl Visit for Visitor {
 	}
 }
 
-impl Serialize for Visitor {
+impl Serialize for Values {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where S: Serializer,
 	{
@@ -122,14 +122,14 @@ impl Serialize for Visitor {
 	}
 }
 
-impl fmt::Display for Visitor {
+impl fmt::Display for Values {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let values = self.0.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
 	}
 }
 
-impl slog::SerdeValue for Visitor {
+impl slog::SerdeValue for Values {
 	fn as_serde(&self) -> &dyn erased_serde::Serialize {
 		self
 	}
@@ -139,7 +139,7 @@ impl slog::SerdeValue for Visitor {
 	}
 }
 
-impl slog::Value for Visitor {
+impl slog::Value for Values {
 	fn serialize(
 		&self,
 		_record: &slog::Record,
@@ -230,7 +230,7 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let mut values = Visitor(Map::new());
+		let mut values = Values(Map::new());
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
 		if let Some(Value::String(wasm_target)) = values.0.get(WASM_TARGET_KEY) {
@@ -295,7 +295,7 @@ impl Subscriber for ProfilingSubscriber {
 				}
 			}
 			if self.check_target(&span_datum.target, &span_datum.level) {
-				self.trace_handler.process_span(span_datum);
+				self.trace_handler.handle_span(span_datum);
 			}
 		};
 		true
@@ -316,7 +316,7 @@ fn log_level(level: Level) -> log::Level {
 }
 
 impl TraceHandler for LogTraceHandler {
-	fn process_span(&self, span_datum: SpanDatum) {
+	fn handle_span(&self, span_datum: SpanDatum) {
 		if span_datum.values.0.is_empty() {
 			log::log!(
 				log_level(span_datum.level), 
@@ -344,7 +344,7 @@ impl TraceHandler for LogTraceHandler {
 pub struct TelemetryTraceHandler;
 
 impl TraceHandler for TelemetryTraceHandler {
-	fn process_span(&self, span_datum: SpanDatum) {
+	fn handle_span(&self, span_datum: SpanDatum) {
 		telemetry!(SUBSTRATE_INFO; "tracing.profiling";
 			"name" => span_datum.name,
 			"target" => span_datum.target,
@@ -366,7 +366,7 @@ mod tests {
 	}
 
 	impl TraceHandler for TestTraceHandler {
-		fn process_span(&self, sd: SpanDatum) {
+		fn handle_span(&self, sd: SpanDatum) {
 			self.spans.lock().push(sd);
 		}
 	}
