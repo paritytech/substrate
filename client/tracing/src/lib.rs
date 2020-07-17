@@ -31,7 +31,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use tracing_core::{
 	event::Event,
 	field::{Visit, Field},
@@ -83,11 +83,11 @@ pub struct SpanDatum {
 
 /// Holds associated values for a tracing span
 #[derive(Clone, Debug)]
-pub struct Visitor(FxHashMap<String, Value>);
+pub struct Visitor(Map<String, Value>);
 
 impl Visitor {
 	/// Consume the Visitor, returning the inner FxHashMap
-	pub fn into_inner(self) -> FxHashMap<String, Value> {
+	pub fn into_inner(self) -> Map<String, Value> {
 		self.0
 	}
 }
@@ -102,7 +102,7 @@ impl Visit for Visitor {
 	}
 
 	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.0.insert(field.name().to_string(), Value::Bool(value.into()));
+		self.0.insert(field.name().to_string(), Value::Bool(value));
 	}
 
 	fn record_str(&mut self, field: &Field, value: &str) {
@@ -118,11 +118,7 @@ impl Serialize for Visitor {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where S: Serializer,
 	{
-		let mut map = serializer.serialize_map(Some(self.0.len()))?;
-		for (k, v) in &self.0 {
-			map.serialize_entry(k, v)?;
-		}
-		map.end()
+		self.0.serialize(serializer)
 	}
 }
 
@@ -234,7 +230,7 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let mut values = Visitor(FxHashMap::default());
+		let mut values = Visitor(Map::new());
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
 		if let Some(Value::String(wasm_target)) = values.0.get(WASM_TARGET_KEY) {
