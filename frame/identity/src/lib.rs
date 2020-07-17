@@ -97,6 +97,10 @@ pub trait WeightInfo {
 	fn set_fields(r: u32, ) -> Weight;
 	fn provide_judgement(r: u32, x: u32, ) -> Weight;
 	fn kill_identity(r: u32, s: u32, x: u32, ) -> Weight;
+	fn add_sub(p: u32, ) -> Weight;
+	fn rename_sub() -> Weight;
+	fn remove_sub(p: u32, ) -> Weight;
+	fn quit_sub(p: u32, ) -> Weight;
 }
 
 impl WeightInfo for () {
@@ -111,6 +115,10 @@ impl WeightInfo for () {
 	fn set_fields(_r: u32, ) -> Weight { 1_000_000_000 }
 	fn provide_judgement(_r: u32, _x: u32, ) -> Weight { 1_000_000_000 }
 	fn kill_identity(_r: u32, _s: u32, _x: u32, ) -> Weight { 1_000_000_000 }
+	fn add_sub(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn rename_sub() -> Weight { 1_000_000_000 }
+	fn remove_sub(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn quit_sub(_p: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
@@ -639,13 +647,13 @@ mod weight_for {
 		subs: Weight,
 	) -> Weight {
 		let db = T::DbWeight::get();
-		db.reads_writes(2, 2) + subs * 10_000_000
+		db.reads_writes(4, 3) + 124_000_000 + 156_000 * subs
 	}
 
 	/// Weight calculation for `rename_sub`.
 	pub(crate) fn rename_sub<T: Trait>() -> Weight {
 		let db = T::DbWeight::get();
-		db.reads_writes(2, 2) + 100_000_000
+		db.reads_writes(2, 1) + 30_000_000
 	}
 
 	/// Weight calculation for `remove_sub`.
@@ -653,7 +661,7 @@ mod weight_for {
 		subs: Weight,
 	) -> Weight {
 		let db = T::DbWeight::get();
-		db.reads_writes(2, 2) + subs * 10_000_000
+		db.reads_writes(4, 3) + 86_000_000 + 50_000 * subs
 	}
 
 	/// Weight calculation for `quit_sub`.
@@ -661,7 +669,7 @@ mod weight_for {
 		subs: Weight,
 	) -> Weight {
 		let db = T::DbWeight::get();
-		db.reads_writes(2, 2) + subs * 10_000_000
+		db.reads_writes(3, 2) + 63_000_000 + 230_000 * subs
 	}
 }
 

@@ -176,7 +176,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 
 		// Give them p many previous sub accounts.
-		let p in 1 .. T::MaxSubAccounts::get() => {
+		let p in 1 .. T::MaxSubAccounts::get() - 1 => {
 			let _ = add_sub_accounts::<T>(&caller, p)?;
 		};
 		let sub = account::<T>("new_sub", 0);
@@ -186,8 +186,10 @@ benchmarks! {
 	rename_sub {
 		let caller = account::<T>("caller", 0);
 
+		let p in 1 .. T::MaxSubAccounts::get();
+
 		// Give them p many previous sub accounts.
-		let (sub, _) = add_sub_accounts::<T>(&caller, 1)?.remove(0);
+		let (sub, _) = add_sub_accounts::<T>(&caller, p)?.remove(0);
 		let data = Data::Raw(vec![1; 32]);
 
 	}: _(RawOrigin::Signed(caller), T::Lookup::unlookup(sub), data)
