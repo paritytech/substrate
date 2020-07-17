@@ -358,3 +358,79 @@ impl TraceHandler for TelemetryTraceHandler {
 		);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::sync::Arc;
+	use serde_json::Value;
+
+	struct TestTraceHandler {
+		spans: Arc<Mutex<Vec<SpanDatum>>>,
+	}
+
+	impl TraceHandler for TestTraceHandler {
+		fn process_span(&self, sd: SpanDatum) {
+			self.spans.lock().push(sd);
+		}
+	}
+
+	fn setup_subscriber() -> (ProfilingSubscriber, Arc<Mutex<Vec<SpanDatum>>>) {
+		let spans = Arc::new(Mutex::new(Vec::new()));
+		let handler = TestTraceHandler {
+			spans: spans.clone(),
+		};
+		let test_subscriber = ProfilingSubscriber::new_with_handler(
+			Box::new(handler),
+			"test_target"
+		);
+		(test_subscriber, spans)
+	}
+
+	#[test]
+	fn test_span() {
+		let (sub, spans) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		let span = tracing::info_span!(target: "test_target", "test_span1");
+		assert_eq!(spans.lock().len(), 0);
+		let _guard = span.enter();
+		assert_eq!(spans.lock().len(), 0);
+		drop(_guard);
+		drop(span);
+		assert_eq!(spans.lock().len(), 1);
+		let sd = spans.lock().remove(0);
+		assert_eq!(sd.name, "test_span1");
+		assert_eq!(sd.target, "test_target");
+		let time: u128 = sd.overall_time.as_nanos();
+		assert!(time > 0);
+	}
+
+	#[test]
+	fn test_span_values() {
+		let (sub, spans) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_default(sub);
+		let test_bool = true;
+		let test_u64 = 1u64;
+		let test_i64 = 2i64;
+		let test_str = "test_str";
+		let span = tracing::info_span!(
+			target: "test_target",
+			"test_span1",
+			test_bool,
+			test_u64,
+			test_i64,
+			test_str
+		);
+		let _guard = span.enter();
+		drop(_guard);
+		drop(span);
+		let sd = spans.lock().remove(0);
+		assert_eq!(sd.name, "test_span1");
+		assert_eq!(sd.target, "test_target");
+		let values = sd.values.into_inner();
+		assert_eq!(values.get("test_bool").unwrap(), &Value::Bool(test_bool));
+		assert_eq!(values.get("test_u64").unwrap(), &Value::Number(test_u64.into()));
+		assert_eq!(values.get("test_i64").unwrap(), &Value::Number(test_i64.into()));
+		assert_eq!(values.get("test_str").unwrap(), &Value::String(test_str.to_owned()));
+	}
+}
