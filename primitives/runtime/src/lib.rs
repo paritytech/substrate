@@ -613,7 +613,7 @@ macro_rules! __impl_outer_config_types {
 /// Optionally serde crate can be given, it must be same version as serde used in sp_runtime,
 /// syntax is:
 /// ```nocompile
-/// impl_outer_config { optional_serde_crate { "my_serde_crate" }
+/// impl_outer_config { serde_crate { "my_serde_crate" }
 ///   ...
 /// }
 /// ```

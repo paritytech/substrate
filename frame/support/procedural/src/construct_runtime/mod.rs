@@ -277,19 +277,14 @@ fn decl_outer_config<'a>(
 		});
 
 	// If caller doesn't depends on serde, then serde must be provided manually.
-	let hidden_serde_use_str = syn::LitStr::new(
-		&format!("__hidden_serde_use_for_{}", runtime),
+	let hidden_serde_use = syn::LitStr::new(
+		&format!("{}::serde", scrate),
 		proc_macro2::Span::call_site(),
-	);
-	let hidden_serde_use_ident = syn::Ident::new(
-		&hidden_serde_use_str.value(),
-		hidden_serde_use_str.span(),
 	);
 
 	quote!(
-		use #scrate::serde as #hidden_serde_use_ident;
 		#scrate::sp_runtime::impl_outer_config! {
-			serde_crate { #hidden_serde_use_str }
+			serde_crate { #hidden_serde_use }
 			pub struct GenesisConfig for #runtime {
 				#(#modules_tokens)*
 			}
