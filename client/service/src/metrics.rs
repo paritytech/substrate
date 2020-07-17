@@ -97,16 +97,16 @@ impl PrometheusMetrics {
 
 			// process
 			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory (resident set size) usage",
+				"memory_usage_bytes", "Process memory (resident set size) usage",
 			)?, registry)?,
 
 			cpu_usage_percentage: register(Gauge::new(
-				"cpu_usage_percentage", "Node CPU usage",
+				"cpu_usage_percentage", "Process CPU usage, percentage per core summed over all cores",
 			)?, registry)?,
 
 			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			netstat: register(GaugeVec::new(
-				Opts::new("netstat_tcp", "Current TCP connections "),
+				Opts::new("netstat_tcp", "Number of TCP sockets of the process"),
 				&["status"]
 			)?, registry)?,
 
@@ -115,7 +115,7 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			open_files: register(GaugeVec::new(
-				Opts::new("open_file_handles", "Open file handlers held by the process"),
+				Opts::new("open_file_handles", "Number of open file handlers held by the process"),
 				&["fd_type"]
 			)?, registry)?,
 
