@@ -779,7 +779,7 @@ checksum = "b3a71ab494c0b5b860bdc8407ae08978052417070c2ced38573a9157ad75b8ac"
 [[package]]
 name = "cranelift-bforest"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "cranelift-entity",
 ]
@@ -787,7 +787,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -806,7 +806,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -815,12 +815,12 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 
 [[package]]
 name = "cranelift-entity"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "serde",
 ]
@@ -828,7 +828,7 @@ dependencies = [
 [[package]]
 name = "cranelift-frontend"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -839,7 +839,7 @@ dependencies = [
 [[package]]
 name = "cranelift-native"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -849,7 +849,7 @@ dependencies = [
 [[package]]
 name = "cranelift-wasm"
 version = "0.66.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -8517,7 +8517,7 @@ version = "1.0.6"
 [[package]]
 name = "substrate-wasmtime"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -9589,7 +9589,7 @@ checksum = "a950e6a618f62147fd514ff445b2a0b53120d382751960797f85f058c7eda9b9"
 [[package]]
 name = "wasmtime-debug"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "anyhow",
  "gimli 0.21.0",
@@ -9604,7 +9604,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-environ"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "anyhow",
  "base64 0.12.3",
@@ -9634,7 +9634,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-jit"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -9662,7 +9662,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-obj"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "anyhow",
  "more-asserts",
@@ -9675,7 +9675,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-profiling"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -9693,7 +9693,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-runtime"
 version = "0.19.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#f744c4e564b40a4cfce6a7090f093ec1726c68e9"
 dependencies = [
  "backtrace",
  "cc",
