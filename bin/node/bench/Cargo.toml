@@ -39,4 +39,5 @@ rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.1.2" }
-futures = "0.3.1"
+sc-transaction-pool = { version = "2.0.0-rc4", path = "../../../client/transaction-pool" }
+futures = { version = "0.3.4", features = ["thread-pool"] }
