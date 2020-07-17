@@ -22,17 +22,17 @@ native_executor_instance!(
 
 mod prelude {
 	use super::*;
-	sc_prelude::prelude!(Block, RuntimeApi, Executor);
+	sc_service_prelude::setup_types!(Block, RuntimeApi, Executor);
 }
 
-use prelude::*;
+use prelude::full;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, FullClient, FullAuraImportQueue, FullBasicPool, (), FullBackend,
+		Block, full::Client, full::AuraImportQueue, full::BasicPool, (), full::Backend,
 	>,
-	FullLongestChain, sp_inherents::InherentDataProviders, FullGrandpaBlockImport<FullLongestChain>,
-	FullGrandpaLink<FullLongestChain>
+	full::LongestChain, sp_inherents::InherentDataProviders, full::GrandpaBlockImport<full::LongestChain>,
+	full::GrandpaLink<full::LongestChain>
 ), ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 

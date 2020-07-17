@@ -1,0 +1,22 @@
+[package]
+name = "sc-service-prelude"
+version = "0.8.0-rc4"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Easy to use type definitions"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+service = { package = "sc-service", path = "..", version = "0.8.0-rc4"}
+grandpa = { package = "sc-finality-grandpa", path = "../../finality-grandpa", version = "0.8.0-rc4"}
+consensus = { package = "sc-consensus", path = "../../consensus/common", version = "0.8.0-rc4"}
+aura = { package = "sc-consensus-aura", path = "../../consensus/aura", version = "0.8.0-rc4"}
+babe = { package = "sc-consensus-babe", path = "../../consensus/babe", version = "0.8.0-rc4"}
+transaction-pool = { package = "sc-transaction-pool", path = "../../transaction-pool", version = "2.0.0-rc4"}
+network = { package = "sc-network", path = "../../network" }
+sp-api = { path = "../../../primitives/api" }

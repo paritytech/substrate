@@ -25,7 +25,6 @@ use sc_consensus_babe;
 use grandpa::{
 	self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
 };
-use node_executor;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
@@ -41,11 +40,15 @@ use sp_core::traits::BareCryptoStorePtr;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, FullClient, FullBabeImportQueue, FullBasicPool, node_rpc::IoHandler, FullBackend
+		Block, full::Client, full::BabeImportQueue, full::BasicPool, node_rpc::IoHandler,
+		full::Backend
 	>,
-	(FullBabeBlockImport<FullGrandpaBlockImport<FullLongestChain>>, FullGrandpaLink<FullLongestChain>, BabeLink),
+	(
+		full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>,
+		full::GrandpaLink<full::LongestChain>, BabeLink
+	),
 	grandpa::SharedVoterState,
-	FullLongestChain,
+	full::LongestChain,
 	InherentDataProviders
 ), ServiceError> {
 	use node_executor::Executor;
@@ -151,18 +154,21 @@ pub fn new_full_params(config: Configuration) -> Result<(
 
 mod prelude {
 	use super::*;
-	sc_prelude::prelude!(Block, RuntimeApi, node_executor::Executor);
+	use node_executor::Executor;
+	sc_service_prelude::setup_types!(Block, RuntimeApi, Executor);
 }
 
-use prelude::*;
+use prelude::{full, light, BabeLink};
 
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	config: Configuration,
-	with_startup_data: impl FnOnce(&FullBabeBlockImport<FullGrandpaBlockImport<FullLongestChain>>, &BabeLink)
+	with_startup_data: impl FnOnce(
+		&full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>, &BabeLink,
+	)
 ) -> Result<(
-	TaskManager, InherentDataProviders, Arc<FullClient>,
-	Arc<NetworkService<Block, <Block as BlockT>::Hash>>, Arc<FullBasicPool>
+	TaskManager, InherentDataProviders, Arc<full::Client>,
+	Arc<NetworkService<Block, <Block as BlockT>::Hash>>, Arc<full::BasicPool>
 ), ServiceError> {
 	let (params, import_setup, rpc_setup, select_chain, inherent_data_providers)
 		= new_full_params(config)?;
@@ -316,15 +322,10 @@ pub fn new_full(config: Configuration)
 	})
 }
 
-type LightClient = sc_service::TLightClient<Block, RuntimeApi, node_executor::Executor>;
-type LightFetcher = sc_network::config::OnDemand<Block>;
-
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
+	TaskManager, Arc<RpcHandlers>, Arc<light::Client>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	Arc<sc_transaction_pool::BasicPool<
-		sc_transaction_pool::LightChainApi<LightClient, LightFetcher, Block>, Block
-	>>
+	Arc<light::BasicPool>
 ), ServiceError> {
 	let (client, backend, keystore, task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, node_executor::Executor>(&config)?;

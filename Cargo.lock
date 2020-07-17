@@ -3521,9 +3521,9 @@ dependencies = [
  "sc-keystore",
  "sc-network",
  "sc-offchain",
- "sc-prelude",
  "sc-rpc",
  "sc-service",
+ "sc-service-prelude",
  "sc-service-test",
  "sc-telemetry",
  "sc-tracing",
@@ -3741,8 +3741,8 @@ dependencies = [
  "sc-executor",
  "sc-finality-grandpa",
  "sc-network",
- "sc-prelude",
  "sc-service",
+ "sc-service-prelude",
  "sc-transaction-pool",
  "sp-api",
  "sp-consensus",
@@ -6787,18 +6787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-prelude"
-version = "0.8.0-rc4"
-dependencies = [
- "sc-consensus",
- "sc-consensus-aura",
- "sc-consensus-babe",
- "sc-finality-grandpa",
- "sc-service",
- "sc-transaction-pool",
-]
-
-[[package]]
 name = "sc-proposer-metrics"
 version = "0.8.0-rc4"
 dependencies = [
@@ -6959,6 +6947,20 @@ dependencies = [
  "tempfile",
  "tracing",
  "wasm-timer",
+]
+
+[[package]]
+name = "sc-service-prelude"
+version = "0.8.0-rc4"
+dependencies = [
+ "sc-consensus",
+ "sc-consensus-aura",
+ "sc-consensus-babe",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-service",
+ "sc-transaction-pool",
+ "sp-api",
 ]
 
 [[package]]
