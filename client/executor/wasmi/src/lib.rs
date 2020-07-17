@@ -37,7 +37,7 @@ use sc_executor_common::{
 use sc_executor_common::util::{DataSegmentsSnapshot, WasmModuleInfo};
 
 struct FunctionExecutor {
-	sandbox_store: sandbox::Store<wasmi::FuncRef>,
+	sandbox_store: RefCell<sandbox::Store<wasmi::FuncRef>>,
 	heap: sp_allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
@@ -56,7 +56,7 @@ impl FunctionExecutor {
 		missing_functions: Arc<Vec<String>>,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
-			sandbox_store: sandbox::Store::new(),
+			sandbox_store: RefCell::new(sandbox::Store::new()),
 			heap: sp_allocator::FreeingBumpHeapAllocator::new(heap_base),
 			memory: m,
 			table: t,
@@ -132,7 +132,10 @@ impl Sandbox for FunctionExecutor {
 		buf_ptr: Pointer<u8>,
 		buf_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory = self
+			.sandbox_store
+			.borrow()
+			.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
 			&sandboxed_memory,
@@ -153,7 +156,10 @@ impl Sandbox for FunctionExecutor {
 		val_ptr: Pointer<u8>,
 		val_len: WordSize,
 	) -> WResult<u32> {
-		let sandboxed_memory = self.sandbox_store.memory(memory_id).map_err(|e| e.to_string())?;
+		let sandboxed_memory = self
+			.sandbox_store
+			.borrow()
+			.memory(memory_id).map_err(|e| e.to_string())?;
 
 		match MemoryInstance::transfer(
 			&self.memory,
@@ -168,7 +174,10 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
-		self.sandbox_store.memory_teardown(memory_id).map_err(|e| e.to_string())
+		self
+			.sandbox_store
+			.borrow_mut()
+			.memory_teardown(memory_id).map_err(|e| e.to_string())
 	}
 
 	fn memory_new(
@@ -176,7 +185,10 @@ impl Sandbox for FunctionExecutor {
 		initial: u32,
 		maximum: u32,
 	) -> WResult<MemoryId> {
-		self.sandbox_store.new_memory(initial, maximum).map_err(|e| e.to_string())
+		self
+			.sandbox_store
+			.borrow_mut()
+			.new_memory(initial, maximum).map_err(|e| e.to_string())
 	}
 
 	fn invoke(
@@ -197,7 +209,11 @@ impl Sandbox for FunctionExecutor {
 			.map(Into::into)
 			.collect::<Vec<_>>();
 
-		let instance = self.sandbox_store.instance(instance_id).map_err(|e| e.to_string())?;
+		let instance = self
+			.sandbox_store
+			.borrow()
+			.instance(instance_id).map_err(|e| e.to_string())?;
+
 		let result = instance.invoke::<_, Holder>(export_name, &args, state);
 
 		match result {
@@ -217,7 +233,10 @@ impl Sandbox for FunctionExecutor {
 	}
 
 	fn instance_teardown(&mut self, instance_id: u32) -> WResult<()> {
-		self.sandbox_store.instance_teardown(instance_id).map_err(|e| e.to_string())
+		self
+			.sandbox_store
+			.borrow_mut()
+			.instance_teardown(instance_id).map_err(|e| e.to_string())
 	}
 
 	fn instance_new(
@@ -237,14 +256,17 @@ impl Sandbox for FunctionExecutor {
 				.clone()
 		};
 
-		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store, raw_env_def) {
+		let guest_env = match sandbox::GuestEnvironment::decode(
+				&*self.sandbox_store.borrow(),
+				raw_env_def
+		) {
 			Ok(guest_env) => guest_env,
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
 		let instance_idx_or_err_code =
 			match sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state)
-				.map(|i| i.register(&mut self.sandbox_store))
+				.map(|i| i.register(&mut *self.sandbox_store.borrow_mut()))
 			{
 				Ok(instance_idx) => instance_idx,
 				Err(sandbox::InstantiationError::StartTrapped) =>
@@ -261,6 +283,7 @@ impl Sandbox for FunctionExecutor {
 		name: &str,
 	) -> WResult<Option<sp_wasm_interface::Value>> {
 		self.sandbox_store
+			.borrow()
 			.instance(instance_idx)
 			.map(|i| i.get_global_val(name))
 			.map_err(|e| e.to_string())
