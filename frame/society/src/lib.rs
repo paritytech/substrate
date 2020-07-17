@@ -264,11 +264,12 @@ use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, d
 use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
-	ExistenceRequirement::AllowDeath, EnsureOrigin
+	ExistenceRequirement::AllowDeath, EnsureOrigin, OnUnbalanced, Imbalance
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
@@ -1143,6 +1144,8 @@ decl_event! {
 		NewMaxMembers(u32),
 		/// Society is unfounded.
 		Unfounded(AccountId),
+		/// Some funds were deposited into the society account.
+		Deposit(Balance),
 	}
 }
 
@@ -1663,5 +1666,16 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		} else {
 			vec![]
 		}
+	}
+}
+
+impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
+		let numeric_amount = amount.peek();
+
+		// Must resolve into existing but better to be safe.
+		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
+
+		Self::deposit_event(RawEvent::Deposit(numeric_amount));
 	}
 }

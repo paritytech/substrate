@@ -897,6 +897,14 @@ pub trait Currency<AccountId> {
 	/// in the case of overflow.
 	fn issue(amount: Self::Balance) -> Self::NegativeImbalance;
 
+	/// Produce a pair of imbalances that cancel each other out exactly.
+	///
+	/// This is just the same as burning and issuing the same amount and has no effect on the
+	/// total issuance.
+	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		(Self::burn(amount.clone()), Self::issue(amount))
+	}
+
 	/// The 'free' balance of a given account.
 	///
 	/// This is the only balance that matters in terms of most operations on tokens. It alone
