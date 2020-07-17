@@ -24,6 +24,7 @@
 mod storage;
 mod construct_runtime;
 mod expand_after;
+mod construct_runtime_args;
 
 use proc_macro::TokenStream;
 
@@ -291,25 +292,6 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// The population of the genesis storage depends on the order of modules. So, if one of your
 /// modules depends on another module, the module that is depended upon needs to come before
 /// the module depending on it.
-///
-/// # Use an inside pallet
-///
-/// The attribute `#[local_macro(pallet_name)]` can be provided if the pallet is defined in
-/// the same crate as construct_runtime is called. Usage is:
-///
-/// ```nocompile
-/// use crate as pallet_name;
-/// construct_runtime!(
-///     #[local_macro(pallet_name)]
-///     pub enum Runtime where
-///         Block = Block,
-///         NodeBlock = runtime::Block,
-///         UncheckedExtrinsic = UncheckedExtrinsic
-///     {
-///         System: system,
-///         MyPallet: pallet_name,
-///     }
-/// )
 /// ```
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
@@ -361,35 +343,19 @@ pub fn expand_after(input: TokenStream) -> TokenStream {
 /// decl_construct_runtime_args!(Module, Call, Event<T>)
 /// ```
 ///
-/// # Limitation:
+/// if multiple pallet are defined in the same crate, then a unique id must be used internally, the
+/// unique id is declared as such:
 ///
-/// * Only one declararion is allowed per crate, if a crate define multiples pallet, make sure
-///   `decl_construct_runtime_args` is declare in the namespace of the wanted pallet.
+/// ```nocompile
+/// decl_construct_runtime_args!(#[unique_id = $id] Module, Call, Event<T>)
+/// ```
+///
+/// `$id` is only used internally and just need to be unique for the crate.
 // The defined macro construct_runtime_args must be called as such:
 // ```
 // construct_runtime_args!( { pattern to find } tokens to find pattern in and expand after )
 // ```
 #[proc_macro]
 pub fn decl_construct_runtime_args(input: TokenStream) -> TokenStream {
-	use frame_support_procedural_tools::generate_crate_access;
-
-	let input: proc_macro2::TokenStream = input.into();
-
-	// frame-support is made available by construct_runtime_preprocess
-	let hidden_crate_name = "construct_runtime_preprocess";
-	let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
-
-	quote::quote!(
-		/// This can be internally called by `construct_runtime` to builds the pallet args.
-		#[macro_export(local_macros)]
-		macro_rules! construct_runtime_args {
-			( { $( $pattern:tt )* } $( $t:tt )* ) => {
-				#scrate::expand_after! {
-					{ $( $pattern )* }
-					{ ::{ #input } }
-					$( $t )*
-				}
-			}
-		}
-	).into()
+	construct_runtime_args::decl_construct_runtime_args(input)
 }

@@ -41,6 +41,10 @@ pub trait Currency {}
 mod module1 {
 	use super::*;
 
+	decl_construct_runtime_args!(#[unique_id = _1]
+		Module, Call, Storage, Config<T>, Event<T>, Origin<T>, Inherent
+	);
+
 	pub trait Trait<I>: system::Trait where <Self as system::Trait>::BlockNumber: From<u32> {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, I>>;
@@ -181,6 +185,8 @@ mod module2 {
 mod module3 {
 	use super::*;
 
+	decl_construct_runtime_args!(#[unique_id = _3] Module, Call);
+
 	pub trait Trait: module2::Trait + module2::Trait<module2::Instance1> + system::Trait {
 		type Currency: Currency;
 		type Currency2: Currency;
@@ -248,24 +254,20 @@ impl system::Trait for Runtime {
 	type Call = Call;
 }
 
-frame_support::construct_runtime!(#[local_macro(module2)]
+frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event<T>},
-		Module1_1: module1::<Instance1>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
-		Module1_2: module1::<Instance2>::{
-			Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
-		},
+		Module1_1: module1::<Instance1>,
+		Module1_2: module1::<Instance2>,
 		Module2: module2,
 		Module2_1: module2::<Instance1>,
 		Module2_2: module2::<Instance2>,
 		Module2_3: module2::<Instance3>,
-		Module3: module3::{Module, Call},
+		Module3: module3,
 	}
 );
 

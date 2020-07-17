@@ -48,7 +48,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// `MyModule: mymodule::{..}` by calling `mymodule::construct_runtime_args!`
 fn construct_runtime_preprocess(
 	def: &RuntimeDefinition,
-	input_clone: TokenStream2,
+	input: TokenStream2,
 ) -> Result<Option<TokenStream2>> {
 	let mut auto_modules = vec![];
 	for module in def.modules.content.inner.iter() {
@@ -64,23 +64,16 @@ fn construct_runtime_preprocess(
 		let scrate_decl = generate_hidden_includes(&hidden_crate_name, "frame-support");
 		let scrate = generate_crate_access(&hidden_crate_name, "frame-support");
 
-		let mut expand = quote!( #scrate::construct_runtime! { #input_clone } );
+		let mut expand = quote!( #scrate::construct_runtime! { #input } );
 
 		while let Some(module) = auto_modules.pop()  {
-			let macro_call = if def.local_macro.as_ref().map_or(false, |m| *m == module.module) {
-				quote!( construct_runtime_args! )
-			} else {
-				let module = &module.module;
-				quote!( #module::construct_runtime_args! )
-			};
-
 			let module_name = &module.name;
 			let module_module = &module.module;
 			let module_instance = module.instance.as_ref()
 				.map(|instance| quote!( ::< #instance > ));
 
 			expand = quote_spanned!(module_name.span() =>
-				#macro_call {
+				#module_module::construct_runtime_args! {
 					{ #module_name : #module_module #module_instance}
 					#expand
 				}
