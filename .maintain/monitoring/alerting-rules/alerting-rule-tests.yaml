@@ -42,33 +42,7 @@ tests:
             }'
             values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
 
-          - series: 'polkadot_cpu_usage_percentage{
-              job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
-            }'
-            values: '0+20x5 100+0x5' # 0 20 40 60 80 100 100 100 100 100 100
-
       alert_rule_test:
-
-          ######################################################################
-          # Resource usage
-          ######################################################################
-
-          - eval_time: 9m
-            alertname: HighCPUUsage
-            exp_alerts:
-          - eval_time: 10m
-            alertname: HighCPUUsage
-            exp_alerts:
-                - exp_labels:
-                      severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
-                  exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has a CPU
-                      usage higher than 100% for more than 5 minutes"
 
           ######################################################################
           # Block production

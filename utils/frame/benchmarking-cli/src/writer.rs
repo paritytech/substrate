@@ -30,12 +30,15 @@ pub fn open_file(path: &str) -> Result<File, std::io::Error> {
 		.open(path)
 }
 
-pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>) -> Result<(), std::io::Error> {
-	let batches = batches.unwrap();
-
+pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), std::io::Error> {
 	let mut current_pallet = Vec::<u8>::new();
 
-	batches.iter().for_each(|batch| {
+	// Skip writing if there are no batches
+	if batches.is_empty() { return Ok(()) }
+
+	for batch in &batches {
+		// Skip writing if there are no results
+		if batch.results.is_empty() { continue }
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
@@ -55,7 +58,7 @@ pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>
 		}
 
 		// function name
-		write!(file, "	fn {}(", benchmark_string).unwrap();
+		write!(file, "\tfn {}(", benchmark_string).unwrap();
 
 		// params
 		let components = &batch.results[0].components;
@@ -64,7 +67,7 @@ pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>
 		}
 		// return value
 		write!(file, ") -> Weight;\n").unwrap();
-	});
+	}
 
 	// final close trait
 	write!(file, "}}\n").unwrap();
@@ -72,7 +75,8 @@ pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>
 	// Reset
 	current_pallet = Vec::<u8>::new();
 
-	batches.iter().for_each(|batch| {
+	for batch in &batches {
+		if batch.results.is_empty() { continue }
 
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
 
@@ -91,7 +95,7 @@ pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>
 		}
 
 		// function name
-		write!(file, "	fn {}(", benchmark_string).unwrap();
+		write!(file, "\tfn {}(", benchmark_string).unwrap();
 
 		// params
 		let components = &batch.results[0].components;
@@ -100,7 +104,7 @@ pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>
 		}
 		// return value
 		write!(file, ") -> Weight {{ 1_000_000_000 }}\n").unwrap();
-	});
+	}
 
 	// final close trait
 	write!(file, "}}\n").unwrap();
@@ -108,15 +112,18 @@ pub fn write_trait(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>
 	Ok(())
 }
 
-pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, String>) -> Result<(), std::io::Error> {
-	let batches = batches.unwrap();
-
+pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), std::io::Error> {
 	let mut current_pallet = Vec::<u8>::new();
+
+	// Skip writing if there are no batches
+	if batches.is_empty() { return Ok(()) }
 
 	// general imports
 	write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n").unwrap();
 
-	batches.iter().for_each(|batch| {
+	for batch in &batches {
+		// Skip writing if there are no results
+		if batch.results.is_empty() { continue }
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let benchmark_string = String::from_utf8(batch.benchmark.clone()).unwrap();
@@ -143,7 +150,7 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		}
 
 		// function name
-		write!(file, "	fn {}(", benchmark_string).unwrap();
+		write!(file, "\tfn {}(", benchmark_string).unwrap();
 
 		// params
 		let components = &batch.results[0].components;
@@ -154,35 +161,35 @@ pub fn write_results(file: &mut File, batches: Result<Vec<BenchmarkBatch>, Strin
 		write!(file, ") -> Weight {{\n").unwrap();
 
 		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-		write!(file, "		({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
+		write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
 		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
-			write!(file, "			.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
+			write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
 				slope.saturating_mul(1000),
 				name,
 			).unwrap();
 		});
 
 		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		write!(file, "			.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
+		write!(file, "\t\t\t.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
 		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
-			write!(file, "			.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
 			).unwrap();
 		});
 
 		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-		write!(file, "			.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
+		write!(file, "\t\t\t.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
 		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
-			write!(file, "			.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
+			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
 			).unwrap();
 		});
 
 		// close function
-		write!(file, "	}}\n").unwrap();
-	});
+		write!(file, "\t}}\n").unwrap();
+	}
 
 	// final close trait
 	write!(file, "}}\n").unwrap();
