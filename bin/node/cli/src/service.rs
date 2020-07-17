@@ -37,6 +37,15 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
+use sc_consensus_babe::BabeLink;
+
+mod prelude {
+	use super::*;
+	use node_executor::Executor;
+	sc_service_types::setup_types!(Block, RuntimeApi, Executor);
+}
+
+use prelude::{full, light};
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
@@ -45,7 +54,7 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	>,
 	(
 		full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>,
-		full::GrandpaLink<full::LongestChain>, BabeLink
+		full::GrandpaLink<full::LongestChain>, BabeLink<Block>,
 	),
 	grandpa::SharedVoterState,
 	full::LongestChain,
@@ -152,19 +161,11 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	Ok((params, import_setup, rpc_setup, select_chain, inherent_data_providers))
 }
 
-mod prelude {
-	use super::*;
-	use node_executor::Executor;
-	sc_service_prelude::setup_types!(Block, RuntimeApi, Executor);
-}
-
-use prelude::{full, light, BabeLink};
-
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	config: Configuration,
 	with_startup_data: impl FnOnce(
-		&full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>, &BabeLink,
+		&full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>, &BabeLink<Block>,
 	)
 ) -> Result<(
 	TaskManager, InherentDataProviders, Arc<full::Client>,

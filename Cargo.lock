@@ -3523,14 +3523,13 @@ dependencies = [
  "sc-offchain",
  "sc-rpc",
  "sc-service",
- "sc-service-prelude",
  "sc-service-test",
+ "sc-service-types",
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
  "serde",
  "serde_json",
- "sp-api",
  "sp-authority-discovery",
  "sp-consensus",
  "sp-consensus-babe",
@@ -3742,7 +3741,7 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-network",
  "sc-service",
- "sc-service-prelude",
+ "sc-service-types",
  "sc-transaction-pool",
  "sp-api",
  "sp-consensus",
@@ -6950,20 +6949,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-service-prelude"
-version = "0.8.0-rc4"
-dependencies = [
- "sc-consensus",
- "sc-consensus-aura",
- "sc-consensus-babe",
- "sc-finality-grandpa",
- "sc-network",
- "sc-service",
- "sc-transaction-pool",
- "sp-api",
-]
-
-[[package]]
 name = "sc-service-test"
 version = "2.0.0-rc4"
 dependencies = [
@@ -6997,6 +6982,20 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "sc-service-types"
+version = "0.8.0-rc4"
+dependencies = [
+ "sc-consensus",
+ "sc-consensus-aura",
+ "sc-consensus-babe",
+ "sc-finality-grandpa",
+ "sc-network",
+ "sc-service",
+ "sc-transaction-pool",
+ "sp-api",
 ]
 
 [[package]]
