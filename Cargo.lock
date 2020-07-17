@@ -6447,6 +6447,7 @@ dependencies = [
  "sc-executor-wasmtime",
  "sc-runtime-test",
  "sc-tracing",
+ "serde_json",
  "sp-api",
  "sp-core",
  "sp-externalities",
