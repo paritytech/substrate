@@ -609,9 +609,18 @@ macro_rules! __impl_outer_config_types {
 /// 	rust_module_one: Option<ModuleOneConfig>,
 /// 	...
 /// }
+///
+/// Optionally serde crate can be given, it must be same version as serde used in sp_runtime,
+/// syntax is:
+/// ```nocompile
+/// impl_outer_config { optional_serde_crate { "my_serde_crate" }
+///   ...
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_outer_config {
 	(
+		$( serde_crate { $serde_crate:expr } )?
 		pub struct $main:ident for $concrete:ident {
 			$( $config:ident =>
 				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
@@ -623,12 +632,8 @@ macro_rules! impl_outer_config {
 
 		$crate::paste::item! {
 			#[cfg(any(feature = "std", test))]
-			#[doc(hidden)]
-			use $crate::serde as _sp_runtime_hidden_serde;
-
-			#[cfg(any(feature = "std", test))]
 			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-			#[serde(crate = "_sp_runtime_hidden_serde")]
+			$( #[serde(crate = $serde_crate )] )?
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
 			pub struct $main {
