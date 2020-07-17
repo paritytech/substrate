@@ -38,7 +38,7 @@ use sc_executor_common::util::{DataSegmentsSnapshot, WasmModuleInfo};
 
 struct FunctionExecutor {
 	sandbox_store: RefCell<sandbox::Store<wasmi::FuncRef>>,
-	allocator: sp_allocator::FreeingBumpHeapAllocator,
+	allocator: RefCell<sp_allocator::FreeingBumpHeapAllocator>,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	host_functions: Arc<Vec<&'static dyn Function>>,
@@ -57,7 +57,7 @@ impl FunctionExecutor {
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: RefCell::new(sandbox::Store::new()),
-			allocator: sp_allocator::FreeingBumpHeapAllocator::new(heap_base),
+			allocator: RefCell::new(sp_allocator::FreeingBumpHeapAllocator::new(heap_base)),
 			memory: m,
 			table: t,
 			host_functions,
@@ -108,14 +108,14 @@ impl FunctionContext for FunctionExecutor {
 	fn allocate_memory(&mut self, size: WordSize) -> WResult<Pointer<u8>> {
 		let heap = &mut self.allocator;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.allocate(mem, size).map_err(|e| e.to_string())
+			heap.borrow_mut().allocate(mem, size).map_err(|e| e.to_string())
 		})
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> WResult<()> {
 		let heap = &mut self.allocator;
 		self.memory.with_direct_access_mut(|mem| {
-			heap.deallocate(mem, ptr).map_err(|e| e.to_string())
+			heap.borrow_mut().deallocate(mem, ptr).map_err(|e| e.to_string())
 		})
 	}
 
