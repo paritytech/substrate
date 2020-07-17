@@ -152,6 +152,7 @@ impl<T: Copy> ForDispatchClass<T> {
 		}
 	}
 }
+
 #[derive(Default, RuntimeDebug)]
 pub struct ValidationErrors {
 	pub has_errors: bool,
