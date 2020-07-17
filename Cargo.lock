@@ -3444,6 +3444,7 @@ dependencies = [
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
+ "sc-transaction-pool",
  "serde",
  "serde_json",
  "sp-consensus",
