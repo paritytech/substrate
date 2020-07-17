@@ -4355,8 +4355,10 @@ name = "pallet-grandpa"
 version = "2.0.0-rc4"
 dependencies = [
  "finality-grandpa",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-authorship",
  "pallet-balances",
  "pallet-finality-tracker",
  "pallet-offences",
