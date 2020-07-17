@@ -226,7 +226,9 @@ impl Sandbox for FunctionExecutor {
 			.borrow()
 			.instance(instance_id).map_err(|e| e.to_string())?;
 
-		let result = instance.invoke::<_, Holder>(export_name, &args, state);
+		let result = EXECUTOR.set(self, || {
+			instance.invoke::<_, Holder>(export_name, &args, state)
+		});
 
 		match result {
 			Ok(None) => Ok(sandbox_primitives::ERR_OK),
@@ -307,17 +309,14 @@ impl Sandbox for FunctionExecutor {
 
 struct Holder;
 
+scoped_tls::scoped_thread_local!(static EXECUTOR: FunctionExecutor);
+
 impl sandbox::SandboxCapabiliesHolder for Holder {
 	type SupervisorFuncRef = wasmi::FuncRef;
 	type SC = FunctionExecutor;
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
-		todo!();
-
-		// FOO.with(|fe| {
-		// 	let mut fe = fe.borrow_mut();
-		// 	f(fe.deref_mut())
-		// });
+		EXECUTOR.with(|executor| f(&mut executor.clone()))
 	}
 }
 

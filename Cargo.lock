@@ -6313,6 +6313,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-executor-common",
+ "scoped-tls",
  "sp-allocator",
  "sp-core",
  "sp-runtime-interface",
