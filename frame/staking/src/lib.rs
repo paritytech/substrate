@@ -2417,7 +2417,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Lets now calculate how this is split to the nominators.
-		// Sort nominators by highest to lowest exposure, but only keep `max_nominator_payouts` of them.
+		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others.iter() {
 			let nominator_exposure_part = Perbill::from_rational_approximation(
 				nominator.value,

@@ -897,6 +897,14 @@ pub trait Currency<AccountId> {
 	/// in the case of overflow.
 	fn issue(amount: Self::Balance) -> Self::NegativeImbalance;
 
+	/// Produce a pair of imbalances that cancel each other out exactly.
+	///
+	/// This is just the same as burning and issuing the same amount and has no effect on the
+	/// total issuance.
+	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+		(Self::burn(amount.clone()), Self::issue(amount))
+	}
+
 	/// The 'free' balance of a given account.
 	///
 	/// This is the only balance that matters in terms of most operations on tokens. It alone
@@ -1490,6 +1498,15 @@ pub mod schedule {
 	/// higher priority.
 	pub type Priority = u8;
 
+	/// The dispatch time of a scheduled task.
+	#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+	pub enum DispatchTime<BlockNumber> {
+		/// At specified block.
+		At(BlockNumber),
+		/// After specified number of blocks.
+		After(BlockNumber),
+	}
+
 	/// The highest priority. We invert the value so that normal sorting will place the highest
 	/// priority at the beginning of the list.
 	pub const HIGHEST_PRIORITY: Priority = 0;
@@ -1510,7 +1527,7 @@ pub mod schedule {
 		///
 		/// Infallible.
 		fn schedule(
-			when: BlockNumber,
+			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			origin: Origin,
@@ -1540,7 +1557,7 @@ pub mod schedule {
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
 			id: Vec<u8>,
-			when: BlockNumber,
+			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
 			origin: Origin,

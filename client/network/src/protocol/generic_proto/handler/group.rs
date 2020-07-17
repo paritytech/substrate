@@ -187,6 +187,9 @@ pub enum NotifsHandlerOut {
 	Open {
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
+		/// Handshake that was sent to us.
+		/// This is normally a "Status" message, but this out of the concern of this code.
+		received_handshake: Vec<u8>,
 	},
 
 	/// The connection is closed for custom protocols.
@@ -213,13 +216,6 @@ pub enum NotifsHandlerOut {
 
 		/// Message that has been received.
 		message: BytesMut,
-	},
-
-	/// A substream to the remote is clogged. The send buffer is very large, and we should print
-	/// a diagnostic message and/or avoid sending more data.
-	Clogged {
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
 	},
 
 	/// An error has happened on the protocol level with this node.
@@ -472,9 +468,9 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, received_handshake, .. }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open { endpoint }
+						NotifsHandlerOut::Open { endpoint, received_handshake }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
@@ -483,10 +479,6 @@ impl ProtocolsHandler for NotifsHandler {
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
 						NotifsHandlerOut::CustomMessage { message }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
-					Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Clogged { messages }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
