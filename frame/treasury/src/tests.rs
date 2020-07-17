@@ -149,6 +149,7 @@ impl Trait for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
