@@ -537,16 +537,21 @@ pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
 	let telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>> = Default::default();
 
 	// Telemetry
-	let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
+	let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
+		if endpoints.is_empty() {
+			// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
+			return None;
+		}
+
 		let genesis_hash = match client.block_hash(Zero::zero()) {
 			Ok(Some(hash)) => hash,
 			_ => Default::default(),
 		};
 
-		build_telemetry(
+		Some(build_telemetry(
 			&mut config, endpoints, telemetry_connection_sinks.clone(), network.clone(),
 			task_manager.spawn_handle(), genesis_hash,
-		)
+		))
 	});
 
 	// Instrumentation

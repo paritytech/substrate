@@ -77,7 +77,7 @@ fn main() {
 	let opt = Opt::from_args();
 
 	if !opt.json {
-		sc_cli::init_logger("", None).expect("init_logger should not fail.");
+		sc_cli::init_logger("");
 	}
 
 	let mut import_benchmarks = Vec::new();

@@ -284,17 +284,12 @@ mod tests {
 
 	use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -337,8 +332,6 @@ mod tests {
 	}
 	type Assets = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
 		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 	}

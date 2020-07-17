@@ -650,6 +650,23 @@ impl<'de> serde::Deserialize<'de> for AccountId32 {
 }
 
 #[cfg(feature = "std")]
+impl sp_std::str::FromStr for AccountId32 {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let hex_or_ss58_without_prefix = s.trim_start_matches("0x");
+		if hex_or_ss58_without_prefix.len() == 64 {
+			let mut bytes = [0u8; 32];
+			hex::decode_to_slice(hex_or_ss58_without_prefix, &mut bytes)
+				.map_err(|_| "invalid hex address.")
+				.map(|_| Self::from(bytes))
+		} else {
+			Self::from_ss58check(s).map_err(|_| "invalid ss58 address.")
+		}
+	}
+}
+
+#[cfg(feature = "std")]
 pub use self::dummy::*;
 
 #[cfg(feature = "std")]
@@ -1159,6 +1176,33 @@ mod tests {
 		assert_eq!(
 			TestPair::from_string("hello world/1//DOT///password", None),
 			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]})
+		);
+	}
+
+	#[test]
+	fn accountid_32_from_str_works() {
+		use std::str::FromStr;
+		assert!(AccountId32::from_str("5G9VdMwXvzza9pS8qE8ZHJk3CheHW9uucBn9ngW4C1gmmzpv").is_ok());
+		assert!(AccountId32::from_str("5c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").is_ok());
+		assert!(AccountId32::from_str("0x5c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").is_ok());
+
+		assert_eq!(
+			AccountId32::from_str("99G9VdMwXvzza9pS8qE8ZHJk3CheHW9uucBn9ngW4C1gmmzpv").unwrap_err(),
+			"invalid ss58 address.",
+		);
+		assert_eq!(
+			AccountId32::from_str("gc55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid hex address.",
+		);
+		assert_eq!(
+			AccountId32::from_str("0xgc55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid hex address.",
+		);
+
+		// valid hex but invalid length will be treated as ss58.
+		assert_eq!(
+			AccountId32::from_str("55c55177d67b064bb5d189a3e1ddad9bc6646e02e64d6e308f5acbb1533ac430d").unwrap_err(),
+			"invalid ss58 address.",
 		);
 	}
 }
