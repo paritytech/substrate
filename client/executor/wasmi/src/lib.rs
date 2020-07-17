@@ -36,24 +36,24 @@ use sc_executor_common::{
 };
 use sc_executor_common::util::{DataSegmentsSnapshot, WasmModuleInfo};
 
-struct FunctionExecutor<'a> {
+struct FunctionExecutor {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,
 	heap: sp_allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
-	host_functions: &'a [&'static dyn Function],
+	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
-	missing_functions: &'a [String],
+	missing_functions: Arc<Vec<String>>,
 }
 
-impl<'a> FunctionExecutor<'a> {
+impl FunctionExecutor {
 	fn new(
 		m: MemoryRef,
 		heap_base: u32,
 		t: Option<TableRef>,
-		host_functions: &'a [&'static dyn Function],
+		host_functions: Arc<Vec<&'static dyn Function>>,
 		allow_missing_func_imports: bool,
-		missing_functions: &'a [String],
+		missing_functions: Arc<Vec<String>>,
 	) -> Result<Self, Error> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -67,7 +67,7 @@ impl<'a> FunctionExecutor<'a> {
 	}
 }
 
-impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
+impl sandbox::SandboxCapabilities for FunctionExecutor {
 	type SupervisorFuncRef = wasmi::FuncRef;
 
 	fn invoke(
@@ -96,7 +96,7 @@ impl<'a> sandbox::SandboxCapabilities for FunctionExecutor<'a> {
 	}
 }
 
-impl<'a> FunctionContext for FunctionExecutor<'a> {
+impl FunctionContext for FunctionExecutor {
 	fn read_memory_into(&self, address: Pointer<u8>, dest: &mut [u8]) -> WResult<()> {
 		self.memory.get_into(address.into(), dest).map_err(|e| e.to_string())
 	}
@@ -124,7 +124,7 @@ impl<'a> FunctionContext for FunctionExecutor<'a> {
 	}
 }
 
-impl<'a> Sandbox for FunctionExecutor<'a> {
+impl Sandbox for FunctionExecutor {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -271,7 +271,7 @@ struct Holder;
 
 impl sandbox::SandboxCapabiliesHolder for Holder {
 	type SupervisorFuncRef = wasmi::FuncRef;
-	type SC = FunctionExecutor<'static>;
+	type SC = FunctionExecutor;
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
 		todo!();
@@ -397,13 +397,13 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 	}
 }
 
-impl<'a> wasmi::Externals for FunctionExecutor<'a> {
+impl wasmi::Externals for FunctionExecutor {
 	fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs)
 		-> Result<Option<wasmi::RuntimeValue>, wasmi::Trap>
 	{
 		let mut args = args.as_ref().iter().copied().map(Into::into);
 
-		if let Some(function) = self.host_functions.get(index) {
+		if let Some(function) = self.host_functions.clone().get(index) {
 			function.execute(self, &mut args)
 				.map_err(|msg| Error::FunctionExecution(function.name().to_string(), msg))
 				.map_err(wasmi::Trap::from)
@@ -453,9 +453,9 @@ fn call_in_wasm_module(
 	memory: &MemoryRef,
 	method: &str,
 	data: &[u8],
-	host_functions: &[&'static dyn Function],
+	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
-	missing_functions: &Vec<String>,
+	missing_functions: Arc<Vec<String>>,
 ) -> Result<Vec<u8>, Error> {
 	// Initialize FunctionExecutor.
 	let table: Option<TableRef> = module_instance
@@ -623,7 +623,7 @@ impl WasmModule for WasmiRuntime {
 			data_segments_snapshot: self.data_segments_snapshot.clone(),
 			host_functions: self.host_functions.clone(),
 			allow_missing_func_imports: self.allow_missing_func_imports,
-			missing_functions,
+			missing_functions: Arc::new(missing_functions),
 		}))
 	}
 }
@@ -687,7 +687,7 @@ pub struct WasmiInstance {
 	/// These stubs will error when the wasm blob trie to call them.
 	allow_missing_func_imports: bool,
 	/// List of missing functions detected during function resolution
-	missing_functions: Vec<String>,
+	missing_functions: Arc<Vec<String>>,
 }
 
 // This is safe because `WasmiInstance` does not leak any references to `self.memory` and `self.instance`
@@ -719,9 +719,9 @@ impl WasmInstance for WasmiInstance {
 			&self.memory,
 			method,
 			data,
-			self.host_functions.as_ref(),
+			self.host_functions.clone(),
 			self.allow_missing_func_imports,
-			self.missing_functions.as_ref(),
+			self.missing_functions.clone(),
 		)
 	}
 
