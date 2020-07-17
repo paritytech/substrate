@@ -31,7 +31,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::ser::{Serialize, Serializer, SerializeMap};
-use slog::{SerdeValue, Value};
+use serde_json::Value;
 use tracing_core::{
 	event::Event,
 	field::{Visit, Field},
@@ -83,34 +83,34 @@ pub struct SpanDatum {
 
 /// Holds associated values for a tracing span
 #[derive(Clone, Debug)]
-pub struct Visitor(FxHashMap<String, String>);
+pub struct Visitor(FxHashMap<String, Value>);
 
 impl Visitor {
 	/// Consume the Visitor, returning the inner FxHashMap
-	pub fn into_inner(self) -> FxHashMap<String, String> {
+	pub fn into_inner(self) -> FxHashMap<String, Value> {
 		self.0
 	}
 }
 
 impl Visit for Visitor {
 	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.0.insert(field.name().to_string(), value.to_string());
+		self.0.insert(field.name().to_string(), Value::Number(value.into()));
 	}
 
 	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.0.insert(field.name().to_string(), value.to_string());
+		self.0.insert(field.name().to_string(), Value::Number(value.into()));
 	}
 
 	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.0.insert(field.name().to_string(), value.to_string());
+		self.0.insert(field.name().to_string(), Value::Bool(value.into()));
 	}
 
 	fn record_str(&mut self, field: &Field, value: &str) {
-		self.0.insert(field.name().to_string(), value.to_owned());
+		self.0.insert(field.name().to_string(), Value::String(value.to_owned()));
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.0.insert(field.name().to_string(), format!("{:?}", value));
+		self.0.insert(field.name().to_string(), Value::String(format!("{:?}", value)));
 	}
 }
 
@@ -133,17 +133,17 @@ impl fmt::Display for Visitor {
 	}
 }
 
-impl SerdeValue for Visitor {
+impl slog::SerdeValue for Visitor {
 	fn as_serde(&self) -> &dyn erased_serde::Serialize {
 		self
 	}
 
-	fn to_sendable(&self) -> Box<dyn SerdeValue + Send + 'static> {
+	fn to_sendable(&self) -> Box<dyn slog::SerdeValue + Send + 'static> {
 		Box::new(self.clone())
 	}
 }
 
-impl Value for Visitor {
+impl slog::Value for Visitor {
 	fn serialize(
 		&self,
 		_record: &slog::Record,
@@ -237,7 +237,7 @@ impl Subscriber for ProfilingSubscriber {
 		let mut values = Visitor(FxHashMap::default());
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
-		if let Some(wasm_target) = values.0.get(WASM_TARGET_KEY) {
+		if let Some(Value::String(wasm_target)) = values.0.get(WASM_TARGET_KEY) {
 			if !self.check_target(wasm_target, attrs.metadata().level()) {
 				return Id::from_u64(id);
 			}
@@ -290,11 +290,11 @@ impl Subscriber for ProfilingSubscriber {
 		};
 		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.0.insert("wasm".to_owned(), "true".to_owned());
-				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
+				span_datum.values.0.insert("wasm".to_owned(), Value::Bool(true));
+				if let Some(Value::String(n)) = span_datum.values.0.remove(WASM_NAME_KEY) {
 					span_datum.name = n;
 				}
-				if let Some(t) = span_datum.values.0.remove(WASM_TARGET_KEY) {
+				if let Some(Value::String(t)) = span_datum.values.0.remove(WASM_TARGET_KEY) {
 					span_datum.target = t;
 				}
 			}
