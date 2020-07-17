@@ -778,16 +778,16 @@ checksum = "b3a71ab494c0b5b860bdc8407ae08978052417070c2ced38573a9157ad75b8ac"
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "byteorder",
  "cranelift-bforest",
@@ -805,8 +805,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -814,21 +814,21 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -838,8 +838,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -848,8 +848,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.65.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.66.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -857,7 +857,7 @@ dependencies = [
  "log",
  "serde",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.59.0",
 ]
 
 [[package]]
@@ -2332,6 +2332,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "076f042c5b7b98f31d205f1249267e12a6518c1481e9dae9764af19b707d2292"
 dependencies = [
  "autocfg 1.0.0",
+ "serde",
 ]
 
 [[package]]
@@ -3922,16 +3923,17 @@ name = "object"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cbca9424c482ee628fa549d9c812e2cd22f1180b9222c9200fdfa6eb31aecb2"
-dependencies = [
- "crc32fast",
- "indexmap",
-]
 
 [[package]]
 name = "object"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
+dependencies = [
+ "crc32fast",
+ "indexmap",
+ "wasmparser 0.57.0",
+]
 
 [[package]]
 name = "once_cell"
@@ -5740,9 +5742,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc"
-version = "0.0.26"
+version = "0.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c03092d79e0fd610932d89ed53895a38c0dd3bcd317a0046e69940de32f1d95"
+checksum = "3598bed0895fe0f72a9e0b00ef9e3a3c8af978a8401b2f2046dec5927de6364a"
 dependencies = [
  "log",
  "rustc-hash",
@@ -8506,8 +8508,8 @@ version = "1.0.6"
 
 [[package]]
 name = "substrate-wasmtime"
-version = "0.18.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -8517,8 +8519,9 @@ dependencies = [
  "log",
  "region",
  "rustc-demangle",
+ "smallvec 1.4.1",
  "target-lexicon",
- "wasmparser",
+ "wasmparser 0.59.0",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-profiling",
@@ -9570,30 +9573,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
 
 [[package]]
+name = "wasmparser"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a950e6a618f62147fd514ff445b2a0b53120d382751960797f85f058c7eda9b9"
+
+[[package]]
 name = "wasmtime-debug"
-version = "0.18.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "anyhow",
  "gimli 0.21.0",
  "more-asserts",
- "object 0.19.0",
+ "object 0.20.0",
  "target-lexicon",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.59.0",
  "wasmtime-environ",
 ]
 
 [[package]]
 name = "wasmtime-environ"
-version = "0.18.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "anyhow",
  "base64 0.12.0",
  "bincode",
+ "cfg-if",
  "cranelift-codegen",
  "cranelift-entity",
+ "cranelift-frontend",
  "cranelift-wasm",
  "directories",
  "errno",
@@ -9607,15 +9618,15 @@ dependencies = [
  "sha2",
  "thiserror",
  "toml",
- "wasmparser",
+ "wasmparser 0.59.0",
  "winapi 0.3.8",
  "zstd",
 ]
 
 [[package]]
 name = "wasmtime-jit"
-version = "0.18.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -9627,21 +9638,36 @@ dependencies = [
  "gimli 0.21.0",
  "log",
  "more-asserts",
+ "object 0.20.0",
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser",
+ "wasmparser 0.59.0",
  "wasmtime-debug",
  "wasmtime-environ",
+ "wasmtime-obj",
  "wasmtime-profiling",
  "wasmtime-runtime",
  "winapi 0.3.8",
 ]
 
 [[package]]
+name = "wasmtime-obj"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
+dependencies = [
+ "anyhow",
+ "more-asserts",
+ "object 0.20.0",
+ "target-lexicon",
+ "wasmtime-debug",
+ "wasmtime-environ",
+]
+
+[[package]]
 name = "wasmtime-profiling"
-version = "0.18.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -9658,8 +9684,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-runtime"
-version = "0.18.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#ff0923ce0ac4ce98479c156d8a7d4ba72bf36be2"
+version = "0.19.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=update-upstream#3e49f83bead421534ea5985f6841bfc93bd1035a"
 dependencies = [
  "backtrace",
  "cc",
