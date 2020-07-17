@@ -43,8 +43,6 @@ use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-/// Maximum number of buffered messages before we refuse to accept more.
-const MAX_PENDING_MESSAGES: usize = 512;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
 /// stream of messages.
@@ -93,10 +91,6 @@ pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
 	#[pin]
 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
-	/// Queue of messages waiting to be sent.
-	messages_queue: VecDeque<Vec<u8>>,
-	/// If true, we need to flush `socket`.
-	need_flush: bool,
 }
 
 impl NotificationsIn {
@@ -272,29 +266,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			Ok((handshake, NotificationsOutSubstream {
 				socket: Framed::new(socket, UviBytes::default()),
-				messages_queue: VecDeque::with_capacity(MAX_PENDING_MESSAGES),
-				need_flush: false,
 			}))
 		})
-	}
-}
-
-impl<TSubstream> NotificationsOutSubstream<TSubstream> {
-	/// Returns the number of items in the queue, capped to `u32::max_value()`.
-	pub fn queue_len(&self) -> u32 {
-		u32::try_from(self.messages_queue.len()).unwrap_or(u32::max_value())
-	}
-
-	/// Push a message to the queue of messages.
-	///
-	/// This has the same effect as the `Sink::start_send` implementation.
-	pub fn push_message(&mut self, item: Vec<u8>) -> Result<(), NotificationsOutError> {
-		if self.messages_queue.len() >= MAX_PENDING_MESSAGES {
-			return Err(NotificationsOutError::Clogged);
-		}
-
-		self.messages_queue.push_back(item);
-		Ok(())
 	}
 }
 
@@ -304,48 +277,23 @@ impl<TSubstream> Sink<Vec<u8>> for NotificationsOutSubstream<TSubstream>
 	type Error = NotificationsOutError;
 
 	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
+		let mut this = self.project();
+		Sink::poll_ready(this.socket.as_mut(), cx)
 	}
 
 	fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
-		self.push_message(item)
+		let mut this = self.project();
+		Sink::start_send(this.socket.as_mut(), cx)
 	}
 
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
 		let mut this = self.project();
-
-		while !this.messages_queue.is_empty() {
-			match Sink::poll_ready(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(From::from(err))),
-				Poll::Ready(Ok(())) => {
-					let msg = this.messages_queue.pop_front()
-						.expect("checked for !is_empty above; qed");
-					Sink::start_send(this.socket.as_mut(), io::Cursor::new(msg))?;
-					*this.need_flush = true;
-				},
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-
-		if *this.need_flush {
-			match Sink::poll_flush(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(From::from(err))),
-				Poll::Ready(Ok(())) => *this.need_flush = false,
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-
-		Poll::Ready(Ok(()))
+		Sink::poll_flush(this.socket.as_mut(), cx)
 	}
 
 	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-		ready!(Sink::poll_flush(self.as_mut(), cx))?;
-		let this = self.project();
-		match Sink::poll_close(this.socket, cx) {
-			Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-			Poll::Ready(Err(err)) => Poll::Ready(Err(From::from(err))),
-			Poll::Pending => Poll::Pending,
-		}
+		let mut this = self.project();
+		Sink::poll_close(this.socket.as_mut(), cx)
 	}
 }
 

@@ -50,7 +50,8 @@ use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handle
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
-	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
+	register, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,
+	PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -98,6 +99,9 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
+	/// Field extracted from the [`Metrics`] struct and necessary to report the
+	/// notifications-related metrics.
+	notifications_sizes_metric: Option<HistogramVec>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -356,6 +360,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			local_peer_id,
 			to_worker,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
+			notifications_sizes_metric:
+				metrics.as_ref().map(|metrics| metrics.notifications_sizes.clone()),
 			_marker: PhantomData,
 		});
 
@@ -568,11 +574,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// `NetworkConfiguration::notifications_protocols`.
 	///
 	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::WriteNotification {
-			target,
-			engine_id,
-			message,
-		});
+		if let Some(notifications_sizes_metric) = self.notifications_sizes_metric.as_ref() {
+			notifications_sizes_metric
+				.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
+				.observe(message.len() as f64);
+		}
+
+		// TODO:
+		todo!();
 	}
 
 	/// Waits until one or more slots are available in the buffer of pending outgoing notifications
@@ -649,6 +658,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		let ready = sink.reserve_notification(todo!()).await;
 		Ok(NotificationsBufferSlot {
 			ready,
+			notification_size_metric: self.notifications_sizes_metric.as_ref().map(|histogram| {
+				histogram.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
+			}),
 		})
 	}
 
@@ -908,11 +920,21 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 #[must_use]
 pub struct NotificationsBufferSlot<'a> {
 	ready: Ready<'a>,
+
+	/// Field extracted from the [`Metrics`] struct and necessary to report the
+	/// notifications-related metrics.
+	notification_size_metric: Option<Histogram>,
 }
 
 impl<'a> NotificationsBufferSlot<'a> {
 	/// Consumes this slots reservation and actually queues the notification.
 	pub fn send(self, notification: impl Into<Vec<u8>>) {
+		let notification = notification.into();
+
+		if let Some(notification_size_metric) = &self.notification_size_metric {
+			notification_size_metric.observe(notification.len() as f64);
+		}
+
 		self.ready.send(notification)
 	}
 }
@@ -937,11 +959,6 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
-	WriteNotification {
-		message: Vec<u8>,
-		engine_id: ConsensusEngineId,
-		target: PeerId,
-	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
 		protocol_name: Cow<'static, [u8]>,
@@ -1276,14 +1293,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
-				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.notifications_sizes
-							.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
-							.observe(message.len() as f64);
-					}
-					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
-				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
 					this.network_service
 						.register_notifications_protocol(engine_id, protocol_name);

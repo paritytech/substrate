@@ -568,7 +568,6 @@ impl ProtocolsHandler for LegacyProtoHandler {
 		}
 	}
 
-	#[inline]
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,

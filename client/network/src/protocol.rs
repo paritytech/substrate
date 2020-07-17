@@ -1060,7 +1060,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Send a notification to the given peer we're connected to.
+	// TODO: remove
+	/*/// Send a notification to the given peer we're connected to.
 	///
 	/// Doesn't do anything if we don't have a notifications substream for that protocol with that
 	/// peer.
@@ -1084,7 +1085,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				engine_id
 			);
 		}
-	}
+	}*/
 
 	/// Registers a new notifications protocol.
 	///

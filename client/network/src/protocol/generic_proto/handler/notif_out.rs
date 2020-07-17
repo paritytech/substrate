@@ -216,6 +216,16 @@ impl NotifsOutHandler {
 	pub fn protocol_name(&self) -> &[u8] {
 		&self.protocol_name
 	}
+
+	// TODO: docs
+	pub fn poll_ready(&self, cx: &mut Context) -> Poll<bool> {
+		if let State::Open { substream, .. } = &self.state {
+			substream.poll_ready_unpin(cx).map(|()| true)
+		} else {
+			Poll::Ready(false)
+		}
+	}
+
 }
 
 impl ProtocolsHandler for NotifsOutHandler {
