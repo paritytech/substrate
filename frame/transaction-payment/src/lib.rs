@@ -284,7 +284,10 @@ decl_module! {
 			sp_io::TestExternalities::new_empty().execute_with(|| {
 				<frame_system::Module<T>>::set_block_limits(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
-				assert!(next > min_value, "The minimum bound of the multiplier is too low. When block saturation is more than target by 1% and multiplier is minimal then multiplier don't increased.");
+				assert!(next > min_value, "The minimum bound of the multiplier is too low. When \
+					block saturation is more than target by 1% and multiplier is minimal then \
+					multiplier don't increased."
+				);
 			})
 		}
 	}
