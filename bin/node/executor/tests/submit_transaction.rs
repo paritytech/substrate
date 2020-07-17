@@ -190,9 +190,9 @@ fn should_submit_signed_twice_from_all_accounts() {
 
 #[test]
 fn submitted_transaction_should_be_valid() {
-	use frame_support::assert_ok;
+	use codec::Encode;
 	use frame_support::storage::StorageMap;
-	use sp_runtime::transaction_validity::TransactionSource;
+	use sp_runtime::transaction_validity::{TransactionSource, TransactionTag};
 	use sp_runtime::traits::StaticLookup;
 
 	let mut t = new_test_ext(COMPACT_CODE, false);
@@ -228,6 +228,12 @@ fn submitted_transaction_should_be_valid() {
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity
-		assert_ok!(Executive::validate_transaction(source, extrinsic));
+		let res = Executive::validate_transaction(source, extrinsic).unwrap();
+
+		// We ignore res.priority since this number can change based on updates to weights and such.
+		assert_eq!(res.requires, Vec::<TransactionTag>::new());
+		assert_eq!(res.provides, vec![(address, 0).encode()]);
+		assert_eq!(res.longevity, 2048);
+		assert_eq!(res.propagate, true);
 	});
 }
