@@ -206,6 +206,9 @@ pub enum LegacyProtoHandlerIn {
 	Disable,
 
 	/// Sends a message through a custom protocol substream.
+	///
+	/// Closes the substream if the buffer is full.
+	// TODO: actually do it ^
 	SendCustomMessage {
 		/// The message to send.
 		message: Vec<u8>,

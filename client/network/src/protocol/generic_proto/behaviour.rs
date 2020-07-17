@@ -229,15 +229,15 @@ impl PeerState {
 		self.get_open().is_some()
 	}
 
-	/// Returns the [`NotificationsSink`] of the first established connection
+	/// Returns the connection ID of the first established connection
 	/// that is open for custom protocol traffic.
-	fn get_open(&self) -> Option<&NotificationsSink> {
+	fn get_open(&self) -> Option<ConnectionId> {
 		match self {
 			PeerState::Disabled { open, .. } |
 			PeerState::DisabledPendingEnable { open, .. } |
 			PeerState::Enabled { open, .. } =>
 				if !open.is_empty() {
-					Some(&open[0].1)
+					Some(open[0].0)
 				} else {
 					None
 				}
@@ -555,14 +555,14 @@ impl GenericProto {
 		message: impl Into<Vec<u8>>,
 		encoded_fallback_message: Vec<u8>,
 	) {
-		let notifs_sink = match self.peers.get(target).and_then(|p| p.get_open()) {
+		let conn = match self.peers.get(target).and_then(|p| p.get_open()) {
 			None => {
 				debug!(target: "sub-libp2p",
 					"Tried to sent notification to {:?} without an open channel.",
 					target);
 				return
 			},
-			Some(sink) => sink
+			Some(conn) => conn
 		};
 
 		trace!(
@@ -573,7 +573,7 @@ impl GenericProto {
 		);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
 
-		/*self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+		self.events.push_back(NetworkBehaviourAction::NotifyHandler {
 			peer_id: target.clone(),
 			handler: NotifyHandler::One(conn),
 			event: NotifsHandlerIn::SendNotification {
@@ -581,8 +581,7 @@ impl GenericProto {
 				encoded_fallback_message,
 				protocol_name,
 			},
-		});*/
-		todo!()
+		});
 	}
 
 	/// Sends a message to a peer.
@@ -592,19 +591,25 @@ impl GenericProto {
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
 	pub fn send_packet(&mut self, target: &PeerId, message: Vec<u8>) {
-		let notifs_sink = match self.peers.get(target).and_then(|p| p.get_open()) {
+		let conn = match self.peers.get(target).and_then(|p| p.get_open()) {
 			None => {
 				debug!(target: "sub-libp2p",
 					"Tried to sent packet to {:?} without an open channel.",
 					target);
 				return
 			}
-			Some(sink) => sink
+			Some(conn) => conn
 		};
 
 		trace!(target: "sub-libp2p", "External API => Packet for {:?}", target);
 		trace!(target: "sub-libp2p", "Handler({:?}) <= Packet", target);
-		notifs_sink.send_legacy(message);
+		self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+			peer_id: target.clone(),
+			handler: NotifyHandler::One(conn),
+			event: NotifsHandlerIn::SendLegacy {
+				message,
+			}
+		});
 	}
 
 	/// Returns the state of the peerset manager, for debugging purposes.
