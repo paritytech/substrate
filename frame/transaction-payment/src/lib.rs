@@ -118,7 +118,7 @@ pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
 	/// Target block saturation level
 	fn target() -> Perquintill;
 	/// Variability factor
-	fn v() -> Multiplier;
+	fn variability() -> Multiplier;
 }
 
 impl MultiplierUpdate for () {
@@ -128,7 +128,7 @@ impl MultiplierUpdate for () {
 	fn target() -> Perquintill {
 		Default::default()
 	}
-	fn v() -> Multiplier {
+	fn variability() -> Multiplier {
 		Default::default()
 	}
 }
@@ -142,7 +142,7 @@ impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
 	fn target() -> Perquintill {
 		S::get()
 	}
-	fn v() -> Multiplier {
+	fn variability() -> Multiplier {
 		V::get()
 	}
 }
@@ -271,7 +271,9 @@ decl_module! {
 			// that if we collapse to minimum, the trend will be positive with a weight value
 			// which is 1% more than the target.
 			let min_value = T::FeeMultiplierUpdate::min();
-			let mut target = T::FeeMultiplierUpdate::target() * (T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
+			let mut target =
+				T::FeeMultiplierUpdate::target() *
+				(T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
 
 			// add 1 percent;
 			let addition = target / 100;
