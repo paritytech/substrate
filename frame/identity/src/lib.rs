@@ -476,12 +476,13 @@ decl_event!(
 		JudgementGiven(AccountId, RegistrarIndex),
 		/// A registrar was added.
 		RegistrarAdded(RegistrarIndex),
-		/// A sub-identity (first) was added to an identity (second) and the deposit paid.
+		/// A sub-identity was added to an identity and the deposit paid. [sub, main, deposit]
 		SubIdentityAdded(AccountId, AccountId, Balance),
-		/// A sub-identity (first) was removed from an identity (second) and the deposit freed.
+		/// A sub-identity was removed from an identity and the deposit freed.
+		/// [sub, main, deposit]
 		SubIdentityRemoved(AccountId, AccountId, Balance),
-		/// A sub-identity (first arg) was cleared, and the given deposit repatriated from the
-		/// main identity account (second arg) to the sub-identity account.
+		/// A sub-identity was cleared, and the given deposit repatriated from the
+		/// main identity account to the sub-identity account. [sub, main, deposit]
 		SubIdentityRevoked(AccountId, AccountId, Balance),
 	}
 );

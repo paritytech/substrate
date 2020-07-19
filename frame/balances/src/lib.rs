@@ -248,11 +248,11 @@ decl_event!(
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
 		/// resulting in an outright loss.
 		DustLost(AccountId, Balance),
-		/// Transfer succeeded (from, to, value).
+		/// Transfer succeeded. [from, to, value]
 		Transfer(AccountId, AccountId, Balance),
-		/// A balance was set by root (who, free, reserved).
+		/// A balance was set by root. [who, free, reserved]
 		BalanceSet(AccountId, Balance, Balance),
-		/// Some amount was deposited (e.g. for transaction fees).
+		/// Some amount was deposited (e.g. for transaction fees). [who, deposit]
 		Deposit(AccountId, Balance),
 		/// Some balance was reserved (moved from free to reserved).
 		Reserved(AccountId, Balance),
@@ -260,6 +260,7 @@ decl_event!(
 		Unreserved(AccountId, Balance),
 		/// Some balance was moved from the reserve of the first account to the second account.
 		/// Final argument indicates the destination balance type.
+		/// [from, to, balance, destination_status]
 		ReserveRepatriated(AccountId, AccountId, Balance, Status),
 	}
 );

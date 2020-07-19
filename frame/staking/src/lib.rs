@@ -1238,11 +1238,13 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
-		/// the remainder from the maximum amount of reward.
+		/// the remainder from the maximum amount of reward. 
+		/// [era_index, validator_payout, remainder]
 		EraPayout(EraIndex, Balance, Balance),
-		/// The staker has been rewarded by this amount. `AccountId` is the stash account.
+		/// The staker has been rewarded by this amount. [stash, amount].
 		Reward(AccountId, Balance),
-		/// One validator (and its nominators) has been slashed by the given amount.
+		/// One validator (and its nominators) has been slashed by the given amount. 
+		/// [validator, amount]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.

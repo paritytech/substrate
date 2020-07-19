@@ -214,7 +214,7 @@ decl_event!(
 		Sudid(DispatchResult),
 		/// The sudoer just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		SudoAsDone(bool),
 	}
 );

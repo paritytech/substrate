@@ -197,7 +197,8 @@ decl_event!(
 	{
 		/// Swap created.
 		NewSwap(AccountId, HashedProof, PendingSwap),
-		/// Swap claimed. The last parameter indicates whether the execution succeeds.
+		/// Swap claimed. The last parameter indicates whether the execution succeeds. 
+		/// [account, proof, success]
 		SwapClaimed(AccountId, HashedProof, bool),
 		/// Swap cancelled.
 		SwapCancelled(AccountId, HashedProof),

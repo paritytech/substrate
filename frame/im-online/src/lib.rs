@@ -280,7 +280,7 @@ decl_event!(
 		HeartbeatReceived(AuthorityId),
 		/// At the end of the session, no offence was committed.
 		AllGood,
-		/// At the end of the session, at least one validator was found to be offline.
+		/// At the end of the session, at least one validator was found to be [offline].
 		SomeOffline(Vec<IdentificationTuple>),
 	}
 );
