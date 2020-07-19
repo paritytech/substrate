@@ -685,11 +685,11 @@ mod test {
 		set_default_ss58_version(Ss58AddressFormat::Custom(200));
 		// custom addr encoded by version 200
 		let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
-		assert!(Public::from_ss58check(&addr).is_ok());
+		Public::from_ss58check(&addr).unwrap();
 		set_default_ss58_version(default_format);
 		// set  current ss58 version to default version
 		let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
-		assert!(Public::from_ss58check(&addr).is_ok());
+		Public::from_ss58check(&addr).unwrap();
 	}
 
 	#[test]
