@@ -268,7 +268,7 @@ decl_module! {
 
 			// This is the minimum value of the multiplier. Make sure that if we collapse to this
 			// value, we can recover with a reasonable amount of traffic. For this test we assert
-			// that if we collapse to minimum, we the trend will be positive with a weight value
+			// that if we collapse to minimum, the trend will be positive with a weight value
 			// which is 1% more than the target.
 			let min_value = T::FeeMultiplierUpdate::min();
 			let mut target = T::FeeMultiplierUpdate::target() * (T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
@@ -286,7 +286,7 @@ decl_module! {
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(next > min_value, "The minimum bound of the multiplier is too low. When \
 					block saturation is more than target by 1% and multiplier is minimal then \
-					multiplier don't increased."
+					the multiplier doesn't increase."
 				);
 			})
 		}
