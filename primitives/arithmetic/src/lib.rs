@@ -143,8 +143,8 @@ impl<P: PerThing> Normalizable<P> for Vec<P> {
 /// `leftover` value. This ensures that the result will always stay accurate, yet it might cause the
 /// execution to become increasingly slow, since leftovers are applied one by one.
 ///
-/// All in all, the complicated case above is rare to happen in all substrate use cases, hence we
-/// opt for it due to its simplicity.
+/// All in all, the complicated case above is rare to happen in most use cases within this repo ,
+/// hence we opt for it due to its simplicity.
 ///
 /// This function will return an error is if length of `input` cannot fit in `T`, or if `sum(input)`
 /// cannot fit inside `T`.

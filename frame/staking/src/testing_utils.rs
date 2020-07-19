@@ -265,10 +265,12 @@ pub fn get_weak_solution<T: Trait>(
 pub fn get_seq_phragmen_solution<T: Trait>(
 	do_reduce: bool,
 ) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
+	let iters = offchain_election::get_balancing_iters::<T>();
+
 	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
-	} = <Module<T>>::do_phragmen::<OffchainAccuracy>().unwrap();
+	} = <Module<T>>::do_phragmen::<OffchainAccuracy>(iters).unwrap();
 
 	offchain_election::prepare_submission::<T>(assignments, winners, do_reduce).unwrap()
 }

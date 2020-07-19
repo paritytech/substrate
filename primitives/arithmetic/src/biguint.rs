@@ -23,6 +23,7 @@ use sp_std::{cmp::Ordering, ops, prelude::*, cell::RefCell, convert::TryFrom};
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
 // should yield the most performance.
+
 /// Representation of a single limb.
 pub type Single = u32;
 /// Representation of two limbs.

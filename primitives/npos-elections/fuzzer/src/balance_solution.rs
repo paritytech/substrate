@@ -21,10 +21,11 @@
 //! one.
 
 mod common;
+
 use common::to_range;
 use honggfuzz::fuzz;
 use sp_npos_elections::{
-	balance_solution, assignment_ratio_to_staked, build_support_map, to_without_backing, seq_phragmen,
+	assignment_ratio_to_staked, build_support_map, to_without_backing, seq_phragmen,
 	ElectionResult, VoteWeight, evaluate_support, is_score_better,
 };
 use sp_std::collections::btree_map::BTreeMap;
@@ -39,7 +40,12 @@ fn generate_random_phragmen_result(
 	to_elect: usize,
 	edge_per_voter: u64,
 	mut rng: impl RngCore,
-) -> (ElectionResult<AccountId, Perbill>, BTreeMap<AccountId, VoteWeight>) {
+) -> (
+	ElectionResult<AccountId, Perbill>,
+	Vec<AccountId>,
+	Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	BTreeMap<AccountId, VoteWeight>,
+) {
 	let prefix = 100_000;
 	// Note, it is important that stakes are always bigger than ed and
 	let base_stake: u64 = 1_000_000_000;
@@ -75,10 +81,12 @@ fn generate_random_phragmen_result(
 	(
 		seq_phragmen::<AccountId, sp_runtime::Perbill>(
 			to_elect,
-			0,
-			candidates,
-			voters,
+			candidates.clone(),
+			voters.clone(),
+			None,
 		).unwrap(),
+		candidates,
+		voters,
 		stake_of_tree,
 	)
 }
@@ -102,7 +110,12 @@ fn main() {
 			edge_per_voter = to_range(edge_per_voter, 1, target_count);
 
 			println!("++ [{} / {} / {} / {}]", voter_count, target_count, to_elect, iterations);
-			let (ElectionResult { winners, assignments }, stake_of_tree) = generate_random_phragmen_result(
+			let (
+				unbalanced,
+				candidates,
+				voters,
+				stake_of_tree,
+			) = generate_random_phragmen_result(
 				voter_count as u64,
 				target_count as u64,
 				to_elect,
@@ -114,42 +127,45 @@ fn main() {
 				*stake_of_tree.get(who).unwrap()
 			};
 
-			let mut staked = assignment_ratio_to_staked(assignments.clone(), &stake_of);
-			let winners = to_without_backing(winners);
-			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
+			let unbalanced_score = {
+				let staked = assignment_ratio_to_staked(unbalanced.assignments.clone(), &stake_of);
+				let winners = to_without_backing(unbalanced.winners);
+				let support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
-			let initial_score = evaluate_support(&support);
-			if initial_score[0] == 0 {
-				// such cases cannot be improved by reduce.
-				return;
-			}
+				let score = evaluate_support(&support);
+				if score[0] == 0 {
+					// such cases cannot be improved by reduce.
+					return;
+				}
+				score
+			};
 
-			let i = balance_solution(
-				&mut staked,
-				&mut support,
-				10,
-				iterations,
-			);
+			let balanced = seq_phragmen::<AccountId, sp_runtime::Perbill>(
+				to_elect,
+				candidates,
+				voters,
+				Some((iterations, 0)),
+			).unwrap();
 
-			let final_score = evaluate_support(&support);
-			if final_score[0] == initial_score[0] {
-				// such solutions can only be improved by such a tiny fiction that it is most often
-				// wrong due to rounding errors.
-				return;
-			}
+			let balanced_score = {
+				let staked = assignment_ratio_to_staked(balanced.assignments.clone(), &stake_of);
+				let winners = to_without_backing(balanced.winners);
+				let support = build_support_map(winners.as_ref(), staked.as_ref()).0;
+				evaluate_support(&support)
+			};
 
-			let enhance = is_score_better(final_score, initial_score, Perbill::zero());
+			let enhance = is_score_better(balanced_score, unbalanced_score, Perbill::zero());
 
 			println!(
 				"iter = {} // {:?} -> {:?} [{}]",
-				i,
-				initial_score,
-				final_score,
+				iterations,
+				unbalanced_score,
+				balanced_score,
 				enhance,
 			);
 
 			// if more than one iteration has been done, or they must be equal.
-			assert!(enhance || initial_score == final_score || i == 0)
+			assert!(enhance || unbalanced_score == balanced_score || iterations == 0)
 		});
 	}
 }

@@ -118,6 +118,5 @@ fn assert_per_thing_equal_error<P: PerThing>(a: P, b: P, err: u128) {
 	let a_abs = a.deconstruct().saturated_into::<u128>();
 	let b_abs = b.deconstruct().saturated_into::<u128>();
 	let diff = a_abs.max(b_abs) - a_abs.min(b_abs);
-	dbg!(&diff);
 	assert!(diff <= err, "{:?} !~ {:?}", a, b);
 }

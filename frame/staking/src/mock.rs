@@ -908,7 +908,7 @@ pub(crate) fn prepare_submission_with(
 	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
-	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
+	} = Staking::do_phragmen::<OffchainAccuracy>(iterations).unwrap();
 	let winners = sp_npos_elections::to_without_backing(winners);
 
 	let stake_of = |who: &AccountId| -> VoteWeight {
@@ -918,16 +918,6 @@ pub(crate) fn prepare_submission_with(
 	};
 
 	let mut staked = sp_npos_elections::assignment_ratio_to_staked(assignments, stake_of);
-	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
-
-	if iterations > 0 {
-		sp_npos_elections::balance_solution(
-			&mut staked,
-			&mut support_map,
-			Zero::zero(),
-			iterations,
-		);
-	}
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);
