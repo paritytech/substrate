@@ -208,7 +208,7 @@ test-linux-stable:                 &test-linux
       - $DEPLOY_TAG
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    - time cargo test --workspace --locked --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
+    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
     - sccache -s
 
 unleash-check:
