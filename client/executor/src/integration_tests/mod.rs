@@ -661,7 +661,6 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use std::sync::{Arc, Mutex};
-	use serde_json::Value;
 	use sc_tracing::SpanDatum;
 
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
@@ -749,9 +748,9 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(len, 1);
 
 	let span_datum = traces.lock().unwrap().pop().unwrap();
-	let values = span_datum.values.into_inner();
+	let values = span_datum.values;
 	assert_eq!(span_datum.target, "integration_test_span_target");
 	assert_eq!(span_datum.name, "integration_test_span_name");
-	assert_eq!(values.get("wasm").unwrap(), &Value::Bool(true));
-	assert_eq!(values.get("is_valid_trace").unwrap(), &Value::Bool(true));
+	assert_eq!(values.bool_values.get("wasm").unwrap(), &true);
+	assert_eq!(values.bool_values.get("is_valid_trace").unwrap(), &true);
 }
