@@ -33,13 +33,13 @@ use sp_runtime::{
 };
 use sp_transaction_pool::error;
 use wasm_timer::Instant;
-use sp_utils::mpsc::TracingUnboundedReceiver;
+use futures::channel::mpsc::Receiver;
 
 use crate::validated_pool::ValidatedPool;
 pub use crate::validated_pool::ValidatedTransaction;
 
 /// Modification notification event stream type;
-pub type EventStream<H> = TracingUnboundedReceiver<H>;
+pub type EventStream<H> = Receiver<H>;
 
 /// Block hash type for a pool.
 pub type BlockHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;

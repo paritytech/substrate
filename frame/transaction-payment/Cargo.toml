@@ -20,10 +20,10 @@ frame-support = { version = "2.0.0-rc4", default-features = false, path = "../su
 frame-system = { version = "2.0.0-rc4", default-features = false, path = "../system" }
 pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-rc4", default-features = false, path = "./rpc/runtime-api" }
 smallvec = "1.4.1"
+sp-io = { version = "2.0.0-rc4", path = "../../primitives/io", default-features = false }
+sp-core = { version = "2.0.0-rc4", path = "../../primitives/core", default-features = false }
 
 [dev-dependencies]
-sp-io = { version = "2.0.0-rc4", path = "../../primitives/io" }
-sp-core = { version = "2.0.0-rc4", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0-rc4", path = "../balances" }
 sp-storage = { version = "2.0.0-rc4", path = "../../primitives/storage" }
 
@@ -36,5 +36,7 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-transaction-payment-rpc-runtime-api/std"
+	"pallet-transaction-payment-rpc-runtime-api/std",
+	"sp-io/std",
+	"sp-core/std",
 ]

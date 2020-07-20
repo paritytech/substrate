@@ -43,7 +43,7 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
 	Parameter,
 };
-use frame_system::{ensure_signed, DigestOf};
+use frame_system::{ensure_none, ensure_signed, DigestOf};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::Zero,
@@ -53,6 +53,9 @@ use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_staking::SessionIndex;
 
 mod equivocation;
+
+#[cfg(any(feature = "runtime-benchmarks", test))]
+mod benchmarking;
 #[cfg(all(feature = "std", test))]
 mod mock;
 #[cfg(all(feature = "std", test))]
@@ -60,7 +63,7 @@ mod tests;
 
 pub use equivocation::{
 	EquivocationHandler, GrandpaEquivocationOffence, GrandpaOffence, GrandpaTimeSlot,
-	HandleEquivocation, ValidateEquivocationReport,
+	HandleEquivocation,
 };
 
 pub trait Trait: frame_system::Trait {
@@ -90,9 +93,8 @@ pub trait Trait: frame_system::Trait {
 	/// offence (after the equivocation has been validated) and for submitting a
 	/// transaction to report an equivocation (from an offchain context).
 	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-	/// `()`) you must add the `equivocation::ValidateEquivocationReport` signed
-	/// extension to the runtime's `SignedExtra` definition, otherwise
-	/// equivocation reports won't be properly validated.
+	/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
+	/// definition.
 	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
@@ -190,6 +192,8 @@ decl_error! {
 		TooSoon,
 		/// A key ownership proof provided as part of an equivocation report is invalid.
 		InvalidKeyOwnershipProof,
+		/// An equivocation proof provided as part of an equivocation report is invalid.
+		InvalidEquivocationProof,
 		/// A given equivocation report is valid but already previously reported.
 		DuplicateOffenceReport,
 	}
@@ -237,46 +241,43 @@ decl_module! {
 		/// equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
-		///
-		/// Since the weight of the extrinsic is 0, in order to avoid DoS by
-		/// submission of invalid equivocation reports, a mandatory pre-validation of
-		/// the extrinsic is implemented in a `SignedExtension`.
-		#[weight = 0]
+		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 			key_owner_proof: T::KeyOwnerProof,
 		) {
-			let reporter_id = ensure_signed(origin)?;
+			let reporter = ensure_signed(origin)?;
 
-			let (session_index, validator_set_count) = (
-				key_owner_proof.session(),
-				key_owner_proof.validator_count(),
-			);
+			Self::do_report_equivocation(
+				Some(reporter),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
+		}
 
-			// we have already checked this proof in `SignedExtension`, we to
-			// check it again to get the full identification of the offender.
-			let offender =
-				T::KeyOwnerProofSystem::check_proof(
-					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
-					key_owner_proof,
-				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[weight = weight_for::report_equivocation::<T>(key_owner_proof.validator_count())]
+		fn report_equivocation_unsigned(
+			origin,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			ensure_none(origin)?;
 
-			// the set id and round when the offence happened
-			let set_id = equivocation_proof.set_id();
-			let round = equivocation_proof.round();
-
-			// report to the offences module rewarding the sender.
-			T::HandleEquivocation::report_offence(
-				vec![reporter_id],
-				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
-					session_index,
-					validator_set_count,
-					offender,
-					set_id,
-					round,
-				),
-			).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
+			Self::do_report_equivocation(
+				T::HandleEquivocation::block_author(),
+				equivocation_proof,
+				key_owner_proof,
+			)?;
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -341,6 +342,40 @@ decl_module! {
 				_ => {},
 			}
 		}
+	}
+}
+
+mod weight_for {
+	use frame_support::{
+		traits::Get,
+		weights::{
+			constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
+			Weight,
+		},
+	};
+
+	pub fn report_equivocation<T: super::Trait>(validator_count: u32) -> Weight {
+		// we take the validator set count from the membership proof to
+		// calculate the weight but we set a floor of 100 validators.
+		let validator_count = validator_count.min(100) as u64;
+
+		// worst case we are considering is that the given offender
+		// is backed by 200 nominators
+		const MAX_NOMINATORS: u64 = 200;
+
+		// checking membership proof
+		(35 * WEIGHT_PER_MICROS)
+			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+			.saturating_add(T::DbWeight::get().reads(5))
+			// check equivocation proof
+			.saturating_add(95 * WEIGHT_PER_MICROS)
+			// report offence
+			.saturating_add(110 * WEIGHT_PER_MICROS)
+			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(T::DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
+			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
+			// fetching set id -> session index mappings
+			.saturating_add(T::DbWeight::get().reads(2))
 	}
 }
 
@@ -457,15 +492,91 @@ impl<T: Trait> Module<T> {
 		SetIdSession::insert(0, 0);
 	}
 
-	/// Submits an extrinsic to report an equivocation. This method will sign an
-	/// extrinsic with a call to `report_equivocation` with any reporting keys
-	/// available in the keystore and will push the transaction to the pool.
-	/// Only useful in an offchain context.
-	pub fn submit_report_equivocation_extrinsic(
+	fn do_report_equivocation(
+		reporter: Option<T::AccountId>,
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Result<(), Error<T>> {
+		// we check the equivocation within the context of its set id (and
+		// associated session) and round. we also need to know the validator
+		// set count when the offence since it is required to calculate the
+		// slash amount.
+		let set_id = equivocation_proof.set_id();
+		let round = equivocation_proof.round();
+		let session_index = key_owner_proof.session();
+		let validator_count = key_owner_proof.validator_count();
+
+		// validate the key ownership proof extracting the id of the offender.
+		let offender =
+			T::KeyOwnerProofSystem::check_proof(
+				(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
+				key_owner_proof,
+			).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
+
+		// validate equivocation proof (check votes are different and
+		// signatures are valid).
+		if !sp_finality_grandpa::check_equivocation_proof(equivocation_proof) {
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		// fetch the current and previous sets last session index. on the
+		// genesis set there's no previous set.
+		let previous_set_id_session_index = if set_id == 0 {
+			None
+		} else {
+			let session_index =
+				if let Some(session_id) = Self::session_for_set(set_id - 1) {
+					session_id
+				} else {
+					return Err(Error::<T>::InvalidEquivocationProof.into());
+				};
+
+			Some(session_index)
+		};
+
+		let set_id_session_index =
+			if let Some(session_id) = Self::session_for_set(set_id) {
+				session_id
+			} else {
+				return Err(Error::<T>::InvalidEquivocationProof.into());
+			};
+
+		// check that the session id for the membership proof is within the
+		// bounds of the set id reported in the equivocation.
+		if session_index > set_id_session_index ||
+			previous_set_id_session_index
+			.map(|previous_index| session_index <= previous_index)
+			.unwrap_or(false)
+		{
+			return Err(Error::<T>::InvalidEquivocationProof.into());
+		}
+
+		// report to the offences module rewarding the sender.
+		T::HandleEquivocation::report_offence(
+			reporter.into_iter().collect(),
+			<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
+				session_index,
+				validator_count,
+				offender,
+				set_id,
+				round,
+			),
+		).map_err(|_| Error::<T>::DuplicateOffenceReport)
+	}
+
+	/// Submits an extrinsic to report an equivocation. This method will create
+	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
+	/// will push the transaction to the pool. Only useful in an offchain
+	/// context.
+	pub fn submit_unsigned_equivocation_report(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof).ok()
+		T::HandleEquivocation::submit_unsigned_equivocation_report(
+			equivocation_proof,
+			key_owner_proof,
+		)
+		.ok()
 	}
 }
 

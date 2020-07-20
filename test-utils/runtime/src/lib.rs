@@ -750,7 +750,7 @@ cfg_if! {
 					Vec::new()
 				}
 
-				fn submit_report_equivocation_extrinsic(
+				fn submit_report_equivocation_unsigned_extrinsic(
 					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,

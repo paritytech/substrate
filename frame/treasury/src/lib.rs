@@ -184,6 +184,9 @@ pub trait Trait: frame_system::Trait {
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
 
+	/// Handler for the unbalanced decrease when treasury funds are burned.
+	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 }
@@ -771,7 +774,10 @@ impl<T: Trait> Module<T> {
 			// burn some proportion of the remaining budget if we run a surplus.
 			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
-			imbalance.subsume(T::Currency::burn(burn));
+
+			let (debit, credit) = T::Currency::pair(burn);
+			imbalance.subsume(debit);
+			T::BurnDestination::on_unbalanced(credit);
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 
