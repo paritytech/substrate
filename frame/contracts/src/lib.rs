@@ -660,11 +660,12 @@ decl_event! {
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash
 	{
-		/// Contract deployed by address at the specified address.
+		/// Contract deployed by address at the specified address. [owner, contract]
 		Instantiated(AccountId, AccountId),
 
 		/// Contract has been evicted and is now in tombstone state.
-		///
+		/// [contract, tombstone]
+		/// 
 		/// # Params
 		///
 		/// - `contract`: `AccountId`: The account ID of the evicted contract.
@@ -672,7 +673,8 @@ decl_event! {
 		Evicted(AccountId, bool),
 
 		/// Restoration for a contract has been successful.
-		///
+		/// [donor, dest, code_hash, rent_allowance]
+		/// 
 		/// # Params
 		///
 		/// - `donor`: `AccountId`: Account ID of the restoring contract
@@ -682,12 +684,14 @@ decl_event! {
 		Restored(AccountId, AccountId, Hash, Balance),
 
 		/// Code with the specified hash has been stored.
+		/// [code_hash]
 		CodeStored(Hash),
 
-		/// Triggered when the current schedule is updated.
+		/// Triggered when the current [schedule] is updated.
 		ScheduleUpdated(u32),
 
 		/// An event deposited upon execution of a contract from the account.
+		/// [account, data]
 		ContractExecution(AccountId, Vec<u8>),
 	}
 }

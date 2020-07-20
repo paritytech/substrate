@@ -141,10 +141,10 @@ decl_event! {
 		AccountId = <T as frame_system::Trait>::AccountId,
 		ProxyType = <T as Trait>::ProxyType
 	{
-		/// A proxy was executed correctly, with the given result.
+		/// A proxy was executed correctly, with the given [result].
 		ProxyExecuted(DispatchResult),
-		/// Anonymous account (first parameter) has been created by new proxy (second) with given
-		/// disambiguation index and proxy type.
+		/// Anonymous account has been created by new proxy with given
+		/// disambiguation index and proxy type. [anonymous, who, proxy_type, disambiguation_index]
 		AnonymousCreated(AccountId, AccountId, ProxyType, u16),
 	}
 }
