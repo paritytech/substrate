@@ -208,8 +208,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 
 	/// Registers a new notifications protocol.
 	///
-	/// After that, you can call `write_notifications`.
-	///
 	/// Please call `event_stream` before registering a protocol, otherwise you may miss events
 	/// about the protocol that you have registered.
 	///
