@@ -206,9 +206,6 @@ pub enum LegacyProtoHandlerIn {
 	Disable,
 
 	/// Sends a message through a custom protocol substream.
-	///
-	/// Closes the substream if the buffer is full.
-	// TODO: actually do it ^
 	SendCustomMessage {
 		/// The message to send.
 		message: Vec<u8>,
@@ -568,6 +565,7 @@ impl ProtocolsHandler for LegacyProtoHandler {
 		}
 	}
 
+	#[inline]
 	fn inject_dial_upgrade_error(&mut self, _: (), err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
