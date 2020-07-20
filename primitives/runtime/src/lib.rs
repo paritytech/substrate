@@ -376,18 +376,6 @@ impl Verify for AnySignature {
 	}
 }
 
-impl BatchVerify for AnySignature {
-	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		let msg = msg.get();
-		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| s.batch_verify(msg, signer))
-			.unwrap_or(false)
-		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| s.batch_verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
-			.unwrap_or(false)
-	}
-}
-
 impl From<sr25519::Signature> for AnySignature {
 	fn from(s: sr25519::Signature) -> Self {
 		AnySignature(s.into())
