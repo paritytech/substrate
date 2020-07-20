@@ -217,7 +217,7 @@ sp_api::mock_impl_runtime_apis! {
 			self.inner.genesis_authorities.clone()
 		}
 
-		fn submit_report_equivocation_extrinsic(
+		fn submit_report_equivocation_unsigned_extrinsic(
 			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
 			_key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()> {
