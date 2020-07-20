@@ -371,7 +371,7 @@ pub fn seq_phragmen<AccountId, R>(
 	voters.extend(initial_voters.into_iter().map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
 		for v in votes {
-			if edges.iter().position(|e| e.who == v).is_some() {
+			if edges.iter().any(|e| e.who == v) {
 				// duplicate edge.
 				continue;
 			}
