@@ -139,7 +139,9 @@ let mut target_path =
 -   Unsafe code requires explicit proofs just as panickers do. When introducing unsafe code,
     consider tradeoffs between efficiency on one hand and reliability, maintenance costs, and
     security on the other. Here is a list of questions that may help evaluating the tradeoff while
-    preparing or reviewing a PR: - how much more performant or compact the resulting code will be
-    using unsafe code, - how likely is it that invariants could be violated, - are issues stemming
-    from the use of unsafe code caught by existing tests/tooling, - what are the consequences if the
-    problems slip into production.
+    preparing or reviewing a PR:
+      - how much more performant or compact the resulting code will be
+    using unsafe code,
+      - how likely is it that invariants could be violated,
+      - are issues stemming from the use of unsafe code caught by existing tests/tooling, 
+      - what are the consequences if the problems slip into production.
