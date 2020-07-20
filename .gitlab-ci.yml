@@ -200,21 +200,15 @@ test-linux-stable:                 &test-linux
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE: 1
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                1
+    WASM_BUILD_NO_COLOR:           1
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --verbose --locked
-    # test-runtime-benchmarks
-    - pushd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --verbose --locked --no-default-features --features runtime-benchmarks
-    - popd
-    # test-frame-staking
-    - pushd frame/staking/
-    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --verbose --locked --no-default-features --features std
-    - popd
+    # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
+    - time cargo test --workspace --locked --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
     - sccache -s
 
 unleash-check:
