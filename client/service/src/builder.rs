@@ -1012,7 +1012,12 @@ ServiceBuilder<
 		let telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
-		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
+		let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
+			if endpoints.is_empty() {
+				// we don't want the telemetry to be initialized if telemetry_endpoints == Some([])
+				return None;
+			}
+
 			let genesis_hash = match client.block_hash(Zero::zero()) {
 				Ok(Some(hash)) => hash,
 				_ => Default::default(),
@@ -1031,7 +1036,7 @@ ServiceBuilder<
 				future,
 			);
 
-			telemetry
+			Some(telemetry)
 		});
 
 		// Instrumentation

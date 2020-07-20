@@ -484,7 +484,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event {
-		/// New session has happened. Note that the argument is the session index, not the block
+		/// New session has happened. Note that the argument is the [session_index], not the block
 		/// number as the type might suggest.
 		NewSession(SessionIndex),
 	}

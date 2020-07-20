@@ -31,10 +31,7 @@ polkadot companion: paritytech/polkadot#567
 
 
 it will then run cargo check from this polkadot's branch with substrate code
-from this pull request. in absence of that string it will check if a polkadot
-pr is mentioned and will use the last one instead. if none of the above can be
-found it will check if polkadot has a branch of the exact same name than the
-substrate's branch. if it can't find anything, it will uses master instead
+from this pull request. otherwise, it will uses master instead
 
 
 EOT
@@ -73,14 +70,6 @@ then
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
       -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
-
-  if [ -z "${pr_companion}" ]
-  then
-    pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*paritytech/polkadot/#([0-9]+).*$;\1;p' \
-      -e 's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
-      | tail -n 1)"
-  fi
 
   if [ "${pr_companion}" ]
   then
