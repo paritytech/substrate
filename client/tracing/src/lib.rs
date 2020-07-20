@@ -30,8 +30,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use serde::ser::{Serialize, Serializer};
-use serde_json::{Map, Value};
+use serde::ser::{Serialize, Serializer, SerializeMap};
 use tracing_core::{
 	event::Event,
 	field::{Visit, Field},
@@ -82,35 +81,51 @@ pub struct SpanDatum {
 }
 
 /// Holds associated values for a tracing span
-#[derive(Clone, Debug)]
-pub struct Values(Map<String, Value>);
+#[derive(Default, Clone, Debug)]
+pub struct Values {
+	pub bool_values: FxHashMap<String, bool>,
+	pub i64_values: FxHashMap<String, i64>,
+	pub u64_values: FxHashMap<String, u64>,
+	pub string_values: FxHashMap<String, String>,
+}
 
 impl Values {
-	/// Consume the Visitor, returning the inner FxHashMap
-	pub fn into_inner(self) -> Map<String, Value> {
-		self.0
+	pub fn new() -> Self {
+		Values {
+			bool_values: Default::default(),
+			i64_values: Default::default(),
+			u64_values: Default::default(),
+			string_values: Default::default()
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.bool_values.is_empty() &&
+			self.i64_values.is_empty() &&
+			self.u64_values.is_empty() &&
+			self.string_values.is_empty()
 	}
 }
 
 impl Visit for Values {
 	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.0.insert(field.name().to_string(), Value::Number(value.into()));
+		self.i64_values.insert(field.name().to_string(), value);
 	}
 
 	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.0.insert(field.name().to_string(), Value::Number(value.into()));
+		self.u64_values.insert(field.name().to_string(), value);
 	}
 
 	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.0.insert(field.name().to_string(), Value::Bool(value));
+		self.bool_values.insert(field.name().to_string(), value);
 	}
 
 	fn record_str(&mut self, field: &Field, value: &str) {
-		self.0.insert(field.name().to_string(), Value::String(value.to_owned()));
+		self.string_values.insert(field.name().to_string(), value.to_owned());
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.0.insert(field.name().to_string(), Value::String(format!("{:?}", value)));
+		self.string_values.insert(field.name().to_string(), format!("{:?}", value).to_owned());
 	}
 }
 
@@ -118,13 +133,31 @@ impl Serialize for Values {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where S: Serializer,
 	{
-		self.0.serialize(serializer)
+		let len = self.bool_values.len() + self.i64_values.len() + self.u64_values.len() + self.string_values.len();
+		let mut map = serializer.serialize_map(Some(len))?;
+		for (k, v) in &self.bool_values {
+			map.serialize_entry(k, v)?;
+		}
+		for (k, v) in &self.i64_values {
+			map.serialize_entry(k, v)?;
+		}
+		for (k, v) in &self.u64_values {
+			map.serialize_entry(k, v)?;
+		}
+		for (k, v) in &self.string_values {
+			map.serialize_entry(k, v)?;
+		}
+		map.end()
 	}
 }
 
 impl fmt::Display for Values {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let values = self.0.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(", ");
+		let bool_iter = self.bool_values.iter().map(|(k, v)| format!("{}={}", k, v));
+		let i64_iter = self.i64_values.iter().map(|(k, v)| format!("{}={}", k, v));
+		let u64_iter = self.u64_values.iter().map(|(k, v)| format!("{}={}", k, v));
+		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
+		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
 	}
 }
@@ -230,10 +263,10 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let mut values = Values(Map::new());
+		let mut values = Values::default();
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
-		if let Some(Value::String(wasm_target)) = values.0.get(WASM_TARGET_KEY) {
+		if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
 			if !self.check_target(wasm_target, attrs.metadata().level()) {
 				return Id::from_u64(id);
 			}
@@ -286,11 +319,11 @@ impl Subscriber for ProfilingSubscriber {
 		};
 		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.0.insert("wasm".to_owned(), Value::Bool(true));
-				if let Some(Value::String(n)) = span_datum.values.0.remove(WASM_NAME_KEY) {
+				span_datum.values.bool_values.insert("wasm".to_owned(), true);
+				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
 					span_datum.name = n;
 				}
-				if let Some(Value::String(t)) = span_datum.values.0.remove(WASM_TARGET_KEY) {
+				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
 					span_datum.target = t;
 				}
 			}
@@ -317,7 +350,7 @@ fn log_level(level: Level) -> log::Level {
 
 impl TraceHandler for LogTraceHandler {
 	fn handle_span(&self, span_datum: SpanDatum) {
-		if span_datum.values.0.is_empty() {
+		if span_datum.values.is_empty() {
 			log::log!(
 				log_level(span_datum.level), 
 				"{}: {}, time: {}",
@@ -359,7 +392,6 @@ impl TraceHandler for TelemetryTraceHandler {
 mod tests {
 	use super::*;
 	use std::sync::Arc;
-	use serde_json::Value;
 
 	struct TestTraceHandler {
 		spans: Arc<Mutex<Vec<SpanDatum>>>,
@@ -423,10 +455,10 @@ mod tests {
 		let sd = spans.lock().remove(0);
 		assert_eq!(sd.name, "test_span1");
 		assert_eq!(sd.target, "test_target");
-		let values = sd.values.into_inner();
-		assert_eq!(values.get("test_bool").unwrap(), &Value::Bool(test_bool));
-		assert_eq!(values.get("test_u64").unwrap(), &Value::Number(test_u64.into()));
-		assert_eq!(values.get("test_i64").unwrap(), &Value::Number(test_i64.into()));
-		assert_eq!(values.get("test_str").unwrap(), &Value::String(test_str.to_owned()));
+		let values = sd.values;
+		assert_eq!(values.bool_values.get("test_bool").unwrap(), &test_bool);
+		assert_eq!(values.u64_values.get("test_u64").unwrap(), &test_u64);
+		assert_eq!(values.i64_values.get("test_i64").unwrap(), &test_i64);
+		assert_eq!(values.string_values.get("test_str").unwrap(), &test_str.to_owned());
 	}
 }
