@@ -1302,6 +1302,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr:tt])*
 		fn integrity_test() { $( $impl:tt )* }
 	) => {
+		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::IntegrityTest
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
@@ -1317,6 +1318,7 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
 	) => {
+		#[cfg(feature = "std")]
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
 			$crate::traits::IntegrityTest
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
