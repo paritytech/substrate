@@ -92,7 +92,7 @@ pub trait Verify {
 pub trait BatchVerify: Verify {
 	/// Verify a signature using available batcher.
 	///
-	/// Should return `false` iff no batching is avaialbe and signature is evaluated as invalid.
+	/// Should return `false` if batching failed or a previous signature already evaluated as invalid.
 	fn batch_verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
