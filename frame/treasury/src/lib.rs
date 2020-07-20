@@ -277,27 +277,27 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash,
 	{
-		/// New proposal.
+		/// New proposal. [proposal_index]
 		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds.
+		/// We have ended a spend period and will now allocate funds. [budget_remaining]
 		Spending(Balance),
-		/// Some funds have been allocated.
+		/// Some funds have been allocated. [proposal_index, award, beneficiary]
 		Awarded(ProposalIndex, Balance, AccountId),
-		/// A proposal was rejected; funds were slashed.
+		/// A proposal was rejected; funds were slashed. [proposal_index, slashed]
 		Rejected(ProposalIndex, Balance),
-		/// Some of our funds have been burnt.
+		/// Some of our funds have been burnt. [burn]
 		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend.
+		/// Spending has finished; this is the amount that rolls over until next spend. [budget_remaining]
 		Rollover(Balance),
-		/// Some funds have been deposited.
+		/// Some funds have been deposited. [deposit]
 		Deposit(Balance),
-		/// A new tip suggestion has been opened.
+		/// A new tip suggestion has been opened. [tip_hash]
 		NewTip(Hash),
-		/// A tip suggestion has reached threshold and is closing.
+		/// A tip suggestion has reached threshold and is closing. [tip_hash]
 		TipClosing(Hash),
-		/// A tip suggestion has been closed.
+		/// A tip suggestion has been closed. [tip_hash, who, payout]
 		TipClosed(Hash, AccountId, Balance),
-		/// A tip suggestion has been retracted.
+		/// A tip suggestion has been retracted. [tip_hash]
 		TipRetracted(Hash),
 	}
 );
