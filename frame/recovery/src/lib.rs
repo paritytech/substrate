@@ -264,7 +264,7 @@ decl_event! {
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
 	{
-		/// A recovery process has been set up for an account.
+		/// A recovery process has been set up for an [account].
 		RecoveryCreated(AccountId),
 		/// A recovery process has been initiated for lost account by rescuer account.
 		/// [lost, rescuer]
@@ -278,7 +278,7 @@ decl_event! {
 		/// Lost account has been successfully recovered by rescuer account.
 		/// [lost, rescuer]
 		AccountRecovered(AccountId, AccountId),
-		/// A recovery process has been removed for an account
+		/// A recovery process has been removed for an [account].
 		RecoveryRemoved(AccountId),
 	}
 }

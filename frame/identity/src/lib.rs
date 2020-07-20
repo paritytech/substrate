@@ -462,19 +462,19 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
-		/// A name was set or reset (which will remove all judgements).
+		/// A name was set or reset (which will remove all judgements). [who]
 		IdentitySet(AccountId),
-		/// A name was cleared, and the given balance returned.
+		/// A name was cleared, and the given balance returned. [who, deposit]
 		IdentityCleared(AccountId, Balance),
-		/// A name was removed and the given balance slashed.
+		/// A name was removed and the given balance slashed. [who, deposit]
 		IdentityKilled(AccountId, Balance),
-		/// A judgement was asked from a registrar.
+		/// A judgement was asked from a registrar. [who, registrar_index]
 		JudgementRequested(AccountId, RegistrarIndex),
-		/// A judgement request was retracted.
+		/// A judgement request was retracted. [who, registrar_index]
 		JudgementUnrequested(AccountId, RegistrarIndex),
-		/// A judgement was given by a registrar.
+		/// A judgement was given by a registrar. [target, registrar_index]
 		JudgementGiven(AccountId, RegistrarIndex),
-		/// A registrar was added.
+		/// A registrar was added. [registrar_index]
 		RegistrarAdded(RegistrarIndex),
 		/// A sub-identity was added to an identity and the deposit paid. [sub, main, deposit]
 		SubIdentityAdded(AccountId, AccountId, Balance),

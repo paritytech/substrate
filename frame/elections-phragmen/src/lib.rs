@@ -717,10 +717,10 @@ decl_event!(
 		/// No (or not enough) candidates existed for this round. This is different from
 		/// `NewTerm([])`. See the description of `NewTerm`.
 		EmptyTerm,
-		/// A member has been removed. This should always be followed by either `NewTerm` ot
+		/// A [member] has been removed. This should always be followed by either `NewTerm` ot
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
-		/// A member has renounced their candidacy.
+		/// A [member] has renounced their candidacy.
 		MemberRenounced(AccountId),
 		/// A voter was reported with the the report being successful or not.
 		/// [voter, reporter, success]

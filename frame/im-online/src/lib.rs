@@ -276,7 +276,7 @@ decl_event!(
 		<T as Trait>::AuthorityId,
 		IdentificationTuple = IdentificationTuple<T>,
 	{
-		/// A new heartbeat was received from `AuthorityId`
+		/// A new heartbeat was received from `AuthorityId` [authority_id]
 		HeartbeatReceived(AuthorityId),
 		/// At the end of the session, no offence was committed.
 		AllGood,

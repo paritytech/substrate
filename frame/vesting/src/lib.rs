@@ -174,7 +174,7 @@ decl_event!(
 		/// balance given is the amount which is left unvested (and thus locked). 
 		/// [account, unvested]
 		VestingUpdated(AccountId, Balance),
-		/// An account (given) has become fully vested. No further vesting can happen.
+		/// An [account] has become fully vested. No further vesting can happen.
 		VestingCompleted(AccountId),
 	}
 );
