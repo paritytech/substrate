@@ -385,7 +385,8 @@ pub struct ServiceParams<TBl: BlockT, TCl, TImpQu, TExPool, TRpc, Backend> {
 	/// An optional, shared remote blockchain instance. Used for light clients.
 	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A block annouce validator builder.
-	pub block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
+	pub block_announce_validator_builder:
+		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 }
 
 /// Put together the components of a service from the parameters.
@@ -408,7 +409,8 @@ pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
 		TBl: BlockT,
 		TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 		TImpQu: 'static + ImportQueue<TBl>,
-		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,
+		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> +
+			MallocSizeOfWasm + 'static,
 		TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>
 {
 	let ServiceParams {
@@ -500,7 +502,9 @@ pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
 	);
 
 	// Prometheus metrics.
-	let metrics_service = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
+	let metrics_service = if let Some(PrometheusConfig { port, registry }) =
+		config.prometheus_config.clone()
+	{
 		// Set static metrics.
 		let metrics = MetricsService::with_prometheus(&registry, &config)?;
 		spawn_handle.spawn(

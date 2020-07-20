@@ -41,9 +41,10 @@ pub mod full {
     pub use service::TFullBackend as Backend;
 
     /// A GRANDPA block import.
-    pub type GrandpaBlockImport<Block, RuntimeApi, Executor, SelectChain> = grandpa::GrandpaBlockImport<
-        Backend<Block>, Block, Client<Block, RuntimeApi, Executor>, SelectChain
-    >;
+    pub type GrandpaBlockImport<Block, RuntimeApi, Executor, SelectChain> =
+        grandpa::GrandpaBlockImport<
+            Backend<Block>, Block, Client<Block, RuntimeApi, Executor>, SelectChain
+        >;
     /// A GRANDPA link. Connects the block import to the GRANDPA service.
     pub type GrandpaLink<Block, RuntimeApi, Executor, SelectChain> = grandpa ::LinkHalf<
         Block, Client<Block, RuntimeApi, Executor>, SelectChain
@@ -109,7 +110,7 @@ macro_rules! setup_types {
             /// A basic select chain implementation.
             pub type LongestChain = full::LongestChain<$block>;
             /// A basic transaction pool.
-            pub type BasicPool = $crate::BasicPool<$block, $runtime_api, $executor>;
+            pub type BasicPool = full::BasicPool<$block, $runtime_api, $executor>;
             /// An import queue for AURA.
             pub type AuraImportQueue = full::AuraImportQueue<
                 $block, $runtime_api, $executor
@@ -136,12 +137,5 @@ macro_rules! setup_types {
             /// A basic transaction pool.
             pub type BasicPool = light::BasicPool<$block, $runtime_api, $executor>;
         }       
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    mod prelude {
-        setup_types!((), (), ());
     }
 }

@@ -146,7 +146,8 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	};
 
 	let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider)) as _;
+	let finality_proof_provider =
+		Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider));
 
 	let params = sc_service::ServiceParams {
 		config, backend, client, import_queue, keystore, task_manager, rpc_extensions_builder,
@@ -375,7 +376,8 @@ pub fn new_light_base(config: Configuration) -> Result<(
 
 	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+	let finality_proof_provider =
+		Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
 
 	let light_deps = node_rpc::LightDeps {
 		remote_blockchain: backend.remote_blockchain(),
@@ -386,17 +388,18 @@ pub fn new_light_base(config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
-	let ServiceComponents { task_manager, rpc_handlers, network, .. } = sc_service::build(sc_service::ServiceParams {	
-		block_announce_validator_builder: None,
-		finality_proof_request_builder: Some(finality_proof_request_builder),
-		finality_proof_provider: Some(finality_proof_provider),
-		on_demand: Some(on_demand),
-		remote_blockchain: Some(backend.remote_blockchain()),
-		rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
-		client: client.clone(),
-		transaction_pool: transaction_pool.clone(),
-		config, import_queue, keystore, backend, task_manager,
-	})?;
+	let ServiceComponents { task_manager, rpc_handlers, network, .. } =
+		sc_service::build(sc_service::ServiceParams {	
+			block_announce_validator_builder: None,
+			finality_proof_request_builder: Some(finality_proof_request_builder),
+			finality_proof_provider: Some(finality_proof_provider),
+			on_demand: Some(on_demand),
+			remote_blockchain: Some(backend.remote_blockchain()),
+			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			config, import_queue, keystore, backend, task_manager,
+		})?;
 	
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }

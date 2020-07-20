@@ -37,7 +37,8 @@ pub fn new_full_params(config: Configuration) -> Result<(
 ), ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
-	let (client, backend, keystore, task_manager) = sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
+	let (client, backend, keystore, task_manager) =
+		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
@@ -73,7 +74,8 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	)?;
 
 	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+	let finality_proof_provider =
+		Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
 	
 	let params = sc_service::ServiceParams {
 		backend, client, import_queue, keystore, task_manager, transaction_pool,
@@ -237,9 +239,8 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		config.prometheus_registry(),
 	)?;
 
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(
-		backend.clone(), client.clone() as Arc<_>
-	));
+	let finality_proof_provider =
+		Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), client.clone() as Arc<_>));
 
 	sc_service::build(sc_service::ServiceParams {	
 		block_announce_validator_builder: None,
