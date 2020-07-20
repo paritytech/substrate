@@ -34,7 +34,10 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{debug, warn, error};
-use std::{borrow::Cow, collections::VecDeque, fmt, mem, pin::Pin, task::{Context, Poll}, time::Duration};
+use std::{
+	borrow::Cow, collections::VecDeque, fmt, mem, pin::Pin, task::{Context, Poll, Waker},
+	time::Duration
+};
 use wasm_timer::Instant;
 
 /// Maximum duration to open a substream and receive the handshake message. After that, we
@@ -74,13 +77,12 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 		DeniedUpgrade
 	}
 
-	fn into_handler(self, peer_id: &PeerId, _: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, _: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		NotifsOutHandler {
 			protocol_name: self.protocol_name,
 			when_connection_open: Instant::now(),
 			state: State::Disabled,
 			events_queue: VecDeque::new(),
-			peer_id: peer_id.clone(),
 		}
 	}
 }
@@ -108,9 +110,6 @@ pub struct NotifsOutHandler {
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
 	events_queue: VecDeque<ProtocolsHandlerEvent<NotificationsOut, (), NotifsOutHandlerOut, void::Void>>,
-
-	/// Who we are connected to.
-	peer_id: PeerId,
 }
 
 /// Our relationship with the node we're connected to.
@@ -145,6 +144,8 @@ enum State {
 	Open {
 		/// Substream that is currently open.
 		substream: NotificationsOutSubstream<NegotiatedSubstream>,
+		/// Waker to wake up if we transition from `Open` to a different state.
+		state_transition_waker: Option<Waker>,
 		/// The initial message that we sent. Necessary if we need to re-open a substream.
 		initial_message: Vec<u8>,
 	},
@@ -204,15 +205,40 @@ impl NotifsOutHandler {
 		&self.protocol_name
 	}
 
-	// TODO: docs
-	pub fn poll_ready(&self, cx: &mut Context) -> Poll<bool> {
-		if let State::Open { substream, .. } = &self.state {
-			substream.poll_ready_unpin(cx).map(|()| true)
+	/// Polls whether the outbound substream is ready to send a notification.
+	///
+	/// - Returns `Poll::Pending` if the substream is open but not ready to send a notification.
+	/// - Returns `Poll::Ready(true)` if the substream is ready to send a notification.
+	/// - Returns `Poll::Ready(false)` if the substream is closed.
+	///
+	pub fn poll_ready(&mut self, cx: &mut Context) -> Poll<bool> {
+		if let State::Open { substream, state_transition_waker, .. } = &mut self.state {
+			match substream.poll_ready_unpin(cx) {
+				Poll::Ready(Ok(())) => Poll::Ready(true),
+				Poll::Ready(Err(_)) => Poll::Ready(false),
+				Poll::Pending => {
+					*state_transition_waker = Some(cx.waker().clone());
+					Poll::Pending
+				}
+			}
 		} else {
 			Poll::Ready(false)
 		}
 	}
 
+	/// Sends out a notification.
+	///
+	/// If the substream is closed, or not ready to send out a notification yet, then the
+	/// notification is silently discarded.
+	///
+	/// You are encouraged to call [`NotifsOutHandler::poll_ready`] beforehand to determine
+	/// whether this will succeed. If `Poll::Ready(true)` is returned, then this method will send
+	/// out a notification.
+	pub fn send_or_discard(&mut self, notification: Vec<u8>) {
+		if let State::Open { substream, .. } = &mut self.state {
+			let _ = substream.start_send_unpin(notification);
+		}
+	}
 }
 
 impl ProtocolsHandler for NotifsOutHandler {
@@ -244,7 +270,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 			State::Opening { initial_message } => {
 				let ev = NotifsOutHandlerOut::Open { handshake: handshake_msg };
 				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(ev));
-				self.state = State::Open { substream, initial_message };
+				self.state = State::Open { substream, initial_message, state_transition_waker: None };
 			},
 			// If the handler was disabled while we were negotiating the protocol, immediately
 			// close it.
@@ -307,7 +333,12 @@ impl ProtocolsHandler for NotifsOutHandler {
 					}
 					State::Opening { .. } => self.state = State::DisabledOpening,
 					State::Refused => self.state = State::Disabled,
-					State::Open { substream, .. } => self.state = State::DisabledOpen(substream),
+					State::Open { substream, state_transition_waker, .. } => {
+						if let Some(state_transition_waker) = state_transition_waker {
+							state_transition_waker.wake();
+						}
+						self.state = State::DisabledOpen(substream)
+					},
 					State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
 				}
 			}
@@ -351,10 +382,14 @@ impl ProtocolsHandler for NotifsOutHandler {
 		}
 
 		match &mut self.state {
-			State::Open { substream, initial_message } =>
+			State::Open { substream, initial_message, state_transition_waker } =>
 				match Sink::poll_flush(Pin::new(substream), cx) {
 					Poll::Pending | Poll::Ready(Ok(())) => {},
 					Poll::Ready(Err(_)) => {
+						if let Some(state_transition_waker) = state_transition_waker.take() {
+							state_transition_waker.wake();
+						}
+
 						// We try to re-open a substream.
 						let initial_message = mem::replace(initial_message, Vec::new());
 						self.state = State::Opening { initial_message: initial_message.clone() };

@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 pub use self::group::{
-	NotificationsSink, Ready, NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut
+	NotificationsSink, GroupError, Ready, NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut
 };
 pub use self::legacy::ConnectionKillError as LegacyConnectionKillError;
 

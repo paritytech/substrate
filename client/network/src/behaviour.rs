@@ -225,13 +225,13 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		let handshake_message = Roles::from(&self.role).encode();
 
 		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name, handshake_message);
-		for (remote, roles) in list {
+		for (remote, roles, notifications_sink) in list {
 			let role = reported_roles_to_observed_role(&self.role, remote, roles);
 			self.events.push_back(BehaviourOut::NotificationStreamOpened {
 				remote: remote.clone(),
 				engine_id,
 				role,
-				notifications_sink: todo!(), // TODO: uuuuggghhh
+				notifications_sink: notifications_sink.clone(),
 			});
 		}
 	}

@@ -33,7 +33,6 @@ use libp2p::swarm::{
 };
 use log::{debug, error, trace, warn};
 use parking_lot::RwLock;
-use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::task::{Context, Poll};
@@ -151,9 +150,6 @@ pub struct GenericProto {
 
 	/// Events to produce from `poll()`.
 	events: VecDeque<NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>>,
-
-	/// If `Some`, report the message queue sizes on this `Histogram`.
-	queue_size_report: Option<HistogramVec>,
 }
 
 /// Identifier for a delay firing.
@@ -334,16 +330,12 @@ pub enum GenericProtoOut {
 
 impl GenericProto {
 	/// Creates a `CustomProtos`.
-	///
-	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
-	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
 		local_peer_id: PeerId,
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
-		queue_size_report: Option<HistogramVec>,
 	) -> Self {
 		let legacy_handshake_message = Arc::new(RwLock::new(handshake_message));
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
@@ -359,7 +351,6 @@ impl GenericProto {
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: VecDeque::new(),
-			queue_size_report,
 		}
 	}
 
@@ -409,6 +400,15 @@ impl GenericProto {
 	/// Returns true if we have an open connection to the given peer.
 	pub fn is_open(&self, peer_id: &PeerId) -> bool {
 		self.peers.get(peer_id).map(|p| p.is_open()).unwrap_or(false)
+	}
+
+	/// Returns the [`NotificationsSink`] that sends notifications to the given peer, or `None`
+	/// if the custom protocols aren't opened with this peer.
+	///
+	/// If [`GenericProto::is_open`] returns `true` for this `PeerId`, then this method is
+	/// guaranteed to return `Some`.
+	pub fn notifications_sink(&self, peer_id: &PeerId) -> Option<&NotificationsSink> {
+		self.peers.get(peer_id).and_then(|p| p.get_open())
 	}
 
 	/// Disconnects the given peer if we are connected to it.
@@ -879,7 +879,6 @@ impl NetworkBehaviour for GenericProto {
 		NotifsHandlerProto::new(
 			self.legacy_protocol.clone(),
 			self.notif_protocols.clone(),
-			self.queue_size_report.clone()
 		)
 	}
 
@@ -991,17 +990,28 @@ impl NetworkBehaviour for GenericProto {
 				// i.e. there is no connection that is open for custom protocols,
 				// in which case `CustomProtocolClosed` was already emitted.
 				let closed = open.is_empty();
+				let was_primary = open.get(0).map_or(false, |(c, _)| c == conn);
 				open.retain(|(c, _)| c != conn);
-				if open.is_empty() && !closed {
-					debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
-					let event = GenericProtoOut::CustomProtocolClosed {
-						peer_id: peer_id.clone(),
-						reason: "Disconnected by libp2p".into(),
-					};
+				if !closed {
+					if open.is_empty() {
+						debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
+						let event = GenericProtoOut::CustomProtocolClosed {
+							peer_id: peer_id.clone(),
+							reason: "Disconnected by libp2p".into(),
+						};
 
-					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+						self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+
+					} else if was_primary {
+						let event = GenericProtoOut::CustomProtocolReplaced {
+							peer_id: peer_id.clone(),
+							notifications_sink: open.get(0)
+								.expect("!open.is_empty() checked above; qed")
+								.1.clone(),
+						};
+						self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+					}
 				}
-				// TODO: generate CustomProtocolChanged event here
 			}
 			_ => {}
 		}
@@ -1147,8 +1157,9 @@ impl NetworkBehaviour for GenericProto {
 					return
 				};
 
-				let last = match mem::replace(entry.get_mut(), PeerState::Poisoned) {
+				let (last, new_notifications_sink) = match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					PeerState::Enabled { mut open } => {
+						let was_primary = open.get(0).map_or(false, |(c, _)| c == &connection);
 						if let Some(pos) = open.iter().position(|(c, _)| c == &connection) {
 							open.remove(pos);
 						} else {
@@ -1174,15 +1185,21 @@ impl NetworkBehaviour for GenericProto {
 						});
 
 						let last = open.is_empty();
+						let new_notifications_sink = if (last, was_primary) == (false, true) {
+							Some(open.first().expect("we check open.is_empty(); qed").1.clone())
+						} else {
+							None
+						};
 
 						*entry.into_mut() = PeerState::Disabled {
 							open,
 							banned_until: None
 						};
 
-						last
+						(last, new_notifications_sink)
 					},
 					PeerState::Disabled { mut open, banned_until } => {
+						let was_primary = open.get(0).map_or(false, |(c, _)| c == &connection);
 						if let Some(pos) = open.iter().position(|(c, _)| c == &connection) {
 							open.remove(pos);
 						} else {
@@ -1195,17 +1212,25 @@ impl NetworkBehaviour for GenericProto {
 						}
 
 						let last = open.is_empty();
+						let new_notifications_sink = if (last, was_primary) == (false, true) {
+							Some(open.first().expect("we check open.is_empty(); qed").1.clone())
+						} else {
+							None
+						};
+
 						*entry.into_mut() = PeerState::Disabled {
 							open,
 							banned_until
 						};
-						last
+
+						(last, new_notifications_sink)
 					},
 					PeerState::DisabledPendingEnable {
 						mut open,
 						timer,
 						timer_deadline
 					} => {
+						let was_primary = open.get(0).map_or(false, |(c, _)| c == &connection);
 						if let Some(pos) = open.iter().position(|(c, _)| c == &connection) {
 							open.remove(pos);
 						} else {
@@ -1218,12 +1243,19 @@ impl NetworkBehaviour for GenericProto {
 						}
 
 						let last = open.is_empty();
+						let new_notifications_sink = if (last, was_primary) == (false, true) {
+							Some(open.first().expect("we check open.is_empty(); qed").1.clone())
+						} else {
+							None
+						};
+
 						*entry.into_mut() = PeerState::DisabledPendingEnable {
 							open,
 							timer,
 							timer_deadline
 						};
-						last
+
+						(last, new_notifications_sink)
 					},
 					state => {
 						error!(target: "sub-libp2p",
@@ -1240,8 +1272,15 @@ impl NetworkBehaviour for GenericProto {
 						peer_id: source,
 					};
 					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+
 				} else {
-					// TODO: emit CustomProtocolChanged event here
+					if let Some(new_notifications_sink) = new_notifications_sink {
+						let event = GenericProtoOut::CustomProtocolReplaced {
+							peer_id: source,
+							notifications_sink: new_notifications_sink,
+						};
+						self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+					}
 					debug!(target: "sub-libp2p", "Secondary connection closed custom protocol.");
 				}
 			}

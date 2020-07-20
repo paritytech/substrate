@@ -174,7 +174,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 		}
 
 		// Indicating that the remote is clogged if that's the case.
-		if self.send_queue.len() >= 2048 {
+		if self.send_queue.len() >= 1536 {
 			if !self.clogged_fuse {
 				// Note: this fuse is important not just for preventing us from flooding the logs;
 				// 	if you remove the fuse, then we will always return early from this function and
