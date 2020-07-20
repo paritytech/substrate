@@ -89,6 +89,12 @@ pub trait Verify {
 }
 
 /// Means of signature batch verification.
+///
+/// Should only be used when there is a batching context registered on the host (through instantiating
+/// helper struct `SingatureBatching` or via 'crypto::start_batch_verify`).
+///
+/// If there were at least one call to this function, `crypto::finish_batch_verify` (or `SingatureBatching::verify`)
+/// then should be called and code must panic if either returns false.
 pub trait BatchVerify: Verify {
 	/// Verify a signature using available batcher.
 	///
