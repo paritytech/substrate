@@ -84,6 +84,9 @@ use impls::{CurrencyToVoteHandler, Author};
 pub mod constants;
 use constants::{time::*, currency::*};
 
+// Weights used for pallet extrinsics.
+mod weights;
+
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -612,7 +615,7 @@ impl pallet_treasury::Trait for Runtime {
 	type MaximumReasonLength = MaximumReasonLength;
 	type MaximumSubBountyDepth = MaximumSubBountyDepth;
 	type BurnDestination = ();
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_treasury::WeightInfo;
 }
 
 parameter_types! {

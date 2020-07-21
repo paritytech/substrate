@@ -151,7 +151,17 @@ pub trait WeightInfo {
 	fn tip_new(r: u32, t: u32, ) -> Weight;
 	fn tip(t: u32, ) -> Weight;
 	fn close_tip(t: u32, ) -> Weight;
-	fn on_initialize(p: u32, ) -> Weight;
+	fn propose_bounty(u: u32, r: u32, ) -> Weight;
+	fn create_sub_bounty(u: u32, r: u32, ) -> Weight;
+	fn approve_bounty(u: u32, ) -> Weight;
+	fn reject_bounty(u: u32, ) -> Weight;
+	fn award_bounty(u: u32, ) -> Weight;
+	fn claim_bounty(u: u32, ) -> Weight;
+	fn cancel_bounty(u: u32, ) -> Weight;
+	fn extend_bounty_expiry(u: u32, ) -> Weight;
+	fn update_bounty_value_minimum() -> Weight;
+	fn on_initialize_proposals(p: u32, ) -> Weight;
+	fn on_initialize_bounties(b: u32, ) -> Weight;
 }
 
 impl WeightInfo for () {
@@ -163,7 +173,17 @@ impl WeightInfo for () {
 	fn tip_new(_r: u32, _t: u32, ) -> Weight { 1_000_000_000 }
 	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
 	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
-	fn on_initialize(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_bounty(_u: u32, _r: u32, ) -> Weight { 1_000_000_000 }
+	fn create_sub_bounty(_u: u32, _r: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn reject_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn award_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn claim_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn extend_bounty_expiry(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn update_bounty_value_minimum() -> Weight { 1_000_000_000 }
+	fn on_initialize_proposals(_p: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize_bounties(_b: u32, ) -> Weight { 1_000_000_000 }
 }
 
 pub trait Trait: frame_system::Trait {
