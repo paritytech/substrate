@@ -30,15 +30,15 @@ use crate::Module as Treasury;
 const SEED: u32 = 0;
 
 // Create the pre-requisite information needed to create a treasury `propose_spend`.
-fn setup_proposal<T: Trait>() -> (
+fn setup_proposal<T: Trait>(u: u32) -> (
 	T::AccountId,
 	BalanceOf<T>,
 	<T::Lookup as StaticLookup>::Source,
 ) {
-	let caller = account("caller", 0, SEED);
+	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T> = T::ProposalBondMinimum::get().saturating_mul(100.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
-	let beneficiary = account("beneficiary", 0, SEED);
+	let beneficiary = account("beneficiary", u, SEED);
 	let beneficiary_lookup = T::Lookup::unlookup(beneficiary);
 	(caller, value, beneficiary_lookup)
 }
@@ -94,7 +94,7 @@ fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(
 // Create proposals that are approved for use in `on_initialize`.
 fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 	for _ in 0 .. n {
-		let (caller, value, lookup) = setup_proposal::<T>();
+		let (caller, value, lookup) = setup_proposal::<T>(0);
 		Treasury::<T>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -120,7 +120,7 @@ fn create_approved_bounties<T: Trait>(n: u32) -> Result<(), &'static str> {
 }
 
 // Create the pre-requisite information needed to create a treasury `propose_bounty`.
-fn setup_bounty<T: Trait>(r: u32) -> (
+fn setup_bounty<T: Trait>(d: u32) -> (
 	T::AccountId,
 	<T::Lookup as StaticLookup>::Source,
 	BalanceOf<T>,
@@ -134,7 +134,7 @@ fn setup_bounty<T: Trait>(r: u32) -> (
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator", 0, SEED);
 	let curator_lookup = T::Lookup::unlookup(curator);
-	let reason = vec![0; r as usize];
+	let reason = vec![0; d as usize];
 	(caller, curator_lookup, fee, value, reason)
 }
 
@@ -185,11 +185,11 @@ benchmarks! {
 	_ { }
 
 	propose_spend {
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T>();
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(0);
 	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T>();
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(1);
 		Treasury::<T>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -199,7 +199,7 @@ benchmarks! {
 	}: _(RawOrigin::Root, proposal_id)
 
 	approve_proposal {
-		let (caller, value, beneficiary_lookup) = setup_proposal::<T>();
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(0);
 		Treasury::<T>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
@@ -275,26 +275,26 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), hash)
 
 	propose_bounty {
-		let r in 0 .. MAX_BYTES;
+		let d in 0 .. MAX_BYTES;
 
-		let (caller, curator_lookup, fee, value, reason) = setup_bounty::<T>(r);
-	}: _(RawOrigin::Signed(caller), curator_lookup, fee, value, reason)
+		let (caller, curator_lookup, fee, value, description) = setup_bounty::<T>(d);
+	}: _(RawOrigin::Signed(caller), curator_lookup, fee, value, description)
 
 	create_sub_bounty {
-		let r in 0 .. MAX_BYTES;
+		let d in 0 .. MAX_BYTES;
 
-		let (caller, curator_lookup, fee, value, reason) = setup_sub_bounty::<T>(r)?;
+		let (caller, curator_lookup, fee, value, description) = setup_sub_bounty::<T>(d)?;
 		let bounty_id = BountyCount::get() - 1;
 
-	}: _(RawOrigin::Signed(caller), bounty_id, curator_lookup, fee, value, reason)
+	}: _(RawOrigin::Signed(caller), bounty_id, curator_lookup, fee, value, description)
 
-	approve_bounty {
+	reject_bounty {
 		let (caller, curator_lookup, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), curator_lookup, fee, value, reason)?;
 		let bounty_id = BountyCount::get() - 1;
 	}: _(RawOrigin::Root, bounty_id)
 
-	reject_bounty {
+	approve_bounty {
 		let (caller, curator_lookup, fee, value, reason) = setup_bounty::<T>(MAX_BYTES);
 		Treasury::<T>::propose_bounty(RawOrigin::Signed(caller).into(), curator_lookup, fee, value, reason)?;
 		let bounty_id = BountyCount::get() - 1;

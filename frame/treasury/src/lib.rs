@@ -143,44 +143,44 @@ type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_sy
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait WeightInfo {
-	fn propose_spend(u: u32, ) -> Weight;
-	fn reject_proposal(u: u32, ) -> Weight;
-	fn approve_proposal(u: u32, ) -> Weight;
+	fn propose_spend() -> Weight;
+	fn reject_proposal() -> Weight;
+	fn approve_proposal() -> Weight;
 	fn report_awesome(r: u32, ) -> Weight;
 	fn retract_tip(r: u32, ) -> Weight;
 	fn tip_new(r: u32, t: u32, ) -> Weight;
 	fn tip(t: u32, ) -> Weight;
 	fn close_tip(t: u32, ) -> Weight;
-	fn propose_bounty(u: u32, r: u32, ) -> Weight;
-	fn create_sub_bounty(u: u32, r: u32, ) -> Weight;
-	fn approve_bounty(u: u32, ) -> Weight;
-	fn reject_bounty(u: u32, ) -> Weight;
-	fn award_bounty(u: u32, ) -> Weight;
-	fn claim_bounty(u: u32, ) -> Weight;
-	fn cancel_bounty(u: u32, ) -> Weight;
-	fn extend_bounty_expiry(u: u32, ) -> Weight;
+	fn propose_bounty(r: u32, ) -> Weight;
+	fn create_sub_bounty(r: u32, ) -> Weight;
+	fn approve_bounty() -> Weight;
+	fn reject_bounty() -> Weight;
+	fn award_bounty() -> Weight;
+	fn claim_bounty() -> Weight;
+	fn cancel_bounty() -> Weight;
+	fn extend_bounty_expiry() -> Weight;
 	fn update_bounty_value_minimum() -> Weight;
 	fn on_initialize_proposals(p: u32, ) -> Weight;
 	fn on_initialize_bounties(b: u32, ) -> Weight;
 }
 
 impl WeightInfo for () {
-	fn propose_spend(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn reject_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn approve_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_spend() -> Weight { 1_000_000_000 }
+	fn reject_proposal() -> Weight { 1_000_000_000 }
+	fn approve_proposal() -> Weight { 1_000_000_000 }
 	fn report_awesome(_r: u32, ) -> Weight { 1_000_000_000 }
 	fn retract_tip(_r: u32, ) -> Weight { 1_000_000_000 }
 	fn tip_new(_r: u32, _t: u32, ) -> Weight { 1_000_000_000 }
 	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
 	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
-	fn propose_bounty(_u: u32, _r: u32, ) -> Weight { 1_000_000_000 }
-	fn create_sub_bounty(_u: u32, _r: u32, ) -> Weight { 1_000_000_000 }
-	fn approve_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn reject_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn award_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn claim_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn cancel_bounty(_u: u32, ) -> Weight { 1_000_000_000 }
-	fn extend_bounty_expiry(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_bounty(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn create_sub_bounty(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_bounty() -> Weight { 1_000_000_000 }
+	fn reject_bounty() -> Weight { 1_000_000_000 }
+	fn award_bounty() -> Weight { 1_000_000_000 }
+	fn claim_bounty() -> Weight { 1_000_000_000 }
+	fn cancel_bounty() -> Weight { 1_000_000_000 }
+	fn extend_bounty_expiry() -> Weight { 1_000_000_000 }
 	fn update_bounty_value_minimum() -> Weight { 1_000_000_000 }
 	fn on_initialize_proposals(_p: u32, ) -> Weight { 1_000_000_000 }
 	fn on_initialize_bounties(_b: u32, ) -> Weight { 1_000_000_000 }
@@ -539,7 +539,7 @@ decl_module! {
 		/// - DbReads: `ProposalCount`, `origin account`
 		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
 		/// # </weight>
-		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = T::WeightInfo::propose_spend()]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -568,7 +568,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `rejected proposer account`
 		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
-		#[weight = (130_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
+		#[weight = (T::WeightInfo::reject_proposal(), DispatchClass::Operational)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 
@@ -590,7 +590,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
-		#[weight = (34_000_000 + T::DbWeight::get().reads_writes(2, 1), DispatchClass::Operational)]
+		#[weight = (T::WeightInfo::approve_proposal(), DispatchClass::Operational)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -614,10 +614,10 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(R)` where `R` length of `reason`.
 		///   - encoding and hashing of 'reason'
-		/// - DbReads: `Reasons`, `Tips`, `who account data`
-		/// - DbWrites: `Tips`, `who account data`
+		/// - DbReads: `Reasons`, `Tips`
+		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = 140_000_000 + 4_000 * reason.len() as Weight + T::DbWeight::get().reads_writes(3, 2)]
+		#[weight = T::WeightInfo::report_awesome(reason.len() as u32)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -665,7 +665,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `origin account`
 		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
-		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = T::WeightInfo::retract_tip(0)]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -701,10 +701,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = 110_000_000
-			+ 4_000 * reason.len() as Weight
-			+ 480_000 * T::Tippers::max_len() as Weight
-			+ T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = T::WeightInfo::tip_new(reason.len() as u32, T::Tippers::max_len() as u32)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -752,8 +749,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = 68_000_000 + 2_000_000 * T::Tippers::max_len() as Weight
-			+ T::DbWeight::get().reads_writes(2, 1)]
+		#[weight = T::WeightInfo::tip(T::Tippers::max_len() as u32)]
 		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -782,8 +778,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = 220_000_000 + 1_100_000 * T::Tippers::max_len() as Weight
-			+ T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = T::WeightInfo::close_tip(T::Tippers::max_len() as u32)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
@@ -796,7 +791,7 @@ decl_module! {
 			Self::payout_tip(hash, tip);
 		}
 
-		#[weight = 150_000_000]
+		#[weight = T::WeightInfo::propose_bounty(description.len() as u32)]
 		fn propose_bounty(
 			origin,
 			curator: <T::Lookup as StaticLookup>::Source,
@@ -810,7 +805,7 @@ decl_module! {
 			Self::create_bounty(proposer, curator, description, fee, value, None)?;
 		}
 
-		#[weight = 150_000_000]
+		#[weight = T::WeightInfo::create_sub_bounty(description.len() as u32)]
 		fn create_sub_bounty(
 			origin,
 			#[compact] parent_bounty_id: BountyIndex,
@@ -832,7 +827,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - Two DB clear.
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::reject_bounty()]
 		fn reject_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
 
@@ -862,7 +857,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::approve_bounty()]
 		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -878,7 +873,7 @@ decl_module! {
 			})?;
 		}
 
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::award_bounty()]
 		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
 			let curator = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -898,7 +893,7 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyAwarded(bounty_id, beneficiary));
 		}
 
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::claim_bounty()]
 		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
@@ -924,7 +919,7 @@ decl_module! {
 			})?;
 		}
 
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::cancel_bounty()]
 		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let curator = ensure_signed(origin)?;
 
@@ -956,7 +951,7 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
 		}
 
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::extend_bounty_expiry()]
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex) {
 			let curator = ensure_signed(origin)?;
 
@@ -980,7 +975,7 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
 		}
 
-		#[weight = 100_000_000]
+		#[weight = T::WeightInfo::update_bounty_value_minimum()]
 		fn update_bounty_value_minimum(origin, #[compact] new_value: BalanceOf<T>) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
@@ -997,10 +992,7 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
-				let approvals_len = Self::spend_funds();
-
-				270_000_000 * approvals_len
-					+ T::DbWeight::get().reads_writes(2 + approvals_len * 3, 2 + approvals_len * 3)
+				Self::spend_funds()
 			} else {
 				0
 			}
@@ -1105,15 +1097,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Spend some money! returns number of approvals before spend.
-	fn spend_funds() -> u64 {
+	fn spend_funds() -> Weight {
+		let mut total_weight: Weight = Zero::zero();
+
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 		let account_id = Self::account_id();
 
 		let mut missed_any = false;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
-		let prior_approvals_len = Approvals::mutate(|v| {
-			let prior_approvals_len = v.len() as u64;
+		let proposals_len = Approvals::mutate(|v| {
+			let proposals_approvals_len = v.len() as u32;
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.
 				if let Some(p) = Self::proposals(index) {
@@ -1137,10 +1131,13 @@ impl<T: Trait> Module<T> {
 					false
 				}
 			});
-			prior_approvals_len
+			proposals_approvals_len
 		});
 
-		BountyApprovals::mutate(|v| {
+		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+
+		let bounties_len = BountyApprovals::mutate(|v| {
+			let bounties_approval_len = v.len() as u32;
 			v.retain(|&index| {
 				Bounties::<T>::mutate(index, |bounty| {
 					// Should always be true, but shouldn't panic if false or we're screwed.
@@ -1169,7 +1166,10 @@ impl<T: Trait> Module<T> {
 					}
 				})
 			});
+			bounties_approval_len
 		});
+
+		total_weight += T::WeightInfo::on_initialize_proposals(bounties_len);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
@@ -1199,7 +1199,7 @@ impl<T: Trait> Module<T> {
 
 		Self::deposit_event(RawEvent::Rollover(budget_remaining));
 
-		prior_approvals_len
+		total_weight
 	}
 
 	/// Return the amount of money in the pot.
