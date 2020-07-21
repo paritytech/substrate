@@ -477,10 +477,9 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		let extension = self.extension::<VerificationExt>()
-			.expect("Failed to get batching extension (VerificationExt) for ed25519 batching verification");
-
-		extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
 	/// Verify `sr25519` signature.
@@ -509,10 +508,9 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		let extension = self.extension::<VerificationExt>()
-			.expect("Failed to get batching extension (VerificationExt) for sr25519 batching verification");
-
-		extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
 	/// Start verification extension.
@@ -658,10 +656,9 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &ecdsa::Public,
 	) -> bool {
-		let extension = self.extension::<VerificationExt>()
-			.expect("Failed to get batching extension (VerificationExt) for ecdsa batching verification");
-
-		extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
+		self.extension::<VerificationExt>().map(
+			|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
+		).unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
