@@ -261,7 +261,7 @@ mod tests {
 	}
 
 	#[test]
-	fn logger_conflicting_opt() {
+	fn logger_age_or_size() {
 		let pattern = "";
 		let log_rotation_opt = LogRotationOpt {
 			log_directory: None,
@@ -271,6 +271,6 @@ mod tests {
 		let res = init_logger(pattern, Some(log_rotation_opt));
 
 		dbg!(&res);
-		assert!(res.is_err());
+		assert!(res.is_ok());
 	}
 }
