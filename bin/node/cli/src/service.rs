@@ -628,7 +628,6 @@ mod tests {
 				let check_nonce = frame_system::CheckNonce::from(index);
 				let check_weight = frame_system::CheckWeight::new();
 				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
-				let validate_grandpa_equivocation = pallet_grandpa::ValidateEquivocationReport::new();
 				let extra = (
 					check_spec_version,
 					check_tx_version,
@@ -637,12 +636,11 @@ mod tests {
 					check_nonce,
 					check_weight,
 					payment,
-					validate_grandpa_equivocation,
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), (), ())
+					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

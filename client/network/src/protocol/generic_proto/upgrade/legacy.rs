@@ -142,10 +142,7 @@ pub enum RegisteredProtocolEvent {
 
 	/// Diagnostic event indicating that the connection is clogged and we should avoid sending too
 	/// many messages to it.
-	Clogged {
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
-	},
+	Clogged,
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
@@ -183,11 +180,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin {
 				// 	if you remove the fuse, then we will always return early from this function and
 				//	thus never read any message from the network.
 				self.clogged_fuse = true;
-				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged {
-					messages: self.send_queue.iter()
-						.map(|m| m.clone().to_vec())
-						.collect(),
-				})))
+				return Poll::Ready(Some(Ok(RegisteredProtocolEvent::Clogged)))
 			}
 		} else {
 			self.clogged_fuse = false;
@@ -255,7 +248,7 @@ impl ProtocolName for RegisteredProtocolName {
 impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
 where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-	type Output = RegisteredProtocolSubstream<TSubstream>;
+	type Output = (RegisteredProtocolSubstream<TSubstream>, Vec<u8>);
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Output, io::Error>> + Send>>;
 	type Error = io::Error;
 
@@ -273,8 +266,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
 			framed.send(handshake).await?;
+			let received_handshake = framed.next().await
+				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
 
-			Ok(RegisteredProtocolSubstream {
+			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
 				endpoint: Endpoint::Listener,
 				send_queue: VecDeque::new(),
@@ -282,7 +277,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				inner: framed.fuse(),
 				protocol_version: info.version,
 				clogged_fuse: false,
-			})
+			}, received_handshake.to_vec()))
 		})
 	}
 }
@@ -308,8 +303,12 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			let handshake = BytesMut::from(&self.handshake_message.read()[..]);
 			framed.send(handshake).await?;
+			let received_handshake = framed.next().await
+				.ok_or_else(|| {
+					io::Error::new(io::ErrorKind::UnexpectedEof, "Failed to receive handshake")
+				})??;
 
-			Ok(RegisteredProtocolSubstream {
+			Ok((RegisteredProtocolSubstream {
 				is_closing: false,
 				endpoint: Endpoint::Dialer,
 				send_queue: VecDeque::new(),
@@ -317,7 +316,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				inner: framed.fuse(),
 				protocol_version: info.version,
 				clogged_fuse: false,
-			})
+			}, received_handshake.to_vec()))
 		})
 	}
 }

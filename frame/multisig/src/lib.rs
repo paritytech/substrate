@@ -197,17 +197,13 @@ decl_event! {
 		BlockNumber = <T as system::Trait>::BlockNumber,
 		CallHash = [u8; 32]
 	{
-		/// A new multisig operation has begun. First param is the account that is approving,
-		/// second is the multisig account, third is hash of the call.
+		/// A new multisig operation has begun. [approving, multisig, call_hash]
 		NewMultisig(AccountId, AccountId, CallHash),
-		/// A multisig operation has been approved by someone. First param is the account that is
-		/// approving, third is the multisig account, fourth is hash of the call.
+		/// A multisig operation has been approved by someone. [approving, timepoint, multisig, call_hash]
 		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
-		/// A multisig operation has been executed. First param is the account that is
-		/// approving, third is the multisig account, fourth is hash of the call to be executed.
+		/// A multisig operation has been executed. [approving, timepoint, multisig, call_hash]
 		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
-		/// A multisig operation has been cancelled. First param is the account that is
-		/// cancelling, third is the multisig account, fourth is hash of the call.
+		/// A multisig operation has been cancelled. [cancelling, timepoint, multisig, call_hash]
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 	}
 }

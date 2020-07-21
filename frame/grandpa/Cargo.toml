@@ -21,12 +21,15 @@ sp-session = { version = "2.0.0-rc4", default-features = false, path = "../../pr
 sp-std = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0-rc4", default-features = false, path = "../../primitives/staking" }
+frame-benchmarking = { version = "2.0.0-rc4", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0-rc4", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-rc4", default-features = false, path = "../system" }
+pallet-authorship = { version = "2.0.0-rc4", default-features = false, path = "../authorship" }
 pallet-session = { version = "2.0.0-rc4", default-features = false, path = "../session" }
 pallet-finality-tracker = { version = "2.0.0-rc4", default-features = false, path = "../finality-tracker" }
 
 [dev-dependencies]
+frame-benchmarking = { version = "2.0.0-rc4", path = "../benchmarking" }
 grandpa = { package = "finality-grandpa", version = "0.12.3", features = ["derive-codec"] }
 sp-io = { version = "2.0.0-rc4", path = "../../primitives/io" }
 sp-keyring = { version = "2.0.0-rc4", path = "../../primitives/keyring" }
@@ -41,6 +44,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"frame-benchmarking/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-finality-grandpa/std",
@@ -50,6 +54,8 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"frame-system/std",
+	"pallet-authorship/std",
 	"pallet-session/std",
 	"pallet-finality-tracker/std",
 ]
+runtime-benchmarks = ["frame-benchmarking"]
