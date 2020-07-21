@@ -3611,7 +3611,6 @@ dependencies = [
  "sc-rpc",
  "sc-service",
  "sc-service-test",
- "sc-service-types",
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
@@ -3828,7 +3827,6 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-network",
  "sc-service",
- "sc-service-types",
  "sc-transaction-pool",
  "sp-consensus",
  "sp-consensus-aura",
@@ -7082,20 +7080,6 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.1.22",
-]
-
-[[package]]
-name = "sc-service-types"
-version = "0.8.0-rc5"
-dependencies = [
- "sc-consensus",
- "sc-consensus-aura",
- "sc-consensus-babe",
- "sc-finality-grandpa",
- "sc-network",
- "sc-service",
- "sc-transaction-pool",
- "sp-api",
 ]
 
 [[package]]

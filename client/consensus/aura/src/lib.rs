@@ -714,7 +714,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
+pub type AuraImportQueue<B, Client> = BasicQueue<B, sp_api::TransactionFor<Client, B>>;
 
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
@@ -824,7 +824,7 @@ pub fn import_queue<B, I, C, P, S>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
 	registry: Option<&Registry>,
-) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
+) -> Result<AuraImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,

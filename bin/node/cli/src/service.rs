@@ -37,31 +37,31 @@ use sp_runtime::traits::Block as BlockT;
 use futures::prelude::*;
 use sc_client_api::{ExecutorProvider, RemoteBackend};
 use sp_core::traits::BareCryptoStorePtr;
-use sc_consensus_babe::BabeLink;
+use node_executor::Executor;
 
-mod prelude {
-	use super::*;
-	use node_executor::Executor;
-	sc_service_types::setup_types!(Block, RuntimeApi, Executor);
-}
-
-use prelude::{full, light};
+type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
+type FullBackend = sc_service::TFullBackend<Block>;
+type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
+type FullGrandpaBlockImport =
+	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
+type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
 pub fn new_full_params(config: Configuration) -> Result<(
 	sc_service::ServiceParams<
-		Block, full::Client, full::BabeImportQueue, full::BasicPool, node_rpc::IoHandler,
-		full::Backend
+		Block, FullClient,
+		sc_consensus_babe::BabeImportQueue<Block, FullClient>,
+		sc_transaction_pool::FullPool<Block, FullClient>, node_rpc::IoHandler,
+		FullBackend
 	>,
 	(
-		full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>,
-		full::GrandpaLink<full::LongestChain>, BabeLink<Block>,
+		sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+		grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
+		sc_consensus_babe::BabeLink<Block>,
 	),
 	grandpa::SharedVoterState,
-	full::LongestChain,
+	FullSelectChain,
 	InherentDataProviders
 ), ServiceError> {
-	use node_executor::Executor;
-
 	let (client, backend, keystore, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
@@ -166,11 +166,13 @@ pub fn new_full_params(config: Configuration) -> Result<(
 pub fn new_full_base(
 	config: Configuration,
 	with_startup_data: impl FnOnce(
-		&full::BabeBlockImport<full::GrandpaBlockImport<full::LongestChain>>, &BabeLink<Block>,
+		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+		&sc_consensus_babe::BabeLink<Block>,
 	)
 ) -> Result<(
-	TaskManager, InherentDataProviders, Arc<full::Client>,
-	Arc<NetworkService<Block, <Block as BlockT>::Hash>>, Arc<full::BasicPool>
+	TaskManager, InherentDataProviders, Arc<FullClient>,
+	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+	Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
 ), ServiceError> {
 	let (params, import_setup, rpc_setup, select_chain, inherent_data_providers)
 		= new_full_params(config)?;
@@ -325,12 +327,12 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, Arc<RpcHandlers>, Arc<light::Client>,
+	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
-	Arc<light::BasicPool>
+	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
 	let (client, backend, keystore, task_manager, on_demand) =
-		sc_service::new_light_parts::<Block, RuntimeApi, node_executor::Executor>(&config)?;
+		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 

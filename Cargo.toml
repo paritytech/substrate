@@ -52,7 +52,6 @@ members = [
 	"client/rpc-api",
 	"client/service",
 	"client/service/test",
-	"client/service/types",
 	"client/state-db",
 	"client/telemetry",
 	"client/transaction-pool",
