@@ -619,7 +619,7 @@ impl<T: Trait> Module<T> {
 		address: T::AccountId,
 		key: [u8; 32],
 	) -> sp_std::result::Result<Option<Vec<u8>>, ContractAccessError> {
-		let contract_info = <ContractInfoOf<T>>::get(&address)
+		let contract_info = ContractInfoOf::<T>::get(&address)
 			.ok_or(ContractAccessError::DoesntExist)?
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
