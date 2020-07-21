@@ -156,7 +156,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 	key: &[u8]
 ) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
 	// we can't query any roots before root
-	let max = ::std::cmp::min(max, end.number.clone());
+	let max = std::cmp::min(max, end.number.clone());
 
 	DrilldownIterator {
 		essence: DrilldownIteratorEssence {
