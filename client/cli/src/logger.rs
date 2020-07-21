@@ -25,7 +25,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use crate::error::{Error, Result};
+use crate::error::{Result};
 
 type IoResult = std::result::Result<(), std::io::Error>;
 
@@ -43,14 +43,14 @@ pub struct LogRotationOpt {
 	/// Rotate the log file when the local clock has started a new day/hour/minute/second
 	/// since the current file has been created.
 	#[structopt(long,
-		conflicts_with("log-size"),
+		requires("log-directory"),
 		possible_values(&["day", "hour", "minute", "second"]),
 		parse(from_str = age_from_str))
 	]
 	pub log_age: Option<Age>,
 
 	/// Rotate the log file when it exceeds this size (in bytes).
-	#[structopt(long, conflicts_with("log-age"))]
+	#[structopt(long, requires("log-directory"))]
 	pub log_size: Option<u64>,
 }
 
@@ -175,9 +175,9 @@ pub fn init_logger(
 	let criterion = match (age, size) {
 		(Some(a), None) => Criterion::Age(a),
 		(None, Some(s)) => Criterion::Size(s),
+		(Some(age), Some(size)) => Criterion::AgeOrSize(age, size),
 		// Default to rotating with a size of `DEFAULT_ROTATION_SIZE`.
 		(None, None) => Criterion::Size(DEFAULT_ROTATION_SIZE),
-		_ => return Err(Error::Input("Only one of Age or Size should be defined".into()))
 	};
 
 	let isatty_stderr = atty::is(atty::Stream::Stderr);
