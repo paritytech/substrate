@@ -156,10 +156,8 @@ pub fn init_logger(
 	// Add filters defined by RUST_LOG.
 	builder.insert_modules_from(LogSpecification::env()?);
 
-	// Dashes are to be replaced with underscores.
-	let pattern = pattern.replace("-", "_");
 	// Add filters passed in as argument.
-	builder.insert_modules_from(LogSpecification::parse(&pattern)?);
+	builder.insert_modules_from(LogSpecification::parse(pattern)?);
 
 	// Build the LogSpec.
 	let spec = builder.build();
