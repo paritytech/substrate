@@ -85,7 +85,7 @@ pub fn key_changes_proof<'a, H: Hasher, Number: BlockNumber>(
 	key: &[u8],
 ) -> Result<Vec<Vec<u8>>, String> where H::Out: Codec {
 	// we can't query any roots before root
-	let max = ::std::cmp::min(max, end.number.clone());
+	let max = std::cmp::min(max, end.number.clone());
 
 	let mut iter = ProvingDrilldownIterator {
 		essence: DrilldownIteratorEssence {

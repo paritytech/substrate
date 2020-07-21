@@ -124,7 +124,7 @@ impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
-			storage: storage,
+			storage,
 		}
 	}
 }
@@ -155,7 +155,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				aux: HashMap::new(),
 			}));
 		Blockchain {
-			storage: storage,
+			storage,
 		}
 	}
 

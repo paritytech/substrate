@@ -302,7 +302,7 @@ pub fn new_full_base(
 			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(telemetry_on_connect_sinks.on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry: prometheus_registry,
+			prometheus_registry,
 			shared_voter_state,
 		};
 
