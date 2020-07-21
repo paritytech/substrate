@@ -252,7 +252,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 					}
 					FnArg::Typed(arg)
 				},
-				r => r.clone(),
+				r => r,
 			});
 
 		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();

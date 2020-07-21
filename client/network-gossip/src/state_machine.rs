@@ -180,7 +180,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		let validator = self.validator.clone();
 		let mut context = NetworkContext { gossip: self, network };
-		validator.new_peer(&mut context, &who, role.clone());
+		validator.new_peer(&mut context, &who, role);
 	}
 
 	fn register_message_hashed(

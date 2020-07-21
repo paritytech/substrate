@@ -518,7 +518,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let temp = tempdir_with_prefix("substrate-sync-test");
 	let mut network = TestNet::new(
 		&temp,
-		spec.clone(),
+		spec,
 		(0..NUM_FULL_NODES).map(|_| { |cfg| full_builder(cfg) }),
 		(0..NUM_LIGHT_NODES).map(|_| { |cfg| light_builder(cfg) }),
 		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
@@ -592,7 +592,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	let temp = tempdir_with_prefix("substrate-consensus-test");
 	let mut network = TestNet::new(
 		&temp,
-		spec.clone(),
+		spec,
 		(0..NUM_FULL_NODES / 2).map(|_| { |cfg| full_builder(cfg).map(|s| (s, ())) }),
 		(0..NUM_LIGHT_NODES / 2).map(|_| { |cfg| light_builder(cfg) }),
 		authorities.into_iter().map(|key| (key, { |cfg| full_builder(cfg).map(|s| (s, ())) })),

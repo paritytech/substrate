@@ -1626,7 +1626,7 @@ decl_module! {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
-				Self::deposit_event(RawEvent::Unbonded(ledger.stash.clone(), value));
+				Self::deposit_event(RawEvent::Unbonded(ledger.stash, value));
 			}
 		}
 
