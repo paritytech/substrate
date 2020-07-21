@@ -510,7 +510,7 @@ pub trait CliConfiguration: Sized {
 		sp_panic_handler::set(&C::support_url(), &C::impl_version());
 
 		fdlimit::raise_fd_limit();
-		init_logger(&logger_pattern, Some(log_rotation_opt))?;
+		let _ = init_logger(&logger_pattern, Some(log_rotation_opt)).map_err(|e| eprintln!("{}", e));
 
 		Ok(())
 	}
