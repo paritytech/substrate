@@ -353,7 +353,7 @@ fn execute_sandboxed(
 				Memory::new() can't return a Error qed"
 			),
 		};
-		env_builder.add_memory("env", "memory", memory.clone());
+		env_builder.add_memory("env", "memory", memory);
 		env_builder
 	};
 
