@@ -119,7 +119,7 @@ codecov:
     # RUSTFLAGS are the cause target cache can't be used here
     - unset "CARGO_TARGET_DIR"
     - cargo clean
-    - time cargo install grcov rust-covfix
+    - time cargo +nightly install grcov rust-covfix
     - time cargo +nightly test --workspace --locked --release --verbose -Z package-features --features runtime-benchmarks --no-fail-fast
     # - cargo build might also be needed
     # coverage with branches
