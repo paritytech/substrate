@@ -198,7 +198,7 @@ impl_parse_for_opt!(DeclStorageBuild => keyword::build);
 #[derive(ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
-	DoubleMap(DeclStorageDoubleMap),
+	DoubleMap(Box<DeclStorageDoubleMap>),
 	Simple(syn::Type),
 }
 
@@ -478,13 +478,13 @@ fn parse_storage_line_defs(
 				}
 			),
 			DeclStorageType::DoubleMap(map) => super::StorageLineTypeDef::DoubleMap(
-				super::DoubleMapDef {
+				Box::new(super::DoubleMapDef {
 					hasher1: map.hasher1.inner.ok_or_else(no_hasher_error)?.into(),
 					hasher2: map.hasher2.inner.ok_or_else(no_hasher_error)?.into(),
 					key1: map.key1,
 					key2: map.key2,
 					value: map.value,
-				}
+				})
 			),
 			DeclStorageType::Simple(expr) => super::StorageLineTypeDef::Simple(expr),
 		};

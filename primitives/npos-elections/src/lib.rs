@@ -416,7 +416,7 @@ pub fn seq_phragmen<AccountId, R>(
 						n.load.n(),
 						n.budget,
 						c.approval_stake,
-					).unwrap_or(Bounded::max_value());
+					).unwrap_or_else(|_| Bounded::max_value());
 					let temp_d = n.load.d();
 					let temp = Rational128::from(temp_n, temp_d);
 					c.score = c.score.lazy_saturating_add(temp);
@@ -470,14 +470,14 @@ pub fn seq_phragmen<AccountId, R>(
 								n.load.n(),
 							)
 							// If result cannot fit in u128. Not much we can do about it.
-							.unwrap_or(Bounded::max_value());
+							.unwrap_or_else(|_| Bounded::max_value());
 
 							TryFrom::try_from(parts)
 								// If the result cannot fit into R::Inner. Defensive only. This can
 								// never happen. `desired_scale * e / n`, where `e / n < 1` always
 								// yields a value smaller than `desired_scale`, which will fit into
 								// R::Inner.
-								.unwrap_or(Bounded::max_value())
+								.unwrap_or_else(|_| Bounded::max_value())
 						} else {
 							// defensive only. Both edge and voter loads are built from
 							// scores, hence MUST have the same denominator.
