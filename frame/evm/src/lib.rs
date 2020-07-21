@@ -40,7 +40,8 @@ use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
 use sha3::{Digest, Keccak256};
-use evm::{ExitReason, ExitSucceed, ExitError, Config};
+pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
+use evm::Config;
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
@@ -200,17 +201,17 @@ decl_event! {
 	{
 		/// Ethereum events from contracts.
 		Log(Log),
-		/// A contract has been created at given address.
+		/// A contract has been created at given [address].
 		Created(H160),
-		/// A contract was attempted to be created, but the execution failed.
+		/// A [contract] was attempted to be created, but the execution failed.
 		CreatedFailed(H160),
-		/// A contract has been executed successfully with states applied.
+		/// A [contract] has been executed successfully with states applied.
 		Executed(H160),
-		/// A contract has been executed with errors. States are reverted with only gas fees applied.
+		/// A [contract] has been executed with errors. States are reverted with only gas fees applied.
 		ExecutedFailed(H160),
-		/// A deposit has been made at a given address.
+		/// A deposit has been made at a given address. [sender, address, value]
 		BalanceDeposit(AccountId, H160, U256),
-		/// A withdrawal has been made from a given address.
+		/// A withdrawal has been made from a given address. [sender, address, value]
 		BalanceWithdraw(AccountId, H160, U256),
 	}
 }
@@ -309,11 +310,12 @@ decl_module! {
 				gas_limit,
 				gas_price,
 				nonce,
+				true,
 			)? {
-				ExitReason::Succeed(_) => {
+				(ExitReason::Succeed(_), _, _) => {
 					Module::<T>::deposit_event(Event::<T>::Executed(target));
 				},
-				ExitReason::Error(_) | ExitReason::Revert(_) | ExitReason::Fatal(_) => {
+				(_, _, _) => {
 					Module::<T>::deposit_event(Event::<T>::ExecutedFailed(target));
 				},
 			}
@@ -343,12 +345,13 @@ decl_module! {
 				value,
 				gas_limit,
 				gas_price,
-				nonce
+				nonce,
+				true,
 			)? {
-				(create_address, ExitReason::Succeed(_)) => {
+				(ExitReason::Succeed(_), create_address, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(create_address, _) => {
+				(_, create_address, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -379,12 +382,13 @@ decl_module! {
 				value,
 				gas_limit,
 				gas_price,
-				nonce
+				nonce,
+				true,
 			)? {
-				(create_address, ExitReason::Succeed(_)) => {
+				(ExitReason::Succeed(_), create_address, _) => {
 					Module::<T>::deposit_event(Event::<T>::Created(create_address));
 				},
-				(create_address, _) => {
+				(_, create_address, _) => {
 					Module::<T>::deposit_event(Event::<T>::CreatedFailed(create_address));
 				},
 			}
@@ -434,23 +438,26 @@ impl<T: Trait> Module<T> {
 		value: U256,
 		gas_limit: u32,
 		gas_price: U256,
-		nonce: Option<U256>
-	) -> Result<(H160, ExitReason), Error<T>> {
+		nonce: Option<U256>,
+		apply_state: bool,
+	) -> Result<(ExitReason, H160, U256), Error<T>> {
 		Self::execute_evm(
 			source,
 			value,
 			gas_limit,
 			gas_price,
 			nonce,
+			apply_state,
 			|executor| {
-				(executor.create_address(
+				let address = executor.create_address(
 					evm::CreateScheme::Legacy { caller: source },
-				), executor.transact_create(
+				);
+				(executor.transact_create(
 					source,
 					value,
 					init,
 					gas_limit as usize,
-				))
+				), address)
 			},
 		)
 	}
@@ -463,8 +470,9 @@ impl<T: Trait> Module<T> {
 		value: U256,
 		gas_limit: u32,
 		gas_price: U256,
-		nonce: Option<U256>
-	) -> Result<(H160, ExitReason), Error<T>> {
+		nonce: Option<U256>,
+		apply_state: bool,
+	) -> Result<(ExitReason, H160, U256), Error<T>> {
 		let code_hash = H256::from_slice(Keccak256::digest(&init).as_slice());
 		Self::execute_evm(
 			source,
@@ -472,16 +480,18 @@ impl<T: Trait> Module<T> {
 			gas_limit,
 			gas_price,
 			nonce,
+			apply_state,
 			|executor| {
-				(executor.create_address(
+				let address = executor.create_address(
 					evm::CreateScheme::Create2 { caller: source, code_hash, salt },
-				), executor.transact_create2(
+				);
+				(executor.transact_create2(
 					source,
 					value,
 					init,
 					salt,
 					gas_limit as usize,
-				))
+				), address)
 			},
 		)
 	}
@@ -495,21 +505,23 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>,
-	) -> Result<ExitReason, Error<T>> {
-		Ok(Self::execute_evm(
+		apply_state: bool,
+	) -> Result<(ExitReason, Vec<u8>, U256), Error<T>> {
+		Self::execute_evm(
 			source,
 			value,
 			gas_limit,
 			gas_price,
 			nonce,
-			|executor| ((), executor.transact_call(
+			apply_state,
+			|executor| executor.transact_call(
 				source,
 				target,
 				value,
 				input,
 				gas_limit as usize,
-			)),
-		)?.1)
+			),
+		)
 	}
 
 	/// Execute an EVM operation.
@@ -519,9 +531,10 @@ impl<T: Trait> Module<T> {
 		gas_limit: u32,
 		gas_price: U256,
 		nonce: Option<U256>,
+		apply_state: bool,
 		f: F,
-	) -> Result<(R, ExitReason), Error<T>> where
-		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (R, ExitReason),
+	) -> Result<(ExitReason, R, U256), Error<T>> where
+		F: FnOnce(&mut StackExecutor<Backend<T>>) -> (ExitReason, R),
 	{
 		let vicinity = Vicinity {
 			gas_price,
@@ -549,12 +562,15 @@ impl<T: Trait> Module<T> {
 
 		let (retv, reason) = f(&mut executor);
 
+		let used_gas = U256::from(executor.used_gas());
 		let actual_fee = executor.fee(gas_price);
 		executor.deposit(source, total_fee.saturating_sub(actual_fee));
 
-		let (values, logs) = executor.deconstruct();
-		backend.apply(values, logs, true);
+		if apply_state {
+			let (values, logs) = executor.deconstruct();
+			backend.apply(values, logs, true);
+		}
 
-		Ok((retv, reason))
+		Ok((retv, reason, used_gas))
 	}
 }

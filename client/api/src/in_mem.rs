@@ -114,11 +114,17 @@ pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
 
+impl<Block: BlockT> Default for Blockchain<Block> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
-			storage: storage.clone(),
+			storage,
 		}
 	}
 }
@@ -149,7 +155,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				aux: HashMap::new(),
 			}));
 		Blockchain {
-			storage: storage.clone(),
+			storage,
 		}
 	}
 
@@ -340,7 +346,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header(BlockId::hash(hash))?.map(|header| CachedHeaderMetadata::from(&header))
-			.ok_or(sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("header not found: {}", hash)))
 	}
 
 	fn insert_header_metadata(&self, _hash: Block::Hash, _metadata: CachedHeaderMetadata<Block>) {

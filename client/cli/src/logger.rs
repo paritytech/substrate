@@ -18,15 +18,13 @@
 
 use ansi_term::Colour;
 use flexi_logger::{
-    DeferredNow, Duplicate, LogSpecBuilder,
-    LogSpecification, LogTarget, Logger, Criterion, Naming, Cleanup, Age,
+	DeferredNow, Duplicate, LogSpecBuilder,
+	LogSpecification, LogTarget, Logger, Criterion, Naming, Cleanup, Age,
 };
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::path::PathBuf;
-use structopt::{
-	StructOpt,
-};
+use structopt::StructOpt;
 use crate::error::{Error, Result};
 
 type IoResult = std::result::Result<(), std::io::Error>;
@@ -35,18 +33,18 @@ type IoResult = std::result::Result<(), std::io::Error>;
 const DEFAULT_ROTATION_SIZE: u64 = u64::MAX;
 
 /// Options for log rotation.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Default, Clone)]
 pub struct LogRotationOpt {
 	/// Specify the path of the directory which will contain the log files.
 	/// Defaults to never rotating logs.
 	#[structopt(long, parse(from_os_str))]
 	log_directory: Option<PathBuf>,
-	
+
 	/// Rotate the log file when the local clock has started a new day/hour/minute/second
 	/// since the current file has been created.
 	#[structopt(long,
-		conflicts_with("log-size"), 
-		possible_values(&["day", "hour", "minute", "second"]), 
+		conflicts_with("log-size"),
+		possible_values(&["day", "hour", "minute", "second"]),
 		parse(from_str = age_from_str))
 	]
 	log_age: Option<Age>,
@@ -58,90 +56,92 @@ pub struct LogRotationOpt {
 
 /// Utility for parsing an Age from a &str.
 fn age_from_str(s: &str) -> Age {
-    match s {
-        "day" => Age::Day,
-        "hour" => Age::Hour,
-        "minute" => Age::Minute,
-        "second" => Age::Second,
-        _ => unreachable!(),
+	match s {
+		"day" => Age::Day,
+		"hour" => Age::Hour,
+		"minute" => Age::Minute,
+		"second" => Age::Second,
+		_ => unreachable!(),
 	}
 }
 
 /// Format used when writing to a tty. Colors the output.
 fn colored_fmt(
-    w: &mut dyn std::io::Write,
-    _now: &mut DeferredNow,
-    record: &log::Record,
+	w: &mut dyn std::io::Write,
+	_now: &mut DeferredNow,
+	record: &log::Record,
 ) -> IoResult {
-    let now = time::now();
-    let timestamp =
-        time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
+	let now = time::now();
+	let timestamp =
+		time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
 
-    let output = if log::max_level() <= log::LevelFilter::Info {
-        format!(
-            "{} {}",
-            Colour::Black.bold().paint(timestamp),
-            record.args(),
-        )
-    } else {
-        let name = ::std::thread::current()
-            .name()
-            .map_or_else(Default::default, |x| {
-                format!("{}", Colour::Blue.bold().paint(x))
-            });
-        let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-        let timestamp = format!("{}.{:03}", timestamp, millis);
-        format!(
-            "{} {} {} {}  {}",
-            Colour::Black.bold().paint(timestamp),
-            name,
-            record.level(),
-            record.target(),
-            record.args()
-        )
-    };
+	let output = if log::max_level() <= log::LevelFilter::Info {
+		format!(
+			"{} {}",
+			Colour::Black.bold().paint(timestamp),
+			record.args(),
+		)
+	} else {
+		let name = ::std::thread::current()
+			.name()
+			.map_or_else(Default::default, |x| {
+				format!("{}", Colour::Blue.bold().paint(x))
+			});
+		let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
+		let timestamp = format!("{}.{:03}", timestamp, millis);
+		format!(
+			"{} {} {} {}  {}",
+			Colour::Black.bold().paint(timestamp),
+			name,
+			record.level(),
+			record.target(),
+			record.args()
+		)
+	};
 
-    write!(w, "{}", output)
+	write!(w, "{}", output)
 }
 
 /// Format used when logging to files. Does not add any colors.
 fn file_fmt(
-    w: &mut dyn std::io::Write,
-    _now: &mut DeferredNow,
-    record: &log::Record,
+	w: &mut dyn std::io::Write,
+	_now: &mut DeferredNow,
+	record: &log::Record,
 ) -> IoResult {
-    let now = time::now();
-    let timestamp =
-        time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
+	let now = time::now();
+	let timestamp =
+		time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
 
-    let output = if log::max_level() <= log::LevelFilter::Info {
-        format!("{} {}", timestamp, record.args(),)
-    } else {
-        let name = std::thread::current()
-            .name()
-            .map_or_else(Default::default, |x| format!("{}", x));
-        let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
-        let timestamp = format!("{}.{:03}", timestamp, millis);
-        format!(
-            "{} {} {} {}  {}",
-            timestamp,
-            name,
-            record.level(),
-            record.target(),
-            record.args()
-        )
+	let output = if log::max_level() <= log::LevelFilter::Info {
+		format!("{} {}", timestamp, record.args(),)
+	} else {
+		let name = std::thread::current()
+			.name()
+			.map_or_else(Default::default, |x| format!("{}", x));
+		let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
+		let timestamp = format!("{}.{:03}", timestamp, millis);
+		format!(
+			"{} {} {} {}  {}",
+			timestamp,
+			name,
+			record.level(),
+			record.target(),
+			record.args()
+		)
 	};
 
 	// Required because substrate sometimes sends strings that are colored.
 	// Doing this ensures no colors are ever printed to files.
 	let output = kill_color(&output);
 
-    write!(w, "{}", output)
+	write!(w, "{}", output)
 }
 
 /// Initialize the logger
-pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<()> {
-
+pub fn init_logger(
+	pattern: &str,
+	log_rotation_opt: Option<LogRotationOpt>,
+) -> Result<()> {
 	let mut builder = LogSpecBuilder::new();
 	// Disable info logging by default for some modules:
 	builder.module("ws", log::LevelFilter::Off);
@@ -167,6 +167,7 @@ pub fn init_logger(pattern: &str, log_rotation_opt: &LogRotationOpt) -> Result<(
 	// Never cleanup old logs; let the end-user take care of that.
 	let cleanup = Cleanup::Never;
 
+	let log_rotation_opt = log_rotation_opt.unwrap_or_default();
 	let age = log_rotation_opt.log_age;
 	let size = log_rotation_opt.log_size;
 
@@ -254,7 +255,7 @@ mod tests {
 			log_size: None,
 		};
 
-		assert!(init_logger(pattern, &log_rotation_opt).is_ok());
+		assert!(init_logger(pattern, Some(log_rotation_opt)).is_ok());
 	}
 
 	#[test]
@@ -266,6 +267,6 @@ mod tests {
 			log_size: Some(1337),
 		};
 
-		assert!(init_logger(pattern, &log_rotation_opt).is_err());
+		assert!(init_logger(pattern, Some(log_rotation_opt)).is_err());
 	}
 }
