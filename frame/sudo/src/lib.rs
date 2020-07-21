@@ -53,7 +53,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_root};
+//! use frame_system::ensure_root;
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
@@ -94,7 +94,7 @@ use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
 use frame_support::{weights::{Weight, GetDispatchInfo}, traits::UnfilteredDispatchable};
-use frame_system::{self as system, ensure_signed};
+use frame_system::ensure_signed;
 
 #[cfg(test)]
 mod mock;
@@ -210,11 +210,11 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		Sudid(DispatchResult),
-		/// The sudoer just switched identity; the old key is supplied.
+		/// The [sudoer] just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		SudoAsDone(bool),
 	}
 );

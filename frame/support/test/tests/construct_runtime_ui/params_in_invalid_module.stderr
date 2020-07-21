@@ -1,5 +1,0 @@
-error: `Call` is not allowed to have arguments in parens. Only the following modules are allowed to have arguments in parens: `Inherent`.
-  --> $DIR/params_in_invalid_module.rs:10:40
-   |
-10 |         Balance: balances::<Instance1>::{Call(toto), Origin<I>},
-   |                                              ^^^^^^

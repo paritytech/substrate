@@ -26,9 +26,9 @@ use sp_runtime::traits::{
 	StaticLookup, Member, LookupError, Zero, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
-use frame_support::dispatch::{DispatchResult, Weight};
+use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_support::weights::constants::WEIGHT_PER_MICROS;
+use frame_support::weights::{Weight, constants::WEIGHT_PER_MICROS};
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
@@ -39,6 +39,22 @@ mod benchmarking;
 
 pub type Address<T> = RawAddress<<T as frame_system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+pub trait WeightInfo {
+	fn claim(i: u32, ) -> Weight;
+	fn transfer(i: u32, ) -> Weight;
+	fn free(i: u32, ) -> Weight;
+	fn force_transfer(i: u32, ) -> Weight;
+	fn freeze(i: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn claim(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn transfer(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn free(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn force_transfer(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn freeze(_i: u32, ) -> Weight { 1_000_000_000 }
+}
 
 /// The module's config trait.
 pub trait Trait: frame_system::Trait {
@@ -54,6 +70,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -76,11 +95,11 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A account index was assigned.
+		/// A account index was assigned. [who, index]
 		IndexAssigned(AccountId, AccountIndex),
-		/// A account index has been freed up (unassigned).
+		/// A account index has been freed up (unassigned). [index]
 		IndexFreed(AccountIndex),
-		/// A account index has been frozen to its current account ID.
+		/// A account index has been frozen to its current account ID. [who, index]
 		IndexFrozen(AccountIndex, AccountId),
 	}
 );
@@ -103,16 +122,6 @@ decl_error! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> Weight {
-			use frame_support::migration::{StorageIterator, put_storage_value};
-			for (key, value) in StorageIterator::<
-				(T::AccountId, BalanceOf<T>)
-			>::new(b"Indices", b"Accounts").drain() {
-				put_storage_value(b"Indices", b"Accounts", &key, (value.0, value.1, false));
-			}
-			1_000_000_000
-		}
 
 		/// Assign an previously unassigned index.
 		///

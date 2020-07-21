@@ -72,6 +72,7 @@ use sc_network::{
 	ExHashT,
 	Multiaddr,
 	NetworkStateInfo,
+	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, Pair};
@@ -430,7 +431,7 @@ where
 			.get(&remote_key)
 			.ok_or(Error::MatchingHashedAuthorityIdWithAuthorityId)?;
 
-		let local_peer_id = multiaddr::Protocol::P2p(self.network.local_peer_id().into());
+		let local_peer_id = self.network.local_peer_id();
 
 		let remote_addresses: Vec<Multiaddr> = values.into_iter()
 			.map(|(_k, v)| {
@@ -459,13 +460,32 @@ where
 			.into_iter()
 			.flatten()
 			// Ignore own addresses.
-			.filter(|addr| !addr.iter().any(|protocol|
-				protocol == local_peer_id
-			))
+			.filter(|addr| !addr.iter().any(|protocol| {
+				// Parse to PeerId first as Multihashes of old and new PeerId
+				// representation don't equal.
+				//
+				// See https://github.com/libp2p/rust-libp2p/issues/555 for
+				// details.
+				if let multiaddr::Protocol::P2p(hash) = protocol {
+					let peer_id = match PeerId::from_multihash(hash) {
+						Ok(peer_id) => peer_id,
+						Err(_) => return true, // Discard address.
+					};
+
+					return peer_id == local_peer_id;
+				}
+
+				false // Multiaddr does not contain a PeerId.
+			}))
 			.collect();
 
 		if !remote_addresses.is_empty() {
 			self.addr_cache.insert(authority_id.clone(), remote_addresses);
+			if let Some(metrics) = &self.metrics {
+				metrics.known_authorities_count.set(
+					self.addr_cache.num_ids().try_into().unwrap_or(std::u64::MAX)
+				);
+			}
 			self.update_peer_set_priority_group()?;
 		}
 
@@ -636,6 +656,7 @@ pub(crate) struct Metrics {
 	request: Counter<U64>,
 	dht_event_received: CounterVec<U64>,
 	handle_value_found_event_failure: Counter<U64>,
+	known_authorities_count: Gauge<U64>,
 	priority_group_size: Gauge<U64>,
 }
 
@@ -679,6 +700,13 @@ impl Metrics {
 				Counter::new(
 					"authority_discovery_handle_value_found_event_failure",
 					"Number of times handling a dht value found event failed."
+				)?,
+				registry,
+			)?,
+			known_authorities_count: register(
+				Gauge::new(
+					"authority_discovery_known_authorities_count",
+					"Number of authorities known by authority discovery."
 				)?,
 				registry,
 			)?,
