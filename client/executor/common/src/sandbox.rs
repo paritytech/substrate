@@ -416,9 +416,10 @@ impl<FR> SandboxInstance<FR> {
 						.call(&args)
 						.map_err(|e| wasmi::Error::Function(e.to_string()))?;
 
-					assert_eq!(wasmtime_result.len(), 1, "multiple return types are not supported yet");
+					assert!(wasmtime_result.len() < 2, "multiple return types are not supported yet");
+
 					if let Some(wasmi_value) = wasmi_result {
-						let wasmtime_value = match *wasmtime_result.first().unwrap() {
+						let wasmtime_value = match *wasmtime_result.first().expect("value should exist") {
 							Val::I32(val) => RuntimeValue::I32(val),
 							Val::I64(val) => RuntimeValue::I64(val),
 							Val::F32(val) => RuntimeValue::F32(val.into()),
