@@ -455,7 +455,9 @@ impl BenchDb {
 		);
 
 		BenchContext {
-			client: Arc::new(client), backend, db_guard: directory_guard,
+			client: Arc::new(client),
+			db_guard: directory_guard,
+			backend,
 		}
 	}
 }
