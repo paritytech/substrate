@@ -745,13 +745,13 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 			client.clone(),
 			subscriptions.clone(),
 			remote_blockchain.clone(),
-			on_demand.clone()
+			on_demand.clone(),
 		);
 		let (state, child_state) = sc_rpc::state::new_light(
 			client.clone(),
 			subscriptions.clone(),
 			remote_blockchain.clone(),
-			on_demand.clone()
+			on_demand,
 		);
 		(chain, state, child_state)
 
@@ -763,15 +763,15 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	};
 
 	let author = sc_rpc::author::Author::new(
-		client.clone(),
-		transaction_pool.clone(),
+		client,
+		transaction_pool,
 		subscriptions,
-		keystore.clone(),
+		keystore,
 		deny_unsafe,
 	);
-	let system = system::System::new(system_info, system_rpc_tx.clone(), deny_unsafe);
+	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
 
-	let maybe_offchain_rpc = offchain_storage.clone()
+	let maybe_offchain_rpc = offchain_storage
 	.map(|storage| {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe);
 		// FIXME: Use plain Option (don't collect into HashMap) when we upgrade to jsonrpc 14.1
@@ -822,7 +822,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 {
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),
-		pool: transaction_pool.clone(),
+		pool: transaction_pool,
 		client: client.clone(),
 	});
 
@@ -856,8 +856,8 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 		chain: client.clone(),
 		finality_proof_provider,
 		finality_proof_request_builder,
-		on_demand: on_demand.clone(),
-		transaction_pool: transaction_pool_adapter.clone() as _,
+		on_demand: on_demand,
+		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),
 		protocol_id,
 		block_announce_validator,
@@ -872,7 +872,7 @@ fn build_network<TBl, TExPool, TImpQu, TCl>(
 	let future = build_network_future(
 		config.role.clone(),
 		network_mut,
-		client.clone(),
+		client,
 		network_status_sinks.clone(),
 		system_rpc_rx,
 		has_bootnodes,

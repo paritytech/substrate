@@ -268,7 +268,7 @@ pub fn new_full_base(
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
 	let keystore = if role.is_authority() {
-		Some(keystore.clone() as BareCryptoStorePtr)
+		Some(keystore as BareCryptoStorePtr)
 	} else {
 		None
 	};
@@ -297,7 +297,7 @@ pub fn new_full_base(
 			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(telemetry_on_connect_sinks.on_connect_stream()),
 			voting_rule: grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry: prometheus_registry,
+			prometheus_registry,
 			shared_voter_state,
 		};
 

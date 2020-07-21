@@ -336,7 +336,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 						let res = with_externalities_safe(&mut **ext, move || (call)())
 							.and_then(|r| r
 								.map(NativeOrEncoded::Native)
-								.map_err(|s| Error::ApiError(s.to_string()))
+								.map_err(|s| Error::ApiError(s))
 							);
 
 						Ok(res)

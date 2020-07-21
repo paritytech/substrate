@@ -202,7 +202,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		let prefixed_storage_key = child_info.prefixed_storage_key();
 		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
 			Ok(value) =>
-				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
+				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or_else(|| default_root.clone()),
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
 				default_root.clone()
