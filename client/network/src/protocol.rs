@@ -142,6 +142,7 @@ struct Metrics {
 	finality_proofs: GaugeVec<U64>,
 	justifications: GaugeVec<U64>,
 	propagated_transactions: Counter<U64>,
+	legacy_requests_received: Counter<U64>,
 }
 
 impl Metrics {
@@ -186,6 +187,10 @@ impl Metrics {
 			propagated_transactions: register(Counter::new(
 				"sync_propagated_transactions",
 				"Number of transactions propagated to at least one peer",
+			)?, r)?,
+			legacy_requests_received: register(Counter::new(
+				"sync_legacy_requests_received",
+				"Number of block/finality/light-client requests received on the legacy substream",
 			)?, r)?,
 		})
 	}
@@ -715,6 +720,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	fn on_block_request(&mut self, peer: PeerId, request: message::BlockRequest<B>) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?} for {:?}",
 			request.id,
 			peer,
@@ -1399,6 +1408,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.method,
 			request.block
 		);
+
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		let proof = match self.context_data.chain.execution_proof(
 			&BlockId::Hash(request.block),
 			&request.method,
@@ -1519,6 +1533,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteReadRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		if request.keys.is_empty() {
 			debug!(target: "sync", "Invalid remote read request sent by {}", who);
 			self.behaviour.disconnect_peer(&who);
@@ -1568,6 +1586,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteReadChildRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		if request.keys.is_empty() {
 			debug!(target: "sync", "Invalid remote child read request sent by {}", who);
 			self.behaviour.disconnect_peer(&who);
@@ -1624,6 +1646,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteHeaderRequest<NumberFor<B>>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
 			request.id, who, request.block);
 		let (header, proof) = match self.context_data.chain.header_proof(&BlockId::Number(request.block)) {
@@ -1654,6 +1680,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::RemoteChangesRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id,
 			who,
@@ -1717,6 +1747,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		who: PeerId,
 		request: message::FinalityProofRequest<B::Hash>,
 	) {
+		if let Some(metrics) = &self.metrics {
+			metrics.legacy_requests_received.inc();
+		}
+
 		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
 		let finality_proof = self.finality_proof_provider.as_ref()
 			.ok_or_else(|| String::from("Finality provider is not configured"))
