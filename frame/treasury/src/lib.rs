@@ -1169,7 +1169,7 @@ impl<T: Trait> Module<T> {
 			bounties_approval_len
 		});
 
-		total_weight += T::WeightInfo::on_initialize_proposals(bounties_len);
+		total_weight += T::WeightInfo::on_initialize_bounties(bounties_len);
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
