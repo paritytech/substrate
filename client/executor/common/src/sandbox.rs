@@ -592,7 +592,7 @@ where
 
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-	config.strategy(wasmtime::Strategy::Lightbeam).map_err(|_| InstantiationError::ModuleDecoding)?;
+	// config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
 
 	let wasmtime_engine = wasmtime::Engine::new(&config);
 	let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
@@ -611,7 +611,7 @@ where
 
 				let dispatch_thunk = dispatch_thunk.clone();
 				Some(wasmtime::Extern::Func(wasmtime::Func::new(&wasmtime_store, func_ty,
-					move |caller, params, result| {
+					move |_caller, params, result| {
 						SCH::with_sandbox_capabilities(|supervisor_externals| {
 							// Serialize arguments into a byte vector.
 							let invoke_args_data = params

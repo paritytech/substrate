@@ -355,7 +355,7 @@ impl SandboxCapabiliesHolder for Holder {
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
 		crate::state_holder::with_context(|ctx| {
-			f(&mut ctx.unwrap())
+			f(&mut ctx.expect("wasmtime executor is not set"))
 		})
 	}
 }

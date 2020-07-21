@@ -279,8 +279,10 @@ impl Sandbox for FunctionExecutor {
 			Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
 		};
 
+		let result = EXECUTOR.set(self, || sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state));
+
 		let instance_idx_or_err_code =
-			match sandbox::instantiate::<_, _, Holder>(dispatch_thunk, wasm, guest_env, state)
+			match result
 				.map(|i| i.register(&mut *self.inner.sandbox_store.borrow_mut()))
 			{
 				Ok(instance_idx) => instance_idx,
@@ -316,6 +318,7 @@ impl sandbox::SandboxCapabiliesHolder for Holder {
 	type SC = FunctionExecutor;
 
 	fn with_sandbox_capabilities<R, F: FnOnce(&mut Self::SC) -> R>(f: F) -> R {
+		assert!(EXECUTOR.is_set(), "wasmi executor is not set");
 		EXECUTOR.with(|executor| f(&mut executor.clone()))
 	}
 }
