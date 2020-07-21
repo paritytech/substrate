@@ -127,13 +127,11 @@ impl<C: SubstrateCli> Runner<C> {
 		let runtime_handle = tokio_runtime.handle().clone();
 
 		let task_executor = move |fut, task_type| {
-			let map_result = |_| ();
-
 			match task_type {
-				TaskType::Async => runtime_handle.spawn(fut).map(map_result),
+				TaskType::Async => runtime_handle.spawn(fut).map(drop),
 				TaskType::Blocking =>
 					runtime_handle.spawn_blocking(move || futures::executor::block_on(fut))
-						.map(map_result),
+						.map(drop),
 			}
 		};
 
