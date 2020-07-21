@@ -45,6 +45,7 @@ decl_event!(
 		/// Just a dummy event.
 		/// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		/// To emit this event, we call the deposit function, from our runtime functions
+		/// [something, who]
 		SomethingStored(u32, AccountId),
 	}
 );

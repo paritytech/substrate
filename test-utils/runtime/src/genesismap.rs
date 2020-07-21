@@ -47,7 +47,7 @@ impl GenesisConfig {
 	) -> Self {
 		GenesisConfig {
 			changes_trie_config,
-			authorities: authorities.clone(),
+			authorities: authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
 			extra_storage,

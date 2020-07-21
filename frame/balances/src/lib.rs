@@ -243,23 +243,24 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as Trait<I>>::Balance
 	{
-		/// An account was created with some free balance.
+		/// An account was created with some free balance. [account, free_balance]
 		Endowed(AccountId, Balance),
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
-		/// resulting in an outright loss.
+		/// resulting in an outright loss. [account, balance]
 		DustLost(AccountId, Balance),
-		/// Transfer succeeded (from, to, value).
+		/// Transfer succeeded. [from, to, value]
 		Transfer(AccountId, AccountId, Balance),
-		/// A balance was set by root (who, free, reserved).
+		/// A balance was set by root. [who, free, reserved]
 		BalanceSet(AccountId, Balance, Balance),
-		/// Some amount was deposited (e.g. for transaction fees).
+		/// Some amount was deposited (e.g. for transaction fees). [who, deposit]
 		Deposit(AccountId, Balance),
-		/// Some balance was reserved (moved from free to reserved).
+		/// Some balance was reserved (moved from free to reserved). [who, value]
 		Reserved(AccountId, Balance),
-		/// Some balance was unreserved (moved from reserved to free).
+		/// Some balance was unreserved (moved from reserved to free). [who, value]
 		Unreserved(AccountId, Balance),
 		/// Some balance was moved from the reserve of the first account to the second account.
 		/// Final argument indicates the destination balance type.
+		/// [from, to, balance, destination_status]
 		ReserveRepatriated(AccountId, AccountId, Balance, Status),
 	}
 );
@@ -1091,7 +1092,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 			// defensive only: overflow should never happen, however in case it does, then this
 			// operation is a no-op.
-			account.free = account.free.checked_add(&value).ok_or(Self::PositiveImbalance::zero())?;
+			account.free = account.free.checked_add(&value).ok_or_else(|| Self::PositiveImbalance::zero())?;
 
 			Ok(PositiveImbalance::new(value))
 		}).unwrap_or_else(|x| x)
@@ -1152,7 +1153,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			};
 			account.free = value;
 			Ok(imbalance)
-		}).unwrap_or(SignedImbalance::Positive(Self::PositiveImbalance::zero()))
+		}).unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
 

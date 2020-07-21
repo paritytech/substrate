@@ -467,39 +467,41 @@ decl_event! {
 		<T as frame_system::Trait>::Hash,
 		<T as frame_system::Trait>::BlockNumber,
 	{
-		/// A motion has been proposed by a public account.
+		/// A motion has been proposed by a public account. [proposal_index, deposit]
 		Proposed(PropIndex, Balance),
-		/// A public proposal has been tabled for referendum vote.
+		/// A public proposal has been tabled for referendum vote. [proposal_index, deposit, depositors]
 		Tabled(PropIndex, Balance, Vec<AccountId>),
 		/// An external proposal has been tabled.
 		ExternalTabled,
-		/// A referendum has begun.
+		/// A referendum has begun. [ref_index, threshold]
 		Started(ReferendumIndex, VoteThreshold),
-		/// A proposal has been approved by referendum.
+		/// A proposal has been approved by referendum. [ref_index]
 		Passed(ReferendumIndex),
-		/// A proposal has been rejected by referendum.
+		/// A proposal has been rejected by referendum. [ref_index]
 		NotPassed(ReferendumIndex),
-		/// A referendum has been cancelled.
+		/// A referendum has been cancelled. [ref_index]
 		Cancelled(ReferendumIndex),
-		/// A proposal has been enacted.
+		/// A proposal has been enacted. [ref_index, is_ok]
 		Executed(ReferendumIndex, bool),
-		/// An account has delegated their vote to another account.
+		/// An account has delegated their vote to another account. [who, target]
 		Delegated(AccountId, AccountId),
-		/// An account has cancelled a previous delegation operation.
+		/// An [account] has cancelled a previous delegation operation.
 		Undelegated(AccountId),
-		/// An external proposal has been vetoed.
+		/// An external proposal has been vetoed. [who, proposal_hash, until]
 		Vetoed(AccountId, Hash, BlockNumber),
-		/// A proposal's preimage was noted, and the deposit taken.
+		/// A proposal's preimage was noted, and the deposit taken. [proposal_hash, who, deposit]
 		PreimageNoted(Hash, AccountId, Balance),
-		/// A proposal preimage was removed and used (the deposit was returned).
+		/// A proposal preimage was removed and used (the deposit was returned). 
+		/// [proposal_hash, provider, deposit]
 		PreimageUsed(Hash, AccountId, Balance),
-		/// A proposal could not be executed because its preimage was invalid.
+		/// A proposal could not be executed because its preimage was invalid. [proposal_hash, ref_index]
 		PreimageInvalid(Hash, ReferendumIndex),
-		/// A proposal could not be executed because its preimage was missing.
+		/// A proposal could not be executed because its preimage was missing. [proposal_hash, ref_index]
 		PreimageMissing(Hash, ReferendumIndex),
-		/// A registered preimage was removed and the deposit collected by the reaper (last item).
+		/// A registered preimage was removed and the deposit collected by the reaper. 
+		/// [proposal_hash, provider, deposit, reaper]
 		PreimageReaped(Hash, AccountId, Balance, AccountId),
-		/// An account has been unlocked successfully.
+		/// An [account] has been unlocked successfully.
 		Unlocked(AccountId),
 	}
 }

@@ -169,7 +169,7 @@ pub enum StoredState<N> {
 
 decl_event! {
 	pub enum Event {
-		/// New authority set has been applied.
+		/// New authority set has been applied. [authority_set]
 		NewAuthorities(AuthorityList),
 		/// Current authority set has been paused.
 		Paused,
