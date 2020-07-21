@@ -794,100 +794,114 @@ macro_rules! impl_benchmark {
 				// Default number of steps for a component.
 				let mut prev_steps = 10;
 
-				// Select the component we will be benchmarking. Each component will be benchmarked.
-				for (idx, (name, low, high)) in components.iter().enumerate() {
-					// Get the number of steps for this component.
-					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
-					prev_steps = steps;
+				let repeat_benchmark = |
+					repeat: u32,
+					c: Vec<($crate::BenchmarkParameter, u32)>,
+					results: &mut Vec<$crate::BenchmarkResults>,
+				| -> Result<(), &'static str> {
+					// Run the benchmark `repeat` times.
+					for _ in 0..repeat {
+						// Set up the externalities environment for the setup we want to
+						// benchmark.
+						let closure_to_benchmark = <
+							SelectedBenchmark as $crate::BenchmarkingSetup<T>
+						>::instance(&selected_benchmark, &c)?;
 
-					// Skip this loop if steps is zero
-					if steps == 0 { continue }
+						// Set the block number to at least 1 so events are deposited.
+						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+							frame_system::Module::<T>::set_block_number(1.into());
+						}
 
-					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
-					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
+						// Commit the externalities to the database, flushing the DB cache.
+						// This will enable worst case scenario for reading from the database.
+						$crate::benchmarking::commit_db();
 
-					let diff = highest - lowest;
+						// Reset the read/write counter so we don't count operations in the setup process.
+						$crate::benchmarking::reset_read_write_count();
 
-					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = (diff / steps).max(1);
-					let num_of_steps = diff / step_size + 1;
+						// Time the extrinsic logic.
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"Start Benchmark: {:?}", c
+						);
 
-					for s in 0..num_of_steps {
-						// This is the value we will be testing for component `name`
-						let component_value = lowest + step_size * s;
+						let start_extrinsic = $crate::benchmarking::current_time();
+						closure_to_benchmark()?;
+						let finish_extrinsic = $crate::benchmarking::current_time();
+						let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+						// Commit the changes to get proper write count
+						$crate::benchmarking::commit_db();
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"End Benchmark: {} ns", elapsed_extrinsic
+						);
+						let read_write_count = $crate::benchmarking::read_write_count();
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"Read/Write Count {:?}", read_write_count
+						);
 
-						// Select the max value for all the other components.
-						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
-							.enumerate()
-							.map(|(idx, (n, _, h))|
-								if n == name {
-									(*n, component_value)
-								} else {
-									(*n, *highest_range_values.get(idx).unwrap_or(h))
-								}
-							)
-							.collect();
+						// Time the storage root recalculation.
+						let start_storage_root = $crate::benchmarking::current_time();
+						$crate::storage_root();
+						let finish_storage_root = $crate::benchmarking::current_time();
+						let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-						// Run the benchmark `repeat` times.
-						for _ in 0..repeat {
-							// Set up the externalities environment for the setup we want to
-							// benchmark.
-							let closure_to_benchmark = <
-								SelectedBenchmark as $crate::BenchmarkingSetup<T>
-							>::instance(&selected_benchmark, &c)?;
+						results.push($crate::BenchmarkResults {
+							components: c.clone(),
+							extrinsic_time: elapsed_extrinsic,
+							storage_root_time: elapsed_storage_root,
+							reads: read_write_count.0,
+							repeat_reads: read_write_count.1,
+							writes: read_write_count.2,
+							repeat_writes: read_write_count.3,
+						});
 
-							// Set the block number to at least 1 so events are deposited.
-							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-								frame_system::Module::<T>::set_block_number(1.into());
-							}
+						// Wipe the DB back to the genesis state.
+						$crate::benchmarking::wipe_db();
+					}
 
-							// Commit the externalities to the database, flushing the DB cache.
-							// This will enable worst case scenario for reading from the database.
-							$crate::benchmarking::commit_db();
+					Ok(())
+				};
 
-							// Reset the read/write counter so we don't count operations in the setup process.
-							$crate::benchmarking::reset_read_write_count();
+				if components.is_empty() {
+					repeat_benchmark(repeat, Default::default(), &mut results)?;
+				} else {
+					// Select the component we will be benchmarking. Each component will be benchmarked.
+					for (idx, (name, low, high)) in components.iter().enumerate() {
+						// Get the number of steps for this component.
+						let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
+						prev_steps = steps;
 
-							// Time the extrinsic logic.
-							frame_support::debug::trace!(
-								target: "benchmark",
-								"Start Benchmark: {:?} {:?}", name, component_value
-							);
+						// Skip this loop if steps is zero
+						if steps == 0 { continue }
 
-							let start_extrinsic = $crate::benchmarking::current_time();
-							closure_to_benchmark()?;
-							let finish_extrinsic = $crate::benchmarking::current_time();
-							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-							// Commit the changes to get proper write count
-							$crate::benchmarking::commit_db();
-							frame_support::debug::trace!(
-								target: "benchmark",
-								"End Benchmark: {} ns", elapsed_extrinsic
-							);
-							let read_write_count = $crate::benchmarking::read_write_count();
-							frame_support::debug::trace!(
-								target: "benchmark",
-								"Read/Write Count {:?}", read_write_count
-							);
+						let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
+						let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
 
-							// Time the storage root recalculation.
-							let start_storage_root = $crate::benchmarking::current_time();
-							$crate::storage_root();
-							let finish_storage_root = $crate::benchmarking::current_time();
-							let elapsed_storage_root = finish_storage_root - start_storage_root;
+						let diff = highest - lowest;
 
-							results.push($crate::BenchmarkResults {
-								components: c.clone(),
-								extrinsic_time: elapsed_extrinsic,
-								storage_root_time: elapsed_storage_root,
-								reads: read_write_count.0,
-								repeat_reads: read_write_count.1,
-								writes: read_write_count.2,
-								repeat_writes: read_write_count.3,
-							});
+						// Create up to `STEPS` steps for that component between high and low.
+						let step_size = (diff / steps).max(1);
+						let num_of_steps = diff / step_size + 1;
 
-							// Wipe the DB back to the genesis state.
-							$crate::benchmarking::wipe_db();
+						for s in 0..num_of_steps {
+							// This is the value we will be testing for component `name`
+							let component_value = lowest + step_size * s;
+
+							// Select the max value for all the other components.
+							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(idx, (n, _, h))|
+									if n == name {
+										(*n, component_value)
+									} else {
+										(*n, *highest_range_values.get(idx).unwrap_or(h))
+									}
+								)
+								.collect();
+
+							repeat_benchmark(repeat, c, &mut results)?;
 						}
 					}
 				}
@@ -938,99 +952,117 @@ macro_rules! impl_benchmark {
 				// Default number of steps for a component.
 				let mut prev_steps = 10;
 
-				// Select the component we will be benchmarking. Each component will be benchmarked.
-				for (idx, (name, low, high)) in components.iter().enumerate() {
-					// Get the number of steps for this component.
-					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
-					prev_steps = steps;
+				let repeat_benchmark = |
+					repeat: u32,
+					c: Vec<($crate::BenchmarkParameter, u32)>,
+					results: &mut Vec<$crate::BenchmarkResults>,
+				| -> Result<(), &'static str> {
+					// Run the benchmark `repeat` times.
+					for _ in 0..repeat {
+						// Set up the externalities environment for the setup we want to
+						// benchmark.
+						let closure_to_benchmark = <
+							SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>
+						>::instance(&selected_benchmark, &c)?;
 
-					// Skip this loop if steps is zero
-					if steps == 0 { continue }
+						// Set the block number to at least 1 so events are deposited.
+						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+							frame_system::Module::<T>::set_block_number(1.into());
+						}
 
-					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
-					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
+						// Commit the externalities to the database, flushing the DB cache.
+						// This will enable worst case scenario for reading from the database.
+						$crate::benchmarking::commit_db();
 
-					let diff = highest - lowest;
+						// Reset the read/write counter so we don't count operations in the setup process.
+						$crate::benchmarking::reset_read_write_count();
 
-					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = (diff / steps).max(1);
-					let num_of_steps = diff / step_size + 1;
+						// Time the extrinsic logic.
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"Start Benchmark: {:?}",
+							c,
+						);
 
-					for s in 0..num_of_steps {
-						// This is the value we will be testing for component `name`
-						let component_value = lowest + step_size * s;
+						let start_extrinsic = $crate::benchmarking::current_time();
+						closure_to_benchmark()?;
+						let finish_extrinsic = $crate::benchmarking::current_time();
+						let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+						// Commit the changes to get proper write count
+						$crate::benchmarking::commit_db();
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"End Benchmark: {} ns",
+							elapsed_extrinsic,
+						);
+						let read_write_count = $crate::benchmarking::read_write_count();
+						frame_support::debug::trace!(
+							target: "benchmark",
+							"Read/Write Count {:?}",
+							read_write_count,
+						);
 
-						// Select the max value for all the other components.
-						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
-							.enumerate()
-							.map(|(idx, (n, _, h))|
-								if n == name {
-									(*n, component_value)
-								} else {
-									(*n, *highest_range_values.get(idx).unwrap_or(h))
-								}
-							)
-							.collect();
+						// Time the storage root recalculation.
+						let start_storage_root = $crate::benchmarking::current_time();
+						$crate::storage_root();
+						let finish_storage_root = $crate::benchmarking::current_time();
+						let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-						// Run the benchmark `repeat` times.
-						for _ in 0..repeat {
-							// Set up the externalities environment for the setup we want to benchmark.
-							let closure_to_benchmark = <
-								SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>
-							>::instance(&selected_benchmark, &c)?;
+						results.push($crate::BenchmarkResults {
+							components: c.clone(),
+							extrinsic_time: elapsed_extrinsic,
+							storage_root_time: elapsed_storage_root,
+							reads: read_write_count.0,
+							repeat_reads: read_write_count.1,
+							writes: read_write_count.2,
+							repeat_writes: read_write_count.3,
+						});
 
-							// Set the block number to at least 1 so events are deposited.
-							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-								frame_system::Module::<T>::set_block_number(1.into());
-							}
+						// Wipe the DB back to the genesis state.
+						$crate::benchmarking::wipe_db();
+					}
 
-							// Commit the externalities to the database, flushing the DB cache.
-							// This will enable worst case scenario for reading from the database.
-							$crate::benchmarking::commit_db();
+					Ok(())
+				};
 
-							// Reset the read/write counter so we don't count operations in the setup process.
-							$crate::benchmarking::reset_read_write_count();
+				if components.is_empty() {
+					repeat_benchmark(repeat, Default::default(), &mut results)?;
+				} else {
+					// Select the component we will be benchmarking. Each component will be benchmarked.
+					for (idx, (name, low, high)) in components.iter().enumerate() {
+						// Get the number of steps for this component.
+						let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
+						prev_steps = steps;
 
-							// Time the extrinsic logic.
-							frame_support::debug::trace!(
-								target: "benchmark",
-								"Start Benchmark: {:?} {:?}", name, component_value
-							);
+						// Skip this loop if steps is zero
+						if steps == 0 { continue }
 
-							let start_extrinsic = $crate::benchmarking::current_time();
-							closure_to_benchmark()?;
-							let finish_extrinsic = $crate::benchmarking::current_time();
-							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-							// Commit the changes to get proper write count
-							$crate::benchmarking::commit_db();
-							frame_support::debug::trace!(
-								target: "benchmark",
-								"End Benchmark: {} ns", elapsed_extrinsic
-							);
-							let read_write_count = $crate::benchmarking::read_write_count();
-							frame_support::debug::trace!(
-								target: "benchmark",
-								"Read/Write Count {:?}", read_write_count
-							);
+						let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
+						let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
 
-							// Time the storage root recalculation.
-							let start_storage_root = $crate::benchmarking::current_time();
-							$crate::storage_root();
-							let finish_storage_root = $crate::benchmarking::current_time();
-							let elapsed_storage_root = finish_storage_root - start_storage_root;
+						let diff = highest - lowest;
 
-							results.push($crate::BenchmarkResults {
-								components: c.clone(),
-								extrinsic_time: elapsed_extrinsic,
-								storage_root_time: elapsed_storage_root,
-								reads: read_write_count.0,
-								repeat_reads: read_write_count.1,
-								writes: read_write_count.2,
-								repeat_writes: read_write_count.3,
-							});
+						// Create up to `STEPS` steps for that component between high and low.
+						let step_size = (diff / steps).max(1);
+						let num_of_steps = diff / step_size + 1;
 
-							// Wipe the DB back to the genesis state.
-							$crate::benchmarking::wipe_db();
+						for s in 0..num_of_steps {
+							// This is the value we will be testing for component `name`
+							let component_value = lowest + step_size * s;
+
+							// Select the max value for all the other components.
+							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(idx, (n, _, h))|
+									if n == name {
+										(*n, component_value)
+									} else {
+										(*n, *highest_range_values.get(idx).unwrap_or(h))
+									}
+								)
+								.collect();
+
+							repeat_benchmark(repeat, c, &mut results)?;
 						}
 					}
 				}
@@ -1060,40 +1092,48 @@ macro_rules! impl_benchmark_test {
 					SelectedBenchmark as $crate::BenchmarkingSetup<T>
 				>::components(&selected_benchmark);
 
-				assert!(
-					components.len() != 0,
-					"You need to add components to your benchmark!",
-				);
-				for (_, (name, low, high)) in components.iter().enumerate() {
-					// Test only the low and high value, assuming values in the middle won't break
-					for component_value in vec![low, high] {
-						// Select the max value for all the other components.
-						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
-							.enumerate()
-							.map(|(_, (n, _, h))|
-								if n == name {
-									(*n, *component_value)
-								} else {
-									(*n, *h)
-								}
-							)
-							.collect();
+				let execute_benchmark = |
+					c: Vec<($crate::BenchmarkParameter, u32)>
+				| -> Result<(), &'static str> {
+					// Set up the verification state
+					let closure_to_verify = <
+						SelectedBenchmark as $crate::BenchmarkingSetup<T>
+					>::verify(&selected_benchmark, &c)?;
 
-						// Set up the verification state
-						let closure_to_verify = <
-							SelectedBenchmark as $crate::BenchmarkingSetup<T>
-						>::verify(&selected_benchmark, &c)?;
+					// Set the block number to at least 1 so events are deposited.
+					if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+						frame_system::Module::<T>::set_block_number(1.into());
+					}
 
-						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-							frame_system::Module::<T>::set_block_number(1.into());
+					// Run verification
+					closure_to_verify()?;
+
+					// Reset the state
+					$crate::benchmarking::wipe_db();
+
+					Ok(())
+				};
+
+				if components.is_empty() {
+					execute_benchmark(Default::default())?;
+				} else {
+					for (_, (name, low, high)) in components.iter().enumerate() {
+						// Test only the low and high value, assuming values in the middle won't break
+						for component_value in vec![low, high] {
+							// Select the max value for all the other components.
+							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(_, (n, _, h))|
+									if n == name {
+										(*n, *component_value)
+									} else {
+										(*n, *h)
+									}
+								)
+								.collect();
+
+							execute_benchmark(c)?;
 						}
-
-						// Run verification
-						closure_to_verify()?;
-
-						// Reset the state
-						$crate::benchmarking::wipe_db();
 					}
 				}
 				Ok(())
@@ -1114,6 +1154,28 @@ macro_rules! impl_benchmark_test {
 					SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>
 				>::components(&selected_benchmark);
 
+				let execute_benchmark = |
+					c: Vec<($crate::BenchmarkParameter, u32)>
+				| -> Result<(), &'static str> {
+					// Set up the verification state
+					let closure_to_verify = <
+						SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>
+					>::verify(&selected_benchmark, &c)?;
+
+					// Set the block number to at least 1 so events are deposited.
+					if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+						frame_system::Module::<T>::set_block_number(1.into());
+					}
+
+					// Run verification
+					closure_to_verify()?;
+
+					// Reset the state
+					$crate::benchmarking::wipe_db();
+
+					Ok(())
+				};
+
 				for (_, (name, low, high)) in components.iter().enumerate() {
 					// Test only the low and high value, assuming values in the middle won't break
 					for component_value in vec![low, high] {
@@ -1129,21 +1191,7 @@ macro_rules! impl_benchmark_test {
 							)
 							.collect();
 
-						// Set up the verification state
-						let closure_to_verify = <
-							SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>
-						>::verify(&selected_benchmark, &c)?;
-
-						// Set the block number to at least 1 so events are deposited.
-						if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
-							frame_system::Module::<T>::set_block_number(1.into());
-						}
-
-						// Run verification
-						closure_to_verify()?;
-
-						// Reset the state
-						$crate::benchmarking::wipe_db();
+						execute_benchmark(c)?;
 					}
 				}
 				Ok(())

@@ -539,7 +539,7 @@ fn resolve_header<Block: BlockT, F: Fetcher<Block>>(
 
 	maybe_header.then(move |result|
 		ready(result.and_then(|maybe_header|
-			maybe_header.ok_or(ClientError::UnknownBlock(format!("{}", block)))
+			maybe_header.ok_or_else(|| ClientError::UnknownBlock(format!("{}", block)))
 		).map_err(client_err)),
 	)
 }

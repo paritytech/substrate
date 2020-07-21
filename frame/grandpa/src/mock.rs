@@ -19,16 +19,13 @@
 
 #![cfg(test)]
 
-use crate::{
-	equivocation::ValidateEquivocationReport, AuthorityId, AuthorityList, Call as GrandpaCall,
-	ConsensusLog, Module, Trait,
-};
+use crate::{AuthorityId, AuthorityList, ConsensusLog, Module, Trait};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
 use frame_support::{
 	impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
-	weights::{DispatchInfo, Weight},
+	weights::Weight,
 };
 use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
@@ -39,11 +36,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
 	testing::{Header, TestXt, UintAuthorityId},
-	traits::{
-		Convert, Extrinsic as ExtrinsicT, IdentityLookup, OpaqueKeys, SaturatedConversion,
-		SignedExtension,
-	},
-	transaction_validity::TransactionValidityError,
+	traits::{Convert, IdentityLookup, OpaqueKeys, SaturatedConversion},
 	DigestItem, Perbill,
 };
 use sp_staking::SessionIndex;
@@ -152,6 +145,17 @@ impl session::Trait for Test {
 impl session::historical::Trait for Test {
 	type FullIdentification = staking::Exposure<u64, u128>;
 	type FullIdentificationOf = staking::ExposureOf<Self>;
+}
+
+parameter_types! {
+	pub const UncleGenerations: u64 = 0;
+}
+
+impl pallet_authorship::Trait for Test {
+	type FindAuthor = ();
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = ();
 }
 
 parameter_types! {
@@ -264,66 +268,7 @@ impl Trait for Test {
 		AuthorityId,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = super::EquivocationHandler<
-		Self::KeyOwnerIdentification,
-		reporting_keys::ReporterAppCrypto,
-		Test,
-		Offences,
-	>;
-}
-
-pub mod reporting_keys {
-	use sp_core::crypto::KeyTypeId;
-
-	pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"test");
-
-	mod app {
-		use sp_application_crypto::{app_crypto, ed25519};
-		app_crypto!(ed25519, super::KEY_TYPE);
-
-		impl sp_runtime::traits::IdentifyAccount for Public {
-			type AccountId = u64;
-			fn into_account(self) -> Self::AccountId {
-				super::super::Grandpa::grandpa_authorities()
-					.iter()
-					.map(|(k, _)| k)
-					.position(|b| *b == self.0.clone().into())
-					.unwrap() as u64
-			}
-		}
-	}
-
-	pub type ReporterId = app::Public;
-
-	pub struct ReporterAppCrypto;
-	impl frame_system::offchain::AppCrypto<ReporterId, sp_core::ed25519::Signature>
-		for ReporterAppCrypto
-	{
-		type RuntimeAppPublic = ReporterId;
-		type GenericSignature = sp_core::ed25519::Signature;
-		type GenericPublic = sp_core::ed25519::Public;
-	}
-}
-
-type Extrinsic = TestXt<Call, ()>;
-
-impl<LocalCall> system::offchain::CreateSignedTransaction<LocalCall> for Test
-where
-	Call: From<LocalCall>,
-{
-	fn create_transaction<C: system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: reporting_keys::ReporterId,
-		_account: <Test as system::Trait>::AccountId,
-		nonce: <Test as system::Trait>::Index,
-	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
-}
-
-impl frame_system::offchain::SigningTypes for Test {
-	type Public = reporting_keys::ReporterId;
-	type Signature = sp_core::ed25519::Signature;
+	type HandleEquivocation = super::EquivocationHandler<Self::KeyOwnerIdentification, Offences>;
 }
 
 mod grandpa {
@@ -466,18 +411,6 @@ pub fn initialize_block(number: u64, parent_hash: H256) {
 		&Default::default(),
 		Default::default(),
 	);
-}
-
-pub fn report_equivocation(
-	equivocation_proof: sp_finality_grandpa::EquivocationProof<H256, u64>,
-	key_owner_proof: sp_session::MembershipProof,
-) -> Result<GrandpaCall<Test>, TransactionValidityError> {
-	let inner = GrandpaCall::report_equivocation(equivocation_proof, key_owner_proof);
-	let call = Call::Grandpa(inner.clone());
-
-	ValidateEquivocationReport::<Test>::new().validate(&0, &call, &DispatchInfo::default(), 0)?;
-
-	Ok(inner)
 }
 
 pub fn generate_equivocation_proof(

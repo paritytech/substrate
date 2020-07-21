@@ -165,7 +165,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	CAW: CanAuthorWith<B> + Send,
 {
 	let worker = AuraWorker {
-		client: client.clone(),
+		client,
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		keystore,
@@ -839,7 +839,7 @@ pub fn import_queue<B, I, C, P, S>(
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = AuraVerifier {
-		client: client.clone(),
+		client,
 		inherent_data_providers,
 		phantom: PhantomData,
 	};
