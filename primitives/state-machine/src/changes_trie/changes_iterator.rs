@@ -46,7 +46,7 @@ pub fn key_changes<'a, H: Hasher, Number: BlockNumber>(
 	key: &'a [u8],
 ) -> Result<DrilldownIterator<'a, H, Number>, String> {
 	// we can't query any roots before root
-	let max = ::std::cmp::min(max, end.number.clone());
+	let max = std::cmp::min(max, end.number.clone());
 
 	Ok(DrilldownIterator {
 		essence: DrilldownIteratorEssence {
