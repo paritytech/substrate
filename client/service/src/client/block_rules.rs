@@ -52,8 +52,8 @@ impl<B: BlockT> BlockRules<B> {
 		bad_blocks: BadBlocks<B>,
 	) -> Self {
 		Self {
-			bad: bad_blocks.unwrap_or(HashSet::new()),
-			forks: fork_blocks.unwrap_or(vec![]).into_iter().collect(),
+			bad: bad_blocks.unwrap_or_else(|| HashSet::new()),
+			forks: fork_blocks.unwrap_or_else(|| vec![]).into_iter().collect(),
 		}
 	}
 
