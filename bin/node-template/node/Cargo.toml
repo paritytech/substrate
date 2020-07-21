@@ -1,6 +1,6 @@
 [package]
 name = "node-template"
-version = "2.0.0-rc4"
+version = "2.0.0-rc5"
 authors = ["Anonymous"]
 description = "A new FRAME-based Substrate node, ready for hacking."
 edition = "2018"
@@ -21,25 +21,25 @@ log = "0.4.8"
 structopt = "0.3.8"
 parking_lot = "0.10.0"
 
-sc-cli = { version = "0.8.0-rc4", path = "../../../client/cli", features = ["wasmtime"] }
-sp-core = { version = "2.0.0-rc4", path = "../../../primitives/core" }
-sc-executor = { version = "0.8.0-rc4", path = "../../../client/executor", features = ["wasmtime"] }
-sc-service = { version = "0.8.0-rc4", path = "../../../client/service", features = ["wasmtime"] }
-sp-inherents = { version = "2.0.0-rc4", path = "../../../primitives/inherents" }
-sc-transaction-pool = { version = "2.0.0-rc4", path = "../../../client/transaction-pool" }
-sp-transaction-pool = { version = "2.0.0-rc4", path = "../../../primitives/transaction-pool" }
-sc-network = { version = "0.8.0-rc4", path = "../../../client/network" }
-sc-consensus-aura = { version = "0.8.0-rc4", path = "../../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.8.0-rc4", path = "../../../primitives/consensus/aura" }
-sp-consensus = { version = "0.8.0-rc4", path = "../../../primitives/consensus/common" }
-sc-consensus = { version = "0.8.0-rc4", path = "../../../client/consensus/common" }
-sc-finality-grandpa = { version = "0.8.0-rc4", path = "../../../client/finality-grandpa" }
-sp-finality-grandpa = { version = "2.0.0-rc4", path = "../../../primitives/finality-grandpa" }
-sc-client-api = { version = "2.0.0-rc4", path = "../../../client/api" }
-sp-runtime = { version = "2.0.0-rc4", path = "../../../primitives/runtime" }
-sc-basic-authorship = { path = "../../../client/basic-authorship", version = "0.8.0-rc4"}
+sc-cli = { version = "0.8.0-rc5", path = "../../../client/cli", features = ["wasmtime"] }
+sp-core = { version = "2.0.0-rc5", path = "../../../primitives/core" }
+sc-executor = { version = "0.8.0-rc5", path = "../../../client/executor", features = ["wasmtime"] }
+sc-service = { version = "0.8.0-rc5", path = "../../../client/service", features = ["wasmtime"] }
+sp-inherents = { version = "2.0.0-rc5", path = "../../../primitives/inherents" }
+sc-transaction-pool = { version = "2.0.0-rc5", path = "../../../client/transaction-pool" }
+sp-transaction-pool = { version = "2.0.0-rc5", path = "../../../primitives/transaction-pool" }
+sc-network = { version = "0.8.0-rc5", path = "../../../client/network" }
+sc-consensus-aura = { version = "0.8.0-rc5", path = "../../../client/consensus/aura" }
+sp-consensus-aura = { version = "0.8.0-rc5", path = "../../../primitives/consensus/aura" }
+sp-consensus = { version = "0.8.0-rc5", path = "../../../primitives/consensus/common" }
+sc-consensus = { version = "0.8.0-rc5", path = "../../../client/consensus/common" }
+sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa" }
+sp-finality-grandpa = { version = "2.0.0-rc5", path = "../../../primitives/finality-grandpa" }
+sc-client-api = { version = "2.0.0-rc5", path = "../../../client/api" }
+sp-runtime = { version = "2.0.0-rc5", path = "../../../primitives/runtime" }
+sc-basic-authorship = { path = "../../../client/basic-authorship", version = "0.8.0-rc5"}
 
-node-template-runtime = { version = "2.0.0-rc4", path = "../runtime" }
+node-template-runtime = { version = "2.0.0-rc5", path = "../runtime" }
 
 [build-dependencies]
-substrate-build-script-utils = { version = "2.0.0-rc4", path = "../../../utils/build-script-utils" }
+substrate-build-script-utils = { version = "2.0.0-rc5", path = "../../../utils/build-script-utils" }

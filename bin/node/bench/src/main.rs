@@ -25,6 +25,7 @@ mod simple_trie;
 mod state_sizes;
 mod tempdb;
 mod trie;
+mod txpool;
 
 use structopt::StructOpt;
 
@@ -37,6 +38,7 @@ use crate::{
 	import::ImportBenchmarkDescription,
 	trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize},
 	construct::ConstructionBenchmarkDescription,
+	txpool::PoolBenchmarkDescription,
 };
 
 #[derive(Debug, StructOpt)]
@@ -148,6 +150,7 @@ fn main() {
 			size: SizeType::Large,
 			database_type: BenchDataBaseType::RocksDb,
 		},
+		PoolBenchmarkDescription { database_type: BenchDataBaseType::RocksDb },
 	);
 
 	if opt.list {
