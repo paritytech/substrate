@@ -14,7 +14,7 @@ There are a few basic ground-rules for contributors (including the maintainer(s)
 . **Non-master branches**, prefixed with a short name moniker (e.g. `gav-my-feature`) must be used for ongoing work.
 . **All modifications** must be made in a **pull-request** to solicit feedback from other contributors.
 . A pull-request *must not be merged until CI* has finished successfully.
-. Contributors should adhere to the https://wiki.parity.io/Substrate-Style-Guide[house coding style].
+. Contributors should adhere to the ./STYLE_GUIDE.md[house coding style].
 
 
 == Merge Process
