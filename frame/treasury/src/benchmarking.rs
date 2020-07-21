@@ -364,12 +364,18 @@ benchmarks! {
 
 	}: _(RawOrigin::Root, 100.into())
 
-	on_initialize {
+	on_initialize_proposals {
 		let p in 0 .. 100;
-		let q in 0 .. 100;
 		setup_pod_account::<T>();
 		create_approved_proposals::<T>(p)?;
-		create_approved_bounties::<T>(q)?;
+	}: {
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
+	}
+
+	on_initialize_bounties {
+		let b in 0 .. 100;
+		setup_pod_account::<T>();
+		create_approved_bounties::<T>(b)?;
 	}: {
 		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}
@@ -401,7 +407,8 @@ mod tests {
 			assert_ok!(test_benchmark_cancel_bounty::<Test>());
 			assert_ok!(test_benchmark_extend_bounty_expiry::<Test>());
 			assert_ok!(test_benchmark_update_bounty_value_minimum::<Test>());
-			assert_ok!(test_benchmark_on_initialize::<Test>());
+			assert_ok!(test_benchmark_on_initialize_proposals::<Test>());
+			assert_ok!(test_benchmark_on_initialize_bounties::<Test>());
 		});
 	}
 }
