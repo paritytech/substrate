@@ -80,7 +80,7 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	
 	let params = sc_service::ServiceParams {
 		backend, client, import_queue, keystore, task_manager, transaction_pool,
-		config: config,
+		config,
 		block_announce_validator_builder: None,
 		finality_proof_request_builder: None,
 		finality_proof_provider: Some(finality_proof_provider),
