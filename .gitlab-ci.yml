@@ -103,8 +103,6 @@ skip-if-draft:
 codecov:
   stage:                           test
   <<:                              *docker-env
-  needs:
-    - check-std
   variables:
     # Variables partly came from https://github.com/mozilla/grcov/blob/master/README.md
     # CARGO_INCREMENTAL: 0 is important, but mentioned in defaults.
