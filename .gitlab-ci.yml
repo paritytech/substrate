@@ -100,18 +100,35 @@ skip-if-draft:
 
 #### stage:                        check
 
-# test-linux-stable:                 &test-linux
-#   stage:                           test
-#   <<:                              *docker-env
-#   variables:
-#     <<:                            *default-vars
-#     # Enable debug assertions since we are running optimized builds for testing
-#     # but still want to have debug assertions.
-#     RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
-#     RUST_BACKTRACE: 1
-#   except:
-#     variables:
-#       - $DEPLOY_TAG
-#   script:
-#     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
-#     - sccache -s
+codecov:
+  stage:                           test
+  <<:                              *docker-env
+  needs:
+    - check-std
+  variables:
+    # Variables partly came from https://github.com/mozilla/grcov/blob/master/README.md
+    # CARGO_INCREMENTAL: 0 is important, but mentioned in defaults.
+    RUSTFLAGS:                     "-Zprofile -Zmir-opt-level=0 -Ccodegen-units=1
+                                      -Copt-level=0 -Clink-dead-code -Coverflow-checks=off"
+    # The `cargo-taurpalin` coverage reporting tool seems to have better code instrumentation and thus
+    # produces better results for Rust codebases in general. However, unlike `grcov` it requires
+    # running docker with `--security-opt seccomp=unconfined` which is why we use `grcov` instead.
+    # We removed the `-Cinline-threshold=0` flag from the above `RUSTFLAGS` since it was bugged
+    # at the time and lead to inlining of functions that shouldn't be inlined for the coverage
+    # report. (More information here: https://github.com/Kogia-sima/rust-covfix/issues/2)
+    WASM_BUILD_NO_COLOR:           1
+  script:
+    # RUSTFLAGS are the cause target cache can't be used here
+    - unset "CARGO_TARGET_DIR"
+    - cargo clean
+    - time cargo install grcov rust-covfix
+    - time cargo +nightly test --workspace --locked --release --verbose -Z package-features --features runtime-benchmarks --no-fail-fast
+    # - cargo build might also be needed
+    # coverage with branches
+    - grcov ./target -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" --ignore "tests/*" -o lcov-w-branch.info
+    - rust-covfix -o lcov-w-branch.info lcov-w-branch.info
+    - bash <(curl -s https://codecov.io/bash) -t "$CODECOV_P_TOKEN" -f lcov-w-branch.info
+    # lines coverage
+    # - grcov ./target -s . -t lcov --llvm --ignore-not-existing --ignore "/*" --ignore "tests/*" -o lcov-lines.info
+    # - rust-covfix -o lcov-lines.info lcov-lines.info
+    # - bash <(curl -s https://codecov.io/bash) -f lcov-lines.info
