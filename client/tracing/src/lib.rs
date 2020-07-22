@@ -380,8 +380,10 @@ impl Subscriber for ProfilingSubscriber {
 				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
 					span_datum.target = t;
 				}
-			}
-			if self.check_target(&span_datum.target, &span_datum.level) {
+				if self.check_target(&span_datum.target, &span_datum.level) {
+					self.trace_handler.handle_span(span_datum);
+				}
+			} else {
 				self.trace_handler.handle_span(span_datum);
 			}
 		};
@@ -627,7 +629,7 @@ mod tests {
 			std::thread::sleep(Duration::from_millis(1));
 		}
 
-		// emit new event while span2 still active in other thread - (will be second item in Vec)
+		// emit new event (will be second item in Vec) while span2 still active in other thread
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event2");
 
 		// stop thread and drop span
