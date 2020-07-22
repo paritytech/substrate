@@ -121,6 +121,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod migration;
+
 #[cfg(feature = "historical")]
 pub mod historical;
 
@@ -562,13 +564,7 @@ decl_module! {
 
 impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 	fn migrate_account(a: &T::AccountId) {
-		if let Some(v) = T::ValidatorIdOf::convert(a.clone()) {
-			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
-				for id in T::Keys::key_ids() {
-					KeyOwner::<T>::migrate_key_from_blake((*id, keys.get_raw(*id)));
-				}
-			}
-		}
+		migration::migrate_account::<T>(a)
 	}
 }
 
