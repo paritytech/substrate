@@ -371,6 +371,10 @@ pub fn seq_phragmen<AccountId, R>(
 	voters.extend(initial_voters.into_iter().map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
 		for v in votes {
+			if edges.iter().any(|e| e.who == v) {
+				// duplicate edge.
+				continue;
+			}
 			if let Some(idx) = c_idx_cache.get(&v) {
 				// This candidate is valid + already cached.
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake
