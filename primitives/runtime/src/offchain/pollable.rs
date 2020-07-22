@@ -1,6 +1,46 @@
-#![allow(dead_code, unused_variables)]
+//! A simple futures executor/reactor used in tandem with host-driven futures.
+//!
+//! At the time of writing, the off-chain workers are not capable of network I/O
+//! or background scheduling on their own. To work around that, they need
+//! to schedule the work on the host side via runtime-called functions which can
+//! be later polled from runtime for completion using the [`PollableId`] handle
+//! via the low-level [`sp_io::offchain::pollable_wait`] API.
+//!
+//! ## Architecture
+//! The current implementation uses both an executor (used to spawn and executing
+//! tasks) and a reactor (notifies tasks when it's possible to make further progress)
+//! on the host side **and** and a simple single-threaded executor/reactor
+//! on the runtime side (which is documented here).
+//!
+//! Most of the heavy lifting is done on the host side such as scheduling timers
+//! or performing network I/O, while the simple executor/reactor here is mostly
+//! to conveniently interface with this, enabling niceties like async/await
+//! syntax sugar or future combinators.
+//!
+//! Because of this approach, the following `Future`s are supported here:
+//! 1. immediately ready ones (i.e. which return `Poll::Ready`),
+//! 2. internally host-driven ones via `PollableId`,
+//! 3. combinators for the supported futures.
 
 // Based on https://github.com/tomaka/redshirt/blob/802e4ab44078e15b47dc72afc6b7e45bab1b72df/interfaces/syscalls/src/block_on.rs#L88.
+
+#![allow(dead_code, unused_variables)]
+
+use sp_core::offchain::{PollableId, PollableKind};
+use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus};
+use sp_std::{rc::Rc, collections::btree_set::BTreeSet, vec::Vec};
+
+use core::cell::RefCell;
+use core::convert::TryInto;
+use core::future::Future;
+use core::mem::{self, ManuallyDrop};
+use core::pin::Pin;
+use core::task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable};
+
+use spin::Mutex;
+use pin_project::pin_project;
+
+pub(crate) type MessageId = PollableId;
 
 /// Pins a value on the stack.
 // A copy of `futures::pin_mut!` without having to pull `futures` in the no_std
@@ -17,20 +57,6 @@ macro_rules! pin_mut {
         };
     )* }
 }
-
-use sp_core::offchain::{PollableId, PollableKind};
-use sp_std::{rc::Rc, collections::btree_set::BTreeSet, vec::Vec};
-use sp_std::cell::RefCell;
-
-use core::future::Future;
-use core::mem::{self, ManuallyDrop};
-use core::pin::Pin;
-use core::{task::{self, Context, Poll, Waker, RawWaker, RawWakerVTable}};
-
-use spin::Mutex;
-use pin_project::pin_project;
-
-pub(crate) type MessageId = PollableId;
 
 fn epoll_peek(interest_list: &[MessageId]) -> Option<MessageId> {
     let deadline = sp_io::offchain::timestamp();
@@ -135,8 +161,13 @@ fn raw_waker<W: Wake + Send + 'static>(waker: Rc<W>) -> RawWaker {
     )
 }
 
-// TODO: Executor + reactor for wasm-side futures, waits on host-executed
-// futures like HTTP requests etc.
+/// Block until a given future is resolved.
+///
+/// ## Support
+/// At the time of writing, the only supported futures are ones that:
+/// 1. are immediately ready (i.e. return `Poll::Ready`),
+/// 2. can be driven by the host via the underlying low-level [`PollableId`] API,
+/// 3. are a combination of the above (e.g. `futures::future::join`ed).
 pub fn block_on<T>(future: impl Future<Output = T>) -> T {
     pin_mut!(future);
 
@@ -153,8 +184,8 @@ pub fn block_on<T>(future: impl Future<Output = T>) -> T {
     let mut context = Context::from_waker(&waker);
 
     loop {
-        // We poll the future continuously until it is either Ready, or the waker stops being
-        // invoked during the polling.
+        // We poll the future continuously until it is either Ready,
+        // or the waker stops being invoked during the polling.
         loop {
             match future.as_mut().poll(&mut context) {
                 Poll::Ready(value) => return value,
@@ -284,11 +315,6 @@ impl Future for HttpFuture {
     type Output = Result<HttpResponse, sp_core::offchain::HttpError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        use sp_core::offchain::HttpRequestId;
-        use sp_core::offchain::HttpRequestStatus;
-        use sp_core::offchain::HttpError;
-        use core::convert::TryInto;
-
         let id: HttpRequestId = self.inner.msg_id.try_into()
             .expect("HttpFuture can be only constructed with HTTP HostFuture");
         let this = self.project();
