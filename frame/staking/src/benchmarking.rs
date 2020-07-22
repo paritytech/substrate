@@ -61,7 +61,7 @@ pub fn create_validator_with_nominators<T: Trait>(
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
 	};
-	Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
+	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
 
 	points_total += 10;
@@ -375,7 +375,7 @@ benchmarks! {
 		for _ in 0 .. l {
 			staking_ledger.unlocking.push(unlock_chunk.clone())
 		}
-		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
+		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10.into();
 		let balance_before = T::Currency::free_balance(&stash);
 	}: {
