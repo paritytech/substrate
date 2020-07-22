@@ -404,18 +404,6 @@ check-polkadot-companion-status:
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
 
-check-polkadot-companion-build:
-  stage:                           build
-  <<:                              *docker-env
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_build.sh
-  after_script:
-    - cd polkadot && git rev-parse --abbrev-ref HEAD
-  allow_failure:                   true
-
 test-browser-node:
   stage:                           build
   <<:                              *docker-env

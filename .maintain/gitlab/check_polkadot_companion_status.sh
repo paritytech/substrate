@@ -70,11 +70,24 @@ then
   exit 0
 fi
 
-if jq -e '.mergeable' < companion_pr.json >/dev/null
+# WARNING: mergeable_state is an undocumented field of GitHub's API that exists since at least
+# February 2018.  The following values are possible at the moment (2020-07-22):
+# - dirty: Merge conflict. Merging will be blocked
+# - unknown: Mergeability was not checked yet. Merging will be blocked
+# - blocked: Blocked by a failing/missing required status check.
+# - behind: Head branch is behind the base branch. Only if required status checks is enabled but
+#   loose policy is not. Merging will be blocked.
+# - unstable: Failing/pending commit status that is not part of the required status checks. Merging
+#   is allowed (yellow box). (unstable seems to take precedence on block, which is annoying)
+# - has_hooks: GitHub Enterprise only, if a repo has custom pre-receive hooks. Merging is allowed
+#   (green box).
+# - clean: No conflicts, everything good. Merging is allowed (green box).
+mergeable_state=$(jq -r .mergeable_state < companion_pr.json)
+if [ "$mergeable_state" == clean ]
 then
-  boldprint "polkadot pr #${pr_companion} mergeable"
+  boldprint "polkadot pr #${pr_companion} mergeable ($mergeable_state)"
 else
-  boldprint "polkadot pr #${pr_companion} not mergeable"
+  boldprint "polkadot pr #${pr_companion} not mergeable ($mergeable_state != clean)"
   exit 1
 fi
 
