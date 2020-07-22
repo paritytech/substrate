@@ -1170,6 +1170,51 @@ macro_rules! implement_per_thing {
 	};
 }
 
+macro_rules! implement_per_thing_with_perthousand {
+	(
+		$name:ident,
+		$test_mod:ident,
+		$pt_test_mod:ident,
+		[$($test_units:tt),+],
+		$max:tt,
+		$type:ty,
+		$upper_type:ty,
+		$title:expr $(,)?
+	) => {
+		implement_per_thing! {
+			$name, $test_mod, [ $( $test_units ),+ ], $max, $type, $upper_type, $title,
+		}
+		impl $name {
+			/// Converts a percent into `Self`. Equal to `x / 1000`.
+			///
+			/// This can be created at compile time.
+			pub const fn from_perthousand(x: $type) -> Self {
+				Self(([x, 1000][(x > 1000) as usize] as $upper_type * $max as $upper_type / 1000) as $type)
+			}
+		}
+		#[cfg(test)]
+		mod $pt_test_mod {
+			use super::$name;
+			use crate::traits::Zero;
+
+			#[test]
+			fn from_perthousand_works() {
+				// some really basic stuff
+				assert_eq!($name::from_perthousand(00), $name::from_parts(Zero::zero()));
+				assert_eq!($name::from_perthousand(100), $name::from_parts($max / 10));
+				assert_eq!($name::from_perthousand(1000), $name::from_parts($max));
+				assert_eq!($name::from_perthousand(2000), $name::from_parts($max));
+			}
+
+			#[test]
+			#[allow(unused)]
+			fn const_fns_work() {
+				const C1: $name = $name::from_perthousand(500);
+			}
+		}
+	}
+}
+
 implement_per_thing!(
 	Percent,
 	test_per_cent,
@@ -1179,36 +1224,40 @@ implement_per_thing!(
 	u16,
 	"_Percent_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	PerU16,
 	test_peru16,
+	test_peru16_extra,
 	[u32, u64, u128],
 	65535_u16,
 	u16,
 	u32,
 	"_Parts per 65535_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Permill,
 	test_permill,
+	test_permill_extra,
 	[u32, u64, u128],
 	1_000_000u32,
 	u32,
 	u64,
 	"_Parts per Million_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Perbill,
 	test_perbill,
+	test_perbill_extra,
 	[u32, u64, u128],
 	1_000_000_000u32,
 	u32,
 	u64,
 	"_Parts per Billion_",
 );
-implement_per_thing!(
+implement_per_thing_with_perthousand!(
 	Perquintill,
 	test_perquintill,
+	test_perquintill_extra,
 	[u64, u128],
 	1_000_000_000_000_000_000u64,
 	u64,

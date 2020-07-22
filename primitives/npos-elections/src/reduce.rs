@@ -362,11 +362,11 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 			// create both.
 			let voter_node = tree
 				.entry(voter_id.clone())
-				.or_insert(Node::new(voter_id).into_ref())
+				.or_insert_with(|| Node::new(voter_id).into_ref())
 				.clone();
 			let target_node = tree
 				.entry(target_id.clone())
-				.or_insert(Node::new(target_id).into_ref())
+				.or_insert_with(|| Node::new(target_id).into_ref())
 				.clone();
 
 			// If one exists but the other one doesn't, or if both does not, then set the existing

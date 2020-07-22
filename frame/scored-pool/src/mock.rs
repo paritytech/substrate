@@ -28,7 +28,7 @@ use sp_runtime::{
 use frame_system::EnsureSignedBy;
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 #[derive(Clone, Eq, PartialEq)]

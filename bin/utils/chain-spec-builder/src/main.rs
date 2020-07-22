@@ -131,7 +131,7 @@ fn generate_chain_spec(
 		Default::default(),
 	);
 
-	chain_spec.as_json(false).map_err(|err| err.to_string())
+	chain_spec.as_json(false).map_err(|err| err)
 }
 
 fn generate_authority_keys_and_store(

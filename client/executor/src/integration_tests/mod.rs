@@ -664,12 +664,14 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 
 	use sc_tracing::{SpanDatum, TraceEvent};
 
+	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
+
 	impl sc_tracing::TraceHandler for TestTraceHandler {
-		fn process_span(&self, sd: SpanDatum) {
+		fn handle_span(&self, sd: SpanDatum) {
 			self.0.lock().unwrap().push(sd);
 		}
 
-		fn process_event(&self, _event: TraceEvent) {}
+		fn handle_event(&self, _event: TraceEvent) {}
 	}
 
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
@@ -751,9 +753,9 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(len, 1);
 
 	let span_datum = traces.lock().unwrap().pop().unwrap();
-	let values = span_datum.values.into_inner();
+	let values = span_datum.values;
 	assert_eq!(span_datum.target, "integration_test_span_target");
 	assert_eq!(span_datum.name, "integration_test_span_name");
-	assert_eq!(values.get("wasm").unwrap(), "true");
-	assert_eq!(values.get("is_valid_trace").unwrap(), "true");
+	assert_eq!(values.bool_values.get("wasm").unwrap(), &true);
+	assert_eq!(values.bool_values.get("is_valid_trace").unwrap(), &true);
 }
