@@ -283,7 +283,7 @@ impl core::convert::TryFrom<HostFuture> for HttpFuture {
 impl Future for HttpFuture {
     type Output = Result<HttpResponse, sp_core::offchain::HttpError>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         use sp_core::offchain::HttpRequestId;
         use sp_core::offchain::HttpRequestStatus;
         use sp_core::offchain::HttpError;

@@ -190,11 +190,15 @@ impl From<TimerId> for u32 {
 	}
 }
 
+/// Identifies a kind for pollable value, such as HTTP request or scheduled timers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PollableKind {
+	/// Identifies a HTTP request.
 	Http = 1,
+	/// Identifies a scheduled timer.
 	Timer = 2,
+	/// Unknown pollable kind.
 	Unknown,
 }
 
@@ -208,18 +212,39 @@ impl From<u32> for PollableKind {
 	}
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, PassByInner)]
+/// Opaque type for pollable values.
+///
+/// This is the core type that allows using async/await in the offchain worker (OCW) context.
+///
+/// At the moment of writing, the OCWs have no way to perform background
+/// computation or scheduling on their own. To work around that, we schedule the
+/// tasks on the host side via runtime-called functions. Doing so returns a handle
+/// ([`PollableId`]) that can be used across host/runtime boundary to poll for results.
+///
+/// The IDs can be manually awaited using the low-level [`sp_io::offchain::pollable_wait`] API.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, PassByInner)]
 #[cfg_attr(feature = "std", derive(Hash))]
 #[repr(transparent)]
 pub struct PollableId(pub u64);
 
+impl core::fmt::Debug for PollableId {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		 f.debug_struct("PollableId")
+		 .field("kind", &self.kind())
+		 .field("id", &(self.0 as u32))
+		 .finish()
+	}
+}
+
 impl PollableId {
+	/// The kind of a pollable value.
 	pub fn kind(self) -> PollableKind {
 		PollableKind::from((self.0 >> 32) as u32)
 	}
 
+	/// Creates a `PollableId` from a `PollableKind` and the inner ID value.
 	pub fn from_parts(kind: PollableKind, id: u32) -> PollableId {
-		PollableId::from(((kind as u64) << 32)| id as u64)
+		PollableId::from(((kind as u64) << 32) | id as u64)
 	}
 }
 
