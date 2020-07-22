@@ -133,11 +133,8 @@ pub type TFullCallExecutor<TBl, TExecDisp> = crate::client::LocalCallExecutor<
 >;
 
 /// Light client type.
-pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
-	TLightBackend<TBl>,
-	TLightCallExecutor<TBl, TExecDisp>,
-	TBl,
-	TRtApi,
+pub type TLightClient<TBl, TRtApi, TExecDisp> = TLightClientWithBackend<
+	TBl, TRtApi, TExecDisp, TLightBackend<TBl>
 >;
 
 /// Light client backend type.
@@ -176,20 +173,18 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<OnDemand<TBl>>,
 );
 
-type TLightBackendWithHash<TBl, THash> = sc_light::Backend<
+/// Light client backend type with a specific hash type.
+pub type TLightBackendWithHash<TBl, THash> = sc_light::Backend<
 	sc_client_db::light::LightStorage<TBl>,
 	THash,
 >;
 
-/// Light client type with a specific hash type.
-pub type TLightClientWithHash<TBl, TRtApi, TExecDisp, THash> = Client<
-	TLightBackendWithHash<TBl, THash>,
+/// Light client type with a specific backend.
+pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
+	TBackend,
 	sc_light::GenesisCallExecutor<
-		TLightBackendWithHash<TBl, THash>,
-		crate::client::LocalCallExecutor<
-			TLightBackendWithHash<TBl, THash>,
-			NativeExecutor<TExecDisp>
-		>,
+		TBackend,
+		crate::client::LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>,
 	>,
 	TBl,
 	TRtApi,

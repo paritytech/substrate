@@ -53,7 +53,8 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 pub use self::error::Error;
 pub use self::builder::{
 	new_full_client, new_client, new_full_parts, new_light_parts, build,
-	ServiceParams, TFullClient, TLightClient, TFullBackend, TLightBackend, TLightClientWithHash,
+	ServiceParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TLightBackendWithHash, TLightClientWithBackend,
 	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
