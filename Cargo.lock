@@ -8815,8 +8815,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.14.14"
-source = "git+https://github.com/GuillaumeGomez/sysinfo?branch=tasks-cleanup#9d7ef472900b95230c5ad33b96ac3bc936860b6b"
+version = "0.14.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2983daff11a197c7c406b130579bc362177aa54cf2cc1f34d6ac88fccaa6a5e1"
 dependencies = [
  "cfg-if",
  "doc-comment",
