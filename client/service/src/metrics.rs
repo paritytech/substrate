@@ -284,15 +284,14 @@ impl MetricsService {
 	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
 		// FIXME: sysinfo::System leaks fd-handlers on Linux. We have to drop it to clean this up
 		//        https://github.com/GuillaumeGomez/sysinfo/issues/352
-		self.system = sysinfo::System::new();
+		self.system = sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes());
 
 		let mut info = ProcessInfo::default();
-		if self.system.refresh_process(*pid) {
-			let prc = self.system.get_process(*pid)
-				.expect("Above refresh_process succeeds, this must be Some(), qed");
+		self.system.refresh_process(*pid);
+		self.system.get_process(*pid).map(|prc| {
 			info.cpu_usage = prc.cpu_usage().into();
 			info.memory = prc.memory();
-		}
+		});
 		info
 	}
 
