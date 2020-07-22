@@ -20,17 +20,11 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 #[proc_macro_attribute]
-pub fn test(
-	args: proc_macro::TokenStream,
-	item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 	impl_test(args, item)
 }
 
-fn impl_test(
-	args: proc_macro::TokenStream,
-	item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+fn impl_test(args: TokenStream, item: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(item as syn::ItemFn);
 	let args = syn::parse_macro_input!(args as syn::AttributeArgs);
 
