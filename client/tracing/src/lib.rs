@@ -90,6 +90,7 @@ pub struct Values {
 }
 
 impl Values {
+	/// Returns a new instance of Values
 	pub fn new() -> Self {
 		Values {
 			bool_values: Default::default(),
@@ -99,6 +100,7 @@ impl Values {
 		}
 	}
 
+	/// Checks if all individual collections are empty
 	pub fn is_empty(&self) -> bool {
 		self.bool_values.is_empty() &&
 			self.i64_values.is_empty() &&
