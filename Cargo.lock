@@ -718,15 +718,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clear_on_drop"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97276801e127ffb46b66ce23f35cc96bd454fa311294bced4bbace7baa8b1d17"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8430,7 +8421,6 @@ name = "substrate-browser-utils"
 version = "0.8.0-rc5"
 dependencies = [
  "chrono",
- "clear_on_drop",
  "console_error_panic_hook",
  "console_log",
  "futures 0.1.29",
