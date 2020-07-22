@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #[test]
-fn tests() {
+fn substrate_test_utils_derive_trybuild() {
 	let t = trybuild::TestCases::new();
 	t.compile_fail("tests/missing-func-parameter.rs");
 	t.compile_fail("tests/too-many-func-parameters.rs");

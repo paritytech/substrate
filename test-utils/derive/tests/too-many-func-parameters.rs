@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#[allow(unused_imports)]
 use sc_service::TaskExecutor;
 
 #[substrate_test_utils_derive::test]
