@@ -674,8 +674,6 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 		fn handle_event(&self, _event: TraceEvent) {}
 	}
 
-	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
-
 	let traces = Arc::new(Mutex::new(Vec::new()));
 	let handler = TestTraceHandler(traces.clone());
 
