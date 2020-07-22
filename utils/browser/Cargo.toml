@@ -28,8 +28,6 @@ sc-service = { version = "0.8.0-rc5", path = "../../client/service", default-fea
 sc-network = { path = "../../client/network", version = "0.8.0-rc5"}
 sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0-rc5"}
 
-# Imported just for the `no_cc` feature
-clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
 # Imported just for the `wasm-bindgen` feature
 rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
