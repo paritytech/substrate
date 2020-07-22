@@ -70,22 +70,34 @@ pub trait TraceHandler: Send + Sync {
 /// Represents a single instance of a tracing span
 #[derive(Debug)]
 pub struct SpanDatum {
+	/// id for this span
 	pub id: u64,
+	/// Name of the span
 	pub name: String,
+	/// Target, typically module
 	pub target: String,
+	/// Tracing Level - ERROR, WARN, INFO, DEBUG or TRACE
 	pub level: Level,
+	/// Line number in source
 	pub line: u32,
+	/// Time that the span was last entered
 	pub start_time: Instant,
+	/// Total duration of span while entered
 	pub overall_time: Duration,
+	/// Values recorded to this span
 	pub values: Values,
 }
 
 /// Holds associated values for a tracing span
 #[derive(Default, Clone, Debug)]
 pub struct Values {
+	/// HashMap of `bool` values
 	pub bool_values: FxHashMap<String, bool>,
+	/// HashMap of `i64` values
 	pub i64_values: FxHashMap<String, i64>,
+	/// HashMap of `u64` values
 	pub u64_values: FxHashMap<String, u64>,
+	/// HashMap of `String` values
 	pub string_values: FxHashMap<String, String>,
 }
 
