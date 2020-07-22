@@ -62,7 +62,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::{
 	borrow::{Borrow, Cow},
 	collections::HashSet,
-	fs, io,
+	fs,
 	marker::PhantomData,
 	num:: NonZeroUsize,
 	pin::Pin,
@@ -490,17 +490,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let not_connected_peers = {
 			let swarm = &mut *swarm;
-			let list = swarm.known_peers().filter(|p| open.iter().all(|n| n != *p))
-				.cloned().collect::<Vec<_>>();
-			list.into_iter().map(move |peer_id| {
-				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
-					version_string: swarm.node(&peer_id)
-						.and_then(|i| i.client_version().map(|s| s.to_owned())),
-					latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
-					known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
-						.into_iter().collect(),
+			swarm.known_peers().into_iter()
+				.filter(|p| open.iter().all(|n| n != p))
+				.map(move |peer_id| {
+					(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+						version_string: swarm.node(&peer_id)
+							.and_then(|i| i.client_version().map(|s| s.to_owned())),
+						latest_ping_time: swarm.node(&peer_id).and_then(|i| i.latest_ping()),
+						known_addresses: NetworkBehaviour::addresses_of_peer(&mut **swarm, &peer_id)
+							.into_iter().collect(),
+					})
 				})
-			}).collect()
+				.collect()
 		};
 
 		NetworkState {
@@ -1111,7 +1112,7 @@ impl Metrics {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
-	type Output = Result<(), io::Error>;
+	type Output = ();
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
@@ -1138,7 +1139,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_worker.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
-				Poll::Ready(None) => return Poll::Ready(Ok(())),
+				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
 

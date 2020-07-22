@@ -18,7 +18,7 @@
 
 use crate::{
 	AliveContractInfo, BalanceOf, ContractInfo, ContractInfoOf, Module, RawEvent,
-	TombstoneContractInfo, Trait, CodeHash,
+	TombstoneContractInfo, Trait, CodeHash, Config
 };
 use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
@@ -87,10 +87,10 @@ enum Verdict<T: Trait> {
 /// This function accounts for the storage rent deposit. I.e. if the contract possesses enough funds
 /// then the fee can drop to zero.
 fn compute_fee_per_block<T: Trait>(
-	balance: &BalanceOf<T>,
+	free_balance: &BalanceOf<T>,
 	contract: &AliveContractInfo<T>,
 ) -> BalanceOf<T> {
-	let free_storage = balance
+	let free_storage = free_balance
 		.checked_div(&T::RentDepositOffset::get())
 		.unwrap_or_else(Zero::zero);
 
@@ -107,30 +107,27 @@ fn compute_fee_per_block<T: Trait>(
 		.unwrap_or(<BalanceOf<T>>::max_value())
 }
 
-/// Subsistence threshold is the extension of the minimum balance (aka existential deposit) by the
-/// tombstone deposit, required for leaving a tombstone.
-///
-/// Rent mechanism cannot make the balance lower than subsistence threshold.
-fn subsistence_threshold<T: Trait>() -> BalanceOf<T> {
-	T::Currency::minimum_balance() + T::TombstoneDeposit::get()
-}
-
 /// Returns amount of funds available to consume by rent mechanism.
 ///
 /// Rent mechanism cannot consume more than `rent_allowance` set by the contract and it cannot make
 /// the balance lower than [`subsistence_threshold`].
 ///
-/// In case the balance is below the subsistence threshold, this function returns `None`.
+/// In case the toal_balance is below the subsistence threshold, this function returns `None`.
 fn rent_budget<T: Trait>(
-	balance: &BalanceOf<T>,
+	total_balance: &BalanceOf<T>,
+	free_balance: &BalanceOf<T>,
 	contract: &AliveContractInfo<T>,
 ) -> Option<BalanceOf<T>> {
-	let subsistence_threshold = subsistence_threshold::<T>();
-	if *balance < subsistence_threshold {
+	let subsistence_threshold = Config::<T>::subsistence_threshold_uncached();
+	// Reserved balance contributes towards the subsistence threshold to stay consistent
+	// with the existential deposit where the reserved balance is also counted.
+	if *total_balance < subsistence_threshold {
 		return None;
 	}
 
-	let rent_allowed_to_charge = *balance - subsistence_threshold;
+	// However, reserved balance cannot be charged so we need to use the free balance
+	// to calculate the actual budget (which can be 0).
+	let rent_allowed_to_charge = free_balance.saturating_sub(subsistence_threshold);
 	Some(<BalanceOf<T>>::min(
 		contract.rent_allowance,
 		rent_allowed_to_charge,
@@ -158,21 +155,22 @@ fn consider_case<T: Trait>(
 		return Verdict::Exempt;
 	}
 
-	let balance = T::Currency::free_balance(account);
+	let total_balance = T::Currency::total_balance(account);
+	let free_balance = T::Currency::free_balance(account);
 
 	// An amount of funds to charge per block for storage taken up by the contract.
-	let fee_per_block = compute_fee_per_block::<T>(&balance, contract);
+	let fee_per_block = compute_fee_per_block::<T>(&free_balance, contract);
 	if fee_per_block.is_zero() {
 		// The rent deposit offset reduced the fee to 0. This means that the contract
 		// gets the rent for free.
 		return Verdict::Exempt;
 	}
 
-	let rent_budget = match rent_budget::<T>(&balance, contract) {
+	let rent_budget = match rent_budget::<T>(&total_balance, &free_balance, contract) {
 		Some(rent_budget) => rent_budget,
 		None => {
-			// The contract's balance is already below subsistence threshold. That indicates that
-			// the contract cannot afford to leave a tombstone.
+			// The contract's total balance is already below subsistence threshold. That
+			// indicates that the contract cannot afford to leave a tombstone.
 			//
 			// So cleanly wipe the contract.
 			return Verdict::Kill;
@@ -195,7 +193,7 @@ fn consider_case<T: Trait>(
 		account,
 		dues_limited,
 		WithdrawReason::Fee.into(),
-		balance.saturating_sub(dues_limited),
+		free_balance.saturating_sub(dues_limited),
 	)
 	.is_ok();
 
@@ -369,14 +367,15 @@ pub fn compute_rent_projection<T: Trait>(
 	};
 
 	// Compute how much would the fee per block be with the *updated* balance.
-	let balance = T::Currency::free_balance(account);
-	let fee_per_block = compute_fee_per_block::<T>(&balance, &alive_contract_info);
+	let total_balance = T::Currency::total_balance(account);
+	let free_balance = T::Currency::free_balance(account);
+	let fee_per_block = compute_fee_per_block::<T>(&free_balance, &alive_contract_info);
 	if fee_per_block.is_zero() {
 		return Ok(RentProjection::NoEviction);
 	}
 
 	// Then compute how much the contract will sustain under these circumstances.
-	let rent_budget = rent_budget::<T>(&balance, &alive_contract_info).expect(
+	let rent_budget = rent_budget::<T>(&total_balance, &free_balance, &alive_contract_info).expect(
 		"the contract exists and in the alive state;
 		the updated balance must be greater than subsistence deposit;
 		this function doesn't return `None`;

@@ -63,13 +63,14 @@ macro_rules! new_full_start {
 			.with_transaction_pool(|builder| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(
 					builder.client().clone(),
+					builder.prometheus_registry(),
 				);
-				let config = builder.config();
-
-				Ok(sc_transaction_pool::BasicPool::new(
-					config.transaction_pool.clone(),
+				Ok(sc_transaction_pool::BasicPool::new_full(
+					builder.config().transaction_pool.clone(),
 					std::sync::Arc::new(pool_api),
 					builder.prometheus_registry(),
+					builder.spawn_handle(),
+					builder.client().clone(),
 				))
 			})?
 			.with_import_queue(|
@@ -85,7 +86,7 @@ macro_rules! new_full_start {
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
 					client.clone(),
 					&(client.clone() as Arc<_>),
-					select_chain,
+					select_chain.clone(),
 				)?;
 				let justification_import = grandpa_block_import.clone();
 
@@ -101,6 +102,7 @@ macro_rules! new_full_start {
 					Some(Box::new(justification_import)),
 					None,
 					client,
+					select_chain,
 					inherent_data_providers.clone(),
 					spawn_task_handle,
 					prometheus_registry,
@@ -359,12 +361,12 @@ pub fn new_light_base(config: Configuration) -> Result<(
 				builder.client().clone(),
 				fetcher,
 			);
-			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
+			let pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
 				builder.config().transaction_pool.clone(),
 				Arc::new(pool_api),
 				builder.prometheus_registry(),
-				sc_transaction_pool::RevalidationType::Light,
-			);
+				builder.spawn_handle(),
+			));
 			Ok(pool)
 		})?
 		.with_import_queue_and_fprb(|
@@ -372,14 +374,18 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			client,
 			backend,
 			fetcher,
-			_select_chain,
+			mut select_chain,
 			_tx_pool,
 			spawn_task_handle,
 			registry,
 		| {
+			let select_chain = select_chain.take()
+				.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
+
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
+
 			let grandpa_block_import = grandpa::light_block_import(
 				client.clone(),
 				backend,
@@ -403,6 +409,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 				None,
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
+				select_chain,
 				inherent_data_providers.clone(),
 				spawn_task_handle,
 				registry,
@@ -626,7 +633,6 @@ mod tests {
 				let check_nonce = frame_system::CheckNonce::from(index);
 				let check_weight = frame_system::CheckWeight::new();
 				let payment = pallet_transaction_payment::ChargeTransactionPayment::from(0);
-				let validate_grandpa_equivocation = pallet_grandpa::ValidateEquivocationReport::new();
 				let extra = (
 					check_spec_version,
 					check_tx_version,
@@ -635,12 +641,11 @@ mod tests {
 					check_nonce,
 					check_weight,
 					payment,
-					validate_grandpa_equivocation,
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), (), ())
+					(spec_version, transaction_version, genesis_hash, genesis_hash, (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

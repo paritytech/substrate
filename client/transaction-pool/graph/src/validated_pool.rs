@@ -36,7 +36,8 @@ use sp_runtime::{
 };
 use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
+use futures::channel::mpsc::{channel, Sender};
+use retain_mut::RetainMut;
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{
@@ -98,7 +99,7 @@ pub struct ValidatedPool<B: ChainApi> {
 		ExtrinsicHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<ExtrinsicHash<B>>>>,
+	import_notification_sinks: Mutex<Vec<Sender<ExtrinsicHash<B>>>>,
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
@@ -137,10 +138,30 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.rotator.is_banned(hash)
 	}
 
+	/// A fast check before doing any further processing of a transaction, like validation.
+	///
+	/// If `ingore_banned` is `true`, it will not check if the transaction is banned.
+	///
+	/// It checks if the transaction is already imported or banned. If so, it returns an error.
+	pub fn check_is_known(
+		&self,
+		tx_hash: &ExtrinsicHash<B>,
+		ignore_banned: bool,
+	) -> Result<(), B::Error> {
+		if !ignore_banned && self.is_banned(tx_hash) {
+			Err(error::Error::TemporarilyBanned.into())
+		} else if self.pool.read().is_imported(tx_hash) {
+			Err(error::Error::AlreadyImported(Box::new(tx_hash.clone())).into())
+		} else {
+			Ok(())
+		}
+	}
+
 	/// Imports a bunch of pre-validated transactions to the pool.
-	pub fn submit<T>(&self, txs: T) -> Vec<Result<ExtrinsicHash<B>, B::Error>> where
-		T: IntoIterator<Item=ValidatedTransactionFor<B>>
-	{
+	pub fn submit(
+		&self,
+		txs: impl IntoIterator<Item=ValidatedTransactionFor<B>>,
+	) -> Vec<Result<ExtrinsicHash<B>, B::Error>> {
 		let results = txs.into_iter()
 			.map(|validated_tx| self.submit_one(validated_tx))
 			.collect::<Vec<_>>();
@@ -166,7 +187,19 @@ impl<B: ChainApi> ValidatedPool<B> {
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
 					self.import_notification_sinks.lock()
-						.retain(|sink| sink.unbounded_send(hash.clone()).is_ok());
+						.retain_mut(|sink| {
+							match sink.try_send(hash.clone()) {
+								Ok(()) => true,
+								Err(e) => {
+									if e.is_full() {
+										log::warn!(target: "txpool", "[{:?}] Trying to notify an import but the channel is full", hash);
+										true
+									} else {
+										false
+									}
+								},
+							}
+						});
 				}
 
 				let mut listener = self.listener.write();
@@ -509,7 +542,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Consumers of this stream should use the `ready` method to actually get the
 	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream<ExtrinsicHash<B>> {
-		let (sink, stream) = tracing_unbounded("mpsc_import_notifications");
+		const CHANNEL_BUFFER_SIZE: usize = 1024;
+
+		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}

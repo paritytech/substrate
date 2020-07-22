@@ -37,9 +37,9 @@ use tempfile::TempDir;
 #[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
-	pub impl_name: &'static str,
+	pub impl_name: String,
 	/// Implementation version (see sc-cli to see an example of format)
-	pub impl_version: &'static str,
+	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
@@ -180,6 +180,11 @@ impl Configuration {
 	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
+	}
+
+	/// Returns the prometheus metrics registry, if available.
+	pub fn prometheus_registry<'a>(&'a self) -> Option<&'a Registry> {
+		self.prometheus_config.as_ref().map(|config| &config.registry)
 	}
 }
 
