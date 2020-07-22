@@ -199,7 +199,7 @@ impl MetricsService {
 
 		Self {
 			metrics,
-			system: sysinfo::System::new(),
+			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
 			pid: Some(process.pid),
 		}
 	}
@@ -234,7 +234,7 @@ impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
-			system: sysinfo::System::new(),
+			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
 			pid: sysinfo::get_current_pid().ok(),
 		}
 	}
@@ -283,12 +283,11 @@ impl MetricsService {
 	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
 		let mut info = ProcessInfo::default();
-		if self.system.refresh_process(*pid) {
-			let prc = self.system.get_process(*pid)
-				.expect("Above refresh_process succeeds, this must be Some(), qed");
+		self.system.refresh_process(*pid);
+		self.system.get_process(*pid).map(|prc| {
 			info.cpu_usage = prc.cpu_usage().into();
 			info.memory = prc.memory();
-		}
+		});
 		info
 	}
 
