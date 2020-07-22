@@ -34,32 +34,32 @@ use futures_timer::Delay;
 pub use sp_core::offchain::TimerId;
 
 pub fn timer(sink: TracingUnboundedSender<PollableId>) -> (TimerApi, TimerWorker) {
-    // let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_timer_to");
-    let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_timer_from");
+	// let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_timer_to");
+	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_timer_from");
 
-    let worker = TimerWorker {
-        to_api: sink,
-        from_api,
-        delay: None,
-        ids: Default::default(),
-    };
+	let worker = TimerWorker {
+		to_api: sink,
+		from_api,
+		delay: None,
+		ids: Default::default(),
+	};
 
-    let api = TimerApi {
-        to_worker,
-        // from_worker,
-        next_id: TimerId(0),
-    };
+	let api = TimerApi {
+		to_worker,
+		// from_worker,
+		next_id: TimerId(0),
+	};
 
-    (api, worker)
+	(api, worker)
 }
 
 pub struct TimerApi {
-    /// Used to sends messages to the `HttpApi`.
+	/// Used to sends messages to the `HttpApi`.
 	to_worker: TracingUnboundedSender<(TimerId, Timestamp)>,
 	// /// Used to receive messages from the `TimerApi`.
 	// from_worker: TracingUnboundedReceiver<TimerId>,
-    /// Counter to generate new timer IDs with.
-    next_id: TimerId,
+	/// Counter to generate new timer IDs with.
+	next_id: TimerId,
 }
 
 impl TimerApi {
@@ -106,11 +106,11 @@ pub struct TimerWorker {
 	/// Used to sends messages to the `HttpApi`.
 	to_api: TracingUnboundedSender<PollableId>,
 	/// Used to receive messages from the `TimerApi`.
-    from_api: TracingUnboundedReceiver<(TimerId, Timestamp)>,
-    /// Timer future driving the wakeups for worker future.
+	from_api: TracingUnboundedReceiver<(TimerId, Timestamp)>,
+	/// Timer future driving the wakeups for worker future.
 	delay: Option<(Timestamp, Delay)>,
 	/// Priority queue for timers, yielding those with earliest timestamps.
-    ids: BinaryHeap<Reverse<TimerIdWithTimestamp>>,
+	ids: BinaryHeap<Reverse<TimerIdWithTimestamp>>,
 }
 
 impl Future for TimerWorker {
@@ -142,8 +142,8 @@ impl Future for TimerWorker {
 				// We just popped timestamps earlier than the present epoch
 				debug_assert!(timestamp > &super::timestamp::now());
 
-                let diff = super::timestamp::timestamp_from_now(*timestamp);
-                let duration = time::Duration::from_millis(diff.as_millis() as u64);
+				let diff = super::timestamp::timestamp_from_now(*timestamp);
+				let duration = time::Duration::from_millis(diff.as_millis() as u64);
 
 				this.delay = Some((*timestamp, Delay::new(duration)));
 				// Reschedule the task to poll the new underlying timer future
@@ -158,19 +158,19 @@ impl Future for TimerWorker {
 			Poll::Ready(Some((id, timestamp))) => {
 				this.ids.push(Reverse(TimerIdWithTimestamp { key: timestamp, id }));
 
-                // Newly added timer may resolve before currently registered
-                // earliest one - if that's the case, adjust the new delay.
-                match this.delay.as_mut() {
-                    Some((earliest, delay)) if earliest.diff(&timestamp).millis() > 0 => {
-                        let diff = super::timestamp::timestamp_from_now(timestamp);
-                        let duration = time::Duration::from_millis(diff.as_millis() as u64);
+				// Newly added timer may resolve before currently registered
+				// earliest one - if that's the case, adjust the new delay.
+				match this.delay.as_mut() {
+					Some((earliest, delay)) if earliest.diff(&timestamp).millis() > 0 => {
+						let diff = super::timestamp::timestamp_from_now(timestamp);
+						let duration = time::Duration::from_millis(diff.as_millis() as u64);
 
-                        delay.reset(duration);
-                    },
-                    _ => {},
-                }
-                // Reschedule the task to poll the new underlying timer future
-                // (delay could've changed or a fresh, single timer could've been added)
+						delay.reset(duration);
+					},
+					_ => {},
+				}
+				// Reschedule the task to poll the new underlying timer future
+				// (delay could've changed or a fresh, single timer could've been added)
 				cx.waker().wake_by_ref();
 
 				Poll::Pending
