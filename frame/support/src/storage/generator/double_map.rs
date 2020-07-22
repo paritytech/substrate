@@ -228,6 +228,15 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		Self::try_mutate(k1, k2, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
+	fn mutate_exists<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Option<V>) -> R,
+	{
+		Self::try_mutate_exists(k1, k2, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	}
+
 	fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E> where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
