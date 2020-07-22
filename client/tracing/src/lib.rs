@@ -599,4 +599,56 @@ mod tests {
 		assert_eq!(sd1.id, te1.parent_id.unwrap());
 	}
 
+	#[test]
+	fn test_parent_id_with_threads() {
+		use std::sync::mpsc;
+
+		let (sub, spans, events) = setup_subscriber();
+		let _sub_guard = tracing::subscriber::set_global_default(sub);
+		let span1 = tracing::info_span!(target: "test_target", "test_span1");
+		let _guard1 = span1.enter();
+
+		let (tx, rx) = mpsc::channel();
+		let handle = std::thread::spawn(move || {
+			let span2 = tracing::info_span!(target: "test_target", "test_span2");
+			let _guard2 = span2.enter();
+			// emit event
+			tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
+			for msg in rx.recv() {
+				if msg == false {
+					break;
+				}
+			}
+			// gard2 and span2 dropped / exited
+		});
+
+		// wait for Event to be dispatched and stored
+		while events.lock().is_empty() {
+			std::thread::sleep(Duration::from_millis(1));
+		}
+
+		// emit new event while span2 still active in other thread - (will be second item in Vec)
+		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event2");
+
+		// stop thread and drop span
+		let _ = tx.send(false);
+		let _ = handle.join();
+
+		// wait for Span to be dispatched and stored
+		while spans.lock().is_empty() {
+			std::thread::sleep(Duration::from_millis(1));
+		}
+		let span2 = spans.lock().remove(0);
+		let event1 = events.lock().remove(0);
+		drop(_guard1);
+		drop(span1);
+		let span1 = spans.lock().remove(0);
+		let event2 = events.lock().remove(0);
+
+		assert_eq!(event1.values.string_values.get("message").unwrap(), "test_event1");
+		assert_eq!(event2.values.string_values.get("message").unwrap(), "test_event2");
+		assert_eq!(span2.id, event1.parent_id.unwrap());
+		assert_eq!(span1.id, event2.parent_id.unwrap());
+		assert_ne!(span2.id, span1.id);
+	}
 }
