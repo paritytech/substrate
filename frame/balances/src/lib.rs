@@ -1092,7 +1092,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 			// defensive only: overflow should never happen, however in case it does, then this
 			// operation is a no-op.
-			account.free = account.free.checked_add(&value).ok_or(Self::PositiveImbalance::zero())?;
+			account.free = account.free.checked_add(&value).ok_or_else(|| Self::PositiveImbalance::zero())?;
 
 			Ok(PositiveImbalance::new(value))
 		}).unwrap_or_else(|x| x)
@@ -1153,7 +1153,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			};
 			account.free = value;
 			Ok(imbalance)
-		}).unwrap_or(SignedImbalance::Positive(Self::PositiveImbalance::zero()))
+		}).unwrap_or_else(|_| SignedImbalance::Positive(Self::PositiveImbalance::zero()))
 	}
 }
 
