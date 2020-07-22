@@ -33,12 +33,12 @@ use pin_project::pin_project;
 pub(crate) type MessageId = PollableId;
 
 fn epoll_peek(interest_list: &[MessageId]) -> Option<MessageId> {
-    let deadline = super::offchain::timestamp();
-    super::offchain::pollable_wait(interest_list, Some(deadline))
+    let deadline = sp_io::offchain::timestamp();
+    sp_io::offchain::pollable_wait(interest_list, Some(deadline))
 }
 
 fn epoll_wait(interest_list: &[MessageId]) -> MessageId {
-    super::offchain::pollable_wait(interest_list, None)
+    sp_io::offchain::pollable_wait(interest_list, None)
         .expect(
             "pollable_wait with None deadline should block indefinitely \
             until we get a response; qed"
@@ -265,6 +265,7 @@ pub(crate) fn peek_response(msg_id: MessageId) -> bool {
 /// TODO: Resolve when the body is ready to be read? When we received header/request?
 /// Maybe two futures - one for the code/headers and the other one for body?
 #[pin_project]
+#[derive(Debug)]
 pub struct HttpFuture {
     #[pin] inner: HostFuture,
 }
@@ -296,8 +297,8 @@ impl Future for HttpFuture {
         match Future::poll(inner, cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(()) => {
-                let now = super::offchain::timestamp();
-                let status = super::offchain::http_response_wait(&[id], Some(now));
+                let now = sp_io::offchain::timestamp();
+                let status = sp_io::offchain::http_response_wait(&[id], Some(now));
                 let code = match status.as_slice() {
                     &[HttpRequestStatus::Finished(code)] => code,
                     &[HttpRequestStatus::IoError] => return Poll::Ready(Err(HttpError::IoError)),
@@ -311,13 +312,13 @@ impl Future for HttpFuture {
                     other => return Poll::Ready(Err(HttpError::Invalid)),
                 };
 
-                let headers = super::offchain::http_response_headers(id);
+                let headers = sp_io::offchain::http_response_headers(id);
                 // TODO: Support chunked response
                 // Ideally should piggy back on AsyncRead but we can't have sth
                 // similar due to Cargo feature unification bug and `futures`
                 // being compiled in `std` contexts in the dep graph
                 let mut buf = [0u8; 1024];
-                let len = match super::offchain::http_response_read_body(id, &mut buf, Some(now)) {
+                let len = match sp_io::offchain::http_response_read_body(id, &mut buf, Some(now)) {
                     Ok(read_len) => read_len,
                     // TODO: Needs more data, can't be handled as a single future as of now
                     Err(HttpError::DeadlineReached) => 0,
