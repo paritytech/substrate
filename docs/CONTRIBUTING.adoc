@@ -70,7 +70,10 @@ To create a Polkadot companion PR:
 . Override your local cargo config to point to your local substrate (pointing to your WIP branch): place `paths = ["path/to/substrate"]` in `~/.cargo/config`.
 . Make the changes required and build polkadot locally.
 . Submit all this as a PR against the Polkadot Repo. Link to your Polkadot PR in the _description_ of your Substrate PR as "polkadot companion: [URL]"
-. Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
+. You must also link your Substrate PR in the _description_ of your Polkadot PR (link in both directions).
+. Now you should see in your Polkadot PR that your Substrate branch will be used in the CI job.
+. On the Substrate PR you should see that there is a step `check-polkadot-companion-status` that will ensure that the Polkadot PR is green and has been approved (and is mergeable).
+. If the Polkadot PR gets approved later on, you can re-run the `check-polkadot-companion-status` step only and it will simply re-run that check specifically.
 . Wait for reviews on both
 . Once both PRs have been green lit, they can both be merged 🍻.
 
