@@ -206,6 +206,7 @@ impl MetricsService {
 
 	fn process_info(&mut self) -> ProcessInfo {
 		let pid = self.pid.clone().expect("unix always has a pid. qed");
+		self.system.clear_procs(); // ensure we close old, released tasks handles
 		let mut info = self.process_info_for(&pid);
 		let process = procfs::process::Process::new(pid).expect("Our process exists. qed.");
 		info.threads = process.stat().ok().map(|s|
@@ -240,6 +241,7 @@ impl MetricsService {
 	}
 
 	fn process_info(&mut self) -> ProcessInfo {
+		self.system.clear_procs(); // ensure we close old, released tasks handles
 		self.pid.map(|pid| self.process_info_for(&pid)).unwrap_or_default()
 	}
 }
