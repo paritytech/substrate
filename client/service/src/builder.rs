@@ -176,6 +176,25 @@ type TLightParts<TBl, TRtApi, TExecDisp> = (
 	Arc<OnDemand<TBl>>,
 );
 
+type TLightBackendWithHash<TBl, THash> = sc_light::Backend<
+	sc_client_db::light::LightStorage<TBl>,
+	THash,
+>;
+
+/// Light client type with a specific hash type.
+pub type TLightClientWithHash<TBl, TRtApi, TExecDisp, THash> = Client<
+	TLightBackendWithHash<TBl, THash>,
+	sc_light::GenesisCallExecutor<
+		TLightBackendWithHash<TBl, THash>,
+		crate::client::LocalCallExecutor<
+			TLightBackendWithHash<TBl, THash>,
+			NativeExecutor<TExecDisp>
+		>,
+	>,
+	TBl,
+	TRtApi,
+>;
+
 /// Creates a new full client for the given config.
 pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
