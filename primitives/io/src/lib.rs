@@ -969,14 +969,20 @@ pub trait Offchain {
 			.map(|r| r as u32)
 	}
 
+	/// Wait until some pollable ID is marked as "ready" to process.
+	///
+	/// This can be used to monitor multiple IDs with an optional timeout.
+	/// Calling this will block until either:
+	/// - a pollable ID becomes ready;
+	/// - the timeout expires (unless a `None` deadline was passed).
 	fn pollable_wait(
 		&mut self,
-		ids: &[PollableId],
+		interest_list: &[PollableId],
 		deadline: Option<Timestamp>
 	) -> Option<PollableId> {
 		self.extension::<OffchainExt>()
 			.expect("pollable_wait can be called only in the offchain worker context")
-			.pollable_wait(ids, deadline)
+			.pollable_wait(interest_list, deadline)
 	}
 }
 
