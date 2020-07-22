@@ -76,17 +76,31 @@ pub struct TraceEvent {
 	pub name: &'static str,
 	pub target: String,
 	pub level: Level,
-	pub visitor: Values,
-	pub parent_id: Option<u64>,
+	pub values: Values,
+	pub parent_id: Option<Id>,
+}
+
+impl From<&Event<'_>> for TraceEvent {
+	fn from(event: &Event<'_>) -> TraceEvent {
+		let mut values = Values::new();
+		event.record(&mut values);
+		TraceEvent {
+			name: event.metadata().name(),
+			target: event.metadata().target().to_owned(),
+			level: event.metadata().level().clone(),
+			parent_id: event.parent().cloned(),
+			values,
+		}
+	}
 }
 
 /// Represents a single instance of a tracing span
 #[derive(Debug)]
 pub struct SpanDatum {
 	/// id for this span
-	pub id: u64,
+	pub id: Id,
 	/// id of the parent span, if any
-	pub parent_id: Option<u64>,
+	pub parent_id: Option<Id>,
 	/// Name of this span
 	pub name: String,
 	/// Target, typically module
@@ -101,8 +115,6 @@ pub struct SpanDatum {
 	pub overall_time: Duration,
 	/// Values recorded to this span
 	pub values: Values,
-	/// Events belonging directly to this span
-	pub events: Vec<TraceEvent>,
 }
 
 /// Holds associated values for a tracing span
@@ -214,7 +226,7 @@ pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
+	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
 	current_span: CurrentSpan,
 }
 
@@ -290,18 +302,18 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
-		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
 		// If this is a wasm trace, check if target/level is enabled
 		if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
 			if !self.check_target(wasm_target, attrs.metadata().level()) {
-				return Id::from_u64(id);
+				return id
 			}
 		}
 		let span_datum = SpanDatum {
-			id,
-			parent_id: self.current_span.id().map(|p| p.into_u64()),
+			id: id.clone(),
+			parent_id: self.current_span.id(),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: attrs.metadata().level().clone(),
@@ -309,15 +321,14 @@ impl Subscriber for ProfilingSubscriber {
 			start_time: Instant::now(),
 			overall_time: ZERO_DURATION,
 			values,
-			events: Vec::new(),
 		};
-		self.span_data.lock().insert(id, span_datum);
-		Id::from_u64(id)
+		self.span_data.lock().insert(id.clone(), span_datum);
+		id
 	}
 
 	fn record(&self, span: &Id, values: &Record<'_>) {
 		let mut span_data = self.span_data.lock();
-		if let Some(s) = span_data.get_mut(&span.into_u64()) {
+		if let Some(s) = span_data.get_mut(span) {
 			values.record(&mut s.values);
 		}
 	}
@@ -325,14 +336,14 @@ impl Subscriber for ProfilingSubscriber {
 	fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
 
 	fn event(&self, event: &Event<'_>) {
-		let mut visitor = Values::default();
-		event.record(&mut visitor);
+		let mut values = Values::default();
+		event.record(&mut values);
 		let trace_event = TraceEvent {
 			name: event.metadata().name(),
 			target: event.metadata().target().to_owned(),
 			level: event.metadata().level().clone(),
-			visitor,
-			parent_id: self.current_span.id().map(|id| id.into_u64()),
+			values,
+			parent_id: self.current_span.id(),
 		};
 		self.trace_handler.handle_event(trace_event);
 	}
@@ -341,7 +352,7 @@ impl Subscriber for ProfilingSubscriber {
 		self.current_span.enter(span.clone());
 		let mut span_data = self.span_data.lock();
 		let start_time = Instant::now();
-		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
+		if let Some(mut s) = span_data.get_mut(&span) {
 			s.start_time = start_time;
 		}
 	}
@@ -350,7 +361,7 @@ impl Subscriber for ProfilingSubscriber {
 		self.current_span.exit();
 		let end_time = Instant::now();
 		let mut span_data = self.span_data.lock();
-		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
+		if let Some(mut s) = span_data.get_mut(&span) {
 			s.overall_time = end_time - s.start_time + s.overall_time;
 		}
 	}
@@ -358,7 +369,7 @@ impl Subscriber for ProfilingSubscriber {
 	fn try_close(&self, span: Id) -> bool {
 		let span_datum = {
 			let mut span_data = self.span_data.lock();
-			span_data.remove(&span.into_u64())
+			span_data.remove(&span)
 		};
 		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
@@ -396,25 +407,23 @@ impl TraceHandler for LogTraceHandler {
 		if span_datum.values.is_empty() {
 			log::log!(
 				log_level(span_datum.level),
-				"{}: {}, time: {}, id: {}, parent_id: {:?}, events: {:?}",
+				"{}: {}, time: {}, id: {}, parent_id: {:?}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
-				span_datum.id,
-				span_datum.parent_id,
-				span_datum.events,
+				span_datum.id.into_u64(),
+				span_datum.parent_id.map(|s| s.into_u64()),
 			);
 		} else {
 			log::log!(
 				log_level(span_datum.level),
-				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}, events: {:?}",
+				"{}: {}, time: {}, id: {}, parent_id: {:?}, values: {}",
 				span_datum.target,
 				span_datum.name,
 				span_datum.overall_time.as_nanos(),
-				span_datum.id,
-				span_datum.parent_id,
+				span_datum.id.into_u64(),
+				span_datum.parent_id.map(|s| s.into_u64()),
 				span_datum.values,
-				span_datum.events,
 			);
 		}
 	}
@@ -425,8 +434,8 @@ impl TraceHandler for LogTraceHandler {
 			"{}: {}, parent_id: {:?}, values: {}",
 			event.name,
 			event.target,
-			event.parent_id,
-			event.visitor
+			event.parent_id.map(|s| s.into_u64()),
+			event.values
 		);
 	}
 }
@@ -442,8 +451,8 @@ impl TraceHandler for TelemetryTraceHandler {
 			"name" => span_datum.name,
 			"target" => span_datum.target,
 			"time" => span_datum.overall_time.as_nanos(),
-			"id" => span_datum.id,
-			"parent_id" => span_datum.parent_id,
+			"id" => span_datum.id.into_u64(),
+			"parent_id" => span_datum.parent_id.map(|i| i.into_u64()),
 			"values" => span_datum.values
 		);
 	}
@@ -452,8 +461,8 @@ impl TraceHandler for TelemetryTraceHandler {
 		telemetry!(SUBSTRATE_INFO; "tracing.event";
 			"name" => event.name,
 			"target" => event.target,
-			"parent_id" => event.parent_id,
-			"values" => event.visitor
+			"parent_id" => event.parent_id.map(|i| i.into_u64()),
+			"values" => event.values
 		);
 	}
 }
@@ -565,7 +574,7 @@ mod tests {
 		let _sub_guard = tracing::subscriber::set_default(sub);
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 		let mut te1 = events.lock().remove(0);
-		assert_eq!(te1.visitor.string_values.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
+		assert_eq!(te1.values.string_values.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
 	}
 
 	#[test]
@@ -589,4 +598,5 @@ mod tests {
 
 		assert_eq!(sd1.id, te1.parent_id.unwrap());
 	}
+
 }
