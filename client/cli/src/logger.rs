@@ -259,18 +259,4 @@ mod tests {
 		dbg!(&res);
 		assert!(res.is_ok());
 	}
-
-	#[test]
-	fn logger_age_or_size() {
-		let pattern = "";
-		let log_rotation_opt = LogRotationOpt {
-			log_directory: None,
-			log_age: Some(Age::Day),
-			log_size: Some(1337),
-		};
-		let res = init_logger(pattern, Some(log_rotation_opt));
-
-		dbg!(&res);
-		assert!(res.is_ok());
-	}
 }
