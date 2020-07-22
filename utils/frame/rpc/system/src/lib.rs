@@ -263,7 +263,7 @@ fn adjust_nonce<P, AccountId, Index>(
 	// `provides` tag. And increment the nonce if we find a transaction
 	// that matches the current one.
 	let mut current_nonce = nonce.clone();
-	let mut current_tag = (account.clone(), nonce.clone()).encode();
+	let mut current_tag = (account.clone(), nonce).encode();
 	for tx in pool.ready() {
 		log::debug!(
 			target: "rpc",

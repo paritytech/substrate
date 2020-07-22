@@ -348,7 +348,7 @@ pub fn new_light() -> (
 
 	let storage = sc_client_db::light::LightStorage::new_test();
 	let blockchain = Arc::new(sc_light::Blockchain::new(storage));
-	let backend = Arc::new(LightBackend::new(blockchain.clone()));
+	let backend = Arc::new(LightBackend::new(blockchain));
 	let executor = new_native_executor();
 	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor(), Default::default());
 	let call_executor = LightExecutor::new(

@@ -123,6 +123,13 @@ impl TelemetryEndpoints {
 	}
 }
 
+impl TelemetryEndpoints {
+	/// Return `true` if there are no telemetry endpoints, `false` otherwise.
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
+}
+
 /// Parses a WebSocket URL into a libp2p `Multiaddr`.
 fn url_to_multiaddr(url: &str) -> Result<Multiaddr, libp2p::multiaddr::Error> {
 	// First, assume that we have a `Multiaddr`.

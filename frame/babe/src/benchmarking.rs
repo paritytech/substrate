@@ -17,8 +17,6 @@
 
 //! Benchmarks for the BABE Pallet.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
 use super::*;
 use frame_benchmarking::benchmarks;
 
