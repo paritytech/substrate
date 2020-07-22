@@ -29,7 +29,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use parking_lot::Mutex;
+use parking_lot::{RwLock, Mutex};
 use serde::ser::{Serialize, Serializer, SerializeMap};
 use tracing_core::{
 	event::Event,
@@ -124,6 +124,7 @@ pub struct ProfilingSubscriber {
 	targets: Vec<(String, Level)>,
 	trace_handler: Box<dyn TraceHandler>,
 	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
+	current_span: RwLock<Option<Id>>,
 }
 
 /// Holds associated values for a tracing span
@@ -259,6 +260,7 @@ impl ProfilingSubscriber {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(Default::default()),
+			current_span: RwLock::new(None),
 		}
 	}
 
@@ -312,7 +314,7 @@ impl Subscriber for ProfilingSubscriber {
 		}
 		let span_datum = SpanDatum {
 			id: id.clone(),
-			parent_id: attrs.parent().cloned(),
+			parent_id: attrs.parent().cloned().or_else(|| self.current_span.read().clone()),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: attrs.metadata().level().clone(),
@@ -336,7 +338,10 @@ impl Subscriber for ProfilingSubscriber {
 	fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
 
 	fn event(&self, event: &Event<'_>) {
-		let event : TraceEvent = event.into();
+		let mut event : TraceEvent = event.into();
+		if event.parent_id.is_none() {
+			event.parent_id = self.current_span.read().clone();
+		}
 		if let Some(parent_id) = event.parent_id.as_ref() {
 			if let Some(span) = self.span_data.lock().get_mut(parent_id) {
 				span.events.push(event);
@@ -348,6 +353,7 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn enter(&self, span: &Id) {
+		*self.current_span.write() = Some(span.clone());
 		let mut span_data = self.span_data.lock();
 		let start_time = Instant::now();
 		if let Some(mut s) = span_data.get_mut(&span) {
@@ -360,6 +366,9 @@ impl Subscriber for ProfilingSubscriber {
 		let mut span_data = self.span_data.lock();
 		if let Some(mut s) = span_data.get_mut(&span) {
 			s.overall_time = end_time - s.start_time + s.overall_time;
+			*self.current_span.write() = s.parent_id.clone()
+		} else {
+			*self.current_span.write() = None
 		}
 	}
 
@@ -544,7 +553,7 @@ mod tests {
 		let _sub_guard = tracing::subscriber::set_default(sub);
 		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event");
 		let mut te1 = events.lock().remove(0);
-		assert_eq!(te1.values.0.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
+		assert_eq!(te1.values.string_values.remove(&"message".to_owned()).unwrap(), "test_event".to_owned());
 	}
 
 	#[test]
