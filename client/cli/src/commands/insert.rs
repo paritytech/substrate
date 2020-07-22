@@ -80,7 +80,8 @@ impl InsertCmd {
 				Error::Other("Cannot convert argument to keytype: argument should be 4-character string".into())
 			})?;
 
-		keystore.write().insert_unknown(key_type, &suri, &public[..])
+		keystore.write()
+			.insert_unknown(key_type, &suri, &public[..])
 			.map_err(|e| Error::Other(format!("{:?}", e)))?;
 
 		Ok(())

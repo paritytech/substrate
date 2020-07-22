@@ -34,13 +34,9 @@ use sp_runtime::traits::IdentifyAccount;
 	about = "Generate a seed that provides a vanity address"
 )]
 pub struct VanityCmd {
-	/// Number of keys to generate
-	#[structopt(long, short)]
-	number: String,
-
 	/// Desired pattern
-	#[structopt(long)]
-	pattern: Option<String>,
+	#[structopt(long, parse(try_from_str = assert_non_empty_string))]
+	pattern: String,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -62,10 +58,7 @@ pub struct VanityCmd {
 impl VanityCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
-		let desired: &str = self.pattern.as_ref()
-			.map(String::as_str)
-			.unwrap_or("");
-		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(desired))?;
+		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(&self.pattern))?;
 		use utils::print_from_uri;
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
@@ -93,10 +86,6 @@ fn generate_key<Pair>(desired: &str) -> Result<String, &'static str>
 		Pair::Public: IdentifyAccount,
 		<Pair::Public as IdentifyAccount>::AccountId: Ss58Codec,
 {
-	if desired.is_empty() {
-		return Err("Pattern must not be empty");
-	}
-
 	println!("Generating key containing pattern '{}'", desired);
 
 	let top = 45 + (desired.len() * 48);
@@ -163,6 +152,15 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		}
 	}
 	0
+}
+
+/// checks that `pattern` is non-empty
+fn assert_non_empty_string(pattern: &str) -> Result<String, &'static str> {
+	if pattern.is_empty() {
+		Err("Pattern must not be empty")
+	} else {
+		Ok(pattern.to_string())
+	}
 }
 
 
