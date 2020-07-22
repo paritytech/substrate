@@ -467,6 +467,10 @@ ss58_address_format!(
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
 	StafiAccount =>
 		(20, "stafi", "Stafi mainnet, standard account (*25519).")
+	DockTestAccount =>
+		(21, "dock-testnet", "Dock testnet, standard account (*25519).")
+	DockMainAccount =>
+		(22, "dock-mainnet", "Dock mainnet, standard account (*25519).")
 	ShiftNrg =>
 		(23, "shift", "ShiftNrg mainnet, standard account (*25519).")
 	SubsocialAccount =>
