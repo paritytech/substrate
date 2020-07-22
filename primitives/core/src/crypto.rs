@@ -180,7 +180,7 @@ impl DeriveJunction {
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
-		let (code, hard) = if j.starts_with("/") {
+		let (code, hard) = if j.starts_with('/') {
 			(&j[1..], true)
 		} else {
 			(j, false)

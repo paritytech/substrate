@@ -801,7 +801,7 @@ where
 
 	fn rent_allowance(&self) -> BalanceOf<T> {
 		storage::rent_allowance::<T>(&self.ctx.self_account)
-			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
+			.unwrap_or_else(|_| <BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
 
 	fn block_number(&self) -> T::BlockNumber { self.block_number }

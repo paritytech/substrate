@@ -221,13 +221,15 @@ test-linux-stable:                 &test-linux
     <<:                            *default-vars
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS: "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE: 1
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                1
+    WASM_BUILD_NO_COLOR:           1
   except:
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked
+    # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
+    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
     - sccache -s
 
 unleash-check:
@@ -239,24 +241,6 @@ unleash-check:
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
-
-test-frame-staking:
-  # into one job
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd frame/staking/
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features "std"
-    - sccache -s
 
 test-frame-examples-compile-to-wasm:
   # into one job
@@ -276,41 +260,6 @@ test-frame-examples-compile-to-wasm:
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../example
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
-    - sccache -s
-
-test-wasmtime:
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions. 
-    RUSTFLAGS: -Cdebug-assertions=y
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd client/executor
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
-    - sccache -s
-
-test-runtime-benchmarks:
-  # into one job
-  stage:                           test
-  <<:                              *docker-env
-  variables:
-    <<:                            *default-vars
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    RUST_BACKTRACE: 1
-  except:
-    variables:
-      - $DEPLOY_TAG
-  script:
-    - cd bin/node/cli
-    - WASM_BUILD_NO_COLOR=1 time cargo test --workspace --release --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
