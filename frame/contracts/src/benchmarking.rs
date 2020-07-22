@@ -81,8 +81,12 @@ fn expanded_contract<T: Trait>(expansions: u32) -> (Vec<u8>, <T::Hashing as Hash
         Instruction::{self, If, I32Const, Return, End},
         BlockType, Instructions,
     };
-    // base size of a contract is 47 bytes and ech expansion adds 6 bytes
-    let expansions = expansions.saturating_sub(47) as usize / 6;
+    // Base size of a contract is 47 bytes and each expansion adds 6 bytes.
+    // We do one expansion less to account for the two the size fields inside the binary
+    // module representation which are leb128 encoded and therefore grow in size when
+    // the contract grows. We are not allowed to overshoot because of the maximum code
+    // size that is enforced by `put_code`.
+    let expansions = (expansions.saturating_sub(47) as usize / 6).saturating_sub(1);
     const EXPANSION: [Instruction; 4] = [
         I32Const(0),
         If(BlockType::NoResult),
@@ -121,7 +125,7 @@ benchmarks! {
     // This constructs a contract that is maximal expensive to instrument.
     // It creates a maximum number of metering blocks per byte.
     put_code {
-        let n in 0 .. 512 * 1024;
+        let n in 0 .. Contracts::<T>::current_schedule().max_code_size;
         let caller = create_funded_user::<T>("caller", 0);
         let (binary, hash) = expanded_contract::<T>(n);
     }: _(RawOrigin::Signed(caller), binary)
