@@ -21,12 +21,12 @@ use sp_core::offchain::Timestamp;
 use sp_core::offchain::PollableId;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
+use core::cmp::{Ordering, Reverse};
 use core::future::Future;
-use core::mem;
 use core::pin::Pin;
 use core::task::{self, Poll};
 use core::time;
-use std::collections::BTreeMap;
+use std::collections::BinaryHeap;
 
 use futures::Stream;
 use futures_timer::Delay;
@@ -75,6 +75,33 @@ impl TimerApi {
 	}
 }
 
+/// A `TimerId` wrapper that implements `Ord` and `Eq` using an additional
+/// `Timestamp` value.
+struct TimerIdWithTimestamp {
+	key: Timestamp,
+	id: TimerId,
+}
+
+impl PartialEq for TimerIdWithTimestamp {
+	fn eq(&self, other: &Self) -> bool {
+		PartialEq::eq(&self.key, &other.key)
+	}
+}
+
+impl Eq for TimerIdWithTimestamp {}
+
+impl PartialOrd for TimerIdWithTimestamp {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		PartialOrd::partial_cmp(&self.key, &other.key)
+	}
+}
+
+impl Ord for TimerIdWithTimestamp {
+	fn cmp(&self, other: &Self) -> Ordering {
+		Ord::cmp(&self.key, &other.key)
+	}
+}
+
 pub struct TimerWorker {
 	/// Used to sends messages to the `HttpApi`.
 	to_api: TracingUnboundedSender<PollableId>,
@@ -82,9 +109,8 @@ pub struct TimerWorker {
     from_api: TracingUnboundedReceiver<(TimerId, Timestamp)>,
     /// Timer future driving the wakeups for worker future.
 	delay: Option<(Timestamp, Delay)>,
-	// TODO: Replace with a binary heap because we can have multiple timers for
-	// the same timestamp
-    ids: BTreeMap<Timestamp, TimerId>,
+	/// Priority queue for timers, yielding those with earliest timestamps.
+    ids: BinaryHeap<Reverse<TimerIdWithTimestamp>>,
 }
 
 impl Future for TimerWorker {
@@ -93,6 +119,7 @@ impl Future for TimerWorker {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
+		// Poll the underlying future to register for a possible future wakeup
 		if let Some((_, delay)) = &mut this.delay {
 			match Future::poll(Pin::new(delay), cx) {
 				Poll::Ready(..) => { this.delay.take(); },
@@ -101,21 +128,24 @@ impl Future for TimerWorker {
 		}
 
 		// Process elapsed timers
-		let future = super::timestamp::now().add(offchain::Duration::from_millis(1));
-		let future_timers = this.ids.split_off(&future);
-		let elapsed = mem::replace(&mut this.ids, future_timers);
+		let now = super::timestamp::now();
 
-		for (_, id) in elapsed {
+		while let Some(true) = this.ids.peek().map(|x| x.0.key <= now) {
+			let id = this.ids.pop().expect("We just peeked an element; qed").0.id;
+
 			let _ = this.to_api.unbounded_send(id.into());
 		}
 
-		// Register the task for wakeup up when we can progress with the nearest timers
-		match (this.ids.iter().nth(0), this.delay.as_ref()) {
-			(Some((&timestamp, _)), None) => {
-                let diff = super::timestamp::timestamp_from_now(timestamp);
+		// Register the task for a wake-up when we can progress with the earliest timer
+		match (this.ids.peek(), this.delay.as_ref()) {
+			(Some(Reverse(TimerIdWithTimestamp { key: timestamp, .. })), None) => {
+				// We just popped timestamps earlier than the present epoch
+				debug_assert!(timestamp > &super::timestamp::now());
+
+                let diff = super::timestamp::timestamp_from_now(*timestamp);
                 let duration = time::Duration::from_millis(diff.as_millis() as u64);
 
-				this.delay = Some((timestamp, Delay::new(duration)));
+				this.delay = Some((*timestamp, Delay::new(duration)));
 				// Reschedule the task to poll the new underlying timer future
 				cx.waker().wake_by_ref();
 			},
@@ -126,8 +156,7 @@ impl Future for TimerWorker {
 		match Stream::poll_next(Pin::new(&mut this.from_api), cx) {
 			Poll::Pending => Poll::Pending,
 			Poll::Ready(Some((id, timestamp))) => {
-				this.ids.insert(timestamp, id);
-                // this.next_id = TimerId(this.next_id.0 + 1);
+				this.ids.push(Reverse(TimerIdWithTimestamp { key: timestamp, id }));
 
                 // Newly added timer may resolve before currently registered
                 // earliest one - if that's the case, adjust the new delay.
@@ -141,7 +170,7 @@ impl Future for TimerWorker {
                     _ => {},
                 }
                 // Reschedule the task to poll the new underlying timer future
-                // (delay could have changed or a first timer to process could've been added)
+                // (delay could've changed or a fresh, single timer could've been added)
 				cx.waker().wake_by_ref();
 
 				Poll::Pending
