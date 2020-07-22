@@ -92,12 +92,7 @@ pub struct Values {
 impl Values {
 	/// Returns a new instance of Values
 	pub fn new() -> Self {
-		Values {
-			bool_values: Default::default(),
-			i64_values: Default::default(),
-			u64_values: Default::default(),
-			string_values: Default::default()
-		}
+		Default::default()
 	}
 
 	/// Checks if all individual collections are empty
