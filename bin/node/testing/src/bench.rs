@@ -118,7 +118,6 @@ impl Clone for BenchDb {
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
 					.path()
-					.clone()
 			).collect();
 		fs_extra::copy_items(
 			&seed_db_files,
@@ -456,7 +455,9 @@ impl BenchDb {
 		);
 
 		BenchContext {
-			client: Arc::new(client), backend, db_guard: directory_guard,
+			client: Arc::new(client),
+			db_guard: directory_guard,
+			backend,
 		}
 	}
 }
