@@ -74,61 +74,55 @@ pub type HashedProof = [u8; 32];
 /// succeeds with best efforts.
 /// - **Claim**: claim any resources reserved in the first phrase.
 /// - **Cancel**: cancel any resources reserved in the first phrase.
-pub trait SwapAction<T: Trait> {
+pub trait SwapAction<AccountId, T: Trait> {
 	/// Reserve the resources needed for the swap, from the given `source`. The reservation is
 	/// allowed to fail. If that is the case, the the full swap creation operation is cancelled.
-	fn reserve(&self, source: &T::AccountId) -> DispatchResult;
+	fn reserve(&self, source: &AccountId) -> DispatchResult;
 	/// Claim the reserved resources, with `source` and `target`. Returns whether the claim
 	/// succeeds.
-	fn claim(&self, source: &T::AccountId, target: &T::AccountId) -> bool;
+	fn claim(&self, source: &AccountId, target: &AccountId) -> bool;
 	/// Weight for executing the operation.
 	fn weight(&self) -> Weight;
 	/// Cancel the resources reserved in `source`.
-	fn cancel(&self, source: &T::AccountId);
+	fn cancel(&self, source: &AccountId);
 }
 
 /// A swap action that only allows transferring balances.
 #[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode)]
-pub struct BalanceSwapAction<T: Trait, C: ReservableCurrency<T::AccountId>> {
-	value: <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance,
+pub struct BalanceSwapAction<AccountId, C: ReservableCurrency<AccountId>> {
+	value: <C as Currency<AccountId>>::Balance,
 	_marker: PhantomData<C>,
 }
 
-impl<T: Trait, C> BalanceSwapAction<T, C> where
-	C: ReservableCurrency<T::AccountId>,
-{
+impl<AccountId, C> BalanceSwapAction<AccountId, C> where C: ReservableCurrency<AccountId> {
 	/// Create a new swap action value of balance.
-	pub fn new(value: <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance) -> Self {
+	pub fn new(value: <C as Currency<AccountId>>::Balance) -> Self {
 		Self { value, _marker: PhantomData }
 	}
 }
 
-impl<T: Trait, C> Deref for BalanceSwapAction<T, C> where
-	C: ReservableCurrency<T::AccountId>,
-{
-	type Target = <C as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+impl<AccountId, C> Deref for BalanceSwapAction<AccountId, C> where C: ReservableCurrency<AccountId> {
+	type Target = <C as Currency<AccountId>>::Balance;
 
 	fn deref(&self) -> &Self::Target {
 		&self.value
 	}
 }
 
-impl<T: Trait, C> DerefMut for BalanceSwapAction<T, C> where
-	C: ReservableCurrency<T::AccountId>,
-{
+impl<AccountId, C> DerefMut for BalanceSwapAction<AccountId, C> where C: ReservableCurrency<AccountId> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.value
 	}
 }
 
-impl<T: Trait, C> SwapAction<T> for BalanceSwapAction<T, C> where
-	C: ReservableCurrency<T::AccountId>,
+impl<T: Trait, AccountId, C> SwapAction<AccountId, T> for BalanceSwapAction<AccountId, C>
+	where C: ReservableCurrency<AccountId>
 {
-	fn reserve(&self, source: &T::AccountId) -> DispatchResult {
+	fn reserve(&self, source: &AccountId) -> DispatchResult {
 		C::reserve(&source, self.value)
 	}
 
-	fn claim(&self, source: &T::AccountId, target: &T::AccountId) -> bool {
+	fn claim(&self, source: &AccountId, target: &AccountId) -> bool {
 		C::repatriate_reserved(source, target, self.value, BalanceStatus::Free).is_ok()
 	}
 
@@ -136,7 +130,7 @@ impl<T: Trait, C> SwapAction<T> for BalanceSwapAction<T, C> where
 		T::DbWeight::get().reads_writes(1, 1)
 	}
 
-	fn cancel(&self, source: &T::AccountId) {
+	fn cancel(&self, source: &AccountId) {
 		C::unreserve(source, self.value);
 	}
 }
@@ -146,7 +140,7 @@ pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Swap action.
-	type SwapAction: SwapAction<Self> + Parameter;
+	type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
 	/// Limit of proof size.
 	///
 	/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the proofs

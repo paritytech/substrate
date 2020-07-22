@@ -72,7 +72,7 @@ fn parse_knobs(
 			use futures::future::FutureExt;
 
 			let #task_executor_name: #task_executor_type = (|fut, _| {
-				tokio::spawn(fut);
+				tokio::spawn(fut).map(drop)
 			})
 			.into();
 			let timeout_task = tokio::time::delay_for(
