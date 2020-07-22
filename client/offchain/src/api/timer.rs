@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! TODO: Add more docs to timer module
+//! This module is composed of two structs: [`TimerApi`] and [`TimerWorker`]. Calling the [`timer`]
+//! function returns a pair of [`TimerApi`] and [`TimerWorker`] that share some state.
+//!
+//! For more technical details and reasoning behind this design, see the analogous [`http`] module.
 
 use sp_core::offchain;
 use sp_core::offchain::Timestamp;
@@ -31,14 +34,15 @@ use std::collections::BinaryHeap;
 use futures::Stream;
 use futures_timer::Delay;
 
+use super::timestamp;
+
 pub use sp_core::offchain::TimerId;
 
 pub fn timer(sink: TracingUnboundedSender<PollableId>) -> (TimerApi, TimerWorker) {
-	// let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_timer_to");
 	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_timer_from");
 
 	let worker = TimerWorker {
-		to_api: sink,
+		ready_ids: sink,
 		from_api,
 		delay: None,
 		ids: Default::default(),
@@ -46,7 +50,6 @@ pub fn timer(sink: TracingUnboundedSender<PollableId>) -> (TimerApi, TimerWorker
 
 	let api = TimerApi {
 		to_worker,
-		// from_worker,
 		next_id: TimerId(0),
 	};
 
@@ -54,20 +57,19 @@ pub fn timer(sink: TracingUnboundedSender<PollableId>) -> (TimerApi, TimerWorker
 }
 
 pub struct TimerApi {
-	/// Used to sends messages to the `HttpApi`.
+	/// Used to enqueue new timer in the `TimerWorker`.
 	to_worker: TracingUnboundedSender<(TimerId, Timestamp)>,
-	// /// Used to receive messages from the `TimerApi`.
-	// from_worker: TracingUnboundedReceiver<TimerId>,
-	/// Counter to generate new timer IDs with.
+	/// Counter used to generate new timer IDs.
 	next_id: TimerId,
 }
 
 impl TimerApi {
+	/// Starts a new timer that resolves a `duration` from the current epoch.
 	pub fn start_timer(&mut self, duration: offchain::Duration) -> Result<TimerId, ()> {
 		let id = self.next_id;
 		self.next_id = TimerId(self.next_id.0 + 1);
 
-		let timestamp = super::timestamp::now().add(duration);
+		let timestamp = timestamp::now().add(duration);
 
 		self.to_worker.unbounded_send((id, timestamp))
 			.map(|_| id)
@@ -103,8 +105,8 @@ impl Ord for TimerIdWithTimestamp {
 }
 
 pub struct TimerWorker {
-	/// Used to sends messages to the `HttpApi`.
-	to_api: TracingUnboundedSender<PollableId>,
+	/// Used to broadcast elapsed timers' IDs.
+	ready_ids: TracingUnboundedSender<PollableId>,
 	/// Used to receive messages from the `TimerApi`.
 	from_api: TracingUnboundedReceiver<(TimerId, Timestamp)>,
 	/// Timer future driving the wakeups for worker future.
@@ -128,21 +130,17 @@ impl Future for TimerWorker {
 		}
 
 		// Process elapsed timers
-		let now = super::timestamp::now();
-
+		let now = timestamp::now();
 		while let Some(true) = this.ids.peek().map(|x| x.0.key <= now) {
 			let id = this.ids.pop().expect("We just peeked an element; qed").0.id;
 
-			let _ = this.to_api.unbounded_send(id.into());
+			let _ = this.ready_ids.unbounded_send(id.into());
 		}
 
 		// Register the task for a wake-up when we can progress with the earliest timer
 		match (this.ids.peek(), this.delay.as_ref()) {
 			(Some(Reverse(TimerIdWithTimestamp { key: timestamp, .. })), None) => {
-				// We just popped timestamps earlier than the present epoch
-				debug_assert!(timestamp > &super::timestamp::now());
-
-				let diff = super::timestamp::timestamp_from_now(*timestamp);
+				let diff = timestamp::timestamp_from_now(*timestamp);
 				let duration = time::Duration::from_millis(diff.as_millis() as u64);
 
 				this.delay = Some((*timestamp, Delay::new(duration)));
@@ -152,7 +150,7 @@ impl Future for TimerWorker {
 			_ => {},
 		}
 
-		// Check for messages coming from the [`HttpApi`].
+		// Check for messages coming from the [`TimerApi`].
 		match Stream::poll_next(Pin::new(&mut this.from_api), cx) {
 			Poll::Pending => Poll::Pending,
 			Poll::Ready(Some((id, timestamp))) => {
@@ -162,7 +160,7 @@ impl Future for TimerWorker {
 				// earliest one - if that's the case, adjust the new delay.
 				match this.delay.as_mut() {
 					Some((earliest, delay)) if earliest.diff(&timestamp).millis() > 0 => {
-						let diff = super::timestamp::timestamp_from_now(timestamp);
+						let diff = timestamp::timestamp_from_now(timestamp);
 						let duration = time::Duration::from_millis(diff.as_millis() as u64);
 
 						delay.reset(duration);
