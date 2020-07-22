@@ -43,14 +43,14 @@ async fn rename_argument(ex: TaskExecutor) {
 
 #[substrate_test_utils_derive::test]
 #[should_panic(expected = "test took too long")]
-// NOTE: enable this test only after setting INTEGRATION_TEST_ALLOWED_TIME to a smaller value
+// NOTE: enable this test only after setting SUBSTRATE_TEST_TIMEOUT to a smaller value
 //
-// INTEGRATION_TEST_ALLOWED_TIME=1 cargo test -- --ignored timeout
+// SUBSTRATE_TEST_TIMEOUT=1 cargo test -- --ignored timeout
 #[ignore]
 async fn timeout(_: TaskExecutor) {
 	tokio::time::delay_for(std::time::Duration::from_secs(
-		option_env!("INTEGRATION_TEST_ALLOWED_TIME")
-			.expect("env var INTEGRATION_TEST_ALLOWED_TIME has been provided by the user")
+		std::env::var("SUBSTRATE_TEST_TIMEOUT")
+			.expect("env var SUBSTRATE_TEST_TIMEOUT has been provided by the user")
 			.parse::<u64>()
 			.unwrap() + 1,
 	))

@@ -77,7 +77,7 @@ fn parse_knobs(
 			.into();
 			let timeout_task = tokio::time::delay_for(
 				std::time::Duration::from_secs(
-					std::env::var("INTEGRATION_TEST_ALLOWED_TIME")
+					std::env::var("SUBSTRATE_TEST_TIMEOUT")
 						.ok()
 						.and_then(|x| x.parse().ok())
 						.unwrap_or(600))
