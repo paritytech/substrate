@@ -22,7 +22,7 @@ use sp_wasm_interface::{Function, Value, ValueType};
 use std::any::Any;
 use wasmtime::{
 	Extern, ExternType, Func, FuncType, ImportType, Limits, Memory, MemoryType, Module,
-	Trap, Val,
+	Trap, Val, Store,
 };
 
 pub struct Imports {
@@ -35,6 +35,7 @@ pub struct Imports {
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
 pub fn resolve_imports(
+	store: &Store,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	heap_pages: u32,
@@ -54,10 +55,10 @@ pub fn resolve_imports(
 		let resolved = match import_ty.name() {
 			"memory" => {
 				memory_import_index = Some(externs.len());
-				resolve_memory_import(module, &import_ty, heap_pages)?
+				resolve_memory_import(store, &import_ty, heap_pages)?
 			}
 			_ => resolve_func_import(
-				module,
+				store,
 				&import_ty,
 				host_functions,
 				allow_missing_func_imports,
@@ -72,7 +73,7 @@ pub fn resolve_imports(
 }
 
 fn resolve_memory_import(
-	module: &Module,
+	store: &Store,
 	import_ty: &ImportType,
 	heap_pages: u32,
 ) -> Result<Extern, WasmError> {
@@ -105,12 +106,12 @@ fn resolve_memory_import(
 	}
 
 	let memory_ty = MemoryType::new(Limits::new(initial, requested_memory_ty.limits().max()));
-	let memory = Memory::new(module.store(), memory_ty);
+	let memory = Memory::new(store, memory_ty);
 	Ok(Extern::Memory(memory))
 }
 
 fn resolve_func_import(
-	module: &Module,
+	store: &Store,
 	import_ty: &ImportType,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -132,7 +133,7 @@ fn resolve_func_import(
 	{
 		Some(host_func) => host_func,
 		None if allow_missing_func_imports => {
-			return Ok(MissingHostFuncHandler::new(import_ty).into_extern(module, &func_ty));
+			return Ok(MissingHostFuncHandler::new(import_ty).into_extern(store, &func_ty));
 		}
 		None => {
 			return Err(WasmError::Other(format!(
@@ -150,7 +151,7 @@ fn resolve_func_import(
 		)));
 	}
 
-	Ok(HostFuncHandler::new(*host_func).into_extern(module))
+	Ok(HostFuncHandler::new(*host_func).into_extern(store))
 }
 
 /// Returns `true` if `lhs` and `rhs` represent the same signature.
@@ -223,10 +224,10 @@ impl HostFuncHandler {
 		}
 	}
 
-	fn into_extern(self, module: &Module) -> Extern {
+	fn into_extern(self, store: &Store) -> Extern {
 		let host_func = self.host_func;
 		let func_ty = wasmtime_func_sig(self.host_func);
-		let func = Func::new(module.store(), func_ty,
+		let func = Func::new(store, func_ty,
 			move |_, params, result| {
 				call_static(host_func, params, result)
 			}
@@ -249,9 +250,9 @@ impl MissingHostFuncHandler {
 		}
 	}
 
-	fn into_extern(self, wasmtime_module: &Module, func_ty: &FuncType) -> Extern {
+	fn into_extern(self, store: &Store, func_ty: &FuncType) -> Extern {
 		let Self { module, name } = self;
-		let func = Func::new(wasmtime_module.store(), func_ty.clone(),
+		let func = Func::new(store, func_ty.clone(),
 			move |_, _, _| Err(Trap::new(format!(
 				"call to a missing function {}:{}",
 				module, name
