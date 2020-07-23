@@ -1,5 +1,3 @@
-[![Substrate Playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
-
 # Substrate Node Template
 
 A new FRAME-based Substrate node, ready for hacking :rocket:
@@ -30,12 +28,6 @@ Once the development environment is set up, build the node template. This comman
 ```bash
 cargo build --release
 ```
-
-## Playground [![Substrate Playground](https://img.shields.io/badge/Playground-node_template-brightgreen?logo=Parity%20Substrate)](https://playground-staging.substrate.dev/?deploy=node-template)
-
-[The Substrate Playground](https://playground-staging.substrate.dev/?deploy=node-template) is an
-online development environment that supplies a pre-configured container with pre-compiled build
-artifacts :cartwheeling:
 
 ## Run
 
