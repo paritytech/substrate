@@ -369,7 +369,24 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 // Note: Maximum nomination limit is set here -- 16.
-generate_compact_solution_type!(pub GenericCompactAssignments, 16);
+generate_compact_solution_type!(
+	pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
+);
+
+/// Accuracy used for on-chain election.
+pub type ChainAccuracy = Perbill;
+
+/// Accuracy used for off-chain election. This better be small.
+pub type OffchainAccuracy = PerU16;
+
+/// The balance type of this module.
+pub type BalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+
+type PositiveImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
+type NegativeImbalanceOf<T> =
+	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
@@ -382,25 +399,6 @@ pub struct ActiveEraInfo {
 	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
 	start: Option<u64>,
 }
-
-/// Accuracy used for on-chain election.
-pub type ChainAccuracy = Perbill;
-
-/// Accuracy used for off-chain election. This better be small.
-pub type OffchainAccuracy = PerU16;
-
-/// The balance type of this module.
-pub type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
-
-/// The compact type for election solutions.
-pub type CompactAssignments =
-	GenericCompactAssignments<NominatorIndex, ValidatorIndex, OffchainAccuracy>;
-
-type PositiveImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
-type NegativeImbalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// Reward points of an era. Used to split era total payout between validators.
 ///
@@ -1238,12 +1236,12 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
-		/// the remainder from the maximum amount of reward. 
+		/// the remainder from the maximum amount of reward.
 		/// [era_index, validator_payout, remainder]
 		EraPayout(EraIndex, Balance, Balance),
 		/// The staker has been rewarded by this amount. [stash, amount]
 		Reward(AccountId, Balance),
-		/// One validator (and its nominators) has been slashed by the given amount. 
+		/// One validator (and its nominators) has been slashed by the given amount.
 		/// [validator, amount]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
