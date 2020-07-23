@@ -25,19 +25,18 @@ mod tests;
 
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
-use sp_std::{vec::Vec, marker::PhantomData};
+use sp_std::vec::Vec;
 #[cfg(feature = "std")]
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::Weight;
-use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
-use frame_system::ensure_signed;
-use sp_runtime::ModuleId;
+use frame_support::traits::{Currency, ExistenceRequirement, Get};
+use frame_system::RawOrigin;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
-	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
+	DispatchResult, AccountId32, traits::{UniqueSaturatedInto, SaturatedConversion, BadOrigin},
 };
 use sha3::{Digest, Keccak256};
 pub use evm::{ExitReason, ExitSucceed, ExitError, ExitRevert, ExitFatal};
@@ -58,41 +57,121 @@ impl FeeCalculator for () {
 	fn min_gas_price() -> U256 { U256::zero() }
 }
 
-/// Trait for converting account ids of `balances` module into
-/// `H160` for EVM module.
-///
-/// Accounts and contracts of this module are stored in its own
-/// storage, in an Ethereum-compatible format. In order to communicate
-/// with the rest of Substrate module, we require an one-to-one
-/// mapping of Substrate account to Ethereum address.
-pub trait ConvertAccountId<A> {
-	/// Given a Substrate address, return the corresponding Ethereum address.
-	fn convert_account_id(account_id: &A) -> H160;
+pub trait EnsureAddressOrigin<OuterOrigin> {
+	/// Success return type.
+	type Success;
+
+	/// Perform the origin check.
+	fn ensure_address_origin(
+		address: &H160,
+		origin: OuterOrigin,
+	) -> Result<Self::Success, BadOrigin> {
+		Self::try_address_origin(address, origin).map_err(|_| BadOrigin)
+	}
+
+	/// Try with origin.
+	fn try_address_origin(
+		address: &H160,
+		origin: OuterOrigin,
+	) -> Result<Self::Success, OuterOrigin>;
 }
 
-/// Hash and then truncate the account id, taking the last 160-bit as the Ethereum address.
-pub struct HashTruncateConvertAccountId<H>(PhantomData<H>);
+/// Ensure that the EVM address is the same as the Substrate address. This only works if the account
+/// ID is `H160`.
+pub struct EnsureAddressSame;
 
-impl<H: Hasher> Default for HashTruncateConvertAccountId<H> {
-	fn default() -> Self {
-		Self(PhantomData)
+impl<OuterOrigin> EnsureAddressOrigin<OuterOrigin> for EnsureAddressSame where
+	OuterOrigin: Into<Result<RawOrigin<H160>, OuterOrigin>> + From<RawOrigin<H160>>,
+{
+	type Success = H160;
+
+	fn try_address_origin(
+		address: &H160,
+		origin: OuterOrigin,
+	) -> Result<H160, OuterOrigin> {
+		origin.into().and_then(|o| match o {
+			RawOrigin::Signed(who) if &who == address => Ok(who),
+			r => Err(OuterOrigin::from(r))
+		})
 	}
 }
 
-impl<H: Hasher, A: AsRef<[u8]>> ConvertAccountId<A> for HashTruncateConvertAccountId<H> {
-	fn convert_account_id(account_id: &A) -> H160 {
-		let account_id = H::hash(account_id.as_ref());
-		let account_id_len = account_id.as_ref().len();
-		let mut value = [0u8; 20];
-		let value_len = value.len();
+/// Ensure that the origin is root.
+pub struct EnsureAddressRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
 
-		if value_len > account_id_len {
-			value[(value_len - account_id_len)..].copy_from_slice(account_id.as_ref());
-		} else {
-			value.copy_from_slice(&account_id.as_ref()[(account_id_len - value_len)..]);
-		}
+impl<OuterOrigin, AccountId> EnsureAddressOrigin<OuterOrigin> for EnsureAddressRoot<AccountId> where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>> + From<RawOrigin<AccountId>>,
+{
+	type Success = ();
 
-		H160::from(value)
+	fn try_address_origin(
+		_address: &H160,
+		origin: OuterOrigin,
+	) -> Result<(), OuterOrigin> {
+		origin.into().and_then(|o| match o {
+			RawOrigin::Root => Ok(()),
+			r => Err(OuterOrigin::from(r)),
+		})
+	}
+}
+
+/// Ensure that the origin never happens.
+pub struct EnsureAddressNever<AccountId>(sp_std::marker::PhantomData<AccountId>);
+
+impl<OuterOrigin, AccountId> EnsureAddressOrigin<OuterOrigin> for EnsureAddressNever<AccountId> {
+	type Success = AccountId;
+
+	fn try_address_origin(
+		_address: &H160,
+		origin: OuterOrigin,
+	) -> Result<AccountId, OuterOrigin> {
+		Err(origin)
+	}
+}
+
+/// Ensure that the address is truncated hash of the origin. Only works if the account id is
+/// `AccountId32`.
+pub struct EnsureAddressTruncated;
+
+impl<OuterOrigin> EnsureAddressOrigin<OuterOrigin> for EnsureAddressTruncated where
+	OuterOrigin: Into<Result<RawOrigin<AccountId32>, OuterOrigin>> + From<RawOrigin<AccountId32>>,
+{
+	type Success = AccountId32;
+
+	fn try_address_origin(
+		address: &H160,
+		origin: OuterOrigin,
+	) -> Result<AccountId32, OuterOrigin> {
+		origin.into().and_then(|o| match o {
+			RawOrigin::Signed(who)
+				if AsRef::<[u8; 32]>::as_ref(&who)[0..20] == address[0..20] => Ok(who),
+			r => Err(OuterOrigin::from(r))
+		})
+	}
+}
+
+pub trait AddressMapping<A> {
+	fn into_account_id(address: H160) -> A;
+}
+
+/// Identity address mapping.
+pub struct IdentityAddressMapping;
+
+impl AddressMapping<H160> for IdentityAddressMapping {
+	fn into_account_id(address: H160) -> H160 { address }
+}
+
+/// Hashed address mapping.
+pub struct HashedAddressMapping<H>(sp_std::marker::PhantomData<H>);
+
+impl<H: Hasher<Out=H256>> AddressMapping<AccountId32> for HashedAddressMapping<H> {
+	fn into_account_id(address: H160) -> AccountId32 {
+		let mut data = [0u8; 24];
+		data[0..4].copy_from_slice(b"evm:");
+		data[4..24].copy_from_slice(&address[..]);
+		let hash = H::hash(&data);
+
+		AccountId32::from(Into::<[u8; 32]>::into(hash))
 	}
 }
 
@@ -133,14 +212,19 @@ static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
-	/// The EVM's module id
-	type ModuleId: Get<ModuleId>;
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
-	/// Convert account ID to H160;
-	type ConvertAccountId: ConvertAccountId<Self::AccountId>;
-	/// Currency type for deposit and withdraw.
+
+	/// Allow the origin to call on behalf of given address.
+	type CallOrigin: EnsureAddressOrigin<Self::Origin>;
+	/// Allow the origin to withdraw on behalf of given address.
+	type WithdrawOrigin: EnsureAddressOrigin<Self::Origin, Success=Self::AccountId>;
+
+	/// Mapping from address to account id.
+	type AddressMapping: AddressMapping<Self::AccountId>;
+	/// Currency type for withdraw and balance storage.
 	type Currency: Currency<Self::AccountId>;
+
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
@@ -170,7 +254,6 @@ pub struct GenesisAccount {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as EVM {
-		Accounts get(fn accounts): map hasher(blake2_128_concat) H160 => Account;
 		AccountCodes get(fn account_codes): map hasher(blake2_128_concat) H160 => Vec<u8>;
 		AccountStorages get(fn account_storages):
 			double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) H256 => H256;
@@ -180,7 +263,7 @@ decl_storage! {
 		config(accounts): std::collections::BTreeMap<H160, GenesisAccount>;
 		build(|config: &GenesisConfig| {
 			for (address, account) in &config.accounts {
-				Accounts::insert(address, Account {
+				Module::<T>::mutate_account_basic(&address, Account {
 					balance: account.balance,
 					nonce: account.nonce,
 				});
@@ -239,57 +322,25 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		const ModuleId: ModuleId = T::ModuleId::get();
-
-		/// Deposit balance from currency/balances module into EVM.
-		#[weight = 0]
-		fn deposit_balance(origin, value: BalanceOf<T>) {
-			let sender = ensure_signed(origin)?;
-
-			let imbalance = T::Currency::withdraw(
-				&sender,
-				value,
-				WithdrawReason::Reserve.into(),
-				ExistenceRequirement::AllowDeath,
-			)?;
-			T::Currency::resolve_creating(&Self::account_id(), imbalance);
-
-			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
-			let address = T::ConvertAccountId::convert_account_id(&sender);
-			Accounts::mutate(&address, |account| {
-				account.balance += bvalue;
-			});
-			Module::<T>::deposit_event(Event::<T>::BalanceDeposit(sender, address, bvalue));
-		}
-
 		/// Withdraw balance from EVM into currency/balances module.
 		#[weight = 0]
-		fn withdraw_balance(origin, value: BalanceOf<T>) {
-			let sender = ensure_signed(origin)?;
-			let address = T::ConvertAccountId::convert_account_id(&sender);
-			let bvalue = U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(value));
+		fn withdraw(origin, address: H160, value: BalanceOf<T>) {
+			let destination = T::WithdrawOrigin::ensure_address_origin(&address, origin)?;
+			let address_account_id = T::AddressMapping::into_account_id(address);
 
-			let mut account = Accounts::get(&address);
-			account.balance = account.balance.checked_sub(bvalue)
-				.ok_or(Error::<T>::BalanceLow)?;
-
-			let imbalance = T::Currency::withdraw(
-				&Self::account_id(),
+			T::Currency::transfer(
+				&address_account_id,
+				&destination,
 				value,
-				WithdrawReason::Reserve.into(),
 				ExistenceRequirement::AllowDeath
 			)?;
-
-			Accounts::insert(&address, account);
-
-			T::Currency::resolve_creating(&sender, imbalance);
-			Module::<T>::deposit_event(Event::<T>::BalanceWithdraw(sender, address, bvalue));
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
 		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn call(
 			origin,
+			source: H160,
 			target: H160,
 			input: Vec<u8>,
 			value: U256,
@@ -298,9 +349,7 @@ decl_module! {
 			nonce: Option<U256>,
 		) -> DispatchResult {
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-
-			let sender = ensure_signed(origin)?;
-			let source = T::ConvertAccountId::convert_account_id(&sender);
+			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_call(
 				source,
@@ -328,6 +377,7 @@ decl_module! {
 		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn create(
 			origin,
+			source: H160,
 			init: Vec<u8>,
 			value: U256,
 			gas_limit: u32,
@@ -335,9 +385,7 @@ decl_module! {
 			nonce: Option<U256>,
 		) -> DispatchResult {
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-
-			let sender = ensure_signed(origin)?;
-			let source = T::ConvertAccountId::convert_account_id(&sender);
+			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create(
 				source,
@@ -363,6 +411,7 @@ decl_module! {
 		#[weight = (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight)]
 		fn create2(
 			origin,
+			source: H160,
 			init: Vec<u8>,
 			salt: H256,
 			value: U256,
@@ -371,9 +420,7 @@ decl_module! {
 			nonce: Option<U256>,
 		) -> DispatchResult {
 			ensure!(gas_price >= T::FeeCalculator::min_gas_price(), Error::<T>::GasPriceTooLow);
-
-			let sender = ensure_signed(origin)?;
-			let source = T::ConvertAccountId::convert_account_id(&sender);
+			T::CallOrigin::ensure_address_origin(&source, origin)?;
 
 			match Self::execute_create2(
 				source,
@@ -399,17 +446,35 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// The account ID of the EVM module.
-	///
-	/// This actually does computation. If you need to keep using it, then make sure you cache the
-	/// value and only call this once.
-	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+	fn remove_account(address: &H160) {
+		AccountCodes::remove(address);
+		AccountStorages::remove_prefix(address);
+	}
+
+	fn mutate_account_basic(address: &H160, new: Account) {
+		let account_id = T::AddressMapping::into_account_id(*address);
+		let current = Self::account_basic(address);
+
+		if current.nonce < new.nonce {
+			// ASSUME: in one single EVM transaction, the nonce will not increase more than
+			// `u128::max_value()`.
+			for _ in 0..(new.nonce - current.nonce).low_u128() {
+				frame_system::Module::<T>::inc_account_nonce(&account_id);
+			}
+		}
+
+		if current.balance < new.balance {
+			let diff = new.balance - current.balance;
+			T::Currency::slash(&account_id, diff.low_u128().unique_saturated_into());
+		} else if current.balance > new.balance {
+			let diff = current.balance - new.balance;
+			T::Currency::deposit_creating(&account_id, diff.low_u128().unique_saturated_into());
+		}
 	}
 
 	/// Check whether an account is empty.
 	pub fn is_account_empty(address: &H160) -> bool {
-		let account = Accounts::get(address);
+		let account = Self::account_basic(address);
 		let code_len = AccountCodes::decode_len(address).unwrap_or(0);
 
 		account.nonce == U256::zero() &&
@@ -420,15 +485,21 @@ impl<T: Trait> Module<T> {
 	/// Remove an account if its empty.
 	pub fn remove_account_if_empty(address: &H160) {
 		if Self::is_account_empty(address) {
-			Self::remove_account(address)
+			Self::remove_account(address);
 		}
 	}
 
-	/// Remove an account from state.
-	fn remove_account(address: &H160) {
-		Accounts::remove(address);
-		AccountCodes::remove(address);
-		AccountStorages::remove_prefix(address);
+	/// Get the account basic in EVM format.
+	pub fn account_basic(address: &H160) -> Account {
+		let account_id = T::AddressMapping::into_account_id(*address);
+
+		let nonce = frame_system::Module::<T>::account_nonce(&account_id);
+		let balance = T::Currency::free_balance(&account_id);
+
+		Account {
+			nonce: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(nonce)),
+			balance: U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(balance)),
+		}
 	}
 
 	/// Execute a create transaction on behalf of given sender.
@@ -552,7 +623,7 @@ impl<T: Trait> Module<T> {
 		let total_fee = gas_price.checked_mul(U256::from(gas_limit))
 			.ok_or(Error::<T>::FeeOverflow)?;
 		let total_payment = value.checked_add(total_fee).ok_or(Error::<T>::PaymentOverflow)?;
-		let source_account = Accounts::get(&source);
+		let source_account = Self::account_basic(&source);
 		ensure!(source_account.balance >= total_payment, Error::<T>::BalanceLow);
 		executor.withdraw(source, total_fee).map_err(|_| Error::<T>::WithdrawFailed)?;
 
