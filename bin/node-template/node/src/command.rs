@@ -19,8 +19,7 @@ use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
 use sc_cli::{SubstrateCli, RuntimeVersion, Role, ChainSpec};
-use sc_service::ServiceParams;
-use crate::service::new_full_params;
+use crate::service::new_full_up_to_import_queue;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -70,8 +69,8 @@ pub fn run() -> sc_cli::Result<()> {
 		Some(subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
 			runner.run_subcommand(subcommand, |config| {
-				let (ServiceParams { client, backend, task_manager, import_queue, .. }, ..)
-					= new_full_params(config)?;
+				let (client, backend, task_manager, import_queue, ..)
+					= new_full_up_to_import_queue(&config)?;
 				Ok((client, backend, import_queue, task_manager))
 			})
 		}
