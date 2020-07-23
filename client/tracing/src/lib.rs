@@ -80,20 +80,6 @@ pub struct TraceEvent {
 	pub parent_id: Option<Id>,
 }
 
-impl From<&Event<'_>> for TraceEvent {
-	fn from(event: &Event<'_>) -> TraceEvent {
-		let mut values = Values::new();
-		event.record(&mut values);
-		TraceEvent {
-			name: event.metadata().name(),
-			target: event.metadata().target().to_owned(),
-			level: event.metadata().level().clone(),
-			parent_id: event.parent().cloned(),
-			values,
-		}
-	}
-}
-
 /// Represents a single instance of a tracing span
 #[derive(Debug)]
 pub struct SpanDatum {
