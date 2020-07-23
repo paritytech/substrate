@@ -466,7 +466,7 @@ fn check_provide_dummy_wasm_binary() -> bool {
 fn provide_dummy_wasm_binary(file_path: &Path) {
 	fs::write(
 		file_path,
-		"pub const WASM_BINARY: &[u8] = &[]; pub const WASM_BINARY_BLOATY: &[u8] = &[];",
+		"pub const WASM_BINARY: Option<&[u8]> = None; pub const WASM_BINARY_BLOATY: Option<&[u8]> = None;",
 	).expect("Writing dummy WASM binary should not fail");
 }
 
