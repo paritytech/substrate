@@ -8202,7 +8202,6 @@ version = "2.0.0-rc6"
 dependencies = [
  "futures 0.3.5",
  "hash-db",
- "lazy_static",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
@@ -8215,7 +8214,6 @@ dependencies = [
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
- "spin",
 ]
 
 [[package]]
@@ -8297,10 +8295,12 @@ dependencies = [
  "either",
  "hash256-std-hasher",
  "impl-trait-for-tuples",
+ "lazy_static",
  "log",
  "parity-scale-codec",
  "parity-util-mem",
  "paste",
+ "pin-project",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -8311,6 +8311,7 @@ dependencies = [
  "sp-io",
  "sp-state-machine",
  "sp-std",
+ "spin",
 ]
 
 [[package]]
