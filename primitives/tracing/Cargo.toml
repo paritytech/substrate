@@ -12,10 +12,26 @@ description = "Instrumentation primitives and macros for Substrate."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-tracing = { version = "0.1.13", optional = true }
+codec = { version = "1.3.1", package = "parity-scale-codec", optional = true, default-features = false}
+tracing = { version = "0.1.13", optional = true, default-features = false }
+tracing-core = { version = "0.1.11", optional = true, default-features = false }
 rental = { version = "0.5.5", optional = true }
 log = { version = "0.4.8", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "tracing", "rental", "log" ]
+with-tracing = [
+    "tracing",
+    "tracing-core",
+    "codec",
+    "codec/derive",
+    "codec/full",
+]
+std = [
+    "with-tracing",
+    "tracing/std",
+    "tracing-core/std",
+    "codec/std",
+    "rental",
+    "log"
+]
