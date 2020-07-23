@@ -44,6 +44,7 @@ use frame_support::{
 	Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
+use pallet_finality_tracker::OnFinalizationStalled;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::Zero,
@@ -284,19 +285,18 @@ decl_module! {
 			)?;
 		}
 
-		#[weight = weight_for::schedule_forced_change::<T>(next_authorities.len())]
-		fn schedule_forced_change(
+		/// Note that the current authority set of the GRANDPA finality gadget
+		/// has stalled. This will trigger a forced authority set change after
+		/// 1000 blocks, and the GRANDPA voters will start the new authority set
+		/// using the given finalized block as base. Only callable by root.
+		#[weight = weight_for::note_stalled::<T>()]
+		fn note_stalled(
 			origin,
-			next_authorities: Vec<AuthorityId>,
 			best_finalized_block_number: T::BlockNumber,
 		) {
 			ensure_root(origin)?;
 
-			Self::schedule_change(
-				next_authorities.into_iter().map(|k| (k, 1)).collect(),
-				FORCED_CHANGE_DELAY.into(),
-				Some(best_finalized_block_number),
-			)?;
+			Self::on_stalled(FORCED_CHANGE_DELAY.into(), best_finalized_block_number)
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -397,11 +397,9 @@ mod weight_for {
 			.saturating_add(T::DbWeight::get().reads(2))
 	}
 
-	pub fn schedule_forced_change<T: super::Trait>(next_authorities: usize) -> Weight {
-		(18 * WEIGHT_PER_MICROS)
-			.saturating_add((55 * WEIGHT_PER_NANOS).saturating_mul(next_authorities as u64))
-			.saturating_add(T::DbWeight::get().reads(2))
-			.saturating_add(T::DbWeight::get().writes(2))
+	pub fn note_stalled<T: super::Trait>() -> Weight {
+		(3 * WEIGHT_PER_MICROS)
+			.saturating_add(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -653,7 +651,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 	}
 }
 
-impl<T: Trait> pallet_finality_tracker::OnFinalizationStalled<T::BlockNumber> for Module<T> {
+impl<T: Trait> OnFinalizationStalled<T::BlockNumber> for Module<T> {
 	fn on_stalled(further_wait: T::BlockNumber, median: T::BlockNumber) {
 		// when we record old authority sets, we can use `pallet_finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard

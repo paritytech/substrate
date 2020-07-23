@@ -22,7 +22,6 @@
 use super::{*, Module as Grandpa};
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
-use sp_application_crypto::Public;
 use sp_core::H256;
 
 benchmarks! {
@@ -65,19 +64,12 @@ benchmarks! {
 		assert!(sp_finality_grandpa::check_equivocation_proof(equivocation_proof2));
 	}
 
-	schedule_forced_change {
-		let n in 0 .. 1000;
-
-		let next_authorities = (0..n)
-			.map(|n| AuthorityId::from_slice(&n.to_be_bytes().repeat(8)))
-			.collect();
-
+	note_stalled {
 		let best_finalized_block_number = 1.into();
 
-	}: _(RawOrigin::Root, next_authorities, best_finalized_block_number)
+	}: _(RawOrigin::Root, best_finalized_block_number)
 	verify {
-		let pending_change = Grandpa::<T>::pending_change().unwrap();
-		assert!(pending_change.forced.is_some())
+		assert!(Grandpa::<T>::stalled().is_some());
 	}
 }
 
@@ -91,7 +83,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-			assert_ok!(test_benchmark_schedule_forced_change::<Test>());
+			assert_ok!(test_benchmark_note_stalled::<Test>());
 		})
 	}
 
