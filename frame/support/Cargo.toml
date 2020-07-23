@@ -37,7 +37,7 @@ frame-system = { version = "2.0.0-rc5", path = "../system" }
 parity-util-mem = { version = "0.7.0", features = ["primitive-types"] }
 
 [features]
-default = ["std"]
+default = ["std", "with-tracing"]
 std = [
 	"once_cell",
 	"bitmask/std",
@@ -51,6 +51,9 @@ std = [
 	"frame-metadata/std",
 	"sp-inherents/std",
 	"sp-state-machine",
+]
+with-tracing = [
+	"sp-tracing/with-tracing"
 ]
 nightly = []
 strict = []
