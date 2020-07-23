@@ -197,7 +197,7 @@ impl<
 	COnRuntimeUpgrade: OnRuntimeUpgrade,
 > Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + tg vbhghhhhggc,
 	CheckedOf<Block::Extrinsic, Context>:
 		Applyable +
 		GetDispatchInfo,
@@ -207,6 +207,7 @@ where
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
+		sp_tracing::enter_span! { sp_tracing::Level::INFO, "initialize block" };
 		let digests = Self::extract_pre_digest(&header);
 		Self::initialize_block_impl(
 			header.number(),
@@ -270,6 +271,7 @@ where
 	}
 
 	fn initial_checks(block: &Block) {
+		sp_tracing::enter_span! { sp_tracing::Level::INFO, "initial checks" };
 		let header = block.header();
 
 		// Check that `parent_hash` is correct.
@@ -309,12 +311,19 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
+		{
+			sp_tracing::enter_span! { sp_tracing::Level::INFO, "executing extrinsics" };
+			extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
+		}
 
-		// post-extrinsics book-keeping
-		<frame_system::Module<System>>::note_finished_extrinsics();
-		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		{
+			sp_tracing::enter_span! { sp_tracing::Level::INFO, "finalizing" };
+			// post-extrinsics book-keeping
+			<frame_system::Module<System>>::note_finished_extrinsics();
+
+			<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+			<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		}
 	}
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
@@ -355,6 +364,9 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
+		sp_tracing::enter_span! { sp_tracing::Level::INFO, "applying extrinsic"};
+		//  FIXME: add support for Codec
+		// sp_tracing::event!(sp_tracing::Level::INFO, extrinsic = ?uxt);
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -377,6 +389,7 @@ where
 	}
 
 	fn final_checks(header: &System::Header) {
+		sp_tracing::enter_span! { sp_tracing::Level::INFO, "final checks" };
 		// remove temporaries
 		let new_header = <frame_system::Module<System>>::finalize();
 

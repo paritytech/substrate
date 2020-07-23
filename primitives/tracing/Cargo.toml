@@ -12,10 +12,11 @@ description = "Instrumentation primitives and macros for Substrate."
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-tracing = { version = "0.1.13", optional = true }
+tracing = { version = "0.1.13", optional = true, default-features = false }
 rental = { version = "0.5.5", optional = true }
 log = { version = "0.4.8", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "tracing", "rental", "log" ]
+with-tracing = [ "tracing" ]
+std = [ "with-tracing", "tracing/std", "rental", "log" ]
