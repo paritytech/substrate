@@ -66,6 +66,10 @@ pub use equivocation::{
 	HandleEquivocation,
 };
 
+/// The default number of blocks a forced change is delayed by,
+/// i.e. it will be activated at `block_signal_number + delay`.
+pub const FORCED_CHANGE_DELAY: u32 = 1000;
+
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -290,7 +294,7 @@ decl_module! {
 
 			Self::schedule_change(
 				next_authorities.into_iter().map(|k| (k, 1)).collect(),
-				1000.into(),
+				FORCED_CHANGE_DELAY.into(),
 				Some(best_finalized_block_number),
 			)?;
 		}
