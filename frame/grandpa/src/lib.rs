@@ -43,9 +43,9 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
 	Parameter,
 };
-use frame_system::{ensure_none, ensure_signed, DigestOf};
+use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_runtime::{
-	generic::{DigestItem, OpaqueDigestItemId},
+	generic::DigestItem,
 	traits::Zero,
 	DispatchResult, KeyTypeId,
 };
@@ -205,7 +205,7 @@ decl_storage! {
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
 		/// Pending change: (signaled at, scheduled change).
-		PendingChange: Option<StoredPendingChange<T::BlockNumber>>;
+		PendingChange get(fn pending_change): Option<StoredPendingChange<T::BlockNumber>>;
 
 		/// next block number where we can force a change.
 		NextForced get(fn next_forced): Option<T::BlockNumber>;
@@ -280,6 +280,21 @@ decl_module! {
 			)?;
 		}
 
+		#[weight = weight_for::schedule_forced_change::<T>(next_authorities.len())]
+		fn schedule_forced_change(
+			origin,
+			next_authorities: AuthorityList,
+			best_finalized_block_number: T::BlockNumber,
+		) {
+			ensure_root(origin)?;
+
+			Self::schedule_change(
+				next_authorities,
+				1000.into(),
+				Some(best_finalized_block_number),
+			)?;
+		}
+
 		fn on_finalize(block_number: T::BlockNumber) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
@@ -295,7 +310,7 @@ decl_module! {
 						))
 					} else {
 						Self::deposit_log(ConsensusLog::ScheduledChange(
-							ScheduledChange{
+							ScheduledChange {
 								delay: pending_change.delay,
 								next_authorities: pending_change.next_authorities.clone(),
 							}
@@ -376,6 +391,13 @@ mod weight_for {
 			.saturating_add(T::DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 			// fetching set id -> session index mappings
 			.saturating_add(T::DbWeight::get().reads(2))
+	}
+
+	pub fn schedule_forced_change<T: super::Trait>(next_authorities: usize) -> Weight {
+		(20 * WEIGHT_PER_MICROS)
+			.saturating_add((50 * WEIGHT_PER_NANOS).saturating_mul(next_authorities as u64))
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(2))
 	}
 }
 
