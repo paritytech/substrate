@@ -580,42 +580,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> {
-	/// Attempt to extract a GRANDPA log from a generic digest.
-	pub fn grandpa_log(digest: &DigestOf<T>) -> Option<ConsensusLog<T::BlockNumber>> {
-		let id = OpaqueDigestItemId::Consensus(&GRANDPA_ENGINE_ID);
-		digest.convert_first(|l| l.try_to::<ConsensusLog<T::BlockNumber>>(id))
-	}
-
-	/// Attempt to extract a pending set-change signal from a digest.
-	pub fn pending_change(digest: &DigestOf<T>)
-		-> Option<ScheduledChange<T::BlockNumber>>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_change())
-	}
-
-	/// Attempt to extract a forced set-change signal from a digest.
-	pub fn forced_change(digest: &DigestOf<T>)
-		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_forced_change())
-	}
-
-	/// Attempt to extract a pause signal from a digest.
-	pub fn pending_pause(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_pause())
-	}
-
-	/// Attempt to extract a resume signal from a digest.
-	pub fn pending_resume(digest: &DigestOf<T>)
-		-> Option<T::BlockNumber>
-	{
-		Self::grandpa_log(digest).and_then(|signal| signal.try_into_resume())
-	}
-}
-
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
