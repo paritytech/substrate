@@ -42,6 +42,8 @@ std = [
 	"sp-runtime-interface/std",
 	"sp-externalities",
 	"sp-wasm-interface/std",
+	"sp-tracing/std",
+	"sp-tracing/with-tracing",
 	"log",
 	"futures",
 	"parking_lot",

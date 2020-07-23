@@ -38,8 +38,8 @@ extern crate rental;
 #[doc(hidden)]
 pub use tracing;
 
-#[cfg(feature = "std")]
-pub mod proxy;
+#[cfg(feature = "with-tracing")]
+pub mod interface;
 
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
