@@ -4354,6 +4354,7 @@ dependencies = [
  "evm",
  "frame-support",
  "frame-system",
+ "impl-trait-for-tuples",
  "pallet-balances",
  "pallet-timestamp",
  "parity-scale-codec",

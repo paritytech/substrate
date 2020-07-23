@@ -18,6 +18,7 @@
 use sp_std::vec::Vec;
 use sp_core::H160;
 use evm::{ExitError, ExitSucceed};
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// Custom precompiles to be used by EVM engine.
 pub trait Precompiles {
@@ -54,42 +55,25 @@ pub trait Precompile {
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>;
 }
 
-macro_rules! impl_precompile_tuple {
-	( ($($item:ident,)+) ) => {
-		impl<$($item: Precompile,)+> Precompiles for ($($item,)+) {
-			fn execute(
-				address: H160,
-				input: &[u8],
-				target_gas: Option<usize>,
-			) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
-				let mut index = 0;
+#[impl_for_tuples(1, 16)]
+#[tuple_types_no_default_trait_bound]
+impl Precompiles for Tuple {
+	for_tuples!( where #( Tuple: Precompile )* );
 
-				$(
-					index += 1;
-					if address == H160::from_low_u64_be(index) {
-						return Some($item::execute(input, target_gas))
-					}
-				)+
+	fn execute(
+		address: H160,
+		input: &[u8],
+		target_gas: Option<usize>,
+	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
+		let mut index = 0;
 
-				None
+		for_tuples!( #(
+			index += 1;
+			if address == H160::from_low_u64_be(index) {
+				return Some(Tuple::execute(input, target_gas))
 			}
-		}
-	};
-}
+		)* );
 
-impl_precompile_tuple!((A,));
-impl_precompile_tuple!((A,B,));
-impl_precompile_tuple!((A,B,C,));
-impl_precompile_tuple!((A,B,C,D,));
-impl_precompile_tuple!((A,B,C,D,E,));
-impl_precompile_tuple!((A,B,C,D,E,F,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,K,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,K,L,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,K,L,M,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,K,L,M,N,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,));
-impl_precompile_tuple!((A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,));
+		None
+	}
+}
