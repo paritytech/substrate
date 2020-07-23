@@ -138,7 +138,7 @@ mod tests {
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
-	use frame_system::weights;
+	use frame_system::limits;
 	use frame_support::{
 		impl_outer_origin, parameter_types, traits::{Randomness, OnInitialize},
 	};
@@ -152,9 +152,9 @@ mod tests {
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: weights::BlockWeights = weights::BlockWeights
+		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
 			::simple_max(1024);
-		pub BlockLength: weights::BlockLength = weights::BlockLength
+		pub BlockLength: limits::BlockLength = limits::BlockLength
 			::max(2 * 1024);
 	}
 

@@ -56,7 +56,7 @@ use frame_support::{
 	traits::KeyOwnerProofSystem,
 	weights::RuntimeDbWeight,
 };
-use frame_system::weights::{BlockWeights, BlockLength};
+use frame_system::limits::{BlockWeights, BlockLength};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 

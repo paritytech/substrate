@@ -695,8 +695,8 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::weights::BlockWeights =
-			frame_system::weights::BlockWeights::simple_max(2_000_000_000_000);
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
 	}
 	impl system::Trait for Test {
 		type BaseCallFilter = BaseFilter;

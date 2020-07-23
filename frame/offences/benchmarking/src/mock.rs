@@ -38,8 +38,8 @@ type BlockNumber = u64;
 type Balance = u64;
 
 parameter_types! {
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 
 impl frame_system::Trait for Test {

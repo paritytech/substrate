@@ -128,9 +128,9 @@ parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
 	pub const BlockHashCount: BlockNumber = 2400;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
-	pub BlockWeights: system::weights::BlockWeights = system::weights::BlockWeights
+	pub BlockWeights: system::limits::BlockWeights = system::limits::BlockWeights
 		::with_sensible_defaults(2 * WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
-	pub BlockLength: system::weights::BlockLength = system::weights::BlockLength
+	pub BlockLength: system::limits::BlockLength = system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 }
 

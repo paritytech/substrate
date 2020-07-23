@@ -54,12 +54,12 @@ impl_outer_event! {
 
 frame_support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::with_sensible_defaults(
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::with_sensible_defaults(
 			4 * 1024 * 1024, Perbill::from_percent(75)
 		);
-	pub BlockLength: frame_system::weights::BlockLength =
-		frame_system::weights::BlockLength::max_with_normal_ratio(
+	pub BlockLength: frame_system::limits::BlockLength =
+		frame_system::limits::BlockLength::max_with_normal_ratio(
 			4 * 1024 * 1024, Perbill::from_percent(75)
 		);
 }

@@ -27,7 +27,7 @@ use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use sp_io;
 use crate as sudo;
 use frame_support::traits::Filter;
-use frame_system::weights;
+use frame_system::limits;
 
 // Logger module to track execution.
 pub mod logger {
@@ -107,7 +107,7 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: weights::BlockWeights = weights::BlockWeights
+	pub BlockWeights: limits::BlockWeights = limits::BlockWeights
 		::simple_max(1024);
 }
 

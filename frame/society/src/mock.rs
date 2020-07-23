@@ -46,8 +46,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const ExistentialDeposit: u64 = 1;
 	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1024);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 ord_parameter_types! {

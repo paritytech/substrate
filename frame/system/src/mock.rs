@@ -52,19 +52,24 @@ parameter_types! {
 		read: 10,
 		write: 100,
 	};
-	pub RuntimeBlockWeights: weights::BlockWeights = weights::BlockWeights::builder()
+	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
 		.base_block(10)
-		.base_extrinsic(5, weights::ExtrinsicDispatchClass::All)
-		.max_for_class(NORMAL_DISPATCH_RATIO * TARGET_BLOCK_WEIGHT, DispatchClass::Normal)
-		.max_for_class(TARGET_BLOCK_WEIGHT, DispatchClass::Operational)
-		.reserved(
-			TARGET_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * TARGET_BLOCK_WEIGHT,
-			DispatchClass::Operational,
-		)
+		.for_class(DispatchClass::all(), |weights| {
+			weights.base_extrinsic = 5;
+		})
+		.for_class(DispatchClass::Normal, |weights| {
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * TARGET_BLOCK_WEIGHT);
+		})
+		.for_class(DispatchClass::Operational, |weights| {
+			weights.max_total = Some(TARGET_BLOCK_WEIGHT);
+			weights.guaranteed = Some(
+				TARGET_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * TARGET_BLOCK_WEIGHT
+			);
+		})
 		.avg_block_initialization(Perbill::from_percent(0))
 		.build_or_panic();
-	pub RuntimeBlockLength: weights::BlockLength =
-		weights::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
+	pub RuntimeBlockLength: limits::BlockLength =
+		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
 thread_local!{

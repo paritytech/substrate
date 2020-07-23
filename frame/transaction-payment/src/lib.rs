@@ -558,15 +558,16 @@ mod tests {
 	}
 
 	pub struct BlockWeights;
-	impl Get<frame_system::weights::BlockWeights> for BlockWeights {
-		fn get() -> frame_system::weights::BlockWeights {
-			frame_system::weights::BlockWeights::builder()
-				.max_for_non_mandatory(1024)
+	impl Get<frame_system::limits::BlockWeights> for BlockWeights {
+		fn get() -> frame_system::limits::BlockWeights {
+			frame_system::limits::BlockWeights::builder()
 				.base_block(0)
-				.base_extrinsic(
-					EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()),
-					frame_system::weights::ExtrinsicDispatchClass::All,
-				)
+				.for_class(DispatchClass::all(), |weights| {
+					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
+				})
+				.for_class(DispatchClass::non_mandatory(), |weights| {
+					weights.max_total = 1024.into();
+				})
 				.build_or_panic()
 		}
 	}

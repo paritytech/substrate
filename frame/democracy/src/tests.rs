@@ -87,8 +87,8 @@ impl Filter<Call> for BaseFilter {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1_000_000);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = BaseFilter;

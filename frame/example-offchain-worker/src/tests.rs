@@ -48,8 +48,8 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1024);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Trait for Test {
 	type BaseCallFilter = ();

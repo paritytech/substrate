@@ -57,10 +57,10 @@ mod multiplier_tests {
 		AdjustmentVariable, System, MinimumMultiplier,
 		RuntimeBlockWeights as BlockWeights,
 	};
-	use frame_support::weights::{Weight, WeightToFeePolynomial};
+	use frame_support::weights::{Weight, WeightToFeePolynomial, DispatchClass};
 
 	fn max_normal() -> Weight {
-		BlockWeights::get().max_for_class.normal
+		BlockWeights::get().get(DispatchClass::Normal).max_total
 			.unwrap_or_else(|| BlockWeights::get().max_block)
 	}
 
@@ -203,7 +203,7 @@ mod multiplier_tests {
 		// `cargo test congested_chain_simulation -- --nocapture` to get some insight.
 
 		// almost full. The entire quota of normal transactions is taken.
-		let block_weight = BlockWeights::get().max_for_class.normal.unwrap() - 100;
+		let block_weight = BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap() - 100;
 
 		// Default substrate weight.
 		let tx_weight = frame_support::weights::constants::ExtrinsicBaseWeight::get();

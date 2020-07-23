@@ -122,7 +122,7 @@ use frame_support::{
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
-		extract_actual_weight,
+		extract_actual_weight, PerDispatchClass,
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -132,7 +132,7 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
-pub mod weights;
+pub mod limits;
 #[cfg(test)]
 pub(crate) mod mock;
 
@@ -181,16 +181,19 @@ impl WeightInfo for () {
 	fn suicide(_n: u32, ) -> Weight { 1_000_000_000 }
 }
 
+/// An object to track the currently used extrinsic weight in a block.
+pub type ExtrinsicsWeight = PerDispatchClass<Weight>;
+
 pub trait Trait: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
 	type BaseCallFilter: Filter<Self::Call>;
 
 	/// Block & extrinsics weights: base values and limits.
-	type BlockWeights: Get<weights::BlockWeights>;
+	type BlockWeights: Get<limits::BlockWeights>;
 
 	/// The maximum length of a block (in bytes).
-	type BlockLength: Get<weights::BlockLength>;
+	type BlockLength: Get<limits::BlockLength>;
 
 	/// The `Origin` type used by dispatchable calls.
 	type Origin:
@@ -273,7 +276,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type SystemWeightInfo: WeightInfo;
 
 	/// Return block weights object.
-	fn block_weights() -> weights::BlockWeights {
+	fn block_weights() -> limits::BlockWeights {
 		Self::BlockWeights::get()
 	}
 }
@@ -407,7 +410,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): weights::ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): ExtrinsicsWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;

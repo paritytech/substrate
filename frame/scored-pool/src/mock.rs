@@ -38,8 +38,8 @@ parameter_types! {
 	pub const Period: u64 = 4;
 	pub const BlockHashCount: u64 = 250;
 	pub const ExistentialDeposit: u64 = 1;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1024);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 ord_parameter_types! {
 	pub const KickOrigin: u64 = 2;

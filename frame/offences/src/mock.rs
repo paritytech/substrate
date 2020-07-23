@@ -91,8 +91,8 @@ pub fn set_offence_weight(new: Weight) {
 pub struct Runtime;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 impl frame_system::Trait for Runtime {
 	type BaseCallFilter = ();

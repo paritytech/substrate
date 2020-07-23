@@ -538,11 +538,11 @@ mod tests {
 	pub struct Runtime;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::weights::BlockWeights =
-			frame_system::weights::BlockWeights::builder()
-				.max_for_non_mandatory(1024)
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::builder()
 				.base_block(10)
-				.base_extrinsic(5, frame_system::weights::ExtrinsicDispatchClass::All)
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = 5)
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = 1024.into())
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -678,7 +678,8 @@ mod tests {
 			balances: vec![(1, 211)],
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
-		let weight = xt.get_dispatch_info().weight + Runtime::block_weights().base_extrinsic.normal;
+		let weight = xt.get_dispatch_info().weight +
+			Runtime::block_weights().get(DispatchClass::Normal).base_extrinsic;
 		let fee: Balance
 			= <Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
@@ -782,7 +783,7 @@ mod tests {
 		let encoded_len = encoded.len() as Weight;
 		// Block execution weight + on_initialize weight
 		let base_block_weight = 175 + Runtime::block_weights().base_block;
-		let limit = Runtime::block_weights().max_for_class.normal.unwrap() - base_block_weight;
+		let limit = Runtime::block_weights().get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
 		let num_to_exhaust_block = limit / (encoded_len + 5);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -842,7 +843,8 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = len as Weight + Runtime::block_weights().base_extrinsic.normal;
+			let extrinsic_weight = len as Weight +
+				Runtime::block_weights().get(DispatchClass::Normal).base_extrinsic;
 			assert_eq!(
 				<frame_system::Module<Runtime>>::block_weight().total(),
 				base_block_weight + 3 * extrinsic_weight,
@@ -898,7 +900,7 @@ mod tests {
 					sign_extra(1, 0, 0),
 				);
 				let weight = xt.get_dispatch_info().weight +
-					Runtime::block_weights().base_extrinsic.normal;
+					Runtime::block_weights().get(DispatchClass::Normal).base_extrinsic;
 				let fee: Balance =
 					<Runtime as pallet_transaction_payment::Trait>::WeightToFee::calc(&weight);
 				Executive::initialize_block(&Header::new(

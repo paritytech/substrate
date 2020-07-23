@@ -19,12 +19,12 @@ impl_outer_origin! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: system::weights::BlockWeights =
-		system::weights::BlockWeights::with_sensible_defaults(
+	pub BlockWeights: system::limits::BlockWeights =
+		system::limits::BlockWeights::with_sensible_defaults(
 			1024,
 			Perbill::from_percent(75)
 		);
-	pub BlockLength: system::weights::BlockLength = system::weights::BlockLength
+	pub BlockLength: system::limits::BlockLength = system::limits::BlockLength
 		::max_with_normal_ratio(
 			2 * 1024,
 			Perbill::from_percent(75)

@@ -18,9 +18,6 @@
 use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass, OneOrMany};
 use sp_runtime::{RuntimeDebug, Perbill};
 
-/// An object to track the currently used extrinsic weight in a block.
-pub type ExtrinsicsWeight = PerDispatchClass<Weight>;
-
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone)]
 pub struct BlockLength {
@@ -86,6 +83,7 @@ macro_rules! error_assert {
 	}
 }
 
+/// A result of validating `BlockWeights` correctness.
 pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 
 /// A ratio of `Normal` dispatch class within block, used as default value for
@@ -265,7 +263,7 @@ impl BlockWeights {
 					}
 				}),
 			},
-			init_cost: Perbill::zero(),
+			init_cost: None,
 		}
 	}
 }
@@ -273,7 +271,7 @@ impl BlockWeights {
 /// An opinionated builder for `Weights` object.
 pub struct BlockWeightsBuilder {
 	weights: BlockWeights,
-	init_cost: Perbill,
+	init_cost: Option<Perbill>,
 }
 
 impl BlockWeightsBuilder {
@@ -288,7 +286,7 @@ impl BlockWeightsBuilder {
 	/// This value is used to derive maximal allowed extrinsic weight for each
 	/// class, based on the allowance.
 	pub fn avg_block_initialization(mut self, init_cost: Perbill) -> Self {
-		self.init_cost = init_cost;
+		self.init_cost = Some(init_cost);
 		self
 	}
 
@@ -313,12 +311,13 @@ impl BlockWeightsBuilder {
 		// compute max extrinsic size
 		let Self { mut weights, init_cost } = self;
 
-		let max_rate = Perbill::one().saturating_sub(init_cost);
+		let max_rate = init_cost.map(|x| Perbill::one().saturating_sub(x))
+			.unwrap_or_else(Perbill::one);
 		for class in DispatchClass::all() {
 			let per_class = weights.per_class.get_mut(*class);
 			// compute max weight of single extrinsic
 			let max_for_class = per_class.max_total;
-			if per_class.max_extrinsic.is_none() && !init_cost.is_zero() {
+			if per_class.max_extrinsic.is_none() && init_cost.is_some() {
 				per_class.max_extrinsic = max_for_class
 					.map(|x| max_rate * x)
 					.map(|x| x.saturating_sub(per_class.base_extrinsic));

@@ -60,8 +60,8 @@ parameter_types! {
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
-	pub BlockWeights: frame_system::weights::BlockWeights =
-		frame_system::weights::BlockWeights::simple_max(1024);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 impl frame_system::Trait for Test {
