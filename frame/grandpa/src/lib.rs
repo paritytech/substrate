@@ -398,8 +398,8 @@ mod weight_for {
 	}
 
 	pub fn schedule_forced_change<T: super::Trait>(next_authorities: usize) -> Weight {
-		(20 * WEIGHT_PER_MICROS)
-			.saturating_add((50 * WEIGHT_PER_NANOS).saturating_mul(next_authorities as u64))
+		(18 * WEIGHT_PER_MICROS)
+			.saturating_add((55 * WEIGHT_PER_NANOS).saturating_mul(next_authorities as u64))
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
