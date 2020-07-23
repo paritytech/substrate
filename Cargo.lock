@@ -7965,7 +7965,6 @@ dependencies = [
  "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
- "tracing",
 ]
 
 [[package]]

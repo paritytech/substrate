@@ -664,9 +664,3 @@ mod tests {
 		assert!(event3.parent_id.is_none());
 	}
 }
-
-struct WasmSpan<'a>{
-	name: &'a str,
-	target: &'a str,
-	data: &'a
-}
