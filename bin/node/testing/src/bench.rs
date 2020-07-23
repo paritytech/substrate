@@ -542,7 +542,7 @@ impl BenchKeyring {
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
 			false,
-			Some(node_runtime::WASM_BINARY),
+			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}
