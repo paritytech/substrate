@@ -28,10 +28,11 @@
 
 use sp_core::offchain::{PollableId, PollableKind};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus};
-use sp_std::{rc::Rc, collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::{rc::Rc, collections::btree_set::BTreeSet};
+use sp_std::prelude::*;
 
 use core::cell::RefCell;
-use core::convert::TryInto;
+use core::convert::{TryFrom, TryInto};
 use core::future::Future;
 use core::mem::{self, ManuallyDrop};
 use core::pin::Pin;
@@ -263,10 +264,10 @@ pub struct HostFuture {
     finished: bool,
 }
 
-impl HostFuture {
-    pub fn from_pollable(id: impl Into<PollableId>) -> Self {
+impl<T> From<T> for HostFuture where T: Into<PollableId> {
+    fn from(value: T) -> HostFuture {
         Self {
-            msg_id: id.into(),
+            msg_id: value.into(),
             finished: false,
         }
     }
@@ -293,15 +294,18 @@ pub(crate) fn peek_response(msg_id: MessageId) -> bool {
     state.pending_messages.remove(&msg_id)
 }
 
-/// TODO: Resolve when the body is ready to be read? When we received header/request?
-/// Maybe two futures - one for the code/headers and the other one for body?
+/// Future that resolves to a HTTP request response.
+///
+/// Because HTTP response can be chunked, the resolved [`HttpResponse`] contains
+/// both HTTP status code and headers but the [`HttpResponse::body`] is a future
+/// type that has to be driven separately.
 #[pin_project]
 #[derive(Debug)]
 pub struct HttpFuture {
     #[pin] inner: HostFuture,
 }
 
-impl core::convert::TryFrom<HostFuture> for HttpFuture {
+impl TryFrom<HostFuture> for HttpFuture {
     type Error = HostFuture;
     fn try_from(value: HostFuture) -> Result<HttpFuture, HostFuture> {
         match value.msg_id.kind() {
@@ -317,54 +321,115 @@ impl Future for HttpFuture {
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let id: HttpRequestId = self.inner.msg_id.try_into()
             .expect("HttpFuture can be only constructed with HTTP HostFuture");
-        let this = self.project();
-        let inner = this.inner;
 
-        match Future::poll(inner, cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(()) => {
+        match Future::poll(self.project().inner, cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(()) => {},
+        }
+
                 let now = sp_io::offchain::timestamp();
                 let status = sp_io::offchain::http_response_wait(&[id], Some(now));
+
                 let code = match status.as_slice() {
-                    &[HttpRequestStatus::Finished(code)] => code,
-                    &[HttpRequestStatus::IoError] => return Poll::Ready(Err(HttpError::IoError)),
-                    &[HttpRequestStatus::Invalid] => return Poll::Ready(Err(HttpError::Invalid)),
-                    &[HttpRequestStatus::DeadlineReached] => {
+            [HttpRequestStatus::Finished(code)] => *code,
+            [HttpRequestStatus::IoError] => return Poll::Ready(Err(HttpError::IoError)),
+            [HttpRequestStatus::Invalid] => return Poll::Ready(Err(HttpError::Invalid)),
+            [HttpRequestStatus::DeadlineReached] => {
                         // Internal logic error: We were signaled as ready but
                         // the request somehow internally timed out.
                         // Return an error instead of panicking
                         return Poll::Ready(Err(HttpError::IoError));
                     },
-                    other => return Poll::Ready(Err(HttpError::Invalid)),
+            [] | [_, _, ..] => unreachable!("waiting for a single ID should give exactly one; qed"),
                 };
 
                 let headers = sp_io::offchain::http_response_headers(id);
-                // TODO: Support chunked response
-                // Ideally should piggy back on AsyncRead but we can't have sth
-                // similar due to Cargo feature unification bug and `futures`
-                // being compiled in `std` contexts in the dep graph
-                let mut buf = [0u8; 1024];
-                let len = match sp_io::offchain::http_response_read_body(id, &mut buf, Some(now)) {
-                    Ok(read_len) => read_len,
-                    // TODO: Needs more data, can't be handled as a single future as of now
-                    Err(HttpError::DeadlineReached) => 0,
-                    other => panic!("The state of the http request is finished, as checked above; qed"),
-                };
 
-                // TODO: Implement initial response buffering
                 Poll::Ready(Ok(HttpResponse {
                     code,
                     headers,
-                    body: buf[..len as usize].to_vec(),
+            body: HttpBodyFuture {
+                id,
+                buf: Some(vec![0; 1024]),
+                len: 0,
+            },
                 }))
+            }
+        }
+
+
+/// A future type that resolves to an HTTP response body.
+///
+/// Part of the [`HttpResponse`] value.
+#[derive(Debug)]
+pub struct HttpBodyFuture {
+    id: HttpRequestId,
+    buf: Option<Vec<u8>>,
+    len: usize,
+    }
+
+impl Future for HttpBodyFuture {
+    type Output = Box<[u8]>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        // Help the borrow checker see disjoint field mutable borrow through Pin
+        let this = &mut *self;
+        let (id, len) = (this.id, &mut this.len);
+        let self_buf = this.buf.as_mut().expect("HttpBodyFuture polled after value taken");
+
+        loop {
+            let buf = &mut self_buf[*len..];
+            // Ensure that we can always write something, so that reading 0 bytes
+            // means EOF rather than inability to write more
+            debug_assert_ne!(buf.len(), 0);
+
+            // Read body in a non-blocking fashion with present timestamp as deadline
+            let now = sp_io::offchain::timestamp();
+            match sp_io::offchain::http_response_read_body(id, buf, Some(now)) {
+                Ok(0) => {
+                    let mut buf = this.buf.take()
+                        .expect("HttpBodyFuture polled after value taken");
+                    buf.truncate(*len);
+
+                    return Poll::Ready(buf.into_boxed_slice());
+                },
+                Ok(bytes_read) => {
+                    // Grow the temporary buffer if it's full
+                    if bytes_read as usize == buf.len() {
+                        let growth = self_buf.len() / 2 * 3; // 1.5
+                        let new_len = self_buf.len() + growth;
+                        self_buf.resize_with(new_len, Default::default);
+}
+                    *len += bytes_read as usize;
+
+                    continue;
+                },
+                Err(HttpError::DeadlineReached) => {
+                    let fut = HostFuture::from(id);
+                    pin_mut!(fut);
+                    if let Poll::Ready(()) = fut.poll(cx) {
+                        // More work is ready by now, reschedule to poll again
+                        cx.waker().wake_by_ref();
+                    }
+
+                    return Poll::Pending;
+                },
+                Err(HttpError::IoError) | Err(HttpError::Invalid) => panic!(
+                    "HttpBodyFuture is created for HTTP requests that are Finished \
+                    and so reading body can return DeadlineReached at worst; qed"
+                ),
             }
         }
     }
 }
 
+/// The output type for the [`HttpFuture`] future.
+///
+/// Because HTTP response can be chunked, the HTTP status code and headers are
+/// immediately available but the response body needs to be driven separately.
 #[derive(Debug)]
 pub struct HttpResponse {
-    code: u16,
-    headers: Vec<(Vec<u8>, Vec<u8>)>,
-    body: Vec<u8>,
+    pub code: u16,
+    pub headers: Vec<(Vec<u8>, Vec<u8>)>,
+    pub body: HttpBodyFuture,
 }
