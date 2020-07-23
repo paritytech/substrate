@@ -30,7 +30,7 @@ use sp_io;
 use sp_core::H256;
 
 impl_outer_origin!{
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.

@@ -1238,28 +1238,30 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
-		/// the remainder from the maximum amount of reward.
+		/// the remainder from the maximum amount of reward. 
+		/// [era_index, validator_payout, remainder]
 		EraPayout(EraIndex, Balance, Balance),
-		/// The staker has been rewarded by this amount. `AccountId` is the stash account.
+		/// The staker has been rewarded by this amount. [stash, amount]
 		Reward(AccountId, Balance),
-		/// One validator (and its nominators) has been slashed by the given amount.
+		/// One validator (and its nominators) has been slashed by the given amount. 
+		/// [validator, amount]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
-		/// not be processed.
+		/// not be processed. [session_index]
 		OldSlashingReportDiscarded(SessionIndex),
-		/// A new set of stakers was elected with the given computation method.
+		/// A new set of stakers was elected with the given [compute].
 		StakingElection(ElectionCompute),
-		/// A new solution for the upcoming election has been stored.
+		/// A new solution for the upcoming election has been stored. [compute]
 		SolutionStored(ElectionCompute),
-		/// An account has bonded this amount.
+		/// An account has bonded this amount. [stash, amount]
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
 		/// it will not be emitted for staking rewards when they are added to stake.
 		Bonded(AccountId, Balance),
-		/// An account has unbonded this amount.
+		/// An account has unbonded this amount. [stash, amount]
 		Unbonded(AccountId, Balance),
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
-		/// from the unlocking queue.
+		/// from the unlocking queue. [stash, amount]
 		Withdrawn(AccountId, Balance),
 	}
 );
@@ -1624,7 +1626,7 @@ decl_module! {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
-				Self::deposit_event(RawEvent::Unbonded(ledger.stash.clone(), value));
+				Self::deposit_event(RawEvent::Unbonded(ledger.stash, value));
 			}
 		}
 
@@ -2417,7 +2419,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Lets now calculate how this is split to the nominators.
-		// Sort nominators by highest to lowest exposure, but only keep `max_nominator_payouts` of them.
+		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others.iter() {
 			let nominator_exposure_part = Perbill::from_rational_approximation(
 				nominator.value,

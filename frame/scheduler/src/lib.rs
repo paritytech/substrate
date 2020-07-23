@@ -177,8 +177,11 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::BlockNumber {
+		/// Scheduled some task. [when, index]
 		Scheduled(BlockNumber, u32),
+		/// Canceled some task. [when, index]
 		Canceled(BlockNumber, u32),
+		/// Dispatched some task. [task, id, result]
 		Dispatched(TaskAddress<BlockNumber>, Option<Vec<u8>>, DispatchResult),
 	}
 );

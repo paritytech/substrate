@@ -47,7 +47,10 @@ use self::common::{*, sign};
 /// The idea here is to pass it as the current runtime code to the executor so the executor will
 /// have to execute provided wasm code instead of the native equivalent. This trick is used to
 /// test code paths that differ between native and wasm versions.
-pub const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
+pub fn bloaty_code_unwrap() -> &'static [u8] {
+	node_runtime::WASM_BINARY_BLOATY.expect("Development wasm binary is not available. \
+											 Testing is only supported with the flag disabled.")
+}
 
 /// Default transfer fee. This will use the same logic that is implemented in transaction-payment module.
 ///
@@ -75,7 +78,7 @@ fn set_heap_pages<E: Externalities>(ext: &mut E, heap_pages: u64) {
 
 fn changes_trie_block() -> (Vec<u8>, Hash) {
 	construct_block(
-		&mut new_test_ext(COMPACT_CODE, true),
+		&mut new_test_ext(compact_code_unwrap(), true),
 		1,
 		GENESIS_HASH.into(),
 		vec![
@@ -95,7 +98,7 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 /// are not guaranteed to be deterministic) and to ensure that the correct state is propagated
 /// from block1's execution to block2 to derive the correct storage_root.
 fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let block1 = construct_block(
 		&mut t,
 		1,
@@ -140,7 +143,7 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 
 fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 	construct_block(
-		&mut new_test_ext(COMPACT_CODE, false),
+		&mut new_test_ext(compact_code_unwrap(), false),
 		1,
 		GENESIS_HASH.into(),
 		vec![
@@ -158,7 +161,7 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 
 #[test]
 fn panic_execution_with_foreign_code_gives_error() {
-	let mut t = new_test_ext(BLOATY_CODE, false);
+	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(69u128, 0u8, 0u128, 0u128, 0u128).encode()
@@ -187,7 +190,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 
 #[test]
 fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 69u128, 0u128, 0u128, 0u128).encode()
@@ -216,7 +219,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 
 #[test]
 fn successful_execution_with_native_equivalent_code_gives_ok() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
@@ -259,7 +262,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 
 #[test]
 fn successful_execution_with_foreign_code_gives_ok() {
-	let mut t = new_test_ext(BLOATY_CODE, false);
+	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
@@ -302,7 +305,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 
 #[test]
 fn full_native_block_import_works() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	let (block1, block2) = blocks();
 
@@ -439,7 +442,7 @@ fn full_native_block_import_works() {
 
 #[test]
 fn full_wasm_block_import_works() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	let (block1, block2) = blocks();
 
@@ -589,7 +592,7 @@ fn deploying_wasm_contract_should_work() {
 	);
 
 	let b = construct_block(
-		&mut new_test_ext(COMPACT_CODE, false),
+		&mut new_test_ext(compact_code_unwrap(), false),
 		1,
 		GENESIS_HASH.into(),
 		vec![
@@ -628,7 +631,7 @@ fn deploying_wasm_contract_should_work() {
 		]
 	);
 
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -652,7 +655,7 @@ fn deploying_wasm_contract_should_work() {
 
 #[test]
 fn wasm_big_block_import_fails() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	set_heap_pages(&mut t.ext(), 4);
 
@@ -668,7 +671,7 @@ fn wasm_big_block_import_fails() {
 
 #[test]
 fn native_big_block_import_succeeds() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
@@ -681,7 +684,7 @@ fn native_big_block_import_succeeds() {
 
 #[test]
 fn native_big_block_import_fails_on_fallback() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 
 	assert!(
 		executor_call::<NeverNativeValue, fn() -> _>(
@@ -696,7 +699,7 @@ fn native_big_block_import_fails_on_fallback() {
 
 #[test]
 fn panic_execution_gives_error() {
-	let mut t = new_test_ext(BLOATY_CODE, false);
+	let mut t = new_test_ext(bloaty_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 0 * DOLLARS, 0u128, 0u128, 0u128).encode()
@@ -725,7 +728,7 @@ fn panic_execution_gives_error() {
 
 #[test]
 fn successful_execution_gives_ok() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
 		(0u32, 0u8, 111 * DOLLARS, 0u128, 0u128, 0u128).encode()
@@ -778,7 +781,7 @@ fn full_native_block_import_works_with_changes_trie() {
 	let block_data = block1.0;
 	let block = Block::decode(&mut &block_data[..]).unwrap();
 
-	let mut t = new_test_ext(COMPACT_CODE, true);
+	let mut t = new_test_ext(compact_code_unwrap(), true);
 	executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
 		"Core_execute_block",
@@ -794,7 +797,7 @@ fn full_native_block_import_works_with_changes_trie() {
 fn full_wasm_block_import_works_with_changes_trie() {
 	let block1 = changes_trie_block();
 
-	let mut t = new_test_ext(COMPACT_CODE, true);
+	let mut t = new_test_ext(compact_code_unwrap(), true);
 	executor_call::<NeverNativeValue, fn() -> _>(
 		&mut t,
 		"Core_execute_block",

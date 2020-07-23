@@ -607,7 +607,7 @@ decl_module! {
 					// returns NoMember error in case of error.
 					let _ = Self::remove_and_replace_member(&who)?;
 					T::Currency::unreserve(&who, T::CandidacyBond::get());
-					Self::deposit_event(RawEvent::MemberRenounced(who.clone()));
+					Self::deposit_event(RawEvent::MemberRenounced(who));
 				},
 				Renouncing::RunnerUp => {
 					let mut runners_up_with_stake = Self::runners_up();
@@ -709,7 +709,7 @@ decl_event!(
 		Balance = BalanceOf<T>,
 		<T as frame_system::Trait>::AccountId,
 	{
-		/// A new term with new members. This indicates that enough candidates existed to run the
+		/// A new term with [new_members]. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
 		/// this purpose. A `NewTerm([])` indicates that some candidates got their bond slashed and
 		/// none were elected, whilst `EmptyTerm` means that no candidates existed to begin with.
@@ -717,13 +717,13 @@ decl_event!(
 		/// No (or not enough) candidates existed for this round. This is different from
 		/// `NewTerm([])`. See the description of `NewTerm`.
 		EmptyTerm,
-		/// A member has been removed. This should always be followed by either `NewTerm` ot
+		/// A [member] has been removed. This should always be followed by either `NewTerm` ot
 		/// `EmptyTerm`.
 		MemberKicked(AccountId),
-		/// A member has renounced their candidacy.
+		/// A [member] has renounced their candidacy.
 		MemberRenounced(AccountId),
-		/// A voter (first element) was reported (byt the second element) with the the report being
-		/// successful or not (third element).
+		/// A voter was reported with the the report being successful or not.
+		/// [voter, reporter, success]
 		VoterReported(AccountId, AccountId, bool),
 	}
 );
@@ -1002,7 +1002,7 @@ impl<T: Trait> Module<T> {
 			);
 			T::ChangeMembers::change_members_sorted(
 				&incoming,
-				&outgoing.clone(),
+				&outgoing,
 				&new_members_ids,
 			);
 			T::ChangeMembers::set_prime(prime);
