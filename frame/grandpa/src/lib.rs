@@ -626,7 +626,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		// Always issue a change if `session` says that the validators have changed.
 		// Even if their session keys are the same as before, the underlying economic
 		// identities have changed.
-		let current_set_id = if changed {
+		let current_set_id = if changed || <Stalled<T>>::exists() {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
 			if let Some((further_wait, median)) = <Stalled<T>>::take() {
 				let _ = Self::schedule_change(next_authorities, further_wait, Some(median));
