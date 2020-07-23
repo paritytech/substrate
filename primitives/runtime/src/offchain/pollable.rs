@@ -430,7 +430,10 @@ impl Future for HttpBodyFuture {
 /// immediately available but the response body needs to be driven separately.
 #[derive(Debug)]
 pub struct HttpResponse {
+	/// HTTP status code (e.g. 200 is "OK").
 	pub code: u16,
+	/// HTTP headers map.
 	pub headers: Vec<(Vec<u8>, Vec<u8>)>,
+	/// A future HTTP body.
 	pub body: HttpBodyFuture,
 }
