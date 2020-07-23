@@ -385,13 +385,14 @@ fn instantiate_and_call_and_deposit_event() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let subsistence = super::Config::<Test>::subsistence_threshold_uncached();
 
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 			// Check at the end to get hash on error easily
 			let creation = Contracts::instantiate(
 				Origin::signed(ALICE),
-				100,
+				subsistence,
 				GAS_LIMIT,
 				code_hash.into(),
 				vec![],
@@ -421,14 +422,14 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(BOB, 100)
+						pallet_balances::RawEvent::Endowed(BOB, subsistence)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, subsistence)
 					),
 					topics: vec![],
 				},
