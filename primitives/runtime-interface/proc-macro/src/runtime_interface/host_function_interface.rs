@@ -43,7 +43,7 @@ use std::iter::{Iterator, self};
 
 /// Generate the extern host functions for wasm and the `HostFunctions` struct that provides the
 /// implementations for the host functions on the host.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, with_tracing: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let extern_host_function_impls = get_runtime_interface(trait_def)?
 		.latest_versions()
@@ -57,7 +57,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 			t.extend(generate_exchangeable_host_function(m)?);
 			Ok::<_, Error>(t)
 		})?;
-	let host_functions_struct = generate_host_functions_struct(trait_def, is_wasm_only)?;
+	let host_functions_struct = generate_host_functions_struct(trait_def, is_wasm_only, with_tracing)?;
 
 	Ok(
 		quote! {
@@ -158,13 +158,21 @@ fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<Token
 
 /// Generate the `HostFunctions` struct that implements `wasm-interface::HostFunctions` to provide
 /// implementations for the extern host functions.
-fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool, with_tracing: bool)
+	-> Result<TokenStream>
+{
 	let crate_ = generate_crate_access();
 
 	let host_functions = get_runtime_interface(trait_def)?
 		.all_versions()
 		.map(|(version, method)|
-			generate_host_function_implementation(&trait_def.ident, method, version, is_wasm_only)
+			generate_host_function_implementation(
+				&trait_def.ident,
+				method,
+				version,
+				is_wasm_only,
+				with_tracing
+			)
 		)
 		.collect::<Result<Vec<_>>>()?;
 
@@ -194,6 +202,7 @@ fn generate_host_function_implementation(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
+	with_tracing: bool,
 ) -> Result<TokenStream> {
 	let name = create_host_function_ident(&method.sig.ident, version, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
@@ -207,6 +216,15 @@ fn generate_host_function_implementation(
 	let host_function_call = generate_host_function_call(&method.sig, version, is_wasm_only);
 	let into_preallocated_ffi_value = generate_into_preallocated_ffi_value(&method.sig)?;
 	let convert_return_value = generate_return_value_into_wasm_value(&method.sig);
+	let tracing = if with_tracing {
+		Some(quote!(
+			let __trace_span = #crate_::tracing::trace_span!(#name);
+			let __guard = __trace_span.enter();
+		))
+	} else {
+		None
+	};
+	
 
 	Ok(
 		quote! {
@@ -227,7 +245,7 @@ fn generate_host_function_implementation(
 						__function_context__: &mut dyn #crate_::sp_wasm_interface::FunctionContext,
 						args: &mut dyn Iterator<Item = #crate_::sp_wasm_interface::Value>,
 					) -> std::result::Result<Option<#crate_::sp_wasm_interface::Value>, String> {
-						#crate_::sp_tracing::enter_span!(#name);
+						#tracing
 						#( #wasm_to_ffi_values )*
 						#( #ffi_to_host_values )*
 						#host_function_call
