@@ -1101,7 +1101,7 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_limits(weight: Weight, len: usize) {
 		BlockWeight::mutate(|current_weight| {
-			current_weight.put(weight, DispatchClass::Normal)
+			current_weight.set(weight, DispatchClass::Normal)
 		});
 		AllExtrinsicsLen::put(len as u32);
 	}

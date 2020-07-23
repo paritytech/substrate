@@ -43,7 +43,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	fn check_extrinsic_weight(
 		info: &DispatchInfoOf<T::Call>,
 	) -> Result<(), TransactionValidityError> {
-		let max = T::BlockWeights::get().max_extrinsic.get(info.class);
+		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
 		match max {
 			Some(max) if info.weight > max => {
 				Err(InvalidTransaction::ExhaustsResources.into())
@@ -60,12 +60,12 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	) -> Result<crate::weights::ExtrinsicsWeight, TransactionValidityError> {
 		let weights = T::BlockWeights::get();
 		let mut all_weight = Module::<T>::block_weight();
-		let extrinsic_weight = info.weight.saturating_add(weights.base_extrinsic.get(info.class));
+		let extrinsic_weight = info.weight.saturating_add(weights.get(info.class).base_extrinsic);
 
-		if let Some(max) = weights.max_for_class.get(info.class) {
+		if let Some(max) = weights.get(info.class).max_total {
 			all_weight.checked_add(extrinsic_weight, info.class)
 				.map_err(|_| InvalidTransaction::ExhaustsResources)?;
-			let per_class = all_weight.get(info.class);
+			let per_class = *all_weight.get(info.class);
 
 			// Class allowance exceeded
 			if per_class > max {
@@ -75,7 +75,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			// Total block weight exceeded.
 			if all_weight.total() > weights.max_block {
 				// Check if we can use reserved pool though.
-				match weights.reserved.get(info.class) {
+				match weights.get(info.class).guaranteed {
 					Some(reserved) if per_class > reserved => {
 						return Err(InvalidTransaction::ExhaustsResources.into());
 					}
@@ -100,7 +100,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let current_len = Module::<T>::all_extrinsics_len();
 		let added_len = len as u32;
 		let next_len = current_len.saturating_add(added_len);
-		if next_len > length_limit.max.get(info.class) {
+		if next_len > *length_limit.max.get(info.class) {
 			Err(InvalidTransaction::ExhaustsResources.into())
 		} else {
 			Ok(next_len)

@@ -123,12 +123,12 @@ impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S,
 
 		let weights = T::block_weights();
 		// the computed ratio is only among the normal class.
-		let normal_max_weight = weights.max_for_class.normal
+		let normal_max_weight = weights.get(DispatchClass::Normal).max_total
 			.unwrap_or_else(|| weights.max_block);
 		let current_block_weight = <frame_system::Module<T>>::block_weight();
-		let normal_block_weight = current_block_weight
+		let normal_block_weight = *current_block_weight
 			.get(DispatchClass::Normal)
-			.min(normal_max_weight);
+			.min(&normal_max_weight);
 
 		let s = S::get();
 		let v = V::get();
@@ -344,7 +344,7 @@ impl<T: Trait> Module<T> where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			let base_fee = Self::weight_to_fee(T::block_weights().base_extrinsic.get(class));
+			let base_fee = Self::weight_to_fee(T::block_weights().get(class).base_extrinsic);
 			base_fee
 				.saturating_add(fixed_len_fee)
 				.saturating_add(adjusted_weight_fee)

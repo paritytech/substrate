@@ -15,56 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
-use frame_support::weights::{Weight, DispatchClass, constants};
+use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass, OneOrMany};
 use sp_runtime::{RuntimeDebug, Perbill};
 
 /// An object to track the currently used extrinsic weight in a block.
-pub type ExtrinsicsWeight = ForDispatchClass<Weight>;
-
-impl ExtrinsicsWeight {
-	/// Returns the total weight consumed by all extrinsics in the block.
-	pub fn total(&self) -> Weight {
-		self.normal
-			.saturating_add(self.operational)
-			.saturating_add(self.mandatory)
-	}
-
-	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_add(weight);
-	}
-
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
-	/// occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
-		Ok(())
-	}
-
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
-	/// `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_sub(weight);
-	}
-
-	/// Get a mutable reference to the current weight of a specific dispatch class.
-	fn get_mut(&mut self, class: DispatchClass) -> &mut Weight {
-		match class {
-			DispatchClass::Operational => &mut self.operational,
-			DispatchClass::Normal => &mut self.normal,
-			DispatchClass::Mandatory => &mut self.mandatory,
-		}
-	}
-
-	/// Set the weight of a specific dispatch class.
-	pub fn put(&mut self, new: Weight, class: DispatchClass) {
-		*self.get_mut(class) = new;
-	}
-}
+pub type ExtrinsicsWeight = PerDispatchClass<Weight>;
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone)]
@@ -73,7 +28,7 @@ pub struct BlockLength {
 	///
 	/// In the worst case, the total block length is going to be:
 	/// `MAX(max)`
-	pub max: ForDispatchClass<u32>,
+	pub max: PerDispatchClass<u32>,
 }
 
 impl Default for BlockLength {
@@ -89,69 +44,23 @@ impl BlockLength {
 	/// Create new `BlockLength` with `max` for every class.
 	pub fn max(max: u32) -> Self {
 		Self {
-			max: ForDispatchClass::new(max),
+			max: PerDispatchClass::new(|_| max),
 		}
 	}
 
 	/// Create new `BlockLength` with `max` for `Operational` & `Mandatory`
 	/// and `normal * max` for `Normal`.
 	pub fn max_with_normal_ratio(max: u32, normal: Perbill) -> Self {
-		let mut len = BlockLength::max(max);
-		len.max.normal = normal * max;
-		len
-	}
-}
-
-/// A struct holding value for each `DispatchClass`.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-pub struct ForDispatchClass<T> {
-	/// Value for `Normal` extrinsics.
-	pub normal: T,
-	/// Value for `Operational` extrinsics.
-	pub operational: T,
-	/// Value for `Mandatory` extrinsics.
-	pub mandatory: T,
-}
-
-impl<T: Copy> ForDispatchClass<T> {
-	/// Create new `ForDispatchClass` with the same value for every class.
-	pub fn new(val: T) -> Self {
 		Self {
-			normal: val,
-			operational: val,
-			mandatory: val,
-		}
-	}
-
-	/// Set the value to given class.
-	pub(crate) fn set(&mut self, value: T, class: ExtrinsicDispatchClass) {
-		match class {
-			ExtrinsicDispatchClass::All => {
-				self.normal = value;
-				self.operational = value;
-				self.mandatory = value;
-			},
-			ExtrinsicDispatchClass::One(DispatchClass::Normal) => {
-				self.normal = value;
-			},
-			ExtrinsicDispatchClass::One(DispatchClass::Operational) => {
-				self.operational = value;
-			},
-			ExtrinsicDispatchClass::One(DispatchClass::Mandatory) => {
-				self.mandatory = value;
-			},
-		}
-	}
-
-	/// Get value for given class.
-	pub fn get(&self, class: DispatchClass) -> T {
-		match class {
-			DispatchClass::Normal => self.normal,
-			DispatchClass::Operational => self.operational,
-			DispatchClass::Mandatory => self.mandatory,
+			max: PerDispatchClass::new(|class| if class == DispatchClass::Normal {
+				normal * max
+			} else {
+				max
+			}),
 		}
 	}
 }
+
 #[derive(Default, RuntimeDebug)]
 pub struct ValidationErrors {
 	pub has_errors: bool,
@@ -184,35 +93,42 @@ pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 /// to use in tests.
 const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 
-/// Block weight limits configuration.
+/// `DispatchClass`-specific weight configuration.
 #[derive(RuntimeDebug, Clone)]
-pub struct BlockWeights {
-	/// Base weight of block execution.
-	pub base_block: Weight,
+pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
-	pub base_extrinsic: ForDispatchClass<Weight>,
-	/// Maximal weight of single extrinsic of given class. Should NOT include `base_extrinsic` cost.
+	pub base_extrinsic: Weight,
+	/// Maximal weight of single extrinsic. Should NOT include `base_extrinsic` cost.
 	///
 	/// `None` indicates that this class of extrinsics doesn't have a limit.
-	pub max_extrinsic: ForDispatchClass<Option<Weight>>,
-	/// Block reserved allowance for all extrinsics of a particular class.
-	///
-	/// Setting to `None` indicates that extrinsics of that class are allowed
-	/// to go over total block weight (but at most `max_allowance`).
-	/// Setting to `Some(x)` guarantees that at least `x` weight of particular class
-	/// is processed in every block.
-	pub reserved: ForDispatchClass<Option<Weight>>,
-	/// Block maximal total weight for all extrinsics of a particular class.
+	pub max_extrinsic: Option<Weight>,
+	/// Block maximal total weight for all extrinsics of given class.
 	///
 	/// `None` indicates that weight sum of this class of extrinsics is not
 	/// restricted. Use this value carefuly, since it might produce heavily oversized
 	/// blocks.
 	///
-	/// In the worst case, the total weight consumed by a block is going to be:
-	/// `MAX(max_for_class) + MAX(reserved)`.
-	pub max_for_class: ForDispatchClass<Option<Weight>>,
+	/// In the worst case, the total weight consumed by the class is going to be:
+	/// `MAX(max) + MAX(reserved)`.
+	pub max_total: Option<Weight>,
+	/// Block reserved allowance for all extrinsics of a particular class.
+	///
+	/// Setting to `None` indicates that extrinsics of that class are allowed
+	/// to go over total block weight (but at most `max`).
+	/// Setting to `Some(x)` guarantees that at least `x` weight of particular class
+	/// is processed in every block.
+	pub guaranteed: Option<Weight>,
+}
+
+/// Block weight limits configuration.
+#[derive(RuntimeDebug, Clone)]
+pub struct BlockWeights {
+	/// Base weight of block execution.
+	pub base_block: Weight,
 	/// Maximal total weight consumed by all kinds of extrinsics.
 	pub max_block: Weight,
+	/// Weight limits for extrinsics of given dispatch class.
+	pub per_class: PerDispatchClass<WeightsPerClass>,
 }
 
 impl Default for BlockWeights {
@@ -225,6 +141,11 @@ impl Default for BlockWeights {
 }
 
 impl BlockWeights {
+	/// Get per-class weight settings.
+	pub fn get(&self, class: DispatchClass) -> &WeightsPerClass {
+		self.per_class.get(class)
+	}
+
 	/// Verifies correctness of this `BlockWeights` object.
 	pub fn validate(self) -> ValidationResult {
 		fn or_max(w: Option<Weight>) -> Weight {
@@ -232,46 +153,48 @@ impl BlockWeights {
 		}
 		let mut error = ValidationErrors::default();
 
-		for class in &DispatchClass::all() {
-			let class = *class;
-			let max_for_class = or_max(self.max_for_class.get(class));
-			let base_extrinsic = self.base_extrinsic.get(class);
-			let reserved = or_max(self.reserved.get(class));
-			// Make sure that if total is set it's greater than base_block && base_extrinsic
+		for class in DispatchClass::all() {
+			let weights = self.per_class.get(*class);
+			let max_for_class = or_max(weights.max_total);
+			let base_for_class = weights.base_extrinsic;
+			let reserved = or_max(weights.guaranteed);
+			// Make sure that if total is set it's greater than base_block &&
+			// base_for_class
 			error_assert!(
-				(max_for_class > self.base_block && max_for_class > base_extrinsic)
+				(max_for_class > self.base_block && max_for_class > base_for_class)
 				|| max_for_class == 0,
 				&mut error,
 				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
-				class, max_for_class, self.base_block, base_extrinsic
+				class, max_for_class, self.base_block, base_for_class
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(
-				self.max_extrinsic.get(class).unwrap_or(0) <= max_for_class.saturating_sub(base_extrinsic),
+				weights.max_extrinsic.unwrap_or(0) <= max_for_class.saturating_sub(base_for_class),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
-				class, self.max_extrinsic.get(class), max_for_class.saturating_sub(base_extrinsic)
+				class, weights.max_extrinsic,
+				max_for_class.saturating_sub(base_for_class)
 			);
-			// Make sure that if reserved is set it's greater than base_extrinsic.
+			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
-				reserved > base_extrinsic || reserved == 0,
+				reserved > base_for_class || reserved == 0,
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
-				class, reserved, base_extrinsic
+				class, reserved, base_for_class
 			);
-			// Make sure max block is greater than max_for_class if it's set.
+			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
-				self.max_block >= self.max_for_class.get(class).unwrap_or(0),
+				self.max_block >= weights.max_total.unwrap_or(0),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
-				class, self.max_block, self.max_for_class.get(class)
+				class, self.max_block, weights.max_total
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
-				self.max_block > base_extrinsic + self.base_block,
+				self.max_block > base_for_class + self.base_block,
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
-				class, self.max_block, base_extrinsic + self.base_block
+				class, self.max_block, base_for_class + self.base_block
 			);
 		}
 
@@ -290,10 +213,14 @@ impl BlockWeights {
 	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
 			.base_block(0)
-			.base_extrinsic(0, ExtrinsicDispatchClass::All)
-			.max_for_non_mandatory(block_weight)
+			.for_class(DispatchClass::all(), |weights| {
+				weights.base_extrinsic = 0;
+			})
+			.for_class(DispatchClass::non_mandatory(), |weights| {
+				weights.max_total = block_weight.into();
+			})
 			.build()
-			.expect("We only specify max_for_class and leave base values as defaults; qed")
+			.expect("We only specify max_total and leave base values as defaults; qed")
 	}
 
 	/// Create a sensible default weights system given only expected maximal block weight and the
@@ -308,9 +235,13 @@ impl BlockWeights {
 	) -> Self {
 		let normal_weight = normal_ratio * expected_block_weight;
 		Self::builder()
-			.max_for_class(normal_weight, DispatchClass::Normal)
-			.max_for_class(expected_block_weight, DispatchClass::Operational)
-			.reserved(expected_block_weight - normal_weight, DispatchClass::Operational)
+			.for_class(DispatchClass::Normal, |weights| {
+				weights.max_total = normal_weight.into();
+			})
+			.for_class(DispatchClass::Operational, |weights| {
+				weights.max_total = expected_block_weight.into();
+				weights.guaranteed = (expected_block_weight - normal_weight).into();
+			})
 			.avg_block_initialization(Perbill::from_percent(10))
 			.build()
 			.expect("Sensible defaults are tested to be valid; qed")
@@ -320,36 +251,22 @@ impl BlockWeights {
 	///
 	/// By default all kinds except of `Mandatory` extrinsics are disallowed.
 	pub fn builder() -> BlockWeightsBuilder {
-		let max_for_class = ForDispatchClass {
-			normal: Some(0),
-			operational: Some(0),
-			mandatory: None,
-		};
 		BlockWeightsBuilder {
 			weights: BlockWeights {
 				base_block: constants::BlockExecutionWeight::get(),
-				base_extrinsic: ForDispatchClass::new(constants::ExtrinsicBaseWeight::get()),
-				max_extrinsic: max_for_class.clone(),
-				reserved: max_for_class.clone(),
-				max_for_class,
 				max_block: 0,
+				per_class: PerDispatchClass::new(|class| {
+					let initial = if class == DispatchClass::Mandatory { None } else { Some(0) };
+					WeightsPerClass {
+						base_extrinsic: constants::ExtrinsicBaseWeight::get(),
+						max_extrinsic: None,
+						max_total: initial,
+						guaranteed: initial,
+					}
+				}),
 			},
 			init_cost: Perbill::zero(),
 		}
-	}
-}
-
-/// Dispatch class to apply change to.
-pub enum ExtrinsicDispatchClass {
-	/// All dispatch classes.
-	All,
-	/// Single dispatch class.
-	One(DispatchClass),
-}
-
-impl From<DispatchClass> for ExtrinsicDispatchClass {
-	fn from(c: DispatchClass) -> Self {
-		ExtrinsicDispatchClass::One(c)
 	}
 }
 
@@ -366,45 +283,6 @@ impl BlockWeightsBuilder {
 		self
 	}
 
-	/// Set base extrinsic weight for given dispatch class.
-	pub fn base_extrinsic(
-		mut self,
-		weight: Weight,
-		class: impl Into<ExtrinsicDispatchClass>,
-	) -> Self {
-		self.weights.base_extrinsic.set(weight, class.into());
-		self
-	}
-
-	/// Set maximal block total weight for given dispatch class.
-	pub fn max_for_class(
-		mut self,
-		max_allowance: Weight,
-		class: impl Into<ExtrinsicDispatchClass>,
-	) -> Self {
-		self.weights.max_for_class.set(max_allowance.into(), class.into());
- 		self
-	}
-
-	/// Set maximal block total weight for `Normal` and `Operational` dispatch class.
-	pub fn max_for_non_mandatory(
-		self,
-		max_allowance: Weight,
-	) -> Self {
-		self.max_for_class(max_allowance, DispatchClass::Normal)
-			.max_for_class(max_allowance, DispatchClass::Operational)
-	}
-
-	/// Set reserved allowance for given dispatch class.
-	pub fn reserved(
-		mut self,
-		reserved: Weight,
-		class: impl Into<ExtrinsicDispatchClass>,
-	) -> Self {
-		self.weights.reserved.set(reserved.into(), class.into());
-		self
-	}
-
 	/// Average block initialization weight cost.
 	///
 	/// This value is used to derive maximal allowed extrinsic weight for each
@@ -414,6 +292,21 @@ impl BlockWeightsBuilder {
 		self
 	}
 
+	/// Set parameters for particular class.
+	///
+	/// Note: `None` values of `max_extrinsic` will be overwritten in `build` in case
+	/// `avg_block_initialization` rate is set to a non-zero value.
+	pub fn for_class(
+		mut self,
+		class: impl OneOrMany<DispatchClass>,
+		action: impl Fn(&mut WeightsPerClass),
+	) -> Self {
+		for class in class.into_iter() {
+			action(self.weights.per_class.get_mut(class));
+		}
+ 		self
+	}
+
 	/// Construct the `BlockWeights` object.
 	pub fn build(self) -> ValidationResult {
 		use sp_runtime::traits::Saturating;
@@ -421,14 +314,15 @@ impl BlockWeightsBuilder {
 		let Self { mut weights, init_cost } = self;
 
 		let max_rate = Perbill::one().saturating_sub(init_cost);
-		for class in &DispatchClass::all() {
-			let class = *class;
+		for class in DispatchClass::all() {
+			let per_class = weights.per_class.get_mut(*class);
 			// compute max weight of single extrinsic
-			let max_for_class = weights.max_for_class.get(class);
-			let max_extrinsic = max_for_class
-				.map(|x| max_rate * x)
-				.map(|x| x.saturating_sub(weights.base_extrinsic.get(class)));
-			weights.max_extrinsic.set(max_extrinsic, class.into());
+			let max_for_class = per_class.max_total;
+			if per_class.max_extrinsic.is_none() && !init_cost.is_zero() {
+				per_class.max_extrinsic = max_for_class
+					.map(|x| max_rate * x)
+					.map(|x| x.saturating_sub(per_class.base_extrinsic));
+			}
 			// Compute max block
 			weights.max_block = match max_for_class {
 				Some(max) if max > weights.max_block => max,
