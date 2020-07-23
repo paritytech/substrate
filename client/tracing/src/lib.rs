@@ -313,7 +313,7 @@ impl Subscriber for ProfilingSubscriber {
 		}
 		let span_datum = SpanDatum {
 			id: id.clone(),
-			parent_id: self.current_span.id(),
+			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
 			level: attrs.metadata().level().clone(),
@@ -343,7 +343,7 @@ impl Subscriber for ProfilingSubscriber {
 			target: event.metadata().target().to_owned(),
 			level: event.metadata().level().clone(),
 			values,
-			parent_id: self.current_span.id(),
+			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
 		};
 		self.trace_handler.handle_event(trace_event);
 	}
@@ -604,6 +604,7 @@ mod tests {
 	#[test]
 	fn test_parent_id_with_threads() {
 		use std::sync::mpsc;
+		use std::thread;
 
 		let (sub, spans, events) = setup_subscriber();
 		let _sub_guard = tracing::subscriber::set_global_default(sub);
@@ -611,7 +612,7 @@ mod tests {
 		let _guard1 = span1.enter();
 
 		let (tx, rx) = mpsc::channel();
-		let handle = std::thread::spawn(move || {
+		let handle = thread::spawn(move || {
 			let span2 = tracing::info_span!(target: "test_target", "test_span2");
 			let _guard2 = span2.enter();
 			// emit event
@@ -626,7 +627,7 @@ mod tests {
 
 		// wait for Event to be dispatched and stored
 		while events.lock().is_empty() {
-			std::thread::sleep(Duration::from_millis(1));
+			thread::sleep(Duration::from_millis(1));
 		}
 
 		// emit new event (will be second item in Vec) while span2 still active in other thread
@@ -638,19 +639,34 @@ mod tests {
 
 		// wait for Span to be dispatched and stored
 		while spans.lock().is_empty() {
-			std::thread::sleep(Duration::from_millis(1));
+			thread::sleep(Duration::from_millis(1));
 		}
 		let span2 = spans.lock().remove(0);
 		let event1 = events.lock().remove(0);
 		drop(_guard1);
 		drop(span1);
+
+		// emit event with no parent
+		tracing::event!(target: "test_target", tracing::Level::INFO, "test_event3");
+
 		let span1 = spans.lock().remove(0);
 		let event2 = events.lock().remove(0);
 
 		assert_eq!(event1.values.string_values.get("message").unwrap(), "test_event1");
 		assert_eq!(event2.values.string_values.get("message").unwrap(), "test_event2");
+		assert!(span1.parent_id.is_none());
+		assert!(span2.parent_id.is_none());
 		assert_eq!(span2.id, event1.parent_id.unwrap());
 		assert_eq!(span1.id, event2.parent_id.unwrap());
 		assert_ne!(span2.id, span1.id);
+
+		let event3 = events.lock().remove(0);
+		assert!(event3.parent_id.is_none());
 	}
+}
+
+struct WasmSpan<'a>{
+	name: &'a str,
+	target: &'a str,
+	data: &'a
 }
