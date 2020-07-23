@@ -68,7 +68,7 @@ parameter_types! {
 }
 impl Trait for Test {
 	type Event = ();
-	type SwapAction = BalanceSwapAction<Test, Balances>;
+	type SwapAction = BalanceSwapAction<u64, Balances>;
 	type ProofLimit = ProofLimit;
 }
 type System = frame_system::Module<Test>;
