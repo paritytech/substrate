@@ -25,7 +25,7 @@ use crate::{
 };
 use sc_client_api::{
 	self, light::RemoteBlockchain, execution_extensions::ExtensionsFactory, ExecutorProvider, 
-	ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider, backend::RemoteBackend,
+	ForkBlocks, BadBlocks, UsageProvider, backend::RemoteBackend,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use sc_chain_spec::get_extension;
@@ -55,7 +55,7 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{LocalTransactionPool, MaintainedTransactionPool};
 use prometheus_endpoint::Registry;
 use sc_client_db::{Backend, DatabaseSettings};
-use sp_core::traits::CodeExecutor;
+use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_runtime::BuildStorage;
 use sc_client_api::{
 	BlockBackend, BlockchainEvents,
@@ -291,7 +291,7 @@ pub fn new_client<E, Block, RA>(
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
 ) -> Result<(

@@ -433,12 +433,12 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			Ok(node_rpc::create_light(light_deps))
 		})?
 		.build_light()?;
-	
+
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {	
+pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 	new_light_base(config).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})

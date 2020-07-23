@@ -50,7 +50,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
+use sp_core::{ExecutionContext, blake2_256, traits::SpawnNamed, Pair, Public, sr25519, ed25519};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -58,9 +58,8 @@ use sc_client_api::{
 	ExecutionStrategy, BlockBackend,
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
-use sp_core::{Pair, Public, sr25519, ed25519};
 use sc_block_builder::BlockBuilderProvider;
-use futures::{executor, task};
+use futures::executor;
 
 /// Keyring full of accounts for benching.
 ///
@@ -145,7 +144,7 @@ impl BlockType {
 	pub fn to_content(self, size: Option<usize>) -> BlockContent {
 		BlockContent {
 			block_type: self,
-			size: size,
+			size,
 		}
 	}
 }
@@ -197,16 +196,13 @@ impl TaskExecutor {
 	}
 }
 
-impl task::Spawn for TaskExecutor {
-	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
-	-> Result<(), task::SpawnError> {
-		self.pool.spawn_obj(future)
+impl SpawnNamed for TaskExecutor {
+	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.pool.spawn_ok(future);
 	}
-}
 
-impl CloneableSpawn for TaskExecutor {
-	fn clone(&self) -> Box<dyn CloneableSpawn> {
-		Box::new(Clone::clone(self))
+	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+		self.pool.spawn_ok(future);
 	}
 }
 
