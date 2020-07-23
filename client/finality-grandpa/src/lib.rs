@@ -84,7 +84,8 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use parking_lot::RwLock;
 
 use finality_grandpa::Error as GrandpaError;
-use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
+use finality_grandpa::{voter, voter_set::VoterSet};
+pub use finality_grandpa::BlockNumberOps;
 
 use std::{fmt, io};
 use std::sync::Arc;
@@ -126,7 +127,7 @@ pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
 pub use import::GrandpaBlockImport;
 pub use justification::GrandpaJustification;
-pub use light_import::light_block_import;
+pub use light_import::{light_block_import, GrandpaLightBlockImport};
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };

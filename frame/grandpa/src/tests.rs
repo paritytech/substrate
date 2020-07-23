@@ -19,13 +19,13 @@
 
 #![cfg(test)]
 
-use super::*;
+use super::{Call, *};
 use crate::mock::*;
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_ok,
-	traits::{Currency, OnFinalize, UnfilteredDispatchable},
+	traits::{Currency, OnFinalize},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -316,7 +316,9 @@ fn time_slot_have_sane_ord() {
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
 }
 
-fn test_authorities() -> AuthorityList {
+/// Returns a list with 3 authorities with known keys:
+/// Alice, Bob and Charlie.
+pub fn test_authorities() -> AuthorityList {
 	let authorities = vec![
 		Ed25519Keyring::Alice,
 		Ed25519Keyring::Bob,
@@ -375,8 +377,13 @@ fn report_equivocation_current_set_works() {
 			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
 
 		// report the equivocation and the tx should be dispatched successfully
-		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
+		assert_ok!(
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+		);
 
 		start_era(2);
 
@@ -456,8 +463,13 @@ fn report_equivocation_old_set_works() {
 
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
-		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
-		assert_ok!(inner.dispatch_bypass_filter(Origin::signed(1)));
+		assert_ok!(
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+		);
 
 		start_era(3);
 
@@ -516,10 +528,14 @@ fn report_equivocation_invalid_set_id() {
 			(1, H256::random(), 10, &equivocation_keyring),
 		);
 
-		// it should be filtered by the signed extension validation
+		// the call for reporting the equivocation should error
 		assert_err!(
-			report_equivocation(equivocation_proof, key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidSetId,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
 		);
 	});
 }
@@ -555,8 +571,12 @@ fn report_equivocation_invalid_session() {
 		// report an equivocation for the current set using an key ownership
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
-			report_equivocation(equivocation_proof, key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidSession,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				key_owner_proof,
+			),
+			Error::<Test>::InvalidEquivocationProof,
 		);
 	});
 }
@@ -596,8 +616,12 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// report an equivocation for the current set using a key ownership
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
-			report_equivocation(equivocation_proof, invalid_key_owner_proof),
-			equivocation::ReportEquivocationValidityError::InvalidKeyOwnershipProof,
+			Grandpa::report_equivocation_unsigned(
+				Origin::none(),
+				equivocation_proof,
+				invalid_key_owner_proof,
+			),
+			Error::<Test>::InvalidKeyOwnershipProof,
 		);
 	});
 }
@@ -623,8 +647,12 @@ fn report_equivocation_invalid_equivocation_proof() {
 
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
-				report_equivocation(equivocation_proof, key_owner_proof.clone()),
-				equivocation::ReportEquivocationValidityError::InvalidEquivocationProof,
+				Grandpa::report_equivocation_unsigned(
+					Origin::none(),
+					equivocation_proof,
+					key_owner_proof.clone(),
+				),
+				Error::<Test>::InvalidEquivocationProof,
 			);
 		};
 
@@ -658,5 +686,84 @@ fn report_equivocation_invalid_equivocation_proof() {
 			(1, H256::random(), 10, &equivocation_keyring),
 			(1, H256::random(), 10, &Ed25519Keyring::Dave),
 		));
+	});
+}
+
+#[test]
+fn report_equivocation_validate_unsigned_prevents_duplicates() {
+	use sp_runtime::transaction_validity::{
+		InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
+		TransactionValidity, ValidTransaction,
+	};
+
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		// generate and report an equivocation for the validator at index 0
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+		let set_id = Grandpa::current_set_id();
+
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let call = Call::report_equivocation_unsigned(
+			equivocation_proof.clone(),
+			key_owner_proof.clone(),
+		);
+
+		// only local/inblock reports are allowed
+		assert_eq!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::External,
+				&call,
+			),
+			InvalidTransaction::Call.into(),
+		);
+
+		// the transaction is valid when passed as local
+		let tx_tag = (
+			equivocation_key,
+			set_id,
+			1u64,
+		);
+
+		assert_eq!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+				TransactionSource::Local,
+				&call,
+			),
+			TransactionValidity::Ok(ValidTransaction {
+				priority: TransactionPriority::max_value(),
+				requires: vec![],
+				provides: vec![("GrandpaEquivocation", tx_tag).encode()],
+				longevity: TransactionLongevity::max_value(),
+				propagate: false,
+			})
+		);
+
+		// the pre dispatch checks should also pass
+		assert_ok!(<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call));
+
+		// we submit the report
+		Grandpa::report_equivocation_unsigned(Origin::none(), equivocation_proof, key_owner_proof)
+			.unwrap();
+
+		// the report should now be considered stale and the transaction is invalid
+		assert_err!(
+			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
+			InvalidTransaction::Stale,
+		);
 	});
 }

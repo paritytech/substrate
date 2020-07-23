@@ -515,12 +515,14 @@ where
 			equivocation,
 		);
 
-		self.client.runtime_api()
-			.submit_report_equivocation_extrinsic(
+		self.client
+			.runtime_api()
+			.submit_report_equivocation_unsigned_extrinsic(
 				&BlockId::Hash(best_header.hash()),
 				equivocation_proof,
 				key_owner_proof,
-			).map_err(Error::Client)?;
+			)
+			.map_err(Error::Client)?;
 
 		Ok(())
 	}

@@ -359,12 +359,13 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		futures::executor::block_on(
@@ -412,12 +413,13 @@ mod tests {
 	#[test]
 	fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
@@ -447,12 +449,13 @@ mod tests {
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		let genesis_hash = client.info().best_hash;
@@ -509,12 +512,13 @@ mod tests {
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let txpool = Arc::new(
-			BasicPool::new(
-				Default::default(),
-				Arc::new(FullChainApi::new(client.clone(), None)),
-				None,
-			).0
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			Arc::new(FullChainApi::new(client.clone(), None)),
+			None,
+			spawner,
+			client.clone(),
 		);
 
 		futures::executor::block_on(

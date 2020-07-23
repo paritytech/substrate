@@ -678,7 +678,7 @@ pub trait TestNetFactory: Sized {
 			protocol_id: ProtocolId::from(&b"test-protocol-name"[..]),
 			import_queue,
 			block_announce_validator: config.block_announce_validator
-				.unwrap_or(Box::new(DefaultBlockAnnounceValidator)),
+				.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator)),
 			metrics_registry: None,
 		}).unwrap();
 

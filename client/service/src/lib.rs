@@ -38,13 +38,12 @@ use std::{io, pin::Pin};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
-use wasm_timer::Instant;
 use std::task::Poll;
 use parking_lot::Mutex;
 
 use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
-use log::{log, warn, debug, error, Level};
+use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -53,9 +52,10 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client, new_client,
-	ServiceBuilder, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
+	new_full_client, new_client, new_full_parts, new_light_parts, build,
+	ServiceParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TLightBackendWithHash, TLightClientWithBackend,
+	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
@@ -151,25 +151,15 @@ impl TelemetryOnConnectSinks {
 
 /// The individual components of the chain, built by the service builder. You are encouraged to
 /// deconstruct this into its fields.
-pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, TCl> {
-	/// A blockchain client.
-	pub client: Arc<TCl>,
-	/// A shared transaction pool instance.
-	pub transaction_pool: Arc<TExPool>,
-	/// The chain task manager. 
+pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TCl> {
+	/// The chain task manager.
 	pub task_manager: TaskManager,
-	/// A keystore that stores keys.
-	pub keystore: sc_keystore::KeyStorePtr,
 	/// A shared network instance.
 	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// RPC handlers that can perform RPC queries.
 	pub rpc_handlers: Arc<RpcHandlers>,
-	/// A shared instance of the chain selection algorithm.
-	pub select_chain: Option<TSc>,
 	/// Sinks to propagate network status updates.
 	pub network_status_sinks: NetworkStatusSinks<TBl>,
-	/// A prometheus metrics registry, (if enabled).
-	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// Shared Telemetry connection sinks,
 	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
 	/// A shared offchain workers instance.
@@ -216,8 +206,6 @@ async fn build_network_future<
 	};
 
 	loop {
-		let before_polling = Instant::now();
-
 		futures::select!{
 			// List of blocks that the client has imported.
 			notification = imported_blocks_stream.next() => {
@@ -334,15 +322,6 @@ async fn build_network_future<
 				ready_sink.send((status, state));
 			}
 		}
-
-		// Now some diagnostic for performances.
-		let polling_dur = before_polling.elapsed();
-		log!(
-			target: "service",
-			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
-			"⚠️  Polling the network future took {:?}",
-			polling_dur
-		);
 	}
 }
 
@@ -577,11 +556,14 @@ mod tests {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(BasicPool::new(
+		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let pool = BasicPool::new_full(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
-		).0);
+			spawner,
+			client.clone(),
+		);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {

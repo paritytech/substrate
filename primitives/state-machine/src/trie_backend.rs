@@ -273,7 +273,7 @@ impl<S, H, P> Backend<H> for TrieBackend<S, H, P> where
 		let mut write_overlay = S::Overlay::default();
 		let mut root = match self.essence.child_root_encoded(child_info) {
 			Ok(value) =>
-				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
+				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or_else(|| default_root.clone()),
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
 				default_root.clone()

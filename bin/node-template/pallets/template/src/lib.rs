@@ -9,7 +9,7 @@
 /// For more guidance on Substrate FRAME, see the example pallet
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
-use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
+use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch, traits::Get};
 use frame_system::ensure_signed;
 
 #[cfg(test)]
@@ -45,6 +45,7 @@ decl_event!(
 		/// Just a dummy event.
 		/// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
 		/// To emit this event, we call the deposit function, from our runtime functions
+		/// [something, who]
 		SomethingStored(u32, AccountId),
 	}
 );
@@ -75,7 +76,7 @@ decl_module! {
 		/// Just a dummy entry point.
 		/// function that can be called by the external world as an extrinsics call
 		/// takes a parameter of the type `AccountId`, stores it, and emits an event
-		#[weight = 0]
+		#[weight = 10_000 + T::DbWeight::get().writes(1)]
 		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let who = ensure_signed(origin)?;
@@ -91,7 +92,7 @@ decl_module! {
 
 		/// Another dummy entry point.
 		/// takes no parameters, attempts to increment storage value, and possibly throws an error
-		#[weight = 0]
+		#[weight = 10_000 + T::DbWeight::get().reads_writes(1,1)]
 		pub fn cause_error(origin) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let _who = ensure_signed(origin)?;

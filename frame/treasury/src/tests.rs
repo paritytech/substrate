@@ -33,7 +33,7 @@ use sp_runtime::{
 };
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 
@@ -149,6 +149,7 @@ impl Trait for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type BurnDestination = ();  // Just gets burned.
 	type WeightInfo = ();
 }
 type System = frame_system::Module<Test>;
