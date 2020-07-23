@@ -283,13 +283,13 @@ decl_module! {
 		#[weight = weight_for::schedule_forced_change::<T>(next_authorities.len())]
 		fn schedule_forced_change(
 			origin,
-			next_authorities: AuthorityList,
+			next_authorities: Vec<AuthorityId>,
 			best_finalized_block_number: T::BlockNumber,
 		) {
 			ensure_root(origin)?;
 
 			Self::schedule_change(
-				next_authorities,
+				next_authorities.into_iter().map(|k| (k, 1)).collect(),
 				1000.into(),
 				Some(best_finalized_block_number),
 			)?;

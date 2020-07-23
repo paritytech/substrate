@@ -69,7 +69,7 @@ benchmarks! {
 		let n in 0 .. 1000;
 
 		let next_authorities = (0..n)
-			.map(|n| (AuthorityId::from_slice(&n.to_be_bytes().repeat(8)), 1))
+			.map(|n| AuthorityId::from_slice(&n.to_be_bytes().repeat(8)))
 			.collect();
 
 		let best_finalized_block_number = 1.into();
