@@ -58,6 +58,9 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"wat",
+	# We are linking the wat crate which uses std and therefore brings with it the
+	# std panic handler. Therefore we need to disable out own panic handlers. Mind that
+	# we still override the std memory allocator.
 	"sp-io/disable_panic_handler",
 	"sp-io/disable_oom",
 ]

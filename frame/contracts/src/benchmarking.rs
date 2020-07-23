@@ -76,17 +76,17 @@ fn contract_with_call_body<T: Trait>(body: FuncBody) -> (Vec<u8>, <T::Hashing as
     (bytes, hash)
 }
 
-fn expanded_contract<T: Trait>(expansions: u32) -> (Vec<u8>, <T::Hashing as Hash>::Output) {
+fn expanded_contract<T: Trait>(target_bytes: u32) -> (Vec<u8>, <T::Hashing as Hash>::Output) {
     use parity_wasm::elements::{
         Instruction::{self, If, I32Const, Return, End},
         BlockType, Instructions,
     };
     // Base size of a contract is 47 bytes and each expansion adds 6 bytes.
-    // We do one expansion less to account for the two the size fields inside the binary
-    // module representation which are leb128 encoded and therefore grow in size when
-    // the contract grows. We are not allowed to overshoot because of the maximum code
-    // size that is enforced by `put_code`.
-    let expansions = (expansions.saturating_sub(47) as usize / 6).saturating_sub(1);
+    // We do one expansion less to account for the code section and function body
+    // size fields inside the binary wasm module representation which are leb128 encoded
+    // and therefore grow in size when the contract grows. We are not allowed to overshoot
+    // because of the maximum code size that is enforced by `put_code`.
+    let expansions = (target_bytes.saturating_sub(47) / 6).saturating_sub(1) as usize;
     const EXPANSION: [Instruction; 4] = [
         I32Const(0),
         If(BlockType::NoResult),
