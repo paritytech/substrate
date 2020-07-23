@@ -155,7 +155,7 @@ mod tests {
 	use std::{collections::HashSet, convert::TryInto, sync::Arc};
 	use jsonrpc_core::{Notification, Output, types::Params};
 
-	use parity_scale_codec::Encode;
+	use parity_scale_codec::Decode;
 	use sc_block_builder::BlockBuilder;
 	use sc_finality_grandpa::{report, AuthorityId, GrandpaJustificationSubscribers, GrandpaJustification};
 	use sp_blockchain::HeaderBackend;
@@ -387,11 +387,7 @@ mod tests {
 				precommits: vec![precommit],
 			};
 
-			GrandpaJustification::from_commit(
-				&client,
-				round,
-				commit,
-			).unwrap()
+			GrandpaJustification::from_commit(&client, round, commit).unwrap()
 		};
 
 		(block_header, justification)
@@ -403,7 +399,8 @@ mod tests {
 		let (meta, receiver) = setup_session();
 
 		// Subscribe
-		let sub_request = r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
+		let sub_request =
+			r#"{"jsonrpc":"2.0","method":"grandpa_subscribeJustifications","params":[],"id":1}"#;
 
 		let resp = io.handle_request_sync(sub_request, meta.clone());
 		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
@@ -423,12 +420,16 @@ mod tests {
 
 		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
 		let mut result = json_map["result"].take();
-		let recv_block_header: Header<u64, BlakeTwo256> = serde_json::from_value(result["header"].take()).unwrap();
-		let recv_justification: Vec<u8> = serde_json::from_value(result["justification"].take()).unwrap();
+		let recv_block_header: Header<u64, BlakeTwo256> =
+			serde_json::from_value(result["header"].take()).unwrap();
+		let recv_justification: Vec<u8> =
+			serde_json::from_value(result["justification"].take()).unwrap();
+		let recv_justification: GrandpaJustification<Block> =
+			Decode::decode(&mut &recv_justification[..]).unwrap();
 
 		assert_eq!(recv.method, "grandpa_justifications");
 		assert_eq!(recv_sub_id, sub_id);
 		assert_eq!(recv_block_header, block_header);
-		assert_eq!(recv_justification, justification.encode());
+		assert_eq!(recv_justification, justification);
 	}
 }
