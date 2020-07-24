@@ -6,25 +6,10 @@ edition = "2018"
 license = "Apache-2.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-autotests = false
 
 [dependencies]
 quote = "1"
 syn = { version = "1", default-features = false }
 
-[dev-dependencies]
-tokio = { version = "0.2.13", features = ["macros"] }
-futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { path = "../../client/service" }
-trybuild = { version = "1.0", features = ["diff"] }
-
 [lib]
 proc-macro = true
-
-[[test]]
-name = "basic"
-path = "tests/basic.rs"
-
-[[test]]
-name = "errors"
-path = "tests/errors.rs"

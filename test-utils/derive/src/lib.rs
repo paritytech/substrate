@@ -63,13 +63,13 @@ fn parse_knobs(
 		#header
 		#(#attrs)*
 		#vis #sig {
-			use futures::future::FutureExt;
+			use substrate_test_utils::futures::future::FutureExt;
 
 			let #task_executor_name: #task_executor_type = (|fut, _| {
-				tokio::spawn(fut).map(drop)
+				substrate_test_utils::tokio::spawn(fut).map(drop)
 			})
 			.into();
-			let timeout_task = tokio::time::delay_for(
+			let timeout_task = substrate_test_utils::tokio::time::delay_for(
 				std::time::Duration::from_secs(
 					std::env::var("SUBSTRATE_TEST_TIMEOUT")
 						.ok()
@@ -81,9 +81,9 @@ fn parse_knobs(
 			}
 			.fuse();
 
-			futures::pin_mut!(timeout_task, actual_test_task);
+			substrate_test_utils::futures::pin_mut!(timeout_task, actual_test_task);
 
-			futures::select! {
+			substrate_test_utils::futures::select! {
 				_ = timeout_task => {
 					panic!("the test took too long");
 				},

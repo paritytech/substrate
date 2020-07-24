@@ -8614,17 +8614,20 @@ dependencies = [
 [[package]]
 name = "substrate-test-utils"
 version = "2.0.0-rc5"
+dependencies = [
+ "futures 0.3.5",
+ "sc-service",
+ "substrate-test-utils-derive",
+ "tokio 0.2.21",
+ "trybuild",
+]
 
 [[package]]
 name = "substrate-test-utils-derive"
 version = "0.8.0-rc4"
 dependencies = [
- "futures 0.3.5",
  "quote 1.0.6",
- "sc-service",
  "syn 1.0.33",
- "tokio 0.2.21",
- "trybuild",
 ]
 
 [[package]]

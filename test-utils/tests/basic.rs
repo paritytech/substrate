@@ -18,30 +18,30 @@
 
 use sc_service::{TaskExecutor, TaskType};
 
-#[substrate_test_utils_derive::test]
+#[substrate_test_utils::test]
 async fn basic_test(_: TaskExecutor) {
 	assert!(true);
 }
 
-#[substrate_test_utils_derive::test]
+#[substrate_test_utils::test]
 #[should_panic(expected = "boo!")]
 async fn panicking_test(_: TaskExecutor) {
 	panic!("boo!");
 }
 
-#[substrate_test_utils_derive::test(max_threads = 2)]
+#[substrate_test_utils::test(max_threads = 2)]
 async fn basic_test_with_args(_: TaskExecutor) {
 	assert!(true);
 }
 
-#[substrate_test_utils_derive::test]
+#[substrate_test_utils::test]
 async fn rename_argument(ex: TaskExecutor) {
 	let ex2 = ex.clone();
 	ex2.spawn(Box::pin(async { () }), TaskType::Blocking);
 	assert!(true);
 }
 
-#[substrate_test_utils_derive::test]
+#[substrate_test_utils::test]
 #[should_panic(expected = "test took too long")]
 // NOTE: enable this test only after setting SUBSTRATE_TEST_TIMEOUT to a smaller value
 //

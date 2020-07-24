@@ -16,8 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[substrate_test_utils_derive::test]
-async fn missing_func_parameter() {
+#[allow(unused_imports)]
+use sc_service::TaskExecutor;
+
+#[substrate_test_utils::test]
+async fn too_many_func_parameters(task_executor_1: TaskExecutor, task_executor_2: TaskExecutor) {
 	assert!(true);
 }
 
