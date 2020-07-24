@@ -74,7 +74,6 @@ impl core::Benchmark for PoolBenchmark {
 		let executor = sp_core::testing::SpawnBlockingExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(context.client.clone(), None)),
 			None,
 			executor,
 			context.client.clone(),

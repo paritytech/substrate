@@ -22,9 +22,7 @@
 
 use std::sync::Arc;
 use sc_consensus_babe;
-use grandpa::{
-	self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
-};
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
 use sc_service::{
@@ -67,12 +65,8 @@ pub fn new_full_up_to_import_queue(config: &Configuration) -> Result<(
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-	let pool_api = sc_transaction_pool::FullChainApi::new(
-		client.clone(), config.prometheus_registry(),
-	);
 	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
 		config.transaction_pool.clone(),
-		std::sync::Arc::new(pool_api),
 		config.prometheus_registry(),
 		task_manager.spawn_handle(),
 		client.clone(),
@@ -169,13 +163,19 @@ pub fn new_full_base(
 		import_setup, rpc_setup,
 	) = new_full_up_to_import_queue(&config)?;
 
-	let provider = client.clone() as Arc<dyn grandpa::StorageAndProofProvider<_, _>>;
 	let finality_proof_provider =
-		Arc::new(grandpa::FinalityProofProvider::new(backend.clone(), provider));
+		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 	
 	let (network, network_status_sinks, system_rpc_tx) = sc_service::build_network(
-		&config, client.clone(), transaction_pool.clone(), task_manager.spawn_handle(),
-		None, None, None, Some(finality_proof_provider.clone()), import_queue
+		&config,
+		client.clone(),
+		transaction_pool.clone(),
+		task_manager.spawn_handle(),
+		import_queue,
+		None,
+		None,
+		None,
+		Some(finality_proof_provider.clone()),
 	)?;
 
 	if config.offchain_worker.enabled {
@@ -342,15 +342,12 @@ pub fn new_light_base(config: Configuration) -> Result<(
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-	let transaction_pool_api = Arc::new(sc_transaction_pool::LightChainApi::new(
-		client.clone(),
-		on_demand.clone(),
-	));
 	let transaction_pool = Arc::new(sc_transaction_pool::BasicPool::new_light(
 		config.transaction_pool.clone(),
-		transaction_pool_api,
 		config.prometheus_registry(),
 		task_manager.spawn_handle(),
+		client.clone(),
+		on_demand.clone(),
 	));
 
 	let grandpa_block_import = grandpa::light_block_import(
@@ -382,15 +379,19 @@ pub fn new_light_base(config: Configuration) -> Result<(
 		config.prometheus_registry(),
 	)?;
 
-	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
 	let finality_proof_provider =
-		Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
+		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
 
 	let (network, network_status_sinks, system_rpc_tx) = sc_service::build_network(
-		&config, client.clone(), transaction_pool.clone(), task_manager.spawn_handle(),
-		Some(on_demand.clone()), None, Some(finality_proof_request_builder), Some(finality_proof_provider),
+		&config,
+		client.clone(),
+		transaction_pool.clone(),
+		task_manager.spawn_handle(),
 		import_queue,
+		Some(on_demand.clone()),
+		None,
+		Some(finality_proof_request_builder),
+		Some(finality_proof_provider),
 	)?;
 	
 	if config.offchain_worker.enabled {

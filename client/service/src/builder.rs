@@ -794,13 +794,13 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	spawn_handle: SpawnTaskHandle,
+	import_queue: TImpQu,
 	on_demand: Option<Arc<OnDemand<TBl>>>,
 	block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
 	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
 	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
-	import_queue: TImpQu
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
