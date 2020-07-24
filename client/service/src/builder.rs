@@ -1271,7 +1271,8 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 		chain_type: config.chain_spec.chain_type(),
 	};
 
-	let subscriptions = SubscriptionManager::new(Arc::new(task_manager.spawn_handle()));
+	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(task_manager.spawn_handle());
+	let subscriptions = SubscriptionManager::new(Arc::new(task_executor));
 
 	let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 		(remote_backend, on_demand) {
