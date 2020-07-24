@@ -18,7 +18,7 @@
 
 use std::{convert::TryFrom, time::SystemTime};
 
-use crate::NetworkStatus;
+use crate::{NetworkStatus, config::Configuration};
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
@@ -29,14 +29,14 @@ use sc_network::config::Role;
 
 use sysinfo::{self, ProcessExt, SystemExt};
 
-#[cfg(all(any(unix, windows), not(target_os = "android")))]
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 use netstat2::{
 	TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags,
 };
 
 struct PrometheusMetrics {
 	// system
-	#[cfg(all(any(unix, windows), not(target_os = "android")))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	load_avg: GaugeVec<F64>,
 
 	// process
@@ -45,7 +45,7 @@ struct PrometheusMetrics {
 	threads: Gauge<U64>,
 	open_files: GaugeVec<U64>,
 
-	#[cfg(all(any(unix, windows), not(target_os = "android")))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	netstat: GaugeVec<U64>,
 
 	// -- inner counters
@@ -89,7 +89,7 @@ impl PrometheusMetrics {
 
 		Ok(Self {
 			// system
-			#[cfg(all(any(unix, windows), not(target_os = "android")))]
+			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			load_avg: register(GaugeVec::new(
 				Opts::new("load_avg", "System load average"),
 				&["over"]
@@ -97,16 +97,16 @@ impl PrometheusMetrics {
 
 			// process
 			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory (resident set size) usage",
+				"memory_usage_bytes", "Process memory (resident set size) usage",
 			)?, registry)?,
 
 			cpu_usage_percentage: register(Gauge::new(
-				"cpu_usage_percentage", "Node CPU usage",
+				"cpu_usage_percentage", "Process CPU usage, percentage per core summed over all cores",
 			)?, registry)?,
 
-			#[cfg(all(any(unix, windows), not(target_os = "android")))]
+			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			netstat: register(GaugeVec::new(
-				Opts::new("netstat_tcp", "Current TCP connections "),
+				Opts::new("netstat_tcp", "Number of TCP sockets of the process"),
 				&["status"]
 			)?, registry)?,
 
@@ -115,7 +115,7 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			open_files: register(GaugeVec::new(
-				Opts::new("open_file_handles", "Open file handlers held by the process"),
+				Opts::new("open_file_handles", "Number of open file handlers held by the process"),
 				&["fd_type"]
 			)?, registry)?,
 
@@ -154,7 +154,7 @@ impl PrometheusMetrics {
 	}
 }
 
-#[cfg(all(any(unix, windows), not(target_os = "android")))]
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 #[derive(Default)]
 struct ConnectionsCount {
 	listen: u64,
@@ -186,7 +186,7 @@ struct ProcessInfo {
 
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
-	#[cfg(all(any(unix, windows), not(target_os = "android")))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	system: sysinfo::System,
 	pid: Option<sysinfo::Pid>,
 }
@@ -199,7 +199,7 @@ impl MetricsService {
 
 		Self {
 			metrics,
-			system: sysinfo::System::new(),
+			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
 			pid: Some(process.pid),
 		}
 	}
@@ -229,12 +229,12 @@ impl MetricsService {
 	}
 }
 
-#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "linux")))]
+#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
-			system: sysinfo::System::new(),
+			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
 			pid: sysinfo::get_current_pid().ok(),
 		}
 	}
@@ -245,7 +245,7 @@ impl MetricsService {
 }
 
 
-#[cfg(not(all(any(unix, windows), not(target_os = "android"))))]
+#[cfg(not(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios"))))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -261,17 +261,17 @@ impl MetricsService {
 
 
 impl MetricsService {
-	pub fn with_prometheus(registry: &Registry, name: &str, version: &str, role: &Role)
+	pub fn with_prometheus(registry: &Registry, config: &Configuration)
 		-> Result<Self, PrometheusError>
 	{
-		let role_bits = match role {
+		let role_bits = match config.role {
 			Role::Full => 1u64,
 			Role::Light => 2u64,
 			Role::Sentry { .. } => 3u64,
 			Role::Authority { .. } => 4u64,
 		};
 
-		PrometheusMetrics::setup(registry, name, version, role_bits).map(|p| {
+		PrometheusMetrics::setup(registry, &config.network.node_name, &config.impl_version, role_bits).map(|p| {
 			Self::inner_new(Some(p))
 		})
 	}
@@ -280,19 +280,18 @@ impl MetricsService {
 		Self::inner_new(None)
 	}
 
-	#[cfg(all(any(unix, windows), not(target_os = "android")))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
 		let mut info = ProcessInfo::default();
-		if self.system.refresh_process(*pid) {
-			let prc = self.system.get_process(*pid)
-				.expect("Above refresh_process succeeds, this must be Some(), qed");
+		self.system.refresh_process(*pid);
+		self.system.get_process(*pid).map(|prc| {
 			info.cpu_usage = prc.cpu_usage().into();
 			info.memory = prc.memory();
-		}
+		});
 		info
 	}
 
-	#[cfg(all(any(unix, windows), not(target_os = "android")))]
+	#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 	fn connections_info(&self) -> Option<ConnectionsCount> {
 		self.pid.as_ref().and_then(|pid| {
 			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
@@ -423,7 +422,7 @@ impl MetricsService {
 				);
 			}
 
-			#[cfg(all(any(unix, windows), not(target_os = "android")))]
+			#[cfg(all(any(unix, windows), not(target_os = "android"), not(target_os = "ios")))]
 			{
 				let load = self.system.get_load_average();
 				metrics.load_avg.with_label_values(&["1min"]).set(load.one);

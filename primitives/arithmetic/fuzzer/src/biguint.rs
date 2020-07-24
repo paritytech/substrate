@@ -48,8 +48,8 @@ fn main() {
 			digits_u.reverse();
 			digits_v.reverse();
 
-			let num_u = num_bigint::BigUint::new(digits_u.clone());
-			let num_v = num_bigint::BigUint::new(digits_v.clone());
+			let num_u = num_bigint::BigUint::new(digits_u);
+			let num_v = num_bigint::BigUint::new(digits_v);
 
 			if check_digit_lengths(&u, &v, 4) {
 				assert_eq!(u.cmp(&v), ue.cmp(&ve));
@@ -146,14 +146,14 @@ fn main() {
 			// Division
 
 			if v.len() == 1 && v.get(0) != 0 {
-				let w = u.clone().div_unit(v.get(0));
-				let num_w = num_u.clone() / &num_v;
+				let w = u.div_unit(v.get(0));
+				let num_w = num_u / &num_v;
 				assert_biguints_eq(&w, &num_w);
 			} else if u.len() > v.len() && v.len() > 0 {
 				let num_remainder = num_u.clone() % num_v.clone();
 
-				let (w, remainder) = u.clone().div(&v, return_remainder).unwrap();
-				let num_w = num_u.clone() / &num_v;
+				let (w, remainder) = u.div(&v, return_remainder).unwrap();
+				let num_w = num_u / &num_v;
 
 				assert_biguints_eq(&w, &num_w);
 

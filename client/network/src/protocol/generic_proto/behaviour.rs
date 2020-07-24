@@ -30,12 +30,13 @@ use libp2p::swarm::{
 	PollParameters
 };
 use log::{debug, error, trace, warn};
+use parking_lot::RwLock;
 use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::task::{Context, Poll};
 use std::{borrow::Cow, cmp, collections::{hash_map::Entry, VecDeque}};
-use std::{error, mem, pin::Pin, str, time::Duration};
+use std::{error, mem, pin::Pin, str, sync::Arc, time::Duration};
 use wasm_timer::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other peers.
@@ -118,7 +119,7 @@ pub struct GenericProto {
 	/// Notification protocols. Entries are only ever added and not removed.
 	/// Contains, for each protocol, the protocol name and the message to send as part of the
 	/// initial handshake.
-	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
+	notif_protocols: Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -220,20 +221,6 @@ enum PeerState {
 }
 
 impl PeerState {
-	/// True if there exists any established connection to the peer.
-	fn is_connected(&self) -> bool {
-		match self {
-			PeerState::Disabled { .. } |
-			PeerState::DisabledPendingEnable { .. } |
-			PeerState::Enabled { .. } |
-			PeerState::PendingRequest { .. } |
-			PeerState::Requested |
-			PeerState::Incoming { .. } => true,
-			PeerState::Poisoned |
-			PeerState::Banned { .. } => false,
-		}
-	}
-
 	/// True if there exists an established connection to the peer
 	/// that is open for custom protocol traffic.
 	fn is_open(&self) -> bool {
@@ -294,6 +281,9 @@ pub enum GenericProtoOut {
 	CustomProtocolOpen {
 		/// Id of the peer we are connected to.
 		peer_id: PeerId,
+		/// Handshake that was sent to us.
+		/// This is normally a "Status" message, but this is out of the concern of this code.
+		received_handshake: Vec<u8>,
 	},
 
 	/// Closed a custom protocol with the remote.
@@ -323,15 +313,6 @@ pub enum GenericProtoOut {
 		/// Message that has been received.
 		message: BytesMut,
 	},
-
-	/// The substream used by the protocol is pretty large. We should print avoid sending more
-	/// messages on it if possible.
-	Clogged {
-		/// Id of the peer which is clogged.
-		peer_id: PeerId,
-		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Vec<u8>>,
-	},
 }
 
 impl GenericProto {
@@ -343,10 +324,12 @@ impl GenericProto {
 		local_peer_id: PeerId,
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
+		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
 		queue_size_report: Option<HistogramVec>,
 	) -> Self {
-		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
+		let legacy_handshake_message = Arc::new(RwLock::new(handshake_message));
+		let legacy_protocol = RegisteredProtocol::new(protocol, versions, legacy_handshake_message);
 
 		GenericProto {
 			local_peer_id,
@@ -372,7 +355,7 @@ impl GenericProto {
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
-		self.notif_protocols.push((protocol_name.into(), handshake_msg.into()));
+		self.notif_protocols.push((protocol_name.into(), Arc::new(RwLock::new(handshake_msg.into()))));
 	}
 
 	/// Modifies the handshake of the given notifications protocol.
@@ -383,24 +366,17 @@ impl GenericProto {
 		protocol_name: &[u8],
 		handshake_message: impl Into<Vec<u8>>
 	) {
-		let handshake_message = handshake_message.into();
 		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
-			protocol.1 = handshake_message.clone();
-		} else {
-			return;
+			*protocol.1.write() = handshake_message.into();
 		}
+	}
 
-		// Send an event to all the peers we're connected to, updating the handshake message.
-		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_connected()) {
-			self.events.push_back(NetworkBehaviourAction::NotifyHandler {
-				peer_id: peer_id.clone(),
-				handler: NotifyHandler::All,
-				event: NotifsHandlerIn::UpdateHandshake {
-					protocol_name: Cow::Owned(protocol_name.to_owned()),
-					handshake_message: handshake_message.clone(),
-				},
-			});
-		}
+	/// Modifies the handshake of the legacy protocol.
+	pub fn set_legacy_handshake_message(
+		&mut self,
+		handshake_message: impl Into<Vec<u8>>
+	) {
+		*self.legacy_protocol.handshake_message().write() = handshake_message.into();
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -830,7 +806,7 @@ impl GenericProto {
 			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming,
 				sending back dropped", index, incoming.peer_id);
 			debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
-			self.peerset.dropped(incoming.peer_id.clone());
+			self.peerset.dropped(incoming.peer_id);
 			return
 		}
 
@@ -1262,7 +1238,7 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::Open { endpoint } => {
+			NotifsHandlerOut::Open { endpoint, received_handshake } => {
 				debug!(target: "sub-libp2p",
 					"Handler({:?}) => Endpoint {:?} open for custom protocols.",
 					source, endpoint);
@@ -1293,10 +1269,34 @@ impl NetworkBehaviour for GenericProto {
 
 				if first {
 					debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
-					let event = GenericProtoOut::CustomProtocolOpen { peer_id: source };
+					let event = GenericProtoOut::CustomProtocolOpen { peer_id: source, received_handshake };
 					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+
 				} else {
-					debug!(target: "sub-libp2p", "Secondary connection opened custom protocol.");
+					// In normal situations, the handshake is supposed to be a Status message, and
+					// we would discard Status messages received from secondary connections.
+					// However, in Polkadot 0.8.10 and below, nodes don't send a Status message
+					// when opening secondary connections and instead directly consider the
+					// substream as open. When connecting to such a node, the first message sent
+					// by the remote will always be considered by our local node as the handshake,
+					// even when it is a regular message.
+					// In order to maintain backwards compatibility, we therefore report the
+					// handshake as if it was a regular message, and the upper layer will ignore
+					// any superfluous Status message.
+					// The code below should be removed once Polkadot 0.8.10 and below are no
+					// longer widely in use, and should be replaced with simply printing a log
+					// entry.
+					debug!(
+						target: "sub-libp2p",
+						"Handler({:?}) => Secondary connection opened custom protocol",
+						source
+					);
+					trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
+					let event = GenericProtoOut::LegacyMessage {
+						peer_id: source,
+						message: From::from(&received_handshake[..]),
+					};
+					self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 				}
 			}
 
@@ -1328,18 +1328,6 @@ impl NetworkBehaviour for GenericProto {
 				};
 
 				self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-			}
-
-			NotifsHandlerOut::Clogged { messages } => {
-				debug_assert!(self.is_open(&source));
-				trace!(target: "sub-libp2p", "Handler({:?}) => Clogged", source);
-				trace!(target: "sub-libp2p", "External API <= Clogged({:?})", source);
-				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} is \
-					pretty large", source);
-				self.events.push_back(NetworkBehaviourAction::GenerateEvent(GenericProtoOut::Clogged {
-					peer_id: source,
-					messages,
-				}));
 			}
 
 			// Don't do anything for non-severe errors except report them.

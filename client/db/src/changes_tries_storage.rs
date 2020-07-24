@@ -719,7 +719,7 @@ mod tests {
 				None,
 				None,
 			).unwrap();
-			backend.storage.db.commit(tx);
+			backend.storage.db.commit(tx).unwrap();
 			backend.changes_tries_storage.post_commit(Some(cache_ops));
 		};
 

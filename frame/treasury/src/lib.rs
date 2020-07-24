@@ -111,6 +111,30 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
+pub trait WeightInfo {
+	fn propose_spend(u: u32, ) -> Weight;
+	fn reject_proposal(u: u32, ) -> Weight;
+	fn approve_proposal(u: u32, ) -> Weight;
+	fn report_awesome(r: u32, ) -> Weight;
+	fn retract_tip(r: u32, ) -> Weight;
+	fn tip_new(r: u32, t: u32, ) -> Weight;
+	fn tip(t: u32, ) -> Weight;
+	fn close_tip(t: u32, ) -> Weight;
+	fn on_initialize(p: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn propose_spend(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn reject_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn approve_proposal(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn report_awesome(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn retract_tip(_r: u32, ) -> Weight { 1_000_000_000 }
+	fn tip_new(_r: u32, _t: u32, ) -> Weight { 1_000_000_000 }
+	fn tip(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn close_tip(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_p: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait {
 	/// The treasury's module id, used for deriving its sovereign account ID.
 	type ModuleId: Get<ModuleId>;
@@ -159,6 +183,12 @@ pub trait Trait: frame_system::Trait {
 
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
+
+	/// Handler for the unbalanced decrease when treasury funds are burned.
+	type BurnDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -247,27 +277,27 @@ decl_event!(
 		<T as frame_system::Trait>::AccountId,
 		<T as frame_system::Trait>::Hash,
 	{
-		/// New proposal.
+		/// New proposal. [proposal_index]
 		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds.
+		/// We have ended a spend period and will now allocate funds. [budget_remaining]
 		Spending(Balance),
-		/// Some funds have been allocated.
+		/// Some funds have been allocated. [proposal_index, award, beneficiary]
 		Awarded(ProposalIndex, Balance, AccountId),
-		/// A proposal was rejected; funds were slashed.
+		/// A proposal was rejected; funds were slashed. [proposal_index, slashed]
 		Rejected(ProposalIndex, Balance),
-		/// Some of our funds have been burnt.
+		/// Some of our funds have been burnt. [burn]
 		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend.
+		/// Spending has finished; this is the amount that rolls over until next spend. [budget_remaining]
 		Rollover(Balance),
-		/// Some funds have been deposited.
+		/// Some funds have been deposited. [deposit]
 		Deposit(Balance),
-		/// A new tip suggestion has been opened.
+		/// A new tip suggestion has been opened. [tip_hash]
 		NewTip(Hash),
-		/// A tip suggestion has reached threshold and is closing.
+		/// A tip suggestion has reached threshold and is closing. [tip_hash]
 		TipClosing(Hash),
-		/// A tip suggestion has been closed.
+		/// A tip suggestion has been closed. [tip_hash, who, payout]
 		TipClosed(Hash, AccountId, Balance),
-		/// A tip suggestion has been retracted.
+		/// A tip suggestion has been retracted. [tip_hash]
 		TipRetracted(Hash),
 	}
 );
@@ -744,7 +774,10 @@ impl<T: Trait> Module<T> {
 			// burn some proportion of the remaining budget if we run a surplus.
 			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
-			imbalance.subsume(T::Currency::burn(burn));
+
+			let (debit, credit) = T::Currency::pair(burn);
+			imbalance.subsume(debit);
+			T::BurnDestination::on_unbalanced(credit);
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
 

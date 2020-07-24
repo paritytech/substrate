@@ -37,7 +37,6 @@ use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
 use codec::{Encode, Decode};
-use frame_system as system;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
 type OpaqueTimeSlot = Vec<u8>;
@@ -52,6 +51,20 @@ pub type DeferredOffenceOf<T> = (
 	SessionIndex,
 );
 
+pub trait WeightInfo {
+	fn report_offence_im_online(r: u32, o: u32, n: u32, ) -> Weight;
+	fn report_offence_grandpa(r: u32, n: u32, ) -> Weight;
+	fn report_offence_babe(r: u32, n: u32, ) -> Weight;
+	fn on_initialize(d: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn report_offence_im_online(_r: u32, _o: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn report_offence_grandpa(_r: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn report_offence_babe(_r: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn on_initialize(_d: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// Offences trait
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -64,6 +77,8 @@ pub trait Trait: frame_system::Trait {
 	/// `on_initialize`.
 	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
 	type WeightSoftLimit: Get<Weight>;
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_storage! {
@@ -96,7 +111,8 @@ decl_event!(
 	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes. last
-		/// element indicates of the offence was applied (true) or queued (false).
+		/// element indicates of the offence was applied (true) or queued (false) 
+		/// [kind, timeslot, applied].
 		Offence(Kind, OpaqueTimeSlot, bool),
 	}
 );
@@ -184,6 +200,15 @@ where
 		Self::deposit_event(Event::Offence(O::ID, time_slot.encode(), applied));
 
 		Ok(())
+	}
+
+	fn is_known_offence(offenders: &[T::IdentificationTuple], time_slot: &O::TimeSlot) -> bool {
+		let any_unknown = offenders.iter().any(|offender| {
+			let report_id = Self::report_id::<O>(time_slot, offender);
+			!<Reports<T>>::contains_key(&report_id)
+		});
+
+		!any_unknown
 	}
 }
 

@@ -64,7 +64,10 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: (|fut, _| wasm_bindgen_futures::spawn_local(fut)).into(),
+		task_executor: (|fut, _| {
+			wasm_bindgen_futures::spawn_local(fut);
+			async {}
+		}).into(),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
@@ -79,8 +82,8 @@ where
 		disable_grandpa: Default::default(),
 		execution_strategies: Default::default(),
 		force_authoring: Default::default(),
-		impl_name: "parity-substrate",
-		impl_version: "0.0.0",
+		impl_name: String::from("parity-substrate"),
+		impl_version: String::from("0.0.0"),
 		offchain_worker: Default::default(),
 		prometheus_config: Default::default(),
 		pruning: Default::default(),
