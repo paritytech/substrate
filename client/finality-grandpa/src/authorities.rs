@@ -423,9 +423,21 @@ where
 			fork_tree::FinalizationResult::Changed(change) => {
 				status.changed = true;
 
-				// if we are able to finalize any standard change then we can
-				// discard all pending forced changes (on different forks)
-				self.pending_forced_changes.clear();
+				let pending_forced_changes = std::mem::replace(
+					&mut self.pending_forced_changes,
+					Vec::new(),
+				);
+
+				// we will keep all forced change for any later blocks and that are a
+				// descendent of the finalized block (i.e. they are from this fork).
+				for change in pending_forced_changes {
+					if change.effective_number() > finalized_number &&
+						is_descendent_of(&finalized_hash, &change.canon_hash)
+							.map_err(fork_tree::Error::Client)?
+					{
+						self.pending_forced_changes.push(change)
+					}
+				}
 
 				if let Some(change) = change {
 					afg_log!(initial_sync,
@@ -1162,5 +1174,125 @@ mod tests {
 			),
 			Err(Error::InvalidAuthoritySet)
 		));
+	}
+
+	#[test]
+	fn cleans_up_stale_forced_changes_when_applying_standard_change() {
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+
+		let mut authorities = AuthoritySet {
+			current_authorities: current_authorities.clone(),
+			set_id: 0,
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
+		};
+
+		let new_set = current_authorities.clone();
+
+		// Create the following pending changes tree:
+		//
+		//               [#C3]
+		//              /
+		//             /- (#C2)
+		//            /
+		// (#A) - (#B) - [#C1]
+		//            \
+		//             (#C0) - [#D]
+		//
+		// () - Standard change
+		// [] - Forced change
+
+		let is_descendent_of = {
+			let hashes = vec!["B", "C0", "C1", "C2", "C3", "D"];
+			is_descendent_of(move |base, hash| match (*base, *hash) {
+				("B", "B") => false, // required to have the simpler case below
+				("A", b) | ("B", b) => hashes.iter().any(|h| *h == b),
+				("C0", "D") => true,
+				_ => false,
+			})
+		};
+
+		let mut add_pending_change = |canon_height, canon_hash, forced| {
+			let change = PendingChange {
+				next_authorities: new_set.clone(),
+				delay: 0,
+				canon_height,
+				canon_hash,
+				delay_kind: if forced {
+					DelayKind::Best {
+						median_last_finalized: 0,
+					}
+				} else {
+					DelayKind::Finalized
+				},
+			};
+
+			authorities
+				.add_pending_change(change, &is_descendent_of)
+				.unwrap();
+		};
+
+		add_pending_change(5, "A", false);
+		add_pending_change(10, "B", false);
+		add_pending_change(15, "C0", false);
+		add_pending_change(15, "C1", true);
+		add_pending_change(15, "C2", false);
+		add_pending_change(15, "C3", true);
+		add_pending_change(20, "D", true);
+
+		println!(
+			"pending_changes: {:?}",
+			authorities
+				.pending_changes()
+				.map(|c| c.canon_hash)
+				.collect::<Vec<_>>()
+		);
+
+		// applying the standard change at A should not prune anything
+		// other then the change that was applied
+		authorities
+			.apply_standard_changes("A", 5, &is_descendent_of, false)
+			.unwrap();
+		println!(
+			"pending_changes: {:?}",
+			authorities
+				.pending_changes()
+				.map(|c| c.canon_hash)
+				.collect::<Vec<_>>()
+		);
+
+		assert_eq!(authorities.pending_changes().count(), 6);
+
+		// same for B
+		authorities
+			.apply_standard_changes("B", 10, &is_descendent_of, false)
+			.unwrap();
+
+		assert_eq!(authorities.pending_changes().count(), 5);
+
+		let authorities2 = authorities.clone();
+
+		// finalizing C2 should clear all forced changes
+		authorities
+			.apply_standard_changes("C2", 15, &is_descendent_of, false)
+			.unwrap();
+
+		assert_eq!(authorities.pending_forced_changes.len(), 0);
+
+		// finalizing C0 should clear all forced changes but D
+		let mut authorities = authorities2;
+		authorities
+			.apply_standard_changes("C0", 15, &is_descendent_of, false)
+			.unwrap();
+
+		assert_eq!(authorities.pending_forced_changes.len(), 1);
+		assert_eq!(
+			authorities
+				.pending_forced_changes
+				.first()
+				.unwrap()
+				.canon_hash,
+			"D"
+		);
 	}
 }
