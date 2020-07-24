@@ -65,9 +65,10 @@ benchmarks! {
 	}
 
 	note_stalled {
+		let delay = 1000.into();
 		let best_finalized_block_number = 1.into();
 
-	}: _(RawOrigin::Root, best_finalized_block_number)
+	}: _(RawOrigin::Root, delay, best_finalized_block_number)
 	verify {
 		assert!(Grandpa::<T>::stalled().is_some());
 	}

@@ -342,14 +342,15 @@ fn report_equivocation_current_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
+		let validators = Session::validators();
 
-		// make sure that all authorities have the same balance
-		for i in 0..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		// make sure that all validators have the same balance
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(1, i as u64),
+				Staking::eras_stakers(1, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -388,11 +389,12 @@ fn report_equivocation_current_set_works() {
 		start_era(2);
 
 		// check that the balance of 0-th validator is slashed 100%.
-		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
-		assert_eq!(Staking::slashable_balance_of(&0), 0);
+		let equivocation_validator_id = validators[equivocation_authority_index];
 
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 		assert_eq!(
-			Staking::eras_stakers(2, 0),
+			Staking::eras_stakers(2, equivocation_validator_id),
 			pallet_staking::Exposure {
 				total: 0,
 				own: 0,
@@ -401,12 +403,16 @@ fn report_equivocation_current_set_works() {
 		);
 
 		// check that the balances of all other validators are left intact.
-		for i in 1..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, i as u64),
+				Staking::eras_stakers(2, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -425,6 +431,7 @@ fn report_equivocation_old_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
+		let validators = Session::validators();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index].0;
@@ -436,12 +443,12 @@ fn report_equivocation_old_set_works() {
 		start_era(2);
 
 		// make sure that all authorities have the same balance
-		for i in 0..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, i as u64),
+				Staking::eras_stakers(2, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -474,11 +481,13 @@ fn report_equivocation_old_set_works() {
 		start_era(3);
 
 		// check that the balance of 0-th validator is slashed 100%.
-		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
-		assert_eq!(Staking::slashable_balance_of(&0), 0);
+		let equivocation_validator_id = validators[equivocation_authority_index];
+
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 
 		assert_eq!(
-			Staking::eras_stakers(3, 0),
+			Staking::eras_stakers(3, equivocation_validator_id),
 			pallet_staking::Exposure {
 				total: 0,
 				own: 0,
@@ -487,12 +496,16 @@ fn report_equivocation_old_set_works() {
 		);
 
 		// check that the balances of all other validators are left intact.
-		for i in 1..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(3, i as u64),
+				Staking::eras_stakers(3, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
