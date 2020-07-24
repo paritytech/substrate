@@ -28,6 +28,7 @@ use frame_support::{
 	traits::{Currency, OnFinalize},
 };
 use frame_system::{EventRecord, Phase};
+use pallet_session::OneSessionHandler;
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;
@@ -783,8 +784,6 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 
 #[test]
 fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
-	use pallet_session::OneSessionHandler;
-
 	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
 		assert_eq!(Grandpa::current_set_id(), 0);
 
@@ -797,7 +796,7 @@ fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
 		// when we try to rotate the session at the beginning of the era we will
 		// fail to schedule a change (there's already one pending), so we should
 		// not increment the set id.
-		Grandpa::schedule_change(to_authorities(vec![(1, 1)]), 2, None);
+		Grandpa::schedule_change(to_authorities(vec![(1, 1)]), 2, None).unwrap();
 		start_era(2);
 		assert_eq!(Grandpa::current_set_id(), 1);
 
@@ -814,6 +813,32 @@ fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
 		// defined will also trigger a new set (regardless of whether the
 		// session validators changed)
 		Grandpa::on_new_session(true, std::iter::empty(), std::iter::empty());
+		assert_eq!(Grandpa::current_set_id(), 2);
+	});
+}
+
+#[test]
+fn always_schedules_a_change_on_new_session_when_stalled() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		start_era(1);
+
+		assert!(Grandpa::pending_change().is_none());
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// if the session handler reports no change then we should not schedule
+		// any pending change
+		Grandpa::on_new_session(false, std::iter::empty(), std::iter::empty());
+
+		assert!(Grandpa::pending_change().is_none());
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// if grandpa is stalled then we should **always** schedule a forced
+		// change on a new session
+		<Stalled<Test>>::put((10, 1));
+		Grandpa::on_new_session(false, std::iter::empty(), std::iter::empty());
+
+		assert!(Grandpa::pending_change().is_some());
+		assert!(Grandpa::pending_change().unwrap().forced.is_some());
 		assert_eq!(Grandpa::current_set_id(), 2);
 	});
 }
