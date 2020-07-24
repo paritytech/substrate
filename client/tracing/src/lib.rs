@@ -42,10 +42,27 @@ use tracing_core::{
 use tracing_subscriber::CurrentSpan;
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+use sp_tracing::interface::{
+	Fields,
+	FieldValue,
+	TracingSubscriber,
+	WasmTracingAttributes,
+	WasmTracingEvent,
+	WasmTracingMetadata,
+	WasmTracingRecord
+};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
+
+/// Responsible for assigning ids to new spans, which are not re-used.
+pub struct ProfilingSubscriber {
+	next_id: AtomicU64,
+	targets: Vec<(String, Level)>,
+	trace_handler: Box<dyn TraceHandler>,
+	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
+	current_span: CurrentSpan,
+}
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -207,15 +224,6 @@ impl slog::Value for Values {
 	}
 }
 
-/// Responsible for assigning ids to new spans, which are not re-used.
-pub struct ProfilingSubscriber {
-	next_id: AtomicU64,
-	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
-	current_span: CurrentSpan,
-}
-
 impl ProfilingSubscriber {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
@@ -245,7 +253,7 @@ impl ProfilingSubscriber {
 			targets,
 			trace_handler,
 			span_data: Mutex::new(FxHashMap::default()),
-			current_span: Default::default()
+			current_span: CurrentSpan::new()
 		}
 	}
 
@@ -276,9 +284,87 @@ fn parse_target(s: &str) -> (String, Level) {
 	}
 }
 
+impl From<Fields> for Values {
+	fn from(fields: Fields) -> Self {
+		let mut values = Values::default();
+		for (k,v) in fields.0 {
+			if let Ok(key) = String::from_utf8(k) {
+				match v {
+					FieldValue::Bool(v) => values.bool_values.insert(key, v),
+					FieldValue::I64(v) => values.i64_values.insert(key, v),
+					FieldValue::U64(v) => values.u64_values.insert(key, v),
+					FieldValue::Str(v) => {
+						if let Ok(val) = String::from_utf8(v) {
+							values.string_values.insert(key, val) ;
+						}
+					},
+					FieldValue::Debug(v) => {
+						if let Ok(val) = String::from_utf8(v) {
+							values.string_values.insert(key, val) ;
+						}
+					},
+				}
+			}
+		}
+		values
+	}
+}
+impl TracingSubscriber for ProfilingSubscriber {
+	fn enabled(&self, metadata: WasmTracingMetadata) -> bool {
+		// TODO move levels into static and implement
+		true
+	}
+
+	fn new_span(&self, span: WasmTracingAttributes) -> u64 {
+		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+		let values = span.fields.into();
+		let span_datum = SpanDatum {
+			id: ID::from_u64(id.clone()),
+			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
+			name: attrs.metadata().name().to_owned(),
+			target: attrs.metadata().target().to_owned(),
+			level: attrs.metadata().level().clone(),
+			line: attrs.metadata().line().unwrap_or(0),
+			start_time: Instant::now(),
+			overall_time: ZERO_DURATION,
+			values,
+		};
+		self.span_data.lock().insert(span_datum.id.clone(), span_datum);
+		id
+	}
+
+	fn record(&self, _span: u64, _values: WasmTracingRecord) {
+		// TODO
+	}
+
+	fn event(&self, _event: WasmTracingEvent) {
+		// TODO
+	}
+
+	fn enter(&self, span: u64) {
+		let id = Id::from_u64(span);
+		self.current_span.enter(id.clone());
+		let mut span_data = self.span_data.lock();
+		let start_time = Instant::now();
+		if let Some(mut s) = span_data.get_mut(&id) {
+			s.start_time = start_time;
+		}
+	}
+
+	fn exit(&self, span: u64) {
+		self.current_span.exit();
+		let end_time = Instant::now();
+		let mut span_data = self.span_data.lock();
+		if let Some(mut s) = span_data.remove(&Id::from_u64(span)) {
+			s.overall_time = end_time - s.start_time + s.overall_time;
+			self.trace_handler.handle_span(s);
+		}
+	}
+}
+
 impl Subscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-		if metadata.target() == PROXY_TARGET || self.check_target(metadata.target(), metadata.level()) {
+		if metadata.target() == self.check_target(metadata.target(), metadata.level()) {
 			log::debug!(target: "tracing", "Enabled target: {}, level: {}", metadata.target(), metadata.level());
 			true
 		} else {
@@ -353,26 +439,12 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		let span_datum = {
+		if let Some(span_datum) = {
 			let mut span_data = self.span_data.lock();
 			span_data.remove(&span)
-		};
-		if let Some(mut span_datum) = span_datum {
-			if span_datum.name == WASM_TRACE_IDENTIFIER {
-				span_datum.values.bool_values.insert("wasm".to_owned(), true);
-				if let Some(n) = span_datum.values.string_values.remove(WASM_NAME_KEY) {
-					span_datum.name = n;
-				}
-				if let Some(t) = span_datum.values.string_values.remove(WASM_TARGET_KEY) {
-					span_datum.target = t;
-				}
-				if self.check_target(&span_datum.target, &span_datum.level) {
-					self.trace_handler.handle_span(span_datum);
-				}
-			} else {
-				self.trace_handler.handle_span(span_datum);
-			}
-		};
+		}  {
+			self.trace_handler.handle_span(span_datum);
+		}
 		true
 	}
 }

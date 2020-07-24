@@ -123,7 +123,7 @@ impl Into<Level> for WasmTracingLevel {
 }
 
 #[derive(Encode, Decode)]
-struct WasmTracingMetadata {
+pub struct WasmTracingMetadata {
     target: Vec<u8>,
     level: WasmTracingLevel,
     file: Option<Vec<u8>>,
@@ -163,10 +163,10 @@ impl From<&Metadata<'_>> for WasmTracingMetadata {
 
 
 #[derive(Encode, Decode)]
-struct WasmTracingEvent;
+pub struct WasmTracingEvent;
 
 #[derive(Encode, Decode)]
-struct WasmTracingRecord;
+pub struct WasmTracingRecord;
 
 pub trait TracingSubscriber {
 	fn enabled(&self, metadata: WasmTracingMetadata) -> bool;
