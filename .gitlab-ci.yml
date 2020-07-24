@@ -229,6 +229,7 @@ cargo-check-subkey:
 test-deterministic-wasm:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *docker-env-only
   variables:
     <<:                            *default-vars
   except:
@@ -452,6 +453,7 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
+  <<:                              *docker-env-only
   <<:                              *build-only
   needs:
     - job:                         cargo-check-subkey
