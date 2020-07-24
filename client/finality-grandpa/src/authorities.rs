@@ -423,28 +423,21 @@ where
 			fork_tree::FinalizationResult::Changed(change) => {
 				status.changed = true;
 
-				// NOTE: the grandpa runtime module guarantees that there are no
-				// overlaping pending changes emitted, either forced or standard,
-				// and taking into account the enactment delay. therefore, an
-				// invariant of this module is that there is always at most one
-				// forced change per fork (the first must have been enacted before
-				// the next one is emitted).
-				let mut pending_forced_change = None;
-				for change in &self.pending_forced_changes {
-					// we will keep a forced change for this fork, which must be for
-					// a later block otherwise it would have been enacted already,
-					// and must be a descendent of the finalized block.
+				let pending_forced_changes = std::mem::replace(
+					&mut self.pending_forced_changes,
+					Vec::new(),
+				);
+
+				for change in pending_forced_changes {
+					// we will keep all forced change for any later blocks and that are a
+					// descendent of the finalized block (i.e. they are from this fork).
 					if change.effective_number() > finalized_number &&
 						is_descendent_of(&finalized_hash, &change.canon_hash)
 							.map_err(fork_tree::Error::Client)?
 					{
-						pending_forced_change = Some(change.clone());
-						break;
+						self.pending_forced_changes.push(change)
 					}
 				}
-
-				// collect the single forced change into a vec (if any)
-				self.pending_forced_changes = pending_forced_change.into_iter().collect();
 
 				if let Some(change) = change {
 					afg_log!(initial_sync,
