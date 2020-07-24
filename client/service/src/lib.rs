@@ -153,6 +153,28 @@ impl TelemetryConnectionSinks {
 	}
 }
 
+/// An imcomplete set of chain components, but enough to run the chain ops subcommands.
+pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
+	/// A shared client instance.
+	pub client: Arc<Client>,
+	/// A shared backend instance.
+	pub backend: Arc<Backend>,
+	/// The chain task manager.
+	pub task_manager: TaskManager,
+	/// A shared keystore instance.
+	pub keystore: KeyStore,
+	/// A chain selection algorithm instance.
+	pub select_chain: SelectChain,
+	/// An import queue.
+	pub import_queue: ImportQueue,
+	/// A shared transaction pool.
+	pub transaction_pool: Arc<TransactionPool>,
+	/// A registry of all providers of `InherentData`.
+	pub inherent_data_providers: sp_inherents::InherentDataProviders,
+	/// Everything else that needs to be passed into the main build function.
+	pub other: Other,
+}
+
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.

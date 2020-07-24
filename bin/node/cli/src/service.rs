@@ -44,21 +44,20 @@ type FullGrandpaBlockImport =
 	grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>;
 type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
-pub fn new_full_up_to_import_queue(config: &Configuration) -> Result<(
-	Arc<FullClient>, Arc<FullBackend>, TaskManager,
+pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
+	FullClient, FullBackend, FullSelectChain,
 	sc_consensus_babe::BabeImportQueue<Block, FullClient>,
-	sc_service::KeyStore,
-	InherentDataProviders,
-	FullSelectChain,
-	Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
-	impl Fn(node_rpc::DenyUnsafe) -> node_rpc::IoHandler,
+	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
-		sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
-		grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
-		sc_consensus_babe::BabeLink<Block>,
-	),
-	grandpa::SharedVoterState,
-), ServiceError> {
+		impl Fn(node_rpc::DenyUnsafe) -> node_rpc::IoHandler,
+		(
+			sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
+			grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
+			sc_consensus_babe::BabeLink<Block>,
+		),
+		grandpa::SharedVoterState,
+	)
+>, ServiceError> {
 	let (client, backend, keystore, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
@@ -138,11 +137,11 @@ pub fn new_full_up_to_import_queue(config: &Configuration) -> Result<(
 		(rpc_extensions_builder, rpc_setup)
 	};
 
-	Ok((
-		client, backend, task_manager, import_queue,
-		keystore, inherent_data_providers, select_chain, transaction_pool, rpc_extensions_builder,
-		import_setup, rpc_setup,
-	))
+	Ok(sc_service::PartialComponents {
+		client, backend, task_manager, keystore, select_chain, import_queue, transaction_pool,
+		inherent_data_providers,
+		other: (rpc_extensions_builder, import_setup, rpc_setup)
+	})
 }
 
 /// Creates a full service from the configuration.
@@ -157,11 +156,11 @@ pub fn new_full_base(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
 ), ServiceError> {
-	let (
-		client, backend, mut task_manager, import_queue,
-		keystore, inherent_data_providers, select_chain, transaction_pool, rpc_extensions_builder,
-		import_setup, rpc_setup,
-	) = new_full_up_to_import_queue(&config)?;
+	let sc_service::PartialComponents {
+		client, backend, mut task_manager, import_queue, keystore, select_chain, transaction_pool,
+		inherent_data_providers,
+		other: (rpc_extensions_builder, import_setup, rpc_setup),
+	} = new_partial(&config)?;
 
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());

@@ -9,9 +9,7 @@ use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_finality_grandpa::{
-	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
-};
+use sc_finality_grandpa::{FinalityProofProvider as GrandpaFinalityProofProvider, SharedVoterState};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -24,16 +22,15 @@ type FullClient = sc_service::TFullClient<Block, RuntimeApi, Executor>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 
-pub fn new_full_up_to_import_queue(config: &Configuration) -> Result<(
-	Arc<FullClient>, Arc<FullBackend>, TaskManager,
+pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
+	FullClient, FullBackend, FullSelectChain,
 	sc_consensus_aura::AuraImportQueue<Block, FullClient>,
-	sc_service::KeyStore,
-	sp_inherents::InherentDataProviders,
-	FullSelectChain,
-	Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
-	sc_finality_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
-	sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>
-), ServiceError> {
+	sc_transaction_pool::FullPool<Block, FullClient>,
+	(
+		sc_finality_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
+		sc_finality_grandpa::LinkHalf<Block, FullClient, FullSelectChain>
+	)
+>, ServiceError> {
 	let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
 	let (client, backend, keystore, task_manager) =
@@ -68,20 +65,20 @@ pub fn new_full_up_to_import_queue(config: &Configuration) -> Result<(
 		config.prometheus_registry(),
 	)?;
 
-	Ok((
-		client, backend, task_manager, import_queue,
-		keystore, inherent_data_providers, select_chain, transaction_pool,
-		grandpa_block_import, grandpa_link,
-	))
+	Ok(sc_service::PartialComponents {
+		client, backend, task_manager, import_queue, keystore, select_chain, transaction_pool,
+		inherent_data_providers,
+		other: (grandpa_block_import, grandpa_link),
+	})
 }
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {	
-	let (
-		client, backend, mut task_manager, import_queue,
-		keystore, inherent_data_providers, select_chain, transaction_pool,
-		block_import, grandpa_link,
-	) = new_full_up_to_import_queue(&config)?;
+	let sc_service::PartialComponents {
+		client, backend, mut task_manager, import_queue, keystore, select_chain, transaction_pool,
+		inherent_data_providers,
+		other: (block_import, grandpa_link),
+	} = new_partial(&config)?;
 
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
