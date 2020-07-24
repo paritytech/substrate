@@ -64,7 +64,7 @@
 //! ```
 //! use frame_support::{decl_module, dispatch};
 //! # use pallet_timestamp as timestamp;
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //!
 //! pub trait Trait: timestamp::Trait {}
 //!
@@ -115,6 +115,16 @@ use sp_timestamp::{
 	OnTimestampSet,
 };
 
+pub trait WeightInfo {
+	fn set(t: u32, ) -> Weight;
+	fn on_finalize(t: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set(_t: u32, ) -> Weight { 1_000_000_000 }
+	fn on_finalize(_t: u32, ) -> Weight { 1_000_000_000 }
+}
+
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
@@ -129,6 +139,9 @@ pub trait Trait: frame_system::Trait {
 	/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
 	/// period on default settings.
 	type MinimumPeriod: Get<Self::Moment>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 decl_module! {
@@ -302,7 +315,7 @@ mod tests {
 	}
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -314,6 +327,7 @@ mod tests {
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -337,6 +351,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;
@@ -345,6 +360,7 @@ mod tests {
 		type Moment = u64;
 		type OnTimestampSet = ();
 		type MinimumPeriod = MinimumPeriod;
+		type WeightInfo = ();
 	}
 	type Timestamp = Module<Test>;
 
@@ -352,7 +368,7 @@ mod tests {
 	fn timestamp_works() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
+			assert_ok!(Timestamp::set(Origin::none(), 69));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -362,8 +378,8 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
+			assert_ok!(Timestamp::set(Origin::none(), 69));
+			let _ = Timestamp::set(Origin::none(), 70);
 		});
 	}
 
@@ -372,7 +388,7 @@ mod tests {
 	fn block_period_minimum_enforced() {
 		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
+			let _ = Timestamp::set(Origin::none(), 46);
 		});
 	}
 }

@@ -30,13 +30,17 @@ use frame_support::{
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Test {
+	trait Store for Module<T: Trait> as Test where
+		<T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event>
+	{
 		Value get(fn value): Option<u32>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where
+		origin: T::Origin, <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event>
+	{
 		#[weight = 0]
 		fn set_value(origin, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
@@ -56,17 +60,23 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-pub trait Trait {
+pub trait OtherTrait {
+	type OtherEvent;
+}
+
+pub trait Trait: OtherTrait where Self::OtherEvent: Into<Self::Event> {
 	type Event;
 	type BlockNumber;
 	type AccountId: 'static + Default + Decode;
-	type Origin: From<frame_system::RawOrigin<Self::AccountId>> + Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
+	type Origin: From<frame_system::RawOrigin<Self::AccountId>> +
+		Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 
 impl frame_system::Trait for Test {
+	type BaseCallFilter = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -90,6 +100,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl Trait for Test {
@@ -99,13 +110,17 @@ impl Trait for Test {
 	type AccountId = u64;
 }
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
+impl OtherTrait for Test {
+	type OtherEvent = ();
+}
+
 fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
 benchmarks!{
+	where_clause { where <T as OtherTrait>::OtherEvent: Into<<T as Trait>::Event> }
+
 	_ {
 		// Define a common range for `b`.
 		let b in 1 .. 1000 => ();
@@ -150,18 +165,22 @@ benchmarks!{
 	verify {
 		ensure!(m[0] == 0, "You forgot to sort!")
 	}
+
+	no_components {
+		let caller = account::<T::AccountId>("caller", 0, 0);
+	}: set_value(RawOrigin::Signed(caller), 0)
 }
 
 #[test]
 fn benchmarks_macro_works() {
 	// Check benchmark creation for `set_value`.
-	let selected_benchmark = SelectedBenchmark::set_value;
+	let selected = SelectedBenchmark::set_value;
 
-	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected);
 	assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::b, 1)],
 	).expect("failed to create closure");
 
@@ -173,12 +192,12 @@ fn benchmarks_macro_works() {
 #[test]
 fn benchmarks_macro_rename_works() {
 	// Check benchmark creation for `other_dummy`.
-	let selected_benchmark = SelectedBenchmark::other_name;
-	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+	let selected = SelectedBenchmark::other_name;
+	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected);
 	assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::b, 1)],
 	).expect("failed to create closure");
 
@@ -189,13 +208,13 @@ fn benchmarks_macro_rename_works() {
 
 #[test]
 fn benchmarks_macro_works_for_non_dispatchable() {
-	let selected_benchmark = SelectedBenchmark::sort_vector;
+	let selected = SelectedBenchmark::sort_vector;
 
-	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
+	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected);
 	assert_eq!(components, vec![(BenchmarkParameter::x, 1, 10000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::x, 1)],
 	).expect("failed to create closure");
 
@@ -205,10 +224,10 @@ fn benchmarks_macro_works_for_non_dispatchable() {
 #[test]
 fn benchmarks_macro_verify_works() {
 	// Check postcondition for benchmark `set_value` is valid.
-	let selected_benchmark = SelectedBenchmark::set_value;
+	let selected = SelectedBenchmark::set_value;
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
-		&selected_benchmark,
+		&selected,
 		&[(BenchmarkParameter::b, 1)],
 	).expect("failed to create closure");
 
@@ -225,5 +244,6 @@ fn benchmarks_generate_unit_tests() {
 		assert_ok!(test_benchmark_sort_vector::<Test>());
 		assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
 		assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
+		assert_ok!(test_benchmark_no_components::<Test>());
 	});
 }

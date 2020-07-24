@@ -24,23 +24,26 @@ pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfigura
 pub use sc_executor::WasmExecutionMethod;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 
-use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
+use std::{io, future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
-use sp_core::crypto::Protected;
+use sp_core::crypto::SecretString;
 pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
+#[cfg(not(target_os = "unknown"))]
+use tempfile::TempDir;
 
 /// Service configuration.
+#[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
-	pub impl_name: &'static str,
+	pub impl_name: String,
 	/// Implementation version (see sc-cli to see an example of format)
-	pub impl_version: &'static str,
+	pub impl_version: String,
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
+	pub task_executor: TaskExecutor,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -65,6 +68,8 @@ pub struct Configuration {
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
+	/// RPC over IPC binding path. `None` if disabled.
+	pub rpc_ipc: Option<String>,
 	/// Maximum number of connections for WebSockets RPC server. `None` if default.
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
@@ -102,6 +107,10 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+	/// Base path of the configuration
+	pub base_path: Option<BasePath>,
+	/// Configuration of the output format that the informant uses.
+	pub informant_output_format: sc_informant::OutputFormat,
 }
 
 /// Type for tasks spawned by the executor.
@@ -114,14 +123,14 @@ pub enum TaskType {
 }
 
 /// Configuration of the client keystore.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum KeystoreConfig {
 	/// Keystore at a path on-disk. Recommended for native nodes.
 	Path {
 		/// The path of the keystore.
 		path: PathBuf,
 		/// Node keystore's password.
-		password: Option<Protected<String>>
+		password: Option<SecretString>
 	},
 	/// In-memory keystore. Recommended for in-browser nodes.
 	InMemory,
@@ -137,7 +146,7 @@ impl KeystoreConfig {
 	}
 }
 /// Configuration of the database of the client.
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OffchainWorkerConfig {
 	/// If this is allowed.
 	pub enabled: bool,
@@ -146,7 +155,7 @@ pub struct OffchainWorkerConfig {
 }
 
 /// Configuration of the Prometheus endpoint.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PrometheusConfig {
 	/// Port to use.
 	pub port: SocketAddr,
@@ -172,6 +181,11 @@ impl Configuration {
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
 	}
+
+	/// Returns the prometheus metrics registry, if available.
+	pub fn prometheus_registry<'a>(&'a self) -> Option<&'a Registry> {
+		self.prometheus_config.as_ref().map(|config| &config.registry)
+	}
 }
 
 /// Available RPC methods.
@@ -189,5 +203,121 @@ pub enum RpcMethods {
 impl Default for RpcMethods {
 	fn default() -> RpcMethods {
 		RpcMethods::Auto
+	}
+}
+
+/// The base path that is used for everything that needs to be write on disk to run a node.
+#[derive(Debug)]
+pub enum BasePath {
+	/// A temporary directory is used as base path and will be deleted when dropped.
+	#[cfg(not(target_os = "unknown"))]
+	Temporary(TempDir),
+	/// A path on the disk.
+	Permanenent(PathBuf),
+}
+
+impl BasePath {
+	/// Create a `BasePath` instance using a temporary directory prefixed with "substrate" and use
+	/// it as base path.
+	///
+	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
+	/// instance is dropped.
+	#[cfg(not(target_os = "unknown"))]
+	pub fn new_temp_dir() -> io::Result<BasePath> {
+		Ok(BasePath::Temporary(
+			tempfile::Builder::new().prefix("substrate").tempdir()?,
+		))
+	}
+
+	/// Create a `BasePath` instance based on an existing path on disk.
+	///
+	/// Note: this function will not ensure that the directory exist nor create the directory. It
+	/// will also not delete the directory when the instance is dropped.
+	pub fn new<P: AsRef<Path>>(path: P) -> BasePath {
+		BasePath::Permanenent(path.as_ref().to_path_buf())
+	}
+
+	/// Create a base path from values describing the project.
+	#[cfg(not(target_os = "unknown"))]
+	pub fn from_project(qualifier: &str, organization: &str, application: &str) -> BasePath {
+		BasePath::new(
+			directories::ProjectDirs::from(qualifier, organization, application)
+				.expect("app directories exist on all supported platforms; qed")
+				.data_local_dir(),
+		)
+	}
+
+	/// Retrieve the base path.
+	pub fn path(&self) -> &Path {
+		match self {
+			#[cfg(not(target_os = "unknown"))]
+			BasePath::Temporary(temp_dir) => temp_dir.path(),
+			BasePath::Permanenent(path) => path.as_path(),
+		}
+	}
+}
+
+impl std::convert::From<PathBuf> for BasePath {
+	fn from(path: PathBuf) -> Self {
+		BasePath::new(path)
+	}
+}
+
+// NOTE: here for code readability.
+pub(crate) type SomeFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+pub(crate) type JoinFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// Callable object that execute tasks.
+///
+/// This struct can be created easily using `Into`.
+///
+/// # Examples
+///
+/// ## Using tokio
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// use futures::future::FutureExt;
+/// use tokio::runtime::Runtime;
+///
+/// let runtime = Runtime::new().unwrap();
+/// let handle = runtime.handle().clone();
+/// let task_executor: TaskExecutor = (move |future, _task_type| {
+///     handle.spawn(future).map(|_| ())
+/// }).into();
+/// ```
+///
+/// ## Using async-std
+///
+/// ```
+/// # use sc_service::TaskExecutor;
+/// let task_executor: TaskExecutor = (|future, _task_type| {
+///     // NOTE: async-std's JoinHandle is not a Result so we don't need to map the result
+///     async_std::task::spawn(future)
+/// }).into();
+/// ```
+#[derive(Clone)]
+pub struct TaskExecutor(Arc<dyn Fn(SomeFuture, TaskType) -> JoinFuture + Send + Sync>);
+
+impl std::fmt::Debug for TaskExecutor {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "TaskExecutor")
+	}
+}
+
+impl<F, FUT> std::convert::From<F> for TaskExecutor
+where
+	F: Fn(SomeFuture, TaskType) -> FUT + Send + Sync + 'static,
+	FUT: Future<Output = ()> + Send + 'static,
+{
+	fn from(func: F) -> Self {
+		Self(Arc::new(move |fut, tt| Box::pin(func(fut, tt))))
+	}
+}
+
+impl TaskExecutor {
+	/// Spawns a new asynchronous task.
+	pub fn spawn(&self, future: SomeFuture, task_type: TaskType) -> JoinFuture {
+		self.0(future, task_type)
 	}
 }

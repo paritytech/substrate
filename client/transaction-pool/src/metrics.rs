@@ -45,12 +45,55 @@ impl MetricsLink {
 
 /// Transaction pool Prometheus metrics.
 pub struct Metrics {
-	pub validations_scheduled: Counter<U64>,
-	pub validations_finished: Counter<U64>,
+	pub submitted_transactions: Counter<U64>,
 	pub validations_invalid: Counter<U64>,
+	pub block_transactions_pruned: Counter<U64>,
+	pub block_transactions_resubmitted: Counter<U64>,
 }
 
 impl Metrics {
+	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			submitted_transactions: register(
+				Counter::new(
+					"sub_txpool_submitted_transactions",
+					"Total number of transactions submitted",
+				)?,
+				registry,
+			)?,
+			validations_invalid: register(
+				Counter::new(
+					"sub_txpool_validations_invalid",
+					"Total number of transactions that were removed from the pool as invalid",
+				)?,
+				registry,
+			)?,
+			block_transactions_pruned: register(
+				Counter::new(
+					"sub_txpool_block_transactions_pruned",
+					"Total number of transactions that was requested to be pruned by block events",
+				)?,
+				registry,
+			)?,
+			block_transactions_resubmitted: register(
+				Counter::new(
+					"sub_txpool_block_transactions_resubmitted",
+					"Total number of transactions that was requested to be resubmitted by block events",
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
+
+/// Transaction pool api Prometheus metrics.
+pub struct ApiMetrics {
+	pub validations_scheduled: Counter<U64>,
+	pub validations_finished: Counter<U64>,
+}
+
+impl ApiMetrics {
+	/// Register the metrics at the given Prometheus registry.
 	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			validations_scheduled: register(
@@ -67,13 +110,20 @@ impl Metrics {
 				)?,
 				registry,
 			)?,
-			validations_invalid: register(
-				Counter::new(
-					"sub_txpool_validations_invalid",
-					"Total number of transactions that were removed from the pool as invalid",
-				)?,
-				registry,
-			)?,
 		})
+	}
+}
+
+/// An extension trait for [`ApiMetrics`].
+pub trait ApiMetricsExt {
+	/// Report an event to the metrics.
+	fn report(&self, report: impl FnOnce(&ApiMetrics));
+}
+
+impl ApiMetricsExt for Option<Arc<ApiMetrics>> {
+	fn report(&self, report: impl FnOnce(&ApiMetrics)) {
+		if let Some(metrics) = self.as_ref() {
+			report(metrics)
+		}
 	}
 }

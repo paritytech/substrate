@@ -76,6 +76,30 @@ pub type MemberCount = u32;
 /// + This pallet assumes that dependents keep to the limit without enforcing it.
 pub const MAX_MEMBERS: MemberCount = 100;
 
+pub trait WeightInfo {
+	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
+	fn execute(m: u32, b: u32, ) -> Weight;
+	fn propose_execute(m: u32, b: u32, ) -> Weight;
+	fn propose_proposed(m: u32, p: u32, b: u32, ) -> Weight;
+	fn vote(m: u32, ) -> Weight;
+	fn close_early_disapproved(m: u32, p: u32, b: u32, ) -> Weight;
+	fn close_early_approved(m: u32, p: u32, b: u32, ) -> Weight;
+	fn close_disapproved(m: u32, p: u32, b: u32, ) -> Weight;
+	fn close_approved(m: u32, p: u32, b: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn set_members(_m: u32, _n: u32, _p: u32, ) -> Weight { 1_000_000_000 }
+	fn execute(_m: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_execute(_m: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn propose_proposed(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn vote(_m: u32, ) -> Weight { 1_000_000_000 }
+	fn close_early_disapproved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_early_approved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_disapproved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+	fn close_approved(_m: u32, _p: u32, _b: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
@@ -94,10 +118,13 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 
 	/// Maximum number of proposals allowed to be active in parallel.
 	type MaxProposals: Get<u32>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Origin for the collective module.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
 pub enum RawOrigin<AccountId, I> {
 	/// It has been condoned by a given number of members of the collective from a given total.
 	Members(MemberCount, MemberCount),
@@ -157,19 +184,26 @@ decl_event! {
 	{
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
+		/// [account, proposal_index, proposal_hash, threshold]
 		Proposed(AccountId, ProposalIndex, Hash, MemberCount),
 		/// A motion (given hash) has been voted on by given account, leaving
 		/// a tally (yes votes and no votes given respectively as `MemberCount`).
+		/// [account, proposal_hash, voted, yes, no]
 		Voted(AccountId, Hash, bool, MemberCount, MemberCount),
 		/// A motion was approved by the required threshold.
+		/// [proposal_hash]
 		Approved(Hash),
 		/// A motion was not approved by the required threshold.
+		/// [proposal_hash]
 		Disapproved(Hash),
-		/// A motion was executed; `bool` is true if returned without error.
+		/// A motion was executed; result will be `Ok` if it returned without error.
+		/// [proposal_hash, result]
 		Executed(Hash, DispatchResult),
-		/// A single member did some action; `bool` is true if returned without error.
+		/// A single member did some action; result will be `Ok` if it returned without error.
+		/// [proposal_hash, result]
 		MemberExecuted(Hash, DispatchResult),
-		/// A proposal was closed after its duration was up.
+		/// A proposal was closed because its threshold was reached or after its duration was up.
+		/// [proposal_hash, yes, no]
 		Closed(Hash, MemberCount, MemberCount),
 	}
 }
@@ -188,7 +222,7 @@ decl_error! {
 		DuplicateVote,
 		/// Members are already initialized!
 		AlreadyInitialized,
-		/// The close call is made too early, before the end of the voting.
+		/// The close call was made too early, before the end of the voting.
 		TooEarly,
 		/// There can only be a maximum of `MaxProposals` active proposals.
 		TooManyProposals,
@@ -1015,10 +1049,11 @@ mod tests {
 		pub const MaxProposals: u32 = 100;
 	}
 	impl frame_system::Trait for Test {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = ();
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1038,6 +1073,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
@@ -1045,6 +1081,7 @@ mod tests {
 		type Event = Event;
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
+		type WeightInfo = ();
 	}
 	impl Trait for Test {
 		type Origin = Origin;
@@ -1052,6 +1089,7 @@ mod tests {
 		type Event = Event;
 		type MotionDuration = MotionDuration;
 		type MaxProposals = MaxProposals;
+		type WeightInfo = ();
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -1167,7 +1205,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3), MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(3), MAX_MEMBERS));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1192,7 +1230,7 @@ mod tests {
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1), MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![1, 2, 3], Some(1), MAX_MEMBERS));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), proposal_len));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -1260,7 +1298,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4], None, MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![2, 3, 4], None, MAX_MEMBERS));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -1275,7 +1313,7 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4], None, MAX_MEMBERS));
+			assert_ok!(Collective::set_members(Origin::root(), vec![2, 4], None, MAX_MEMBERS));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })
@@ -1618,7 +1656,7 @@ mod tests {
 			// Proposal would normally succeed
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			// But Root can disapprove and remove it anyway
-			assert_ok!(Collective::disapprove_proposal(Origin::ROOT, hash.clone()));
+			assert_ok!(Collective::disapprove_proposal(Origin::root(), hash.clone()));
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 2))),

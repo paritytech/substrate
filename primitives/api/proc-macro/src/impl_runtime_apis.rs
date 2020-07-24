@@ -34,7 +34,7 @@ use syn::{
 	fold::{self, Fold}, parse_quote,
 };
 
-use std::{collections::HashSet, iter};
+use std::collections::HashSet;
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
@@ -71,10 +71,8 @@ fn generate_impl_call(
 	let params = extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let c_iter = iter::repeat(&c);
 	let fn_name = &signature.ident;
-	let fn_name_str = iter::repeat(fn_name.to_string());
-	let input = iter::repeat(input);
+	let fn_name_str = fn_name.to_string();
 	let pnames = params.iter().map(|v| &v.0);
 	let pnames2 = params.iter().map(|v| &v.0);
 	let ptypes = params.iter().map(|v| &v.1);
@@ -82,12 +80,14 @@ fn generate_impl_call(
 
 	Ok(
 		quote!(
-			#(
-				let #pnames : #ptypes = match #c_iter::Decode::decode(&mut #input) {
-					Ok(input) => input,
+			let (#( #pnames ),*) : ( #( #ptypes ),* ) =
+				match #c::DecodeLimit::decode_all_with_depth_limit(
+					#c::MAX_EXTRINSIC_DEPTH,
+					&#input,
+				) {
+					Ok(res) => res,
 					Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e.what()),
 				};
-			)*
 
 			#[allow(deprecated)]
 			<#runtime as #impl_trait>::#fn_name(#( #pborrow #pnames2 ),*)
@@ -135,7 +135,7 @@ fn generate_impl_calls(
 
 /// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
-	let data = Ident::new("data", Span::call_site());
+	let data = Ident::new("__sp_api__input_data", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let impl_calls = generate_impl_calls(impls, &data)?
 		.into_iter()
@@ -253,17 +253,18 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		{
 			type StateBackend = C::StateBackend;
 
-			fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
+			fn execute_in_transaction<F: FnOnce(&Self) -> #crate_::TransactionOutcome<R>, R>(
 				&self,
-				map_call: F,
-			) -> std::result::Result<R, E> where Self: Sized {
+				call: F,
+			) -> R where Self: Sized {
+				self.changes.borrow_mut().start_transaction();
 				*self.commit_on_success.borrow_mut() = false;
-				let res = map_call(self);
+				let res = call(self);
 				*self.commit_on_success.borrow_mut() = true;
 
-				self.commit_on_ok(&res);
+				self.commit_or_rollback(matches!(res, #crate_::TransactionOutcome::Commit(_)));
 
-				res
+				res.into_inner()
 			}
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
@@ -366,6 +367,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				&self,
 				call_api_at: F,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
+				if *self.commit_on_success.borrow() {
+					self.changes.borrow_mut().start_transaction();
+				}
 				let res = call_api_at(
 					&self.call,
 					self,
@@ -376,16 +380,21 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.recorder,
 				);
 
-				self.commit_on_ok(&res);
+				self.commit_or_rollback(res.is_ok());
 				res
 			}
 
-			fn commit_on_ok<R, E>(&self, res: &std::result::Result<R, E>) {
+			fn commit_or_rollback(&self, commit: bool) {
+				let proof = "\
+					We only close a transaction when we opened one ourself.
+					Other parts of the runtime that make use of transactions (state-machine)
+					also balance their transactions. The runtime cannot close client initiated
+					transactions. qed";
 				if *self.commit_on_success.borrow() {
-					if res.is_err() {
-						self.changes.borrow_mut().discard_prospective();
+					if commit {
+						self.changes.borrow_mut().commit_transaction().expect(proof);
 					} else {
-						self.changes.borrow_mut().commit_prospective();
+						self.changes.borrow_mut().rollback_transaction().expect(proof);
 					}
 				}
 			}
@@ -408,7 +417,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 	};
 
 	let pos = trait_.segments.len() - 1;
-	trait_.segments.insert(pos, runtime.clone().into());
+	trait_.segments.insert(pos, runtime.into());
 	trait_
 }
 

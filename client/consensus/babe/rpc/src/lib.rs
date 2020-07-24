@@ -32,13 +32,18 @@ use sp_consensus_babe::{
 	digests::PreDigest,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::{
+	crypto::Public,
+	traits::BareCryptoStore,
+};
+use sp_application_crypto::AppKey;
 use sc_keystore::KeyStorePtr;
 use sc_rpc_api::DenyUnsafe;
 use sp_api::{ProvideRuntimeApi, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{HeaderBackend, HeaderMetadata, Error as BlockChainError};
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
 
@@ -93,7 +98,6 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 		B: BlockT,
 		C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error=BlockChainError> + 'static,
 		C::Api: BabeRuntimeApi<B>,
-		<C::Api as sp_api::ApiErrorExt>::Error: fmt::Debug,
 		SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {
@@ -126,22 +130,23 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
-			let key_pairs = {
-				let keystore = keystore.read();
+			let keys = {
+				let ks = keystore.read();
 				epoch.authorities.iter()
 					.enumerate()
-					.flat_map(|(i, a)| {
-						keystore
-							.key_pair::<sp_consensus_babe::AuthorityPair>(&a.0)
-							.ok()
-							.map(|kp| (kp, i))
+					.filter_map(|(i, a)| {
+						if ks.has_keys(&[(a.0.to_raw_vec(), AuthorityId::ID)]) {
+							Some((a.0.clone(), i))
+						} else {
+							None
+						}
 					})
 					.collect::<Vec<_>>()
 			};
 
 			for slot_number in epoch_start..epoch_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_key_pairs(slot_number, &epoch, &key_pairs)
+					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {

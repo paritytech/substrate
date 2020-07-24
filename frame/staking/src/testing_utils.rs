@@ -24,7 +24,7 @@ use frame_benchmarking::{account};
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
-use sp_phragmen::*;
+use sp_npos_elections::*;
 
 const SEED: u32 = 0;
 
@@ -46,6 +46,21 @@ pub fn create_stash_controller<T: Trait>(n: u32, balance_factor: u32)
 	let controller = create_funded_user::<T>("controller", n, balance_factor);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
+	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	return Ok((stash, controller))
+}
+
+/// Create a stash and controller pair, where the controller is dead, and payouts go to controller.
+/// This is used to test worst case payout scenarios.
+pub fn create_stash_and_dead_controller<T: Trait>(n: u32, balance_factor: u32)
+	-> Result<(T::AccountId, T::AccountId), &'static str>
+{
+	let stash = create_funded_user::<T>("stash", n, balance_factor);
+	// controller has no funds
+	let controller = create_funded_user::<T>("controller", n, 0);
+	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let reward_destination = RewardDestination::Controller;
 	let amount = T::Currency::minimum_balance() * (balance_factor / 10).max(1).into();
 	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
 	return Ok((stash, controller))
@@ -138,12 +153,12 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(
 /// which has a less score than the seq-phragmen.
 pub fn get_weak_solution<T: Trait>(
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, CompactAssignments, PhragmenScore, ElectionSize) {
+) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
 	// self stake
 	<Validators<T>>::iter().for_each(|(who, _p)| {
-		*backing_stake_of.entry(who.clone()).or_insert(Zero::zero()) +=
+		*backing_stake_of.entry(who.clone()).or_insert_with(|| Zero::zero()) +=
 			<Module<T>>::slashable_balance_of(&who)
 	});
 
@@ -201,11 +216,8 @@ pub fn get_weak_solution<T: Trait>(
 	};
 
 	// convert back to ratio assignment. This takes less space.
-	let low_accuracy_assignment: Vec<Assignment<T::AccountId, OffchainAccuracy>> =
-		staked_assignments
-			.into_iter()
-			.map(|sa| sa.into_assignment(true))
-			.collect();
+	let low_accuracy_assignment = assignment_staked_to_ratio_normalized(staked_assignments)
+		.expect("Failed to normalize");
 
 	// re-calculate score based on what the chain will decode.
 	let score = {
@@ -252,8 +264,8 @@ pub fn get_weak_solution<T: Trait>(
 /// worker code.
 pub fn get_seq_phragmen_solution<T: Trait>(
 	do_reduce: bool,
-) -> (Vec<ValidatorIndex>, CompactAssignments, PhragmenScore, ElectionSize) {
-	let sp_phragmen::PhragmenResult {
+) -> (Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize) {
+	let sp_npos_elections::ElectionResult {
 		winners,
 		assignments,
 	} = <Module<T>>::do_phragmen::<OffchainAccuracy>().unwrap();
@@ -264,7 +276,7 @@ pub fn get_seq_phragmen_solution<T: Trait>(
 /// Returns a solution in which only one winner is elected with just a self vote.
 pub fn get_single_winner_solution<T: Trait>(
 	winner: T::AccountId
-) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore, ElectionSize), &'static str> {
+) -> Result<(Vec<ValidatorIndex>, CompactAssignments, ElectionScore, ElectionSize), &'static str> {
 	let snapshot_validators = <Module<T>>::snapshot_validators().unwrap();
 	let snapshot_nominators = <Module<T>>::snapshot_nominators().unwrap();
 

@@ -32,6 +32,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
 };
+use std::convert::TryInto;
 
 pub use self::gen_client::Client as ContractsClient;
 pub use pallet_contracts_rpc_runtime_api::{
@@ -80,7 +81,7 @@ pub struct CallRequest<AccountId, Balance> {
 	origin: AccountId,
 	dest: AccountId,
 	value: Balance,
-	gas_limit: number::NumberOrHex<u64>,
+	gas_limit: number::NumberOrHex,
 	input_data: Bytes,
 }
 
@@ -91,10 +92,12 @@ pub struct CallRequest<AccountId, Balance> {
 pub enum RpcContractExecResult {
 	/// Successful execution
 	Success {
-		/// Status code
-		status: u8,
+		/// The return flags
+		flags: u32,
 		/// Output data
 		data: Bytes,
+		/// How much gas was consumed by the call.
+		gas_consumed: u64,
 	},
 	/// Error execution
 	Error(()),
@@ -103,9 +106,14 @@ pub enum RpcContractExecResult {
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
 		match r {
-			ContractExecResult::Success { status, data } => RpcContractExecResult::Success {
-				status,
+			ContractExecResult::Success {
+				flags,
+				data,
+				gas_consumed
+			} => RpcContractExecResult::Success {
+				flags,
 				data: data.into(),
+				gas_consumed,
 			},
 			ContractExecResult::Error => RpcContractExecResult::Error(()),
 		}
@@ -203,9 +211,11 @@ where
 			gas_limit,
 			input_data,
 		} = call_request;
-		let gas_limit = gas_limit.to_number().map_err(|e| Error {
+
+		// Make sure that gas_limit fits into 64 bits.
+		let gas_limit: u64 = gas_limit.try_into().map_err(|_| Error {
 			code: ErrorCode::InvalidParams,
-			message: e,
+			message: format!("{:?} doesn't fit in 64 bit unsigned value", gas_limit),
 			data: None,
 		})?;
 
@@ -282,16 +292,31 @@ fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> Error {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_core::U256;
 
 	#[test]
-	fn should_serialize_deserialize_properly() {
+	fn call_request_should_serialize_deserialize_properly() {
+		type Req = CallRequest<String, u128>;
+		let req: Req = serde_json::from_str(r#"
+		{
+			"origin": "5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL",
+			"dest": "5DRakbLVnjVrW6niwLfHGW24EeCEvDAFGEXrtaYS5M4ynoom",
+			"value": 0,
+			"gasLimit": 1000000000000,
+			"inputData": "0x8c97db39"
+		}
+		"#).unwrap();
+		assert_eq!(req.gas_limit.into_u256(), U256::from(0xe8d4a51000u64));
+	}
+
+	#[test]
+	fn result_should_serialize_deserialize_properly() {
 		fn test(expected: &str) {
 			let res: RpcContractExecResult = serde_json::from_str(expected).unwrap();
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, expected);
 		}
-
-		test(r#"{"success":{"status":5,"data":"0x1234"}}"#);
+		test(r#"{"success":{"flags":5,"data":"0x1234","gas_consumed":5000}}"#);
 		test(r#"{"error":null}"#);
 	}
 }

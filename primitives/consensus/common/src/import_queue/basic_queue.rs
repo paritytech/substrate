@@ -61,7 +61,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-		spawner: &impl sp_core::traits::SpawnBlocking,
+		spawner: &impl sp_core::traits::SpawnNamed,
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
@@ -108,7 +108,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 	) {
 		let _ = self.sender
 			.unbounded_send(
-				ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification)
+				ToWorkerMsg::ImportJustification(who, hash, number, justification)
 			);
 	}
 

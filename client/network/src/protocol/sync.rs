@@ -48,6 +48,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion, Hash, HashFor}
 };
+use sp_arithmetic::traits::Saturating;
 use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc};
 
 mod blocks;
@@ -388,7 +389,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Returns the current sync status.
 	pub fn status(&self) -> Status<B> {
-		let best_seen = self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number);
+		let best_seen = self.peers.values().map(|p| p.best_number).max();
 		let sync_state =
 			if let Some(n) = best_seen {
 				// A chain is classified as downloading if the provided best block is
@@ -651,7 +652,6 @@ impl<B: BlockT> ChainSync<B> {
 		let blocks = &mut self.blocks;
 		let attrs = &self.required_block_attributes;
 		let fork_targets = &mut self.fork_targets;
-		let mut have_requests = false;
 		let last_finalized = self.client.info().finalized_number;
 		let best_queued = self.best_queued_number;
 		let client = &self.client;
@@ -681,7 +681,6 @@ impl<B: BlockT> ChainSync<B> {
 					peer.common_number,
 					req,
 				);
-				have_requests = true;
 				Some((id, req))
 			} else if let Some((hash, req)) = fork_sync_request(
 				id,
@@ -697,7 +696,6 @@ impl<B: BlockT> ChainSync<B> {
 			) {
 				trace!(target: "sync", "Downloading fork {:?} from {}", hash, id);
 				peer.state = PeerSyncState::DownloadingStale(hash);
-				have_requests = true;
 				Some((id, req))
 			} else {
 				None
@@ -1189,6 +1187,21 @@ impl<B: BlockT> ChainSync<B> {
 			peer.recently_announced.pop_front();
 		}
 		peer.recently_announced.push_back(hash.clone());
+
+		// Let external validator check the block announcement.
+		let assoc_data = announce.data.as_ref().map_or(&[][..], |v| v.as_slice());
+		let is_best = match self.block_announce_validator.validate(&header, assoc_data) {
+			Ok(Validation::Success { is_new_best }) => is_new_best || is_best,
+			Ok(Validation::Failure) => {
+				debug!(target: "sync", "Block announcement validation of block {} from {} failed", hash, who);
+				return OnBlockAnnounce::Nothing
+			}
+			Err(e) => {
+				error!(target: "sync", "💔 Block announcement validation errored: {}", e);
+				return OnBlockAnnounce::Nothing
+			}
+		};
+
 		if is_best {
 			// update their best block
 			peer.best_number = number;
@@ -1217,20 +1230,6 @@ impl<B: BlockT> ChainSync<B> {
 				target.peers.insert(who.clone());
 			}
 			return OnBlockAnnounce::Nothing
-		}
-
-		// Let external validator check the block announcement.
-		let assoc_data = announce.data.as_ref().map_or(&[][..], |v| v.as_slice());
-		match self.block_announce_validator.validate(&header, assoc_data) {
-			Ok(Validation::Success) => (),
-			Ok(Validation::Failure) => {
-				debug!(target: "sync", "Block announcement validation of block {} from {} failed", hash, who);
-				return OnBlockAnnounce::Nothing
-			}
-			Err(e) => {
-				error!(target: "sync", "💔 Block announcement validation errored: {}", e);
-				return OnBlockAnnounce::Nothing
-			}
 		}
 
 		if ancient_parent {
@@ -1431,14 +1430,24 @@ fn peer_block_request<B: BlockT>(
 		max_parallel_downloads,
 		MAX_DOWNLOAD_AHEAD,
 	) {
+		// The end is not part of the range.
+		let last = range.end.saturating_sub(One::one());
+
+		let from = if peer.best_number == last {
+			message::FromBlock::Hash(peer.best_hash)
+		} else {
+			message::FromBlock::Number(last)
+		};
+
 		let request = message::generic::BlockRequest {
 			id: 0,
 			fields: attrs.clone(),
-			from: message::FromBlock::Number(range.start),
+			from,
 			to: None,
-			direction: message::Direction::Ascending,
+			direction: message::Direction::Descending,
 			max: Some((range.end - range.start).saturated_into::<u32>())
 		};
+
 		Some((range, request))
 	} else {
 		None
@@ -1561,7 +1570,7 @@ mod test {
 
 		let client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
-		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator::new(client.clone()));
+		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 		let peer_id = PeerId::random();
 
 		let mut sync = ChainSync::new(

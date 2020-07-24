@@ -21,17 +21,20 @@ use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_service::{
-	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
+	config::DatabaseConfig, chain_ops::export_blocks,
 };
+use sc_client_api::{BlockBackend, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, StructOpt)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
 	#[structopt(parse(from_os_str))]
@@ -68,19 +71,17 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, C>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: Arc<C>,
+		database_config: DatabaseConfig,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		C: BlockBackend<B> + UsageProvider<B> + 'static,
+		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
+		if let DatabaseConfig::RocksDb { ref path, .. } = database_config {
 			info!("DB path: {}", path.display());
 		}
 
@@ -94,8 +95,7 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		builder(config)?
-			.export_blocks(file, from.into(), to, binary)
+		export_blocks(client, file, from.into(), to, binary)
 			.await
 			.map_err(Into::into)
 	}

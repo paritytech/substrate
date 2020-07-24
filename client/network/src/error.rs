@@ -18,6 +18,7 @@
 
 //! Substrate network possible errors.
 
+use crate::config::TransportConfig;
 use libp2p::{PeerId, Multiaddr};
 
 use std::fmt;
@@ -31,7 +32,7 @@ pub enum Error {
 	/// Io error
 	Io(std::io::Error),
 	/// Client error
-	Client(sp_blockchain::Error),
+	Client(Box<sp_blockchain::Error>),
 	/// The same bootnode (based on address) is registered with two different peer ids.
 	#[display(
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
@@ -48,7 +49,18 @@ pub enum Error {
 		second_id: PeerId,
 	},
 	/// Prometheus metrics error.
-	Prometheus(prometheus_endpoint::PrometheusError)
+	Prometheus(prometheus_endpoint::PrometheusError),
+	/// The network addresses are invalid because they don't match the transport.
+	#[display(
+		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
+		addresses,
+	)]
+	AddressesForAnotherTransport {
+		/// Transport used.
+		transport: TransportConfig,
+		/// The invalid addresses.
+		addresses: Vec<Multiaddr>,
+	},
 }
 
 // Make `Debug` use the `Display` implementation.
@@ -65,6 +77,7 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(err),
 			Error::DuplicateBootnode { .. } => None,
 			Error::Prometheus(ref err) => Some(err),
+			Error::AddressesForAnotherTransport { .. } => None,
 		}
 	}
 }

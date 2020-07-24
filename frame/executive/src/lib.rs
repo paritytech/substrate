@@ -293,11 +293,13 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
-		let batching_safeguard = sp_runtime::SignatureBatching::start();
+		let signature_batching = sp_runtime::SignatureBatching::start();
+
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-		if !sp_runtime::SignatureBatching::verify(batching_safeguard) {
+
+		if !signature_batching.verify() {
 			panic!("Signature verification failed.");
 		}
 
@@ -545,6 +547,7 @@ mod tests {
 		};
 	}
 	impl frame_system::Trait for Runtime {
+		type BaseCallFilter = ();
 		type Origin = Origin;
 		type Index = u64;
 		type Call = Call;
@@ -568,6 +571,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<Balance>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	type Balance = u64;
@@ -580,6 +584,7 @@ mod tests {
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
+		type WeightInfo = ();
 	}
 
 	parameter_types! {
@@ -708,7 +713,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("05a38fa4a48ca80ffa8482304be7749a484dc8c9c31462a570d0fbadde6a3633").into(),
+					state_root: hex!("e8ff7b3dd4375f6f3a76e24a1999e2a7be2d15b353e49ac94ace1eae3e80eb87").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

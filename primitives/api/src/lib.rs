@@ -58,7 +58,7 @@ pub use sp_runtime::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
 		Header as HeaderT, Hash as HashT,
 	},
-	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString,
+	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString, TransactionOutcome,
 };
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
@@ -69,10 +69,13 @@ pub use sp_std::{slice, mem};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode};
+pub use codec::{Encode, Decode, DecodeLimit};
 use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::{panic::UnwindSafe, cell::RefCell};
+
+/// Maximum nesting level for extrinsics.
+pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 
 /// Declares given traits as runtime apis.
 ///
@@ -353,15 +356,15 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// The state backend that is used to store the block states.
 	type StateBackend: StateBackend<HashFor<Block>>;
 
-	/// The given closure will be called with api instance. Inside the closure any api call is
-	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
-	/// different `Result` type. This can be important, as the internal data structure that keeps
-	/// track of modifications to the storage, discards changes when the `Result` is an `Err`.
-	/// On `Ok`, the structure commits the changes to an internal buffer.
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
+	/// Execute the given closure inside a new transaction.
+	///
+	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
+	///
+	/// The internal result of the closure is returned afterwards.
+	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
 		&self,
-		map_call: F,
-	) -> result::Result<R, E> where Self: Sized;
+		call: F,
+	) -> R where Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
 	fn has_api<A: RuntimeApiInfo + ?Sized>(

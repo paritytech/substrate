@@ -135,7 +135,7 @@ fn heartbeat(
 			e @ _ => <&'static str>::from(e),
 		})?;
 	ImOnline::heartbeat(
-		Origin::system(frame_system::RawOrigin::None),
+		Origin::none(),
 		heartbeat,
 		signature,
 	)

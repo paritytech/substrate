@@ -165,7 +165,7 @@ pub fn start_aura<B, C, SC, E, I, P, SO, CAW, Error>(
 	CAW: CanAuthorWith<B> + Send,
 {
 	let worker = AuraWorker {
-		client: client.clone(),
+		client,
 		block_import: Arc::new(Mutex::new(block_import)),
 		env,
 		keystore,
@@ -479,8 +479,8 @@ fn check_header<C, B: BlockT, P: Pair>(
 				info!(
 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
 					slot_num,
-					equivocation_proof.fst_header().hash(),
-					equivocation_proof.snd_header().hash(),
+					equivocation_proof.first_header.hash(),
+					equivocation_proof.second_header.hash(),
 				);
 			}
 
@@ -714,7 +714,7 @@ fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, Consensus
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
+pub type AuraImportQueue<B, Client> = BasicQueue<B, sp_api::TransactionFor<Client, B>>;
 
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
@@ -824,7 +824,7 @@ pub fn import_queue<B, I, C, P, S>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &S,
 	registry: Option<&Registry>,
-) -> Result<AuraImportQueue<B, sp_api::TransactionFor<C, B>>, sp_consensus::Error> where
+) -> Result<AuraImportQueue<B, C>, sp_consensus::Error> where
 	B: BlockT,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B, Error = sp_blockchain::Error>,
 	C: 'static + ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + Send + Sync + AuxStore + HeaderBackend<B>,
@@ -833,13 +833,13 @@ pub fn import_queue<B, I, C, P, S>(
 	P: Pair + Send + Sync + 'static,
 	P::Public: Clone + Eq + Send + Sync + Hash + Debug + Encode + Decode,
 	P::Signature: Encode + Decode,
-	S: sp_core::traits::SpawnBlocking,
+	S: sp_core::traits::SpawnNamed,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 	initialize_authorities_cache(&*client)?;
 
 	let verifier = AuraVerifier {
-		client: client.clone(),
+		client,
 		inherent_data_providers,
 		phantom: PhantomData,
 	};

@@ -31,20 +31,20 @@
 pub mod light;
 pub mod offchain;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
 mod cache;
 mod changes_tries_storage;
 mod storage_cache;
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
 mod utils;
 mod stats;
-#[cfg(feature = "parity-db")]
+#[cfg(feature = "with-parity-db")]
 mod parity_db;
-#[cfg(feature = "subdb")]
+#[cfg(feature = "with-subdb")]
 mod subdb;
 
 use std::sync::Arc;
@@ -91,7 +91,7 @@ use log::{trace, debug, warn};
 pub use sp_database::Database;
 pub use sc_state_db::PruningMode;
 
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -271,7 +271,7 @@ pub struct DatabaseSettings {
 }
 
 /// Where to find the database..
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum DatabaseSettingsSrc {
 	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {
@@ -512,7 +512,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+			}).ok_or_else(|| ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		}, Ok)
 	}
 
@@ -544,7 +544,12 @@ pub struct BlockImportOperation<Block: BlockT> {
 
 impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
-		for (key, value_operation) in self.offchain_storage_updates.drain() {
+		for ((prefix, key), value_operation) in self.offchain_storage_updates.drain() {
+			let key: Vec<u8> = prefix
+				.into_iter()
+				.chain(sp_core::sp_std::iter::once(b'/'))
+				.chain(key.into_iter())
+				.collect();
 			match value_operation {
 				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
 				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
@@ -1238,7 +1243,7 @@ impl<Block: BlockT> Backend<Block> {
 			None
 		};
 
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 
 		if let Some((
 			number,
@@ -1351,7 +1356,7 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 		for k in delete {
 			transaction.remove(columns::AUX, k);
 		}
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		Ok(())
 	}
 
@@ -1433,7 +1438,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
@@ -1531,7 +1536,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
-						self.storage.db.commit(transaction);
+						self.storage.db.commit(transaction)?;
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
 					}
@@ -1550,7 +1555,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 			leaves.revert(best_hash, best_number);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-			self.storage.db.commit(transaction);
+			self.storage.db.commit(transaction)?;
 
 			Ok(())
 		};

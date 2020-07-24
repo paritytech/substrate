@@ -39,7 +39,7 @@
 //!    `Yes`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!         #[weight = 1000]
@@ -52,7 +52,7 @@
 //! 2.1 Define weight and class, **in which case `PaysFee` would be `Yes`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::DispatchClass;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -66,7 +66,7 @@
 //! 2.2 Define weight and `PaysFee`, **in which case `ClassifyDispatch` would be `Normal`**.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::Pays;
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -80,7 +80,7 @@
 //! 3. Define all 3 parameters.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -100,7 +100,7 @@
 //! all 3 are static values, providing a raw tuple is easier.
 //!
 //! ```
-//! # use frame_system::{self as system, Trait};
+//! # use frame_system::Trait;
 //! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -136,7 +136,7 @@ use sp_runtime::{
 };
 use crate::dispatch::{DispatchErrorWithPostInfo, DispatchResultWithPostInfo, DispatchError};
 use sp_runtime::traits::SaturatedConversion;
-use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating}};
+use sp_arithmetic::{Perbill, traits::{BaseArithmetic, Saturating, Unsigned}};
 use smallvec::{smallvec, SmallVec};
 
 /// Re-export priority as type
@@ -425,9 +425,11 @@ impl<T> PaysFee<T> for (Weight, Pays) {
 ///   with the same argument list as the dispatched, wrapped in a tuple.
 /// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that
 ///   returns a `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
+#[deprecated = "Function arguments are available directly inside the annotation now."]
 pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
 // `WeighData` as a raw value
+#[allow(deprecated)]
 impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 	fn weigh_data(&self, _: Args) -> Weight {
 		self.0
@@ -435,6 +437,7 @@ impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 }
 
 // `WeighData` as a closure
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
 	WD : Fn(Args) -> Weight
 {
@@ -444,6 +447,7 @@ impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `ClassifyDispatch` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> {
 	fn classify_dispatch(&self, _: Args) -> DispatchClass {
 		self.1
@@ -451,6 +455,7 @@ impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> 
 }
 
 // `ClassifyDispatch` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 	CD : Fn(Args) -> DispatchClass
 {
@@ -460,6 +465,7 @@ impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `PaysFee` as a raw value
+#[allow(deprecated)]
 impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 	fn pays_fee(&self, _: Args) -> Pays {
 		self.2
@@ -467,6 +473,7 @@ impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
 }
 
 // `PaysFee` as a closure
+#[allow(deprecated)]
 impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF> where
 	PF : Fn(Args) -> Pays
 {
@@ -564,7 +571,7 @@ pub type WeightToFeeCoefficients<T> = SmallVec<[WeightToFeeCoefficient<T>; 4]>;
 /// An implementor should only implement the `polynomial` function.
 pub trait WeightToFeePolynomial {
 	/// The type that is returned as result from polynomial evaluation.
-	type Balance: BaseArithmetic + From<u32> + Copy;
+	type Balance: BaseArithmetic + From<u32> + Copy + Unsigned;
 
 	/// Returns a polynomial that describes the weight to fee conversion.
 	///
@@ -582,7 +589,7 @@ pub trait WeightToFeePolynomial {
 		Self::polynomial().iter().fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
 			let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
 
-			// The sum could get negative. Therefore we only sum with the accumulator. 
+			// The sum could get negative. Therefore we only sum with the accumulator.
 			// The Perbill Mul implementation is non overflowing.
 			let frac = args.coeff_frac * w;
 			let integer = args.coeff_integer.saturating_mul(w);
@@ -604,7 +611,7 @@ pub trait WeightToFeePolynomial {
 pub struct IdentityFee<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> WeightToFeePolynomial for IdentityFee<T> where
-	T: BaseArithmetic + From<u32> + Copy
+	T: BaseArithmetic + From<u32> + Copy + Unsigned
 {
 	type Balance = T;
 
@@ -663,10 +670,10 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, Pays::Yes)]
+			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
