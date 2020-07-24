@@ -79,6 +79,8 @@ default:
   interruptible:                   true
   tags:
     - linux-docker
+  variables:
+    SUBSTRATE_TEST_TIMEOUT:        600
 
 .build-only:                       &build-only
   only:
@@ -224,6 +226,7 @@ test-linux-stable:                 &test-linux
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                1
     WASM_BUILD_NO_COLOR:           1
+    SUBSTRATE_TEST_TIMEOUT:        600
   except:
     variables:
       - $DEPLOY_TAG

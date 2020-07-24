@@ -74,7 +74,7 @@ fn parse_knobs(
 					std::env::var("SUBSTRATE_TEST_TIMEOUT")
 						.ok()
 						.and_then(|x| x.parse().ok())
-						.unwrap_or(600))
+						.unwrap_or(120))
 			).fuse();
 			let actual_test_task = async move {
 				#body
