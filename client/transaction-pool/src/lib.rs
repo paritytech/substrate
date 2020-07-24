@@ -64,6 +64,11 @@ type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
 
+/// A transaction pool for a full node.
+pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
+/// A transaction pool for a light node.
+pub type LightPool<Block, Client, Fetcher> = BasicPool<LightChainApi<Client, Fetcher, Block>, Block>;
+
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
 	where

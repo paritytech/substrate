@@ -65,7 +65,7 @@ pub trait RuntimeInfo {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_runtime_test::WASM_BINARY;
+	use sc_runtime_test::wasm_binary_unwrap;
 	use sp_io::TestExternalities;
 	use sp_wasm_interface::HostFunctions;
 	use sp_core::traits::CallInWasm;
@@ -82,7 +82,7 @@ mod tests {
 			8,
 		);
 		let res = executor.call_in_wasm(
-			&WASM_BINARY[..],
+			&wasm_binary_unwrap()[..],
 			None,
 			"test_empty_return",
 			&[],
