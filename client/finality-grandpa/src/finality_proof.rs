@@ -177,9 +177,7 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	pub fn new_for_service(
 		backend: Arc<B>,
 		storage_and_proof_provider: Arc<dyn StorageAndProofProvider<Block, B>>,
-	) -> Arc<Self>
-		//where P: StorageAndProofProvider<Block, B> + 'static,
-	{
+	) -> Arc<Self> {
 		Arc::new(Self::new(backend, storage_and_proof_provider))
 	}
 
