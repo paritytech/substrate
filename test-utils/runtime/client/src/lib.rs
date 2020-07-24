@@ -353,7 +353,7 @@ pub fn new_light() -> (
 	let local_call_executor = client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		Box::new(sp_core::testing::SpawnBlockingExecutor::new()),
+		Box::new(sp_core::testing::TaskExecutor::new()),
 		Default::default(),
 	);
 	let call_executor = LightExecutor::new(

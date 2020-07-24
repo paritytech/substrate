@@ -1208,7 +1208,7 @@ mod tests {
 	use super::*;
 	use sp_state_machine::BasicExternalities;
 	use sp_core::{
-		storage::Storage, map, traits::TaskExecutorExt, testing::SpawnBlockingExecutor,
+		storage::Storage, map, traits::TaskExecutorExt, testing::TaskExecutor,
 	};
 	use std::any::TypeId;
 
@@ -1276,7 +1276,7 @@ mod tests {
 	#[test]
 	fn batch_verify_start_finish_works() {
 		let mut ext = BasicExternalities::default();
-		ext.register_extension(TaskExecutorExt::new(SpawnBlockingExecutor::new()));
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 
 		ext.execute_with(|| {
 			crypto::start_batch_verify();
@@ -1294,7 +1294,7 @@ mod tests {
 	#[test]
 	fn long_sr25519_batching() {
 		let mut ext = BasicExternalities::default();
-		ext.register_extension(TaskExecutorExt::new(SpawnBlockingExecutor::new()));
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			crypto::start_batch_verify();
@@ -1325,7 +1325,7 @@ mod tests {
 	#[test]
 	fn batching_works() {
 		let mut ext = BasicExternalities::default();
-		ext.register_extension(TaskExecutorExt::new(SpawnBlockingExecutor::new()));
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();

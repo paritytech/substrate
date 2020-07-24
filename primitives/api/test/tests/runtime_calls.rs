@@ -201,7 +201,7 @@ fn record_proof_works() {
 		&backend,
 		&mut overlay,
 		&executor,
-		sp_core::testing::SpawnBlockingExecutor::new(),
+		sp_core::testing::TaskExecutor::new(),
 		"Core_execute_block",
 		&block.encode(),
 		&runtime_code,

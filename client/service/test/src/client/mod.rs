@@ -40,7 +40,7 @@ use sp_runtime::traits::{
 use substrate_test_runtime::TestAPI;
 use sp_state_machine::backend::Backend as _;
 use sp_api::{ProvideRuntimeApi, OffchainOverlayedChanges};
-use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::SpawnBlockingExecutor};
+use sp_core::{H256, ChangesTrieConfiguration, blake2_256, testing::TaskExecutor};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use sp_consensus::{
@@ -164,7 +164,7 @@ fn construct_block(
 	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
-	let task_executor = Box::new(SpawnBlockingExecutor::new());
+	let task_executor = Box::new(TaskExecutor::new());
 
 	StateMachine::new(
 		backend,
@@ -262,7 +262,7 @@ fn construct_genesis_should_work_with_native() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		SpawnBlockingExecutor::new(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	).unwrap();
@@ -298,7 +298,7 @@ fn construct_genesis_should_work_with_wasm() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		SpawnBlockingExecutor::new(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::AlwaysWasm,
 	).unwrap();
@@ -334,7 +334,7 @@ fn construct_genesis_with_bad_transaction_should_panic() {
 		&b1data,
 		Default::default(),
 		&runtime_code,
-		SpawnBlockingExecutor::new(),
+		TaskExecutor::new(),
 	).execute(
 		ExecutionStrategy::NativeElseWasm,
 	);
@@ -1743,7 +1743,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 			&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 			None,
 			None,
-			Box::new(SpawnBlockingExecutor::new()),
+			Box::new(TaskExecutor::new()),
 			Default::default(),
 		)
 			.unwrap();

@@ -873,7 +873,7 @@ mod tests {
 	fn batching_still_finishes_when_not_called_directly() {
 		let mut ext = sp_state_machine::BasicExternalities::default();
 		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::SpawnBlockingExecutor::new()),
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
 		);
 
 		ext.execute_with(|| {

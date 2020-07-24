@@ -769,7 +769,7 @@ mod tests {
 	use super::ext::Ext;
 	use super::changes_trie::Configuration as ChangesTrieConfig;
 	use sp_core::{
-		map, traits::{Externalities, RuntimeCode}, testing::SpawnBlockingExecutor,
+		map, traits::{Externalities, RuntimeCode}, testing::TaskExecutor,
 	};
 	use sp_runtime::traits::BlakeTwo256;
 
@@ -864,7 +864,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
-			SpawnBlockingExecutor::new(),
+			TaskExecutor::new(),
 		);
 
 		assert_eq!(
@@ -896,7 +896,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
-			SpawnBlockingExecutor::new(),
+			TaskExecutor::new(),
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
@@ -925,7 +925,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
-			SpawnBlockingExecutor::new(),
+			TaskExecutor::new(),
 		);
 
 		assert!(
@@ -956,7 +956,7 @@ mod tests {
 			remote_backend,
 			&mut Default::default(),
 			&executor,
-			SpawnBlockingExecutor::new(),
+			TaskExecutor::new(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),
@@ -968,7 +968,7 @@ mod tests {
 			remote_proof,
 			&mut Default::default(),
 			&executor,
-			SpawnBlockingExecutor::new(),
+			TaskExecutor::new(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),

@@ -257,7 +257,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
 			executor,
-			Box::new(sp_core::testing::SpawnBlockingExecutor::new()),
+			Box::new(sp_core::testing::TaskExecutor::new()),
 			Default::default(),
 		);
 

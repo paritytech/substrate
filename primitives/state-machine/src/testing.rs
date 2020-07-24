@@ -40,7 +40,7 @@ use sp_core::{
 		Storage,
 	},
 	traits::TaskExecutorExt,
-	testing::SpawnBlockingExecutor,
+	testing::TaskExecutor,
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
@@ -111,7 +111,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		let offchain_overlay = OffchainOverlayedChanges::enabled();
 
 		let mut extensions = Extensions::default();
-		extensions.register(TaskExecutorExt::new(SpawnBlockingExecutor::new()));
+		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 
 		let offchain_db = TestPersistentOffchainDB::new();
 

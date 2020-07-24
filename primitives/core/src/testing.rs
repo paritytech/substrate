@@ -359,16 +359,16 @@ macro_rules! wasm_export_functions {
 	};
 }
 
-/// An executor that supports spawning blocking futures in tests.
+/// A task executor that can be used in tests.
 ///
 /// Internally this just wraps a `ThreadPool` with a pool size of `8`. This
 /// should ensure that we have enough threads in tests for spawning blocking futures.
 #[cfg(feature = "std")]
 #[derive(Clone)]
-pub struct SpawnBlockingExecutor(futures::executor::ThreadPool);
+pub struct TaskExecutor(futures::executor::ThreadPool);
 
 #[cfg(feature = "std")]
-impl SpawnBlockingExecutor {
+impl TaskExecutor {
 	/// Create a new instance of `Self`.
 	pub fn new() -> Self {
 		let mut builder = futures::executor::ThreadPoolBuilder::new();
@@ -377,7 +377,7 @@ impl SpawnBlockingExecutor {
 }
 
 #[cfg(feature = "std")]
-impl crate::traits::SpawnNamed for SpawnBlockingExecutor {
+impl crate::traits::SpawnNamed for TaskExecutor {
 	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
 		self.0.spawn_ok(future);
 	}

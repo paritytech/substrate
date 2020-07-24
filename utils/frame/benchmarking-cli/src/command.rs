@@ -78,7 +78,7 @@ impl BenchmarkCmd {
 			).encode(),
 			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-			sp_core::testing::SpawnBlockingExecutor::new(),
+			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
