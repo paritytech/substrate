@@ -574,7 +574,7 @@ mod tests {
 		backend.begin_state_operation(&mut op, block_id).unwrap();
 		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
 		op.update_changes_trie((changes_trie_update, ChangesTrieCacheAction::Clear)).unwrap();
-		backend.commit_operation(op, &|_| true).unwrap();
+		backend.commit_operation(op).unwrap();
 
 		header_hash
 	}
@@ -917,7 +917,7 @@ mod tests {
 		op.mark_finalized(BlockId::Hash(block1), None).unwrap();
 		op.mark_finalized(BlockId::Hash(block2), None).unwrap();
 		op.set_block_data(header3, None, None, NewBlockState::Final).unwrap();
-		backend.commit_operation(op, &|_| true).unwrap();
+		backend.commit_operation(op).unwrap();
 
 		// insert more unfinalized headers
 		let block4 = insert_header_with_configuration_change(&backend, 4, block3, changes(4), configs[4].clone());
@@ -942,7 +942,7 @@ mod tests {
 		op.mark_finalized(BlockId::Hash(block5), None).unwrap();
 		op.mark_finalized(BlockId::Hash(block6), None).unwrap();
 		op.set_block_data(header7, None, None, NewBlockState::Final).unwrap();
-		backend.commit_operation(op, &|_| true).unwrap();
+		backend.commit_operation(op).unwrap();
 	}
 
 	#[test]

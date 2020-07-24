@@ -646,10 +646,9 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(())
 	}
 
-	fn commit_operation<F: Fn(&Block::Hash) -> bool>(
+	fn commit_operation(
 		&self,
 		operation: Self::BlockImportOperation,
-		_finalization_check: &F,
 	) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {

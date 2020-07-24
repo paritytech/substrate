@@ -146,10 +146,9 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 		Ok(())
 	}
 
-	fn commit_operation<F: Fn(&Block::Hash) -> bool>(
+	fn commit_operation(
 		&self,
 		mut operation: Self::BlockImportOperation,
-		_finalization_check: &F,
 	) -> ClientResult<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for block in operation.finalized_blocks {

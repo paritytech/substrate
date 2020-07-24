@@ -244,10 +244,7 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 			let r = f(&mut op)?;
 
 			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
-			self.backend.commit_operation(
-				op,
-				&|hash| !self.block_rules.lookup_hash(hash).is_unfinalized(),
-			)?;
+			self.backend.commit_operation(op)?;
 
 			self.notify_finalized(notify_finalized)?;
 			self.notify_imported(notify_imported)?;
@@ -310,10 +307,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				None,
 				NewBlockState::Final
 			)?;
-			backend.commit_operation(
-				op,
-				&|_| true,
-			)?;
+			backend.commit_operation(op)?;
 		}
 
 		Ok(Client {
@@ -1081,7 +1075,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let (number, reverted) = self.backend.revert(n, true)?;
 		if blacklist {
 			for b in reverted {
-				self.block_rules.mark_unfinalized(b);
+				self.block_rules.mark_bad(b);
 			}
 		}
 		Ok(number)
@@ -1741,13 +1735,6 @@ impl<B, E, Block, RA> sp_consensus::BlockImport<Block> for &Client<B, E, Block, 
 				);
 				return Ok(ImportResult::KnownBad);
 			},
-			BlockLookupResult::KnownUnfinalized => {
-				trace!(
-					"Encountered block that is marked as not to be finalized: #{} {:?}, keep importing.",
-					number,
-					hash,
-				);
-			}
 			BlockLookupResult::NotSpecial => {}
 		}
 
@@ -1945,7 +1932,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
-	}	
+	}
 }
 
 impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
