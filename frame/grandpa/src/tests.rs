@@ -780,3 +780,40 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 		);
 	});
 }
+
+#[test]
+fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
+	use pallet_session::OneSessionHandler;
+
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		assert_eq!(Grandpa::current_set_id(), 0);
+
+		// starting a new era should lead to a change in the session
+		// validators and trigger a new set
+		start_era(1);
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// we schedule a change delayed by 2 blocks, this should make it so that
+		// when we try to rotate the session at the beginning of the era we will
+		// fail to schedule a change (there's already one pending), so we should
+		// not increment the set id.
+		Grandpa::schedule_change(to_authorities(vec![(1, 1)]), 2, None);
+		start_era(2);
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// everything should go back to normal after.
+		start_era(3);
+		assert_eq!(Grandpa::current_set_id(), 2);
+
+		// session rotation might also fail to schedule a change if it's for a
+		// forced change (i.e. grandpa is stalled) and it is too soon.
+		<NextForced<Test>>::put(1000);
+		<Stalled<Test>>::put((30, 1));
+
+		// NOTE: we cannot go through normal era rotation since having `Stalled`
+		// defined will also trigger a new set (regardless of whether the
+		// session validators changed)
+		Grandpa::on_new_session(true, std::iter::empty(), std::iter::empty());
+		assert_eq!(Grandpa::current_set_id(), 2);
+	});
+}
