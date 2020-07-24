@@ -31,10 +31,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate rental;
-
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use tracing;
 
@@ -43,10 +39,16 @@ pub mod interface;
 
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "std")]
+use once_cell::sync::OnceCell;
 
 /// Flag to signal whether to run wasm tracing
 #[cfg(feature = "std")]
 static WASM_TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Instance of the native subscriber in use
+#[cfg(feature = "std")]
+static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn interface::TracingSubscriber>> = OnceCell::new();
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
@@ -114,4 +116,14 @@ pub fn wasm_tracing_enabled() -> bool {
 #[cfg(feature = "std")]
 pub fn set_wasm_tracing(b: bool) {
 	WASM_TRACING_ENABLED.store(b, Ordering::Relaxed)
+}
+
+#[cfg(feature = "std")]
+pub fn set_tracing_subscriber(subscriber: Box<dyn interface::TracingSubscriber>)  {
+	let _ = SUBSCRIBER_INSTANCE.set(subscriber);
+}
+
+#[cfg(feature = "std")]
+pub fn get_tracing_subscriber() -> Option<Box<dyn interface::TracingSubscriber>> {
+	SUBSCRIBER_INSTANCE.get().cloned()
 }
