@@ -174,7 +174,7 @@ A FRAME pallet is compromised of a number of blockchain primitives:
     from outside of the runtime in order to update its state.
 -   Events: Substrate uses [events](https://substrate.dev/docs/en/knowledgebase/runtime/events) to
     notify users of important changes in the runtime.
--   Errors: When a dispatchable fails, it emits an error.
+-   Errors: When a dispatchable fails, it returns an error.
 -   Trait: The `Trait` configuration interface is used to define the types and parameters upon which
     a FRAME pallet depends.
 
