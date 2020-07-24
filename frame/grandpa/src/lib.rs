@@ -67,10 +67,6 @@ pub use equivocation::{
 	HandleEquivocation,
 };
 
-/// The default number of blocks a forced change is delayed by,
-/// i.e. it will be activated at `block_signal_number + delay`.
-pub const FORCED_CHANGE_DELAY: u32 = 1000;
-
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
@@ -285,18 +281,22 @@ decl_module! {
 			)?;
 		}
 
-		/// Note that the current authority set of the GRANDPA finality gadget
-		/// has stalled. This will trigger a forced authority set change after
-		/// 1000 blocks, and the GRANDPA voters will start the new authority set
-		/// using the given finalized block as base. Only callable by root.
+		/// Note that the current authority set of the GRANDPA finality gadget has
+		/// stalled. This will trigger a forced authority set change at the beginning
+		/// of the next session, to be enacted `delay` blocks after that. The delay
+		/// should be high enough to safely assume that the block signalling the
+		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
+		/// will start the new authority set using the given finalized block as base.
+		/// Only callable by root.
 		#[weight = weight_for::note_stalled::<T>()]
 		fn note_stalled(
 			origin,
+			delay: T::BlockNumber,
 			best_finalized_block_number: T::BlockNumber,
 		) {
 			ensure_root(origin)?;
 
-			Self::on_stalled(FORCED_CHANGE_DELAY.into(), best_finalized_block_number)
+			Self::on_stalled(delay, best_finalized_block_number)
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
