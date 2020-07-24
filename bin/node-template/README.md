@@ -142,8 +142,8 @@ capabilities and configuration parameters that it exposes:
 
 The Substrate project in this repository uses the
 [FRAME](https://substrate.dev/docs/en/knowledgebase/runtime/frame) framework to construct a
-blockchain runtime. This means that the code that defines the runtime is separated into modules
-called "pallets". At the heart of FRAME is a helpful
+blockchain runtime. FRAME allows you to declare domain-specific logic in modules called "pallets".
+At the heart of FRAME is a helpful
 [macro language](https://substrate.dev/docs/en/knowledgebase/runtime/macros) that makes it easy to
 create pallets and flexibly compose them to create blockchains that can address a variety of needs.
 
