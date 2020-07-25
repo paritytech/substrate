@@ -1143,7 +1143,7 @@ pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,
 	misc::HostFunctions,
-	sp_tracing::wasm_tracing::HostFunctions,
+	// sp_tracing::wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,

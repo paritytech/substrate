@@ -22,164 +22,28 @@ use core::{
 };
 
 use codec::{Encode, Decode};
-use tracing_core::{
-	subscriber::Subscriber,
-	metadata::{Metadata, Kind},
-	field::{Field, Visit},
-	event::{Event},
-	span::{
-		Attributes,
-		Id,
-		Record,
-	},
-	Level,
+use crate::{
+	WasmMetadata, WasmAttributes, WasmRecord, WasmEvent
 };
 
-use sp_std::vec::Vec;
+#[cfg(feature = "std")]
+use sp_externalities::{ExternalitiesExt, Externalities};
+
 use sp_runtime_interface::runtime_interface;
 
-
-#[derive(Encode, Decode, Debug)]
-pub enum FieldValue {
-	I64(i64),
-	U64(u64),
-	Bool(bool),
-	Str(Vec<u8>),
-	Debug(Vec<u8>),
-}
-
-
-#[derive(Encode, Decode, Debug)]
-pub struct Fields (pub Vec<(Vec<u8>, FieldValue)>);
-
-impl Visit for Fields {
-	fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
-		todo!{}
-		// self.0.push((field.name().as_bytes().into(), FieldValue::Debug(format!("{:?}", value).into())));
-	}
-	fn record_i64(&mut self, field: &Field, value: i64) {
-		self.0.push((field.name().as_bytes().into(), FieldValue::I64(value)));
-	}
-	fn record_u64(&mut self, field: &Field, value: u64) {
-		self.0.push((field.name().as_bytes().into(), FieldValue::U64(value)));
-	}
-	fn record_bool(&mut self, field: &Field, value: bool) {
-		self.0.push((field.name().as_bytes().into(), FieldValue::Bool(value)));
-	}
-	fn record_str(&mut self, field: &Field, value: &str) {
-		self.0.push((field.name().as_bytes().into(), FieldValue::Str(value.as_bytes().into())));
-	}
-}
-
-#[derive(Encode, Decode)]
-pub struct WasmTracingAttributes {
-	pub parent_id: Option<u64>,
-	pub fields: Fields
-}
-
-impl From<&Attributes<'_>> for WasmTracingAttributes {
-	fn from(a: &Attributes) -> WasmTracingAttributes {
-		let mut fields = Fields(Vec::new());
-		a.record(&mut fields);
-		WasmTracingAttributes {
-			parent_id: a.parent().map(|a| a.into_u64()),
-			fields
-		}
-	}
-}
-
-
-#[derive(Encode, Decode)]
-pub enum WasmTracingLevel {
-	ERROR,
-	WARN,
-	INFO,
-	DEBUG,
-	TRACE
-}
-
-impl From<&Level> for WasmTracingLevel {
-	fn from(lvl: &Level) -> WasmTracingLevel {
-		match *lvl {
-			Level::ERROR => WasmTracingLevel::ERROR,
-			Level::WARN => WasmTracingLevel::WARN,
-			Level::INFO => WasmTracingLevel::INFO,
-			Level::DEBUG => WasmTracingLevel::DEBUG,
-			Level::TRACE => WasmTracingLevel::TRACE,
-		}
-	}
-}
-
-impl Into<Level> for WasmTracingLevel {
-	fn into(self) -> Level {
-		match self {
-			WasmTracingLevel::ERROR => Level::ERROR,
-			WasmTracingLevel::WARN => Level::WARN,
-			WasmTracingLevel::INFO => Level::INFO,
-			WasmTracingLevel::DEBUG => Level::DEBUG,
-			WasmTracingLevel::TRACE => Level::TRACE,
-		}
-	}
-}
-
-#[derive(Encode, Decode)]
-pub struct WasmTracingMetadata {
-    target: Vec<u8>,
-    level: WasmTracingLevel,
-    file: Option<Vec<u8>>,
-    line: Option<u32>,
-	module_path: Option<Vec<u8>>,
-	is_span: bool,
-}
-
-impl From<&Metadata<'_>> for WasmTracingMetadata {
-	fn from(m: &Metadata) -> WasmTracingMetadata {
-		WasmTracingMetadata {
-			target: m.target().as_bytes().into(),
-			module_path: m.module_path().map(|m| m.as_bytes().into()),
-			file:  m.file().map(|m| m.as_bytes().into()),
-			line: m.line().clone(),
-			level: m.level().into(),
-			is_span: m.is_span(),
-		}
-	}
-}
-
-// #[cfg(feature="std")]
-// impl<'a> Into<Metadata<'a>> for WasmTracingMetadata {
-// 	fn into(self) -> Metadata<'a> {
-// 		Metadata::new(
-// 			"wasm_tracing", // must be static, it's the same for all then
-// 			std::str::from_utf8(self.target.as_slice()).unwrap_or("<unknown>"),
-// 			self.level.into(),
-// 			self.file.as_ref().and_then(|s| std::str::from_utf8(s.as_slice()).ok()),
-// 			self.line,
-// 			self.module_path.as_ref().and_then(|s| std::str::from_utf8(s.as_slice()).ok()),
-// 			Default::default(),
-// 			if self.is_span { Kind::SPAN } else { Kind::EVENT } 
-// 		)
-// 	}
-// }
-
-
-#[derive(Encode, Decode)]
-pub struct WasmTracingEvent;
-
-#[derive(Encode, Decode)]
-pub struct WasmTracingRecord;
-
 pub trait TracingSubscriber {
-	fn enabled(&self, metadata: WasmTracingMetadata) -> bool;
-	fn new_span(&self, span: WasmTracingAttributes) -> u64;
-	fn record(&self, span: u64, values: WasmTracingRecord);
-	fn event(&self, event: WasmTracingEvent);
+	fn enabled(&self, metadata: WasmMetadata) -> bool;
+	fn new_span(&self, span: WasmAttributes) -> u64;
+	fn record(&self, span: u64, values: WasmRecord);
+	fn event(&self, event: WasmEvent);
 	fn enter(&self, span: u64);
 	fn exit(&self, span: u64);
 }
 
+#[cfg(feature="std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
-	pub struct WasmTracer(dyn TracingSubscriber + 'static + Send);
+	pub struct WasmTracer(Box<dyn TracingSubscriber + 'static + Send + Sync>);
 }
 
 
@@ -187,34 +51,34 @@ sp_externalities::decl_extension! {
 // #[runtime_interface(wasm_only, no_tracing)]
 #[runtime_interface]
 pub trait WasmTracing {
-	fn enabled(&self, metadata: WasmTracingMetadata) -> bool {
+	fn enabled(&mut self, metadata: WasmMetadata) -> bool {
 		self.extension::<WasmTracer>().map(|t|{
-			t.enabled(metadata)
+			t.0.enabled(metadata)
 		}).unwrap_or(false)
 	}
-	fn new_span(&self, span: WasmTracingAttributes) -> u64 {
+	fn new_span(&mut self, span: WasmAttributes) -> u64 {
 		self.extension::<WasmTracer>().map(|t|{
-			t.new_span(span)
+			t.0.new_span(span)
 		}).unwrap_or(0)
 	}
-	fn record(&self, span: u64, values: WasmTracingRecord) {
+	fn record(&mut self, span: u64, values: WasmRecord) {
 		self.extension::<WasmTracer>().map(|t|{
-			t.record(span, values)
+			t.0.record(span, values)
 		});
 	}
-	fn event(&self, event: WasmTracingEvent) {
+	fn event(&mut self, event: WasmEvent) {
 		self.extension::<WasmTracer>().map(|t|{
-			t.event(event)
+			t.0.event(event)
 		});
 	}
-	fn enter(&self, span: u64) {
+	fn enter(&mut self, span: u64) {
 		self.extension::<WasmTracer>().map(|t|{
-			t.enter(span)
+			t.0.enter(span)
 		});
 	}
-	fn exit(&self, span: u64) {
+	fn exit(&mut self, span: u64) {
 		self.extension::<WasmTracer>().map(|t|{
-			t.exit(span)
+			t.0.exit(span)
 		});
 	}
 }

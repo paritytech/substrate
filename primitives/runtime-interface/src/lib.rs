@@ -112,7 +112,7 @@ pub use sp_wasm_interface;
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-use tracing;
+pub use tracing;
 
 #[doc(hidden)]
 pub use sp_std;
