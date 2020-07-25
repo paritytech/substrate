@@ -364,7 +364,7 @@ impl TaskExecutorExt {
 	}
 }
 
-/// Something that can spawn futures (blocking and non-blocking) with am assigned name.
+/// Something that can spawn futures (blocking and non-blocking) with an assigned name.
 #[dyn_clonable::clonable]
 pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
