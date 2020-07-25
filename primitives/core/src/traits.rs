@@ -379,10 +379,10 @@ pub trait SpawnNamed: Clone + Send + Sync {
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
 	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(*self).spawn_blocking(name, future)
+		(**self).spawn_blocking(name, future)
 	}
 
 	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(*self).spawn(name, future)
+		(**self).spawn(name, future)
 	}
 }
