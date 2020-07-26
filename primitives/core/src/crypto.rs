@@ -367,10 +367,14 @@ macro_rules! ss58_address_format {
 				match x {
 					$($number => Ok(Ss58AddressFormat::$identifier)),*,
 					_ => {
+						#[cfg(feature = "std")]
 						match Ss58AddressFormat::default() {
 							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
 							_ => Err(()),
 						}
+						
+						#[cfg(not(feature = "std"))]
+						Err(())
 					},
 				}
 			}
