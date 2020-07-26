@@ -370,7 +370,7 @@ macro_rules! ss58_address_format {
 						match Ss58AddressFormat::default() {
 							Ss58AddressFormat::Custom(n) if n == x => Ok(Ss58AddressFormat::Custom(x)),
 							_ => Err(()),
-						};
+						}
 					},
 				}
 			}
