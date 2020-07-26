@@ -36,7 +36,7 @@ use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, AtLeast32BitUnsigned, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating,
 	SaturatedConversion, Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, IntegerSquareRoot
+	CheckedRem, CheckedShl, CheckedShr, IntegerSquareRoot
 };
 use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;

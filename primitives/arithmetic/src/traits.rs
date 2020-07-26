@@ -22,7 +22,7 @@ use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedNeg,
-	CheckedShl, CheckedShr, checked_pow, Signed, Unsigned,
+	CheckedRem, CheckedShl, CheckedShr, checked_pow, Signed, Unsigned,
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -39,8 +39,8 @@ pub trait BaseArithmetic:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
-	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + CheckedRem +
+	Saturating + PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
 	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
 	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
 	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
@@ -59,8 +59,8 @@ impl<T:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
-	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + CheckedRem +
+	Saturating + PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
 	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
 	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
 	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
