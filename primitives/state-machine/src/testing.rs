@@ -39,6 +39,8 @@ use sp_core::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
 	},
+	traits::TaskExecutorExt,
+	testing::TaskExecutor,
 };
 use codec::Encode;
 use sp_externalities::{Extensions, Extension};
@@ -109,8 +111,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		let offchain_overlay = OffchainOverlayedChanges::enabled();
 
 		let mut extensions = Extensions::default();
-		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
-
+		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
 
 		let offchain_db = TestPersistentOffchainDB::new();
 
