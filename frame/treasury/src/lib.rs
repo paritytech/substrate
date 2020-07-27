@@ -791,6 +791,18 @@ decl_module! {
 			Self::payout_tip(hash, tip);
 		}
 
+		/// Propose for a new bounty.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Payment: `TipReportDepositBase` will be reserved from the origin account, as well as
+		/// `DataDepositPerByte` for each byte in `reason`. It will be unreserved upon approval,
+		/// or slashed when rejected.
+		///
+		/// - `curator`: The curator account whom will manage this bounty.
+		/// - `fee`: The curator fee.
+		/// - `value`: The total payment amount of this bounty, curator fee included.
+		/// - `description`: The description of this bounty.
 		#[weight = T::WeightInfo::propose_bounty(description.len() as u32)]
 		fn propose_bounty(
 			origin,
@@ -805,6 +817,17 @@ decl_module! {
 			Self::create_bounty(proposer, curator, description, fee, value, None)?;
 		}
 
+		/// Create a sub-bounty from an approved bounty.
+		///
+		/// The dispatch origin for this call must be the curator of the parent bounty.
+		///
+		/// Payment: No additional payment.
+		///
+		/// - `parent_bounty_id`: The parent bounty ID that will fund for this sub-bounty.
+		/// - `curator`: Curator of the new sub-bounty.
+		/// - `fee`: The curator fee for the new sub-bounty. It will be deduced from the parent bounty curator fee.
+		/// - `value`: The total payment amount of this sub-bounty, curator fee included.
+		/// - `description`: The description of this bounty.
 		#[weight = T::WeightInfo::create_sub_bounty(description.len() as u32)]
 		fn create_sub_bounty(
 			origin,
@@ -873,6 +896,12 @@ decl_module! {
 			})?;
 		}
 
+		/// Award bounty to a beneficiary account. The beneficiary will be able to claim the funds after a delay.
+		///
+		/// The dispatch origin for this call must be the curator of this bounty.
+		///
+		/// - `bounty_id`: Bounty ID to award.
+		/// - `beneficiary`: The beneficiary account whom will receive the payout.
 		#[weight = T::WeightInfo::award_bounty()]
 		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
 			let curator = ensure_signed(origin)?;
@@ -893,6 +922,11 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyAwarded(bounty_id, beneficiary));
 		}
 
+		/// Claim the payout from an awarded bounty after payout delay.
+		///
+		/// The dispatch origin for this call must be the beneficiary of this bounty.
+		///
+		/// - `bounty_id`: Bounty ID to claim.
 		#[weight = T::WeightInfo::claim_bounty()]
 		fn claim_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
@@ -919,6 +953,11 @@ decl_module! {
 			})?;
 		}
 
+		/// Cancel an active bounty. All the funds will be send to treasury.
+		///
+		/// The dispatch origin for this call must be the curator of this bounty.
+		///
+		/// - `bounty_id`: Bounty ID to cancel.
 		#[weight = T::WeightInfo::cancel_bounty()]
 		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			let curator = ensure_signed(origin)?;
@@ -951,6 +990,11 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyCanceled(bounty_id));
 		}
 
+		/// Extend the expiry time of an active bounty.
+		///
+		/// The dispatch origin for this call must be the curator of this bounty.
+		///
+		/// - `bounty_id`: Bounty ID to extend.
 		#[weight = T::WeightInfo::extend_bounty_expiry()]
 		fn extend_bounty_expiry(origin, #[compact] bounty_id: BountyIndex) {
 			let curator = ensure_signed(origin)?;
@@ -975,6 +1019,11 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyExtended(bounty_id));
 		}
 
+		/// Update `BountyValueMinimum`.
+		///
+		/// May only be called from `T::ApproveOrigin`.
+		///
+		/// - `bounty_id`: Bounty ID to extend.
 		#[weight = T::WeightInfo::update_bounty_value_minimum()]
 		fn update_bounty_value_minimum(origin, #[compact] new_value: BalanceOf<T>) {
 			T::ApproveOrigin::ensure_origin(origin)?;
