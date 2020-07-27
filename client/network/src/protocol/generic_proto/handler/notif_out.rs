@@ -144,8 +144,11 @@ enum State {
 	Open {
 		/// Substream that is currently open.
 		substream: NotificationsOutSubstream<NegotiatedSubstream>,
-		/// Waker to wake up if we transition from `Open` to a different state.
-		state_transition_waker: Option<Waker>,
+		/// Waker for the last task that got `Poll::Pending` from `poll_ready`, to notify
+		/// when the open substream closes due to being disabled or encountering an
+		/// error, i.e. to notify the task as soon as the substream becomes unavailable,
+		/// without waiting for an underlying I/O task wakeup.
+		close_waker: Option<Waker>,
 		/// The initial message that we sent. Necessary if we need to re-open a substream.
 		initial_message: Vec<u8>,
 	},
