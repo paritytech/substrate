@@ -1,6 +1,6 @@
 [package]
 name = "node-browser-testing"
-version = "2.0.0-rc4"
+version = "2.0.0-rc5"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Tests for the in-browser light client."
 edition = "2018"
@@ -17,5 +17,5 @@ wasm-bindgen-futures = "0.4.10"
 wasm-bindgen-test = "0.3.10"
 futures = "0.3.4"
 
-node-cli = { path = "../cli", default-features = false, features = ["browser"] , version = "2.0.0-rc4"}
-sc-rpc-api = { path = "../../../client/rpc-api" , version = "0.8.0-rc4"}
+node-cli = { path = "../cli", default-features = false, features = ["browser"] , version = "2.0.0-rc5"}
+sc-rpc-api = { path = "../../../client/rpc-api" , version = "0.8.0-rc5"}

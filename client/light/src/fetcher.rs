@@ -24,8 +24,7 @@ use std::marker::PhantomData;
 
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
-use sp_core::{convert_hash, traits::CodeExecutor};
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::{convert_hash, traits::{CodeExecutor, SpawnNamed}, storage::{ChildInfo, ChildType}};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	AtLeast32Bit, CheckedConversion,
@@ -33,7 +32,7 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
-	read_child_proof_check, CloneableSpawn,
+	read_child_proof_check,
 };
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -46,20 +45,23 @@ pub use sc_client_api::{
 	},
 	cht,
 };
-use crate::blockchain::Blockchain;
-use crate::call_executor::check_execution_proof;
+use crate::{blockchain::Blockchain, call_executor::check_execution_proof};
 
 /// Remote data checker.
 pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	_hasher: PhantomData<(B, H)>,
 }
 
 impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	/// Create new light data checker.
-	pub fn new(blockchain: Arc<Blockchain<S>>, executor: E, spawn_handle: Box<dyn CloneableSpawn>) -> Self {
+	pub fn new(
+		blockchain: Arc<Blockchain<S>>,
+		executor: E,
+		spawn_handle: Box<dyn SpawnNamed>,
+	) -> Self {
 		Self {
 			blockchain, executor, spawn_handle, _hasher: PhantomData
 		}

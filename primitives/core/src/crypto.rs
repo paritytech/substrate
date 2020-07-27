@@ -180,7 +180,7 @@ impl DeriveJunction {
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
-		let (code, hard) = if j.starts_with("/") {
+		let (code, hard) = if j.starts_with('/') {
 			(&j[1..], true)
 		} else {
 			(j, false)
@@ -411,6 +411,8 @@ ss58_address_format!(
 		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
 	Reserved3 =>
 		(3, "reserved3", "Reserved for future use (3).")
+	KatalChainAccount =>
+		(4, "katalchain", "Katal Chain, standard account (*25519).")
 	PlasmAccount =>
 		(5, "plasm", "Plasm Network, standard account (*25519).")
 	BifrostAccount =>

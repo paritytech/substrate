@@ -17,9 +17,9 @@
 
 //! Batch/parallel verification.
 
-use sp_core::{ed25519, sr25519, ecdsa, crypto::Pair, traits::CloneableSpawn};
+use sp_core::{ed25519, sr25519, ecdsa, crypto::Pair, traits::SpawnNamed};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
-use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
+use futures::{future::FutureExt, channel::oneshot};
 
 #[derive(Debug, Clone)]
 struct Sr25519BatchItem {
@@ -35,14 +35,14 @@ struct Sr25519BatchItem {
 /// call `verify_and_clear to get a result. After that, batch verifier is ready for the
 /// next batching job.
 pub struct BatchVerifier {
-	scheduler: Box<dyn CloneableSpawn>,
+	scheduler: Box<dyn SpawnNamed>,
 	sr25519_items: Vec<Sr25519BatchItem>,
 	invalid: Arc<AtomicBool>,
 	pending_tasks: Vec<oneshot::Receiver<()>>,
 }
 
 impl BatchVerifier {
-	pub fn new(scheduler: Box<dyn CloneableSpawn>) -> Self {
+	pub fn new(scheduler: Box<dyn SpawnNamed>) -> Self {
 		BatchVerifier {
 			scheduler,
 			sr25519_items: Default::default(),
@@ -56,7 +56,9 @@ impl BatchVerifier {
 	/// Returns `false` if there was already an invalid verification or if
 	/// the verification could not be spawned.
 	fn spawn_verification_task(
-		&mut self, f: impl FnOnce() -> bool + Send + 'static,
+		&mut self,
+		f: impl FnOnce() -> bool + Send + 'static,
+		name: &'static str,
 	) -> bool {
 		// there is already invalid transaction encountered
 		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
@@ -65,7 +67,8 @@ impl BatchVerifier {
 		let (sender, receiver) = oneshot::channel();
 		self.pending_tasks.push(receiver);
 
-		self.scheduler.spawn_obj(FutureObj::new(
+		self.scheduler.spawn(
+			name,
 			async move {
 				if !f() {
 					invalid_clone.store(true, AtomicOrdering::Relaxed);
@@ -75,15 +78,10 @@ impl BatchVerifier {
 					log::warn!("Verification halted while result was pending");
 					invalid_clone.store(true, AtomicOrdering::Relaxed);
 				}
-			}.boxed()
-		))
-		.map_err(|_| {
-			log::debug!(
-				target: "runtime",
-				"Batch-verification returns false because failed to spawn background task.",
-			)
-		})
-		.is_ok()
+			}.boxed(),
+		);
+
+		true
 	}
 
 	/// Push ed25519 signature to verify.
@@ -96,7 +94,10 @@ impl BatchVerifier {
 		pub_key: ed25519::Public,
 		message: Vec<u8>,
 	) -> bool {
-		self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key))
+		self.spawn_verification_task(
+			move || ed25519::Pair::verify(&signature, &message, &pub_key),
+			"substrate_ed25519_verify",
+		)
 	}
 
 	/// Push sr25519 signature to verify.
@@ -114,7 +115,10 @@ impl BatchVerifier {
 
 		if self.sr25519_items.len() >= 128 {
 			let items = std::mem::take(&mut self.sr25519_items);
-			self.spawn_verification_task(move || Self::verify_sr25519_batch(items))
+			self.spawn_verification_task(
+				move || Self::verify_sr25519_batch(items),
+				"substrate_sr25519_verify",
+			)
 		} else {
 			true
 		}
@@ -130,7 +134,10 @@ impl BatchVerifier {
 		pub_key: ecdsa::Public,
 		message: Vec<u8>,
 	) -> bool {
-		self.spawn_verification_task(move || ecdsa::Pair::verify(&signature, &message, &pub_key))
+		self.spawn_verification_task(
+			move || ecdsa::Pair::verify(&signature, &message, &pub_key),
+			"substrate_ecdsa_verify",
+		)
 	}
 
 	fn verify_sr25519_batch(items: Vec<Sr25519BatchItem>) -> bool {
@@ -161,21 +168,22 @@ impl BatchVerifier {
 
 		if pending.len() > 0 {
 			let (sender, receiver) = std::sync::mpsc::channel();
-			if self.scheduler.spawn_obj(FutureObj::new(async move {
-				futures::future::join_all(pending).await;
-				sender.send(())
-					.expect("Channel never panics if receiver is live. \
-							Receiver is always live until received this data; qed. ");
-			}.boxed())).is_err() {
-				log::debug!(
+			self.scheduler.spawn(
+				"substrate_batch_verify_join",
+				async move {
+					futures::future::join_all(pending).await;
+					sender.send(())
+						  .expect("Channel never panics if receiver is live. \
+								Receiver is always live until received this data; qed. ");
+				}.boxed(),
+			);
+
+			if receiver.recv().is_err() {
+				log::warn!(
 					target: "runtime",
-					"Batch-verification returns false because failed to spawn background task.",
+					"Haven't received async result from verification task. Returning false.",
 				);
 
-				return false;
-			}
-			if receiver.recv().is_err() {
-				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.");
 				return false;
 			}
 		}
