@@ -151,6 +151,9 @@ impl DiscoveryConfig {
 
 		let mut config = KademliaConfig::default();
 		config.set_protocol_name(proto_name);
+		// By default Kademlia attempts to insert all peers into its routing table once a dialing
+		// attempt succeeds. In order to control which peer is added, disable the auto-insertion and
+		// instead add peers manually.
 		config.set_kbucket_inserts(KademliaBucketInserts::Manual);
 
 		let store = MemoryStore::new(self.local_peer_id.clone());
