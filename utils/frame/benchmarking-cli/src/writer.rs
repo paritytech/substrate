@@ -120,7 +120,10 @@ pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<()
 	if batches.is_empty() { return Ok(()) }
 
 	// general imports
-	write!(file, "#![allow(unused)]\n\nuse frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n").unwrap();
+	write!(
+		file,
+		"#![allow(unused)]\n\nuse frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n"
+	).unwrap();
 
 	for batch in &batches {
 		// Skip writing if there are no results
