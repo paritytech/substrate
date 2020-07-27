@@ -364,7 +364,7 @@ impl<'a> Ready<'a> {
 
 /// Error specific to the collection of protocols.
 #[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum GroupError {
+pub enum NotifsHandlerError {
 	/// Channel of synchronous notifications is full.
 	SyncNotificationsClogged,
 	/// Error in legacy protocol.
@@ -406,7 +406,7 @@ impl NotifsHandlerProto {
 impl ProtocolsHandler for NotifsHandler {
 	type InEvent = NotifsHandlerIn;
 	type OutEvent = NotifsHandlerOut;
-	type Error = GroupError;
+	type Error = NotifsHandlerError;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
 	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
 	// Index within the `out_handlers`; None for legacy
@@ -611,7 +611,7 @@ impl ProtocolsHandler for NotifsHandler {
 						});
 					}
 					NotificationsSinkMessage::ForceClose => {
-						return Poll::Ready(ProtocolsHandlerEvent::Close(GroupError::SyncNotificationsClogged));
+						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged));
 					}
 				}
 			}
@@ -664,7 +664,7 @@ impl ProtocolsHandler for NotifsHandler {
 						NotifsHandlerOut::ProtocolError { is_severe, error }
 					)),
 				ProtocolsHandlerEvent::Close(err) =>
-					Poll::Ready(ProtocolsHandlerEvent::Close(GroupError::Legacy(err))),
+					Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 			}
 		}
 

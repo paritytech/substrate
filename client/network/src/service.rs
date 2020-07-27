@@ -38,7 +38,7 @@ use crate::{
 	},
 	on_demand_layer::AlwaysBadChecker,
 	light_client_handler, block_requests, finality_requests,
-	protocol::{self, event::Event, GroupError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
+	protocol::{self, event::Event, NotifsHandlerError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
@@ -1545,10 +1545,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								GroupError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
+								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								GroupError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
+								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};
