@@ -34,16 +34,6 @@ pub trait Precompiles {
 	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>>;
 }
 
-impl Precompiles for () {
-	fn execute(
-		_address: H160,
-		_input: &[u8],
-		_target_gas: Option<usize>
-	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
-		None
-	}
-}
-
 /// One single precompile used by EVM engine.
 pub trait Precompile {
 	/// Try to execute the precompile. Calculate the amount of gas needed with given `input` and
@@ -55,7 +45,7 @@ pub trait Precompile {
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>;
 }
 
-#[impl_for_tuples(1, 16)]
+#[impl_for_tuples(16)]
 #[tuple_types_no_default_trait_bound]
 impl Precompiles for Tuple {
 	for_tuples!( where #( Tuple: Precompile )* );
