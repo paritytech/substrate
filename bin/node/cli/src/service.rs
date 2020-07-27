@@ -203,7 +203,8 @@ pub fn new_full_base(
 		on_demand: None,
 		remote_blockchain: None,
 		telemetry_connection_sinks: telemetry_connection_sinks.clone(),
-		network_status_sinks, system_rpc_tx,
+		network_status_sinks,
+		system_rpc_tx,
 	})?;
 	
 	let (block_import, grandpa_link, babe_link) = import_setup;

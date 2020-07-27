@@ -264,7 +264,13 @@ pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
 		on_demand: Some(on_demand),
 		rpc_extensions_builder: Box::new(|_| ()),
 		telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
-		config, client, keystore, backend, network, network_status_sinks, system_rpc_tx,
+		config, 
+		client, 
+		keystore, 
+		backend, 
+		network, 
+		network_status_sinks, 
+		system_rpc_tx,
 	 })?;
 
 	 Ok(task_manager)
