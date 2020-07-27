@@ -598,7 +598,7 @@ where
 	let wasmtime_engine = wasmtime::Engine::new(&config);
 	let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
 
-	let wasmtime_module = wasmtime::Module::new(&wasmtime_store, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let wasmtime_module = wasmtime::Module::new(&wasmtime_engine, wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 
 	let module_imports: Vec<_> = wasmtime_module
 		.imports()
@@ -697,7 +697,7 @@ where
 		})
 		.collect();
 
-	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
+	let wasmtime_instance = wasmtime::Instance::new(&wasmtime_store, &wasmtime_module, &module_imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
