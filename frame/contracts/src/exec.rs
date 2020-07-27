@@ -426,7 +426,10 @@ where
 				)?;
 
 			// Error out if insufficient remaining balance.
-			if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
+			// We need each contract that exists to be above the subsistence threshold
+			// in order to keep up the guarantuee that we always leave a tombstone behind
+			// with the exception of a contract that called `ext_terminate`.
+			if T::Currency::free_balance(&dest) < nested.config.subsistence_threshold() {
 				Err("insufficient remaining balance")?
 			}
 
@@ -1016,7 +1019,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
-			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
+			let result = ctx.instantiate(cfg.subsistence_threshold(), &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -1306,7 +1309,7 @@ mod tests {
 			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
-				1,
+				cfg.subsistence_threshold(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1549,7 +1552,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					&dummy_ch,
-					15u64,
+					Config::<Test>::subsistence_threshold_uncached(),
 					ctx.gas_meter,
 					vec![]
 				).unwrap();
@@ -1679,7 +1682,7 @@ mod tests {
 			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
-				1,
+				cfg.subsistence_threshold(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],
