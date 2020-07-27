@@ -92,8 +92,8 @@ use rand::Rng;
 
 #[cfg(feature="test-helpers")]
 use {
-	sp_core::traits::CodeExecutor,
-	sc_client_api::{CloneableSpawn, in_mem},
+	sp_core::traits::{CodeExecutor, SpawnNamed},
+	sc_client_api::in_mem,
 	sc_executor::RuntimeInfo,
 	super::call_executor::LocalCallExecutor,
 };
@@ -149,7 +149,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
@@ -189,7 +189,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
-	spawn_handle: Box<dyn CloneableSpawn>,
+	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
