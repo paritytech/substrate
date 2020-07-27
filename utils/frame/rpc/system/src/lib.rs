@@ -289,7 +289,7 @@ mod tests {
 
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{ApplyExtrinsicResult, transaction_validity::{TransactionValidityError, InvalidTransaction}};
 
 	#[test]

@@ -556,7 +556,7 @@ mod tests {
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
