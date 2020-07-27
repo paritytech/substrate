@@ -572,6 +572,10 @@ impl ProtocolsHandler for NotifsHandler {
 			'poll_notifs_sink: loop {
 				// Before we poll the notifications sink receiver, check that all the notification
 				// channels are ready to send a message.
+				// TODO: it is planned that in the future we switch to one `NotificationsSink` per
+				// protocol, in which case each sink should wait only for its corresponding handler
+				// to be ready, and not all handlers
+				// see https://github.com/paritytech/substrate/issues/5670
 				for (out_handler, _) in &mut self.out_handlers {
 					match out_handler.poll_ready(cx) {
 						Poll::Ready(_) => {},

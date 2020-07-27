@@ -389,7 +389,7 @@ fn notifications_back_pressure() {
 		// Sending!
 		for num in 0..TOTAL_NOTIFS {
 			let notif = node1.notification_sender(node2_id.clone(), ENGINE_ID).unwrap();
-			notif.wait().await.unwrap().send(format!("hello #{}", num)).unwrap();
+			notif.ready().await.unwrap().send(format!("hello #{}", num)).unwrap();
 		}
 
 		receiver.await;

@@ -659,7 +659,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// // Do NOT do this
 	/// for peer in peers {
 	/// 	if let Ok(n) = network.notification_sender(peer, ...) {
-	///			if let Ok(s) = n.wait().await {
+	///			if let Ok(s) = n.ready().await {
 	///				let _ = s.send(...);
 	///			}
 	/// 	}
