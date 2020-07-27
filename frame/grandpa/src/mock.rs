@@ -365,23 +365,18 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 }
 
 pub fn start_session(session_index: SessionIndex) {
-	let mut parent_hash = System::parent_hash();
-
 	for i in Session::current_index()..session_index {
+		System::on_finalize(System::block_number());
+		Session::on_finalize(System::block_number());
 		Staking::on_finalize(System::block_number());
-		System::set_block_number((i + 1).into());
-		Timestamp::set_timestamp(System::block_number() * 6000);
+		Grandpa::on_finalize(System::block_number());
 
-		// In order to be able to use `System::parent_hash()` in the tests
-		// we need to first get it via `System::finalize` and then set it
-		// the `System::initialize`. However, it is needed to be taken into
-		// consideration that finalizing will prune some data in `System`
-		// storage including old values `BlockHash` if that reaches above
-		// `BlockHashCount` capacity.
-		if System::block_number() > 1 {
+		let parent_hash = if System::block_number() > 1 {
 			let hdr = System::finalize();
-			parent_hash = hdr.hash();
-		}
+			hdr.hash()
+		} else {
+			System::parent_hash()
+		};
 
 		System::initialize(
 			&(i as u64 + 1),
@@ -390,9 +385,13 @@ pub fn start_session(session_index: SessionIndex) {
 			&Default::default(),
 			Default::default(),
 		);
+		System::set_block_number((i + 1).into());
+		Timestamp::set_timestamp(System::block_number() * 6000);
 
-		Session::on_initialize(System::block_number());
 		System::on_initialize(System::block_number());
+		Session::on_initialize(System::block_number());
+		Staking::on_initialize(System::block_number());
+		Grandpa::on_initialize(System::block_number());
 	}
 
 	assert_eq!(Session::current_index(), session_index);
