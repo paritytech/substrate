@@ -215,12 +215,12 @@ impl NotifsOutHandler {
 	/// - Returns `Poll::Ready(false)` if the substream is closed.
 	///
 	pub fn poll_ready(&mut self, cx: &mut Context) -> Poll<bool> {
-		if let State::Open { substream, state_transition_waker, .. } = &mut self.state {
+		if let State::Open { substream, close_waker, .. } = &mut self.state {
 			match substream.poll_ready_unpin(cx) {
 				Poll::Ready(Ok(())) => Poll::Ready(true),
 				Poll::Ready(Err(_)) => Poll::Ready(false),
 				Poll::Pending => {
-					*state_transition_waker = Some(cx.waker().clone());
+					*close_waker = Some(cx.waker().clone());
 					Poll::Pending
 				}
 			}
@@ -273,7 +273,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 			State::Opening { initial_message } => {
 				let ev = NotifsOutHandlerOut::Open { handshake: handshake_msg };
 				self.events_queue.push_back(ProtocolsHandlerEvent::Custom(ev));
-				self.state = State::Open { substream, initial_message, state_transition_waker: None };
+				self.state = State::Open { substream, initial_message, close_waker: None };
 			},
 			// If the handler was disabled while we were negotiating the protocol, immediately
 			// close it.
@@ -336,9 +336,9 @@ impl ProtocolsHandler for NotifsOutHandler {
 					}
 					State::Opening { .. } => self.state = State::DisabledOpening,
 					State::Refused => self.state = State::Disabled,
-					State::Open { substream, state_transition_waker, .. } => {
-						if let Some(state_transition_waker) = state_transition_waker {
-							state_transition_waker.wake();
+					State::Open { substream, close_waker, .. } => {
+						if let Some(close_waker) = close_waker {
+							close_waker.wake();
 						}
 						self.state = State::DisabledOpen(substream)
 					},
@@ -385,12 +385,12 @@ impl ProtocolsHandler for NotifsOutHandler {
 		}
 
 		match &mut self.state {
-			State::Open { substream, initial_message, state_transition_waker } =>
+			State::Open { substream, initial_message, close_waker } =>
 				match Sink::poll_flush(Pin::new(substream), cx) {
 					Poll::Pending | Poll::Ready(Ok(())) => {},
 					Poll::Ready(Err(_)) => {
-						if let Some(state_transition_waker) = state_transition_waker.take() {
-							state_transition_waker.wake();
+						if let Some(close_waker) = close_waker.take() {
+							close_waker.wake();
 						}
 
 						// We try to re-open a substream.
