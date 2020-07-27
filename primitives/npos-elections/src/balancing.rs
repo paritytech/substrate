@@ -26,7 +26,7 @@
 //!
 //! See [`balance`] for more information.
 
-use crate::{IdentifierT, Voter, ExtendedBalance};
+use crate::{IdentifierT, Voter, ExtendedBalance, Edge};
 use sp_arithmetic::traits::Zero;
 use sp_std::prelude::*;
 use sp_std::{cell::RefCell, rc::Rc};
@@ -83,8 +83,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	let mut elected_edges = voter.edges
 		.iter_mut()
 		.filter(|e| e.candidate.borrow().elected)
-		.map(|e| Rc::new(RefCell::new(e)))
-		.collect::<Vec<_>>();
+		.collect::<Vec<&mut Edge<AccountId>>>();
 
 	// Either empty, or a self vote. Not much to do in either case.
 	if elected_edges.len() <= 1 {
@@ -94,20 +93,20 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	// amount of stake from this voter that is used in edges.
 	let stake_used = elected_edges
 		.iter()
-		.fold(0, |a: ExtendedBalance, e| a.saturating_add(e.borrow().weight));
+		.fold(0, |a: ExtendedBalance, e| a.saturating_add(e.weight));
 
 	// backed stake of each of the elected edges.
 	let backed_stakes = elected_edges
 		.iter()
-		.map(|e| e.borrow().candidate.borrow().backed_stake)
+		.map(|e| e.candidate.borrow().backed_stake)
 		.collect::<Vec<_>>();
 
 	// backed stake of all the edges for whom we've spent some stake.
 	let backing_backed_stake = elected_edges
 		.iter()
 		.filter_map(|e|
-			if e.borrow().weight > 0 {
-				Some(e.borrow().candidate.borrow().backed_stake)
+			if e.weight > 0 {
+				Some(e.candidate.borrow().backed_stake)
 			} else {
 				None
 			}
@@ -135,24 +134,19 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 
 	// remove all backings.
 	for edge in elected_edges.iter_mut() {
-		{
-			let edge = edge.borrow();
-			let mut candidate = edge.candidate.borrow_mut();
-			candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
-		}
-		{
-			edge.borrow_mut().weight = 0;
-		}
+		let mut candidate = edge.candidate.borrow_mut();
+		candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
+		edge.weight = 0;
 	}
 
-	elected_edges.sort_unstable_by_key(|e| e.borrow().candidate.borrow().backed_stake);
+	elected_edges.sort_unstable_by_key(|e| e.candidate.borrow().backed_stake);
 
 	let mut cumulative_backed_stake = Zero::zero();
 	let mut last_index = elected_edges.len() - 1;
 
 	for (index, edge) in elected_edges.iter().enumerate() {
 		let index = index as ExtendedBalance;
-		let backed_stake = edge.borrow().candidate.borrow().backed_stake;
+		let backed_stake = edge.candidate.borrow().backed_stake;
 		let temp = backed_stake.saturating_mul(index);
 		if temp.saturating_sub(cumulative_backed_stake) > voter.budget {
 			// defensive only. length of elected_edges is checked to be above 1.
@@ -165,7 +159,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	let last_stake = elected_edges.get(last_index).expect(
 		"length of elected_edges is greater than or equal 2; last_index index is at \
 		the minimum elected_edges.len() - 1; index is within range; qed"
-	).borrow().candidate.borrow().backed_stake;
+	).candidate.borrow().backed_stake;
 	let ways_to_split = last_index + 1;
 	let excess = voter.budget
 		.saturating_add(cumulative_backed_stake)
@@ -175,8 +169,6 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	for edge in elected_edges.into_iter().take(ways_to_split) {
 		// first, do one scoped borrow to get the previous candidate stake.
 		let candidate_backed_stake = {
-			let edge_ref = edge.clone();
-			let edge = edge_ref.borrow();
 			let candidate = edge.candidate.borrow();
 			candidate.backed_stake
 		};
@@ -186,16 +178,12 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 			.saturating_sub(candidate_backed_stake);
 
 		// write the new edge weight
-		{
-			edge.borrow_mut().weight = new_edge_weight;
-		}
+		edge.weight = new_edge_weight;
 
 		// write the new candidate stake
-		{
-			let edge = edge.borrow();
-			let mut candidate = edge.candidate.borrow_mut();
-			candidate.backed_stake = candidate.backed_stake.saturating_add(new_edge_weight);
-		}
+		let mut candidate = edge.candidate.borrow_mut();
+		candidate.backed_stake = candidate.backed_stake.saturating_add(new_edge_weight);
+
 	}
 
 	difference

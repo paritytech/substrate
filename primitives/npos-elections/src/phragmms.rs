@@ -110,6 +110,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 
 	// finalise the score value, and find the best.
 	let mut best_score = Rational128::zero();
+	// TODO: this function should be able to return Option.
 	let mut best_candidate = Rc::clone(&candidates[0]);
 	for c_ptr in candidates.iter() {
 		let mut candidate = c_ptr.borrow_mut();
@@ -117,6 +118,7 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// finalise the score value.
 			let score_d = candidate.score.d();
 			let one: ExtendedBalance = P::ACCURACY.into();
+			// TODO: the accuracy here is questionable.
 			let score_n = candidate.approval_stake.checked_mul(one).unwrap_or_else(|| Bounded::max_value());
 			candidate.score = Rational128::from(score_n, score_d);
 
