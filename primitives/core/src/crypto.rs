@@ -411,6 +411,8 @@ ss58_address_format!(
 		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
 	Reserved3 =>
 		(3, "reserved3", "Reserved for future use (3).")
+	KatalChainAccount =>
+		(4, "katalchain", "Katal Chain, standard account (*25519).")
 	PlasmAccount =>
 		(5, "plasm", "Plasm Network, standard account (*25519).")
 	BifrostAccount =>
