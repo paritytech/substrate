@@ -606,8 +606,9 @@ impl ProtocolsHandler for NotifsHandler {
 
 							if handler.is_open() {
 								handler.send_or_discard(message);
-								continue 'poll_notifs_sink;
 							}
+
+							continue 'poll_notifs_sink;
 						}
 
 						self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
