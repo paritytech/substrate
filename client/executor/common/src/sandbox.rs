@@ -593,7 +593,7 @@ where
 
 	let mut config = wasmtime::Config::new();
 	config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-	// config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
+	config.strategy(wasmtime::Strategy::Cranelift).map_err(|_| InstantiationError::ModuleDecoding)?;
 
 	let wasmtime_engine = wasmtime::Engine::new(&config);
 	let wasmtime_store = wasmtime::Store::new(&wasmtime_engine);
