@@ -1,5 +1,3 @@
-// Creating mock runtime here
-
 use crate::{Module, Trait};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, parameter_types};
@@ -12,9 +10,8 @@ impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
-// For testing the pallet, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of pallets we want to use.
+// Configure a mock runtime to test the pallet.
+
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -30,6 +27,7 @@ parameter_types! {
 			Perbill::from_percent(75)
 		);
 }
+
 impl system::Trait for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = BlockWeights;
@@ -53,13 +51,14 @@ impl system::Trait for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 }
+
 impl Trait for Test {
 	type Event = ();
 }
+
 pub type TemplateModule = Module<Test>;
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
+// Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
