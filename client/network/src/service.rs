@@ -628,20 +628,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
 	/// for another notification, yielding a [`NotificationSenderReady`] token.
-   	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
-   	/// can only fail if the underlying notification substream or connection has suddenly closed.
+	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
+	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
-	///
-	///
-	/// An error is returned either by `prepare_notification`, by [`PrepareNotification::wait`],
-	/// or by [`NotificationsBufferSlot::send`] if there exists no open notifications substream
+	/// An error is returned either by `prepare_notification`, by [`NotificationSender::wait`],
+	/// or by [`NotificationSenderReady::send`] if there exists no open notifications substream
 	/// with that combination of peer and protocol, or if the remote has asked to close the
 	/// notifications substream. If that happens, it is guaranteed that an
 	/// [`Event::NotificationStreamClosed`] has been generated on the stream returned by
 	/// [`NetworkService::event_stream`].
 	///
 	/// If the remote requests to close the notifications substream, all notifications successfully
-	/// enqueued using [`NotificationsBufferSlot::send`] will finish being sent out before the
+	/// enqueued using [`NotificationSenderReady::send`] will finish being sent out before the
 	/// substream actually gets closed, but attempting to enqueue more notifications will now
 	/// return an error. It is however possible for the entire connection to be abruptly closed,
 	/// in which case enqueued notifications will be lost.
@@ -699,17 +697,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			if let Some(sink) = peers_notifications_sinks.get(&(target, engine_id)) {
 				sink.clone()
 			} else {
-				return Err(SendNotificationsError::NoSubstream);
+				return Err(NotificationSenderError::Closed);
 			}
 		};
 
 		// Determine the wire protocol name corresponding to this `engine_id`.
 		let protocol_name = match self.protocol_name_by_engine.lock().get(&engine_id).cloned() {
 			Some(p) => p,
-			None => return Err(SendNotificationsError::BadProtocol),
+			None => return Err(NotificationSenderError::BadProtocol),
 		};
 
-		Ok(PrepareNotification {
+		Ok(NotificationSender {
 			sink,
 			protocol_name,
 			engine_id,
@@ -989,13 +987,13 @@ pub struct NotificationSender {
 	notification_size_metric: Option<Histogram>,
 }
 
-impl PrepareNotification {
+impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
 	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
-		Ok(NotificationsBufferSlot {
+		Ok(NotificationSenderReady {
 			ready: match self.sink.reserve_notification(&self.protocol_name).await {
 				Ok(r) => r,
-				Err(()) => return Err(SendNotificationsError::NoSubstream),
+				Err(()) => return Err(NotificationSenderError::Closed),
 			},
 			engine_id: self.engine_id,
 			notification_size_metric: self.notification_size_metric.clone(),
@@ -1016,7 +1014,7 @@ pub struct NotificationSenderReady<'a> {
 	notification_size_metric: Option<Histogram>,
 }
 
-impl<'a> NotificationsBufferSlot<'a> {
+impl<'a> NotificationSenderReady<'a> {
 	/// Consumes this slots reservation and actually queues the notification.
 	pub fn send(self, notification: impl Into<Vec<u8>>) -> Result<(), NotificationSenderError> {
 		let notification = notification.into();
@@ -1037,6 +1035,7 @@ impl<'a> NotificationsBufferSlot<'a> {
 		});
 
 		self.ready.send(fallback, notification)
+			.map_err(|()| NotificationSenderError::Closed)
 	}
 }
 
