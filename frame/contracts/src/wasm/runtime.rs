@@ -18,7 +18,7 @@
 
 use crate::{Schedule, Trait, CodeHash, BalanceOf, Error};
 use crate::exec::{
-	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags,
+	Ext, ExecResult, ExecReturnValue, StorageKey, TopicOf, ReturnFlags, ExecError
 };
 use crate::gas::{Gas, GasMeter, Token, GasMeterResult};
 use crate::wasm::env_def::ConvertibleToWasm;
@@ -43,14 +43,26 @@ pub enum ReturnCode {
 	Success = 0,
 	/// The called function trapped and has its state changes reverted.
 	/// In this case no output buffer is returned.
-	/// Can only be returned from `ext_call` and `ext_instantiate`.
 	CalleeTrapped = 1,
 	/// The called function ran to completion but decided to revert its state.
 	/// An output buffer is returned when one was supplied.
-	/// Can only be returned from `ext_call` and `ext_instantiate`.
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
+	/// Transfer failed because it would have brought the senders total balance below the
+	/// subsistence deposit.
+	BelowSubsistenceThreshold = 4,
+	/// Transfer failed for other reasons. Most probably reserved or locked balance of the
+	/// sender prevents the transfer.
+	TransferFailed = 5,
+	/// The newly created contract is below the subsistence threshold after executing
+	// its contructor.
+	NewContractNotFunded = 6,
+	/// No code could be found at the supplied code hash.
+	CodeNotFound = 7,
+	/// The contract that was called is either no contract at all (a plain account)
+	/// or is a tombstone.
+	InvalidContractCalled = 8,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -66,7 +78,7 @@ impl ConvertibleToWasm for ReturnCode {
 }
 
 impl From<ExecReturnValue> for ReturnCode {
-	fn from(from: ExecReturnValue) -> ReturnCode {
+	fn from(from: ExecReturnValue) -> Self {
 		if from.flags.contains(ReturnFlags::REVERT) {
 			Self::CalleeReverted
 		} else {
@@ -379,7 +391,7 @@ fn write_sandbox_output<E: Ext>(
 	let len: u32 = read_sandbox_memory_as(ctx, out_len_ptr, 4)?;
 
 	if len < buf_len {
-		Err(map_err(ctx, Error::<E::T>::OutputBufferTooSmall))?
+		Err(store_err(ctx, Error::<E::T>::OutputBufferTooSmall))?
 	}
 
 	charge_gas(
@@ -398,12 +410,80 @@ fn write_sandbox_output<E: Ext>(
 /// Stores a DispatchError returned from an Ext function into the trap_reason.
 ///
 /// This allows through supervisor generated errors to the caller.
-fn map_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError where
+fn store_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError where
 	E: Ext,
 	Error: Into<DispatchError>,
 {
 	ctx.trap_reason = Some(TrapReason::SupervisorError(err.into()));
 	sp_sandbox::HostError
+}
+
+/// Fallible conversion of `DispatchError` to `ReturnCode`.
+fn err_into_return_code<T: Trait>(from: DispatchError) -> Result<ReturnCode, DispatchError> {
+	use ReturnCode::*;
+
+	let below_sub = Error::<T>::BelowSubsistenceThreshold.into();
+	let transfer_failed = Error::<T>::TransferFailed.into();
+	let not_funded = Error::<T>::NewContractNotFunded.into();
+	let no_code = Error::<T>::CodeNotFound.into();
+	let invalid_contract = Error::<T>::InvalidContractCalled.into();
+
+	match from {
+		x if x == below_sub => Ok(BelowSubsistenceThreshold),
+		x if x == transfer_failed => Ok(TransferFailed),
+		x if x == not_funded => Ok(NewContractNotFunded),
+		x if x == no_code => Ok(CodeNotFound),
+		x if x == invalid_contract => Ok(InvalidContractCalled),
+		err => Err(err)
+	}
+}
+
+/// Fallible conversion of a `ExecResult` to `ReturnCode`.
+fn exec_into_return_code<T: Trait>(from: ExecResult) -> Result<ReturnCode, DispatchError> {
+	use crate::exec::ErrorOrigin::Callee;
+
+	let ExecError { error, origin } = match from {
+		Ok(retval) => return Ok(retval.into()),
+		Err(err) => err,
+	};
+
+	match (error, origin) {
+		(_, Callee) => Ok(ReturnCode::CalleeTrapped),
+		(err, _) => err_into_return_code::<T>(err)
+	}
+}
+
+/// Used by Runtime API that calls into other contracts.
+///
+/// Those need to transform the the `ExecResult` returned from the execution into
+/// a `ReturnCode`. If this conversion fails because the `ExecResult` constitutes a
+/// a fatal error then this error is stored in the `ExecutionContext` so it can be
+/// extracted for display in the UI.
+fn map_exec_result<E: Ext>(ctx: &mut Runtime<E>, result: ExecResult)
+	-> Result<ReturnCode, sp_sandbox::HostError>
+{
+	match exec_into_return_code::<E::T>(result) {
+		Ok(code) => Ok(code),
+		Err(err) => Err(store_err(ctx, err)),
+	}
+}
+
+/// Try to convert an error into a `ReturnCode`.
+///
+/// Used to decide between fatal and non-fatal errors.
+fn map_dispatch_result<T, E: Ext>(ctx: &mut Runtime<E>, result: Result<T, DispatchError>)
+	-> Result<ReturnCode, sp_sandbox::HostError>
+{
+	let err = if let Err(err) = result {
+		err
+	} else {
+		return Ok(ReturnCode::Success)
+	};
+
+	match err_into_return_code::<E::T>(err) {
+		Ok(code) => Ok(code),
+		Err(err) => Err(store_err(ctx, err)),
+	}
 }
 
 // ***********************************************************
@@ -412,6 +492,12 @@ fn map_err<E, Error>(ctx: &mut Runtime<E>, err: Error) -> sp_sandbox::HostError 
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.
+//
+// # Note
+//
+// Any input that leads to a out of bound error (reading or writing) or failing to decode
+// data passed to the supervisor will lead to a trap. This is not documented explicitly
+// for every function.
 define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
@@ -441,7 +527,7 @@ define_env!(Env, <E: Ext>,
 	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
 	// - `value_len`: the length of the value in bytes.
 	//
-	// # Errors
+	// # Traps
 	//
 	// - If value length exceeds the configured maximum value length of a storage entry.
 	// - Upon trying to set an empty storage entry (value length is 0).
@@ -480,12 +566,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// If there is no entry under the given key then this function will return
-	// `ReturnCode::KeyNotFound`.
-	//
-	// # Traps
-	//
-	// Traps if the supplied buffer length is smaller than the size of the stored value.
+	// `ReturnCode::KeyNotFound`
 	ext_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let mut key: StorageKey = [0; 32];
 		read_sandbox_memory_into_buf(ctx, key_ptr, &mut key)?;
@@ -508,24 +589,24 @@ define_env!(Env, <E: Ext>,
 	//   Should be decodable as a `T::Balance`. Traps otherwise.
 	// - value_len: length of the value buffer.
 	//
-	// # Traps
+	// # Errors
 	//
-	// Traps if the transfer wasn't succesful. This can happen when the value transfered
-	// brings the sender below the existential deposit. Use `ext_terminate` to remove
-	// the caller contract.
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
 	ext_transfer(
 		ctx,
 		account_ptr: u32,
 		account_len: u32,
 		value_ptr: u32,
 		value_len: u32
-	) => {
+	) -> ReturnCode => {
 		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
 			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
 		let value: BalanceOf<<E as Ext>::T> =
 			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
 
-		ctx.ext.transfer(&callee, value, ctx.gas_meter).map_err(|e| map_err(ctx, e))
+		let result = ctx.ext.transfer(&callee, value, ctx.gas_meter);
+		map_dispatch_result(ctx, result)
 	},
 
 	// Make a call to another contract.
@@ -551,17 +632,14 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// `ReturnCode::CalleeReverted`: The callee ran to completion but decided to have its
-	//  changes reverted. The delivery of the output buffer is still possible.
-	// `ReturnCode::CalleeTrapped`: The callee trapped during execution. All changes are reverted
-	//  and no output buffer is delivered.
+	// An error means that the call wasn't succesful output buffer is returned unless
+	// stated otherwise.
 	//
-	// # Traps
-	//
-	// - Transfer of balance failed. This call can not bring the sender below the existential
-	//   deposit. Use `ext_terminate` to remove the caller.
-	// - Callee does not exist.
-	// - Supplied output buffer is too small.
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	// `ReturnCode::InvalidConractCalled`
 	ext_call(
 		ctx,
 		callee_ptr: u32,
@@ -594,22 +672,16 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data,
 					)
-					.map_err(|_| ())
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
+				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
 			}
 		});
 
-		match call_outcome {
-			Ok(output) => {
-				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
-				Ok(output.into())
-			},
-			Err(_) => {
-				Ok(ReturnCode::CalleeTrapped)
-			},
+		if let Ok(output) = &call_outcome {
+			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 		}
+		map_exec_result(ctx, call_outcome)
 	},
 
 	// Instantiate a contract with the specified code hash.
@@ -643,19 +715,18 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// `ReturnCode::CalleeReverted`: The callee's constructor ran to completion but decided to have
-	//		its changes reverted. The delivery of the output buffer is still possible but the
-	//		account was not created and no address is returned.
-	// `ReturnCode::CalleeTrapped`: The callee trapped during execution. All changes are reverted
-	//		and no output buffer is delivered. The accounts was not created and no address is
-	//		returned.
+	// Please consult the `ReturnCode` enum declaration for more information on those
+	// errors. Here we only note things specific to this function.
 	//
-	// # Traps
+	// An error means that the account wasn't created and no address or output buffer
+	// is returned unless stated otherwise.
 	//
-	// - Transfer of balance failed. This call can not bring the sender below the existential
-	//   deposit. Use `ext_terminate` to remove the caller.
-	// - Code hash does not exist.
-	// - Supplied output buffers are too small.
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::BelowSubsistenceThreshold`
+	// `ReturnCode::TransferFailed`
+	// `ReturnCode::NewContractNotFunded`
+	// `ReturnCode::CodeNotFound`
 	ext_instantiate(
 		ctx,
 		code_hash_ptr: u32,
@@ -690,26 +761,20 @@ define_env!(Env, <E: Ext>,
 						nested_meter,
 						input_data
 					)
-					.map_err(|_| ())
 				}
 				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
+				None => Err(Error::<<E as Ext>::T>::OutOfGas.into()),
 			}
 		});
-		match instantiate_outcome {
-			Ok((address, output)) => {
-				if !output.flags.contains(ReturnFlags::REVERT) {
-					write_sandbox_output(
-						ctx, address_ptr, address_len_ptr, &address.encode(), true
-					)?;
-				}
-				write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
-				Ok(output.into())
-			},
-			Err(_) => {
-				Ok(ReturnCode::CalleeTrapped)
-			},
+		if let Ok((address, output)) = &instantiate_outcome {
+			if !output.flags.contains(ReturnFlags::REVERT) {
+				write_sandbox_output(
+					ctx, address_ptr, address_len_ptr, &address.encode(), true
+				)?;
+			}
+			write_sandbox_output(ctx, output_ptr, output_len_ptr, &output.data, true)?;
 		}
+		map_exec_result(ctx, instantiate_outcome.map(|(_id, retval)| retval))
 	},
 
 	// Remove the calling account and transfer remaining balance.
@@ -722,6 +787,10 @@ define_env!(Env, <E: Ext>,
 	//   where all remaining funds of the caller are transfered.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - beneficiary_len: length of the address buffer.
+	//
+	// # Traps
+	//
+	// - The contract is live i.e is already on the call stack.
 	ext_terminate(
 		ctx,
 		beneficiary_ptr: u32,
@@ -939,6 +1008,11 @@ define_env!(Env, <E: Ext>,
 	// encodes the rent allowance that must be set in the case of successful restoration.
 	// `delta_ptr` is the pointer to the start of a buffer that has `delta_count` storage keys
 	// laid out sequentially.
+	//
+	// # Traps
+	//
+	// - Tombstone hashes do not match
+	// - Calling cantract is live i.e is already on the call stack.
 	ext_restore_to(
 		ctx,
 		dest_ptr: u32,

@@ -152,7 +152,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use sp_core::H256;
-	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags};
+	use crate::exec::{Ext, StorageKey, ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
@@ -225,7 +225,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), DispatchError> {
+		) -> Result<(u64, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash: code_hash.clone(),
 				endowment,
@@ -365,7 +365,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			input_data: Vec<u8>,
-		) -> Result<(u64, ExecReturnValue), DispatchError> {
+		) -> Result<(u64, ExecReturnValue), ExecError> {
 			(**self).instantiate(code, value, gas_meter, input_data)
 		}
 		fn transfer(
@@ -483,14 +483,16 @@ mod tests {
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;) -> u32
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_transfer
-			(i32.const 4)  ;; Pointer to "account" address.
-			(i32.const 8)  ;; Length of "account" address.
-			(i32.const 12) ;; Pointer to the buffer with value to transfer
-			(i32.const 8)  ;; Length of the buffer with value to transfer.
+		(drop
+			(call $ext_transfer
+				(i32.const 4)  ;; Pointer to "account" address.
+				(i32.const 8)  ;; Length of "account" address.
+				(i32.const 12) ;; Pointer to the buffer with value to transfer
+				(i32.const 8)  ;; Length of the buffer with value to transfer.
+			)
 		)
 	)
 	(func (export "deploy"))
@@ -521,7 +523,7 @@ mod tests {
 				to: 7,
 				value: 153,
 				data: Vec::new(),
-				gas_left: 9989500000,
+				gas_left: 9989000000,
 			}]
 		);
 	}
@@ -1510,7 +1512,10 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(DispatchError::Other("contract trapped during execution"))
+			Err(ExecError {
+				error: DispatchError::Other("contract trapped during execution"),
+				origin: ErrorOrigin::Supervisor,
+			})
 		);
 	}
 
@@ -1552,7 +1557,10 @@ mod tests {
 				MockExt::default(),
 				&mut gas_meter
 			),
-			Err(DispatchError::Other("contract trapped during execution"))
+			Err(ExecError {
+				error: DispatchError::Other("contract trapped during execution"),
+				origin: ErrorOrigin::Supervisor,
+			})
 		);
 	}
 

@@ -1,5 +1,5 @@
 (module
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32) (result i32)))
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32)))
 	(import "env" "ext_clear_storage" (func $ext_clear_storage (param i32)))
 	(import "env" "ext_set_rent_allowance" (func $ext_set_rent_allowance (param i32 i32)))
@@ -24,7 +24,12 @@
 
 	;; transfer 50 to CHARLIE
 	(func $call_2
-		(call $ext_transfer (i32.const 68) (i32.const 8) (i32.const 76) (i32.const 8))
+		(call $assert
+			(i32.eq
+				(call $ext_transfer (i32.const 68) (i32.const 8) (i32.const 76) (i32.const 8))
+				(i32.const 0)
+			)
+		)
 	)
 
 	;; do nothing

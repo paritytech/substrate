@@ -420,9 +420,24 @@ decl_error! {
 		/// the subsistence threshold. No transfer is allowed to do this in order to allow
 		/// for a tombstone to be created. Use `ext_terminate` to remove a contract without
 		/// leaving a tombstone behind.
-		InsufficientBalance,
+		BelowSubsistenceThreshold,
+		/// The newly created contract is below the subsistence threshold after executing
+		/// its contructor. No contracts are allowed to exist below that threshold.
+		NewContractNotFunded,
+		/// Performing the requested transfer failed for a reason originating in the
+		/// chosen currency implementation of the runtime. Most probably the balance is
+		/// too low or locks are placed on it.
+		TransferFailed,
+		/// Performing a call was denied because the calling depth reached the limit
+		/// of what is specified in the schedule.
+		MaxCallDepthReached,
+		/// The contract that was called is either no contract at all (a plain account)
+		/// or is a tombstone.
+		InvalidContractCalled,
 		/// The code supplied to `put_code` exceeds the limit specified in the current schedule.
 		CodeTooLarge,
+		/// No code could be found at the supplied code hash.
+		CodeNotFound,
 	}
 }
 

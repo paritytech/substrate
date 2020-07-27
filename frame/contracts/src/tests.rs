@@ -32,6 +32,7 @@ use frame_support::{
 	impl_outer_origin, parameter_types, StorageMap, StorageValue,
 	traits::{Currency, Get},
 	weights::{Weight, PostDispatchInfo},
+	dispatch::DispatchErrorWithPostInfo,
 };
 use std::cell::RefCell;
 use frame_system::{self as system, EventRecord, Phase};
@@ -279,19 +280,23 @@ where
 	Ok((wasm_binary, code_hash))
 }
 
-// Perform a simple transfer to a non-existent account.
+// Perform a call to a plain account.
+// The actual transfer fails because we can only call contracts.
 // Then we check that only the base costs are returned as actual costs.
 #[test]
-fn returns_base_call_cost() {
+fn calling_plain_account_fails() {
 	ExtBuilder::default().build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000);
 
 		assert_eq!(
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
-			Ok(
-				PostDispatchInfo {
-					actual_weight: Some(67500000),
-					pays_fee: Default::default(),
+			Err(
+				DispatchErrorWithPostInfo {
+					error: Error::<Test>::InvalidContractCalled.into(),
+					post_info: PostDispatchInfo {
+						actual_weight: Some(67500000),
+						pays_fee: Default::default(),
+					},
 				}
 			)
 		);
@@ -987,7 +992,7 @@ fn call_removed_contract() {
 			// Calling contract should remove contract and fail.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
-				"contract has been evicted"
+				Error::<Test>::InvalidContractCalled
 			);
 			// Calling a contract that is about to evict shall emit an event.
 			assert_eq!(System::events(), vec![
@@ -1001,7 +1006,7 @@ fn call_removed_contract() {
 			// Subsequent contract calls should also fail.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
-				"contract has been evicted"
+				Error::<Test>::InvalidContractCalled
 			);
 		})
 }
@@ -1128,7 +1133,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			// we expect that it will get removed leaving tombstone.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
-				"contract has been evicted"
+				Error::<Test>::InvalidContractCalled
 			);
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 			assert_eq!(System::events(), vec![
@@ -1373,17 +1378,16 @@ fn cannot_self_destruct_through_draning() {
 				Some(ContractInfo::Alive(_))
 			);
 
-			// Call BOB with no input data, forcing it to run until out-of-balance
-			// and eventually trapping because below existential deposit.
-			assert_err_ignore_postinfo!(
+			// Call BOB which makes it send all funds to the zero address
+			// The contract code asserts that the correct error value is returned.
+			assert_ok!(
 				Contracts::call(
 					Origin::signed(ALICE),
 					BOB,
 					0,
 					GAS_LIMIT,
 					vec![],
-				),
-				"contract trapped during execution"
+				)
 			);
 		});
 }
@@ -1535,8 +1539,7 @@ fn cannot_self_destruct_in_constructor() {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
-			// Fail to instantiate the BOB because the call that is issued in the deploy
-			// function exhausts all balances which puts it below the existential deposit.
+			// Fail to instantiate the BOB because the contructor calls ext_terminate.
 			assert_err_ignore_postinfo!(
 				Contracts::instantiate(
 					Origin::signed(ALICE),
@@ -1545,7 +1548,7 @@ fn cannot_self_destruct_in_constructor() {
 					code_hash.into(),
 					vec![],
 				),
-				"contract trapped during execution"
+				Error::<Test>::NewContractNotFunded,
 			);
 		});
 }
