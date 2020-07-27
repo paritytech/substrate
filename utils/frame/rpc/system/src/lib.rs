@@ -298,7 +298,7 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
 			None,
@@ -337,7 +337,7 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
 			None,
@@ -360,7 +360,7 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
 			None,
@@ -392,7 +392,7 @@ mod tests {
 
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = BasicPool::new_full(
 			Default::default(),
 			None,

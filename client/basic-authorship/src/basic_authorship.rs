@@ -358,7 +358,7 @@ mod tests {
 	fn should_cease_building_block_when_deadline_is_reached() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
@@ -411,7 +411,7 @@ mod tests {
 	#[test]
 	fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
@@ -446,7 +446,7 @@ mod tests {
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, backend) = TestClientBuilder::new().build_with_backend();
 		let client = Arc::new(client);
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
@@ -508,7 +508,7 @@ mod tests {
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
