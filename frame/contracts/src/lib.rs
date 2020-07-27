@@ -648,7 +648,7 @@ impl<T: Trait> Module<T> {
 		let cfg = Config::preload();
 		let vm = WasmVm::new(&cfg.schedule);
 		let loader = WasmLoader::new(&cfg.schedule);
-		let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
+		let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 		func(&mut ctx, gas_meter)
 	}
 }

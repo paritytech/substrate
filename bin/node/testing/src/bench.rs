@@ -118,7 +118,6 @@ impl Clone for BenchDb {
 			.map(|f_result|
 				f_result.expect("failed to read file in seed db")
 					.path()
-					.clone()
 			).collect();
 		fs_extra::copy_items(
 			&seed_db_files,
@@ -543,7 +542,7 @@ impl BenchKeyring {
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
 			false,
-			Some(node_runtime::WASM_BINARY),
+			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}

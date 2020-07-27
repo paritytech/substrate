@@ -25,6 +25,7 @@ sc-finality-grandpa = { version = "0.8.0-rc5", path = "../../../client/finality-
 sc-finality-grandpa-rpc = { version = "0.8.0-rc5", path = "../../../client/finality-grandpa/rpc" }
 sc-keystore = { version = "2.0.0-rc5", path = "../../../client/keystore" }
 sc-rpc-api = { version = "0.8.0-rc5", path = "../../../client/rpc-api" }
+sc-rpc = { version = "2.0.0-rc5", path = "../../../client/rpc" }
 sp-api = { version = "2.0.0-rc5", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0-rc5", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0-rc5", path = "../../../primitives/blockchain" }
