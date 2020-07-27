@@ -968,7 +968,7 @@ where
 }
 
 /// The BABE import queue type.
-pub type BabeImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
+pub type BabeImportQueue<B, Client> = BasicQueue<B, sp_api::TransactionFor<Client, B>>;
 
 /// Register the babe inherent data provider, if not registered already.
 fn register_babe_inherent_data_provider(
@@ -1368,7 +1368,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
-) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
+) -> ClientResult<BabeImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
