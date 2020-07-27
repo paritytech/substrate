@@ -41,14 +41,15 @@
 //!
 //! The goal of an election algorithm is to provide an `ElectionResult`. A data composed of:
 //! - `winners`: A flat list of identifiers belonging to those who have won the election, usually
-//!   ordered in some meaningful way.
+//!   ordered in some meaningful way. They are zipped with their total backing stake.
 //! - `assignment`: A mapping from each voter to their winner-only targets, zipped with a ration
 //!   denoting the amount of support given to that particular target.
 //!
 //! ```rust
-//! # use crate::*;
+//! # use sp_npos_elections::*;
+//! # use sp_runtime::Perbill;
 //! // the winners.
-//! let winners = vec![1, 2];
+//! let winners = vec![(1, 100), (2, 50)];
 //! let assignments = vec![
 //! 	// A voter, giving equal backing to both 1 and 2.
 //!     Assignment { who: 10, distribution: vec![(1, Perbill::from_percent(50)), (2, Perbill::from_percent(50))] },
@@ -57,7 +58,7 @@
 //! ];
 //!
 //! // the combination of the two makes the election result.
-//! let election_result = ElectionResult { winners, assignment };
+//! let election_result = ElectionResult { winners, assignments };
 //!
 //! ```
 //!
@@ -567,7 +568,9 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 
 /// Converts raw inputs to types used in this crate.
 ///
-/// This drops any votes that are pointing to non-candidates.
+/// This will perform some cleanup that are most often important:
+/// - It drop any votes that are pointing to non-candidates.
+/// - Duplicate targets within a voter are also ignored.
 pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
@@ -587,6 +590,10 @@ pub(crate) fn setup_inputs<AccountId: IdentifierT>(
 	let voters = initial_voters.into_iter().map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
 		for v in votes {
+			if edges.iter().any(|e| e.who == v) {
+				// duplicate edge.
+				continue;
+			}
 			if let Some(idx) = c_idx_cache.get(&v) {
 				// This candidate is valid + already cached.
 				let mut candidate = candidates[*idx].borrow_mut();
