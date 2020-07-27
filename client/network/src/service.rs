@@ -568,7 +568,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// these notifications, or if the available network bandwidth is too low.
 	///
 	/// For this reason, this method is considered soft-deprecated. You are encouraged to use
-	/// [`NetworkService::prepare_notification`] instead.
+	/// [`NetworkService::notification_sender`] instead.
 	///
 	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
 	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
@@ -631,7 +631,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
 	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
-	/// An error is returned either by `prepare_notification`, by [`NotificationSender::wait`],
+	/// An error is returned either by `notification_sender`, by [`NotificationSender::wait`],
 	/// or by [`NotificationSenderReady::send`] if there exists no open notifications substream
 	/// with that combination of peer and protocol, or if the remote has asked to close the
 	/// notifications substream. If that happens, it is guaranteed that an
@@ -658,7 +658,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// ```ignore
 	/// // Do NOT do this
 	/// for peer in peers {
-	/// 	if let Ok(n) = network.prepare_notification(peer, ...) {
+	/// 	if let Ok(n) = network.notification_sender(peer, ...) {
 	///			if let Ok(s) = n.wait().await {
 	///				let _ = s.send(...);
 	///			}
@@ -670,7 +670,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// malfunctioning peer could intentionally process notifications at a very slow rate.
 	///
 	/// Instead, you are encouraged to maintain your own buffer of notifications on top of the one
-	/// maintained by `sc-network`, and use `prepare_notification` to progressively send out
+	/// maintained by `sc-network`, and use `notification_sender` to progressively send out
 	/// elements from your buffer. If this additional buffer is full (which will happen at some
 	/// point if the peer is too slow to process notifications), appropriate measures can be taken,
 	/// such as removing non-critical notifications from the buffer or disconnecting the peer
@@ -678,7 +678,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///
 	///
 	/// Notifications              Per-peer buffer
-	///   broadcast    +------->   of notifications   +-->  `prepare_notification`  +-->  Internet
+	///   broadcast    +------->   of notifications   +-->  `notification_sender`  +-->  Internet
 	///                    ^       (not covered by
 	///                    |         sc-network)
 	///                    +
