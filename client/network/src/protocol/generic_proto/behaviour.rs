@@ -806,7 +806,7 @@ impl GenericProto {
 			debug!(target: "sub-libp2p", "PSM => Accept({:?}, {:?}): Obsolete incoming,
 				sending back dropped", index, incoming.peer_id);
 			debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", incoming.peer_id);
-			self.peerset.dropped(incoming.peer_id.clone());
+			self.peerset.dropped(incoming.peer_id);
 			return
 		}
 

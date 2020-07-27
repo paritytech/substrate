@@ -185,7 +185,7 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Signer<T, C, X> 
 				let generic_public = C::GenericPublic::from(key);
 				let public = generic_public.into();
 				let account_id = public.clone().into_account();
-				Account::new(index, account_id, public.clone())
+				Account::new(index, account_id, public)
 			})
 	}
 }
