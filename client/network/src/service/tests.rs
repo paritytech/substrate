@@ -88,7 +88,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		Box::new(client.clone()),
 		None,
 		None,
-		&sp_core::testing::SpawnBlockingExecutor::new(),
+		&sp_core::testing::TaskExecutor::new(),
 		None,
 	));
 

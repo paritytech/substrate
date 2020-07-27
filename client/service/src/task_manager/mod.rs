@@ -19,8 +19,6 @@ use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
 	future::{select, Either, BoxFuture},
-	compat::*,
-	task::{Spawn, FutureObj, SpawnError},
 	sink::SinkExt,
 };
 use prometheus_endpoint::{
@@ -28,7 +26,6 @@ use prometheus_endpoint::{
 	PrometheusError,
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
-use sc_client_api::CloneableSpawn;
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 use crate::{config::{TaskExecutor, TaskType, JoinFuture}, Error};
 
@@ -132,14 +129,6 @@ impl SpawnTaskHandle {
 	}
 }
 
-impl Spawn for SpawnTaskHandle {
-	fn spawn_obj(&self, future: FutureObj<'static, ()>)
-	-> Result<(), SpawnError> {
-		self.spawn("unnamed", future);
-		Ok(())
-	}
-}
-
 impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn_blocking(name, future);
@@ -147,21 +136,6 @@ impl sp_core::traits::SpawnNamed for SpawnTaskHandle {
 
 	fn spawn(&self, name: &'static str, future: BoxFuture<'static, ()>) {
 		self.spawn(name, future);
-	}
-}
-
-impl sc_client_api::CloneableSpawn for SpawnTaskHandle {
-	fn clone(&self) -> Box<dyn CloneableSpawn> {
-		Box::new(Clone::clone(self))
-	}
-}
-
-type Boxed01Future01 = Box<dyn futures01::Future<Item = (), Error = ()> + Send + 'static>;
-
-impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
-	fn execute(&self, future: Boxed01Future01) -> Result<(), futures01::future::ExecuteError<Boxed01Future01>>{
-		self.spawn("unnamed", future.compat().map(drop));
-		Ok(())
 	}
 }
 

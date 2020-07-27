@@ -28,6 +28,7 @@ use frame_support::{
 	traits::{Currency, OnFinalize},
 };
 use frame_system::{EventRecord, Phase};
+use pallet_session::OneSessionHandler;
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::testing::Digest;
@@ -342,14 +343,15 @@ fn report_equivocation_current_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
+		let validators = Session::validators();
 
-		// make sure that all authorities have the same balance
-		for i in 0..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		// make sure that all validators have the same balance
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(1, i as u64),
+				Staking::eras_stakers(1, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -388,11 +390,12 @@ fn report_equivocation_current_set_works() {
 		start_era(2);
 
 		// check that the balance of 0-th validator is slashed 100%.
-		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
-		assert_eq!(Staking::slashable_balance_of(&0), 0);
+		let equivocation_validator_id = validators[equivocation_authority_index];
 
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 		assert_eq!(
-			Staking::eras_stakers(2, 0),
+			Staking::eras_stakers(2, equivocation_validator_id),
 			pallet_staking::Exposure {
 				total: 0,
 				own: 0,
@@ -401,12 +404,16 @@ fn report_equivocation_current_set_works() {
 		);
 
 		// check that the balances of all other validators are left intact.
-		for i in 1..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, i as u64),
+				Staking::eras_stakers(2, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -425,6 +432,7 @@ fn report_equivocation_old_set_works() {
 		start_era(1);
 
 		let authorities = Grandpa::grandpa_authorities();
+		let validators = Session::validators();
 
 		let equivocation_authority_index = 0;
 		let equivocation_key = &authorities[equivocation_authority_index].0;
@@ -436,12 +444,12 @@ fn report_equivocation_old_set_works() {
 		start_era(2);
 
 		// make sure that all authorities have the same balance
-		for i in 0..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(2, i as u64),
+				Staking::eras_stakers(2, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -474,11 +482,13 @@ fn report_equivocation_old_set_works() {
 		start_era(3);
 
 		// check that the balance of 0-th validator is slashed 100%.
-		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
-		assert_eq!(Staking::slashable_balance_of(&0), 0);
+		let equivocation_validator_id = validators[equivocation_authority_index];
+
+		assert_eq!(Balances::total_balance(&equivocation_validator_id), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&equivocation_validator_id), 0);
 
 		assert_eq!(
-			Staking::eras_stakers(3, 0),
+			Staking::eras_stakers(3, equivocation_validator_id),
 			pallet_staking::Exposure {
 				total: 0,
 				own: 0,
@@ -487,12 +497,16 @@ fn report_equivocation_old_set_works() {
 		);
 
 		// check that the balances of all other validators are left intact.
-		for i in 1..authorities.len() {
-			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
-			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+		for validator in &validators {
+			if *validator == equivocation_validator_id {
+				continue;
+			}
+
+			assert_eq!(Balances::total_balance(validator), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(validator), 10_000);
 
 			assert_eq!(
-				Staking::eras_stakers(3, i as u64),
+				Staking::eras_stakers(3, validator),
 				pallet_staking::Exposure {
 					total: 10_000,
 					own: 10_000,
@@ -765,5 +779,66 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 			<Grandpa as sp_runtime::traits::ValidateUnsigned>::pre_dispatch(&call),
 			InvalidTransaction::Stale,
 		);
+	});
+}
+
+#[test]
+fn on_new_session_doesnt_start_new_set_if_schedule_change_failed() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		assert_eq!(Grandpa::current_set_id(), 0);
+
+		// starting a new era should lead to a change in the session
+		// validators and trigger a new set
+		start_era(1);
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// we schedule a change delayed by 2 blocks, this should make it so that
+		// when we try to rotate the session at the beginning of the era we will
+		// fail to schedule a change (there's already one pending), so we should
+		// not increment the set id.
+		Grandpa::schedule_change(to_authorities(vec![(1, 1)]), 2, None).unwrap();
+		start_era(2);
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// everything should go back to normal after.
+		start_era(3);
+		assert_eq!(Grandpa::current_set_id(), 2);
+
+		// session rotation might also fail to schedule a change if it's for a
+		// forced change (i.e. grandpa is stalled) and it is too soon.
+		<NextForced<Test>>::put(1000);
+		<Stalled<Test>>::put((30, 1));
+
+		// NOTE: we cannot go through normal era rotation since having `Stalled`
+		// defined will also trigger a new set (regardless of whether the
+		// session validators changed)
+		Grandpa::on_new_session(true, std::iter::empty(), std::iter::empty());
+		assert_eq!(Grandpa::current_set_id(), 2);
+	});
+}
+
+#[test]
+fn always_schedules_a_change_on_new_session_when_stalled() {
+	new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
+		start_era(1);
+
+		assert!(Grandpa::pending_change().is_none());
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// if the session handler reports no change then we should not schedule
+		// any pending change
+		Grandpa::on_new_session(false, std::iter::empty(), std::iter::empty());
+
+		assert!(Grandpa::pending_change().is_none());
+		assert_eq!(Grandpa::current_set_id(), 1);
+
+		// if grandpa is stalled then we should **always** schedule a forced
+		// change on a new session
+		<Stalled<Test>>::put((10, 1));
+		Grandpa::on_new_session(false, std::iter::empty(), std::iter::empty());
+
+		assert!(Grandpa::pending_change().is_some());
+		assert!(Grandpa::pending_change().unwrap().forced.is_some());
+		assert_eq!(Grandpa::current_set_id(), 2);
 	});
 }
