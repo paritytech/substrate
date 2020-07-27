@@ -1402,6 +1402,43 @@ mod tests {
 			);
 
 			assert!(!crypto::finish_batch_verify());
+
+			// 1 valid ecdsa signature
+			crypto::start_batch_verify();
+
+			let pair = ecdsa::Pair::generate_with_phrase(None).0;
+			let msg = b"ECDSA!!1";
+			let signature = pair.sign(msg);
+			crypto::ecdsa_batch_verify(&signature, msg, &pair.public());
+
+			assert!(crypto::finish_batch_verify());
+
+			// 1 invalid ecdsa signature
+			crypto::start_batch_verify();
+
+			crypto::ecdsa_batch_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+
+			assert!(!crypto::finish_batch_verify());
+
+			// 1 valid, 1 invalid ecdsa signature
+			crypto::start_batch_verify();
+
+			let pair = ecdsa::Pair::generate_with_phrase(None).0;
+			let msg = b"ECDSA!!1";
+			let signature = pair.sign(msg);
+			crypto::ecdsa_batch_verify(&signature, msg, &pair.public());
+
+			crypto::ecdsa_batch_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+
+			assert!(!crypto::finish_batch_verify());
 		});
 	}
 }

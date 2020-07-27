@@ -885,6 +885,28 @@ mod tests {
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 
+	#[test]
+	fn ecdsa_batch_verify_works() {
+		let mut ext = sp_state_machine::BasicExternalities::default();
+		ext.register_extension(
+			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
+		);
+
+		ext.execute_with(move || {
+			let msg = &b"test-message"[..];
+			let (pair, _) = ecdsa::Pair::generate();
+
+			let signature = pair.sign(&msg);
+
+			let multi_sig = MultiSignature::from(signature.clone());
+			let multi_signer = MultiSigner::from(pair.public());
+
+			let batching = SignatureBatching::start();
+			assert!(signature.batch_verify(msg, &pair.public()));
+			assert!(multi_sig.batch_verify(msg, &multi_signer.into_account()));
+			assert!(batching.verify());
+		});
+	}
 
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]

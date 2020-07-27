@@ -144,6 +144,16 @@ impl Verify for sp_core::ecdsa::Signature {
 	}
 }
 
+impl BatchVerify for sp_core::ecdsa::Signature {
+	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ecdsa::Public) -> bool {
+		sp_io::crypto::ecdsa_batch_verify(
+			self,
+			msg.get(),
+			signer,
+		)
+	}
+}
+
 /// Means of signature verification of an application key.
 pub trait AppVerify {
 	/// Type of the signer.
