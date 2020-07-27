@@ -25,7 +25,6 @@ use std::{
 };
 use futures::{Future, Stream};
 use serde::{Deserialize, Serialize};
-use sp_utils::mpsc;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
@@ -131,7 +130,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = mpsc::TracingUnboundedReceiver<H>;
+pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;

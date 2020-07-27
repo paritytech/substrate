@@ -41,7 +41,7 @@ use self::common::*;
 
 #[test]
 fn should_submit_unsigned_transaction() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -67,7 +67,7 @@ const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put c
 
 #[test]
 fn should_submit_signed_transaction() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -92,7 +92,7 @@ fn should_submit_signed_transaction() {
 
 #[test]
 fn should_submit_signed_twice_from_the_same_account() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -136,7 +136,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 #[test]
 fn should_submit_signed_twice_from_all_accounts() {
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -195,7 +195,7 @@ fn submitted_transaction_should_be_valid() {
 	use sp_runtime::transaction_validity::{ValidTransaction, TransactionSource};
 	use sp_runtime::traits::StaticLookup;
 
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -216,7 +216,7 @@ fn submitted_transaction_should_be_valid() {
 	// check that transaction is valid, but reset environment storage,
 	// since CreateTransaction increments the nonce
 	let tx0 = state.read().transactions[0].clone();
-	let mut t = new_test_ext(COMPACT_CODE, false);
+	let mut t = new_test_ext(compact_code_unwrap(), false);
 	t.execute_with(|| {
 		let source = TransactionSource::External;
 		let extrinsic = UncheckedExtrinsic::decode(&mut &*tx0).unwrap();

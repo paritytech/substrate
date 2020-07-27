@@ -16,17 +16,15 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator};
-use crate::gas::{Gas, GasMeter, Token};
-use crate::rent;
-use crate::storage;
+use crate::{gas::{Gas, GasMeter, Token}, rent, storage, Error, ContractInfoOf};
 use bitflags::bitflags;
-
 use sp_std::prelude::*;
-use sp_runtime::traits::{Bounded, Zero, Convert};
+use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
 	dispatch::DispatchError,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
 	weights::Weight,
+	ensure, StorageMap,
 };
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
@@ -44,6 +42,15 @@ bitflags! {
 		/// If this bit is set all changes made by the contract exection are rolled back.
 		const REVERT = 0x0000_0001;
 	}
+}
+
+/// Describes whether we deal with a contract or a plain account.
+pub enum TransactorKind {
+	/// Transaction was initiated from a plain account. That can be either be through a
+	/// signed transaction or through RPC.
+	PlainAccount,
+	/// The call was initiated by a contract account.
+	Contract,
 }
 
 /// Output of a contract call or instantiation which ran to completion.
@@ -320,6 +327,7 @@ where
 			Err("contract has been evicted")?
 		};
 
+		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 		let dest_trie_id = contract_info.and_then(|i| i.as_alive().map(|i| i.trie_id.clone()));
 
@@ -328,6 +336,7 @@ where
 				transfer(
 					gas_meter,
 					TransferCause::Call,
+					transactor_kind,
 					&caller,
 					&dest,
 					value,
@@ -372,6 +381,7 @@ where
 			Err("not enough gas to pay base instantiate fee")?
 		}
 
+		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
@@ -399,6 +409,7 @@ where
 			transfer(
 				gas_meter,
 				TransferCause::Instantiate,
+				transactor_kind,
 				&caller,
 				&dest,
 				endowment,
@@ -415,7 +426,10 @@ where
 				)?;
 
 			// Error out if insufficient remaining balance.
-			if T::Currency::free_balance(&dest) < nested.config.existential_deposit {
+			// We need each contract that exists to be above the subsistence threshold
+			// in order to keep up the guarantuee that we always leave a tombstone behind
+			// with the exception of a contract that called `ext_terminate`.
+			if T::Currency::free_balance(&dest) < nested.config.subsistence_threshold() {
 				Err("insufficient remaining balance")?
 			}
 
@@ -465,6 +479,17 @@ where
 	fn is_live(&self, account: &T::AccountId) -> bool {
 		&self.self_account == account ||
 			self.caller.map_or(false, |caller| caller.is_live(account))
+	}
+
+	fn transactor_kind(&self) -> TransactorKind {
+		if self.depth == 0 {
+			debug_assert!(self.self_trie_id.is_none());
+			debug_assert!(self.caller.is_none());
+			debug_assert!(ContractInfoOf::<T>::get(&self.self_account).is_none());
+			TransactorKind::PlainAccount
+		} else {
+			TransactorKind::Contract
+		}
 	}
 }
 
@@ -519,6 +544,7 @@ enum TransferCause {
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	gas_meter: &mut GasMeter<T>,
 	cause: TransferCause,
+	origin: TransactorKind,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
@@ -526,6 +552,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 ) -> Result<(), DispatchError> {
 	use self::TransferCause::*;
 	use self::TransferFeeKind::*;
+	use self::TransactorKind::*;
 
 	let token = {
 		let kind: TransferFeeKind = match cause {
@@ -545,10 +572,19 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		Err("not enough gas to pay transfer fee")?
 	}
 
-	// Only ext_terminate is allowed to bring the sender below the existential deposit
-	let existence_requirement = match cause {
-		Terminate => ExistenceRequirement::AllowDeath,
-		_ => ExistenceRequirement::KeepAlive,
+	// Only ext_terminate is allowed to bring the sender below the subsistence
+	// threshold or even existential deposit.
+	let existence_requirement = match (cause, origin) {
+		(Terminate, _) => ExistenceRequirement::AllowDeath,
+		(_, Contract) => {
+			ensure!(
+				T::Currency::total_balance(transactor).saturating_sub(value) >=
+					ctx.config.subsistence_threshold(),
+				Error::<T>::InsufficientBalance,
+			);
+			ExistenceRequirement::KeepAlive
+		},
+		(_, PlainAccount) => ExistenceRequirement::KeepAlive,
 	};
 	T::Currency::transfer(transactor, dest, value, existence_requirement)?;
 
@@ -630,6 +666,7 @@ where
 		transfer(
 			gas_meter,
 			TransferCause::Call,
+			TransactorKind::Contract,
 			&self.ctx.self_account.clone(),
 			&to,
 			value,
@@ -654,6 +691,7 @@ where
 		transfer(
 			gas_meter,
 			TransferCause::Terminate,
+			TransactorKind::Contract,
 			&self_id,
 			beneficiary,
 			value,
@@ -766,7 +804,7 @@ where
 
 	fn rent_allowance(&self) -> BalanceOf<T> {
 		storage::rent_allowance::<T>(&self.ctx.self_account)
-			.unwrap_or(<BalanceOf<T>>::max_value()) // Must never be triggered actually
+			.unwrap_or_else(|_| <BalanceOf<T>>::max_value()) // Must never be triggered actually
 	}
 
 	fn block_number(&self) -> T::BlockNumber { self.block_number }
@@ -981,7 +1019,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
-			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
+			let result = ctx.instantiate(cfg.subsistence_threshold(), &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -1271,7 +1309,7 @@ mod tests {
 			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
-				1,
+				cfg.subsistence_threshold(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1514,7 +1552,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					&dummy_ch,
-					15u64,
+					Config::<Test>::subsistence_threshold_uncached(),
 					ctx.gas_meter,
 					vec![]
 				).unwrap();
@@ -1644,7 +1682,7 @@ mod tests {
 			set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
-				1,
+				cfg.subsistence_threshold(),
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],

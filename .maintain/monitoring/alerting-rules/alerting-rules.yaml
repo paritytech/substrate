@@ -3,19 +3,6 @@ groups:
   rules:
 
   ##############################################################################
-  # Resource usage
-  ##############################################################################
-
-  - alert: HighCPUUsage
-    expr: polkadot_cpu_usage_percentage >= 100
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      message: 'The node {{ $labels.instance }} has a CPU usage higher than 100%
-      for more than 5 minutes'
-
-  ##############################################################################
   # Block production
   ##############################################################################
 
