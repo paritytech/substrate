@@ -990,25 +990,24 @@ impl NetworkBehaviour for GenericProto {
 				// i.e. there is no connection that is open for custom protocols,
 				// in which case `CustomProtocolClosed` was already emitted.
 				let closed = open.is_empty();
-				let was_primary = open.get(0).map_or(false, |(c, _)| c == conn);
+				let sink_closed = open.get(0).map_or(false, |(c, _)| c == conn);
 				open.retain(|(c, _)| c != conn);
 				if !closed {
-					if open.is_empty() {
+					if let Some((_, sink)) = open.get(0) {
+						if sink_closed {
+							let event = GenericProtoOut::CustomProtocolReplaced {
+								peer_id: peer_id.clone(),
+								notifications_sink: sink.clone(),
+							};
+							self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
+						}
+					} else {
 						debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
 						let event = GenericProtoOut::CustomProtocolClosed {
 							peer_id: peer_id.clone(),
 							reason: "Disconnected by libp2p".into(),
 						};
 
-						self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
-
-					} else if was_primary {
-						let event = GenericProtoOut::CustomProtocolReplaced {
-							peer_id: peer_id.clone(),
-							notifications_sink: open.get(0)
-								.expect("!open.is_empty() checked above; qed")
-								.1.clone(),
-						};
 						self.events.push_back(NetworkBehaviourAction::GenerateEvent(event));
 					}
 				}
@@ -1159,8 +1158,9 @@ impl NetworkBehaviour for GenericProto {
 
 				let (last, new_notifications_sink) = match mem::replace(entry.get_mut(), PeerState::Poisoned) {
 					PeerState::Enabled { mut open } => {
-						let was_primary = open.get(0).map_or(false, |(c, _)| c == &connection);
-						if let Some(pos) = open.iter().position(|(c, _)| c == &connection) {
+						let pos = open.iter().position(|(c, _)| c == &connection);
+						let sink_closed = pos == Some(0);
+						if let Some(pos) = pos {
 							open.remove(pos);
 						} else {
 							debug_assert!(false);
@@ -1185,11 +1185,12 @@ impl NetworkBehaviour for GenericProto {
 						});
 
 						let last = open.is_empty();
-						let new_notifications_sink = if (last, was_primary) == (false, true) {
-							Some(open.first().expect("we check open.is_empty(); qed").1.clone())
-						} else {
-							None
-						};
+						let new_notifications_sink = open.iter().next().and_then(|(_, sink)|
+							if sink_closed {
+								Some(sink.clone())
+							} else {
+								None
+							});
 
 						*entry.into_mut() = PeerState::Disabled {
 							open,
@@ -1199,8 +1200,9 @@ impl NetworkBehaviour for GenericProto {
 						(last, new_notifications_sink)
 					},
 					PeerState::Disabled { mut open, banned_until } => {
-						let was_primary = open.get(0).map_or(false, |(c, _)| c == &connection);
-						if let Some(pos) = open.iter().position(|(c, _)| c == &connection) {
+						let pos = open.iter().position(|(c, _)| c == &connection);
+						let sink_closed = pos == Some(0);
+						if let Some(pos) = pos {
 							open.remove(pos);
 						} else {
 							debug_assert!(false);
@@ -1212,11 +1214,12 @@ impl NetworkBehaviour for GenericProto {
 						}
 
 						let last = open.is_empty();
-						let new_notifications_sink = if (last, was_primary) == (false, true) {
-							Some(open.first().expect("we check open.is_empty(); qed").1.clone())
-						} else {
-							None
-						};
+						let new_notifications_sink = open.iter().next().and_then(|(_, sink)|
+							if sink_closed {
+								Some(sink.clone())
+							} else {
+								None
+							});
 
 						*entry.into_mut() = PeerState::Disabled {
 							open,
@@ -1230,8 +1233,9 @@ impl NetworkBehaviour for GenericProto {
 						timer,
 						timer_deadline
 					} => {
-						let was_primary = open.get(0).map_or(false, |(c, _)| c == &connection);
-						if let Some(pos) = open.iter().position(|(c, _)| c == &connection) {
+						let pos = open.iter().position(|(c, _)| c == &connection);
+						let sink_closed = pos == Some(0);
+						if let Some(pos) = pos {
 							open.remove(pos);
 						} else {
 							debug_assert!(false);
@@ -1243,11 +1247,12 @@ impl NetworkBehaviour for GenericProto {
 						}
 
 						let last = open.is_empty();
-						let new_notifications_sink = if (last, was_primary) == (false, true) {
-							Some(open.first().expect("we check open.is_empty(); qed").1.clone())
-						} else {
-							None
-						};
+						let new_notifications_sink = open.iter().next().and_then(|(_, sink)|
+							if sink_closed {
+								Some(sink.clone())
+							} else {
+								None
+							});
 
 						*entry.into_mut() = PeerState::DisabledPendingEnable {
 							open,
