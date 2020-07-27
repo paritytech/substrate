@@ -386,7 +386,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEven
 		}
 
 		for addr in listen_addrs {
-			self.discovery.add_self_reported_address(&peer_id, &protocols, addr);
+			self.discovery.add_self_reported_address(&peer_id, protocols.iter(), addr);
 		}
 		self.substrate.add_discovered_nodes(iter::once(peer_id));
 	}

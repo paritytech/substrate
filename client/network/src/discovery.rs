@@ -252,15 +252,26 @@ impl DiscoveryBehaviour {
 		}
 	}
 
-	/// Call this method when a node reports an address for itself.
+	/// Add a self-reported address of a remote peer to the k-buckets of the supported
+	/// DHTs (`supported_protocols`).
 	///
 	/// **Note**: It is important that you call this method. The discovery mechanism will not
 	/// automatically add connecting peers to the Kademlia k-buckets.
-	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, protocols: &[String], addr: Multiaddr) {
-		if self.allow_non_globals_in_dht || self.can_add_to_dht(&addr) {
-			let mut added = false;
+	pub fn add_self_reported_address(
+		&mut self,
+		peer_id: &PeerId,
+		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
+		addr: Multiaddr
+	) {
+		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
+			log::trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
+			return
+		}
+
+		let mut added = false;
+		for protocol in supported_protocols {
 			for kademlia in self.kademlias.values_mut() {
-				if protocols.iter().any(|p| p.as_bytes() == kademlia.protocol_name()) {
+				if protocol.as_ref() == kademlia.protocol_name() {
 					log::trace!(
 						target: "sub-libp2p",
 						"Adding self-reported address {} from {} to Kademlia DHT {}.",
@@ -270,16 +281,14 @@ impl DiscoveryBehaviour {
 					added = true;
 				}
 			}
+		}
 
-			if !added {
-				log::trace!(
-					target: "sub-libp2p",
-					"Ignoring self-reported address {} from {} as remote node is not part of any \
-					 Kademlia DHTs supported by the local node.", addr, peer_id,
-				);
-			}
-		} else {
-			log::trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
+		if !added {
+			log::trace!(
+				target: "sub-libp2p",
+				"Ignoring self-reported address {} from {} as remote node is not part of any \
+				 Kademlia DHTs supported by the local node.", addr, peer_id,
+			);
 		}
 	}
 
@@ -814,7 +823,7 @@ mod tests {
 										.unwrap();
 									swarms[swarm_n].0.add_self_reported_address(
 										&other,
-										&[String::from_utf8(protocol_name_from_protocol_id(&protocol_id)).unwrap()],
+										[protocol_name_from_protocol_id(&protocol_id)].iter(),
 										addr,
 									);
 
@@ -862,7 +871,7 @@ mod tests {
 		// Add remote peer with unsupported protocol.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			&[String::from_utf8(protocol_name_from_protocol_id(&unsupported_protocol_id)).unwrap()],
+			[protocol_name_from_protocol_id(&unsupported_protocol_id)].iter(),
 			remote_addr.clone(),
 		);
 
@@ -878,7 +887,7 @@ mod tests {
 		// Add remote peer with supported protocol.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			&[String::from_utf8(protocol_name_from_protocol_id(&supported_protocol_id)).unwrap()],
+			[protocol_name_from_protocol_id(&supported_protocol_id)].iter(),
 			remote_addr.clone(),
 		);
 
@@ -915,7 +924,7 @@ mod tests {
 		// Add remote peer with `protocol_a` only.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			&[String::from_utf8(protocol_name_from_protocol_id(&protocol_a)).unwrap()],
+			[protocol_name_from_protocol_id(&protocol_a)].iter(),
 			remote_addr.clone(),
 		);
 
@@ -936,7 +945,7 @@ mod tests {
 				.kbucket(remote_peer_id.clone())
 				.expect("Remote peer id not to be equal to local peer id.")
 				.is_empty(),
-			"Expected remote peer not to be added to `protocol_a` Kademlia instance.",
+			"Expected remote peer not to be added to `protocol_b` Kademlia instance.",
 		);
 	}
 }
