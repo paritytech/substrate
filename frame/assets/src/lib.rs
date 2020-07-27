@@ -230,11 +230,11 @@ decl_event! {
 		<T as Trait>::Balance,
 		<T as Trait>::AssetId,
 	{
-		/// Some assets were issued.
+		/// Some assets were issued. [asset_id, owner, total_supply]
 		Issued(AssetId, AccountId, Balance),
-		/// Some assets were transferred.
+		/// Some assets were transferred. [asset_id, from, to, amount]
 		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Some assets were destroyed.
+		/// Some assets were destroyed. [asset_id, owner, balance]
 		Destroyed(AssetId, AccountId, Balance),
 	}
 }
@@ -287,7 +287,7 @@ mod tests {
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]

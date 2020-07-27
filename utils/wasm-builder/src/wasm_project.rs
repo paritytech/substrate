@@ -205,7 +205,7 @@ fn find_and_clear_workspace_members(wasm_workspace: &Path) -> Vec<String> {
 		.map(|d| d.into_path())
 		.filter(|p| p.is_dir())
 		.filter_map(|p| p.file_name().map(|f| f.to_owned()).and_then(|s| s.into_string().ok()))
-		.filter(|f| !f.starts_with(".") && f != "target")
+		.filter(|f| !f.starts_with('.') && f != "target")
 		.collect::<Vec<_>>();
 
 	let mut i = 0;

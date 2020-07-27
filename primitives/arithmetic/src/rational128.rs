@@ -30,6 +30,13 @@ impl sp_std::fmt::Debug for Rational128 {
 	}
 }
 
+#[cfg(not(feature = "std"))]
+impl sp_std::fmt::Debug for Rational128 {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		write!(f, "Rational128(..)")
+	}
+}
+
 impl Rational128 {
 	/// Zero.
 	pub fn zero() -> Self {

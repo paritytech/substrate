@@ -144,7 +144,6 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 	elected_ptr: CandidatePtr<AccountId>,
 ) {
 	let mut elected = elected_ptr.borrow_mut();
-	dbg!(elected.score);
 	let cutoff = elected.score.to_den(1)
 		.expect("(n / d) < u128::max() and (n' / 1) == (n / d), thus n' < u128::max()'; qed.")
 		.n();
