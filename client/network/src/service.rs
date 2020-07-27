@@ -621,22 +621,17 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		}
 	}
 
-	/// Waits until one or more slots are available in the buffer of pending outgoing notifications
-	/// with the given peer.
+	/// Obtains a [`NotificationSender`] for a connected peer, if it exists.
 	///
-	/// Sending a notification is done in two steps:
+	/// A `NotificationSender` is scoped to a particular connection to the peer that holds
+	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two steps:
 	///
-	/// - Call `prepare_notification` in order to check whether the protocol name is correct and
-	/// a substream is open. A [`PrepareNotification`] object is returned.
-	/// - Call [`PrepareNotification::wait`] in order to wait for a slot is available to send
-	/// said notification.
+	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
+	/// for another notification, yielding a [`NotificationSenderReady`] token.
+   	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
+   	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
-	/// > **Note**: The reason for two steps rather than one is borrow checking issues. It is not
-	/// >			impossible that both steps get fused into one in the future.
 	///
-	/// The `Future` returned by [`PrepareNotification::wait`] finishes after the peer is ready
-	/// to accept more notifications. Use the returned [`NotificationsBufferSlot`] to actually
-	/// send the notifications.
 	///
 	/// An error is returned either by `prepare_notification`, by [`PrepareNotification::wait`],
 	/// or by [`NotificationsBufferSlot::send`] if there exists no open notifications substream
@@ -692,11 +687,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///      Notifications should be dropped
 	///             if buffer is full
 	///
-	pub fn prepare_notification(
+	pub fn notification_sender(
 		&self,
 		target: PeerId,
 		engine_id: ConsensusEngineId,
-	) -> Result<PrepareNotification, SendNotificationsError> {
+	) -> Result<NotificationSender, NotificationSenderError> {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
@@ -978,12 +973,9 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	}
 }
 
-/// Intermediary step for sending a notification.
-///
-/// This struct is unfortunately mandatory due to locking constraints. Removing it would require
-/// using self-referential struct, which isn't possible in safe Rust.
+/// A `NotificationSender` allows for sending notifications to a peer with a chosen protocol.
 #[must_use]
-pub struct PrepareNotification {
+pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
@@ -998,8 +990,8 @@ pub struct PrepareNotification {
 }
 
 impl PrepareNotification {
-	/// Wait for a slot to be available.
-	pub async fn wait<'a>(&'a self) -> Result<NotificationsBufferSlot<'a>, SendNotificationsError> {
+	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
+	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
 		Ok(NotificationsBufferSlot {
 			ready: match self.sink.reserve_notification(&self.protocol_name).await {
 				Ok(r) => r,
@@ -1013,7 +1005,7 @@ impl PrepareNotification {
 
 /// Reserved slot in the notifications buffer, ready to accept data.
 #[must_use]
-pub struct NotificationsBufferSlot<'a> {
+pub struct NotificationSenderReady<'a> {
 	ready: Ready<'a>,
 
 	/// Engine ID used for the fallback message.
@@ -1026,7 +1018,7 @@ pub struct NotificationsBufferSlot<'a> {
 
 impl<'a> NotificationsBufferSlot<'a> {
 	/// Consumes this slots reservation and actually queues the notification.
-	pub fn send(self, notification: impl Into<Vec<u8>>) -> Result<(), ()> {
+	pub fn send(self, notification: impl Into<Vec<u8>>) -> Result<(), NotificationSenderError> {
 		let notification = notification.into();
 
 		if let Some(notification_size_metric) = &self.notification_size_metric {
@@ -1050,9 +1042,13 @@ impl<'a> NotificationsBufferSlot<'a> {
 
 /// Error returned by [`NetworkService::send_notification`].
 #[derive(Debug, derive_more::Display, derive_more::Error)]
-pub enum SendNotificationsError {
-	/// No open notifications substream exists with the provided combination of peer and protocol.
-	NoSubstream,
+pub enum NotificationSenderError {
+	/// The notification receiver has been closed, usually because the underlying connection closed.
+	///
+	/// Some of the notifications most recently sent may not have been received. However,
+	/// the peer may still be connected and a new `NotificationSender` for the same
+	/// protocol obtained from [`NetworkService::notification_sender`].
+	Closed,
 	/// Protocol name hasn't been registered.
 	BadProtocol,
 }
