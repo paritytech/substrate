@@ -401,7 +401,9 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 /// Build a shared offchain workers instance.
 pub fn build_offchain_workers<TBl, TBackend, TCl>(
 	config: &Configuration,
-	backend: Arc<TBackend>, spawn_handle: SpawnTaskHandle, client: Arc<TCl>,
+	backend: Arc<TBackend>,
+	spawn_handle: SpawnTaskHandle,
+	client: Arc<TCl>,
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 ) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBackend::OffchainStorage, TBl>>>
 	where
@@ -437,7 +439,7 @@ pub fn build_offchain_workers<TBl, TBackend, TCl>(
 	offchain_workers
 }
 
-/// Put together the components of a service from the parameters.
+/// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
 ) -> Result<Arc<RpcHandlers>, Error>
@@ -788,19 +790,33 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	))
 }
 
-/// Build the network service, the network status sinks and an RPC sender.
-pub fn build_network<TBl, TExPool, TImpQu, TCl>(
-	config: &Configuration,
-	client: Arc<TCl>,
-	transaction_pool: Arc<TExPool>,
-	spawn_handle: SpawnTaskHandle,
-	import_queue: TImpQu,
-	on_demand: Option<Arc<OnDemand<TBl>>>,
-	block_announce_validator_builder: Option<Box<
+/// Parameters to pass into `build_network`.
+pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
+	/// The service configuration.
+	pub config: &'a Configuration,
+	/// A shared client returned by `new_full_parts`/`new_light_parts`.
+	pub client: Arc<TCl>,
+	/// A shared transaction pool.
+	pub transaction_pool: Arc<TExPool>,
+	/// A handle for spawning tasks.
+	pub spawn_handle: SpawnTaskHandle,
+	/// An import queue.
+	pub import_queue: TImpQu,
+	/// An optional, shared data fetcher for light clients.
+	pub on_demand: Option<Arc<OnDemand<TBl>>>,
+	/// A block annouce validator builder.
+	pub block_announce_validator_builder: Option<Box<
 		dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send
 	>>,
-	finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
-	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
+	/// An optional finality proof request builder.
+	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<TBl>>,
+	/// An optional, shared finality proof request provider.
+	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<TBl>>>,
+}
+
+/// Build the network service, the network status sinks and an RPC sender.
+pub fn build_network<TBl, TExPool, TImpQu, TCl>(
+	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>
 ) -> Result<
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
@@ -817,6 +833,11 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 		TImpQu: ImportQueue<TBl> + 'static,
 {
+	let BuildNetworkParams {
+		config, client, transaction_pool, spawn_handle, import_queue, on_demand,
+		block_announce_validator_builder, finality_proof_request_builder, finality_proof_provider,
+	} = params;
+
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),
 		pool: transaction_pool,
