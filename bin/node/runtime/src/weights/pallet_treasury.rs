@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 pub struct WeightInfo;
 impl pallet_treasury::WeightInfo for WeightInfo {
