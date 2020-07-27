@@ -244,7 +244,7 @@ fn two_nodes_transfer_lots_of_packets() {
 				},
 				// An empty handshake is being sent after opening.
 				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
-				v => panic!("{:?}", v), // TODO: restore
+				_ => panic!(),
 			}
 		}
 	});
