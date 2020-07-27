@@ -21,8 +21,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod backend;
+mod precompiles;
 mod tests;
 
+pub use crate::precompiles::{Precompile, Precompiles};
 pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::vec::Vec;
@@ -172,30 +174,6 @@ impl<H: Hasher<Out=H256>> AddressMapping<AccountId32> for HashedAddressMapping<H
 		let hash = H::hash(&data);
 
 		AccountId32::from(Into::<[u8; 32]>::into(hash))
-	}
-}
-
-/// Custom precompiles to be used by EVM engine.
-pub trait Precompiles {
-	/// Try to execute the code address as precompile. If the code address is not
-	/// a precompile or the precompile is not yet available, return `None`.
-	/// Otherwise, calculate the amount of gas needed with given `input` and
-	/// `target_gas`. Return `Some(Ok(status, output, gas_used))` if the execution
-	/// is successful. Otherwise return `Some(Err(_))`.
-	fn execute(
-		address: H160,
-		input: &[u8],
-		target_gas: Option<usize>
-	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>>;
-}
-
-impl Precompiles for () {
-	fn execute(
-		_address: H160,
-		_input: &[u8],
-		_target_gas: Option<usize>
-	) -> Option<core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError>> {
-		None
 	}
 }
 
