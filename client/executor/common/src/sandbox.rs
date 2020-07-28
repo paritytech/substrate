@@ -418,7 +418,7 @@ impl<FR> SandboxInstance<FR> {
 
 					assert!(wasmtime_result.len() < 2, "multiple return types are not supported yet");
 
-					if let Some(wasmi_value) = wasmi_result {
+					let wasmtime_result = if let Some(wasmi_value) = wasmi_result {
 						let wasmtime_value = match *wasmtime_result.first().expect("value should exist") {
 							Val::I32(val) => RuntimeValue::I32(val),
 							Val::I64(val) => RuntimeValue::I64(val),
@@ -428,9 +428,12 @@ impl<FR> SandboxInstance<FR> {
 						};
 
 						assert_eq!(wasmi_value, wasmtime_value, "return values do not match");
-					}
+						Some(wasmtime_value)
+					} else {
+						None
+					};
 
-					Ok(wasmi_result)
+					Ok(wasmtime_result)
 				},
 			)
 		})
@@ -444,7 +447,8 @@ impl<FR> SandboxInstance<FR> {
 			.export_by_name(name)?
 			.as_global()?
 			.get();
-		let wasmi_value = wasmi_global.into();
+
+		let wasmi_value: sp_wasm_interface::Value = wasmi_global.into();
 
 		let wasmtime_global = self.wasmtime_instance.get_global(name)?.get();
 		let wasmtime_value = match wasmtime_global {
@@ -457,7 +461,7 @@ impl<FR> SandboxInstance<FR> {
 
 		assert_eq!(wasmi_value, wasmtime_value);
 
-		Some(wasmi_value)
+		Some(wasmtime_value)
 	}
 }
 
