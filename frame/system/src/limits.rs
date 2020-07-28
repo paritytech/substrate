@@ -15,6 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Block resource limits configuration structures.
+//!
+//! FRAME defines two resources that are limited within a block:
+//! - Weight (execution cost/time)
+//! - Length (block size)
+//!
+//! `frame_system` tracks consumption of each of these resources separately for each
+//! `DispatchClass`. This module contains configuration object for both resources,
+//! which should be passed to `frame_system` configuration when runtime is being set up.
+
 use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass, OneOrMany};
 use sp_runtime::{RuntimeDebug, Perbill};
 
@@ -67,7 +77,7 @@ pub struct ValidationErrors {
 
 #[cfg(feature = "std")]
 macro_rules! error_assert {
-	($cond : expr, $err : expr, $format : expr $(, $params: expr )*) => {
+	($cond : expr, $err : expr, $format : expr $(, $params: expr )*$(,)*) => {
 		if !$cond {
 			$err.has_errors = true;
 			$err.errors.push(format!($format $(, &$params )*));
@@ -76,7 +86,7 @@ macro_rules! error_assert {
 }
 #[cfg(not(feature = "std"))]
 macro_rules! error_assert {
-	($cond : expr, $err : expr, $format : expr $(, $params: expr )*) => {
+	($cond : expr, $err : expr, $format : expr $(, $params: expr )*$(,)*) => {
 		if !$cond {
 			$err.has_errors = true;
 		}
@@ -112,18 +122,82 @@ pub struct WeightsPerClass {
 	/// Block reserved allowance for all extrinsics of a particular class.
 	///
 	/// Setting to `None` indicates that extrinsics of that class are allowed
-	/// to go over total block weight (but at most `max`).
+	/// to go over total block weight (but at most `max_total` for that class).
 	/// Setting to `Some(x)` guarantees that at least `x` weight of particular class
 	/// is processed in every block.
-	pub guaranteed: Option<Weight>,
+	pub reserved: Option<Weight>,
 }
 
-/// Block weight limits configuration.
+/// Block weight limits & base values configuration.
+///
+/// This object is responsible for defining weight limits and base weight values tracked
+/// during extrinsic execution.
+///
+/// Each block starts with `base_block` weight being consumed right away. Next up the
+/// `on_initialize` pallet callbacks are invoked and their cost is added before any extrinsic
+/// is executed. This cost is tracked as `Mandatory` dispatch class.
+///
+/// |   | `max_block`    |   |
+///	|   |                |   |
+///	|   |                |   |
+/// |   |                |   |
+/// |   |                |  #| `on_initialize`
+/// |  #| `base_block`   |  #|
+///	|NOM|                |NOM|
+///	 ||\_ Mandatory
+///	 |\__ Operational
+///	 \___ Normal
+///
+/// The remaining capacity can be used to dispatch extrinsics. Note that each dispatch class
+/// is being tracked separately, but the sum can't exceed `max_block` (except for `reserved`).
+/// Below you can see a picture representing full block with 3 extrinsics (two `Operational` and
+/// one `Normal`). Each class has it's own limit `max_total`, but also the sum cannot exceed
+/// `max_block` value.
+///                          -- `Mandatory` limit (unlimited)
+/// | # |                 |   |
+/// | # | `Ext3`          | - - `Operational` limit
+///	|#  | `Ext2`          |-  - `Normal` limit
+/// | # | `Ext1`          | # |
+/// |  #| `on_initialize` | ##|
+/// |  #| `base_block`    |###|
+///	|NOM|                 |NOM|
+///
+/// It should be obvious now that it's possible for one class to reach it's limit (say `Normal`),
+/// while the block has still capacity to process more transactions (`max_block` not reached,
+/// `Operational` transactions can still go in). Setting `max_total` to `None` disables the
+/// per-class limit. This is generally highly recommended for `Mandatory` dispatch class.
+///
+/// Often it's desirable for some class of transactions to be added to the block despite it being
+/// full. For instance one might want to prevent high-priority `Normal` transactions from pushing
+/// out lower-priority `Operational` transactions. In such cases you might add a `reserved` capacity
+/// for given class.
+///              _
+///	  #           \
+///	  #   `Ext8`   - `reserved`
+///   #          _/
+/// | # | `Ext7                 | - - `Operational` limit
+/// |#  | `Ext6`                |   |
+///	|#  | `Ext5`                |-# - `Normal` limit
+/// |#  | `Ext4`                |## |
+/// |  #| `on_initialize`       |###|
+/// |  #| `base_block`          |###|
+///	|NOM|                       |NOM|
+///
+///	In the above example, `Ext4-6` fill up the block almost up to `max_block`. `Ext7` would not fit
+///	if there wasn't the extra `reserved` space for `Operational` transactions. Note that `max_total`
+///	limit applies to `reserved` space as well (i.e. the sum of weights of `Ext7` & `Ext8` mustn't
+///	exceed it). Setting `reserved` to `None` allows the extrinsics to always get into the block up
+///	to their `max_total` limit. If `max_total` is set to `None` as well, all extrinsics witch
+///	dispatchables of given class will always end up in the block (recommended for `Mandatory`
+///	dispatch class).
+///
+///	As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
+///	value, so this parameter should rather be thought of as "target block weight" than a hard limit.
 #[derive(RuntimeDebug, Clone)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
 	pub base_block: Weight,
-	/// Maximal total weight consumed by all kinds of extrinsics.
+	/// Maximal total weight consumed by all kinds of extrinsics (without `reserved` space).
 	pub max_block: Weight,
 	/// Weight limits for extrinsics of given dispatch class.
 	pub per_class: PerDispatchClass<WeightsPerClass>,
@@ -155,7 +229,7 @@ impl BlockWeights {
 			let weights = self.per_class.get(*class);
 			let max_for_class = or_max(weights.max_total);
 			let base_for_class = weights.base_extrinsic;
-			let reserved = or_max(weights.guaranteed);
+			let reserved = or_max(weights.reserved);
 			// Make sure that if total is set it's greater than base_block &&
 			// base_for_class
 			error_assert!(
@@ -171,28 +245,28 @@ impl BlockWeights {
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class, weights.max_extrinsic,
-				max_for_class.saturating_sub(base_for_class)
+				max_for_class.saturating_sub(base_for_class),
 			);
 			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
 				reserved > base_for_class || reserved == 0,
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
-				class, reserved, base_for_class
+				class, reserved, base_for_class,
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
 				self.max_block >= weights.max_total.unwrap_or(0),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
-				class, self.max_block, weights.max_total
+				class, self.max_block, weights.max_total,
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
 				self.max_block > base_for_class + self.base_block,
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
-				class, self.max_block, base_for_class + self.base_block
+				class, self.max_block, base_for_class + self.base_block,
 			);
 		}
 
@@ -238,7 +312,7 @@ impl BlockWeights {
 			})
 			.for_class(DispatchClass::Operational, |weights| {
 				weights.max_total = expected_block_weight.into();
-				weights.guaranteed = (expected_block_weight - normal_weight).into();
+				weights.reserved = (expected_block_weight - normal_weight).into();
 			})
 			.avg_block_initialization(Perbill::from_percent(10))
 			.build()
@@ -259,7 +333,7 @@ impl BlockWeights {
 						base_extrinsic: constants::ExtrinsicBaseWeight::get(),
 						max_extrinsic: None,
 						max_total: initial,
-						guaranteed: initial,
+						reserved: initial,
 					}
 				}),
 			},

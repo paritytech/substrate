@@ -57,7 +57,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_block_weight(
 		info: &DispatchInfoOf<T::Call>,
-	) -> Result<crate::ExtrinsicsWeight, TransactionValidityError> {
+	) -> Result<crate::ConsumedWeight, TransactionValidityError> {
 		let weights = T::BlockWeights::get();
 		let mut all_weight = Module::<T>::block_weight();
 		let extrinsic_weight = info.weight.saturating_add(weights.get(info.class).base_extrinsic);
@@ -75,7 +75,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 			// Total block weight exceeded.
 			if all_weight.total() > weights.max_block {
 				// Check if we can use reserved pool though.
-				match weights.get(info.class).guaranteed {
+				match weights.get(info.class).reserved {
 					Some(reserved) if per_class > reserved => {
 						return Err(InvalidTransaction::ExhaustsResources.into());
 					}

@@ -58,12 +58,12 @@ parameter_types! {
 			weights.base_extrinsic = 5;
 		})
 		.for_class(DispatchClass::Normal, |weights| {
-			weights.max_total = Some(NORMAL_DISPATCH_RATIO * TARGET_BLOCK_WEIGHT);
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
-			weights.max_total = Some(TARGET_BLOCK_WEIGHT);
-			weights.guaranteed = Some(
-				TARGET_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * TARGET_BLOCK_WEIGHT
+			weights.max_total = Some(MAX_BLOCK_WEIGHT);
+			weights.reserved = Some(
+				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
 			);
 		})
 		.avg_block_initialization(Perbill::from_percent(0))

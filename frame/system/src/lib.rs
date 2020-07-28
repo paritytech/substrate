@@ -182,7 +182,7 @@ impl WeightInfo for () {
 }
 
 /// An object to track the currently used extrinsic weight in a block.
-pub type ExtrinsicsWeight = PerDispatchClass<Weight>;
+pub type ConsumedWeight = PerDispatchClass<Weight>;
 
 pub trait Trait: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
@@ -410,7 +410,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): ConsumedWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -533,7 +533,7 @@ decl_module! {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = *_ratio * T::BlockWeights::get().max_block]
+		#[weight = *_ratio * T::block_weights().max_block]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -574,7 +574,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
+		#[weight = (T::block_weights().max_block, DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -590,7 +590,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
+		#[weight = (T::block_weights().max_block, DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -1102,7 +1102,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_limits(weight: Weight, len: usize) {
+	pub fn set_block_consumed_resources(weight: Weight, len: usize) {
 		BlockWeight::mutate(|current_weight| {
 			current_weight.set(weight, DispatchClass::Normal)
 		});

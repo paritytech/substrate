@@ -271,9 +271,8 @@ decl_module! {
 			// that if we collapse to minimum, the trend will be positive with a weight value
 			// which is 1% more than the target.
 			let min_value = T::FeeMultiplierUpdate::min();
-			let mut target =
-				T::FeeMultiplierUpdate::target() *
-				(T::AvailableBlockRatio::get() * T::MaximumBlockWeight::get());
+			let mut target = T::FeeMultiplierUpdate::target() *
+				T::block_weights().get(DispatchClass::Normal).max_total.unwrap();
 
 			// add 1 percent;
 			let addition = target / 100;
@@ -284,7 +283,7 @@ decl_module! {
 			target += addition;
 
 			sp_io::TestExternalities::new_empty().execute_with(|| {
-				<frame_system::Module<T>>::set_block_limits(target, 0);
+				<frame_system::Module<T>>::set_block_consumed_resources(target, 0);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(next > min_value, "The minimum bound of the multiplier is too low. When \
 					block saturation is more than target by 1% and multiplier is minimal then \
