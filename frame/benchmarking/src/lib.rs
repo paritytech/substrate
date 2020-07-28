@@ -829,12 +829,12 @@ macro_rules! impl_benchmark_test {
 		$name:ident
 	) => {
 		$crate::paste::item! {
-			fn [<test_benchmark_ $name>] <T: Trait $(<$instance>, I: Instance)? > () -> Result<(), &'static str>
+			fn [<test_benchmark_ $name>] <T: Trait > () -> Result<(), &'static str>
 				where T: frame_system::Trait, $( $where_clause )*
 			{
 				let selected_benchmark = SelectedBenchmark::$name;
 				let components = <
-					SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)? >
+					SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
 				>::components(&selected_benchmark);
 
 				let execute_benchmark = |
@@ -842,7 +842,7 @@ macro_rules! impl_benchmark_test {
 				| -> Result<(), &'static str> {
 					// Set up the verification state
 					let closure_to_verify = <
-						SelectedBenchmark as $crate::BenchmarkingSetup<T, $(, $instance)? >
+						SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
 					>::verify(&selected_benchmark, &c)?;
 
 					// Set the block number to at least 1 so events are deposited.
