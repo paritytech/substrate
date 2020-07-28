@@ -356,8 +356,8 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 		};
 		" pays_fee=".print();
 		match self.pays_fee {
-			Pays::Yes => "true".print(),
-			Pays::No => "false".print(),
+			Pays::Yes => "Yes".print(),
+			Pays::No => "No".print(),
 		}
 	}
 }
