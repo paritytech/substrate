@@ -5442,14 +5442,13 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0575e258dab62268e7236d7307caa38848acbda7ec7ab87bd9093791e999d20"
+checksum = "dd0ced56dee39a6e960c15c74dc48849d614586db2eaada6497477af7c7811cd"
 dependencies = [
  "cfg-if",
  "fnv",
  "lazy_static",
- "protobuf",
  "spin",
  "thiserror",
 ]
@@ -5504,12 +5503,6 @@ dependencies = [
  "bytes 0.5.4",
  "prost",
 ]
-
-[[package]]
-name = "protobuf"
-version = "2.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e86d370532557ae7573551a1ec8235a0f8d6cb276c7c9e6aa490b511c447485"
 
 [[package]]
 name = "pwasm-utils"
