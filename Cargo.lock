@@ -7039,6 +7039,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-finality-grandpa",
+ "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-session",
