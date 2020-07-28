@@ -78,9 +78,9 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 	}
 }
 
-#[cfg(not(feature = "mem-tracker"))]
+#[cfg(not(feature = "memory-tracker"))]
 type MemTracker = memory_db::NoopTracker<trie_db::DBValue>;
-#[cfg(feature = "mem-tracker")]
+#[cfg(feature = "memory-tracker")]
 type MemTracker = memory_db::MemCounter<trie_db::DBValue>;
 
 /// TrieDB error over `TrieConfiguration` trait.
