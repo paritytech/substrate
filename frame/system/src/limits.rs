@@ -138,15 +138,15 @@ pub struct WeightsPerClass {
 /// is executed. This cost is tracked as `Mandatory` dispatch class.
 ///
 /// |   | `max_block`    |   |
-///	|   |                |   |
-///	|   |                |   |
+/// |   |                |   |
+/// |   |                |   |
 /// |   |                |   |
 /// |   |                |  #| `on_initialize`
 /// |  #| `base_block`   |  #|
-///	|NOM|                |NOM|
-///	 ||\_ Mandatory
-///	 |\__ Operational
-///	 \___ Normal
+/// |NOM|                |NOM|
+///  ||\_ Mandatory
+///  |\__ Operational
+///  \___ Normal
 ///
 /// The remaining capacity can be used to dispatch extrinsics. Note that each dispatch class
 /// is being tracked separately, but the sum can't exceed `max_block` (except for `reserved`).
@@ -156,11 +156,11 @@ pub struct WeightsPerClass {
 ///                          -- `Mandatory` limit (unlimited)
 /// | # |                 |   |
 /// | # | `Ext3`          | - - `Operational` limit
-///	|#  | `Ext2`          |-  - `Normal` limit
+/// |#  | `Ext2`          |-  - `Normal` limit
 /// | # | `Ext1`          | # |
 /// |  #| `on_initialize` | ##|
 /// |  #| `base_block`    |###|
-///	|NOM|                 |NOM|
+/// |NOM|                 |NOM|
 ///
 /// It should be obvious now that it's possible for one class to reach it's limit (say `Normal`),
 /// while the block has still capacity to process more transactions (`max_block` not reached,
@@ -172,27 +172,27 @@ pub struct WeightsPerClass {
 /// out lower-priority `Operational` transactions. In such cases you might add a `reserved` capacity
 /// for given class.
 ///              _
-///	  #           \
-///	  #   `Ext8`   - `reserved`
+///   #           \
+///   #   `Ext8`   - `reserved`
 ///   #          _/
 /// | # | `Ext7                 | - - `Operational` limit
 /// |#  | `Ext6`                |   |
-///	|#  | `Ext5`                |-# - `Normal` limit
+/// |#  | `Ext5`                |-# - `Normal` limit
 /// |#  | `Ext4`                |## |
 /// |  #| `on_initialize`       |###|
 /// |  #| `base_block`          |###|
-///	|NOM|                       |NOM|
+/// |NOM|                       |NOM|
 ///
-///	In the above example, `Ext4-6` fill up the block almost up to `max_block`. `Ext7` would not fit
-///	if there wasn't the extra `reserved` space for `Operational` transactions. Note that `max_total`
-///	limit applies to `reserved` space as well (i.e. the sum of weights of `Ext7` & `Ext8` mustn't
-///	exceed it). Setting `reserved` to `None` allows the extrinsics to always get into the block up
-///	to their `max_total` limit. If `max_total` is set to `None` as well, all extrinsics witch
-///	dispatchables of given class will always end up in the block (recommended for `Mandatory`
-///	dispatch class).
+/// In the above example, `Ext4-6` fill up the block almost up to `max_block`. `Ext7` would not fit
+/// if there wasn't the extra `reserved` space for `Operational` transactions. Note that `max_total`
+/// limit applies to `reserved` space as well (i.e. the sum of weights of `Ext7` & `Ext8` mustn't
+/// exceed it). Setting `reserved` to `None` allows the extrinsics to always get into the block up
+/// to their `max_total` limit. If `max_total` is set to `None` as well, all extrinsics witch
+/// dispatchables of given class will always end up in the block (recommended for `Mandatory`
+/// dispatch class).
 ///
-///	As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
-///	value, so this parameter should rather be thought of as "target block weight" than a hard limit.
+/// As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
+/// value, so this parameter should rather be thought of as "target block weight" than a hard limit.
 #[derive(RuntimeDebug, Clone)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
