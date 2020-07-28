@@ -131,7 +131,7 @@ decl_module! {
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
 		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
-		fn sudo(origin, call: Box<<T as Trait>::Call>) -> DispatchResultWithPostInfo{
+		fn sudo(origin, call: Box<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
