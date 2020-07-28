@@ -26,6 +26,7 @@ primitive-types = { version = "0.7.0", default-features = false, features = ["rl
 rlp = { version = "0.4", default-features = false }
 evm = { version = "0.17", default-features = false }
 sha3 = { version = "0.8", default-features = false }
+impl-trait-for-tuples = "0.1"
 
 [features]
 default = ["std"]
