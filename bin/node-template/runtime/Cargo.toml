@@ -29,7 +29,6 @@ sp-block-builder = { path = "../../../primitives/block-builder", default-feature
 sp-consensus-aura = { version = "0.8.0-rc5", default-features = false, path = "../../../primitives/consensus/aura" }
 sp-core = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "2.0.0-rc5"}
-sp-io = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/io" }
 sp-offchain = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/offchain" }
 sp-runtime = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "2.0.0-rc5", default-features = false, path = "../../../primitives/session" }
@@ -58,7 +57,6 @@ std = [
 	"sp-consensus-aura/std",
 	"sp-core/std",
 	"sp-inherents/std",
-	"sp-io/std",
 	"sp-offchain/std",
 	"sp-runtime/std",
 	"sp-session/std",
