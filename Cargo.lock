@@ -3826,10 +3826,7 @@ dependencies = [
 name = "node-template"
 version = "2.0.0-rc5"
 dependencies = [
- "futures 0.3.5",
- "log",
  "node-template-runtime",
- "parking_lot 0.10.2",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
@@ -3837,7 +3834,6 @@ dependencies = [
  "sc-consensus-aura",
  "sc-executor",
  "sc-finality-grandpa",
- "sc-network",
  "sc-service",
  "sc-transaction-pool",
  "sp-consensus",
@@ -3873,7 +3869,6 @@ dependencies = [
  "sp-consensus-aura",
  "sp-core",
  "sp-inherents",
- "sp-io",
  "sp-offchain",
  "sp-runtime",
  "sp-session",
