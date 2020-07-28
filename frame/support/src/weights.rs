@@ -290,7 +290,9 @@ impl PostDispatchInfo {
 	/// Determine if user should actually pay fees at the end of the dispatch.
 	pub fn pays_fee(&self, info: &DispatchInfo) -> Pays {
 		// If they originally were not paying fees, or the post dispatch info
-		// says they should not pay fees, then they don't pay fees...
+		// says they should not pay fees, then they don't pay fees.
+		// This is because the pre dispatch information must contain the
+		// worst case for weight and fees paid.
 		if info.pays_fee == Pays::No || self.pays_fee == Pays::No {
 			Pays::No
 		} else {
