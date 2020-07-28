@@ -136,7 +136,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = call.clone().dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
