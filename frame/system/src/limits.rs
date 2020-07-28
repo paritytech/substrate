@@ -103,11 +103,11 @@ pub struct WeightsPerClass {
 	/// Block maximal total weight for all extrinsics of given class.
 	///
 	/// `None` indicates that weight sum of this class of extrinsics is not
-	/// restricted. Use this value carefuly, since it might produce heavily oversized
+	/// restricted. Use this value carefully, since it might produce heavily oversized
 	/// blocks.
 	///
 	/// In the worst case, the total weight consumed by the class is going to be:
-	/// `MAX(max) + MAX(reserved)`.
+	/// `MAX(max_total) + MAX(guaranteed)`.
 	pub max_total: Option<Weight>,
 	/// Block reserved allowance for all extrinsics of a particular class.
 	///
@@ -163,7 +163,7 @@ impl BlockWeights {
 				|| max_for_class == 0,
 				&mut error,
 				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
-				class, max_for_class, self.base_block, base_for_class
+				class, max_for_class, self.base_block, base_for_class,
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(

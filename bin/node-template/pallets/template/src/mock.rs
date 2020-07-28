@@ -19,12 +19,12 @@ parameter_types! {
 	pub BlockWeights: system::limits::BlockWeights =
 		system::limits::BlockWeights::with_sensible_defaults(
 			1024,
-			Perbill::from_percent(75)
+			Perbill::from_percent(75),
 		);
 	pub BlockLength: system::limits::BlockLength = system::limits::BlockLength
 		::max_with_normal_ratio(
 			2 * 1024,
-			Perbill::from_percent(75)
+			Perbill::from_percent(75),
 		);
 }
 

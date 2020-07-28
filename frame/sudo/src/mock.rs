@@ -107,8 +107,7 @@ pub struct Test;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights
-		::simple_max(1024);
+	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(1024);
 }
 
 pub struct BlockEverything;

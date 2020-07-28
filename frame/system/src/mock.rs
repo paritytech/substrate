@@ -35,7 +35,7 @@ impl_outer_origin! {
 pub struct Test;
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const TARGET_BLOCK_WEIGHT: Weight = 1024;
+const MAX_BLOCK_WEIGHT: Weight = 1024;
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 10;
