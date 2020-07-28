@@ -30,23 +30,34 @@
 //! the associated Fields mentioned above.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate rental;
+pub mod interface;
+pub mod types;
+pub use types::*;
 
+#[macro_export]
+#[cfg(not(feature = "std"))]
+mod wasm_tracing;
+
+#[macro_export]
 #[cfg(feature = "std")]
-#[doc(hidden)]
 pub use tracing;
 
-#[cfg(feature = "std")]
-pub mod proxy;
+#[cfg(not(feature = "std"))]
+pub use types::WasmLevel as Level;
+
 
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "std")]
+use once_cell::sync::OnceCell;
 
 /// Flag to signal whether to run wasm tracing
 #[cfg(feature = "std")]
 static WASM_TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// Instance of the native subscriber in use
+#[cfg(feature = "std")]
+static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn interface::TracingSubscriber>> = OnceCell::new();
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
@@ -114,4 +125,27 @@ pub fn wasm_tracing_enabled() -> bool {
 #[cfg(feature = "std")]
 pub fn set_wasm_tracing(b: bool) {
 	WASM_TRACING_ENABLED.store(b, Ordering::Relaxed)
+}
+
+#[cfg(feature = "std")]
+pub fn set_tracing_subscriber(subscriber: Box<dyn interface::TracingSubscriber>) {
+	let _ = SUBSCRIBER_INSTANCE.set(subscriber);
+}
+
+#[cfg(feature = "std")]
+pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn interface::TracingSubscriber>> {
+	SUBSCRIBER_INSTANCE.get()
+}
+
+#[cfg(feature = "std")]
+impl From<WasmLevel> for tracing::Level {
+	fn from(w: WasmLevel) -> Self {
+		match w {
+			WasmLevel::ERROR => tracing::Level::ERROR,
+			WasmLevel::WARN => tracing::Level::WARN,
+			WasmLevel::INFO => tracing::Level::INFO,
+			WasmLevel::DEBUG => tracing::Level::DEBUG,
+			WasmLevel::TRACE => tracing::Level::TRACE,
+		}
+	}
 }

@@ -576,6 +576,7 @@ pub fn build<TBl, TBackend, TImpQu, TExPool, TRpc, TCl>(
 		let subscriber = sc_tracing::ProfilingSubscriber::new(
 			config.tracing_receiver, tracing_targets
 		);
+		sp_tracing::set_tracing_subscriber(Box::new(subscriber.clone()));
 		match tracing::subscriber::set_global_default(subscriber) {
 			Ok(_) => (),
 			Err(e) => error!(target: "tracing", "Unable to set global default subscriber {}", e),
