@@ -591,6 +591,8 @@ fn deploying_wasm_contract_should_work() {
 		&charlie(),
 	);
 
+	let subsistence = pallet_contracts::Config::<Runtime>::subsistence_threshold_uncached();
+
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap(), false),
 		1,
@@ -610,7 +612,7 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate::<Runtime>(
-						1 * DOLLARS,
+						1 * DOLLARS + subsistence,
 						500_000_000,
 						transfer_ch,
 						Vec::new()
