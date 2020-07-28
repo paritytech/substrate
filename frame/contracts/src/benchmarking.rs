@@ -27,8 +27,6 @@ use frame_system::{Module as System, RawOrigin};
 use parity_wasm::elements::FuncBody;
 use sp_runtime::traits::Hash;
 
-const SEED: u32 = 0;
-
 macro_rules! load_module {
     ($name:expr) => {{
         let code = include_bytes!(concat!("../fixtures/benchmarks/", $name, ".wat"));
@@ -48,7 +46,7 @@ fn funding<T: Trait>() -> BalanceOf<T> {
 }
 
 fn create_funded_user<T: Trait>(string: &'static str, n: u32) -> T::AccountId {
-	let user = account(string, n, SEED);
+	let user = account(string, n, 0);
 	T::Currency::make_free_balance_be(&user, funding::<T>());
 	user
 }
