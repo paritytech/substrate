@@ -834,7 +834,7 @@ macro_rules! impl_benchmark_test {
 			{
 				let selected_benchmark = SelectedBenchmark::$name;
 				let components = <
-					SelectedBenchmark as $crate::BenchmarkingSetup<_>
+					SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)? >
 				>::components(&selected_benchmark);
 
 				let execute_benchmark = |
@@ -842,7 +842,7 @@ macro_rules! impl_benchmark_test {
 				| -> Result<(), &'static str> {
 					// Set up the verification state
 					let closure_to_verify = <
-						SelectedBenchmark as $crate::BenchmarkingSetup<_>
+						SelectedBenchmark as $crate::BenchmarkingSetup<T, $(, $instance)? >
 					>::verify(&selected_benchmark, &c)?;
 
 					// Set the block number to at least 1 so events are deposited.
