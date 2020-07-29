@@ -125,7 +125,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			&params.network_config.transport,
 		)?;
 
-		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
+		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
 
 		if let Some(path) = params.network_config.net_config_path {
 			fs::create_dir_all(&path)?;
@@ -361,7 +361,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			network_service: swarm,
 			service,
 			import_queue: params.import_queue,
-			from_worker,
+			from_service,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			metrics,
@@ -843,7 +843,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 /// Main network worker. Must be polled in order for the network to advance.
 ///
 /// You are encouraged to poll this in a separate background thread or task.
-#[must_use = "The NetworkWorker must be polled in order for the network to work"]
+#[must_use = "The NetworkWorker must be polled in order for the network to advance"]
 pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -855,10 +855,10 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
 	network_service: Swarm<B, H>,
-	/// The import queue that was passed as initialization.
+	/// The import queue that was passed at initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
-	/// Messages from the `NetworkService` and that must be processed.
-	from_worker: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
+	/// Messages from the [`NetworkService`] that must be processed.
+	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
@@ -1137,7 +1137,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 		loop {
 			// Process the next message coming from the `NetworkService`.
-			let msg = match this.from_worker.poll_next_unpin(cx) {
+			let msg = match this.from_service.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
 				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
