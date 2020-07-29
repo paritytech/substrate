@@ -14,22 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// #![cfg_attr(not(feature = "std"), no_std)]
-// //! Proxy to allow entering tracing spans from wasm.
-// use core::{
-// 	default::Default,
-// 	fmt::Debug,
-// };
-
-// use codec::{Encode, Decode};
-use crate::{
+use crate::types::{
 	WasmMetadata, WasmAttributes, WasmRecord, WasmEvent
 };
-//
-// #[cfg(feature = "std")]
-// use sp_externalities::{ExternalitiesExt, Externalities};
 
-// use sp_runtime_interface::runtime_interface;
+use sp_runtime_interface::runtime_interface;
 
 pub trait TracingSubscriber: Send + Sync {
 	fn enabled(&self, metadata: WasmMetadata) -> bool;
@@ -39,46 +28,39 @@ pub trait TracingSubscriber: Send + Sync {
 	fn enter(&self, span: u64);
 	fn exit(&self, span: u64);
 }
-//
-// #[cfg(feature="std")]
-// sp_externalities::decl_extension! {
-// 	/// The keystore extension to register/retrieve from the externalities.
-// 	pub struct WasmTracer(Box<dyn TracingSubscriber + 'static + Send + Sync>);
-// }
-//
-//
-// /// Interface that provides tracing functions
-// // #[runtime_interface(wasm_only, no_tracing)]
-// #[runtime_interface]
-// pub trait WasmTracing {
-// 	fn enabled(&mut self, metadata: WasmMetadata) -> bool {
-// 		self.extension::<WasmTracer>().map(|t|{
-// 			t.0.enabled(metadata)
-// 		}).unwrap_or(false)
-// 	}
-// 	fn new_span(&mut self, span: WasmAttributes) -> u64 {
-// 		self.extension::<WasmTracer>().map(|t|{
-// 			t.0.new_span(span)
-// 		}).unwrap_or(0)
-// 	}
-// 	fn record(&mut self, span: u64, values: WasmRecord) {
-// 		self.extension::<WasmTracer>().map(|t|{
-// 			t.0.record(span, values)
-// 		});
-// 	}
-// 	fn event(&mut self, event: WasmEvent) {
-// 		self.extension::<WasmTracer>().map(|t|{
-// 			t.0.event(event)
-// 		});
-// 	}
-// 	fn enter(&mut self, span: u64) {
-// 		self.extension::<WasmTracer>().map(|t|{
-// 			t.0.enter(span)
-// 		});
-// 	}
-// 	fn exit(&mut self, span: u64) {
-// 		self.extension::<WasmTracer>().map(|t|{
-// 			t.0.exit(span)
-// 		});
-// 	}
-// }
+
+/// Interface that provides tracing functions
+// #[runtime_interface(wasm_only, no_tracing)]
+#[runtime_interface]
+pub trait WasmTracing {
+	fn enabled(&mut self, metadata: WasmMetadata) -> bool {
+		crate::get_tracing_subscriber().map(|t|{
+			t.enabled(metadata)
+		}).unwrap_or(false)
+	}
+	fn new_span(&mut self, span: WasmAttributes) -> u64 {
+		crate::get_tracing_subscriber().map(|t|{
+			t.new_span(span)
+		}).unwrap_or(0)
+	}
+	fn record(&mut self, span: u64, values: WasmRecord) {
+		crate::get_tracing_subscriber().map(|t|{
+			t.record(span, values)
+		});
+	}
+	fn event(&mut self, event: WasmEvent) {
+		crate::get_tracing_subscriber().map(|t|{
+			t.event(event)
+		});
+	}
+	fn enter(&mut self, span: u64) {
+		crate::get_tracing_subscriber().map(|t|{
+			t.enter(span)
+		});
+	}
+	fn exit(&mut self, span: u64) {
+		crate::get_tracing_subscriber().map(|t|{
+			t.exit(span)
+		});
+	}
+}

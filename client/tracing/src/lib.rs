@@ -56,7 +56,6 @@ use sp_tracing::types::{
 use sp_tracing::interface::TracingSubscriber;
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
-const PROXY_TARGET: &'static str = "sp_tracing::proxy";
 const UNABLE_TO_DECODE: &'static str = "Unable to decode";
 
 /// Responsible for assigning ids to new spans, which are not re-used.

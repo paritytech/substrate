@@ -31,8 +31,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod types;
-pub use types::*;
-
 pub mod interface;
 
 #[macro_export]
