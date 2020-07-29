@@ -171,7 +171,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		key: &[u8],
 	) -> Result<Option<StorageValue>, String> {
 		let root = self.child_root(child_info)?
-			.unwrap_or(empty_child_trie_root::<Layout<H>>().encode());
+			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode());
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
@@ -186,7 +186,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		f: F,
 	) {
 		let root = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or(empty_child_trie_root::<Layout<H>>().encode()),
+			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;
@@ -211,7 +211,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		mut f: F,
 	) {
 		let root_vec = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or(empty_child_trie_root::<Layout<H>>().encode()),
+			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return;

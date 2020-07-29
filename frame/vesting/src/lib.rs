@@ -171,9 +171,10 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
-		/// balance given is the amount which is left unvested (and thus locked).
+		/// balance given is the amount which is left unvested (and thus locked). 
+		/// [account, unvested]
 		VestingUpdated(AccountId, Balance),
-		/// An account (given) has become fully vested. No further vesting can happen.
+		/// An [account] has become fully vested. No further vesting can happen.
 		VestingCompleted(AccountId),
 	}
 );
@@ -424,7 +425,7 @@ mod tests {
 	use frame_system::RawOrigin;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	#[derive(Clone, Eq, PartialEq)]

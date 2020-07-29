@@ -210,11 +210,11 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		Sudid(DispatchResult),
-		/// The sudoer just switched identity; the old key is supplied.
+		/// The [sudoer] just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
-		/// A sudo just took place.
+		/// A sudo just took place. [result]
 		SudoAsDone(bool),
 	}
 );

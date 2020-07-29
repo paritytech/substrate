@@ -88,7 +88,7 @@ exports.createDevNode = async function (options) {
   nodeSpec.extraInfo = {
     nodeType: 'bootnode',
     chainspec: 'dev',
-    peerId: "12D3KooWAEp46L9sMSb2AyPDq5bfHLVzzBBjr4GTGcGChHJtTnbF",
+    peerId: "12D3KooWQ2UejBfUdvXG5YEEKKFw2QivxgkCJNEic4wt7juTgtWu",
     image
   }
   await this.createNode(nodeSpec)
@@ -196,7 +196,6 @@ exports.createNode = async function (nodeSpec) {
   if (nodeSpec.extraInfo) {
     Object.assign(nodeInfo, nodeSpec.extraInfo)
   }
-
   logger.info(`${nodeSpec.nodeId} is created`)
   this.config.addNode(nodeInfo)
 }

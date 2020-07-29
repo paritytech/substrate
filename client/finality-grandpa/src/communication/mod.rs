@@ -701,8 +701,8 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 				keystore.local_id().clone(),
 				self.round,
 				self.set_id,
-			).ok_or(
-				Error::Signing(format!(
+			).ok_or_else(
+				|| Error::Signing(format!(
 					"Failed to sign GRANDPA vote for round {} targetting {:?}", self.round, target_hash
 				))
 			)?;
