@@ -180,18 +180,6 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		)
 	}
 
-	/// Create new basic transaction pool for a light node with the provided api.
-	pub fn new_light(
-		options: sc_transaction_graph::Options,
-		pool_api: Arc<PoolApi>,
-		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
-	) -> Self {
-		Self::with_revalidation_type(
-			options, pool_api, prometheus, RevalidationType::Light, spawner,
-		)
-	}
-
 	/// Create new basic transaction pool with provided api and custom
 	/// revalidation type.
 	pub fn with_revalidation_type(
@@ -342,7 +330,28 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	}
 }
 
-impl<Block, Client> BasicPool<FullChainApi<Client, Block>, Block>
+impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
+where
+	Block: BlockT,
+	Client: sp_blockchain::HeaderBackend<Block> + 'static,
+	Fetcher: sc_client_api::Fetcher<Block> + 'static,
+{
+	/// Create new basic transaction pool for a light node with the provided api.
+	pub fn new_light(
+		options: sc_transaction_graph::Options,
+		prometheus: Option<&PrometheusRegistry>,
+		spawner: impl SpawnNamed,
+		client: Arc<Client>,
+		fetcher: Arc<Fetcher>,
+	) -> Self {
+		let pool_api = Arc::new(LightChainApi::new(client, fetcher));
+		Self::with_revalidation_type(
+			options, pool_api, prometheus, RevalidationType::Light, spawner,
+		)
+	}
+}
+
+impl<Block, Client> FullPool<Block, Client>
 where
 	Block: BlockT,
 	Client: sp_api::ProvideRuntimeApi<Block>
@@ -355,11 +364,11 @@ where
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
 		options: sc_transaction_graph::Options,
-		pool_api: Arc<FullChainApi<Client, Block>>,
 		prometheus: Option<&PrometheusRegistry>,
 		spawner: impl SpawnNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
 		let pool = Arc::new(Self::with_revalidation_type(
 			options, pool_api, prometheus, RevalidationType::Full, spawner
 		));
