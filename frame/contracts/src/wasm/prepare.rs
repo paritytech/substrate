@@ -391,7 +391,6 @@ mod tests {
 	use super::*;
 	use crate::exec::Ext;
 	use std::fmt;
-	use wabt;
 	use assert_matches::assert_matches;
 
 	impl fmt::Debug for PrefabWasmModule {
@@ -417,7 +416,7 @@ mod tests {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
-				let wasm = wabt::Wat2Wasm::new().validate(false).convert($wat).unwrap();
+				let wasm = wat::parse_str($wat).unwrap();
 				let schedule = Schedule::default();
 				let r = prepare_contract::<TestEnv>(wasm.as_ref(), &schedule);
 				assert_matches!(r, $($expected)*);
@@ -694,7 +693,7 @@ mod tests {
 
 		#[test]
 		fn ext_println_debug_enabled() {
-			let wasm = wabt::Wat2Wasm::new().validate(false).convert(
+			let wasm = wat::parse_str(
 				r#"
 				(module
 					(import "env" "ext_println" (func $ext_println (param i32 i32)))

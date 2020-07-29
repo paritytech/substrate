@@ -4262,6 +4262,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "assert_matches",
  "bitflags",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
@@ -4279,8 +4280,8 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
- "wabt",
  "wasmi-validation",
+ "wat",
 ]
 
 [[package]]
