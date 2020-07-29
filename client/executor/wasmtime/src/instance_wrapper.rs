@@ -29,36 +29,36 @@ use sc_executor_common::{
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Engine, Instance, Module, Memory, Table, Val, Func, Extern, Global, Store};
+use parity_wasm::elements;
 
 mod globals_snapshot;
 
 pub use globals_snapshot::GlobalsSnapshot;
 
 pub struct ModuleWrapper {
-	imported_globals_count: u32,
-	globals_count: u32,
 	module: Module,
 	data_segments_snapshot: DataSegmentsSnapshot,
 }
 
 impl ModuleWrapper {
 	pub fn new(engine: &Engine, code: &[u8]) -> Result<Self> {
-		let module = Module::new(engine, code)
+		let mut raw_module: elements::Module = elements::deserialize_buffer(code)
+			.map_err(|e| Error::from(format!("cannot decode module: {}", e)))?;
+		pwasm_utils::export_mutable_globals(&mut raw_module, "exported_internal_global");
+		let instrumented_code = elements::serialize(raw_module)
+			.map_err(|e| Error::from(format!("cannot encode module: {}", e)))?;
+
+		let module = Module::new(engine, &instrumented_code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
 
 		let module_info = WasmModuleInfo::new(code)
 			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
-		let declared_globals_count = module_info.declared_globals_count();
-		let imported_globals_count = module_info.imported_globals_count();
-		let globals_count = imported_globals_count + declared_globals_count;
 
 		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
 			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
 
 		Ok(Self {
 			module,
-			imported_globals_count,
-			globals_count,
 			data_segments_snapshot,
 		})
 	}
@@ -78,8 +78,6 @@ impl ModuleWrapper {
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
-	globals_count: u32,
-	imported_globals_count: u32,
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
@@ -143,8 +141,6 @@ impl InstanceWrapper {
 		Ok(Self {
 			table: get_table(&instance),
 			instance,
-			globals_count: module_wrapper.globals_count,
-			imported_globals_count: module_wrapper.imported_globals_count,
 			memory,
 			_not_send_nor_sync: marker::PhantomData,
 		})
