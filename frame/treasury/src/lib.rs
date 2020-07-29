@@ -392,7 +392,7 @@ decl_storage! {
 		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
 
 		/// Minimum value for a bounty or sub-bounty.
-		pub BountyValueMinimum get(fn bounty_value_minimum): BalanceOf<T>;
+		pub BountyValueMinimum get(fn bounty_value_minimum) config(): BalanceOf<T>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -400,6 +400,10 @@ decl_storage! {
 			let _ = T::Currency::make_free_balance_be(
 				&<Module<T>>::account_id(),
 				T::Currency::minimum_balance(),
+			);
+			assert!(
+				BountyValueMinimum::<T>::get() >= T::Currency::minimum_balance(),
+				"bounty_value_minimum must not be lower than minimum_balance"
 			);
 		});
 	}
