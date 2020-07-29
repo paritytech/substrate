@@ -34,17 +34,15 @@
 ///
 
 use bytes::BytesMut;
-use futures::{prelude::*, ready};
+use futures::prelude::*;
 use futures_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
-use std::{borrow::Cow, collections::VecDeque, convert::TryFrom as _, io, iter, mem, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-/// Maximum number of buffered messages before we refuse to accept more.
-const MAX_PENDING_MESSAGES: usize = 512;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
 /// stream of messages.
@@ -93,10 +91,6 @@ pub struct NotificationsOutSubstream<TSubstream> {
 	/// Substream where to send messages.
 	#[pin]
 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
-	/// Queue of messages waiting to be sent.
-	messages_queue: VecDeque<Vec<u8>>,
-	/// If true, we need to flush `socket`.
-	need_flush: bool,
 }
 
 impl NotificationsIn {
@@ -272,29 +266,8 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 
 			Ok((handshake, NotificationsOutSubstream {
 				socket: Framed::new(socket, UviBytes::default()),
-				messages_queue: VecDeque::with_capacity(MAX_PENDING_MESSAGES),
-				need_flush: false,
 			}))
 		})
-	}
-}
-
-impl<TSubstream> NotificationsOutSubstream<TSubstream> {
-	/// Returns the number of items in the queue, capped to `u32::max_value()`.
-	pub fn queue_len(&self) -> u32 {
-		u32::try_from(self.messages_queue.len()).unwrap_or(u32::max_value())
-	}
-
-	/// Push a message to the queue of messages.
-	///
-	/// This has the same effect as the `Sink::start_send` implementation.
-	pub fn push_message(&mut self, item: Vec<u8>) -> Result<(), NotificationsOutError> {
-		if self.messages_queue.len() >= MAX_PENDING_MESSAGES {
-			return Err(NotificationsOutError::Clogged);
-		}
-
-		self.messages_queue.push_back(item);
-		Ok(())
 	}
 }
 
@@ -303,49 +276,28 @@ impl<TSubstream> Sink<Vec<u8>> for NotificationsOutSubstream<TSubstream>
 {
 	type Error = NotificationsOutError;
 
-	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
-		Poll::Ready(Ok(()))
+	fn poll_ready(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		let mut this = self.project();
+		Sink::poll_ready(this.socket.as_mut(), cx)
+			.map_err(NotificationsOutError::Io)
 	}
 
-	fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
-		self.push_message(item)
+	fn start_send(self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+		let mut this = self.project();
+		Sink::start_send(this.socket.as_mut(), io::Cursor::new(item))
+			.map_err(NotificationsOutError::Io)
 	}
 
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
 		let mut this = self.project();
-
-		while !this.messages_queue.is_empty() {
-			match Sink::poll_ready(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(From::from(err))),
-				Poll::Ready(Ok(())) => {
-					let msg = this.messages_queue.pop_front()
-						.expect("checked for !is_empty above; qed");
-					Sink::start_send(this.socket.as_mut(), io::Cursor::new(msg))?;
-					*this.need_flush = true;
-				},
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-
-		if *this.need_flush {
-			match Sink::poll_flush(this.socket.as_mut(), cx) {
-				Poll::Ready(Err(err)) => return Poll::Ready(Err(From::from(err))),
-				Poll::Ready(Ok(())) => *this.need_flush = false,
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-
-		Poll::Ready(Ok(()))
+		Sink::poll_flush(this.socket.as_mut(), cx)
+			.map_err(NotificationsOutError::Io)
 	}
 
-	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
-		ready!(Sink::poll_flush(self.as_mut(), cx))?;
-		let this = self.project();
-		match Sink::poll_close(this.socket, cx) {
-			Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-			Poll::Ready(Err(err)) => Poll::Ready(Err(From::from(err))),
-			Poll::Pending => Poll::Pending,
-		}
+	fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+		let mut this = self.project();
+		Sink::poll_close(this.socket.as_mut(), cx)
+			.map_err(NotificationsOutError::Io)
 	}
 }
 
@@ -386,13 +338,6 @@ impl From<unsigned_varint::io::ReadError> for NotificationsHandshakeError {
 pub enum NotificationsOutError {
 	/// I/O error on the substream.
 	Io(io::Error),
-
-	/// Remote doesn't process our messages quickly enough.
-	///
-	/// > **Note**: This is not necessarily the remote's fault, and could also be caused by the
-	/// >           local node sending data too quickly. Properly doing back-pressure, however,
-	/// >           would require a deep refactoring effort in Substrate as a whole.
-	Clogged,
 }
 
 #[cfg(test)]
@@ -402,7 +347,6 @@ mod tests {
 	use async_std::net::{TcpListener, TcpStream};
 	use futures::{prelude::*, channel::oneshot};
 	use libp2p::core::upgrade;
-	use std::pin::Pin;
 
 	#[test]
 	fn basic_works() {
@@ -581,58 +525,5 @@ mod tests {
 		});
 
 		async_std::task::block_on(client);
-	}
-
-	#[test]
-	fn buffer_is_full_closes_connection() {
-		const PROTO_NAME: &'static [u8] = b"/test/proto/1";
-		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
-
-		let client = async_std::task::spawn(async move {
-			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
-			let (handshake, mut substream) = upgrade::apply_outbound(
-				socket,
-				NotificationsOut::new(PROTO_NAME, vec![]),
-				upgrade::Version::V1
-			).await.unwrap();
-
-			assert!(handshake.is_empty());
-
-			// Push an item and flush so that the test works.
-			substream.send(b"hello world".to_vec()).await.unwrap();
-
-			for _ in 0..32768 {
-				// Push an item on the sink without flushing until an error happens because the
-				// buffer is full.
-				let message = b"hello world!".to_vec();
-				if future::poll_fn(|cx| Sink::poll_ready(Pin::new(&mut substream), cx)).await.is_err() {
-					return Ok(());
-				}
-				if Sink::start_send(Pin::new(&mut substream), message).is_err() {
-					return Ok(());
-				}
-			}
-
-			Err(())
-		});
-
-		async_std::task::block_on(async move {
-			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
-
-			let (socket, _) = listener.accept().await.unwrap();
-			let (initial_message, mut substream) = upgrade::apply_inbound(
-				socket,
-				NotificationsIn::new(PROTO_NAME)
-			).await.unwrap();
-
-			assert!(initial_message.is_empty());
-			substream.send_handshake(vec![]);
-
-			// Process one message so that the handshake and all works.
-			let _ = substream.next().await.unwrap().unwrap();
-
-			client.await.unwrap();
-		});
 	}
 }

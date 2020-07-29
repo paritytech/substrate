@@ -38,7 +38,7 @@ use crate::{
 	},
 	on_demand_layer::AlwaysBadChecker,
 	light_client_handler, block_requests, finality_requests,
-	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
+	protocol::{self, event::Event, NotifsHandlerError, LegacyConnectionKillError, NotificationsSink, Ready, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
@@ -50,7 +50,8 @@ use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handle
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
-	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
+	register, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,
+	PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -61,7 +62,7 @@ use sp_runtime::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::{Borrow, Cow},
-	collections::HashSet,
+	collections::{HashMap, HashSet},
 	fs,
 	marker::PhantomData,
 	num:: NonZeroUsize,
@@ -95,6 +96,14 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
+	/// For each peer and protocol combination, an object that allows sending notifications to
+	/// that peer. Updated by the [`NetworkWorker`].
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
+	/// For each legacy gossiping engine ID, the corresponding new protocol name.
+	protocol_name_by_engine: Mutex<HashMap<ConsensusEngineId, Cow<'static, [u8]>>>,
+	/// Field extracted from the [`Metrics`] struct and necessary to report the
+	/// notifications-related metrics.
+	notifications_sizes_metric: Option<HistogramVec>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -242,7 +251,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
-			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
 		// Build the swarm.
@@ -342,6 +350,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
+		let peers_notifications_sinks = Arc::new(Mutex::new(HashMap::new()));
+		let protocol_name_by_engine = Mutex::new({
+			params.network_config.notifications_protocols.iter().cloned().collect()
+		});
 
 		let service = Arc::new(NetworkService {
 			bandwidth,
@@ -351,6 +363,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			peerset: peerset_handle,
 			local_peer_id,
 			to_worker,
+			peers_notifications_sinks: peers_notifications_sinks.clone(),
+			protocol_name_by_engine,
+			notifications_sizes_metric:
+				metrics.as_ref().map(|metrics| metrics.notifications_sizes.clone()),
 			_marker: PhantomData,
 		});
 
@@ -364,6 +380,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			from_service,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
+			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
 		})
@@ -542,8 +559,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		&self.local_peer_id
 	}
 
-	/// Writes a message on an open notifications channel. Has no effect if the notifications
-	/// channel with this protocol name is closed.
+	/// Appends a notification to the buffer of pending outgoing notifications with the given peer.
+	/// Has no effect if the notifications channel with this protocol name is not open.
+	///
+	/// If the buffer of pending outgoing notifications with that peer is full, the notification
+	/// is silently dropped and the connection to the remote will start being shut down. This
+	/// happens if you call this method at a higher rate than the rate at which the peer processes
+	/// these notifications, or if the available network bandwidth is too low.
+	///
+	/// For this reason, this method is considered soft-deprecated. You are encouraged to use
+	/// [`NetworkService::notification_sender`] instead.
 	///
 	/// > **Note**: The reason why this is a no-op in the situation where we have no channel is
 	/// >			that we don't guarantee message delivery anyway. Networking issues can cause
@@ -551,14 +576,145 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			between the remote voluntarily closing a substream or a network error
 	/// >			preventing the message from being delivered.
 	///
-	/// The protocol must have been registered with `register_notifications_protocol`.
+	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// `NetworkConfiguration::notifications_protocols`.
 	///
 	pub fn write_notification(&self, target: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::WriteNotification {
-			target,
+		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
+		// `peers_notifications_sinks` mutex as soon as possible.
+		let sink = {
+			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
+			if let Some(sink) = peers_notifications_sinks.get(&(target, engine_id)) {
+				sink.clone()
+			} else {
+				// Notification silently discarded, as documented.
+				return;
+			}
+		};
+
+		// Used later for the metrics report.
+		let message_len = message.len();
+
+		// Determine the wire protocol name corresponding to this `engine_id`.
+		let protocol_name = self.protocol_name_by_engine.lock().get(&engine_id).cloned();
+		if let Some(protocol_name) = protocol_name {
+			// For backwards-compatibility reason, we have to duplicate the message and pass it
+			// in the situation where the remote still uses the legacy substream.
+			let fallback = codec::Encode::encode(&{
+				protocol::message::generic::Message::<(), (), (), ()>::Consensus({
+					protocol::message::generic::ConsensusMessage {
+						engine_id,
+						data: message.clone(),
+					}
+				})
+			});
+
+			sink.send_sync_notification(&protocol_name, fallback, message);
+		} else {
+			return;
+		}
+
+		if let Some(notifications_sizes_metric) = self.notifications_sizes_metric.as_ref() {
+			notifications_sizes_metric
+				.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
+				.observe(message_len as f64);
+		}
+	}
+
+	/// Obtains a [`NotificationSender`] for a connected peer, if it exists.
+	///
+	/// A `NotificationSender` is scoped to a particular connection to the peer that holds
+	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two steps:
+	///
+	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
+	/// for another notification, yielding a [`NotificationSenderReady`] token.
+	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
+	/// can only fail if the underlying notification substream or connection has suddenly closed.
+	///
+	/// An error is returned either by `notification_sender`, by [`NotificationSender::wait`],
+	/// or by [`NotificationSenderReady::send`] if there exists no open notifications substream
+	/// with that combination of peer and protocol, or if the remote has asked to close the
+	/// notifications substream. If that happens, it is guaranteed that an
+	/// [`Event::NotificationStreamClosed`] has been generated on the stream returned by
+	/// [`NetworkService::event_stream`].
+	///
+	/// If the remote requests to close the notifications substream, all notifications successfully
+	/// enqueued using [`NotificationSenderReady::send`] will finish being sent out before the
+	/// substream actually gets closed, but attempting to enqueue more notifications will now
+	/// return an error. It is however possible for the entire connection to be abruptly closed,
+	/// in which case enqueued notifications will be lost.
+	///
+	/// The protocol must have been registered with `register_notifications_protocol` or
+	/// `NetworkConfiguration::notifications_protocols`.
+	///
+	/// # Usage
+	///
+	/// This method returns a struct that allows waiting until there is space available in the
+	/// buffer of messages towards the given peer. If the peer processes notifications at a slower
+	/// rate than we send them, this buffer will quickly fill up.
+	///
+	/// As such, you should never do something like this:
+	///
+	/// ```ignore
+	/// // Do NOT do this
+	/// for peer in peers {
+	/// 	if let Ok(n) = network.notification_sender(peer, ...) {
+	///			if let Ok(s) = n.ready().await {
+	///				let _ = s.send(...);
+	///			}
+	/// 	}
+	/// }
+	/// ```
+	///
+	/// Doing so would slow down all peers to the rate of the slowest one. A malicious or
+	/// malfunctioning peer could intentionally process notifications at a very slow rate.
+	///
+	/// Instead, you are encouraged to maintain your own buffer of notifications on top of the one
+	/// maintained by `sc-network`, and use `notification_sender` to progressively send out
+	/// elements from your buffer. If this additional buffer is full (which will happen at some
+	/// point if the peer is too slow to process notifications), appropriate measures can be taken,
+	/// such as removing non-critical notifications from the buffer or disconnecting the peer
+	/// using [`NetworkService::disconnect_peer`].
+	///
+	///
+	/// Notifications              Per-peer buffer
+	///   broadcast    +------->   of notifications   +-->  `notification_sender`  +-->  Internet
+	///                    ^       (not covered by
+	///                    |         sc-network)
+	///                    +
+	///      Notifications should be dropped
+	///             if buffer is full
+	///
+	pub fn notification_sender(
+		&self,
+		target: PeerId,
+		engine_id: ConsensusEngineId,
+	) -> Result<NotificationSender, NotificationSenderError> {
+		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
+		// `peers_notifications_sinks` mutex as soon as possible.
+		let sink = {
+			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
+			if let Some(sink) = peers_notifications_sinks.get(&(target, engine_id)) {
+				sink.clone()
+			} else {
+				return Err(NotificationSenderError::Closed);
+			}
+		};
+
+		// Determine the wire protocol name corresponding to this `engine_id`.
+		let protocol_name = match self.protocol_name_by_engine.lock().get(&engine_id).cloned() {
+			Some(p) => p,
+			None => return Err(NotificationSenderError::BadProtocol),
+		};
+
+		Ok(NotificationSender {
+			sink,
+			protocol_name,
 			engine_id,
-			message,
-		});
+			notification_size_metric: self.notifications_sizes_metric.as_ref().map(|histogram| {
+				histogram.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
+			}),
+		})
 	}
 
 	/// Returns a stream containing the events that happen on the network.
@@ -595,9 +751,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) {
+		let protocol_name = protocol_name.into();
+		self.protocol_name_by_engine.lock().insert(engine_id, protocol_name.clone());
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RegisterNotifProtocol {
 			engine_id,
-			protocol_name: protocol_name.into(),
+			protocol_name,
 		});
 	}
 
@@ -813,6 +971,87 @@ impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	}
 }
 
+/// A `NotificationSender` allows for sending notifications to a peer with a chosen protocol.
+#[must_use]
+pub struct NotificationSender {
+	sink: NotificationsSink,
+
+	/// Name of the protocol on the wire.
+	protocol_name: Cow<'static, [u8]>,
+
+	/// Engine ID used for the fallback message.
+	engine_id: ConsensusEngineId,
+
+	/// Field extracted from the [`Metrics`] struct and necessary to report the
+	/// notifications-related metrics.
+	notification_size_metric: Option<Histogram>,
+}
+
+impl NotificationSender {
+	/// Returns a future that resolves when the `NotificationSender` is ready to send a notification.
+	pub async fn ready<'a>(&'a self) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
+		Ok(NotificationSenderReady {
+			ready: match self.sink.reserve_notification(&self.protocol_name).await {
+				Ok(r) => r,
+				Err(()) => return Err(NotificationSenderError::Closed),
+			},
+			engine_id: self.engine_id,
+			notification_size_metric: self.notification_size_metric.clone(),
+		})
+	}
+}
+
+/// Reserved slot in the notifications buffer, ready to accept data.
+#[must_use]
+pub struct NotificationSenderReady<'a> {
+	ready: Ready<'a>,
+
+	/// Engine ID used for the fallback message.
+	engine_id: ConsensusEngineId,
+
+	/// Field extracted from the [`Metrics`] struct and necessary to report the
+	/// notifications-related metrics.
+	notification_size_metric: Option<Histogram>,
+}
+
+impl<'a> NotificationSenderReady<'a> {
+	/// Consumes this slots reservation and actually queues the notification.
+	pub fn send(self, notification: impl Into<Vec<u8>>) -> Result<(), NotificationSenderError> {
+		let notification = notification.into();
+
+		if let Some(notification_size_metric) = &self.notification_size_metric {
+			notification_size_metric.observe(notification.len() as f64);
+		}
+
+		// For backwards-compatibility reason, we have to duplicate the message and pass it
+		// in the situation where the remote still uses the legacy substream.
+		let fallback = codec::Encode::encode(&{
+			protocol::message::generic::Message::<(), (), (), ()>::Consensus({
+				protocol::message::generic::ConsensusMessage {
+					engine_id: self.engine_id,
+					data: notification.clone(),
+				}
+			})
+		});
+
+		self.ready.send(fallback, notification)
+			.map_err(|()| NotificationSenderError::Closed)
+	}
+}
+
+/// Error returned by [`NetworkService::send_notification`].
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+pub enum NotificationSenderError {
+	/// The notification receiver has been closed, usually because the underlying connection closed.
+	///
+	/// Some of the notifications most recently sent may not have been received. However,
+	/// the peer may still be connected and a new `NotificationSender` for the same
+	/// protocol obtained from [`NetworkService::notification_sender`].
+	Closed,
+	/// Protocol name hasn't been registered.
+	BadProtocol,
+}
+
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
 ///
 /// Each entry corresponds to a method of `NetworkService`.
@@ -826,11 +1065,6 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
-	WriteNotification {
-		message: Vec<u8>,
-		engine_id: ConsensusEngineId,
-		target: PeerId,
-	},
 	RegisterNotifProtocol {
 		engine_id: ConsensusEngineId,
 		protocol_name: Cow<'static, [u8]>,
@@ -867,6 +1101,9 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// For each peer and protocol combination, an object that allows sending notifications to
+	/// that peer. Shared with the [`NetworkService`].
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ConsensusEngineId), NotificationsSink>>>,
 }
 
 struct Metrics {
@@ -889,7 +1126,6 @@ struct Metrics {
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
-	notifications_queues_size: HistogramVec,
 	notifications_sizes: HistogramVec,
 	notifications_streams_closed_total: CounterVec<U64>,
 	notifications_streams_opened_total: CounterVec<U64>,
@@ -1002,16 +1238,6 @@ impl Metrics {
 				),
 				&["direction"]
 			)?, registry)?,
-			notifications_queues_size: register(HistogramVec::new(
-				HistogramOpts {
-					common_opts: Opts::new(
-						"sub_libp2p_notifications_queues_size",
-						"Total size of all the notification queues"
-					),
-					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 511.0, 512.0],
-				},
-				&["protocol"]
-			)?, registry)?,
 			notifications_sizes: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
@@ -1088,27 +1314,6 @@ impl Metrics {
 			)?, registry)?,
 		})
 	}
-
-	fn update_with_network_event(&self, event: &Event) {
-		match event {
-			Event::NotificationStreamOpened { engine_id, .. } => {
-				self.notifications_streams_opened_total
-					.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id)]).inc();
-			},
-			Event::NotificationStreamClosed { engine_id, .. } => {
-				self.notifications_streams_closed_total
-					.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id)]).inc();
-			},
-			Event::NotificationsReceived { messages, .. } => {
-				for (engine_id, message) in messages {
-					self.notifications_sizes
-						.with_label_values(&["in", &maybe_utf8_bytes_to_string(engine_id)])
-						.observe(message.len() as f64);
-				}
-			},
-			_ => {}
-		}
-	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
@@ -1162,14 +1367,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) =>
 					this.event_streams.push(sender),
-				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.notifications_sizes
-							.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
-							.observe(message.len() as f64);
-					}
-					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
-				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
 					this.network_service
 						.register_notifications_protocol(engine_id, protocol_name);
@@ -1237,11 +1434,82 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened { remote, engine_id, notifications_sink, role })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.update_with_network_event(&ev);
+						metrics.notifications_streams_opened_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&engine_id)]).inc();
 					}
-					this.event_streams.send(ev);
+					{
+						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						peers_notifications_sinks.insert((remote.clone(), engine_id), notifications_sink);
+					}
+					this.event_streams.send(Event::NotificationStreamOpened {
+						remote,
+						engine_id,
+						role,
+					});
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamReplaced { remote, engine_id, notifications_sink })) => {
+					let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+					if let Some(s) = peers_notifications_sinks.get_mut(&(remote, engine_id)) {
+						*s = notifications_sink;
+					} else {
+						log::error!(
+							target: "sub-libp2p",
+							"NotificationStreamReplaced for non-existing substream"
+						);
+					}
+
+					// TODO: Notifications might have been lost as a result of the previous
+					// connection being dropped, and as a result it would be preferable to notify
+					// the users of this fact by simulating the substream being closed then
+					// reopened.
+					// The code below doesn't compile because `role` is unknown. Propagating the
+					// handshake of the secondary connections is quite an invasive change and
+					// would conflict with https://github.com/paritytech/substrate/issues/6403.
+					// Considering that dropping notifications is generally regarded as
+					// acceptable, this bug is at the moment intentionally left there and is
+					// intended to be fixed at the same time as
+					// https://github.com/paritytech/substrate/issues/6403.
+					/*this.event_streams.send(Event::NotificationStreamClosed {
+						remote,
+						engine_id,
+					});
+					this.event_streams.send(Event::NotificationStreamOpened {
+						remote,
+						engine_id,
+						role,
+					});*/
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamClosed { remote, engine_id })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.notifications_streams_closed_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&engine_id[..])]).inc();
+					}
+					this.event_streams.send(Event::NotificationStreamClosed {
+						remote: remote.clone(),
+						engine_id,
+					});
+					{
+						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						peers_notifications_sinks.remove(&(remote.clone(), engine_id));
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationsReceived { remote, messages })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						for (engine_id, message) in &messages {
+							metrics.notifications_sizes
+								.with_label_values(&["in", &maybe_utf8_bytes_to_string(engine_id)])
+								.observe(message.len() as f64);
+						}
+					}
+					this.event_streams.send(Event::NotificationsReceived {
+						remote,
+						messages,
+					});
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(ev))) => {
+					this.event_streams.send(Event::Dht(ev));
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
@@ -1272,7 +1540,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								EitherError::B(LegacyConnectionKillError)))))))) =>	"force-closed",
+								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};

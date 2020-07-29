@@ -63,10 +63,20 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 	NegotiatedSubstream,
 };
+use futures::{
+	channel::mpsc,
+	lock::{Mutex as FuturesMutex, MutexGuard as FuturesMutexGuard},
+	prelude::*
+};
 use log::{debug, error};
-use parking_lot::RwLock;
-use prometheus_endpoint::HistogramVec;
+use parking_lot::{Mutex, RwLock};
 use std::{borrow::Cow, error, io, str, sync::Arc, task::{Context, Poll}};
+
+/// Number of pending notifications in asynchronous contexts.
+/// See [`NotificationsSink::reserve_notification`] for context.
+const ASYNC_NOTIFICATIONS_BUFFER_SIZE: usize = 8;
+/// Number of pending notifications in synchronous contexts.
+const SYNC_NOTIFICATIONS_BUFFER_SIZE: usize = 2048;
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -107,6 +117,18 @@ pub struct NotifsHandler {
 	/// we push the corresponding index here and process them when the handler
 	/// gets enabled/disabled.
 	pending_in: Vec<usize>,
+
+	/// If `Some`, contains the two `Receiver`s connected to the [`NotificationsSink`] that has
+	/// been sent out. The notifications to send out can be pulled from this receivers.
+	/// We use two different channels in order to have two different channel sizes, but from the
+	/// receiving point of view, the two channels are the same.
+	/// The receivers are fused in case the user drops the [`NotificationsSink`] entirely.
+	notifications_sink_rx: Option<
+		stream::Select<
+			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>,
+			stream::Fuse<mpsc::Receiver<NotificationsSinkMessage>>
+		>
+	>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,6 +162,7 @@ impl IntoProtocolsHandler for NotifsHandlerProto {
 			legacy: self.legacy.into_handler(remote_peer_id, connected_point),
 			enabled: EnabledState::Initial,
 			pending_in: Vec::new(),
+			notifications_sink_rx: None,
 		}
 	}
 }
@@ -152,32 +175,6 @@ pub enum NotifsHandlerIn {
 
 	/// The node should stop using custom protocols.
 	Disable,
-
-	/// Sends a message through the custom protocol substream.
-	///
-	/// > **Note**: This must **not** be a `ConsensusMessage`, `Transactions`, or
-	/// > 			`BlockAnnounce` message.
-	SendLegacy {
-		/// The message to send.
-		message: Vec<u8>,
-	},
-
-	/// Sends a notifications message.
-	SendNotification {
-		/// Name of the protocol for the message.
-		///
-		/// Must match one of the registered protocols. For backwards-compatibility reasons, if
-		/// the remote doesn't support this protocol, we use the legacy substream.
-		protocol_name: Cow<'static, [u8]>,
-
-		/// Message to send on the legacy substream if the protocol isn't available.
-		///
-		/// This corresponds to what you would have sent with `SendLegacy`.
-		encoded_fallback_message: Vec<u8>,
-
-		/// The message to send.
-		message: Vec<u8>,
-	},
 }
 
 /// Event that can be emitted by a `NotifsHandler`.
@@ -190,6 +187,8 @@ pub enum NotifsHandlerOut {
 		/// Handshake that was sent to us.
 		/// This is normally a "Status" message, but this out of the concern of this code.
 		received_handshake: Vec<u8>,
+		/// How notifications can be sent to this node.
+		notifications_sink: NotificationsSink,
 	},
 
 	/// The connection is closed for custom protocols.
@@ -227,19 +226,160 @@ pub enum NotifsHandlerOut {
 	},
 }
 
+/// Sink connected directly to the node background task. Allows sending notifications to the peer.
+///
+/// Can be cloned in order to obtain multiple references to the same peer.
+#[derive(Debug, Clone)]
+pub struct NotificationsSink {
+	inner: Arc<NotificationsSinkInner>,
+}
+
+#[derive(Debug)]
+struct NotificationsSinkInner {
+	/// Sender to use in asynchronous contexts. Uses an asynchronous mutex.
+	async_channel: FuturesMutex<mpsc::Sender<NotificationsSinkMessage>>,
+	/// Sender to use in synchronous contexts. Uses a synchronous mutex.
+	/// This channel has a large capacity and is meant to be used in contexts where
+	/// back-pressure cannot be properly exerted.
+	/// It will be removed in a future version.
+	sync_channel: Mutex<mpsc::Sender<NotificationsSinkMessage>>,
+}
+
+/// Message emitted through the [`NotificationsSink`] and processed by the background task
+/// dedicated to the peer.
+#[derive(Debug)]
+enum NotificationsSinkMessage {
+	/// Message emitted by [`NotificationsSink::send_legacy`].
+	Legacy {
+		message: Vec<u8>,
+	},
+
+	/// Message emitted by [`NotificationsSink::reserve_notification`] and
+	/// [`NotificationsSink::write_notification_now`].
+	Notification {
+		protocol_name: Vec<u8>,
+		encoded_fallback_message: Vec<u8>,
+		message: Vec<u8>,
+	},
+
+	/// Must close the connection.
+	ForceClose,
+}
+
+impl NotificationsSink {
+	/// Sends a message to the peer using the legacy substream.
+	///
+	/// If too many messages are already buffered, the message is silently discarded and the
+	/// connection to the peer will be closed shortly after.
+	///
+	/// This method will be removed in a future version.
+	pub fn send_legacy<'a>(&'a self, message: impl Into<Vec<u8>>) {
+		let mut lock = self.inner.sync_channel.lock();
+		let result = lock.try_send(NotificationsSinkMessage::Legacy {
+			message: message.into()
+		});
+
+		if result.is_err() {
+			// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
+			// buffer, and therefore that `try_send` will succeed.
+			let _result2 = lock.clone().try_send(NotificationsSinkMessage::ForceClose);
+			debug_assert!(_result2.map(|()| true).unwrap_or_else(|err| err.is_disconnected()));
+		}
+	}
+
+	/// Sends a notification to the peer.
+	///
+	/// If too many messages are already buffered, the notification is silently discarded and the
+	/// connection to the peer will be closed shortly after.
+	///
+	/// The protocol name is expected to be checked ahead of calling this method. It is a logic
+	/// error to send a notification using an unknown protocol.
+	///
+	/// This method will be removed in a future version.
+	pub fn send_sync_notification<'a>(
+		&'a self,
+		protocol_name: &[u8],
+		encoded_fallback_message: impl Into<Vec<u8>>,
+		message: impl Into<Vec<u8>>
+	) {
+		let mut lock = self.inner.sync_channel.lock();
+		let result = lock.try_send(NotificationsSinkMessage::Notification {
+			protocol_name: protocol_name.to_owned(),
+			encoded_fallback_message: encoded_fallback_message.into(),
+			message: message.into()
+		});
+
+		if result.is_err() {
+			// Cloning the `mpsc::Sender` guarantees the allocation of an extra spot in the
+			// buffer, and therefore that `try_send` will succeed.
+			let _result2 = lock.clone().try_send(NotificationsSinkMessage::ForceClose);
+			debug_assert!(_result2.map(|()| true).unwrap_or_else(|err| err.is_disconnected()));
+		}
+	}
+
+	/// Wait until the remote is ready to accept a notification.
+	///
+	/// Returns an error in the case where the connection is closed.
+	///
+	/// The protocol name is expected to be checked ahead of calling this method. It is a logic
+	/// error to send a notification using an unknown protocol.
+	pub async fn reserve_notification<'a>(&'a self, protocol_name: &[u8]) -> Result<Ready<'a>, ()> {
+		let mut lock = self.inner.async_channel.lock().await;
+
+		let poll_ready = future::poll_fn(|cx| lock.poll_ready(cx)).await;
+		if poll_ready.is_ok() {
+			Ok(Ready { protocol_name: protocol_name.to_owned(), lock })
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Notification slot is reserved and the notification can actually be sent.
+#[must_use]
+#[derive(Debug)]
+pub struct Ready<'a> {
+	/// Guarded channel. The channel inside is guaranteed to not be full.
+	lock: FuturesMutexGuard<'a, mpsc::Sender<NotificationsSinkMessage>>,
+	/// Name of the protocol. Should match one of the protocols passed at initialization.
+	protocol_name: Vec<u8>,
+}
+
+impl<'a> Ready<'a> {
+	/// Consumes this slots reservation and actually queues the notification.
+	///
+	/// Returns an error if the substream has been closed.
+	pub fn send(
+		mut self,
+		encoded_fallback_message: impl Into<Vec<u8>>,
+		notification: impl Into<Vec<u8>>
+	) -> Result<(), ()> {
+		self.lock.start_send(NotificationsSinkMessage::Notification {
+			protocol_name: self.protocol_name,
+			encoded_fallback_message: encoded_fallback_message.into(),
+			message: notification.into(),
+		}).map_err(|_| ())
+	}
+}
+
+/// Error specific to the collection of protocols.
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+pub enum NotifsHandlerError {
+	/// Channel of synchronous notifications is full.
+	SyncNotificationsClogged,
+	/// Error in legacy protocol.
+	Legacy(<LegacyProtoHandler as ProtocolsHandler>::Error),
+}
+
 impl NotifsHandlerProto {
 	/// Builds a new handler.
 	///
 	/// `list` is a list of notification protocols names, and the message to send as part of the
 	/// handshake. At the moment, the message is always the same whether we open a substream
 	/// ourselves or respond to handshake from the remote.
-	///
-	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
-	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
 		legacy: RegisteredProtocol,
 		list: impl Into<Vec<(Cow<'static, [u8]>, Arc<RwLock<Vec<u8>>>)>>,
-		queue_size_report: Option<HistogramVec>
 	) -> Self {
 		let list = list.into();
 
@@ -247,16 +387,7 @@ impl NotifsHandlerProto {
 			.clone()
 			.into_iter()
 			.map(|(proto_name, initial_message)| {
-				let queue_size_report = queue_size_report.as_ref().and_then(|qs| {
-					if let Ok(utf8) = str::from_utf8(&proto_name) {
-						Some(qs.with_label_values(&[utf8]))
-					} else {
-						log::warn!("Ignoring Prometheus metric because {:?} isn't UTF-8", proto_name);
-						None
-					}
-				});
-
-				(NotifsOutHandlerProto::new(proto_name, queue_size_report), initial_message)
+				(NotifsOutHandlerProto::new(proto_name), initial_message)
 			}).collect();
 
 		let in_handlers = list.clone()
@@ -275,13 +406,7 @@ impl NotifsHandlerProto {
 impl ProtocolsHandler for NotifsHandler {
 	type InEvent = NotifsHandlerIn;
 	type OutEvent = NotifsHandlerOut;
-	type Error = EitherError<
-		EitherError<
-			<NotifsInHandler as ProtocolsHandler>::Error,
-			<NotifsOutHandler as ProtocolsHandler>::Error,
-		>,
-		<LegacyProtoHandler as ProtocolsHandler>::Error,
-	>;
+	type Error = NotifsHandlerError;
 	type InboundProtocol = SelectUpgrade<UpgradeCollec<NotificationsIn>, RegisteredProtocol>;
 	type OutboundProtocol = EitherUpgrade<NotificationsOut, RegisteredProtocol>;
 	// Index within the `out_handlers`; None for legacy
@@ -363,24 +488,6 @@ impl ProtocolsHandler for NotifsHandler {
 					self.in_handlers[num].0.inject_event(NotifsInHandlerIn::Refuse);
 				}
 			},
-			NotifsHandlerIn::SendLegacy { message } =>
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
-			NotifsHandlerIn::SendNotification { message, encoded_fallback_message, protocol_name } => {
-				for (handler, _) in &mut self.out_handlers {
-					if handler.protocol_name() != &protocol_name[..] {
-						continue;
-					}
-
-					if handler.is_open() {
-						handler.inject_event(NotifsOutHandlerIn::Send(message));
-						return;
-					}
-				}
-
-				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
-					message: encoded_fallback_message,
-				});
-			},
 		}
 	}
 
@@ -461,6 +568,60 @@ impl ProtocolsHandler for NotifsHandler {
 	) -> Poll<
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
+		if let Some(notifications_sink_rx) = &mut self.notifications_sink_rx {
+			'poll_notifs_sink: loop {
+				// Before we poll the notifications sink receiver, check that all the notification
+				// channels are ready to send a message.
+				// TODO: it is planned that in the future we switch to one `NotificationsSink` per
+				// protocol, in which case each sink should wait only for its corresponding handler
+				// to be ready, and not all handlers
+				// see https://github.com/paritytech/substrate/issues/5670
+				for (out_handler, _) in &mut self.out_handlers {
+					match out_handler.poll_ready(cx) {
+						Poll::Ready(_) => {},
+						Poll::Pending => break 'poll_notifs_sink,
+					}
+				}
+
+				let message = match notifications_sink_rx.poll_next_unpin(cx) {
+					Poll::Ready(Some(msg)) => msg,
+					Poll::Ready(None) | Poll::Pending => break,
+				};
+
+				match message {
+					NotificationsSinkMessage::Legacy { message } => {
+						self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
+							message
+						});
+					}
+					NotificationsSinkMessage::Notification {
+						protocol_name,
+						encoded_fallback_message,
+						message
+					} => {
+						for (handler, _) in &mut self.out_handlers {
+							if handler.protocol_name() != &protocol_name[..] {
+								continue;
+							}
+
+							if handler.is_open() {
+								handler.send_or_discard(message);
+							}
+
+							continue 'poll_notifs_sink;
+						}
+
+						self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage {
+							message: encoded_fallback_message,
+						});
+					}
+					NotificationsSinkMessage::ForceClose => {
+						return Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::SyncNotificationsClogged));
+					}
+				}
+			}
+		}
+
 		if let Poll::Ready(ev) = self.legacy.poll(cx) {
 			return match ev {
 				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
@@ -468,14 +629,37 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, received_handshake, .. }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen {
+					endpoint,
+					received_handshake,
+					..
+				}) => {
+					let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
+					let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
+					let notifications_sink = NotificationsSink {
+						inner: Arc::new(NotificationsSinkInner {
+							async_channel: FuturesMutex::new(async_tx),
+							sync_channel: Mutex::new(sync_tx),
+						}),
+					};
+
+					debug_assert!(self.notifications_sink_rx.is_none());
+					self.notifications_sink_rx = Some(stream::select(async_rx.fuse(), sync_rx.fuse()));
+
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open { endpoint, received_handshake }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
+						NotifsHandlerOut::Open { endpoint, received_handshake, notifications_sink }
+					))
+				},
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) => {
+					// We consciously drop the receivers despite notifications being potentially
+					// still buffered up.
+					debug_assert!(self.notifications_sink_rx.is_some());
+					self.notifications_sink_rx = None;
+
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
 						NotifsHandlerOut::Closed { endpoint, reason }
-					)),
+					))
+				},
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
 					Poll::Ready(ProtocolsHandlerEvent::Custom(
 						NotifsHandlerOut::CustomMessage { message }
@@ -485,7 +669,7 @@ impl ProtocolsHandler for NotifsHandler {
 						NotifsHandlerOut::ProtocolError { is_severe, error }
 					)),
 				ProtocolsHandlerEvent::Close(err) =>
-					Poll::Ready(ProtocolsHandlerEvent::Close(EitherError::B(err))),
+					Poll::Ready(ProtocolsHandlerEvent::Close(NotifsHandlerError::Legacy(err))),
 			}
 		}
 
