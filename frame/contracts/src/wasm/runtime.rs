@@ -292,7 +292,8 @@ fn read_sandbox_memory<E: Ext>(
 	)?;
 
 	let mut buf = vec![0u8; len as usize];
-	ctx.memory.get(ptr, buf.as_mut_slice()).map_err(|_| sp_sandbox::HostError)?;
+	ctx.memory.get(ptr, buf.as_mut_slice())
+		.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))?;
 	Ok(buf)
 }
 
@@ -316,7 +317,7 @@ fn read_sandbox_memory_into_buf<E: Ext>(
 		RuntimeToken::ReadMemory(buf.len() as u32),
 	)?;
 
-	ctx.memory.get(ptr, buf).map_err(Into::into)
+	ctx.memory.get(ptr, buf).map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
 /// Read designated chunk from the sandbox memory, consuming an appropriate amount of
@@ -334,7 +335,7 @@ fn read_sandbox_memory_as<E: Ext, D: Decode>(
 	len: u32,
 ) -> Result<D, sp_sandbox::HostError> {
 	let buf = read_sandbox_memory(ctx, ptr, len)?;
-	D::decode(&mut &buf[..]).map_err(|_| sp_sandbox::HostError)
+	D::decode(&mut &buf[..]).map_err(|_| store_err(ctx, Error::<E::T>::DecodingFailed))
 }
 
 /// Write the given buffer to the designated location in the sandbox memory, consuming
@@ -357,9 +358,8 @@ fn write_sandbox_memory<E: Ext>(
 		RuntimeToken::WriteMemory(buf.len() as u32),
 	)?;
 
-	ctx.memory.set(ptr, buf)?;
-
-	Ok(())
+	ctx.memory.set(ptr, buf)
+		.map_err(|_| store_err(ctx, Error::<E::T>::OutOfBounds))
 }
 
 /// Write the given buffer and its length to the designated locations in sandbox memory.

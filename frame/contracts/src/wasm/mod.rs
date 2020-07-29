@@ -1674,4 +1674,75 @@ mod tests {
 		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::REVERT, data: hex!("5566778899").to_vec() });
 		assert!(!output.is_success());
 	}
+
+	const CODE_OUT_OF_BOUNDS_ACCESS: &str = r#"
+(module
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $ext_terminate
+			(i32.const 65536)  ;; Pointer to "account" address (out of bound).
+			(i32.const 8)  ;; Length of "account" address.
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn contract_out_of_bounds_access() {
+		let mut mock_ext = MockExt::default();
+		let result = execute(
+			CODE_OUT_OF_BOUNDS_ACCESS,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::new(GAS_LIMIT),
+		);
+
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::OutOfBounds.into(),
+				origin: ErrorOrigin::Supervisor,
+			})
+		);
+	}
+
+	const CODE_DECODE_FAILURE: &str = r#"
+(module
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(call $ext_terminate
+			(i32.const 0)  ;; Pointer to "account" address.
+			(i32.const 4)  ;; Length of "account" address (too small -> decode fail).
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn contract_decode_failure() {
+		let mut mock_ext = MockExt::default();
+		let result = execute(
+			CODE_DECODE_FAILURE,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::new(GAS_LIMIT),
+		);
+
+		assert_eq!(
+			result,
+			Err(ExecError {
+				error: Error::<Test>::DecodingFailed.into(),
+				origin: ErrorOrigin::Supervisor,
+			})
+		);
+	}
+
 }

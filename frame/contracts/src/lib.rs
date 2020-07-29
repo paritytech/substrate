@@ -438,6 +438,10 @@ decl_error! {
 		CodeTooLarge,
 		/// No code could be found at the supplied code hash.
 		CodeNotFound,
+		/// A buffer outside of sandbox memory was passed to a contract API function.
+		OutOfBounds,
+		/// Input passed to a contract API function failed to decode as expected type.
+		DecodingFailed,
 	}
 }
 
