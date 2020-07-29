@@ -45,8 +45,8 @@ use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
-use sc_rpc_api::DenyUnsafe;
 use sp_block_builder::BlockBuilder;
+pub use sc_rpc_api::DenyUnsafe;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
