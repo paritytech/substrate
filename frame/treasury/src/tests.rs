@@ -886,6 +886,31 @@ fn cancel_and_refund() {
 }
 
 #[test]
+fn award_and_cancel() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 4, 3, 50, b"12345".to_vec()));
+
+		assert_ok!(Treasury::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Treasury::award_bounty(Origin::signed(4), 0, 3));
+
+		assert_ok!(Treasury::cancel_bounty(Origin::root(), 0));
+
+		assert_eq!(last_event(), RawEvent::BountyCanceled(0));
+
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
+
+		assert_eq!(Treasury::bounties(0), None);
+		assert_eq!(Treasury::bounty_descriptions(0), None);
+	});
+}
+
+#[test]
 fn expire_and_cancel() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);

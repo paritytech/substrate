@@ -960,7 +960,9 @@ decl_module! {
 		/// - `bounty_id`: Bounty ID to cancel.
 		#[weight = T::WeightInfo::cancel_bounty()]
 		fn cancel_bounty(origin, #[compact] bounty_id: BountyIndex) {
-			let curator = ensure_signed(origin)?;
+			let maybe_curator = ensure_signed(origin.clone())
+				.map(Some)
+				.or_else(|_| T::RejectOrigin::ensure_origin(origin).map(|_| None))?;
 
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
@@ -970,8 +972,11 @@ decl_module! {
 						let now = system::Module::<T>::block_number();
 						if expires > now {
 							// only curator can cancel unexpired bounty
-							ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+							ensure!(maybe_curator.map_or(false, |curator| curator == bounty.curator), Error::<T>::RequireCurator);
 						}
+					},
+					BountyStatus::PendingPayout { .. } => {
+						ensure!(maybe_curator.is_none(), BadOrigin);
 					},
 					_ => return Err(Error::<T>::UnexpectedStatus.into()),
 				}
