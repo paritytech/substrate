@@ -595,13 +595,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = DiscoveryOut::UnroutablePeer(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						// TODO: By ignoring the `addresses` field we ignore the
-						// addresses reported through Kademlia. Are the
-						// addresses reported via the identify behaviour always
-						// superior? We depend on the identify behaviour
-						// finishing before the connection is closed as
-						// otherwise identify does not know how to connect to
-						// the node as we drop the addresses here.
 						KademliaEvent::RoutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::Discovered(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
