@@ -1033,6 +1033,8 @@ decl_module! {
 		fn update_bounty_value_minimum(origin, #[compact] new_value: BalanceOf<T>) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
+			ensure!(new_value >= T::Currency::minimum_balance(), Error::<T>::InvalidValue);
+
 			BountyValueMinimum::<T>::put(new_value);
 		}
 
