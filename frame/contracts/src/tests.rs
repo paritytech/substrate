@@ -1186,7 +1186,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 				assert_err_ignore_postinfo!(
 					perform_the_restoration(),
-					"contract trapped during execution"
+					Error::<Test>::ContractTrapped,
 				);
 
 				assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
@@ -1314,7 +1314,7 @@ fn storage_max_value_limit() {
 					GAS_LIMIT,
 					Encode::encode(&(self::MaxValueSize::get() + 1)),
 				),
-				"contract trapped during execution"
+				Error::<Test>::ContractTrapped,
 			);
 		});
 }
@@ -1427,7 +1427,7 @@ fn cannot_self_destruct_while_live() {
 					GAS_LIMIT,
 					vec![0],
 				),
-				"contract trapped during execution"
+				Error::<Test>::ContractTrapped,
 			);
 
 			// Check that BOB is still alive.

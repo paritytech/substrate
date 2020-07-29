@@ -190,7 +190,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 			Err("validation error")?,
 		// Any other kind of a trap should result in a failure.
 		Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-			Err("contract trapped during execution")?,
+			Err(Error::<E::T>::ContractTrapped)?
 	}
 }
 

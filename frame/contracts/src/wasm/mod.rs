@@ -156,9 +156,8 @@ mod tests {
 	use crate::gas::{Gas, GasMeter};
 	use crate::tests::{Test, Call};
 	use crate::wasm::prepare::prepare_contract;
-	use crate::{CodeHash, BalanceOf};
+	use crate::{CodeHash, BalanceOf, Error};
 	use hex_literal::hex;
-	use assert_matches::assert_matches;
 	use sp_runtime::DispatchError;
 	use frame_support::weights::Weight;
 
@@ -1505,7 +1504,7 @@ mod tests {
 		// Checks that the runtime traps if there are more than `max_topic_events` topics.
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
-		assert_matches!(
+		assert_eq!(
 			execute(
 				CODE_DEPOSIT_EVENT_MAX_TOPICS,
 				vec![],
@@ -1513,7 +1512,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				error: DispatchError::Other("contract trapped during execution"),
+				error: Error::<Test>::ContractTrapped.into(),
 				origin: ErrorOrigin::Supervisor,
 			})
 		);
@@ -1550,7 +1549,7 @@ mod tests {
 		// Checks that the runtime traps if there are duplicates.
 		let mut gas_meter = GasMeter::new(GAS_LIMIT);
 
-		assert_matches!(
+		assert_eq!(
 			execute(
 				CODE_DEPOSIT_EVENT_DUPLICATES,
 				vec![],
@@ -1558,7 +1557,7 @@ mod tests {
 				&mut gas_meter
 			),
 			Err(ExecError {
-				error: DispatchError::Other("contract trapped during execution"),
+				error: Error::<Test>::ContractTrapped.into(),
 				origin: ErrorOrigin::Supervisor,
 			})
 		);

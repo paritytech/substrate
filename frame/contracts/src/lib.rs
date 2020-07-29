@@ -442,6 +442,8 @@ decl_error! {
 		OutOfBounds,
 		/// Input passed to a contract API function failed to decode as expected type.
 		DecodingFailed,
+		/// Contract trapped during execution.
+		ContractTrapped,
 	}
 }
 
