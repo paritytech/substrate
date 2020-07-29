@@ -164,7 +164,7 @@ pub fn new_full_base(
 
 	let finality_proof_provider =
 		GrandpaFinalityProofProvider::new_for_service(backend.clone(), client.clone());
-	
+
 	let (network, network_status_sinks, system_rpc_tx) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
@@ -206,7 +206,7 @@ pub fn new_full_base(
 		network_status_sinks,
 		system_rpc_tx,
 	})?;
-	
+
 	let (block_import, grandpa_link, babe_link) = import_setup;
 	let shared_voter_state = rpc_setup;
 
@@ -260,7 +260,7 @@ pub fn new_full_base(
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}}).boxed();
-		let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
+		let (authority_discovery_worker, _service) = sc_authority_discovery::AuthorityDiscoveryWorker::new(
 			client.clone(),
 			network.clone(),
 			sentries,
@@ -269,7 +269,7 @@ pub fn new_full_base(
 			prometheus_registry.clone(),
 		);
 
-		task_manager.spawn_handle().spawn("authority-discovery", authority_discovery);
+		task_manager.spawn_handle().spawn("authority-discovery-worker", authority_discovery_worker);
 	}
 
 	// if the node isn't actively participating in consensus then it doesn't
@@ -395,7 +395,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			finality_proof_request_builder: Some(finality_proof_request_builder),
 			finality_proof_provider: Some(finality_proof_provider),
 		})?;
-	
+
 	if config.offchain_worker.enabled {
 		sc_service::build_offchain_workers(
 			&config, backend.clone(), task_manager.spawn_handle(), client.clone(), network.clone(),
@@ -412,7 +412,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
 	let rpc_handlers =
-		sc_service::spawn_tasks(sc_service::SpawnTasksParams {	
+		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
 			remote_blockchain: Some(backend.remote_blockchain()),
 			rpc_extensions_builder: Box::new(sc_service::NoopRpcExtensionBuilder(rpc_extensions)),
@@ -423,7 +423,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 			telemetry_connection_sinks: sc_service::TelemetryConnectionSinks::default(),
 			task_manager: &mut task_manager,
 		})?;
-	
+
 	Ok((task_manager, rpc_handlers, client, network, transaction_pool))
 }
 
@@ -498,7 +498,7 @@ mod tests {
 							setup_handles = Some((block_import.clone(), babe_link.clone()));
 						}
 					)?;
-				
+
 				let node = sc_service_test::TestNetComponents::new(
 					keep_alive, client, network, transaction_pool
 				);

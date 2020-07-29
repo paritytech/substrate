@@ -225,7 +225,7 @@ fn new_registers_metrics() {
 
 	let registry = prometheus_endpoint::Registry::new();
 
-	AuthorityDiscovery::new(
+	AuthorityDiscoveryWorker::new(
 		test_api,
 		network.clone(),
 		vec![],
@@ -253,7 +253,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
 
-	let mut authority_discovery = AuthorityDiscovery::new(
+	let (mut authority_discovery_worker, _service) = AuthorityDiscoveryWorker::new(
 		test_api,
 		network.clone(),
 		vec![],
@@ -262,7 +262,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		None,
 	);
 
-	authority_discovery.request_addresses_of_others().unwrap();
+	authority_discovery_worker.request_addresses_of_others().unwrap();
 
 	// Expect authority discovery to request new records from the dht.
 	assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
@@ -295,7 +295,7 @@ fn publish_discover_cycle() {
 		authorities: vec![node_a_public.into()],
 	});
 
-	let mut authority_discovery = AuthorityDiscovery::new(
+	let (mut authority_discovery_worker, _service) = AuthorityDiscoveryWorker::new(
 		test_api,
 		network.clone(),
 		vec![],
@@ -304,7 +304,7 @@ fn publish_discover_cycle() {
 		None,
 	);
 
-	authority_discovery.publish_ext_addresses().unwrap();
+	authority_discovery_worker.publish_ext_addresses().unwrap();
 
 	// Expect authority discovery to put a new record onto the dht.
 	assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
@@ -324,7 +324,7 @@ fn publish_discover_cycle() {
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
 
-	let mut authority_discovery = AuthorityDiscovery::new(
+	let (mut authority_discovery_worker, _service) = AuthorityDiscoveryWorker::new(
 		test_api,
 		network.clone(),
 		vec![],
@@ -337,7 +337,7 @@ fn publish_discover_cycle() {
 
 	let f = |cx: &mut Context<'_>| -> Poll<()> {
 		// Make authority discovery handle the event.
-		if let Poll::Ready(e) = authority_discovery.handle_dht_events(cx) {
+		if let Poll::Ready(e) = authority_discovery_worker.handle_dht_events(cx) {
 			panic!("Unexpected error: {:?}", e);
 		}
 
@@ -367,7 +367,7 @@ fn terminate_when_event_stream_terminates() {
 		authorities: vec![],
 	});
 
-	let mut authority_discovery = AuthorityDiscovery::new(
+	let (mut authority_discovery_worker, _service) = AuthorityDiscoveryWorker::new(
 		test_api,
 		network.clone(),
 		vec![],
@@ -377,14 +377,14 @@ fn terminate_when_event_stream_terminates() {
 	);
 
 	block_on(async {
-		assert_eq!(Poll::Pending, poll!(&mut authority_discovery));
+		assert_eq!(Poll::Pending, poll!(&mut authority_discovery_worker));
 
 		// Simulate termination of the network through dropping the sender side of the dht event
 		// channel.
 		drop(dht_event_tx);
 
 		assert_eq!(
-			Poll::Ready(()), poll!(&mut authority_discovery),
+			Poll::Ready(()), poll!(&mut authority_discovery_worker),
 			"Expect the authority discovery module to terminate once the sending side of the dht \
 			event channel is terminated.",
 		);
@@ -408,7 +408,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	});
 	let mut pool = LocalPool::new();
 
-	let mut authority_discovery = AuthorityDiscovery::new(
+	let (mut authority_discovery_worker, _service) = AuthorityDiscoveryWorker::new(
 		test_api,
 		network.clone(),
 		vec![],
@@ -423,7 +423,7 @@ fn dont_stop_polling_when_error_is_returned() {
 	// can make progress until the future returns `Pending`.
 	pool.spawner().spawn_local_obj(
 		futures::future::poll_fn(move |ctx| {
-			match std::pin::Pin::new(&mut authority_discovery).poll(ctx) {
+			match std::pin::Pin::new(&mut authority_discovery_worker).poll(ctx) {
 				Poll::Ready(()) => {},
 				Poll::Pending => {
 					discovery_update_tx.send(Event::Processed).now_or_never();
@@ -535,7 +535,7 @@ fn never_add_own_address_to_priority_group() {
 		authorities: vec![validator_public.into()],
 	});
 
-	let mut sentry_authority_discovery = AuthorityDiscovery::new(
+	let (mut sentry_authority_discovery_worker, _service) = AuthorityDiscoveryWorker::new(
 		sentry_test_api,
 		sentry_network.clone(),
 		vec![],
@@ -544,7 +544,7 @@ fn never_add_own_address_to_priority_group() {
 		None,
 	);
 
-	sentry_authority_discovery.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	sentry_authority_discovery_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
 
 	assert_eq!(
 		sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
@@ -559,4 +559,38 @@ fn never_add_own_address_to_priority_group() {
 		),
 		"Expect authority discovery to only add `random_multiaddr`."
 	);
+}
+
+#[test]
+fn get_addresses() {
+	let (_dht_event_tx, dht_event_rx) = channel(0);
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let key_store = KeyStore::new();
+	let remote: AuthorityId = key_store
+		.write()
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.unwrap()
+		.into();
+	let remote_addr: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
+	let test_api = Arc::new(TestApi {
+		authorities: vec![],
+	});
+
+	let (mut worker, mut service) = AuthorityDiscoveryWorker::new(
+		test_api,
+		network.clone(),
+		vec![],
+		dht_event_rx.boxed(),
+		Role::Authority(key_store),
+		None,
+	);
+
+	worker.addr_cache.insert(remote.clone(), vec![remote_addr.clone()]);
+
+	let mut pool = LocalPool::new();
+	pool.spawner().spawn_local_obj(Box::pin(worker).into()).unwrap();
+
+	pool.run_until(async {
+		assert_eq!(Some(vec![remote_addr]), service.get_addresses(remote).await);
+	});
 }

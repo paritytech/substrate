@@ -73,6 +73,10 @@ where
 		self.cache.len()
 	}
 
+	pub fn get_addresses(&self, id: &Id) -> Option<&Vec<Addr>> {
+		self.cache.get(&id)
+	}
+
 	// Each node should connect to a subset of all authorities. In order to prevent hot spots, this
 	// selection is based on randomness. Selecting randomly each time we alter the address cache
 	// would result in connection churn. To reduce this churn a node generates a seed on startup and

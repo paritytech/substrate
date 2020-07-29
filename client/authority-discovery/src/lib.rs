@@ -18,14 +18,21 @@
 
 //! Substrate authority discovery.
 //!
-//! This crate enables Substrate authorities to directly connect to other authorities.
-//! [`AuthorityDiscoveryWorker`] implements the Future trait. By polling [`AuthorityDiscoveryWorker`] an
-//! authority:
+//! This crate enables Substrate authorities to directly connect to other
+//! authorities. It is split into two components the
+//! [`AuthorityDiscoveryWorker`] and the [`AuthorityDiscoveryService`].
+//!
+//!
+//! # [`AuthorityDiscoveryWorker`]
+//!
+//! The [`AuthorityDiscoveryWorker`] implements the Future trait. By
+//! polling [`AuthorityDiscoveryWorker`] an authority:
 //!
 //!
 //! 1. **Makes itself discoverable**
 //!
-//!    1. Retrieves its external addresses (including peer id) or the ones of its sentry nodes.
+//!    1. Retrieves its external addresses (including peer id) or the ones of
+//!    its sentry nodes.
 //!
 //!    2. Signs the above.
 //!
@@ -40,12 +47,20 @@
 //!
 //!    3. Validates the signatures of the retrieved key value pairs.
 //!
-//!    4. Adds the retrieved external addresses as priority nodes to the peerset.
+//!    4. Adds the retrieved external addresses as priority nodes to the
+//!    peerset.
 //!
-//! When run as a sentry node, the authority discovery module does not
-//! publish any addresses to the DHT but still discovers validators and
-//! sentry nodes of validators, i.e. only step 2 (Discovers other authorities)
-//! is executed.
+//! When run as a sentry node, the [`AuthorityDiscoveryWorker`] does not publish
+//! any addresses to the DHT but still discovers validators and sentry nodes of
+//! validators, i.e. only step 2 (Discovers other authorities) is executed.
+//!
+//!
+//! # [`AuthorityDiscoveryService`]
+//!
+//! The [`AuthorityDiscoveryService`] allows to interact with the
+//! [`AuthorityDiscoveryWorker`], e.g. by querying the
+//! [`AuthorityDiscoveryWorker`] local address cache for a given
+//! [`AuthorityId`].
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -54,8 +69,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures::channel::{mpsc, oneshot};
 use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt};
+use futures::{Future, FutureExt, ready, SinkExt, Stream, StreamExt};
 use futures_timer::Delay;
 
 use addr_cache::AddrCache;
@@ -121,6 +137,9 @@ where
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 {
+	/// Channel receiver for messages send by an [`AuthorityDiscoveryService`].
+	from_service: mpsc::Receiver<ServicetoWorkerMsg>,
+
 	client: Arc<Client>,
 
 	network: Arc<Network>,
@@ -158,10 +177,13 @@ where
 		AuthorityDiscoveryApi<Block, Error = sp_blockchain::Error>,
 	Self: Future<Output = ()>,
 {
-	/// Return a new authority discovery.
+	/// Return a new [`AuthorityDiscoveryWorker`].
 	///
 	/// Note: When specifying `sentry_nodes` this module will not advertise the public addresses of
 	/// the node itself but only the public addresses of its sentry nodes.
+	//
+	// TODO: Instead of a method returning both worker and service, how about a
+	// separate function returning both?
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
@@ -169,7 +191,7 @@ where
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
-	) -> Self {
+	) -> (Self, AuthorityDiscoveryService) {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
 		// Given that a node could restart at any point in time, one can not depend on the
 		// republishing process, thus publishing own external addresses should happen on an interval
@@ -208,7 +230,10 @@ where
 			None => None,
 		};
 
-		AuthorityDiscoveryWorker {
+		let (to_worker, from_service) = mpsc::channel(0);
+		let service = AuthorityDiscoveryService { to_worker };
+		let worker = AuthorityDiscoveryWorker {
+			from_service,
 			client,
 			network,
 			sentry_nodes,
@@ -219,7 +244,9 @@ where
 			role,
 			metrics,
 			phantom: PhantomData,
-		}
+		};
+
+		(worker, service)
 	}
 
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
@@ -566,7 +593,6 @@ where
 			return Poll::Ready(());
 		}
 
-
 		// Publish own addresses.
 		if let Poll::Ready(_) = self.publish_interval.poll_next_unpin(cx) {
 			// Register waker of underlying task for next interval.
@@ -593,13 +619,24 @@ where
 			}
 		}
 
+		// Handle messages from [`AuthorityDiscoveryService`].
+		while let Poll::Ready(Some(msg)) = self.from_service.poll_next_unpin(cx) {
+			match msg {
+				ServicetoWorkerMsg::GetAddresses(authority, sender) => {
+					let _ = sender.send(
+						self.addr_cache.get_addresses(&authority).map(Clone::clone),
+					);
+				}
+			}
+		}
+
 		Poll::Pending
 	}
 }
 
-/// NetworkProvider provides [`AuthorityDiscoveryWorker`] with all necessary hooks into the underlying
-/// Substrate networking. Using this trait abstraction instead of NetworkService directly is
-/// necessary to unit test [`AuthorityDiscoveryWorker`].
+/// NetworkProvider provides [`AuthorityDiscoveryWorker`] with all necessary hooks into the
+/// underlying Substrate networking. Using this trait abstraction instead of [`NetworkService`]
+/// directly is necessary to unit test [`AuthorityDiscoveryWorker`].
 pub trait NetworkProvider: NetworkStateInfo {
 	/// Modify a peerset priority group.
 	fn set_priority_group(
@@ -720,4 +757,33 @@ impl Metrics {
 			)?,
 		})
 	}
+}
+
+/// Service to interact with the [`AuthorityDiscoveryWorker`].
+//
+// TODO: How about moving this to a separate file `service.rs`?
+#[derive(Clone)]
+pub struct AuthorityDiscoveryService {
+	to_worker: mpsc::Sender<ServicetoWorkerMsg>,
+}
+
+impl AuthorityDiscoveryService {
+	/// Get the addresses for the given [`AuthorityId`] from the local address cache.
+	//
+	// TODO: Should this function be able to error?
+	pub async fn get_addresses(&mut self, authority: AuthorityId) -> Option<Vec<Multiaddr>> {
+		let (tx, rx) = oneshot::channel();
+
+		if let Err(_) = self.to_worker.send(ServicetoWorkerMsg::GetAddresses(authority, tx)).await {
+			return None;
+		}
+
+		rx.await.ok().flatten()
+	}
+}
+
+/// Message send from the [`AuthorityDiscoveryService`] to the [`AuthorityDiscoveryWorker`].
+enum ServicetoWorkerMsg {
+	/// See [`AuthorityDiscoveryService::get_addresses`].
+	GetAddresses(AuthorityId, oneshot::Sender<Option<Vec<Multiaddr>>>)
 }
