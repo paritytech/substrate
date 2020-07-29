@@ -7038,6 +7038,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-trie",
  "sp-utils",
@@ -8071,7 +8072,6 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
  "sp-std",
- "sp-tracing",
  "sp-wasm-interface",
  "static_assertions",
  "trybuild",
@@ -8100,7 +8100,6 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
- "tracing",
 ]
 
 [[package]]
@@ -8239,6 +8238,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "sp-externalities",
+ "sp-runtime-interface",
  "sp-std",
  "tracing",
  "tracing-core",

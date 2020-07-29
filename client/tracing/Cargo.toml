@@ -22,7 +22,6 @@ slog = { version = "2.5.2", features = ["nested-values"] }
 tracing-core = "0.1.11"
 tracing-subscriber = "0.2.7"
 sp-tracing = { version = "2.0.0-rc5", path = "../../primitives/tracing" }
-
 sc-telemetry = { version = "2.0.0-rc5", path = "../telemetry" }
 
 [dev-dependencies]

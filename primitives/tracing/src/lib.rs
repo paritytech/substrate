@@ -30,9 +30,10 @@
 //! the associated Fields mentioned above.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod interface;
 pub mod types;
 pub use types::*;
+
+pub mod interface;
 
 #[macro_export]
 #[cfg(not(feature = "std"))]
@@ -44,7 +45,6 @@ pub use tracing;
 
 #[cfg(not(feature = "std"))]
 pub use types::WasmLevel as Level;
-
 
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -135,17 +135,4 @@ pub fn set_tracing_subscriber(subscriber: Box<dyn interface::TracingSubscriber>)
 #[cfg(feature = "std")]
 pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn interface::TracingSubscriber>> {
 	SUBSCRIBER_INSTANCE.get()
-}
-
-#[cfg(feature = "std")]
-impl From<WasmLevel> for tracing::Level {
-	fn from(w: WasmLevel) -> Self {
-		match w {
-			WasmLevel::ERROR => tracing::Level::ERROR,
-			WasmLevel::WARN => tracing::Level::WARN,
-			WasmLevel::INFO => tracing::Level::INFO,
-			WasmLevel::DEBUG => tracing::Level::DEBUG,
-			WasmLevel::TRACE => tracing::Level::TRACE,
-		}
-	}
 }
