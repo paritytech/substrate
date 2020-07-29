@@ -180,7 +180,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 	// sort output once based on diff. This will require more data transfer and saving original
 	// index, but we sort only twice instead: once now and once at the very end.
 	let mut output_with_idx = input.iter().cloned().enumerate().collect::<Vec<(usize, T)>>();
-	output_with_idx.sort_unstable_by_key(|x| x.1);
+	output_with_idx.sort_by_key(|x| x.1);
 
 	if needs_bump {
 		// must increase the values a bit. Bump from the min element. Index of minimum is now zero
@@ -262,7 +262,7 @@ pub fn normalize<T>(input: &[T], targeted_sum: T) -> Result<Vec<T>, &'static str
 	);
 
 	// sort again based on the original index.
-	output_with_idx.sort_unstable_by_key(|x| x.0);
+	output_with_idx.sort_by_key(|x| x.0);
 	Ok(output_with_idx.into_iter().map(|(_, t)| t).collect())
 }
 
