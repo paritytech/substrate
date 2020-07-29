@@ -247,10 +247,9 @@ mod tests {
 		let _ = env_logger::try_init();
 
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::SpawnBlockingExecutor::new();
+		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool = TestPool(BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone(), None)),
 			None,
 			spawner,
 			client.clone(),

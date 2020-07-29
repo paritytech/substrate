@@ -171,9 +171,10 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
 		/// The amount vested has been updated. This could indicate more funds are available. The
-		/// balance given is the amount which is left unvested (and thus locked).
+		/// balance given is the amount which is left unvested (and thus locked). 
+		/// [account, unvested]
 		VestingUpdated(AccountId, Balance),
-		/// An account (given) has become fully vested. No further vesting can happen.
+		/// An [account] has become fully vested. No further vesting can happen.
 		VestingCompleted(AccountId),
 	}
 );
@@ -416,8 +417,6 @@ mod tests {
 		traits::Get
 	};
 	use sp_core::H256;
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
@@ -426,12 +425,9 @@ mod tests {
 	use frame_system::RawOrigin;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
-	// For testing the pallet, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
