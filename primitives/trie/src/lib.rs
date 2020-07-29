@@ -577,7 +577,7 @@ mod tests {
 			count: 1000,
 		};
 		let mut d = st.make();
-		d.sort_unstable_by(|&(ref a, _), &(ref b, _)| a.cmp(b));
+		d.sort_by(|&(ref a, _), &(ref b, _)| a.cmp(b));
 		let dr = d.iter().map(|v| (&v.0[..], &v.1[..])).collect();
 		check_equivalent::<Layout>(&dr);
 		check_iteration::<Layout>(&dr);
