@@ -105,7 +105,7 @@ impl<Hash> ManualSeal<Hash> {
 	}
 }
 
-impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
+impl<Hash: std::fmt::Debug + Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 	fn create_block(
 		&self,
 		create_empty: bool,
@@ -122,7 +122,10 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 				sender: Some(sender),
 			};
 			sink.send(command).await?;
-			receiver.await?
+			println!("Awaiting command result.");
+			let res = receiver.await?;
+			println!("Got response: {:?}", res);
+			res
 		}.boxed();
 
 		Box::new(future.map_err(Error::from).compat())
