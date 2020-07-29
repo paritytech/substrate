@@ -93,7 +93,11 @@ use sp_runtime::{DispatchResult, traits::StaticLookup};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::{weights::{Weight, GetDispatchInfo}, traits::UnfilteredDispatchable};
+use frame_support::{
+	weights::{Weight, GetDispatchInfo, Pays},
+	traits::UnfilteredDispatchable,
+	dispatch::DispatchResultWithPostInfo,
+};
 use frame_system::ensure_signed;
 
 #[cfg(test)]
@@ -127,13 +131,15 @@ decl_module! {
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
 		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
-		fn sudo(origin, call: Box<<T as Trait>::Call>) {
+		fn sudo(origin, call: Box<<T as Trait>::Call>) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
@@ -147,13 +153,15 @@ decl_module! {
 		/// - The weight of this call is defined by the caller.
 		/// # </weight>
 		#[weight = (*_weight, call.get_dispatch_info().class)]
-		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) {
+		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
@@ -166,7 +174,7 @@ decl_module! {
 		/// - One DB change.
 		/// # </weight>
 		#[weight = 0]
-		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
+		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
@@ -174,6 +182,8 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 
 		/// Authenticates the sudo key and dispatches a function call with `Signed` origin from
@@ -188,7 +198,10 @@ decl_module! {
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
 		#[weight = (call.get_dispatch_info().weight + 10_000, call.get_dispatch_info().class)]
-		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
+		fn sudo_as(origin,
+			who: <T::Lookup as StaticLookup>::Source,
+			call: Box<<T as Trait>::Call>
+		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
@@ -204,6 +217,8 @@ decl_module! {
 			};
 
 			Self::deposit_event(RawEvent::SudoAsDone(res));
+			// Sudo user does not pay a fee.
+			Ok(Pays::No.into())
 		}
 	}
 }
