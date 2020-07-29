@@ -19,7 +19,7 @@
 //! Substrate authority discovery.
 //!
 //! This crate enables Substrate authorities to directly connect to other authorities.
-//! [`AuthorityDiscovery`] implements the Future trait. By polling [`AuthorityDiscovery`] an
+//! [`AuthorityDiscoveryWorker`] implements the Future trait. By polling [`AuthorityDiscoveryWorker`] an
 //! authority:
 //!
 //!
@@ -112,8 +112,9 @@ pub enum Role {
 	Sentry,
 }
 
-/// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
-pub struct AuthorityDiscovery<Client, Network, Block>
+/// An [`AuthorityDiscoveryWorker`] makes a given authority discoverable and discovers other
+/// authorities.
+pub struct AuthorityDiscoveryWorker<Client, Network, Block>
 where
 	Block: BlockT + 'static,
 	Network: NetworkProvider,
@@ -148,7 +149,7 @@ where
 	phantom: PhantomData<Block>,
 }
 
-impl<Client, Network, Block> AuthorityDiscovery<Client, Network, Block>
+impl<Client, Network, Block> AuthorityDiscoveryWorker<Client, Network, Block>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
@@ -207,7 +208,7 @@ where
 			None => None,
 		};
 
-		AuthorityDiscovery {
+		AuthorityDiscoveryWorker {
 			client,
 			network,
 			sentry_nodes,
@@ -257,7 +258,7 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
+		let keys = AuthorityDiscoveryWorker::get_own_public_keys_within_authority_set(
 			&key_store,
 			&self.client,
 		)?.into_iter().map(Into::into).collect::<Vec<_>>();
@@ -546,7 +547,7 @@ where
 	}
 }
 
-impl<Client, Network, Block> Future for AuthorityDiscovery<Client, Network, Block>
+impl<Client, Network, Block> Future for AuthorityDiscoveryWorker<Client, Network, Block>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
@@ -596,9 +597,9 @@ where
 	}
 }
 
-/// NetworkProvider provides AuthorityDiscovery with all necessary hooks into the underlying
+/// NetworkProvider provides [`AuthorityDiscoveryWorker`] with all necessary hooks into the underlying
 /// Substrate networking. Using this trait abstraction instead of NetworkService directly is
-/// necessary to unit test AuthorityDiscovery.
+/// necessary to unit test [`AuthorityDiscoveryWorker`].
 pub trait NetworkProvider: NetworkStateInfo {
 	/// Modify a peerset priority group.
 	fn set_priority_group(
@@ -648,7 +649,7 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 	Box::new(stream)
 }
 
-/// Prometheus metrics for an `AuthorityDiscovery`.
+/// Prometheus metrics for an [`AuthorityDiscoveryWorker`].
 #[derive(Clone)]
 pub(crate) struct Metrics {
 	publish: Counter<U64>,
