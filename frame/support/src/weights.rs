@@ -296,7 +296,7 @@ impl PostDispatchInfo {
 		if info.pays_fee == Pays::No || self.pays_fee == Pays::No {
 			Pays::No
 		} else {
-		// Otherwise they pay.
+			// Otherwise they pay.
 			Pays::Yes
 		}
 	}
@@ -354,7 +354,7 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 			Some(weight) => weight.print(),
 			None => "max-weight".print(),
 		};
-		" pays_fee=".print();
+		"pays_fee=".print();
 		match self.pays_fee {
 			Pays::Yes => "Yes".print(),
 			Pays::No => "No".print(),
