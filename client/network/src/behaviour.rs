@@ -25,6 +25,7 @@ use bytes::Bytes;
 use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
+use libp2p::identify::IdentifyInfo;
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
@@ -413,16 +414,28 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Even
 impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent>
 	for Behaviour<B, H> {
 	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
-		let peer_info::PeerInfoEvent::Identified { peer_id, mut info } = event;
-		if info.listen_addrs.len() > 30 {
-			debug!(target: "sub-libp2p", "Node {:?} has reported more than 30 addresses; \
-				it is identified by {:?} and {:?}", peer_id, info.protocol_version,
-				info.agent_version
+		let peer_info::PeerInfoEvent::Identified {
+			peer_id,
+			info: IdentifyInfo {
+				protocol_version,
+				agent_version,
+				mut listen_addrs,
+				protocols,
+				..
+			},
+		} = event;
+
+		if listen_addrs.len() > 30 {
+			debug!(
+				target: "sub-libp2p",
+				"Node {:?} has reported more than 30 addresses; it is identified by {:?} and {:?}",
+				peer_id, protocol_version, agent_version
 			);
-			info.listen_addrs.truncate(30);
+			listen_addrs.truncate(30);
 		}
-		for addr in &info.listen_addrs {
-			self.discovery.add_self_reported_address(&peer_id, addr.clone());
+
+		for addr in listen_addrs {
+			self.discovery.add_self_reported_address(&peer_id, protocols.iter(), addr);
 		}
 		self.substrate.add_discovered_nodes(iter::once(peer_id));
 	}
