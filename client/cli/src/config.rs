@@ -22,9 +22,11 @@ use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
 	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	NodeParams, OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
+	TransactionPoolParams,
 };
 use names::{Generator, Name};
+use regex::Regex;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	BasePath, Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
@@ -45,6 +47,11 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 pub trait CliConfiguration: Sized {
 	/// Get the SharedParams for this object
 	fn shared_params(&self) -> &SharedParams;
+
+	/// Get the NodeParams for this object.
+	fn node_params(&self) -> Option<&NodeParams> {
+		None
+	}
 
 	/// Get the ImportParams for this object
 	fn import_params(&self) -> Option<&ImportParams> {
@@ -81,11 +88,20 @@ pub trait CliConfiguration: Sized {
 		self.import_params().map(|x| &x.database_params)
 	}
 
+	/// Get the TransactionPoolParams for this object
+	fn transaction_pool_params(&self) -> Option<&TransactionPoolParams> {
+		None
+	}
+
 	/// Get the base path of the configuration (if any)
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn base_path(&self) -> Result<Option<BasePath>> {
-		Ok(self.shared_params().base_path())
+		Ok(self
+			.node_params()
+			.map(|x| x.base_path())
+			.transpose()?
+			.unwrap_or_else(|| self.shared_params().base_path()))
 	}
 
 	/// Returns `true` if the node is for development or not
@@ -98,15 +114,21 @@ pub trait CliConfiguration: Sized {
 	/// Gets the role
 	///
 	/// By default this is `Role::Full`.
-	fn role(&self, _is_dev: bool) -> Result<Role> {
-		Ok(Role::Full)
+	fn role(&self, is_dev: bool) -> Result<Role> {
+		Ok(self
+			.node_params()
+			.map(|x| x.role(is_dev))
+			.unwrap_or(Role::Full))
 	}
 
 	/// Get the transaction pool options
 	///
 	/// By default this is `TransactionPoolOptions::default()`.
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
-		Ok(Default::default())
+		Ok(self
+			.transaction_pool_params()
+			.map(|x| x.transaction_pool())
+			.unwrap_or_default())
 	}
 
 	/// Get the network configuration
@@ -133,12 +155,7 @@ pub trait CliConfiguration: Sized {
 				node_key,
 			)
 		} else {
-			NetworkConfiguration::new(
-				node_name,
-				client_id,
-				node_key,
-				Some(net_config_dir),
-			)
+			NetworkConfiguration::new(node_name, client_id, node_key, Some(net_config_dir))
 		})
 	}
 
@@ -156,7 +173,8 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.database_params()
+		Ok(self
+			.database_params()
 			.map(|x| x.database_cache_size())
 			.unwrap_or_default())
 	}
@@ -193,7 +211,8 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
 	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params()
+		Ok(self
+			.import_params()
 			.map(|x| x.state_cache_size())
 			.unwrap_or_default())
 	}
@@ -226,7 +245,10 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default a random name is generated.
 	fn node_name(&self) -> Result<String> {
-		Ok(generate_node_name())
+		Ok(self
+			.node_params()
+			.and_then(|x| x.node_name())
+			.unwrap_or_else(generate_node_name))
 	}
 
 	/// Get the WASM execution method.
@@ -234,7 +256,8 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `WasmExecutionMethod::default()`.
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(self.import_params()
+		Ok(self
+			.import_params()
 			.map(|x| x.wasm_method())
 			.unwrap_or_default())
 	}
@@ -258,21 +281,27 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is `None`.
 	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
-		Ok(Default::default())
+		self.node_params()
+			.map(|x| x.rpc_http())
+			.transpose()
+			.map(|x| x.flatten())
 	}
 
 	/// Get the RPC IPC path (`None` if disabled).
 	///
 	/// By default this is `None`.
 	fn rpc_ipc(&self) -> Result<Option<String>> {
-		Ok(Default::default())
+		Ok(self.node_params().and_then(|x| x.rpc_ipc()))
 	}
 
 	/// Get the RPC websocket address (`None` if disabled).
 	///
 	/// By default this is `None`.
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
-		Ok(Default::default())
+		self.node_params()
+			.map(|x| x.rpc_ws())
+			.transpose()
+			.map(|x| x.flatten())
 	}
 
 	/// Returns the RPC method set to expose.
@@ -280,28 +309,35 @@ pub trait CliConfiguration: Sized {
 	/// By default this is `RpcMethods::Auto` (unsafe RPCs are denied iff
 	/// `{rpc,ws}_external` returns true, respectively).
 	fn rpc_methods(&self) -> Result<RpcMethods> {
-		Ok(Default::default())
+		Ok(self
+			.node_params()
+			.map(|x| x.rpc_methods())
+			.unwrap_or_default())
 	}
 
 	/// Get the RPC websockets maximum connections (`None` if unlimited).
 	///
 	/// By default this is `None`.
 	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+		Ok(self.node_params().and_then(|x| x.rpc_ws_max_connections()))
 	}
 
 	/// Get the RPC cors (`None` if disabled)
 	///
-	/// By default this is `None`.
-	fn rpc_cors(&self, _is_dev: bool) -> Result<Option<Vec<String>>> {
-		Ok(Some(Vec::new()))
+	/// By default this is `Some(vec![])`.
+	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
+		// TODO: is it None or Some(vec![]) by default??
+		Ok(self
+			.node_params()
+			.map(|x| x.rpc_cors(is_dev))
+			.unwrap_or_else(|| Some(Vec::new())))
 	}
 
 	/// Get the prometheus configuration (`None` if disabled)
 	///
 	/// By default this is `None`.
 	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
-		Ok(Default::default())
+		Ok(self.node_params().and_then(|x| x.prometheus_config()))
 	}
 
 	/// Get the telemetry endpoints (if any)
@@ -311,7 +347,11 @@ pub trait CliConfiguration: Sized {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
-		Ok(chain_spec.telemetry_endpoints().clone())
+		Ok(self
+			.node_params()
+			.map(|x| x.telemetry_endpoints(chain_spec))
+			.transpose()?
+			.unwrap_or_else(|| chain_spec.telemetry_endpoints().clone()))
 	}
 
 	/// Get the telemetry external transport
@@ -340,22 +380,28 @@ pub trait CliConfiguration: Sized {
 	/// Returns `Ok(true)` if authoring should be forced
 	///
 	/// By default this is `false`.
-	fn force_authoring(&self) -> Result<bool> {
-		Ok(Default::default())
+	fn force_authoring(&self, is_dev: bool) -> Result<bool> {
+		Ok(self
+			.node_params()
+			.map(|x| x.force_authoring(is_dev))
+			.unwrap_or_default())
 	}
 
 	/// Returns `Ok(true)` if grandpa should be disabled
 	///
 	/// By default this is `false`.
 	fn disable_grandpa(&self) -> Result<bool> {
-		Ok(Default::default())
+		Ok(self
+			.node_params()
+			.map(|x| x.disable_grandpa())
+			.unwrap_or_default())
 	}
 
 	/// Get the development key seed from the current object
 	///
 	/// By default this is `None`.
-	fn dev_key_seed(&self, _is_dev: bool) -> Result<Option<String>> {
-		Ok(Default::default())
+	fn dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
+		Ok(self.node_params().and_then(|x| x.dev_key_seed(is_dev)))
 	}
 
 	/// Get the tracing targets from the current object (if any)
@@ -363,7 +409,8 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `None`.
 	fn tracing_targets(&self) -> Result<Option<String>> {
-		Ok(self.import_params()
+		Ok(self
+			.import_params()
 			.map(|x| x.tracing_targets())
 			.unwrap_or_else(|| Default::default()))
 	}
@@ -373,7 +420,8 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `TracingReceiver::default()`.
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
-		Ok(self.import_params()
+		Ok(self
+			.import_params()
 			.map(|x| x.tracing_receiver())
 			.unwrap_or_default())
 	}
@@ -392,7 +440,10 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is `None`.
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+		Ok(self
+			.node_params()
+			.map(|x| x.max_runtime_instances())
+			.unwrap_or_default())
 	}
 
 	/// Activate or not the automatic announcing of blocks after import
@@ -427,11 +478,13 @@ pub trait CliConfiguration: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_network_authority();
-
 		let unsafe_pruning = self
 			.import_params()
 			.map(|p| p.unsafe_pruning)
 			.unwrap_or(false);
+		let node_name = self.node_name()?;
+
+		ensure_node_name_valid(&node_name)?;
 
 		Ok(Configuration {
 			impl_name: C::impl_name(),
@@ -443,7 +496,7 @@ pub trait CliConfiguration: Sized {
 				is_dev,
 				net_config_dir,
 				client_id.as_str(),
-				self.node_name()?.as_str(),
+				node_name.as_str(),
 				node_key,
 			)?,
 			keystore: self.keystore_config(&config_dir)?,
@@ -464,7 +517,7 @@ pub trait CliConfiguration: Sized {
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
 			offchain_worker: self.offchain_worker(&role)?,
-			force_authoring: self.force_authoring()?,
+			force_authoring: self.force_authoring(is_dev)?,
 			disable_grandpa: self.disable_grandpa()?,
 			dev_key_seed: self.dev_key_seed(is_dev)?,
 			tracing_targets: self.tracing_targets()?,
@@ -518,5 +571,53 @@ pub fn generate_node_name() -> String {
 		if count < NODE_NAME_MAX_LENGTH {
 			return node_name;
 		}
+	}
+}
+
+/// Check whether a node name is considered as valid.
+pub fn ensure_node_name_valid(name: &str) -> Result<()> {
+	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
+		return Err(format!(
+			"Invalid node name {:?}: too long (< {}).",
+			name, NODE_NAME_MAX_LENGTH
+		)
+		.into());
+	}
+
+	let invalid_chars = r"[\\.@]";
+	let re = Regex::new(invalid_chars).unwrap();
+	if re.is_match(name) {
+		return Err(format!("Invalid node name {:?}: invalid characters.", name).into());
+	}
+
+	let invalid_patterns = r"(https?:\\/+)?(www)+";
+	let re = Regex::new(invalid_patterns).unwrap();
+	if re.is_match(name) {
+		return Err(format!("Invalod node name {:?}: it should not contain URLs", name).into());
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn tests_node_name_good() {
+		assert!(is_node_name_valid("short name").is_ok());
+	}
+
+	#[test]
+	fn tests_node_name_bad() {
+		assert!(is_node_name_valid(
+			"very very long names are really not very cool for the ui at all, really they're not"
+		)
+		.is_err());
+		assert!(is_node_name_valid("Dots.not.Ok").is_err());
+		assert!(is_node_name_valid("http://visit.me").is_err());
+		assert!(is_node_name_valid("https://visit.me").is_err());
+		assert!(is_node_name_valid("www.visit.me").is_err());
+		assert!(is_node_name_valid("email@domain").is_err());
 	}
 }

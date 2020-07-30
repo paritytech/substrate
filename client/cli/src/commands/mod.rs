@@ -360,9 +360,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn force_authoring(&self) -> $crate::Result<bool> {
+			fn force_authoring(&self, is_dev: bool) -> $crate::Result<bool> {
 				match self {
-					$($enum::$variant(cmd) => cmd.force_authoring()),*
+					$($enum::$variant(cmd) => cmd.force_authoring(is_dev)),*
 				}
 			}
 

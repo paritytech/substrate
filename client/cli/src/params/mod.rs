@@ -20,19 +20,24 @@ mod import_params;
 mod keystore_params;
 mod network_params;
 mod node_key_params;
+mod node_params;
 mod offchain_worker_params;
 mod pruning_params;
 mod shared_params;
 mod transaction_pool_params;
 
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
+};
 use std::{fmt::Debug, str::FromStr};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, NumberFor}};
 
 pub use crate::params::database_params::*;
 pub use crate::params::import_params::*;
 pub use crate::params::keystore_params::*;
 pub use crate::params::network_params::*;
 pub use crate::params::node_key_params::*;
+pub use crate::params::node_params::*;
 pub use crate::params::offchain_worker_params::*;
 pub use crate::params::pruning_params::*;
 pub use crate::params::shared_params::*;
