@@ -743,7 +743,7 @@ impl<T: Trait> Config<T> {
 	/// than the subsistence threshold in order to guarantee that a tombstone is created.
 	///
 	/// The only way to completely kill a contract without a tombstone is calling `ext_terminate`.
-	fn subsistence_threshold(&self) -> BalanceOf<T> {
+	pub fn subsistence_threshold(&self) -> BalanceOf<T> {
 		self.existential_deposit.saturating_add(self.tombstone_deposit)
 	}
 
@@ -751,7 +751,7 @@ impl<T: Trait> Config<T> {
 	///
 	/// This is for cases where this value is needed in rent calculation rather than
 	/// during contract execution.
-	fn subsistence_threshold_uncached() -> BalanceOf<T> {
+	pub fn subsistence_threshold_uncached() -> BalanceOf<T> {
 		T::Currency::minimum_balance().saturating_add(T::TombstoneDeposit::get())
 	}
 }
