@@ -46,7 +46,7 @@ type LightClient = sc_service::TLightClient<Block, RuntimeApi, Executor>;
 
 pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponents<
 	FullClient, FullBackend, FullSelectChain,
-	sc_consensus_babe::BabeImportQueue<Block, FullClient>,
+	sp_consensus::DefaultImportQueue<Block, FullClient>,
 	sc_transaction_pool::FullPool<Block, FullClient>,
 	(
 		impl Fn(node_rpc::DenyUnsafe) -> node_rpc::IoHandler,

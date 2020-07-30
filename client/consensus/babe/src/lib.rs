@@ -100,7 +100,7 @@ use sp_consensus::{
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
-use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
+use sp_consensus::import_queue::{Verifier, BasicQueue, DefaultImportQueue, CacheKeyId};
 use sc_client_api::{
 	backend::AuxStore,
 	BlockchainEvents, ProvideUncles,
@@ -967,9 +967,6 @@ where
 	}
 }
 
-/// The BABE import queue type.
-pub type BabeImportQueue<B, Client> = BasicQueue<B, sp_api::TransactionFor<Client, B>>;
-
 /// Register the babe inherent data provider, if not registered already.
 fn register_babe_inherent_data_provider(
 	inherent_data_providers: &InherentDataProviders,
@@ -1368,7 +1365,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, Inner>(
 	inherent_data_providers: InherentDataProviders,
 	spawner: &impl sp_core::traits::SpawnNamed,
 	registry: Option<&Registry>,
-) -> ClientResult<BabeImportQueue<Block, Client>> where
+) -> ClientResult<DefaultImportQueue<Block, Client>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
 	Client: ProvideRuntimeApi<Block> + ProvideCache<Block> + Send + Sync + AuxStore + 'static,
