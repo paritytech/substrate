@@ -529,26 +529,3 @@ fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> 
 		Cors::List(origins)
 	})
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn tests_node_name_good() {
-		assert!(is_node_name_valid("short name").is_ok());
-	}
-
-	#[test]
-	fn tests_node_name_bad() {
-		assert!(is_node_name_valid(
-			"very very long names are really not very cool for the ui at all, really they're not"
-		)
-		.is_err());
-		assert!(is_node_name_valid("Dots.not.Ok").is_err());
-		assert!(is_node_name_valid("http://visit.me").is_err());
-		assert!(is_node_name_valid("https://visit.me").is_err());
-		assert!(is_node_name_valid("www.visit.me").is_err());
-		assert!(is_node_name_valid("email@domain").is_err());
-	}
-}
