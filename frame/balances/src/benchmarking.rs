@@ -28,6 +28,7 @@ use sp_runtime::traits::Bounded;
 use crate::Module as Balances;
 
 const SEED: u32 = 0;
+// existential deposit multiplier
 const ED_MULTIPLIER: u32 = 10;
 
 
