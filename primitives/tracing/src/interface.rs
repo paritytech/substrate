@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::types::{
-	WasmMetadata, WasmAttributes, WasmRecord, WasmEvent
+	WasmMetadata, WasmAttributes, WasmValues, WasmEvent
 };
 
 use sp_runtime_interface::runtime_interface;
@@ -23,7 +23,7 @@ use sp_runtime_interface::runtime_interface;
 pub trait TracingSubscriber: Send + Sync {
 	fn enabled(&self, metadata: WasmMetadata) -> bool;
 	fn new_span(&self, attrs: WasmAttributes) -> u64;
-	fn record(&self, span: u64, values: WasmRecord);
+	fn record(&self, span: u64, values: WasmValues);
 	fn event(&self, event: WasmEvent);
 	fn enter(&self, span: u64);
 	fn exit(&self, span: u64);
@@ -43,7 +43,7 @@ pub trait WasmTracing {
 			t.new_span(span)
 		}).unwrap_or(0)
 	}
-	fn record(&mut self, span: u64, values: WasmRecord) {
+	fn record(&mut self, span: u64, values: WasmValues) {
 		crate::get_tracing_subscriber().map(|t|{
 			t.record(span, values)
 		});

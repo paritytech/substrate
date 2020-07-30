@@ -51,7 +51,6 @@ use sp_tracing::types::{
 	WasmMetadata,
 	WasmAttributes,
 	WasmEvent,
-	WasmRecord,
 };
 use sp_tracing::interface::TracingSubscriber;
 
@@ -94,7 +93,7 @@ pub trait TraceHandler: Send + Sync {
 /// Represents a tracing event, complete with values
 #[derive(Debug)]
 pub struct TraceEvent {
-	pub name: &'static str,
+	pub name: String,
 	pub target: String,
 	pub level: Level,
 	pub values: Values,
@@ -149,6 +148,13 @@ impl Values {
 			self.i64_values.is_empty() &&
 			self.u64_values.is_empty() &&
 			self.string_values.is_empty()
+	}
+
+	pub fn extend(&mut self, other: Values) {
+		self.bool_values.extend(other.bool_values.into_iter());
+		self.i64_values.extend(other.i64_values.into_iter());
+		self.u64_values.extend(other.u64_values.into_iter());
+		self.string_values.extend(other.string_values.into_iter());
 	}
 }
 
@@ -317,8 +323,15 @@ impl From<WasmValues> for Values {
 
 impl TracingSubscriber for ProfilingSubscriber {
 	fn enabled(&self, metadata: WasmMetadata) -> bool {
-		// TODO move levels into static and implement
-		true
+		let level = metadata.level();
+		let target = metadata.target();
+		if self.check_target(target, &level) {
+			log::debug!(target: "tracing", "Enabled target: {}, level: {}", target, level);
+			true
+		} else {
+			log::debug!(target: "tracing", "Disabled target: {}, level: {}", target, level);
+			false
+		}
 	}
 
 	fn new_span(&self, attrs: WasmAttributes) -> u64 {
@@ -339,12 +352,24 @@ impl TracingSubscriber for ProfilingSubscriber {
 		id
 	}
 
-	fn record(&self, _span: u64, _values: WasmRecord) {
-		// TODO
+	fn record(&self, span: u64, values: WasmValues) {
+		let mut span_data = self.span_data.lock();
+		if let Some(mut s) = span_data.get_mut(&Id::from_u64(span)) {
+			let new_values: Values = values.into();
+			s.values.extend(new_values);
+		}
 	}
 
-	fn event(&self, _event: WasmEvent) {
-		// TODO
+	fn event(&self, event: WasmEvent) {
+		let mut values = event.fields.into();
+		let trace_event = TraceEvent {
+			name: event.metadata.name().to_owned(),
+			target: event.metadata.target().to_owned(),
+			level: event.metadata.level(),
+			values,
+			parent_id: event.parent_id.map(|id| Id::from_u64(id)).or_else(|| self.current_span.id()),
+		};
+		self.trace_handler.handle_event(trace_event);
 	}
 
 	fn enter(&self, span: u64) {
@@ -383,12 +408,6 @@ impl Subscriber for ProfilingSubscriber {
 		let id = Id::from_u64(self.next_id.fetch_add(1, Ordering::Relaxed));
 		let mut values = Values::default();
 		attrs.record(&mut values);
-		// If this is a wasm trace, check if target/level is enabled
-		// if let Some(wasm_target) = values.string_values.get(WASM_TARGET_KEY) {
-		// 	if !self.check_target(wasm_target, attrs.metadata().level()) {
-		// 		return id
-		// 	}
-		// }
 		let span_datum = SpanDatum {
 			id: id.clone(),
 			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
@@ -417,7 +436,7 @@ impl Subscriber for ProfilingSubscriber {
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
-			name: event.metadata().name(),
+			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
 			level: event.metadata().level().clone(),
 			values,

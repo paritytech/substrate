@@ -24,7 +24,7 @@ use sp_std::{
 use sp_runtime_interface::pass_by::PassByCodec;
 use codec::{Encode, Decode};
 
-#[derive(Encode, Decode, PassByCodec)]
+#[derive(Clone, Encode, Decode, PassByCodec)]
 pub enum WasmLevel {
 	ERROR,
 	WARN,
@@ -67,13 +67,14 @@ pub struct WasmAttributes {
 
 #[derive(Encode, Decode, PassByCodec)]
 pub struct WasmEvent {
-	pub parent: Option<u64>,
+	pub parent_id: Option<u64>,
 	pub metadata: WasmMetadata,
 	pub fields: WasmValues,
 }
 
-#[derive(Encode, Decode, PassByCodec)]
-pub struct WasmRecord;
+// TODO - Do we need this when we have WasmValues ?
+// #[derive(Encode, Decode, PassByCodec)]
+// pub struct WasmRecord;
 
 #[cfg(feature = "std")]
 impl From<WasmLevel> for tracing::Level {
@@ -85,5 +86,20 @@ impl From<WasmLevel> for tracing::Level {
 			WasmLevel::DEBUG => tracing::Level::DEBUG,
 			WasmLevel::TRACE => tracing::Level::TRACE,
 		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl WasmMetadata {
+	pub fn target(&self) -> &str {
+		std::str::from_utf8(&self.target).unwrap()
+	}
+
+	pub fn name(&self) -> &str {
+		std::str::from_utf8(&self.name).unwrap()
+	}
+
+	pub fn level(&self) -> tracing::Level {
+		self.level.clone().into()
 	}
 }
