@@ -418,10 +418,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
-	///
-	/// The `finalization_check` closure checks that if an imported block is able to be
-	/// finalized. If the check returns false, the import succeeds, but with the imported block
-	/// unfinalized.
 	fn commit_operation(
 		&self,
 		transaction: Self::BlockImportOperation,
