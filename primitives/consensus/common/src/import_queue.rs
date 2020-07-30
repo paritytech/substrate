@@ -40,6 +40,11 @@ use crate::{
 };
 pub use basic_queue::BasicQueue;
 
+/// A commonly-used Import Queue type.
+///
+/// This defines the transaction type of the `BasicQueue` to be the transaction type for a client.
+pub type DefaultImportQueue<Block, Client> = BasicQueue<Block, sp_api::TransactionFor<Client, Block>>;
+
 mod basic_queue;
 pub mod buffered_link;
 
