@@ -4391,6 +4391,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
+ "ripemd160",
  "rlp",
  "serde",
  "sha3",
@@ -5952,6 +5953,17 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi 0.3.8",
+]
+
+[[package]]
+name = "ripemd160"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eca4ecc81b7f313189bf73ce724400a07da2a6dac19588b03c8bd76a2dcc251"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
