@@ -344,7 +344,7 @@ impl TaskManager {
 
 	/// Register another TaskManager to terminate and gracefully shutdown when the parent
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
-	/// task fails.
+	/// task fails. (But don't end the parent if a child terminates without failure.)
 	pub fn add_children(&mut self, child: TaskManager) {
 		self.children.push(Box::new(child));
 	}
