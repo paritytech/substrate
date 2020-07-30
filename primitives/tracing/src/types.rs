@@ -15,16 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg_attr(not(feature = "std"), no_std)]
+// #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(not(feature = "std"))]
 use sp_std::{
-    vec::Vec
+	vec::Vec
 };
 use sp_runtime_interface::pass_by::PassByCodec;
 use codec::{Encode, Decode};
 
-
-#[derive(Encode, Decode, PassByCodec)]
+#[derive(Clone, Encode, Decode, PassByCodec)]
 pub enum WasmLevel {
 	ERROR,
 	WARN,
@@ -48,28 +48,58 @@ pub type WasmValues = Vec<(Vec<u8>, WasmFieldValue)>;
 
 #[derive(Encode, Decode, PassByCodec)]
 pub struct WasmMetadata {
-    pub name: Vec<u8>,
-    pub target: Vec<u8>,
-    pub level: WasmLevel,
-    pub file: Vec<u8>,
-    pub line: u32,
+	pub name: Vec<u8>,
+	pub target: Vec<u8>,
+	pub level: WasmLevel,
+	pub file: Vec<u8>,
+	pub line: u32,
 	pub module_path: Vec<u8>,
-    pub is_span: bool,
-    pub fields: WasmFields,
+	pub is_span: bool,
+	pub fields: WasmFields,
 }
 
 #[derive(Encode, Decode, PassByCodec)]
 pub struct WasmAttributes {
 	pub parent_id: Option<u64>,
 	pub fields: WasmValues,
+	pub metadata: WasmMetadata,
 }
 
 #[derive(Encode, Decode, PassByCodec)]
 pub struct WasmEvent {
-    pub parent: Option<u64>,
-    pub metadata: WasmMetadata,
+	pub parent_id: Option<u64>,
+	pub metadata: WasmMetadata,
 	pub fields: WasmValues,
 }
 
-#[derive(Encode, Decode, PassByCodec)]
-pub struct WasmRecord;
+// TODO - Do we need this when we have WasmValues ?
+// #[derive(Encode, Decode, PassByCodec)]
+// pub struct WasmRecord;
+
+#[cfg(feature = "std")]
+impl From<WasmLevel> for tracing::Level {
+	fn from(w: WasmLevel) -> Self {
+		match w {
+			WasmLevel::ERROR => tracing::Level::ERROR,
+			WasmLevel::WARN => tracing::Level::WARN,
+			WasmLevel::INFO => tracing::Level::INFO,
+			WasmLevel::DEBUG => tracing::Level::DEBUG,
+			WasmLevel::TRACE => tracing::Level::TRACE,
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl WasmMetadata {
+	pub fn target(&self) -> &str {
+		std::str::from_utf8(&self.target).unwrap()
+	}
+
+	pub fn name(&self) -> &str {
+		std::str::from_utf8(&self.name).unwrap()
+	}
+
+	pub fn level(&self) -> tracing::Level {
+		self.level.clone().into()
+	}
+}

@@ -46,7 +46,7 @@ use std::iter;
 
 /// Generate one bare function per trait method. The name of the bare function is equal to the name
 /// of the trait method.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, with_tracing: bool) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
@@ -62,10 +62,10 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, with_tracing: bool) -
 
 	// earlier versions compatibility dispatch (only std variant)
 	let result: Result<TokenStream> = runtime_interface.all_versions().try_fold(token_stream?, |mut t, (version, method)|
-	{
-		t.extend(function_std_impl(trait_name, method, version, is_wasm_only, with_tracing)?);
-		Ok(t)
-	});
+		{
+			t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
+			Ok(t)
+		});
 
 	result
 }
@@ -145,7 +145,6 @@ fn function_std_impl(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
-	with_tracing: bool,
 ) -> Result<TokenStream> {
 	let function_name = create_function_ident_with_version(&method.sig.ident, version);
 	let function_name_str = function_name.to_string();
@@ -165,14 +164,6 @@ fn function_std_impl(
 			}
 		).take(1),
 	);
-	let tracing = if with_tracing {
-		Some(quote!(
-			let __trace_span = #crate_::tracing::trace_span!(#function_name_str);
-			let __guard = __trace_span.enter();
-		))
-	} else {
-		None
-	};
 	let return_value = &method.sig.output;
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
@@ -183,7 +174,6 @@ fn function_std_impl(
 			#[cfg(feature = "std")]
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
-				#tracing
 				#call_to_trait
 			}
 		}

@@ -7953,6 +7953,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-std",
+ "sp-tracing",
  "sp-trie",
  "sp-wasm-interface",
 ]
@@ -8068,7 +8069,6 @@ dependencies = [
  "sp-std",
  "sp-wasm-interface",
  "static_assertions",
- "tracing",
  "trybuild",
 ]
 
@@ -8095,7 +8095,6 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
- "tracing",
 ]
 
 [[package]]
@@ -8233,11 +8232,9 @@ dependencies = [
  "log",
  "once_cell",
  "parity-scale-codec",
- "sp-externalities",
  "sp-runtime-interface",
  "sp-std",
  "tracing",
- "tracing-core",
 ]
 
 [[package]]
@@ -9285,11 +9282,11 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c72c8cf3ec4ed69fef614d011a5ae4274537a8a8c59133558029bd731eb71659"
+checksum = "e4f5dd7095c2481b7b3cbed71c8de53085fb3542bc3c2b4c73cba43e8f11c7ba"
 dependencies = [
- "ansi_term 0.11.0",
+ "ansi_term 0.12.1",
  "chrono",
  "lazy_static",
  "matchers",

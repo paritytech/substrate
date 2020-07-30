@@ -30,9 +30,8 @@
 //! the associated Fields mentioned above.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod types;
 pub mod interface;
-mod types;
-pub use types::*;
 
 #[macro_export]
 #[cfg(not(feature = "std"))]
@@ -45,7 +44,6 @@ pub use tracing;
 #[cfg(not(feature = "std"))]
 pub use types::WasmLevel as Level;
 
-
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "std")]
@@ -57,7 +55,7 @@ static WASM_TRACING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Instance of the native subscriber in use
 #[cfg(feature = "std")]
-static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn interface::TracingSubscriber + Sync + Send>> = OnceCell::new();
+static SUBSCRIBER_INSTANCE: OnceCell<Box<dyn interface::TracingSubscriber>> = OnceCell::new();
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
@@ -95,19 +93,13 @@ macro_rules! tracing_span {
 /// sp_tracing::enter_span!("test-span");
 /// ```
 #[macro_export]
-#[cfg(feature = "with-tracing")]
 macro_rules! enter_span {
 	( $name:expr ) => {
-		// FIXME: this needs be name-dependent to avoid clashes
-		let __tracing_span__ = $crate::trace_span!($name);
-		let __tracing_guard__ = __tracing_span__.enter();
+		let __tracing_span__ = $crate::if_tracing!(
+			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
+		);
+		let __tracing_guard__ = $crate::if_tracing!(__tracing_span__.enter());
 	}
-}
-
-#[macro_export]
-#[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
-macro_rules! enter_span {
-	( $name:expr ) => { {} }
 }
 
 /// Generates the given code if the tracing dependency is enabled.
@@ -133,12 +125,12 @@ pub fn set_wasm_tracing(b: bool) {
 	WASM_TRACING_ENABLED.store(b, Ordering::Relaxed)
 }
 
-// #[cfg(feature = "std")]
-// pub fn set_tracing_subscriber(subscriber: Box<dyn interface::TracingSubscriber>)  {
-// 	let _ = SUBSCRIBER_INSTANCE.set(subscriber);
-// }
+#[cfg(feature = "std")]
+pub fn set_tracing_subscriber(subscriber: Box<dyn interface::TracingSubscriber>) {
+	let _ = SUBSCRIBER_INSTANCE.set(subscriber);
+}
 
-// #[cfg(feature = "std")]
-// pub fn get_tracing_subscriber() -> Option<Box<dyn interface::TracingSubscriber>> {
-// 	SUBSCRIBER_INSTANCE.get().cloned()
-// }
+#[cfg(feature = "std")]
+pub fn get_tracing_subscriber<'a>() -> Option<&'a Box<dyn interface::TracingSubscriber>> {
+	SUBSCRIBER_INSTANCE.get()
+}
