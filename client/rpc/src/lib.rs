@@ -57,7 +57,7 @@ impl Executor<Box<dyn Future<Item = (), Error = ()> + Send>> for SubscriptionTas
 		&self,
 		future: Box<dyn Future<Item = (), Error = ()> + Send>,
 	) -> Result<(), ExecuteError<Box<dyn Future<Item = (), Error = ()> + Send>>> {
-		self.0.spawn("substrate_rpc_subscription", future.compat().map(drop).boxed());
+		self.0.spawn("substrate-rpc-subscription", future.compat().map(drop).boxed());
 		Ok(())
 	}
 }
