@@ -78,6 +78,11 @@ impl<H: Hasher> TrieConfiguration for Layout<H> {
 	}
 }
 
+#[cfg(not(feature = "memory-tracker"))]
+type MemTracker = memory_db::NoopTracker<trie_db::DBValue>;
+#[cfg(feature = "memory-tracker")]
+type MemTracker = memory_db::MemCounter<trie_db::DBValue>;
+
 /// TrieDB error over `TrieConfiguration` trait.
 pub type TrieError<L> = trie_db::TrieError<TrieHash<L>, CError<L>>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
@@ -88,13 +93,19 @@ pub type HashDB<'a, H> = dyn hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a `KeyFunction` for prefixing keys internally (avoiding
 /// key conflict for non random keys).
-pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
+pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<
+	H, memory_db::PrefixedKey<H>, trie_db::DBValue, MemTracker
+>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
 /// This uses a noops `KeyFunction` (key addressing must be hashed or using
 /// an encoding scheme that avoid key conflict).
-pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
+pub type MemoryDB<H> = memory_db::MemoryDB<
+	H, memory_db::HashKey<H>, trie_db::DBValue, MemTracker,
+>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue>;
+pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<
+	H, KF, trie_db::DBValue, MemTracker
+>;
 
 /// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, L> = trie_db::TrieDB<'a, L>;
