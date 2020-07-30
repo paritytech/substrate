@@ -18,7 +18,7 @@ use exit_future::Signal;
 use log::{debug, error};
 use futures::{
 	Future, FutureExt, StreamExt,
-	future::{select, Either, BoxFuture, select_all},
+	future::{select, Either, BoxFuture, select_all, join_all},
 	sink::SinkExt,
 };
 use prometheus_endpoint::{
@@ -287,10 +287,12 @@ impl TaskManager {
 	/// objects properly otherwise it triggers a SIGABRT on exit.
 	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		self.terminate();
+		let children_shutdowns = self.children.into_iter().map(|x| x.clean_shutdown());
 		let keep_alive = self.keep_alive;
 		let completion_future = self.completion_future;
 
 		Box::pin(async move {
+			join_all(children_shutdowns).await;
 			completion_future.await;
 			drop(keep_alive);
 		})
@@ -321,8 +323,11 @@ impl TaskManager {
 	pub fn terminate(&mut self) {
 		if let Some(signal) = self.signal.take() {
 			let _ = signal.fire();
-			// NOTE: task will prevent new tasks to be spawned
+			// NOTE: this will prevent new tasks to be spawned
 			self.task_notifier.close_channel();
+			for child in self.children.iter_mut() {
+				child.terminate();
+			}
 		}
 	}
 
