@@ -37,12 +37,10 @@
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
-use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero}};
-use sp_runtime::traits::Member;
+use sp_runtime::{DispatchResult, traits::{Dispatchable, Zero, Hash, Member, Saturating}};
 use frame_support::{
-	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, traits::{
-		Get, ReservableCurrency, Currency, InstanceFilter,
-		OriginTrait, IsType,
+	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug, traits::{
+		Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType,
 	}, weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
 	dispatch::{PostDispatchInfo, IsSubType},
 };
@@ -108,19 +106,58 @@ pub trait Trait: frame_system::Trait {
 
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// The maximum amount of time-delayed announcements that are allowed to be panding.
+	type MaxPending: Get<u32>;
+
+	/// The type of hash used for hashing the call.
+	type CallHasher: Hash;
 }
+
+/// The parameters under which a particular account has a proxy relationship with some other
+/// account.
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
+	/// The account which may act on behalf of another.
+	delegate: AccountId,
+	/// A value defining the subset of calls that it is allowed to make.
+	proxy_type: ProxyType,
+	/// The number of blocks that an announcement must be in place for before the corresponding call
+	/// may be dispatched. If zero, then no announcement is needed.
+	delay: BlockNumber,
+}
+
+/// Details surrounding a specific instance of an announcement to make a call.
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug)]
+pub struct Announcement<AccountId, Hash, BlockNumber> {
+	/// The account which made the announcement.
+	real: AccountId,
+	/// The hash of the call to be made.
+	call_hash: Hash,
+	/// The height at which the announcement was made.
+	height: BlockNumber,
+}
+
+type CallHashOf<T> = <<T as Trait>::CallHasher as Hash>::Output;
+
+// TODO: storage migration for proxies
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Proxy {
 		/// The set of account proxies. Maps the account which has delegated to the accounts
 		/// which are being delegated to, together with the amount held on deposit.
-		pub Proxies: map hasher(twox_64_concat) T::AccountId => (Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>);
+		pub Proxies: map hasher(twox_64_concat) T::AccountId
+			=> (Vec<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>>, BalanceOf<T>);
+
+		/// The announcements made by the proxy (key).
+		pub Announcements: map hasher(twox_64_concat) T::AccountId
+			=> Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>;
 	}
 }
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-		/// There are too many proxies registered.
+		/// There are too many proxies registered or too many announcements pending.
 		TooMany,
 		/// Proxy registration not found.
 		NotFound,
@@ -132,6 +169,11 @@ decl_error! {
 		Duplicate,
 		/// Call may not be made by proxy because it may escalate its privileges.
 		NoPermission,
+		/// Announcement, if made at all, was made too recently.
+		Unannounced,
+		/// Unexpected decode error of storage item. Should never happen, but if it does then it'll
+		/// need governance intervention.
+		Corrupted,
 	}
 }
 
@@ -139,13 +181,16 @@ decl_event! {
 	/// Events type.
 	pub enum Event<T> where
 		AccountId = <T as frame_system::Trait>::AccountId,
-		ProxyType = <T as Trait>::ProxyType
+		ProxyType = <T as Trait>::ProxyType,
+		Hash = CallHashOf<T>,
 	{
 		/// A proxy was executed correctly, with the given [result].
 		ProxyExecuted(DispatchResult),
 		/// Anonymous account has been created by new proxy with given
 		/// disambiguation index and proxy type. [anonymous, who, proxy_type, disambiguation_index]
 		AnonymousCreated(AccountId, AccountId, ProxyType, u16),
+		/// An announcement was placed to make a call in the future. [real, proxy, call_hash]
+		Announced(AccountId, AccountId, Hash),
 	}
 }
 
@@ -165,8 +210,66 @@ decl_module! {
 		/// The maximum amount of proxies allowed for a single account.
 		const MaxProxies: u16 = T::MaxProxies::get();
 
+		/// `MaxPending` metadata shadow.
+		const MaxPending: u32 = T::MaxPending::get();
+
+		/// Publish the hash of a proxy-call that will be made in the future.
+		#[weight = {
+			T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(18 * WEIGHT_PER_MICROS)
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
+		}]
+		fn announce_proxy(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
+			let who = ensure_signed(origin)?;
+			Proxies::<T>::get(&real).0.into_iter()
+				.find(|x| &x.delegate == &who)
+				.ok_or(Error::<T>::NotProxy)?;
+			let pending = Announcements::<T>::decode_len(&who).ok_or(Error::<T>::Corrupted)?;
+			ensure!(pending < T::MaxPending::get() as usize, Error::<T>::TooMany);
+
+			let announcement = Announcement {
+				real: real.clone(),
+				call_hash: call_hash.clone(),
+				height: system::Module::<T>::block_number(),
+			};
+			Announcements::<T>::append(&who, announcement);
+			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
+		}
+
+		/// Remove a given announcement.
+		#[weight = {
+			T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(18 * WEIGHT_PER_MICROS)
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
+		}]
+		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
+			let who = ensure_signed(origin)?;
+			Announcements::<T>::mutate(&who, |anns|
+				anns.retain(|ann| ann.real != real || ann.call_hash != call_hash)
+			);
+		}
+
+		/// Remove the given announcement of a delegate.
+		#[weight = {
+			T::DbWeight::get().reads_writes(1, 1)
+			.saturating_add(18 * WEIGHT_PER_MICROS)
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
+			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
+		}]
+		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
+			let who = ensure_signed(origin)?;
+
+			Announcements::<T>::mutate(&delegate, |anns|
+				anns.retain(|ann| ann.real != who || ann.call_hash != call_hash)
+			);
+		}
+
 		/// Dispatch the given `call` from an account that the sender is authorised for through
 		/// `add_proxy`.
+		///
+		/// Removes any corresponding announcement(s).
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -195,25 +298,44 @@ decl_module! {
 			call: Box<<T as Trait>::Call>
 		) {
 			let who = ensure_signed(origin)?;
-			let (_, proxy_type) = Proxies::<T>::get(&real).0.into_iter()
-				.find(|x| &x.0 == &who && force_proxy_type.as_ref().map_or(true, |y| &x.1 == y))
-				.ok_or(Error::<T>::NotProxy)?;
+			let def = Proxies::<T>::get(&real).0.into_iter()
+				.find(|x| &x.delegate == &who
+					&& force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
+				).ok_or(Error::<T>::NotProxy)?;
+
+			Announcements::<T>::try_mutate(&who, |anns| -> DispatchResult {
+				let call_hash = T::CallHasher::hash_of(&call);
+				let now = system::Module::<T>::block_number();
+				let mut announcement_period = T::BlockNumber::zero();
+				anns.retain(|ann|
+					if ann.real == real && ann.call_hash == call_hash {
+						true
+					} else {
+						announcement_period = announcement_period.max(now.saturating_sub(ann.height));
+						false
+					}
+				);
+				ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
+				Ok(())
+			})?;
 
 			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
 			let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
 			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
 				let c = <T as Trait>::Call::from_ref(c);
 				match c.is_sub_type() {
-					Some(Call::add_proxy(_, ref pt)) | Some(Call::remove_proxy(_, ref pt))
-						if !proxy_type.is_superset(&pt) => false,
+					Some(Call::add_proxy(_, ref pt, _)) | Some(Call::remove_proxy(_, ref pt, _))
+						if !def.proxy_type.is_superset(&pt) => false,
 					Some(Call::remove_proxies(..)) | Some(Call::kill_anonymous(..))
-					    if proxy_type != T::ProxyType::default() => false,
-					_ => proxy_type.filter(c)
+					    if def.proxy_type != T::ProxyType::default() => false,
+					_ => def.proxy_type.filter(c)
 				}
 			});
 			let e = call.dispatch(origin);
 			Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
 		}
+
+		// TODO: Increment tx_version.
 
 		/// Register a proxy account for the sender that is able to make calls on its behalf.
 		///
@@ -232,13 +354,17 @@ decl_module! {
 			.saturating_add(18 * WEIGHT_PER_MICROS)
 			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
-		fn add_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
+		fn add_proxy(origin,
+			delegate: T::AccountId,
+			proxy_type: T::ProxyType,
+			delay: T::BlockNumber,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate(&who, |(ref mut proxies, ref mut deposit)| {
 				ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
-				let typed_proxy = (proxy, proxy_type);
-				let i = proxies.binary_search(&typed_proxy).err().ok_or(Error::<T>::Duplicate)?;
-				proxies.insert(i, typed_proxy);
+				let proxy_def = ProxyDefinition { delegate, proxy_type, delay };
+				let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
+				proxies.insert(i, proxy_def);
 				let new_deposit = T::ProxyDepositBase::get()
 					+ T::ProxyDepositFactor::get() * (proxies.len() as u32).into();
 				if new_deposit > *deposit {
@@ -268,12 +394,16 @@ decl_module! {
 			.saturating_add(14 * WEIGHT_PER_MICROS)
 			.saturating_add((160 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
-		fn remove_proxy(origin, proxy: T::AccountId, proxy_type: T::ProxyType) -> DispatchResult {
+		fn remove_proxy(origin,
+			delegate: T::AccountId,
+			proxy_type: T::ProxyType,
+			delay: T::BlockNumber,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::try_mutate_exists(&who, |x| {
 				let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
-				let typed_proxy = (proxy, proxy_type);
-				let i = proxies.binary_search(&typed_proxy).ok().ok_or(Error::<T>::NotFound)?;
+				let proxy_def = ProxyDefinition { delegate, proxy_type, delay };
+				let i = proxies.binary_search(&proxy_def).ok().ok_or(Error::<T>::NotFound)?;
 				proxies.remove(i);
 				let new_deposit = if proxies.is_empty() {
 					BalanceOf::<T>::zero()
@@ -325,6 +455,8 @@ decl_module! {
 		/// - `index`: A disambiguation index, in case this is called multiple times in the same
 		/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
 		/// want to use `0`.
+		/// - `delay`: The announcement period required of the initial proxy. Will generally be
+		/// zero.
 		///
 		/// Fails with `Duplicate` if this has already been called in this transaction, from the
 		/// same sender, with the same parameters.
@@ -340,14 +472,19 @@ decl_module! {
 			.saturating_add(36 * WEIGHT_PER_MICROS)
 			.saturating_add((40 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 		]
-		fn anonymous(origin, proxy_type: T::ProxyType, index: u16) {
+		fn anonymous(origin, proxy_type: T::ProxyType, delay: T::BlockNumber, index: u16) {
 			let who = ensure_signed(origin)?;
 
 			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
 			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
 			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
 			T::Currency::reserve(&who, deposit)?;
-			Proxies::<T>::insert(&anonymous, (vec![(who.clone(), proxy_type.clone())], deposit));
+			let proxy_def = ProxyDefinition {
+				delegate: who.clone(),
+				proxy_type: proxy_type.clone(),
+				delay,
+			};
+			Proxies::<T>::insert(&anonymous, (vec![proxy_def], deposit));
 			Self::deposit_event(RawEvent::AnonymousCreated(anonymous, who, proxy_type, index));
 		}
 
