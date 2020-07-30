@@ -427,6 +427,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 }
 
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
+#[must_use]
 pub struct BabeWorker<B: BlockT> {
 	inner: Pin<Box<dyn futures::Future<Output=()> + Send + 'static>>,
 	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
@@ -457,6 +458,9 @@ impl<B: BlockT> futures::Future for BabeWorker<B> {
 	}
 }
 
+/// Slot notification sinks.
+type SlotNotificationSinks<B> = Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>>;
+
 struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<Mutex<I>>,
@@ -465,7 +469,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO> {
 	force_authoring: bool,
 	keystore: KeyStorePtr,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
-	slot_notification_sinks: Arc<Mutex<Vec<Sender<(u64, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)>>>>,
+	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
 }
 
