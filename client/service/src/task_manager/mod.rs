@@ -311,10 +311,16 @@ impl TaskManager {
 			let mut t2 = self.on_exit.clone().fuse();
 			let mut t3 = select_all(self.children.iter_mut().map(|x| x.future())).fuse();
 
-			futures::select! {
-				_ = t1 => Err(Error::Other("Essential task failed.".into())),
-				_ = t2 => Ok(()),
-				(res, _, _) = t3 => res,
+			loop {
+				futures::select! {
+					_ = t1 => break Err(Error::Other("Essential task failed.".into())),
+					_ = t2 => break Ok(()),
+					(res, _, _) = t3 => if res.is_err() {
+						break res;
+					} else {
+						continue;
+					},
+				}
 			}
 		})
 	}
