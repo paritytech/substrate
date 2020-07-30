@@ -334,7 +334,7 @@ pub fn new_full(config: Configuration)
 }
 
 pub fn new_light_base(config: Configuration) -> Result<(
-	TaskManager, RpcHandlers, Arc<LightClient>,
+	TaskManager, Arc<RpcHandlers>, Arc<LightClient>,
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
