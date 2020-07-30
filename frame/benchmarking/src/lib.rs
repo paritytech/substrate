@@ -188,6 +188,7 @@ macro_rules! benchmarks {
 			{ $( $( $where_ty: $where_bound ),* )? }
 			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			( )
+			( )
 			$( $rest )*
 		);
 	}
@@ -210,6 +211,7 @@ macro_rules! benchmarks_instance {
 			{ $( $( $where_ty: $where_bound ),* )? }
 			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
 			( )
+			( )
 			$( $rest )*
 		);
 	}
@@ -218,12 +220,34 @@ macro_rules! benchmarks_instance {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! benchmarks_iter {
+	// detect and extract extra tag:
+	(
+		{ $( $instance:ident )? }
+		{ $( $where_clause:tt )* }
+		{ $( $common:tt )* }
+		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
+		#[extra]
+		$name:ident
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			{ $( $instance)? }
+			{ $( $where_clause )* }
+			{ $( $common )* }
+			( $( $names )* )
+			( $( $names_extra )* $name )
+			$name
+			$( $rest )*
+		}
+	};
 	// mutation arm:
 	(
 		{ $( $instance:ident )? }
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* ) // This contains $( $( { $instance } )? $name:ident )*
+		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
@@ -233,6 +257,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
+			( $( $names_extra )* )
 			$name { $( $code )* }: $name ( $origin $( , $arg )* )
 			verify $postcode
 			$( $rest )*
@@ -244,6 +269,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
 		verify $postcode:block
 		$( $rest:tt )*
@@ -253,6 +279,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
+			( $( $names_extra )* )
 			$name { $( $code )* }: {
 				<
 					Call<T $(, $instance)? > as $crate::frame_support::traits::UnfilteredDispatchable
@@ -270,6 +297,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
 		verify $postcode:block
 		$( $rest:tt )*
@@ -297,6 +325,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* { $( $instance )? } $name )
+			( $( $names_extra )* )
 			$( $rest )*
 		);
 	};
@@ -306,9 +335,19 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
 	) => {
-		$crate::selected_benchmark!( { $( $where_clause)* } { $( $instance)? } $( $names )* );
-		$crate::impl_benchmark!( { $( $where_clause )* } { $( $instance)? } $( $names )* );
+		$crate::selected_benchmark!(
+			{ $( $where_clause)* }
+			{ $( $instance)? }
+			$( $names )*
+		);
+		$crate::impl_benchmark!(
+			{ $( $where_clause )* }
+			{ $( $instance)? }
+			( $( $names )* )
+			( $( $names_extra ),* )
+		);
 	};
 	// add verify block to _() format
 	(
@@ -316,6 +355,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
@@ -324,6 +364,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
+			( $( $names_extra )* )
 			$name { $( $code )* }: _ ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
@@ -335,6 +376,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
@@ -343,6 +385,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
+			( $( $names_extra )* )
 			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
@@ -354,6 +397,7 @@ macro_rules! benchmarks_iter {
 		{ $( $where_clause:tt )* }
 		{ $( $common:tt )* }
 		( $( $names:tt )* )
+		( $( $names_extra:tt )* )
 		$name:ident { $( $code:tt )* }: $eval:block
 		$( $rest:tt )*
 	) => {
@@ -362,6 +406,7 @@ macro_rules! benchmarks_iter {
 			{ $( $where_clause )* }
 			{ $( $common )* }
 			( $( $names )* )
+			( $( $names_extra )* )
 			$name { $( $code )* }: $eval
 			verify { }
 			$( $rest )*
@@ -659,14 +704,20 @@ macro_rules! impl_benchmark {
 	(
 		{ $( $where_clause:tt )* }
 		{ $( $instance:ident )? }
-		$( { $( $name_inst:ident )? } $name:ident )*
+		( $( { $( $name_inst:ident )? } $name:ident )* )
+		( $( $name_extra:ident ),* )
 	) => {
 		impl<T: Trait $(<$instance>, I: Instance)? >
 			$crate::Benchmarking<$crate::BenchmarkResults> for Module<T $(, $instance)? >
 			where T: frame_system::Trait, $( $where_clause )*
 		{
-			fn benchmarks() -> Vec<&'static [u8]> {
-				vec![ $( stringify!($name).as_ref() ),* ]
+			fn benchmarks(extra: bool) -> Vec<&'static [u8]> {
+				let mut all = vec![ $( stringify!($name).as_ref() ),* ];
+				if !extra {
+					let extra = [ $( stringify!($name_extra).as_ref() ),* ];
+					all.retain(|x| !extra.contains(x));
+				}
+				all
 			}
 
 			fn run_benchmark(
@@ -931,10 +982,10 @@ macro_rules! impl_benchmark_test {
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:ident, $( $location:tt )* ) => (
 		let name_string = stringify!($name).as_bytes();
-		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist) = $params;
+		let (pallet, benchmark, lowest_range_values, highest_range_values, steps, repeat, whitelist, extra) = $params;
 		if &pallet[..] == &name_string[..] || &pallet[..] == &b"*"[..] {
 			if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
-				for benchmark in $( $location )*::benchmarks().into_iter() {
+				for benchmark in $( $location )*::benchmarks(extra).into_iter() {
 					$batches.push($crate::BenchmarkBatch {
 						results: $( $location )*::run_benchmark(
 							benchmark,
