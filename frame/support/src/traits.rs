@@ -1238,7 +1238,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 	///
 	/// This resets any previous value of prime.
 	fn change_members(incoming: &[AccountId], outgoing: &[AccountId], mut new: Vec<AccountId>) {
-		new.sort_unstable();
+		new.sort();
 		Self::change_members_sorted(incoming, outgoing, &new[..]);
 	}
 
