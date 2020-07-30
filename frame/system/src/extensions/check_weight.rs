@@ -575,7 +575,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// This is half of the max block weight
 			let info = DispatchInfo { weight: 512, ..Default::default() };
-			let post_info = PostDispatchInfo { actual_weight: Some(128), };
+			let post_info = PostDispatchInfo {
+				actual_weight: Some(128),
+				pays_fee: Default::default(),
+			};
 			let len = 0_usize;
 
 			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
@@ -601,7 +604,10 @@ mod tests {
 	fn signed_ext_check_weight_actual_weight_higher_than_max_is_capped() {
 		new_test_ext().execute_with(|| {
 			let info = DispatchInfo { weight: 512, ..Default::default() };
-			let post_info = PostDispatchInfo { actual_weight: Some(700), };
+			let post_info = PostDispatchInfo {
+				actual_weight: Some(700),
+				pays_fee: Default::default(),
+			};
 			let len = 0_usize;
 
 			BlockWeight::mutate(|current_weight| {

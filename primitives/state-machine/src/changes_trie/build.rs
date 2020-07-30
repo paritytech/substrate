@@ -174,7 +174,7 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					extrinsics.extend(
 						v.extrinsics().cloned()
 					);
-					extrinsics.sort_unstable();
+					extrinsics.sort();
 				},
 			}
 

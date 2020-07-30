@@ -384,7 +384,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			renames.push((version, prefix_function_with_trait(&trait_name, &old_name)));
 		}
 
-		renames.sort_unstable_by(|l, r| r.cmp(l));
+		renames.sort_by(|l, r| r.cmp(l));
 		let (versions, old_names) = renames.into_iter().fold(
 			(Vec::new(), Vec::new()),
 			|(mut versions, mut old_names), (version, old_name)| {

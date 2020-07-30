@@ -269,16 +269,12 @@ impl ExtBuilder {
 /// The fixture files are located under the `fixtures/` directory.
 fn compile_module<T>(
 	fixture_name: &str,
-) -> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
+) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
 where
 	T: frame_system::Trait,
 {
-	use std::fs;
-
 	let fixture_path = ["fixtures/", fixture_name, ".wat"].concat();
-	let module_wat_source =
-		fs::read_to_string(&fixture_path).expect(&format!("Unable to find {} fixture", fixture_name));
-	let wasm_binary = wabt::wat2wasm(module_wat_source)?;
+	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
 }
@@ -295,6 +291,7 @@ fn returns_base_call_cost() {
 			Ok(
 				PostDispatchInfo {
 					actual_weight: Some(67500000),
+					pays_fee: Default::default(),
 				}
 			)
 		);
@@ -385,13 +382,14 @@ fn instantiate_and_call_and_deposit_event() {
 		.build()
 		.execute_with(|| {
 			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let subsistence = super::Config::<Test>::subsistence_threshold_uncached();
 
 			assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
 
 			// Check at the end to get hash on error easily
 			let creation = Contracts::instantiate(
 				Origin::signed(ALICE),
-				100,
+				subsistence,
 				GAS_LIMIT,
 				code_hash.into(),
 				vec![],
@@ -421,14 +419,14 @@ fn instantiate_and_call_and_deposit_event() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Endowed(BOB, 100)
+						pallet_balances::RawEvent::Endowed(BOB, subsistence)
 					),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::balances(
-						pallet_balances::RawEvent::Transfer(ALICE, BOB, 100)
+						pallet_balances::RawEvent::Transfer(ALICE, BOB, subsistence)
 					),
 					topics: vec![],
 				},
