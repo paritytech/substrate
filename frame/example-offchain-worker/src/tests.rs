@@ -39,7 +39,7 @@ use sp_runtime::{
 };
 
 impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 // For testing the module, we construct most of a mock runtime. This means
@@ -78,6 +78,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 type Extrinsic = TestXt<Call<Test>, ()>;

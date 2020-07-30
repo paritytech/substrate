@@ -45,8 +45,8 @@ use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
-use sc_rpc_api::DenyUnsafe;
 use sp_block_builder::BlockBuilder;
+pub use sc_rpc_api::DenyUnsafe;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -93,6 +93,9 @@ pub struct FullDeps<C, P, SC> {
 	/// GRANDPA specific dependencies.
 	pub grandpa: GrandpaDeps,
 }
+
+/// A IO handler that uses all Full RPC extensions.
+pub type IoHandler = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, M, SC>(

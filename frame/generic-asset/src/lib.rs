@@ -171,7 +171,7 @@ use frame_support::{
 	},
 	Parameter, StorageMap,
 };
-use frame_system::{self as system, ensure_signed, ensure_root};
+use frame_system::{ensure_signed, ensure_root};
 
 mod mock;
 mod tests;
@@ -493,15 +493,15 @@ decl_event!(
 		<T as Trait>::AssetId,
 		AssetOptions = AssetOptions<<T as Trait>::Balance, <T as frame_system::Trait>::AccountId>
 	{
-		/// Asset created (asset_id, creator, asset_options).
+		/// Asset created. [asset_id, creator, asset_options]
 		Created(AssetId, AccountId, AssetOptions),
-		/// Asset transfer succeeded (asset_id, from, to, amount).
+		/// Asset transfer succeeded. [asset_id, from, to, amount]
 		Transferred(AssetId, AccountId, AccountId, Balance),
-		/// Asset permission updated (asset_id, new_permissions).
+		/// Asset permission updated. [asset_id, new_permissions]
 		PermissionUpdated(AssetId, PermissionLatest<AccountId>),
-		/// New asset minted (asset_id, account, amount).
+		/// New asset minted. [asset_id, account, amount]
 		Minted(AssetId, AccountId, Balance),
-		/// Asset burned (asset_id, account, amount).
+		/// Asset burned. [asset_id, account, amount]
 		Burned(AssetId, AccountId, Balance),
 	}
 );
@@ -1135,6 +1135,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

@@ -200,10 +200,7 @@ mod tests {
 		AccountKeyring::*,
 		TestClientBuilder,
 	};
-	use sc_transaction_pool::{
-		BasicPool,
-		txpool::Options,
-	};
+	use sc_transaction_pool::{BasicPool, RevalidationType, txpool::Options};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
@@ -223,7 +220,10 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(), api(), None, RevalidationType::Full, spawner,
+		));
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
@@ -288,7 +288,10 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(), api(), None, RevalidationType::Full, spawner,
+		));
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),
@@ -357,7 +360,10 @@ mod tests {
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone(), None).0);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(), pool_api.clone(), None, RevalidationType::Full, spawner,
+		));
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),

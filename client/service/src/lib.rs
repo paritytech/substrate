@@ -20,10 +20,9 @@
 //! Manages communication between them.
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "1024"]
 
 pub mod config;
-#[macro_use]
 pub mod chain_ops;
 pub mod error;
 
@@ -39,13 +38,12 @@ use std::{io, pin::Pin};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::time::Duration;
-use wasm_timer::Instant;
 use std::task::Poll;
 use parking_lot::Mutex;
 
-use futures::{Future, FutureExt, Stream, StreamExt, compat::*};
+use futures::{Future, FutureExt, Stream, StreamExt, stream, compat::*};
 use sc_network::{NetworkStatus, network_state::NetworkState, PeerId};
-use log::{log, warn, debug, error, Level};
+use log::{warn, debug, error};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -54,9 +52,11 @@ use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client, new_client,
-	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
-	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder,
+	new_full_client, new_client, new_full_parts, new_light_parts,
+	spawn_tasks, build_network, BuildNetworkParams, build_offchain_workers,
+	SpawnTasksParams, TFullClient, TLightClient, TFullBackend, TLightBackend,
+	TLightBackendWithHash, TLightClientWithBackend,
+	TFullCallExecutor, TLightCallExecutor, RpcExtensionBuilder, NoopRpcExtensionBuilder,
 };
 pub use config::{
 	BasePath, Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskExecutor, TaskType,
@@ -79,7 +79,9 @@ pub use sc_network::config::{
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 pub use task_manager::TaskManager;
-use sc_client_api::{Backend, BlockchainEvents};
+pub use sp_consensus::import_queue::ImportQueue;
+use sc_client_api::BlockchainEvents;
+pub use sc_keystore::KeyStorePtr as KeyStore;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -122,13 +124,14 @@ impl RpcHandlers {
 
 /// Sinks to propagate network status updates.
 /// For each element, every time the `Interval` fires we push an element on the sender.
+#[derive(Clone)]
 pub struct NetworkStatusSinks<Block: BlockT>(
-	Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>,
+	Arc<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>,
 );
 
 impl<Block: BlockT> NetworkStatusSinks<Block> {
 	fn new(
-		sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>>
+		sinks: Arc<status_sinks::StatusSinks<(NetworkStatus<Block>, NetworkState)>>
 	) -> Self {
 		Self(sinks)
 	}
@@ -137,15 +140,16 @@ impl<Block: BlockT> NetworkStatusSinks<Block> {
 	pub fn network_status(&self, interval: Duration)
 		-> TracingUnboundedReceiver<(NetworkStatus<Block>, NetworkState)> {
 		let (sink, stream) = tracing_unbounded("mpsc_network_status");
-		self.0.lock().push(interval, sink);
+		self.0.push(interval, sink);
 		stream
 	}
 }
 
 /// Sinks to propagate telemetry connection established events.
-pub struct TelemetryOnConnectSinks(pub Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
+#[derive(Default, Clone)]
+pub struct TelemetryConnectionSinks(Arc<Mutex<Vec<TracingUnboundedSender<()>>>>);
 
-impl TelemetryOnConnectSinks {
+impl TelemetryConnectionSinks {
 	/// Get event stream for telemetry connection established events.
 	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (sink, stream) =tracing_unbounded("mpsc_telemetry_on_connect");
@@ -154,39 +158,32 @@ impl TelemetryOnConnectSinks {
 	}
 }
 
-/// The individual components of the chain, built by the service builder. You are encouraged to
-/// deconstruct this into its fields.
-pub struct ServiceComponents<TBl: BlockT, TBackend: Backend<TBl>, TSc, TExPool, TCl> {
-	/// A blockchain client.
-	pub client: Arc<TCl>,
-	/// A shared transaction pool instance.
-	pub transaction_pool: Arc<TExPool>,
-	/// The chain task manager. 
+/// An imcomplete set of chain components, but enough to run the chain ops subcommands.
+pub struct PartialComponents<Client, Backend, SelectChain, ImportQueue, TransactionPool, Other> {
+	/// A shared client instance.
+	pub client: Arc<Client>,
+	/// A shared backend instance.
+	pub backend: Arc<Backend>,
+	/// The chain task manager.
 	pub task_manager: TaskManager,
-	/// A keystore that stores keys.
-	pub keystore: sc_keystore::KeyStorePtr,
-	/// A shared network instance.
-	pub network: Arc<sc_network::NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	/// RPC handlers that can perform RPC queries.
-	pub rpc_handlers: RpcHandlers,
-	/// A shared instance of the chain selection algorithm.
-	pub select_chain: Option<TSc>,
-	/// Sinks to propagate network status updates.
-	pub network_status_sinks: NetworkStatusSinks<TBl>,
-	/// A prometheus metrics registry, (if enabled).
-	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
-	/// Shared Telemetry connection sinks,
-	pub telemetry_on_connect_sinks: TelemetryOnConnectSinks,
-	/// A shared offchain workers instance.
-	pub offchain_workers: Option<Arc<sc_offchain::OffchainWorkers<
-		TCl, TBackend::OffchainStorage, TBl
-	>>>,
+	/// A shared keystore instance.
+	pub keystore: KeyStore,
+	/// A chain selection algorithm instance.
+	pub select_chain: SelectChain,
+	/// An import queue.
+	pub import_queue: ImportQueue,
+	/// A shared transaction pool.
+	pub transaction_pool: Arc<TransactionPool>,
+	/// A registry of all providers of `InherentData`.
+	pub inherent_data_providers: sp_inherents::InherentDataProviders,
+	/// Everything else that needs to be passed into the main build function.
+	pub other: Other,
 }
 
 /// Builds a never-ending future that continuously polls the network.
 ///
 /// The `status_sink` contain a list of senders to send a periodic network status to.
-fn build_network_future<
+async fn build_network_future<
 	B: BlockT,
 	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT
@@ -194,141 +191,150 @@ fn build_network_future<
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
-	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
+	status_sinks: NetworkStatusSinks<B>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
-) -> impl Future<Output = ()> {
+) {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
-	let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
-	futures::future::poll_fn(move |cx| {
-		let before_polling = Instant::now();
+	// Stream of finalized blocks reported by the client.
+	let mut finality_notification_stream = {
+		let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
-		// We poll `imported_blocks_stream`.
-		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			if announce_imported_blocks {
-				network.service().announce_block(notification.hash, Vec::new());
+		// We tweak the `Stream` in order to merge together multiple items if they happen to be
+		// ready. This way, we only get the latest finalized block.
+		stream::poll_fn(move |cx| {
+			let mut last = None;
+			while let Poll::Ready(Some(item)) = Pin::new(&mut finality_notification_stream).poll_next(cx) {
+				last = Some(item);
 			}
-
-			if let sp_consensus::BlockOrigin::Own = notification.origin {
-				network.service().own_block_imported(
-					notification.hash,
-					notification.header.number().clone(),
-				);
+			if let Some(last) = last {
+				Poll::Ready(Some(last))
+			} else {
+				Poll::Pending
 			}
-		}
+		}).fuse()
+	};
 
-		// We poll `finality_notification_stream`, but we only take the last event.
-		let mut last = None;
-		while let Poll::Ready(Some(item)) = Pin::new(&mut finality_notification_stream).poll_next(cx) {
-			last = Some(item);
-		}
-		if let Some(notification) = last {
-			network.on_block_finalized(notification.hash, notification.header);
-		}
+	loop {
+		futures::select!{
+			// List of blocks that the client has imported.
+			notification = imported_blocks_stream.next() => {
+				let notification = match notification {
+					Some(n) => n,
+					// If this stream is shut down, that means the client has shut down, and the
+					// most appropriate thing to do for the network future is to shut down too.
+					None => return,
+				};
 
-		// Poll the RPC requests and answer them.
-		while let Poll::Ready(Some(request)) = Pin::new(&mut rpc_rx).poll_next(cx) {
-			match request {
-				sc_rpc::system::Request::Health(sender) => {
-					let _ = sender.send(sc_rpc::system::Health {
-						peers: network.peers_debug_info().len(),
-						is_syncing: network.service().is_major_syncing(),
-						should_have_peers,
-					});
-				},
-				sc_rpc::system::Request::LocalPeerId(sender) => {
-					let _ = sender.send(network.local_peer_id().to_base58());
-				},
-				sc_rpc::system::Request::LocalListenAddresses(sender) => {
-					let peer_id = network.local_peer_id().clone().into();
-					let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
-					let addresses = network.listen_addresses()
-						.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
-						.collect();
-					let _ = sender.send(addresses);
-				},
-				sc_rpc::system::Request::Peers(sender) => {
-					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
-						sc_rpc::system::PeerInfo {
-							peer_id: peer_id.to_base58(),
-							roles: format!("{:?}", p.roles),
-							protocol_version: p.protocol_version,
-							best_hash: p.best_hash,
-							best_number: p.best_number,
-						}
-					).collect());
+				if announce_imported_blocks {
+					network.service().announce_block(notification.hash, Vec::new());
 				}
-				sc_rpc::system::Request::NetworkState(sender) => {
-					if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
-						let _ = sender.send(network_state);
+
+				if let sp_consensus::BlockOrigin::Own = notification.origin {
+					network.service().own_block_imported(
+						notification.hash,
+						notification.header.number().clone(),
+					);
+				}
+			}
+
+			// List of blocks that the client has finalized.
+			notification = finality_notification_stream.select_next_some() => {
+				network.on_block_finalized(notification.hash, notification.header);
+			}
+
+			// Answer incoming RPC requests.
+			request = rpc_rx.select_next_some() => {
+				match request {
+					sc_rpc::system::Request::Health(sender) => {
+						let _ = sender.send(sc_rpc::system::Health {
+							peers: network.peers_debug_info().len(),
+							is_syncing: network.service().is_major_syncing(),
+							should_have_peers,
+						});
+					},
+					sc_rpc::system::Request::LocalPeerId(sender) => {
+						let _ = sender.send(network.local_peer_id().to_base58());
+					},
+					sc_rpc::system::Request::LocalListenAddresses(sender) => {
+						let peer_id = network.local_peer_id().clone().into();
+						let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
+						let addresses = network.listen_addresses()
+							.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
+							.collect();
+						let _ = sender.send(addresses);
+					},
+					sc_rpc::system::Request::Peers(sender) => {
+						let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+							sc_rpc::system::PeerInfo {
+								peer_id: peer_id.to_base58(),
+								roles: format!("{:?}", p.roles),
+								protocol_version: p.protocol_version,
+								best_hash: p.best_hash,
+								best_number: p.best_number,
+							}
+						).collect());
+					}
+					sc_rpc::system::Request::NetworkState(sender) => {
+						if let Some(network_state) = serde_json::to_value(&network.network_state()).ok() {
+							let _ = sender.send(network_state);
+						}
+					}
+					sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
+						let x = network.add_reserved_peer(peer_addr)
+							.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+						let _ = sender.send(x);
+					}
+					sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
+						let _ = match peer_id.parse::<PeerId>() {
+							Ok(peer_id) => {
+								network.remove_reserved_peer(peer_id);
+								sender.send(Ok(()))
+							}
+							Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
+								e.to_string(),
+							))),
+						};
+					}
+					sc_rpc::system::Request::NodeRoles(sender) => {
+						use sc_rpc::system::NodeRole;
+
+						let node_role = match role {
+							Role::Authority { .. } => NodeRole::Authority,
+							Role::Light => NodeRole::LightClient,
+							Role::Full => NodeRole::Full,
+							Role::Sentry { .. } => NodeRole::Sentry,
+						};
+
+						let _ = sender.send(vec![node_role]);
 					}
 				}
-				sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
-					let x = network.add_reserved_peer(peer_addr)
-						.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
-					let _ = sender.send(x);
-				}
-				sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
-					let _ = match peer_id.parse::<PeerId>() {
-						Ok(peer_id) => {
-							network.remove_reserved_peer(peer_id);
-							sender.send(Ok(()))
-						}
-						Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
-							e.to_string(),
-						))),
-					};
-				}
-				sc_rpc::system::Request::NodeRoles(sender) => {
-					use sc_rpc::system::NodeRole;
+			}
 
-					let node_role = match role {
-						Role::Authority { .. } => NodeRole::Authority,
-						Role::Light => NodeRole::LightClient,
-						Role::Full => NodeRole::Full,
-						Role::Sentry { .. } => NodeRole::Sentry,
-					};
+			// The network worker has done something. Nothing special to do, but could be
+			// used in the future to perform actions in response of things that happened on
+			// the network.
+			_ = (&mut network).fuse() => {}
 
-					let _ = sender.send(vec![node_role]);
-				}
-			};
+			// At a regular interval, we send the state of the network on what is called
+			// the "status sinks".
+			ready_sink = status_sinks.0.next().fuse() => {
+				let status = NetworkStatus {
+					sync_state: network.sync_state(),
+					best_seen_block: network.best_seen_block(),
+					num_sync_peers: network.num_sync_peers(),
+					num_connected_peers: network.num_connected_peers(),
+					num_active_peers: network.num_active_peers(),
+					average_download_per_sec: network.average_download_per_sec(),
+					average_upload_per_sec: network.average_upload_per_sec(),
+				};
+				let state = network.network_state();
+				ready_sink.send((status, state));
+			}
 		}
-
-		// Interval report for the external API.
-		status_sinks.lock().poll(cx, || {
-			let status = NetworkStatus {
-				sync_state: network.sync_state(),
-				best_seen_block: network.best_seen_block(),
-				num_sync_peers: network.num_sync_peers(),
-				num_connected_peers: network.num_connected_peers(),
-				num_active_peers: network.num_active_peers(),
-				average_download_per_sec: network.average_download_per_sec(),
-				average_upload_per_sec: network.average_upload_per_sec(),
-			};
-			let state = network.network_state();
-			(status, state)
-		});
-
-		// Main network polling.
-		if let Poll::Ready(Ok(())) = Pin::new(&mut network).poll(cx).map_err(|err| {
-			warn!(target: "service", "Error in network: {:?}", err);
-		}) {
-			return Poll::Ready(());
-		}
-
-		// Now some diagnostic for performances.
-		let polling_dur = before_polling.elapsed();
-		log!(
-			target: "service",
-			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
-			"⚠️  Polling the network future took {:?}",
-			polling_dur
-		);
-
-		Poll::Pending
-	})
+	}
 }
 
 #[cfg(not(target_os = "unknown"))]
@@ -555,18 +561,20 @@ mod tests {
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 
 	#[test]
 	fn should_not_propagate_transactions_that_are_marked_as_such() {
 		// given
 		let (client, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool = Arc::new(BasicPool::new(
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = BasicPool::new_full(
 			Default::default(),
-			Arc::new(FullChainApi::new(client.clone())),
 			None,
-		).0);
+			spawner,
+			client.clone(),
+		);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {

@@ -147,7 +147,7 @@ mod tests {
 	pub struct Test;
 
 	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+		pub enum Origin for Test where system = frame_system {}
 	}
 
 	parameter_types! {
@@ -182,6 +182,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type SystemWeightInfo = ();
 	}
 
 	type System = frame_system::Module<Test>;

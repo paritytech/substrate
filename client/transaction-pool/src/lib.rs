@@ -42,6 +42,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero},
 };
+use sp_core::traits::SpawnNamed;
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
@@ -62,6 +63,11 @@ type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<
 >;
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output=ReadyIteratorFor<PoolApi>> + Send>>;
+
+/// A transaction pool for a full node.
+pub type FullPool<Block, Client> = BasicPool<FullChainApi<Client, Block>, Block>;
+/// A transaction pool for a light node.
+pub type LightPool<Block, Client, Fetcher> = BasicPool<LightChainApi<Client, Fetcher, Block>, Block>;
 
 /// Basic implementation of transaction pool that can be customized by providing PoolApi.
 pub struct BasicPool<PoolApi, Block>
@@ -152,18 +158,6 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		Block: BlockT,
 		PoolApi: ChainApi<Block=Block> + 'static,
 {
-	/// Create new basic transaction pool with provided api.
-	///
-	/// It will also optionally return background task that might be started by the
-	/// caller.
-	pub fn new(
-		options: sc_transaction_graph::Options,
-		pool_api: Arc<PoolApi>,
-		prometheus: Option<&PrometheusRegistry>,
-	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
-		Self::with_revalidation_type(options, pool_api, prometheus, RevalidationType::Full)
-	}
-
 	/// Create new basic transaction pool with provided api, for tests.
 	#[cfg(test)]
 	pub fn new_test(
@@ -193,7 +187,8 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
-	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
+		spawner: impl SpawnNamed,
+	) -> Self {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
 			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
@@ -203,22 +198,23 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 			},
 		};
 
-		(
-			BasicPool {
-				api: pool_api,
-				pool,
-				revalidation_queue: Arc::new(revalidation_queue),
-				revalidation_strategy: Arc::new(Mutex::new(
-					match revalidation_type {
-						RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
-						RevalidationType::Full => RevalidationStrategy::Always,
-					}
-				)),
-				ready_poll: Default::default(),
-				metrics: PrometheusMetrics::new(prometheus),
-			},
-			background_task,
-		)
+		if let Some(background_task) = background_task {
+			spawner.spawn("txpool-background", background_task);
+		}
+
+		BasicPool {
+			api: pool_api,
+			pool,
+			revalidation_queue: Arc::new(revalidation_queue),
+			revalidation_strategy: Arc::new(Mutex::new(
+				match revalidation_type {
+					RevalidationType::Light => RevalidationStrategy::Light(RevalidationStatus::NotScheduled),
+					RevalidationType::Full => RevalidationStrategy::Always,
+				}
+			)),
+			ready_poll: Default::default(),
+			metrics: PrometheusMetrics::new(prometheus),
+		}
 	}
 
 	/// Gets shared reference to the underlying pool.
@@ -248,15 +244,9 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		self.metrics.report(|metrics| metrics.validations_scheduled.inc_by(xts.len() as u64));
+		self.metrics.report(|metrics| metrics.submitted_transactions.inc_by(xts.len() as u64));
 
-		let metrics = self.metrics.clone();
-		async move {
-			let tx_count = xts.len();
-			let res = pool.submit_at(&at, source, xts, false).await;
-			metrics.report(|metrics| metrics.validations_finished.inc_by(tx_count as u64));
-			res
-		}.boxed()
+		async move { pool.submit_at(&at, source, xts).await }.boxed()
 	}
 
 	fn submit_one(
@@ -268,16 +258,9 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+		self.metrics.report(|metrics| metrics.submitted_transactions.inc());
 
-		let metrics = self.metrics.clone();
-		async move {
-			let res = pool.submit_one(&at, source, xt).await;
-
-			metrics.report(|metrics| metrics.validations_finished.inc());
-			res
-
-		}.boxed()
+		async move { pool.submit_one(&at, source, xt).await }.boxed()
 	}
 
 	fn submit_and_watch(
@@ -289,17 +272,12 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 		let pool = self.pool.clone();
 
-		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+		self.metrics.report(|metrics| metrics.submitted_transactions.inc());
 
-		let metrics = self.metrics.clone();
 		async move {
-			let result = pool.submit_and_watch(&at, source, xt)
+			pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-				.await;
-
-			metrics.report(|metrics| metrics.validations_finished.inc());
-
-			result
+				.await
 		}.boxed()
 	}
 
@@ -349,6 +327,56 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 
 	fn ready(&self) -> ReadyIteratorFor<PoolApi> {
 		Box::new(self.pool.validated_pool().ready())
+	}
+}
+
+impl<Block, Client, Fetcher> LightPool<Block, Client, Fetcher>
+where
+	Block: BlockT,
+	Client: sp_blockchain::HeaderBackend<Block> + 'static,
+	Fetcher: sc_client_api::Fetcher<Block> + 'static,
+{
+	/// Create new basic transaction pool for a light node with the provided api.
+	pub fn new_light(
+		options: sc_transaction_graph::Options,
+		prometheus: Option<&PrometheusRegistry>,
+		spawner: impl SpawnNamed,
+		client: Arc<Client>,
+		fetcher: Arc<Fetcher>,
+	) -> Self {
+		let pool_api = Arc::new(LightChainApi::new(client, fetcher));
+		Self::with_revalidation_type(
+			options, pool_api, prometheus, RevalidationType::Light, spawner,
+		)
+	}
+}
+
+impl<Block, Client> FullPool<Block, Client>
+where
+	Block: BlockT,
+	Client: sp_api::ProvideRuntimeApi<Block>
+		+ sc_client_api::BlockBackend<Block>
+		+ sp_runtime::traits::BlockIdTo<Block>,
+	Client: sc_client_api::ExecutorProvider<Block> + Send + Sync + 'static,
+	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+	sp_api::ApiErrorFor<Client, Block>: Send + std::fmt::Display,
+{
+	/// Create new basic transaction pool for a full node with the provided api.
+	pub fn new_full(
+		options: sc_transaction_graph::Options,
+		prometheus: Option<&PrometheusRegistry>,
+		spawner: impl SpawnNamed,
+		client: Arc<Client>,
+	) -> Arc<Self> {
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
+		let pool = Arc::new(Self::with_revalidation_type(
+			options, pool_api, prometheus, RevalidationType::Full, spawner
+		));
+
+		// make transaction pool available for off-chain runtime calls.
+		client.execution_extensions().register_transaction_pool(&pool);
+
+		pool
 	}
 }
 
@@ -632,13 +660,12 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 							);
 						}
 
-						if let Err(e) = pool.submit_at(
+						if let Err(e) = pool.resubmit_at(
 							&id,
 							// These transactions are coming from retracted blocks, we should
 							// simply consider them external.
 							TransactionSource::External,
 							resubmit_transactions,
-							true,
 						).await {
 							log::debug!(
 								target: "txpool",

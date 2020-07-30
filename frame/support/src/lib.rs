@@ -30,11 +30,11 @@ pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
+pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_std;
 #[doc(hidden)]
 pub use codec;
-use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -364,11 +364,6 @@ macro_rules! assert_ok {
 	}
 }
 
-/// The void type - it cannot exist.
-// Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
-pub enum Void {}
-
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Serialize, Deserialize};
@@ -381,7 +376,7 @@ mod tests {
 		DecodeDifferent, StorageEntryMetadata, StorageMetadata, StorageEntryType,
 		StorageEntryModifier, DefaultByteGetter, StorageHasher,
 	};
-	use sp_std::marker::PhantomData;
+	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
 	pub trait Trait {
@@ -631,6 +626,36 @@ mod tests {
 			DoubleMap::insert(&key1, &key2, &vec![1]);
 			DoubleMap::append(&key1, &key2, 2);
 			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2]);
+		});
+	}
+
+	#[test]
+	fn double_map_try_mutate_exists_should_work() {
+		new_test_ext().execute_with(|| {
+			type DoubleMap = DataDM;
+			type TestResult = result::Result<(), &'static str>;
+
+			let (key1, key2) = (11, 13);
+
+			// mutated if `Ok`
+			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = Some(1);
+				Ok(())
+			}));
+			assert_eq!(DoubleMap::get(&key1, key2), 1);
+
+			// no-op if `Err`
+			assert_noop!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = Some(2);
+				Err("nah")
+			}), "nah");
+
+			// removed if mutated to`None`
+			assert_ok!(DoubleMap::try_mutate_exists(key1, key2, |v| -> TestResult {
+				*v = None;
+				Ok(())
+			}));
+			assert!(!DoubleMap::contains_key(&key1, key2));
 		});
 	}
 

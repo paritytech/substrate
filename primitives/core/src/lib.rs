@@ -72,8 +72,6 @@ mod changes_trie;
 pub mod traits;
 pub mod testing;
 #[cfg(feature = "std")]
-pub mod tasks;
-#[cfg(feature = "std")]
 pub mod vrf;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
@@ -332,6 +330,11 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 	res
 }
+
+/// The void type - it cannot exist.
+// Oh rust, you crack me up...
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
+pub enum Void {}
 
 /// Macro for creating `Maybe*` marker traits.
 ///
