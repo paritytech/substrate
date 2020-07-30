@@ -210,7 +210,8 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 								this.forwarding_state = ForwardingState::Busy(to_forward.into());
 							},
-							Event::Dht(_) => {}
+							Event::Dht(_) => {},
+							Event::Bitswap(_) => {},
 						}
 						// The network event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => return Poll::Ready(()),

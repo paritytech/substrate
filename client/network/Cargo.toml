@@ -59,6 +59,7 @@ unsigned-varint = { version = "0.4.0", features = ["futures", "futures-codec"] }
 void = "1.0.2"
 wasm-timer = "0.2"
 zeroize = "1.0.0"
+libp2p-bitswap = "0.5.1"
 
 [dependencies.libp2p]
 version = "0.22.0"

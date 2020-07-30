@@ -32,6 +32,8 @@ pub enum Error {
 	NotHealthy(Health),
 	/// Peer argument is malformatted.
 	MalformattedPeerArg(String),
+	/// CID parsing error.
+	CidParse(cid::Error)
 }
 
 impl std::error::Error for Error {}
@@ -48,8 +50,13 @@ impl From<Error> for rpc::Error {
 				data: serde_json::to_value(h).ok(),
 			},
 			Error::MalformattedPeerArg(ref e) => rpc::Error {
-				code :rpc::ErrorCode::ServerError(BASE_ERROR + 2),
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 2),
 				message: e.clone(),
+				data: None,
+			},
+			Error::CidParse(ref e) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(BASE_ERROR + 3),
+				message: e.to_string(),
 				data: None,
 			}
 		}

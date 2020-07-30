@@ -65,6 +65,8 @@ pub enum Request<B: traits::Block> {
 	NetworkAddReservedPeer(String, oneshot::Sender<Result<()>>),
 	/// Must return any potential parse error.
 	NetworkRemoveReservedPeer(String, oneshot::Sender<Result<()>>),
+	NetworkBitswapPublish(String, oneshot::Sender<String>),
+	NetworkBitswapWant(String, oneshot::Sender<Result<()>>),
 	/// Must return the node role.
 	NodeRoles(oneshot::Sender<Vec<NodeRole>>)
 }
@@ -175,6 +177,26 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::NetworkRemoveReservedPeer(peer, tx));
+		async move {
+			match rx.await {
+				Ok(Ok(())) => Ok(()),
+				Ok(Err(e)) => Err(rpc::Error::from(e)),
+				Err(_) => Err(rpc::Error::internal_error()),
+			}
+		}.boxed().compat()
+	}
+
+	fn system_bitswap_publish(&self, data: String) -> Receiver<String> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NetworkBitswapPublish(data, tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_bitswap_want(&self, cid: String)
+		-> Compat<BoxFuture<'static, std::result::Result<(), rpc::Error>>>
+	{
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::NetworkBitswapWant(cid, tx));
 		async move {
 			match rx.await {
 				Ok(Ok(())) => Ok(()),

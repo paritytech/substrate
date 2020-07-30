@@ -551,6 +551,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
+
+	/// Get a mutable reference to the Bitswap behaviour.
+	pub fn bitswap(&mut self) -> &mut libp2p_bitswap::Bitswap {
+		&mut self.network_service.bitswap
+	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
@@ -1511,6 +1516,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Dht(ev))) => {
 					this.event_streams.send(Event::Dht(ev));
 				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Bitswap(ev))) => {
+					this.event_streams.send(Event::Bitswap(ev));
+				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
 
@@ -1537,13 +1545,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectionError::IO(_) => "transport-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(
-								EitherError::A(PingFailure::Timeout)))))))) => "ping-timeout",
+								todo))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::Legacy(LegacyConnectionKillError)))))))) =>	"force-closed",
+								todo))))))) =>	"force-closed",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::A(
-								NotifsHandlerError::SyncNotificationsClogged))))))) => "sync-notifications-clogged",
+								todo))))))) => "sync-notifications-clogged",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};
