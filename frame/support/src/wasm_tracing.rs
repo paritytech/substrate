@@ -69,7 +69,7 @@ impl Drop for TracingSpanGuard {
 /// ```
 #[macro_export]
 macro_rules! enter_span {
-	( $name:expr ) => {
+	( $name:expr, $values:expr ) => {
 		#[cfg(not(feature = "std"))]
 		let __span_id__ = if $crate::wasm_tracing::wasm_tracing_enabled() {
 				use $crate::sp_std::prelude::*;
@@ -85,14 +85,14 @@ macro_rules! enter_span {
 				};
 				let attrs = $crate::sp_tracing::types::WasmAttributes{
 					parent_id: None,
-					fields: Vec::new(),
+					fields: $values,
 					metadata,
 				};
 				let id = $crate::sp_tracing::interface::wasm_tracing::new_span(
 					attrs
 				);
 				if id == 0 {
-					$crate::wasm_tracing::disable_wasm_tracing();
+					// $crate::wasm_tracing::disable_wasm_tracing();
 					$crate::wasm_tracing::TracingSpanGuard::new(None)
 				} else {
 					$crate::sp_tracing::interface::wasm_tracing::enter(id);

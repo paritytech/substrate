@@ -134,6 +134,8 @@ pub struct Values {
 	pub u64_values: FxHashMap<String, u64>,
 	/// HashMap of `String` values
 	pub string_values: FxHashMap<String, String>,
+	/// HashMap of `String` values
+	pub encoded_values: FxHashMap<String, Vec<u8>>,
 }
 
 impl Values {
@@ -147,14 +149,17 @@ impl Values {
 		self.bool_values.is_empty() &&
 			self.i64_values.is_empty() &&
 			self.u64_values.is_empty() &&
-			self.string_values.is_empty()
+			self.string_values.is_empty() &&
+			self.encoded_values.is_empty()
 	}
 
+	/// Extend self with other
 	pub fn extend(&mut self, other: Values) {
 		self.bool_values.extend(other.bool_values.into_iter());
 		self.i64_values.extend(other.i64_values.into_iter());
 		self.u64_values.extend(other.u64_values.into_iter());
 		self.string_values.extend(other.string_values.into_iter());
+		self.encoded_values.extend(other.encoded_values.into_iter());
 	}
 }
 
@@ -208,7 +213,13 @@ impl fmt::Display for Values {
 		let i64_iter = self.i64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let u64_iter = self.u64_values.iter().map(|(k, v)| format!("{}={}", k, v));
 		let string_iter = self.string_values.iter().map(|(k, v)| format!("{}=\"{}\"", k, v));
-		let values = bool_iter.chain(i64_iter).chain(u64_iter).chain(string_iter).collect::<Vec<String>>().join(", ");
+		let encoded_iter = self.encoded_values.iter().map(|(k, v)| format!("{}={:?}", k, v));
+		let values = bool_iter
+			.chain(i64_iter)
+			.chain(u64_iter)
+			.chain(string_iter)
+			.chain(encoded_iter)
+			.collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
 	}
 }
@@ -311,8 +322,8 @@ impl From<WasmValues> for Values {
 						let s = String::from_utf8(v).unwrap_or_else(|_| UNABLE_TO_DECODE.to_owned());
 						values.string_values.insert(key, s);
 					}
-					WasmFieldValue::Encoded(_v) => {
-						// TODO
+					WasmFieldValue::Encoded(v) => {
+						values.encoded_values.insert(key, v);
 					}
 				}
 			}

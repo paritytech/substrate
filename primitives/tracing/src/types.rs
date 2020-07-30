@@ -33,7 +33,7 @@ pub enum WasmLevel {
 	TRACE
 }
 
-#[derive(Encode, Decode, PassByCodec)]
+#[derive(Encode, Decode, PassByCodec, Debug)]
 pub enum WasmFieldValue {
 	I64(i64),
 	U64(u64),
