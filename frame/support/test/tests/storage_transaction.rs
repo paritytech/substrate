@@ -17,9 +17,10 @@
 
 use codec::{Encode, Decode, EncodeLike};
 use frame_support::{
-	StorageMap, StorageValue, storage::{with_transaction, TransactionOutcome::*},
+	assert_ok, assert_noop, transactional, StorageMap, StorageValue, storage::{with_transaction, TransactionOutcome::*},
 };
 use sp_io::TestExternalities;
+use sp_std::result;
 
 pub trait Trait {
 	type Origin;
@@ -155,5 +156,27 @@ fn storage_transaction_commit_then_rollback() {
 		assert_eq!(Map::get("val1"), 1);
 		assert_eq!(Map::get("val2"), 0);
 		assert_eq!(Map::get("val3"), 0);
+	});
+}
+
+#[test]
+fn transactional_annotation() {
+	#[transactional]
+	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+		Value::set(v);
+		Ok(v)
+	}
+
+	#[transactional]
+	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+		Value::set(v);
+		Err("nah")
+	}
+
+	TestExternalities::default().execute_with(|| {
+		assert_ok!(value_commits(2), 2);
+		assert_eq!(Value::get(), 2);
+
+		assert_noop!(value_rollbacks(3), "nah");
 	});
 }
