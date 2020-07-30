@@ -231,7 +231,7 @@ impl<C: SubstrateCli> Runner<C> {
 		let mut task_manager = initialise(self.config)?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
-		Ok(res.map_err(|e| e.to_string())?)
+		res.map_err(|e| e.to_string().into())
 	}
 
 	/// A helper function that runs a command with the configuration of this node
