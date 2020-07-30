@@ -72,8 +72,23 @@ impl Precompiles for Tuple {
 }
 
 /// Linear gas cost
-fn linear_cost(len: usize, base: usize, word: usize) -> Option<usize> {
-	base.checked_add(word.checked_mul(len.saturating_add(31) / 32)?)
+fn ensure_linear_cost(
+	target_gas: Option<usize>,
+	len: usize,
+	base: usize,
+	word: usize
+) -> Result<usize, ExitError> {
+	let cost = base.checked_add(
+		word.checked_mul(len.saturating_add(31) / 32).ok_or(ExitError::OutOfGas)?
+	).ok_or(ExitError::OutOfGas)?;
+
+	if let Some(target_gas) = target_gas {
+		if cost > target_gas {
+			return Err(ExitError::OutOfGas)
+		}
+	}
+
+	Ok(cost)
 }
 
 /// The identity precompile.
@@ -84,13 +99,7 @@ impl Precompile for Identity {
 		input: &[u8],
 		target_gas: Option<usize>,
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError> {
-		let cost = linear_cost(input.len(), 15, 3).ok_or(ExitError::OutOfGas)?;
-
-		if let Some(target_gas) = target_gas {
-			if cost > target_gas {
-				return Err(ExitError::OutOfGas)
-			}
-		}
+		let cost = ensure_linear_cost(target_gas, input.len(), 15, 3)?;
 
 		Ok((ExitSucceed::Returned, input.to_vec(), cost))
 	}
@@ -104,13 +113,7 @@ impl Precompile for ECRecover {
 		i: &[u8],
 		target_gas: Option<usize>,
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError> {
-		let cost = linear_cost(i.len(), 3000, 0).ok_or(ExitError::OutOfGas)?;
-
-		if let Some(target_gas) = target_gas {
-			if cost > target_gas {
-				return Err(ExitError::OutOfGas)
-			}
-		}
+		let cost = ensure_linear_cost(target_gas, i.len(), 3000, 0)?;
 
 		let mut input = [0u8; 128];
 		input[..min(i.len(), 128)].copy_from_slice(&i[..min(i.len(), 128)]);
@@ -140,16 +143,9 @@ impl Precompile for Ripemd160 {
 		input: &[u8],
 		target_gas: Option<usize>,
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError> {
-		let cost = linear_cost(input.len(), 600, 120).ok_or(ExitError::OutOfGas)?;
-
-		if let Some(target_gas) = target_gas {
-			if cost > target_gas {
-				return Err(ExitError::OutOfGas)
-			}
-		}
+		let cost = ensure_linear_cost(target_gas, input.len(), 600, 120)?;
 
 		let ret = ripemd160::Ripemd160::digest(input).to_vec();
-
 		Ok((ExitSucceed::Returned, ret, cost))
 	}
 }
@@ -162,16 +158,9 @@ impl Precompile for Sha256 {
 		input: &[u8],
 		target_gas: Option<usize>,
 	) -> core::result::Result<(ExitSucceed, Vec<u8>, usize), ExitError> {
-		let cost = linear_cost(input.len(), 60, 12).ok_or(ExitError::OutOfGas)?;
-
-		if let Some(target_gas) = target_gas {
-			if cost > target_gas {
-				return Err(ExitError::OutOfGas)
-			}
-		}
+		let cost = ensure_linear_cost(target_gas, input.len(), 60, 12)?;
 
 		let ret = sp_io::hashing::sha2_256(input);
-
 		Ok((ExitSucceed::Returned, ret.to_vec(), cost))
 	}
 }
