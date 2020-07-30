@@ -95,6 +95,7 @@ use crate::wasm::{WasmLoader, WasmVm};
 
 pub use crate::gas::{Gas, GasMeter};
 pub use crate::exec::{ExecResult, ExecReturnValue};
+pub use crate::wasm::ReturnCode as RuntimeReturnCode;
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};

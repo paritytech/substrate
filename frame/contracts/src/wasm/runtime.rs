@@ -639,7 +639,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::CalleeTrapped`
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
-	// `ReturnCode::InvalidConractCalled`
+	// `ReturnCode::InvalidContractCalled`
 	ext_call(
 		ctx,
 		callee_ptr: u32,

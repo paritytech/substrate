@@ -17,7 +17,7 @@
 use crate::{
 	BalanceOf, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig, Module,
 	RawAliveContractInfo, RawEvent, Trait, TrieId, Schedule, TrieIdGenerator, gas::Gas,
-	Error,
+	Error, Config, RuntimeReturnCode,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -30,7 +30,7 @@ use sp_runtime::{
 use frame_support::{
 	assert_ok, assert_err_ignore_postinfo, impl_outer_dispatch, impl_outer_event,
 	impl_outer_origin, parameter_types, StorageMap, StorageValue,
-	traits::{Currency, Get},
+	traits::{Currency, Get, ReservableCurrency},
 	weights::{Weight, PostDispatchInfo},
 	dispatch::DispatchErrorWithPostInfo,
 };
@@ -64,6 +64,7 @@ impl_outer_dispatch! {
 	}
 }
 
+#[macro_use]
 pub mod test_utils {
 	use super::{Test, Balances};
 	use crate::{ContractInfoOf, TrieIdGenerator, CodeHash};
@@ -89,6 +90,12 @@ pub mod test_utils {
 	}
 	pub fn get_balance(who: &u64) -> u64 {
 		Balances::free_balance(who)
+	}
+	macro_rules! assert_return_code {
+		( $x:expr , $y:expr $(,)? ) => {{
+			use sp_std::convert::TryInto;
+			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
+		}}
 	}
 }
 
@@ -1605,4 +1612,217 @@ fn crypto_hashes() {
 				assert_eq!(&result.data[..*expected_size], &*expected);
 			}
 		})
+}
+
+#[test]
+fn transfer_return_code() {
+	let (wasm, code_hash) = compile_module::<Test>("transfer_return_code").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Config::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), wasm));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				code_hash.into(),
+				vec![],
+			),
+		);
+
+		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
+
+		// Contract has enough total balance in order to not go below the subsistence
+		// threshold when transfering 100 balance but this balance is reserved so
+		// the transfer still fails but with another return code.
+		Balances::make_free_balance_be(&BOB, subsistence + 100);
+		Balances::reserve(&BOB, subsistence + 100).unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
+	});
+}
+
+#[test]
+fn call_return_code() {
+	let (caller_code, caller_hash) = compile_module::<Test>("call_return_code").unwrap();
+	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Config::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		let _ = Balances::deposit_creating(&CHARLIE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), caller_code));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), callee_code));
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				caller_hash.into(),
+				vec![0],
+			),
+		);
+
+		// Contract calls into Django which is no valid contract
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![0],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::InvalidContractCalled);
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(CHARLIE),
+				subsistence,
+				GAS_LIMIT,
+				callee_hash.into(),
+				vec![0],
+			),
+		);
+
+		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![0],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
+
+		// Contract has enough total balance in order to not go below the subsistence
+		// threshold when transfering 100 balance but this balance is reserved so
+		// the transfer still fails but with another return code.
+		Balances::make_free_balance_be(&BOB, subsistence + 100);
+		Balances::reserve(&BOB, subsistence + 100).unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![0],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
+
+		// Contract has enough balance but callee reverts because "1" is passed.
+		Balances::make_free_balance_be(&BOB, subsistence + 1000);
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![1],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
+
+		// Contract has enough balance but callee traps because "2" is passed.
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![2],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
+
+	});
+}
+
+#[test]
+fn instantiate_return_code() {
+	let (caller_code, caller_hash) = compile_module::<Test>("instantiate_return_code").unwrap();
+	let (callee_code, callee_hash) = compile_module::<Test>("ok_trap_revert").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let subsistence = Config::<Test>::subsistence_threshold_uncached();
+		let _ = Balances::deposit_creating(&ALICE, 10 * subsistence);
+		let _ = Balances::deposit_creating(&CHARLIE, 10 * subsistence);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), caller_code));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), callee_code));
+		let callee_hash = callee_hash.as_ref().to_vec();
+
+		assert_ok!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				subsistence,
+				GAS_LIMIT,
+				caller_hash.into(),
+				vec![],
+			),
+		);
+
+		// Contract has only the minimal balance so any transfer will return BelowSubsistence.
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![0; 33],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::BelowSubsistenceThreshold);
+
+		// Contract has enough total balance in order to not go below the subsistence
+		// threshold when transfering 100 balance but this balance is reserved so
+		// the transfer still fails but with another return code.
+		Balances::make_free_balance_be(&BOB, subsistence + 100);
+		Balances::reserve(&BOB, subsistence + 100).unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![0; 33],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
+
+		// Contract has enough balance but the passed code hash is invalid
+		Balances::make_free_balance_be(&BOB, subsistence + 1000);
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			vec![0; 33],
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::CodeNotFound);
+
+		// Contract has enough balance but callee reverts because "1" is passed.
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			callee_hash.iter().cloned().chain(sp_std::iter::once(1)).collect(),
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
+
+		// Contract has enough balance but callee traps because "2" is passed.
+		let result = Contracts::bare_call(
+			ALICE,
+			BOB,
+			0,
+			GAS_LIMIT,
+			callee_hash.iter().cloned().chain(sp_std::iter::once(2)).collect(),
+		).0.unwrap();
+		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
+
+	});
 }
