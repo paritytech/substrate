@@ -83,9 +83,12 @@ pub enum ErrorOrigin {
 	Callee,
 }
 
+/// Error returned by contract exection.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub struct ExecError {
+	/// The reason why the execution failed.
 	pub error: DispatchError,
+	/// Origin of the error.
 	pub origin: ErrorOrigin,
 }
 
@@ -98,7 +101,8 @@ impl<T: Into<DispatchError>> From<T> for ExecError {
 	}
 }
 
-/// The error returned from functions calling into contract execution.
+/// The result that is returned from contract execution. It either contains the output
+/// buffer or an error describing the reason for failure.
 pub type ExecResult = Result<ExecReturnValue, ExecError>;
 
 /// An interface that provides access to the external environment in which the
