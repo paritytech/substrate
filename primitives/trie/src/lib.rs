@@ -186,6 +186,9 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	{
 		let mut trie = TrieDBMut::<L>::from_existing(&mut *db, &mut root)?;
 
+		let mut delta = delta.into_iter().collect::<Vec<_>>();
+		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
+
 		for (key, change) in delta {
 			match change.borrow() {
 				Some(val) => trie.insert(key.borrow(), val.borrow())?,
@@ -259,19 +262,12 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
-	{
-		let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-		let mut trie = TrieDBMut::<L>::from_existing(&mut db, &mut root)?;
-
-		for (key, change) in delta {
-			match change.borrow() {
-				Some(val) => trie.insert(key.borrow(), val.borrow())?,
-				None => trie.remove(key.borrow())?,
-			};
-		}
-	}
-
-	Ok(root)
+	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
+	delta_trie_root::<L, _, _, _, _, _>(
+		&mut db,
+		root,
+		delta,
+	)
 }
 
 /// Call `f` for all keys in a child trie.
@@ -468,7 +464,7 @@ mod trie_constants {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Encode, Compact};
+	use codec::{Encode, Decode, Compact};
 	use sp_core::Blake2Hasher;
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie, NodeCodec as NodeCodecT};
@@ -855,5 +851,35 @@ mod tests {
 				&[(pairs[1].0.clone(), Some(pairs[1].1.clone()))]
 			).is_err()
 		);
+	}
+
+	#[test]
+	fn generate_storage_root_with_proof_works_independently_from_the_delta_order() {
+		let proof = StorageProof::decode(&mut &include_bytes!("../test-res/proof")[..]).unwrap();
+		let storage_root = sp_core::H256::decode(
+			&mut &include_bytes!("../test-res/storage_root")[..],
+		).unwrap();
+		// Delta order that is "invalid" so that it would require a different proof.
+		let invalid_delta = Vec::<(Vec<u8>, Option<Vec<u8>>)>::decode(
+			&mut &include_bytes!("../test-res/invalid-delta-order")[..],
+		).unwrap();
+		// Delta order that is "valid"
+		let valid_delta = Vec::<(Vec<u8>, Option<Vec<u8>>)>::decode(
+			&mut &include_bytes!("../test-res/valid-delta-order")[..],
+		).unwrap();
+
+		let proof_db = proof.into_memory_db::<Blake2Hasher>();
+		let first_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
+			&mut proof_db.clone(),
+			storage_root,
+			valid_delta,
+		).unwrap();
+		let second_storage_root = delta_trie_root::<Layout, _, _, _, _, _>(
+			&mut proof_db.clone(),
+			storage_root,
+			invalid_delta,
+		).unwrap();
+
+		assert_eq!(first_storage_root, second_storage_root);
 	}
 }
