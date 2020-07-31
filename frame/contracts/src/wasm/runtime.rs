@@ -49,14 +49,14 @@ pub enum ReturnCode {
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
-	/// Transfer failed because it would have brought the senders total balance below the
-	/// subsistence deposit.
+	/// Transfer failed because it would have brought the sender's total balance below the
+	/// subsistence threshold.
 	BelowSubsistenceThreshold = 4,
 	/// Transfer failed for other reasons. Most probably reserved or locked balance of the
 	/// sender prevents the transfer.
 	TransferFailed = 5,
 	/// The newly created contract is below the subsistence threshold after executing
-	// its contructor.
+	/// its constructor.
 	NewContractNotFunded = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
