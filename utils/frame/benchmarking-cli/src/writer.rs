@@ -129,35 +129,31 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 		let mut used_writes = Vec::new();
 		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
 			if !slope.is_zero() {
-				used_components.push(name);
+				if !used_components.contains(&name) { used_components.push(name); }
 				used_extrinsic_time.push((slope, name));
 			}
 		});
 		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
 			if !slope.is_zero() {
-				used_components.push(name);
+				if !used_components.contains(&name) { used_components.push(name); }
 				used_reads.push((slope, name));
 			}
 		});
 		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
 			if !slope.is_zero() {
-				used_components.push(name);
+				if !used_components.contains(&name) { used_components.push(name); }
 				used_writes.push((slope, name));
 			}
 		});
 
-		// These are the final set of "used" components, i.e. only those that are used in the weight formula
-		used_components.sort();
-		used_components.dedup();
-
-		let mut components = batch.results[0].components
+		let mut all_components = batch.results[0].components
 			.iter()
 			.map(|(name, _)| -> String { return name.to_string() })
 			.collect::<Vec<String>>();
-		if components.len() != used_components.len() {
-			// These are the components that were not used.
-			components.retain(|x| !used_components.contains(&x));
-			write!(file, "\t// WARNING! Some components were not used: {:?}\n", components)?;
+		if all_components.len() != used_components.len() {
+			// `all_components` becomes the components that were not used.
+			all_components.retain(|x| !used_components.contains(&x));
+			write!(file, "\t// WARNING! Some components were not used: {:?}\n", all_components)?;
 		}
 
 		// function name
