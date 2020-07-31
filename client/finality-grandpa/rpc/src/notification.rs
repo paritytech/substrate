@@ -21,20 +21,12 @@ use parity_scale_codec::Encode;
 use sp_runtime::traits::Block as BlockT;
 use sc_finality_grandpa::GrandpaJustification;
 
-/// Justification for a finalized block.
+/// An encoded justification proving that the given header has been finalized
 #[derive(Clone, Serialize, Deserialize)]
-pub struct JustificationNotification<Block: BlockT> {
-	/// Highest finalized block header
-	pub header: Block::Header,
-	/// An encoded justification proving that the given header has been finalized
-	pub justification: Vec<u8>,
-}
+pub struct JustificationNotification(Vec<u8>);
 
-impl<Block: BlockT> From<(Block::Header, GrandpaJustification<Block>)> for JustificationNotification<Block> {
-	fn from(notification: (Block::Header, GrandpaJustification<Block>)) -> Self {
-		JustificationNotification {
-			header: notification.0,
-			justification: notification.1.encode(),
-		}
+impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationNotification {
+	fn from(notification: GrandpaJustification<Block>) -> Self {
+		JustificationNotification(notification.encode())
 	}
 }

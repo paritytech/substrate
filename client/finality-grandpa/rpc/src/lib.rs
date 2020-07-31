@@ -33,7 +33,7 @@ mod error;
 mod notification;
 mod report;
 
-use sc_finality_grandpa::GrandpaJustifications;
+use sc_finality_grandpa::GrandpaJustificationStream;
 use sp_runtime::traits::Block as BlockT;
 
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
@@ -86,28 +86,28 @@ pub trait GrandpaApi<Notification> {
 pub struct GrandpaRpcHandler<AuthoritySet, VoterState, Block: BlockT> {
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
-	justification_receiver: GrandpaJustifications<Block>,
+	justification_stream: GrandpaJustificationStream<Block>,
 	manager: SubscriptionManager,
 }
 
 impl<AuthoritySet, VoterState, Block: BlockT> GrandpaRpcHandler<AuthoritySet, VoterState, Block> {
-	/// Creates a new GrandpaRpcHander instance.
+	/// Creates a new GrandpaRpcHandler instance.
 	pub fn new(
 		authority_set: AuthoritySet,
 		voter_state: VoterState,
-		justification_receiver: GrandpaJustifications<Block>,
+		justification_stream: GrandpaJustificationStream<Block>,
 		manager: SubscriptionManager,
 	) -> Self {
 		Self {
 			authority_set,
 			voter_state,
-			justification_receiver,
+			justification_stream,
 			manager,
 		}
 	}
 }
 
-impl<AuthoritySet, VoterState, Block> GrandpaApi<JustificationNotification<Block>>
+impl<AuthoritySet, VoterState, Block> GrandpaApi<JustificationNotification>
 	for GrandpaRpcHandler<AuthoritySet, VoterState, Block>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
@@ -125,9 +125,9 @@ where
 	fn subscribe_justifications(
 		&self,
 		_metadata: Self::Metadata,
-		subscriber: Subscriber<JustificationNotification<Block>>
+		subscriber: Subscriber<JustificationNotification>
 	) {
-		let stream = self.justification_receiver.subscribe()
+		let stream = self.justification_stream.subscribe()
 			.map(|x| Ok::<_,()>(JustificationNotification::from(x)))
 			.map_err(|e| warn!("Notification stream error: {:?}", e))
 			.compat();
@@ -157,13 +157,12 @@ mod tests {
 
 	use parity_scale_codec::Decode;
 	use sc_block_builder::BlockBuilder;
-	use sc_finality_grandpa::{report, AuthorityId, GrandpaJustificationSubscribers, GrandpaJustification};
+	use sc_finality_grandpa::{report, AuthorityId, GrandpaJustificationSender, GrandpaJustification};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::RecordProof;
 	use sp_core::crypto::Public;
 	use sp_keyring::Ed25519Keyring;
-	use sp_runtime::generic::Header;
-	use sp_runtime::traits::{Header as HeaderT, BlakeTwo256};
+	use sp_runtime::traits::Header as HeaderT;
 	use substrate_test_runtime_client::{
 		runtime::Block,
 		DefaultTestClientBuilderExt,
@@ -228,24 +227,24 @@ mod tests {
 
 	fn setup_io_handler<VoterState>(voter_state: VoterState) -> (
 		jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>,
-		GrandpaJustificationSubscribers<Block>,
+		GrandpaJustificationSender<Block>,
 	) where
 		VoterState: ReportVoterState + Send + Sync + 'static,
 	{
-		let (subscribers, justifications) = GrandpaJustifications::channel();
+		let (justification_sender, justification_stream) = GrandpaJustificationStream::channel();
 		let manager = SubscriptionManager::new(Arc::new(sc_rpc::testing::TaskExecutor));
 
 		let handler = GrandpaRpcHandler::new(
 			TestAuthoritySet,
 			voter_state,
-			justifications,
+			justification_stream,
 			manager,
 		);
 
 		let mut io = jsonrpc_core::MetaIoHandler::default();
 		io.extend_with(GrandpaApi::to_delegate(handler));
 
-		(io, subscribers)
+		(io, justification_sender)
 	}
 
 	#[test]
@@ -341,7 +340,7 @@ mod tests {
 		);
 	}
 
-	fn create_justification() -> (Header<u64, BlakeTwo256>, GrandpaJustification<Block>) {
+	fn create_justification() -> GrandpaJustification<Block> {
 		let peers = &[Ed25519Keyring::Alice];
 
 		let builder = TestClientBuilder::new();
@@ -360,7 +359,6 @@ mod tests {
 
 		let block = built_block.block;
 		let block_hash = block.hash();
-		let block_header = block.header.clone();
 
 		let justification = {
 			let round = 1;
@@ -390,12 +388,12 @@ mod tests {
 			GrandpaJustification::from_commit(&client, round, commit).unwrap()
 		};
 
-		(block_header, justification)
+		justification
 	}
 
 	#[test]
 	fn subscribe_and_listen_to_one_justification() {
-		let (io, subscribers) = setup_io_handler(TestVoterState);
+		let (io, justification_sender) = setup_io_handler(TestVoterState);
 		let (meta, receiver) = setup_session();
 
 		// Subscribe
@@ -407,8 +405,8 @@ mod tests {
 		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
 		// Notify with a header and justification
-		let (block_header, justification) = create_justification();
-		let _ = subscribers.notify((block_header.clone(), justification.clone())).unwrap();
+		let justification = create_justification();
+		let _ = justification_sender.notify(justification.clone()).unwrap();
 
 		// Inspect what we received
 		let recv = receiver.take(1).wait().flatten().collect::<Vec<_>>();
@@ -418,18 +416,15 @@ mod tests {
 			_ => panic!(),
 		};
 
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let mut result = json_map["result"].take();
-		let recv_block_header: Header<u64, BlakeTwo256> =
-			serde_json::from_value(result["header"].take()).unwrap();
+		let recv_sub_id: String =
+			serde_json::from_value(json_map["subscription"].take()).unwrap();
 		let recv_justification: Vec<u8> =
-			serde_json::from_value(result["justification"].take()).unwrap();
+			serde_json::from_value(json_map["result"].take()).unwrap();
 		let recv_justification: GrandpaJustification<Block> =
 			Decode::decode(&mut &recv_justification[..]).unwrap();
 
 		assert_eq!(recv.method, "grandpa_justifications");
 		assert_eq!(recv_sub_id, sub_id);
-		assert_eq!(recv_block_header, block_header);
 		assert_eq!(recv_justification, justification);
 	}
 }

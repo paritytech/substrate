@@ -40,7 +40,7 @@ use crate::{
 use crate::authorities::SharedAuthoritySet;
 use crate::communication::{Network as NetworkT, NetworkBridge};
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::notification::GrandpaJustificationSubscribers;
+use crate::notification::GrandpaJustificationSender;
 use sp_finality_grandpa::AuthorityId;
 use std::marker::{PhantomData, Unpin};
 
@@ -70,7 +70,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
-	justification_sender: &Option<GrandpaJustificationSubscribers<Block>>,
+	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
@@ -219,7 +219,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	persistent_data: PersistentData<B>,
 	keystore: Option<BareCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
-	justification_sender: Option<GrandpaJustificationSubscribers<B>>,
+	justification_sender: Option<GrandpaJustificationSender<B>>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -237,7 +237,7 @@ where
 		persistent_data: PersistentData<B>,
 		keystore: Option<BareCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
-		justification_sender: Option<GrandpaJustificationSubscribers<B>>,
+		justification_sender: Option<GrandpaJustificationSender<B>>,
 	) -> Self {
 
 		let mut work = ObserverWork {

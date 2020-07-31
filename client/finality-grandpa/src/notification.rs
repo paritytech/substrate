@@ -24,32 +24,29 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnbounded
 
 use crate::justification::GrandpaJustification;
 
-/// Justification for a finalized block.
-type JustificationNotification<Block> = (<Block as BlockT>::Header, GrandpaJustification<Block>);
-
 // Stream of justifications returned when subscribing.
-type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
+type JustificationStream<Block> = TracingUnboundedReceiver<GrandpaJustification<Block>>;
 
 // Sending endpoint for notifying about justifications.
-type JustificationSubscriber<T> = TracingUnboundedSender<JustificationNotification<T>>;
+type JustificationSender<Block> = TracingUnboundedSender<GrandpaJustification<Block>>;
 
 // Collection of channel sending endpoints shared with the receiver side so they can register
 // themselves.
-type SharedJustificationSubscribers<T> = Arc<Mutex<Vec<JustificationSubscriber<T>>>>;
+type SharedJustificationSenders<Block> = Arc<Mutex<Vec<JustificationSender<Block>>>>;
 
 /// The sending half of the Grandpa justification channel(s).
 ///
-/// Used to send notifictions about justifications generated
+/// Used to send notifications about justifications generated
 /// at the end of a Grandpa round.
 #[derive(Clone)]
-pub struct GrandpaJustificationSubscribers<Block: BlockT> {
-	subscribers: SharedJustificationSubscribers<Block>
+pub struct GrandpaJustificationSender<Block: BlockT> {
+	subscribers: SharedJustificationSenders<Block>
 }
 
-impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
-	/// The `notifiers` should be shared with a corresponding
-	/// `GrandpaJustificationReceiver`.
-	fn new(subscribers: SharedJustificationSubscribers<Block>) -> Self {
+impl<Block: BlockT> GrandpaJustificationSender<Block> {
+	/// The `subscribers` should be shared with a corresponding
+	/// `GrandpaJustificationStream`.
+	fn new(subscribers: SharedJustificationSenders<Block>) -> Self {
 		Self {
 			subscribers,
 		}
@@ -57,39 +54,39 @@ impl<Block: BlockT> GrandpaJustificationSubscribers<Block> {
 
 	/// Send out a notification to all subscribers that a new justification
 	/// is available for a block.
-	pub fn notify(&self, notification: JustificationNotification<Block>) -> Result<(), ()> {
-		self.subscribers.lock()
-			.retain(|n| {
-				!n.is_closed() && n.unbounded_send(notification.clone()).is_ok()
-			});
-
+	pub fn notify(&self, notification: GrandpaJustification<Block>) -> Result<(), ()> {
+		self.subscribers.lock().retain(|n| {
+			!n.is_closed() && n.unbounded_send(notification.clone()).is_ok()
+		});
 		Ok(())
 	}
 }
 
 /// The receiving half of the Grandpa justification channel.
 ///
-/// Used to recieve notifictions about justifications generated
+/// Used to receive notifications about justifications generated
 /// at the end of a Grandpa round.
+/// The `GrandpaJustificationStream` entity stores the `SharedJustificationSenders`
+/// so it can be used to add more subscriptions.
 #[derive(Clone)]
-pub struct GrandpaJustifications<Block: BlockT> {
-	subscribers: SharedJustificationSubscribers<Block>
+pub struct GrandpaJustificationStream<Block: BlockT> {
+	subscribers: SharedJustificationSenders<Block>
 }
 
-impl<Block: BlockT> GrandpaJustifications<Block> {
+impl<Block: BlockT> GrandpaJustificationStream<Block> {
 	/// Creates a new pair of receiver and sender of justification notifications.
-	pub fn channel() -> (GrandpaJustificationSubscribers<Block>, Self) {
-		let finality_notifiers = Arc::new(Mutex::new(vec![]));
-		let receiver = GrandpaJustifications::new(finality_notifiers.clone());
-		let sender = GrandpaJustificationSubscribers::new(finality_notifiers.clone());
+	pub fn channel() -> (GrandpaJustificationSender<Block>, Self) {
+		let subscribers = Arc::new(Mutex::new(vec![]));
+		let receiver = GrandpaJustificationStream::new(subscribers.clone());
+		let sender = GrandpaJustificationSender::new(subscribers.clone());
 		(sender, receiver)
 	}
 
 	/// Create a new receiver of justification notifications.
 	///
-	/// The `notifiers` should be shared with a corresponding
+	/// The `subscribers` should be shared with a corresponding
 	/// `GrandpaJustificationSender`.
-	fn new(subscribers: SharedJustificationSubscribers<Block>) -> Self {
+	fn new(subscribers: SharedJustificationSenders<Block>) -> Self {
 		Self {
 			subscribers,
 		}

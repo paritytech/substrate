@@ -38,7 +38,7 @@ use node_runtime::UncheckedExtrinsic;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
 use sc_consensus_epochs::SharedEpochChanges;
-use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustifications};
+use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustificationStream};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_keystore::KeyStorePtr;
 use sc_rpc_api::DenyUnsafe;
@@ -78,7 +78,7 @@ pub struct GrandpaDeps {
 	/// Authority set info.
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 	/// Receives notifications about justification events from Grandpa.
-	pub justification_receiver: GrandpaJustifications<Block>,
+	pub justification_stream: GrandpaJustificationStream<Block>,
 	/// Subscription manager to keep track of pubsub subscribers.
 	pub subscriptions: SubscriptionManager,
 }
@@ -100,12 +100,12 @@ pub struct FullDeps<C, P, SC> {
 }
 
 /// A IO handler that uses all Full RPC extensions.
-pub type IoHandler = jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>;
+pub type IoHandler = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, SC>(
 	deps: FullDeps<C, P, SC>,
-) -> jsonrpc_core::MetaIoHandler<sc_rpc_api::Metadata> where
+) -> jsonrpc_core::IoHandler<sc_rpc_api::Metadata> where
 	C: ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block> + HeaderMetadata<Block, Error=BlockChainError> + 'static,
 	C: Send + Sync + 'static,
@@ -121,7 +121,7 @@ pub fn create_full<C, P, SC>(
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
 
-	let mut io = jsonrpc_core::MetaIoHandler::default();
+	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps {
 		client,
 		pool,
@@ -139,7 +139,7 @@ pub fn create_full<C, P, SC>(
 	let GrandpaDeps {
 		shared_voter_state,
 		shared_authority_set,
-		justification_receiver,
+		justification_stream,
 		subscriptions,
 	} = grandpa;
 
@@ -172,7 +172,7 @@ pub fn create_full<C, P, SC>(
 			GrandpaRpcHandler::new(
 				shared_authority_set,
 				shared_voter_state,
-				justification_receiver,
+				justification_stream,
 				subscriptions,
 			)
 		)

@@ -111,7 +111,7 @@ pub fn new_full_params(config: Configuration) -> Result<(
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, babe_link) = &import_setup;
 
-		let justification_receiver = grandpa_link.justification_receiver();
+		let justification_stream = grandpa_link.justification_stream();
 		let shared_authority_set = grandpa_link.shared_authority_set().clone();
 		let shared_voter_state = grandpa::SharedVoterState::empty();
 
@@ -139,7 +139,7 @@ pub fn new_full_params(config: Configuration) -> Result<(
 				grandpa: node_rpc::GrandpaDeps {
 					shared_voter_state: shared_voter_state.clone(),
 					shared_authority_set: shared_authority_set.clone(),
-					justification_receiver: justification_receiver.clone(),
+					justification_stream: justification_stream.clone(),
 					subscriptions,
 				},
 			};
