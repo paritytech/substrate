@@ -20,3 +20,7 @@ pub mod pallet_democracy;
 pub mod pallet_identity;
 pub mod pallet_indices;
 pub mod pallet_multisig;
+pub mod pallet_offences;
+pub mod pallet_proxy;
+pub mod pallet_scheduler;
+pub mod pallet_session;
