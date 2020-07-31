@@ -95,7 +95,7 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 
 		// only create new trait definitions when we go to a new pallet
 		if batch.pallet != current_pallet {
-			// general imports
+			// auto-generation note
 			write!(
 				file,
 				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n\n",
