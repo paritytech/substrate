@@ -47,6 +47,11 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 
 		// only create new trait definitions when we go to a new pallet
 		if batch.pallet != current_pallet {
+			if !current_pallet.is_empty() {
+				// close trait
+				write!(file, "}}\n")?;
+			}
+
 			// trait wrapper
 			write!(file, "// {}\n", pallet_string)?;
 			write!(file, "pub trait WeightInfo {{\n")?;
