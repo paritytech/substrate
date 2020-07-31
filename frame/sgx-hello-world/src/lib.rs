@@ -120,11 +120,13 @@ impl QuotingReport {
 	}
 }
 
+// Note: keep in sync with subxt_sgx_runtime::Enclave
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Enclave {
 	pub quote: QuotingReport,
 	pub address: Vec<u8>,
 	pub timestamp: u64,
+	pub public_key: Vec<u8>,
 }
 
 type EnclaveAddress = Vec<u8>;
@@ -310,6 +312,14 @@ impl<T: Trait> Module<T> {
 		let mut verified = Vec::new();
 
 		for (enclave_sign, enclave_addr) in <UnverifiedEnclaves<T>>::get() {
+			debug::trace!(target: "sgx", "[remote_attest_unverified_enclaves] Getting public key for {:?}/{:?}", enclave_sign, enclave_addr);
+			let public_key = match Self::get_enclave_public_key(&enclave_addr) {
+				Ok(pk) => pk,
+				Err(e) => {
+					debug::warn!(target: "sgx", "[remote_attest_unverified_enclaves] Could not get public key for enclave at {:?}/{:?}: {:?}. Is the enclave running? Ignoring.", enclave_sign, enclave_addr, e);
+					continue
+				}
+			};
 			debug::trace!(target: "sgx", "[remote_attest_unverified_enclaves] Sending RA for {:?}/{:?}", enclave_sign, enclave_addr);
 			let qe = match Self::send_ra_request(&enclave_sign, &enclave_addr) {
 				Ok(qe) => qe,
@@ -322,7 +332,8 @@ impl<T: Trait> Module<T> {
 			let enclave = Enclave {
 				address: enclave_addr.clone(),
 				quote: QuotingReport::from_bytes(&qe),
-				timestamp: sp_io::offchain::timestamp().unix_millis()
+				timestamp: sp_io::offchain::timestamp().unix_millis(),
+				public_key,
 			};
 			debug::info!(target: "sgx", "[remote_attest_unverified_enclaves] received quoting_report: {:?}", enclave.quote);
 			let vr = match Self::get_ias_verification_report(&qe) {
@@ -403,6 +414,21 @@ impl<T: Trait> Module<T> {
 			.send()
 			.unwrap();
 		let response = pending.wait().expect("http IO error");
+		Ok(response.body().collect())
+	}
+
+	fn get_enclave_public_key(enclave_addr: &[u8]) -> Result<Vec<u8>, &'static str> {
+		let mut endpoint = vec![];
+		endpoint.extend(enclave_addr);
+		endpoint.extend("/public_key".as_bytes());
+		let endpoint = sp_std::str::from_utf8(&endpoint)
+			.map_err(|_e| "enclave public key endpoint address must be valid utf8")?;
+		debug::debug!(target: "sgx","[get_enclave_public_key]: fetching public key from enclave at address={:?}", endpoint);
+		let req = http::Request::get(&endpoint)
+			.add_header("substrate_sgx", "1.0")
+			.send()
+			.expect("enclave has a public_key endpoint");
+		let response = req.wait().expect("http works");
 		Ok(response.body().collect())
 	}
 
