@@ -122,9 +122,7 @@ impl<Hash: std::fmt::Debug + Send + 'static> ManualSealApi<Hash> for ManualSeal<
 				sender: Some(sender),
 			};
 			sink.send(command).await?;
-			println!("Awaiting command result.");
 			let res = receiver.await?;
-			println!("Got response: {:?}", res);
 			res
 		}.boxed();
 

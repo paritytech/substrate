@@ -26,7 +26,8 @@ test-helpers = []
 derive_more = "0.99.2"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.4", features = ["compat"] }
-jsonrpc-pubsub = "14.2.0"
+jsonrpc-pubsub = "14.2"
+jsonrpc-core = "14.2"
 rand = "0.7.3"
 parking_lot = "0.10.0"
 lazy_static = "1.4.0"

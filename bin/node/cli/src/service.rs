@@ -429,8 +429,7 @@ pub fn new_light_base(config: Configuration) -> Result<(
 
 /// Builds a new service for a light client.
 pub fn new_light(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_light_base(config).map(|(mut task_manager, rpc_handler, _, _, _)| {
-		task_manager.keep_alive(rpc_handler);
+	new_light_base(config).map(|(task_manager, _, _, _, _)| {
 		task_manager
 	})
 }

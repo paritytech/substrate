@@ -540,7 +540,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	);
 	let rpc = start_rpc_servers(&config, gen_handler)?;
 	// This is used internally, so don't restrict access to unsafe RPC
-	let rpc_handlers = RpcHandlers(gen_handler(sc_rpc::DenyUnsafe::No));
+	let rpc_handlers = RpcHandlers(Arc::new(gen_handler(sc_rpc::DenyUnsafe::No).into()));
 
 	// Telemetry
 	let telemetry = config.telemetry_endpoints.clone().and_then(|endpoints| {
@@ -579,7 +579,7 @@ pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 		config.informant_output_format,
 	));
 
-	task_manager.keep_alive((telemetry, config.base_path, rpc));
+	task_manager.keep_alive((telemetry, config.base_path, rpc, rpc_handlers.clone()));
 
 	Ok(rpc_handlers)
 }
