@@ -16,3 +16,7 @@
 //! A list of the different weight modules for our runtime.
 
 pub mod pallet_balances;
+pub mod pallet_democracy;
+pub mod pallet_identity;
+pub mod pallet_indices;
+pub mod pallet_multisig;
