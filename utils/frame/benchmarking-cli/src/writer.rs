@@ -169,9 +169,7 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 		// return value
 		write!(file, ") -> Weight {{\n").unwrap();
 
-		if !extrinsic_time.base.is_zero() {
-			write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
-		}
+		write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
 		used_extrinsic_time.iter().for_each(|(slope, name)| {
 			write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
 				slope.saturating_mul(1000),
