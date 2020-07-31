@@ -48,26 +48,26 @@ pub fn write_trait(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<(), 
 		// only create new trait definitions when we go to a new pallet
 		if batch.pallet != current_pallet {
 			// trait wrapper
-			write!(file, "// {}\n", pallet_string).unwrap();
-			write!(file, "pub trait WeightInfo {{\n").unwrap();
+			write!(file, "// {}\n", pallet_string)?;
+			write!(file, "pub trait WeightInfo {{\n")?;
 
 			current_pallet = batch.pallet.clone()
 		}
 
 		// function name
-		write!(file, "\tfn {}(", benchmark_string).unwrap();
+		write!(file, "\tfn {}(", benchmark_string)?;
 
 		// params
 		let components = &batch.results[0].components;
 		for component in components {
-			write!(file, "{:?}: u32, ", component.0).unwrap();
+			write!(file, "{:?}: u32, ", component.0)?;
 		}
 		// return value
-		write!(file, ") -> Weight;\n").unwrap();
+		write!(file, ") -> Weight;\n")?;
 	}
 
 	// final close trait
-	write!(file, "}}\n").unwrap();
+	write!(file, "}}\n")?;
 
 	Ok(())
 }
@@ -100,19 +100,19 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 				file,
 				"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {}\n\n",
 				 VERSION,
-			).unwrap();
+			)?;
 
 			// general imports
 			write!(
 				file,
 				"use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n\n"
-			).unwrap();
+			)?;
 
 			// struct for weights
-			write!(file, "pub struct WeightInfo;\n").unwrap();
+			write!(file, "pub struct WeightInfo;\n")?;
 
 			// trait wrapper
-			write!(file, "impl {}::WeightInfo for WeightInfo {{\n", pallet_string).unwrap();
+			write!(file, "impl {}::WeightInfo for WeightInfo {{\n", pallet_string)?;
 
 			current_pallet = batch.pallet.clone()
 		}
@@ -157,60 +157,60 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 		if components.len() != used_components.len() {
 			// These are the components that were not used.
 			components.retain(|x| !used_components.contains(&x));
-			write!(file, "\t// WARNING! Some components were not used: {:?}\n", components).unwrap();
+			write!(file, "\t// WARNING! Some components were not used: {:?}\n", components)?;
 		}
 
 		// function name
-		write!(file, "\tfn {}(", benchmark_string).unwrap();
+		write!(file, "\tfn {}(", benchmark_string)?;
 		// params
 		for component in used_components {
-			write!(file, "{}: u32, ", component).unwrap();
+			write!(file, "{}: u32, ", component)?;
 		}
 		// return value
-		write!(file, ") -> Weight {{\n").unwrap();
+		write!(file, ") -> Weight {{\n")?;
 
-		write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
-		used_extrinsic_time.iter().for_each(|(slope, name)| {
+		write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000))?;
+		used_extrinsic_time.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
 			write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
 				slope.saturating_mul(1000),
 				name,
-			).unwrap();
-		});
+			)
+		})?;
 
 		if !reads.base.is_zero() {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
+			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base)?;
 		}
-		used_reads.iter().for_each(|(slope, name)| {
+		used_reads.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
 			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
-			).unwrap();
-		});
+			)
+		})?;
 
 		if !writes.base.is_zero() {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
+			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base)?;
 		}
-		used_writes.iter().for_each(|(slope, name)| {
+		used_writes.iter().try_for_each(|(slope, name)| -> Result<(), std::io::Error> {
 			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
 				slope,
 				name,
-			).unwrap();
-		});
+			)
+		})?;
 
 		// close function
-		write!(file, "\t}}\n").unwrap();
+		write!(file, "\t}}\n")?;
 
 		// Check if this is the end of the iterator
 		if let Some(next) = batches_iter.peek() {
 			// Next pallet is different than current pallet, so we close up the file and open a new one.
 			if next.pallet != current_pallet {
-				write!(file, "}}\n").unwrap();
+				write!(file, "}}\n")?;
 				let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
 				file = open_file(&(next_pallet + ".rs"))?;
 			}
 		} else {
 			// This is the end of the iterator, so we close up the final file.
-			write!(file, "}}\n").unwrap();
+			write!(file, "}}\n")?;
 		}
 	}
 
