@@ -30,6 +30,13 @@ pub enum BenchmarkParameter {
 	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
 }
 
+#[cfg(feature = "std")]
+impl std::fmt::Display for BenchmarkParameter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
 /// The results of a single of benchmark.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatch {

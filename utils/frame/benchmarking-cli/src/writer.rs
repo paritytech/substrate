@@ -117,9 +117,6 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 			current_pallet = batch.pallet.clone()
 		}
 
-		// function name
-		write!(file, "\tfn {}(", benchmark_string).unwrap();
-
 		// Analysis results
 		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
 		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
@@ -153,11 +150,19 @@ pub fn write_results(batches: &[BenchmarkBatch]) -> Result<(), std::io::Error> {
 		used_components.sort();
 		used_components.dedup();
 
-		let components = &batch.results[0].components;
+		let mut components = batch.results[0].components
+			.iter()
+			.map(|(name, _)| -> String { return name.to_string() })
+			.collect::<Vec<String>>();
 		if components.len() != used_components.len() {
-			println!("SHAWN LEN DIFFERENT:\n{:?}\n{:?}", components, used_components)
+			// These are the components that were not used.
+			components.retain(|x| !used_components.contains(&x));
+			write!(file, "\t// WARNING! Some components were not used: {:?}\n", components).unwrap();
 		}
 
+		// function name
+		write!(file, "\tfn {}(", benchmark_string).unwrap();
+		// params
 		for component in used_components {
 			write!(file, "{}: u32, ", component).unwrap();
 		}
