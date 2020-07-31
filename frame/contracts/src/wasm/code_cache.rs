@@ -49,6 +49,24 @@ pub fn save<T: Trait>(
 	Ok(code_hash)
 }
 
+/// Version of `save` to be used in runtime benchmarks.
+//
+/// This version neither checks nor instruments the passed in code. This is useful
+/// when code needs to be benchmarked without the injected instrumentation.
+#[cfg(feature = "runtime-benchmarks")]
+pub fn save_raw<T: Trait>(
+	original_code: Vec<u8>,
+	schedule: &Schedule,
+) -> Result<CodeHash<T>, &'static str> {
+	let prefab_module = prepare::benchmarking::prepare_contract(&original_code, schedule)?;
+	let code_hash = T::Hashing::hash(&original_code);
+
+	<CodeStorage<T>>::insert(code_hash, prefab_module);
+	<PristineCode<T>>::insert(code_hash, original_code);
+
+	Ok(code_hash)
+}
+
 /// Load code with the given code hash.
 ///
 /// If the module was instrumented with a lower version of schedule than

@@ -269,7 +269,10 @@ impl<'a> ContractModule<'a> {
 	/// - checks any imported function against defined host functions set, incl.
 	///   their signatures.
 	/// - if there is a memory import, returns it's descriptor
-	fn scan_imports<C: ImportSatisfyCheck>(&self) -> Result<Option<&MemoryType>, &'static str> {
+	/// `import_fn_banlist`: list of function names that are disallowed to be imported
+	fn scan_imports<C: ImportSatisfyCheck>(&self, import_fn_banlist: &[&[u8]])
+		-> Result<Option<&MemoryType>, &'static str>
+	{
 		let module = &self.module;
 
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
@@ -315,8 +318,7 @@ impl<'a> ContractModule<'a> {
 				return Err("module imports `seal_println` but debug features disabled");
 			}
 
-			// We disallow importing `gas` function here since it is treated as implementation detail.
-			if import.field().as_bytes() == b"gas"
+			if import_fn_banlist.iter().any(|f| import.field().as_bytes() == *f)
 				|| !C::can_satisfy(import.field().as_bytes(), func_ty)
 			{
 				return Err("module imports a non-existent function");
@@ -328,6 +330,36 @@ impl<'a> ContractModule<'a> {
 	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
 		elements::serialize(self.module)
 			.map_err(|_| "error serializing instrumented module")
+	}
+}
+
+fn get_memory_limits(module: Option<&MemoryType>, schedule: &Schedule)
+	-> Result<(u32, u32), &'static str>
+{
+	if let Some(memory_type) = module {
+		// Inspect the module to extract the initial and maximum page count.
+		let limits = memory_type.limits();
+		match (limits.initial(), limits.maximum()) {
+			(initial, Some(maximum)) if initial > maximum => {
+				return Err(
+					"Requested initial number of pages should not exceed the requested maximum",
+				);
+			}
+			(_, Some(maximum)) if maximum > schedule.max_memory_pages => {
+				return Err("Maximum number of pages should not exceed the configured maximum.");
+			}
+			(initial, Some(maximum)) => Ok((initial, maximum)),
+			(_, None) => {
+				// Maximum number of pages should be always declared.
+				// This isn't a hard requirement and can be treated as a maximum set
+				// to configured maximum.
+				return Err("Maximum number of pages should be always declared.");
+			}
+		}
+	} else {
+		// If none memory imported then just crate an empty placeholder.
+		// Any access to it will lead to out of bounds trap.
+		Ok((0, 0))
 	}
 }
 
@@ -352,39 +384,12 @@ pub fn prepare_contract<C: ImportSatisfyCheck>(
 	contract_module.ensure_table_size_limit(schedule.max_table_size)?;
 	contract_module.ensure_no_floating_types()?;
 
-	struct MemoryDefinition {
-		initial: u32,
-		maximum: u32,
-	}
-
-	let memory_def = if let Some(memory_type) = contract_module.scan_imports::<C>()? {
-		// Inspect the module to extract the initial and maximum page count.
-		let limits = memory_type.limits();
-		match (limits.initial(), limits.maximum()) {
-			(initial, Some(maximum)) if initial > maximum => {
-				return Err(
-					"Requested initial number of pages should not exceed the requested maximum",
-				);
-			}
-			(_, Some(maximum)) if maximum > schedule.max_memory_pages => {
-				return Err("Maximum number of pages should not exceed the configured maximum.");
-			}
-			(initial, Some(maximum)) => MemoryDefinition { initial, maximum },
-			(_, None) => {
-				// Maximum number of pages should be always declared.
-				// This isn't a hard requirement and can be treated as a maximum set
-				// to configured maximum.
-				return Err("Maximum number of pages should be always declared.");
-			}
-		}
-	} else {
-		// If none memory imported then just crate an empty placeholder.
-		// Any access to it will lead to out of bounds trap.
-		MemoryDefinition {
-			initial: 0,
-			maximum: 0,
-		}
-	};
+	// We disallow importing `gas` function here since it is treated as implementation detail.
+	let disallowed_imports = [b"gas".as_ref()];
+	let memory_limits = get_memory_limits(
+		contract_module.scan_imports::<C>(&disallowed_imports)?,
+		schedule
+	)?;
 
 	contract_module = contract_module
 		.inject_gas_metering()?
@@ -392,11 +397,38 @@ pub fn prepare_contract<C: ImportSatisfyCheck>(
 
 	Ok(PrefabWasmModule {
 		schedule_version: schedule.version,
-		initial: memory_def.initial,
-		maximum: memory_def.maximum,
+		initial: memory_limits.0,
+		maximum: memory_limits.1,
 		_reserved: None,
 		code: contract_module.into_wasm_code()?,
 	})
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking {
+	use super::{ContractModule, PrefabWasmModule, ImportSatisfyCheck, Schedule, get_memory_limits};
+	use parity_wasm::elements::FunctionType;
+
+	impl ImportSatisfyCheck for () {
+		fn can_satisfy(_name: &[u8], _func_type: &FunctionType) -> bool {
+			true
+		}
+	}
+
+	/// Prepare function that neither checks nor instruments the passed in code.
+	pub fn prepare_contract(original_code: &[u8], schedule: &Schedule)
+		-> Result<PrefabWasmModule, &'static str>
+	{
+		let contract_module = ContractModule::new(original_code, schedule)?;
+		let memory_limits = get_memory_limits(contract_module.scan_imports::<()>(&[])?, schedule)?;
+		Ok(PrefabWasmModule {
+			schedule_version: schedule.version,
+			initial: memory_limits.0,
+			maximum: memory_limits.1,
+			_reserved: None,
+			code: contract_module.into_wasm_code()?,
+		})
+	}
 }
 
 #[cfg(test)]

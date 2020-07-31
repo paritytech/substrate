@@ -659,6 +659,14 @@ impl<T: Trait> Module<T> {
 	) -> sp_std::result::Result<RentProjection<T::BlockNumber>, ContractAccessError> {
 		rent::compute_rent_projection::<T>(&address)
 	}
+
+	/// Put code for benchmarks which does not check or instrument the code.
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn put_code_raw(code: Vec<u8>) -> DispatchResult {
+		let schedule = <Module<T>>::current_schedule();
+		let result = wasm::save_code_raw::<T>(code, &schedule);
+		result.map(|_| ()).map_err(Into::into)
+	}
 }
 
 impl<T: Trait> Module<T> {

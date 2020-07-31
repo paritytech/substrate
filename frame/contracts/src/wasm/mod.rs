@@ -36,6 +36,8 @@ use self::runtime::{to_execution_result, Runtime};
 use self::code_cache::load as load_code;
 
 pub use self::code_cache::save as save_code;
+#[cfg(feature = "runtime-benchmarks")]
+pub use self::code_cache::save_raw as save_code_raw;
 pub use self::runtime::ReturnCode;
 
 /// A prepared wasm module ready for execution.
