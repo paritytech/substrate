@@ -45,6 +45,7 @@ use frame_support::{
 	dispatch::{PostDispatchInfo, IsSubType},
 };
 use frame_system::{self as system, ensure_signed};
+use frame_support::dispatch::DispatchError;
 
 mod tests;
 mod benchmarking;
@@ -107,11 +108,22 @@ pub trait Trait: frame_system::Trait {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 
-	/// The maximum amount of time-delayed announcements that are allowed to be panding.
+	/// The maximum amount of time-delayed announcements that are allowed to be pending.
 	type MaxPending: Get<u32>;
 
 	/// The type of hash used for hashing the call.
 	type CallHasher: Hash;
+
+	/// The base amount of currency needed to reserve for creating an announcement.
+	///
+	/// This is held when a new storage item holding a `Balance` is created (typically 16 bytes).
+	type AnnouncementDepositBase: Get<BalanceOf<Self>>;
+
+	/// The amount of currency needed per announcement made.
+	///
+	/// This is held for adding an `AccountId`, `Hash` and `BlockNumber` (typically 68 bytes)
+	/// into a pre-existing storage value.
+	type AnnouncementDepositFactor: Get<BalanceOf<Self>>;
 }
 
 /// The parameters under which a particular account has a proxy relationship with some other
@@ -151,7 +163,7 @@ decl_storage! {
 
 		/// The announcements made by the proxy (key).
 		pub Announcements: map hasher(twox_64_concat) T::AccountId
-			=> Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>;
+			=> (BalanceOf<T>, Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>);
 	}
 }
 
@@ -213,6 +225,12 @@ decl_module! {
 		/// `MaxPending` metadata shadow.
 		const MaxPending: u32 = T::MaxPending::get();
 
+		/// `AnnouncementDepositBase` metadata shadow.
+		const AnnouncementDepositBase: BalanceOf<T> = T::AnnouncementDepositBase::get();
+
+		/// `AnnouncementDepositFactor` metadata shadow.
+		const AnnouncementDepositFactor: BalanceOf<T> = T::AnnouncementDepositFactor::get();
+
 		/// Publish the hash of a proxy-call that will be made in the future.
 		#[weight = {
 			T::DbWeight::get().reads_writes(1, 1)
@@ -220,20 +238,30 @@ decl_module! {
 			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into()))
 			.saturating_add((200 * WEIGHT_PER_NANOS).saturating_mul(T::MaxPending::get().into()))
 		}]
-		fn announce_proxy(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
+		fn announce(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 			Proxies::<T>::get(&real).0.into_iter()
 				.find(|x| &x.delegate == &who)
 				.ok_or(Error::<T>::NotProxy)?;
-			let pending = Announcements::<T>::decode_len(&who).ok_or(Error::<T>::Corrupted)?;
-			ensure!(pending < T::MaxPending::get() as usize, Error::<T>::TooMany);
 
 			let announcement = Announcement {
 				real: real.clone(),
 				call_hash: call_hash.clone(),
 				height: system::Module::<T>::block_number(),
 			};
-			Announcements::<T>::append(&who, announcement);
+
+			Announcements::<T>::try_mutate(&who, |(ref mut deposit, ref mut pending)| {
+				ensure!(pending.len() < T::MaxPending::get() as usize, Error::<T>::TooMany);
+				pending.push(announcement);
+				Self::rejig_deposit(
+					&who,
+					*deposit,
+					T::AnnouncementDepositBase::get(),
+					T::AnnouncementDepositFactor::get(),
+					pending.len(),
+				).map(|d| d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed"))
+				.map(|d| *deposit = d)
+			})?;
 			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
 		}
 
@@ -246,9 +274,20 @@ decl_module! {
 		}]
 		fn remove_announcement(origin, real: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
-			Announcements::<T>::mutate(&who, |anns|
-				anns.retain(|ann| ann.real != real || ann.call_hash != call_hash)
-			);
+			Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
+				let (old_deposit, mut pending) = x.take().ok_or(Error::<T>::NotFound)?;
+				let orig_pending_len = pending.len();
+				pending.retain(|ann| ann.real != real || ann.call_hash != call_hash);
+				ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
+				*x = Self::rejig_deposit(
+					&who,
+					old_deposit,
+					T::AnnouncementDepositBase::get(),
+					T::AnnouncementDepositFactor::get(),
+					pending.len(),
+				)?.map(|deposit| (deposit, pending));
+				Ok(())
+			})?;
 		}
 
 		/// Remove the given announcement of a delegate.
@@ -261,9 +300,20 @@ decl_module! {
 		fn reject_announcement(origin, delegate: T::AccountId, call_hash: CallHashOf<T>) {
 			let who = ensure_signed(origin)?;
 
-			Announcements::<T>::mutate(&delegate, |anns|
-				anns.retain(|ann| ann.real != who || ann.call_hash != call_hash)
-			);
+			Announcements::<T>::try_mutate_exists(&delegate, |x| -> DispatchResult {
+				let (old_deposit, mut pending) = x.take().ok_or(Error::<T>::NotFound)?;
+				let orig_pending_len = pending.len();
+				pending.retain(|ann| ann.real != who || ann.call_hash != call_hash);
+				ensure!(orig_pending_len > pending.len(), Error::<T>::NotFound);
+				*x = Self::rejig_deposit(
+					&delegate,
+					old_deposit,
+					T::AnnouncementDepositBase::get(),
+					T::AnnouncementDepositFactor::get(),
+					pending.len(),
+				)?.map(|deposit| (deposit, pending));
+				Ok(())
+			})?;
 		}
 
 		/// Dispatch the given `call` from an account that the sender is authorised for through
@@ -303,18 +353,27 @@ decl_module! {
 					&& force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
 				).ok_or(Error::<T>::NotProxy)?;
 
-			Announcements::<T>::try_mutate(&who, |anns| -> DispatchResult {
-				let call_hash = T::CallHasher::hash_of(&call);
-				let now = system::Module::<T>::block_number();
+			Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
 				let mut announcement_period = T::BlockNumber::zero();
-				anns.retain(|ann|
-					if ann.real == real && ann.call_hash == call_hash {
-						true
-					} else {
-						announcement_period = announcement_period.max(now.saturating_sub(ann.height));
-						false
-					}
-				);
+				if let Some((old_deposit, mut pending)) = x.take() {
+					let call_hash = T::CallHasher::hash_of(&call);
+					let now = system::Module::<T>::block_number();
+					pending.retain(|ann|
+						if ann.real == real && ann.call_hash == call_hash {
+							announcement_period = announcement_period.max(now.saturating_sub(ann.height));
+							false
+						} else {
+							true
+						}
+					);
+					*x = Self::rejig_deposit(
+						&who,
+						old_deposit,
+						T::AnnouncementDepositBase::get(),
+						T::AnnouncementDepositFactor::get(),
+						pending.len(),
+					)?.map(|deposit| (deposit, pending));
+				}
 				ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
 				Ok(())
 			})?;
@@ -547,5 +606,29 @@ impl<T: Trait> Module<T> {
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
 		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+	}
+
+	fn rejig_deposit(
+		who: &T::AccountId,
+		old_deposit: BalanceOf<T>,
+		base: BalanceOf<T>,
+		factor: BalanceOf<T>,
+		len: usize,
+	) -> Result<Option<BalanceOf<T>>, DispatchError> {
+		let new_deposit = if len == 0 {
+			BalanceOf::<T>::zero()
+		} else {
+			base + factor * (len as u32).into()
+		};
+		if new_deposit > old_deposit {
+			T::Currency::reserve(&who, new_deposit - old_deposit)?;
+		} else if new_deposit < old_deposit {
+			T::Currency::unreserve(&who, old_deposit - new_deposit);
+		}
+		Ok(if len == 0 {
+			None
+		} else {
+			Some(new_deposit)
+		})
 	}
 }
