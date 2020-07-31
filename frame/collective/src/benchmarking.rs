@@ -579,6 +579,54 @@ benchmarks_instance! {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(RawEvent::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
 	}
+
+	disapprove_proposal {
+		let p in 1 .. T::MaxProposals::get();
+
+		let m = 3;
+		let b = MAX_BYTES;
+		let bytes_in_storage = b + size_of::<u32>() as u32;
+
+		// Construct `members`.
+		let mut members = vec![];
+		for i in 0 .. m - 1 {
+			let member = account("member", i, SEED);
+			members.push(member);
+		}
+		let caller: T::AccountId = account("caller", 0, SEED);
+		members.push(caller.clone());
+		Collective::<T, _>::set_members(
+			SystemOrigin::Root.into(),
+			members.clone(),
+			Some(caller.clone()),
+			MAX_MEMBERS,
+		)?;
+
+		// Threshold is one less than total members so that two nays will disapprove the vote
+		let threshold = m - 1;
+
+		// Add proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = SystemCall::<T>::remark(vec![i as u8; b as usize]).into();
+			Collective::<T, _>::propose(
+				SystemOrigin::Signed(caller.clone()).into(),
+				threshold,
+				Box::new(proposal.clone()),
+				bytes_in_storage,
+			)?;
+			last_hash = T::Hashing::hash_of(&proposal);
+		}
+
+		System::<T>::set_block_number(T::BlockNumber::max_value());
+		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
+
+	}: _(SystemOrigin::Root, last_hash)
+	verify {
+		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
+	}
 }
 
 #[cfg(test)]
@@ -647,6 +695,13 @@ mod tests {
 	fn close_approved() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_close_approved::<Test>());
+		});
+	}
+
+	#[test]
+	fn disapprove_proposal() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_disapprove_proposal::<Test>());
 		});
 	}
 }
