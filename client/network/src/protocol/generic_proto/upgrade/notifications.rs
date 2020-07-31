@@ -84,6 +84,10 @@ enum NotificationsInSubstreamHandshake {
 	Flush,
 	/// Handshake message successfully sent and flushed.
 	Sent,
+	/// Remote has closed their writing side. We close our own writing side in return.
+	ClosingInResponseToRemote,
+	/// Both our side and the remote have closed their writing side.
+	BothSidesClosed,
 }
 
 /// A substream for outgoing notification messages.
@@ -178,8 +182,6 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 		// This `Stream` implementation first tries to send back the handshake if necessary.
 		loop {
 			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
-				NotificationsInSubstreamHandshake::Sent =>
-					return Stream::poll_next(this.socket.as_mut(), cx),
 				NotificationsInSubstreamHandshake::NotSent => {
 					*this.handshake = NotificationsInSubstreamHandshake::NotSent;
 					return Poll::Pending
@@ -207,6 +209,34 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 							return Poll::Pending
 						}
 					},
+
+				NotificationsInSubstreamHandshake::Sent => {
+					match Stream::poll_next(this.socket.as_mut(), cx) {
+						Poll::Ready(None) => *this.handshake =
+							NotificationsInSubstreamHandshake::ClosingInResponseToRemote,
+						Poll::Ready(Some(msg)) => {
+							*this.handshake = NotificationsInSubstreamHandshake::Sent;
+							return Poll::Ready(Some(msg))
+						},
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::Sent;
+							return Poll::Pending
+						},
+					}
+				},
+
+				NotificationsInSubstreamHandshake::ClosingInResponseToRemote =>
+					match Sink::poll_close(this.socket.as_mut(), cx)? {
+						Poll::Ready(()) =>
+							*this.handshake = NotificationsInSubstreamHandshake::BothSidesClosed,
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::ClosingInResponseToRemote;
+							return Poll::Pending
+						}
+					},
+
+				NotificationsInSubstreamHandshake::BothSidesClosed =>
+					return Poll::Ready(None),
 			}
 		}
 	}
