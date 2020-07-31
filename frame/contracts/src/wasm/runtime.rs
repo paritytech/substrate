@@ -36,7 +36,7 @@ use sp_io::hashing::{
 	sha2_256,
 };
 
-/// Every error that can be returned from a runtime API call.
+/// Every error that can be returned to a contract when it calls any of the host functions.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
