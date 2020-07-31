@@ -21,6 +21,9 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use frame_support::weights::Weight;
+
+type ComponentsType = Weight;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
@@ -46,7 +49,7 @@ pub struct BenchmarkBatch {
 /// used for that benchmark result.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkResults {
-	pub components: Vec<(BenchmarkParameter, u32)>,
+	pub components: Vec<(BenchmarkParameter, ComponentsType)>,
 	pub extrinsic_time: u128,
 	pub storage_root_time: u128,
 	pub reads: u32,
@@ -62,8 +65,8 @@ sp_api::decl_runtime_apis! {
 		fn dispatch_benchmark(
 			pallet: Vec<u8>,
 			benchmark: Vec<u8>,
-			lowest_range_values: Vec<u32>,
-			highest_range_values: Vec<u32>,
+			lowest_range_values: Vec<ComponentsType>,
+			highest_range_values: Vec<ComponentsType>,
 			steps: Vec<u32>,
 			repeat: u32,
 			extra: bool,
@@ -130,8 +133,8 @@ pub trait Benchmarking<T> {
 	/// - `repeat`: The number of times you want to repeat a benchmark.
 	fn run_benchmark(
 		name: &[u8],
-		lowest_range_values: &[u32],
-		highest_range_values: &[u32],
+		lowest_range_values: &[ComponentsType],
+		highest_range_values: &[ComponentsType],
 		steps: &[u32],
 		repeat: u32,
 		whitelist: &[Vec<u8>]
@@ -144,13 +147,13 @@ pub trait Benchmarking<T> {
 /// instantiable pallets.
 pub trait BenchmarkingSetup<T, I = ()> {
 	/// Return the components and their ranges which should be tested in this benchmark.
-	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
+	fn components(&self) -> Vec<(BenchmarkParameter, ComponentsType, ComponentsType)>;
 
 	/// Set up the storage, and prepare a closure to run the benchmark.
-	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+	fn instance(&self, components: &[(BenchmarkParameter, ComponentsType)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 
 	/// Set up the storage, and prepare a closure to test and verify the benchmark
-	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+	fn verify(&self, components: &[(BenchmarkParameter, ComponentsType)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.
