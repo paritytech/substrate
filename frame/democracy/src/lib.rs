@@ -934,8 +934,8 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(R)` where R is the number of referendums the voter delegating to has
 		///   voted on. Weight is charged as if maximum votes.
-		/// - Db reads: 2*`VotingOf`, `balances locks`
-		/// - Db writes: 2*`VotingOf`, `balances locks`
+		/// - Db reads: 3*`VotingOf`, `origin account locks`
+		/// - Db writes: 3*`VotingOf`, `origin account locks`
 		/// - Db reads per votes: `ReferendumInfoOf`
 		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
@@ -1069,8 +1069,8 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Complexity: `O(D)` where D is length of proposal.
-		/// - Db reads: `Preimages`
-		/// - Db writes: `Preimages`
+		/// - Db reads: `Preimages`, provider account data
+		/// - Db writes: `Preimages` provider account data
 		/// # </weight>
 		#[weight = T::WeightInfo::reap_preimage(*proposal_len_upper_bound)]
 		fn reap_preimage(origin, proposal_hash: T::Hash, #[compact] proposal_len_upper_bound: u32) {
@@ -1173,7 +1173,8 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
 		/// # </weight>
-		#[weight = T::WeightInfo::remove_other_vote(T::MaxVotes::get())]
+		#[weight = T::WeightInfo::remove_other_vote(T::MaxVotes::get())
+			.max(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
