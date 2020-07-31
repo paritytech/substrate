@@ -143,35 +143,42 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	}
 }
 
+/// Converts the sandbox result and the runtime state into the execution outcome.
+///
+/// It evaluates information stored in the `trap_reason` variable of the runtime and
+/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
+/// the result of the sandbox is evaluated.
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
 ) -> ExecResult {
-	match runtime.trap_reason {
-		// The trap was the result of the execution `return` host function.
-		Some(TrapReason::Return(ReturnData{ flags, data })) => {
-			let flags = ReturnFlags::from_bits(flags).ok_or_else(||
-				"used reserved bit in return flags"
-			)?;
-			return Ok(ExecReturnValue {
-				flags,
-				data,
-			})
-		},
-		Some(TrapReason::Termination) => {
-			return Ok(ExecReturnValue {
-				flags: ReturnFlags::empty(),
-				data: Vec::new(),
-			})
-		},
-		Some(TrapReason::Restoration) => {
-			return Ok(ExecReturnValue {
-				flags: ReturnFlags::empty(),
-				data: Vec::new(),
-			})
+	// If a trap reason is set we base our decision solely on that.
+	if let Some(trap_reason) = runtime.trap_reason {
+		return match trap_reason {
+			// The trap was the result of the execution `return` host function.
+			TrapReason::Return(ReturnData{ flags, data }) => {
+				let flags = ReturnFlags::from_bits(flags).ok_or_else(||
+					"used reserved bit in return flags"
+				)?;
+				Ok(ExecReturnValue {
+					flags,
+					data,
+				})
+			},
+			TrapReason::Termination => {
+				Ok(ExecReturnValue {
+					flags: ReturnFlags::empty(),
+					data: Vec::new(),
+				})
+			},
+			TrapReason::Restoration => {
+				Ok(ExecReturnValue {
+					flags: ReturnFlags::empty(),
+					data: Vec::new(),
+				})
+			},
+			TrapReason::SupervisorError(error) => Err(error)?,
 		}
-		Some(TrapReason::SupervisorError(error)) => Err(error)?,
-		None => (),
 	}
 
 	// Check the exact type of the error.
