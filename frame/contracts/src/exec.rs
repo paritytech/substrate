@@ -73,11 +73,12 @@ impl ExecReturnValue {
 
 /// Call or instantiate both call into other contracts and pass through errors happening
 /// in those to the caller. This enum is for  the caller to distinguish whether the error
-/// happened during the execution of the callee or during the supervisor code execution.
+/// happened during the execution of the callee or in the current execution context.
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub enum ErrorOrigin {
-	/// The error happened during the setup phase of the contract that is to be called.
-	Supervisor,
+	/// The error happened in the current exeuction context rather than in the one
+	/// of the contract that is called into.
+	Caller,
 	/// The error happened during execution of the called contract.
 	Callee,
 }
@@ -92,7 +93,7 @@ impl<T: Into<DispatchError>> From<T> for ExecError {
 	fn from(error: T) -> Self {
 		Self {
 			error: error.into(),
-			origin: ErrorOrigin::Supervisor,
+			origin: ErrorOrigin::Caller,
 		}
 	}
 }

@@ -1514,7 +1514,7 @@ mod tests {
 			),
 			Err(ExecError {
 				error: Error::<Test>::ContractTrapped.into(),
-				origin: ErrorOrigin::Supervisor,
+				origin: ErrorOrigin::Caller,
 			})
 		);
 	}
@@ -1559,7 +1559,7 @@ mod tests {
 			),
 			Err(ExecError {
 				error: Error::<Test>::ContractTrapped.into(),
-				origin: ErrorOrigin::Supervisor,
+				origin: ErrorOrigin::Caller,
 			})
 		);
 	}
@@ -1705,7 +1705,7 @@ mod tests {
 			result,
 			Err(ExecError {
 				error: Error::<Test>::OutOfBounds.into(),
-				origin: ErrorOrigin::Supervisor,
+				origin: ErrorOrigin::Caller,
 			})
 		);
 	}
@@ -1740,7 +1740,7 @@ mod tests {
 			result,
 			Err(ExecError {
 				error: Error::<Test>::DecodingFailed.into(),
-				origin: ErrorOrigin::Supervisor,
+				origin: ErrorOrigin::Caller,
 			})
 		);
 	}
