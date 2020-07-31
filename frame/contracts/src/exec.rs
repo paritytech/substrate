@@ -316,12 +316,12 @@ where
 		}
 	}
 
-	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: TrieId)
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
 			caller: Some(self),
-			self_trie_id: trie_id,
+			self_trie_id: Some(trie_id),
 			self_account: dest,
 			depth: self.depth + 1,
 			config: self.config,
@@ -365,7 +365,7 @@ where
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 
-		self.with_nested_context(dest.clone(), Some(contract.trie_id.clone()), |nested| {
+		self.with_nested_context(dest.clone(), contract.trie_id.clone(), |nested| {
 			if value > BalanceOf::<T>::zero() {
 				transfer(
 					gas_meter,
@@ -421,7 +421,7 @@ where
 		// Generate it now.
 		let dest_trie_id = <T as Trait>::TrieIdGenerator::trie_id(&dest);
 
-		let output = self.with_nested_context(dest.clone(), Some(dest_trie_id), |nested| {
+		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
 			storage::place_contract::<T>(
 				&dest,
 				nested
@@ -486,7 +486,7 @@ where
 	}
 
 	/// Execute the given closure within a nested execution context.
-	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: Option<TrieId>, func: F)
+	fn with_nested_context<F>(&mut self, dest: T::AccountId, trie_id: TrieId, func: F)
 		-> ExecResult
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
