@@ -34,7 +34,7 @@
 				(i32.const 8) ;; Length of the buffer with value to transfer.
 				(i32.const 20) ;; Pointer to input data buffer address
 				(i32.load (i32.const 24)) ;; Length of input data buffer
-				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+				(i32.const 0xffffffff) ;; u32 max sentinel value: do not copy output
 				(i32.const 0) ;; Ptr to output buffer len
 			)
 		)
