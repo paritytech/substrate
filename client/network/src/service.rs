@@ -179,6 +179,20 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
 			}
 
+			let print_deprecated_message = match &params.role {
+				Role::Sentry { .. } => true,
+				Role::Authority { sentry_nodes } if !sentry_nodes.is_empty() => true,
+				_ => false,
+			};
+			if print_deprecated_message {
+				log::warn!(
+					"🙇 Sentry nodes are deprecated for the time being, and the `--sentry` and
+					`--sentry-nodes` CLI options will be removed in a future version. The Substrate
+					and Polkadot networking protocol require validators to be publicly-accessible.
+					Please do not block access to your validator nodes."
+				);
+			}
+
 			let mut sentries_and_validators = HashSet::new();
 			match &params.role {
 				Role::Sentry { validators } => {
