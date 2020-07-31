@@ -20,7 +20,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis};
-use inflector::Inflector;
+use sp_runtime::traits::Zero;
 
 pub fn open_file(path: &str) -> Result<File, std::io::Error> {
 	OpenOptions::new()
@@ -119,7 +119,16 @@ pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<()
 	if batches.is_empty() { return Ok(()) }
 
 	// general imports
-	write!(file, "use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n").unwrap();
+	write!(
+		file,
+		"//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI\n\n"
+	).unwrap();
+
+	// general imports
+	write!(
+		file,
+		"use frame_support::weights::{{Weight, constants::RocksDbWeight as DbWeight}};\n\n"
+	).unwrap();
 
 	for batch in &batches {
 		// Skip writing if there are no results
@@ -136,15 +145,10 @@ pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<()
 			}
 
 			// struct for weights
-			write!(file, "pub struct WeightFor{};\n",
-				pallet_string.to_pascal_case(),
-			).unwrap();
+			write!(file, "pub struct WeightInfo;\n").unwrap();
 
 			// trait wrapper
-			write!(file, "impl {}::WeightInfo for WeightFor{} {{\n",
-				pallet_string,
-				pallet_string.to_pascal_case(),
-			).unwrap();
+			write!(file, "impl {}::WeightInfo for WeightInfo {{\n", pallet_string).unwrap();
 
 			current_pallet = batch.pallet.clone()
 		}
@@ -161,30 +165,42 @@ pub fn write_results(file: &mut File, batches: Vec<BenchmarkBatch>) -> Result<()
 		write!(file, ") -> Weight {{\n").unwrap();
 
 		let extrinsic_time = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::ExtrinsicTime).unwrap();
-		write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
+		if !extrinsic_time.base.is_zero() {
+			write!(file, "\t\t({} as Weight)\n", extrinsic_time.base.saturating_mul(1000)).unwrap();
+		}
 		extrinsic_time.slopes.iter().zip(extrinsic_time.names.iter()).for_each(|(slope, name)| {
-			write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
-				slope.saturating_mul(1000),
-				name,
-			).unwrap();
+			if !slope.is_zero() {
+				write!(file, "\t\t\t.saturating_add(({} as Weight).saturating_mul({} as Weight))\n",
+					slope.saturating_mul(1000),
+					name,
+				).unwrap();
+			}
 		});
 
 		let reads = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Reads).unwrap();
-		write!(file, "\t\t\t.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
+		if !reads.base.is_zero() {
+			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads({} as Weight))\n", reads.base).unwrap();
+		}
 		reads.slopes.iter().zip(reads.names.iter()).for_each(|(slope, name)| {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
-				slope,
-				name,
-			).unwrap();
+			if !slope.is_zero() {
+				write!(file, "\t\t\t.saturating_add(DbWeight::get().reads(({} as Weight).saturating_mul({} as Weight)))\n",
+					slope,
+					name,
+				).unwrap();
+			}
 		});
 
 		let writes = Analysis::min_squares_iqr(&batch.results, BenchmarkSelector::Writes).unwrap();
-		write!(file, "\t\t\t.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
+		if !writes.base.is_zero() {
+			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes({} as Weight))\n", writes.base).unwrap();
+		}
 		writes.slopes.iter().zip(writes.names.iter()).for_each(|(slope, name)| {
-			write!(file, "\t\t\t.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
-				slope,
-				name,
-			).unwrap();
+			if !slope.is_zero() {
+				write!(file, "\t\t\t.saturating_add(DbWeight::get().writes(({} as Weight).saturating_mul({} as Weight)))\n",
+					slope,
+					name,
+				).unwrap();
+			}
 		});
 
 		// close function
