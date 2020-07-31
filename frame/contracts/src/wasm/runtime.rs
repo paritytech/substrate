@@ -108,7 +108,7 @@ enum TrapReason {
 	SupervisorError(DispatchError),
 	/// Signals that trap was generated in response to call `ext_return` host function.
 	Return(ReturnData),
-	/// Signals that a trap was generated in response to a succesful call to the
+	/// Signals that a trap was generated in response to a successful call to the
 	/// `ext_terminate` host function.
 	Termination,
 	/// Signals that a trap was generated because of a successful restoration.
@@ -639,7 +639,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// An error means that the call wasn't succesful output buffer is returned unless
+	// An error means that the call wasn't successful output buffer is returned unless
 	// stated otherwise.
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
