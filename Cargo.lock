@@ -4555,6 +4555,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-node-permission"
+version = "2.0.0-rc5"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "sp-node-permission",
+]
+
+[[package]]
 name = "pallet-offences"
 version = "2.0.0-rc5"
 dependencies = [
@@ -7932,6 +7942,17 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "strum",
+]
+
+[[package]]
+name = "sp-node-permission"
+version = "2.0.0-rc5"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-application-crypto",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
