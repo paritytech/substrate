@@ -60,6 +60,7 @@ use pallet_grandpa::{AuthorityId as GrandpaId, AuthorityList as GrandpaAuthority
 use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
+use sp_node_permission::NodeId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
@@ -841,6 +842,9 @@ impl pallet_vesting::Trait for Runtime {
 	type WeightInfo = ();
 }
 
+impl pallet_node_permission::Trait for Runtime {
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -879,6 +883,7 @@ construct_runtime!(
 		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Module, Call, Storage, Event<T>},
 		Multisig: pallet_multisig::{Module, Call, Storage, Event<T>},
+		NodePermission: pallet_node_permission::{Module, Call, Storage},
 	}
 );
 
@@ -1104,6 +1109,12 @@ impl_runtime_apis! {
 	> for Runtime {
 		fn query_info(uxt: <Block as BlockT>::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_info(uxt, len)
+		}
+	}
+
+	impl sp_node_permission::NodePermissionApi<Block> for Runtime {
+		fn nodes() -> Vec<NodeId> {
+			NodePermission::nodes()
 		}
 	}
 

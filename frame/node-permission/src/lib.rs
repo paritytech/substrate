@@ -24,6 +24,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, dispatch::DispatchResult};
 use frame_system::ensure_signed;
 use sp_node_permission::NodeId;
@@ -55,5 +56,12 @@ decl_module! {
 
             Ok(())
         }
+    }
+}
+
+impl<T: Trait> Module<T> {
+    /// Retrieve all the permissioned nodes.
+    pub fn nodes() -> Vec<NodeId> {
+        NodePublicKeys::get()
     }
 }
