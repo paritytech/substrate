@@ -46,7 +46,7 @@ use frame_support::{
 	decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug, traits::{
 		Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType,
 	}, weights::{Weight, GetDispatchInfo, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
-	dispatch::{PostDispatchInfo, IsSubType},
+	dispatch::{PostDispatchInfo, IsSubType}, storage::IterableStorageMap,
 };
 use frame_system::{self as system, ensure_signed};
 use frame_support::dispatch::DispatchError;
@@ -156,8 +156,6 @@ pub struct Announcement<AccountId, Hash, BlockNumber> {
 
 type CallHashOf<T> = <<T as Trait>::CallHasher as Hash>::Output;
 
-// TODO: storage migration for proxies
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Proxy {
 		/// The set of account proxies. Maps the account which has delegated to the accounts
@@ -234,6 +232,22 @@ decl_module! {
 
 		/// `AnnouncementDepositFactor` metadata shadow.
 		const AnnouncementDepositFactor: BalanceOf<T> = T::AnnouncementDepositFactor::get();
+
+		fn on_runtime_upgrade() -> Weight {
+			Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
+				|_, (targets, deposit)| Some((
+					targets.into_iter()
+						.map(|(a, t)| ProxyDefinition {
+							delegate: a,
+							proxy_type: t,
+							delay: Zero::zero(),
+						})
+						.collect::<Vec<_>>(),
+					deposit,
+				))
+			);
+			T::MaximumBlockWeight::get()
+		}
 
 		/// Publish the hash of a proxy-call that will be made in the future.
 		///
