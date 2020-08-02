@@ -194,7 +194,7 @@ decl_event! {
 	pub enum Event<T> where
 		AccountId = <T as frame_system::Trait>::AccountId,
 		ProxyType = <T as Trait>::ProxyType,
-		Hash = <<T as Trait>::CallHasher as Hash>::Output,
+		Hash = CallHashOf<T>,
 	{
 		/// A proxy was executed correctly, with the given [result].
 		ProxyExecuted(DispatchResult),
@@ -262,7 +262,7 @@ decl_module! {
 				).map(|d| d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed"))
 				.map(|d| *deposit = d)
 			})?;
-			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
+//			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
 		}
 
 		/// Remove a given announcement.
