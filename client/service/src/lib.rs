@@ -215,7 +215,7 @@ async fn build_network_future<
 	};
 
 
-	let mut bitswap_stream = network.service().event_stream("bitswap")
+	let mut bitswap_events = network.service().event_stream("bitswap")
 		.filter_map(|event| futures::future::ready(if let sc_network::Event::Bitswap(event) = event {
 			Some(event)
 		} else {
@@ -314,32 +314,6 @@ async fn build_network_future<
 						};
 
 						let _ = sender.send(vec![node_role]);
-					},
-					sc_rpc::system::Request::NetworkBitswapPublish(data, sender) => {
-						let hash = multihash::Code::Sha2_256.digest(data.as_bytes());
-						let cid = cid::Cid::new_v1(cid::Codec::Raw, hash);
-
-						let cid_bytes = &cid.to_bytes()[..];
-						let res = backend.insert_aux(std::iter::once(&(cid_bytes, data.as_bytes())), std::iter::empty());
-
-						if let Err(e) = res {
-							warn!("{:?}", e);
-						}
-
-						network.bitswap().send_block_all(&cid, data.as_bytes());
-
-						let _ = sender.send(cid.to_string());
-					},
-					sc_rpc::system::Request::NetworkBitswapWant(cid, sender) => {
-						let _ = match cid.parse() {
-							Ok(cid) => {
-								network.bitswap().want_block(cid, 100);
-								sender.send(Ok(()))
-							},
-							Err(e) => sender.send(Err(sc_rpc::system::error::Error::CidParse(
-								e,
-							)))
-						};
 					}
 				}
 			}
@@ -365,7 +339,7 @@ async fn build_network_future<
 				ready_sink.send((status, state));
 			}
 
-			event = bitswap_stream.select_next_some() => {
+			event = bitswap_events.select_next_some() => {
 				match event {
 					sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
 						let cid_bytes = &cid.to_bytes()[..];

@@ -6912,11 +6912,13 @@ dependencies = [
 name = "sc-network-test"
 version = "0.8.0-rc5"
 dependencies = [
+ "cid",
  "env_logger 0.7.1",
  "futures 0.3.5",
  "futures-timer 3.0.2",
  "libp2p",
  "log",
+ "multihash",
  "parking_lot 0.10.2",
  "rand 0.7.3",
  "sc-block-builder",
@@ -7031,7 +7033,6 @@ dependencies = [
 name = "sc-rpc-api"
 version = "0.8.0-rc5"
 dependencies = [
- "cid",
  "derive_more",
  "futures 0.3.5",
  "jsonrpc-core",

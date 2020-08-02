@@ -1544,14 +1544,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							ConnectionError::IO(_) => "transport-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(
-								todo))))))) => "ping-timeout",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout))))))))) => "ping-timeout",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								todo))))))) =>	"force-closed",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::Legacy(LegacyConnectionKillError))))))))) =>	"force-closed",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::A(
-								todo))))))) => "sync-notifications-clogged",
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+								NotifsHandlerError::SyncNotificationsClogged)))))))) => "sync-notifications-clogged",
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) => "protocol-error",
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) => "keep-alive-timeout",
 						};

@@ -21,11 +21,13 @@
 mod block_import;
 #[cfg(test)]
 mod sync;
+#[cfg(test)]
+mod bitswap;
 
 use std::{collections::HashMap, pin::Pin, sync::Arc, marker::PhantomData, task::{Poll, Context as FutureContext}};
 
 use libp2p::build_multiaddr;
-use log::trace;
+use log::{trace, warn};
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	HeaderBackend, Result as ClientResult,
@@ -162,6 +164,17 @@ impl PeersClient {
 		}
 	}
 
+	fn insert_aux(&self, key: &[u8], value: &[u8]) -> ClientResult<()> {
+		match *self {
+			PeersClient::Full(ref client, ref _backend) => {
+				client.insert_aux(std::iter::once(&(key, value)), std::iter::empty())
+			},
+			PeersClient::Light(ref client, ref _backend) => {
+				client.insert_aux(std::iter::once(&(key, value)), std::iter::empty())
+			}
+		}
+	}
+
 	pub fn info(&self) -> BlockchainInfo<Block> {
 		match *self {
 			PeersClient::Full(ref client, ref _backend) => client.chain_info(),
@@ -224,6 +237,7 @@ pub struct Peer<D> {
 	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
+	bitswap_stream: Pin<Box<dyn Stream<Item = sc_network::BitswapEvent> + Send>>,
 }
 
 impl<D> Peer<D> {
@@ -690,6 +704,14 @@ pub trait TestNetFactory: Sized {
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
 			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
+			let bitswap_stream = network.service().event_stream("bitswap")
+				.filter_map(|event| futures::future::ready(if let sc_network::Event::Bitswap(event) = event {
+					Some(event)
+				} else {
+					None
+				}))
+				.boxed();
+
 			peers.push(Peer {
 				data,
 				client: PeersClient::Full(client, backend.clone()),
@@ -700,6 +722,7 @@ pub trait TestNetFactory: Sized {
 				block_import,
 				verifier,
 				network,
+				bitswap_stream,
 			});
 		});
 	}
@@ -769,6 +792,14 @@ pub trait TestNetFactory: Sized {
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
 			let finality_notification_stream = Box::pin(client.finality_notification_stream().fuse());
 
+			let bitswap_stream = network.service().event_stream("bitswap")
+				.filter_map(|event| futures::future::ready(if let sc_network::Event::Bitswap(event) = event {
+					Some(event)
+				} else {
+					None
+				}))
+				.boxed();
+			
 			peers.push(Peer {
 				data,
 				verifier,
@@ -779,6 +810,7 @@ pub trait TestNetFactory: Sized {
 				imported_blocks_stream,
 				finality_notification_stream,
 				network,
+				bitswap_stream,
 			});
 		});
 	}
@@ -883,6 +915,29 @@ pub trait TestNetFactory: Sized {
 				}
 				if let Some(notification) = last {
 					peer.network.on_block_finalized(notification.hash, notification.header);
+				}
+
+				while let Poll::Ready(Some(event)) = peer.bitswap_stream.as_mut().poll_next(cx) {
+					match event {
+						sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
+							let cid_bytes = &cid.to_bytes()[..];
+							let res = peer.client.insert_aux(cid_bytes, &data[..]);
+			
+							if let Err(e) = res {
+								warn!("{:?}", e);
+							}
+						},
+						sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
+							match peer.client.get_aux(&cid.to_bytes()[..]) {
+								Ok(Some(data)) => {
+									peer.network.bitswap().send_block(&peer_id, cid, data.into_boxed_slice());
+								},
+								Ok(None) => warn!("No data for {:?}", cid),
+								Err(e) => warn!("{:?}", e)
+							}
+						}
+						sc_network::BitswapEvent::ReceivedCancel(_, _) => {},
+					}
 				}
 			}
 		});

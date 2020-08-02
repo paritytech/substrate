@@ -103,13 +103,4 @@ pub trait SystemApi<Hash, Number> {
 	/// Returns the roles the node is running as.
 	#[rpc(name = "system_nodeRoles", returns = "Vec<NodeRole>")]
 	fn system_node_roles(&self) -> Receiver<Vec<NodeRole>>;
-
-	/// Publish some data via Bitswap.
-	#[rpc(name = "system_bitswapPublish", returns = "String")]
-	fn system_bitswap_publish(&self, data: String) -> Receiver<String>;
-
-	/// Request some data via Bitswap.
-	#[rpc(name = "system_bitswapWant", returns = "()")]
-	fn system_bitswap_want(&self, cid: String)
-		-> Compat<BoxFuture<'static, Result<(), jsonrpc_core::Error>>>;
 }
