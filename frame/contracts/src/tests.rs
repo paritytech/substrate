@@ -291,6 +291,7 @@ fn returns_base_call_cost() {
 			Ok(
 				PostDispatchInfo {
 					actual_weight: Some(67500000),
+					pays_fee: Default::default(),
 				}
 			)
 		);

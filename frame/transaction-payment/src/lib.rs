@@ -371,7 +371,7 @@ impl<T: Trait> Module<T> where
 	) -> BalanceOf<T> where
 		T::Call: Dispatchable<Info=DispatchInfo,PostInfo=PostDispatchInfo>,
 	{
-		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, info.pays_fee)
+		Self::compute_fee_raw(len, post_info.calc_actual_weight(info), tip, post_info.pays_fee(info))
 	}
 
 	fn compute_fee_raw(
@@ -762,11 +762,24 @@ mod tests {
 	}
 
 	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
-		PostDispatchInfo { actual_weight: Some(w), }
+		PostDispatchInfo {
+			actual_weight: Some(w),
+			pays_fee: Default::default(),
+		}
+	}
+
+	fn post_info_from_pays(p: Pays) -> PostDispatchInfo {
+		PostDispatchInfo {
+			actual_weight: None,
+			pays_fee: p,
+		}
 	}
 
 	fn default_post_info() -> PostDispatchInfo {
-		PostDispatchInfo { actual_weight: None, }
+		PostDispatchInfo {
+			actual_weight: None,
+			pays_fee: Default::default(),
+		}
 	}
 
 	#[test]
@@ -1208,6 +1221,40 @@ mod tests {
 
 			// 33 weight, 10 length, 7 base, 5 tip
 			assert_eq!(actual_fee, 7 + 10 + (33 * 5 / 4) + 5);
+			assert_eq!(refund_based_fee, actual_fee);
+		});
+	}
+
+	#[test]
+	fn post_info_can_change_pays_fee() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_weight(7)
+			.build()
+			.execute_with(||
+		{
+			let info = info_from_weight(100);
+			let post_info = post_info_from_pays(Pays::No);
+			let prev_balance = Balances::free_balance(2);
+			let len = 10;
+			let tip = 5;
+
+			NextFeeMultiplier::put(Multiplier::saturating_from_rational(5, 4));
+
+			let pre = ChargeTransactionPayment::<Runtime>::from(tip)
+				.pre_dispatch(&2, CALL, &info, len)
+				.unwrap();
+
+			ChargeTransactionPayment::<Runtime>
+				::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.unwrap();
+
+			let refund_based_fee = prev_balance - Balances::free_balance(2);
+			let actual_fee = Module::<Runtime>
+				::compute_actual_fee(len as u32, &info, &post_info, tip);
+
+			// Only 5 tip is paid
+			assert_eq!(actual_fee, 5);
 			assert_eq!(refund_based_fee, actual_fee);
 		});
 	}
