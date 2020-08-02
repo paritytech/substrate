@@ -18,7 +18,7 @@
 
 //! In memory client backend
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ptr;
 use std::sync::Arc;
 use parking_lot::RwLock;
@@ -646,7 +646,10 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> sp_blockchain::Result<()> {
+	fn commit_operation(
+		&self,
+		operation: Self::BlockImportOperation,
+	) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				self.blockchain.finalize_header(block, justification)?;
@@ -722,8 +725,8 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 		&self,
 		_n: NumberFor<Block>,
 		_revert_finalized: bool,
-	) -> sp_blockchain::Result<NumberFor<Block>> {
-		Ok(Zero::zero())
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)> {
+		Ok((Zero::zero(), HashSet::new()))
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {
