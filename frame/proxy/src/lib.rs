@@ -194,7 +194,7 @@ decl_event! {
 	pub enum Event<T> where
 		AccountId = <T as frame_system::Trait>::AccountId,
 		ProxyType = <T as Trait>::ProxyType,
-		Hash = CallHashOf<T>,
+		Hash = <<T as Trait>::CallHasher as Hash>::Output,
 	{
 		/// A proxy was executed correctly, with the given [result].
 		ProxyExecuted(DispatchResult),
