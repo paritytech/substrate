@@ -19,6 +19,10 @@
 //! A module allowing accounts to give permission to other accounts to dispatch types of calls from
 //! their signed origin.
 //!
+//! The accounts to which permission is delegated may be requied to announce the action that they
+//! wish to execute some duration prior to execution happens. In this case, the target account may
+//! reject the announcement and in doing so, veto the execution.
+//!
 //! - [`proxy::Trait`](./trait.Trait.html)
 //! - [`Call`](./enum.Call.html)
 //!
@@ -232,6 +236,20 @@ decl_module! {
 		const AnnouncementDepositFactor: BalanceOf<T> = T::AnnouncementDepositFactor::get();
 
 		/// Publish the hash of a proxy-call that will be made in the future.
+		///
+		/// This must be called some number of blocks before the corresponding `proxy` is attempted
+		/// if the delay associated with the peoxy relatioship is greater than zero.
+		///
+		/// No more than `MaxPending` announcements may be made at any one time.
+		///
+		/// This will take a deposit of `AnnouncementDepositFactor` as well as
+		/// `AnnoucementDepositBase` if there are no other pending announcements.
+		///
+		/// The dispatch origin for this call must be _Signed_ and a proxy of `real`.
+		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `call_hash`: The hash of the call to be made by the `real` account.
 		#[weight = {
 			T::DbWeight::get().reads_writes(1, 1)
 			.saturating_add(18 * WEIGHT_PER_MICROS)
@@ -262,10 +280,19 @@ decl_module! {
 				).map(|d| d.expect("Just pushed; pending.len() > 0; rejig_deposit returns Some; qed"))
 				.map(|d| *deposit = d)
 			})?;
-//			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
+			Self::deposit_event(RawEvent::Announced(real, who, call_hash));
 		}
 
 		/// Remove a given announcement.
+		///
+		/// May be called by a proxy account to remove a call they previously announced and return
+		/// the deposit.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `real`: The account that the proxy will make a call on behalf of.
+		/// - `call_hash`: The hash of the call to be made by the `real` account.
 		#[weight = {
 			T::DbWeight::get().reads_writes(1, 1)
 			.saturating_add(18 * WEIGHT_PER_MICROS)
@@ -291,6 +318,15 @@ decl_module! {
 		}
 
 		/// Remove the given announcement of a delegate.
+		///
+		/// May be called by a target (proxied) account to remove a call that one of their delegates
+		/// (`delegate`) has announced they want to execute. The deposit is returned.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// Parameters:
+		/// - `delagte`: The account that previously announced the call.
+		/// - `call_hash`: The hash of the call to be made.
 		#[weight = {
 			T::DbWeight::get().reads_writes(1, 1)
 			.saturating_add(18 * WEIGHT_PER_MICROS)
