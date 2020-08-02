@@ -41,21 +41,25 @@ fn add_proxies<T: Trait>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), 
 	Ok(())
 }
 
-fn add_announcements<T: Trait>(n: u32, maybe_who: Option<T::AccountId>, maybe_real: Option<T::AccountId>) -> Result<(), &'static str> {
+fn add_announcements<T: Trait>(
+	n: u32,
+	maybe_who: Option<T::AccountId>,
+	maybe_real: Option<T::AccountId>
+) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	let real = if let Some(real) = maybe_real {
 		real
 	} else {
-		let a = account("real", 0, SEED);
-		T::Currency::make_free_balance_be(&a, BalanceOf::<T>::max_value());
+		let real = account("real", 0, SEED);
+		T::Currency::make_free_balance_be(&real, BalanceOf::<T>::max_value());
 		Proxy::<T>::add_proxy(
-			RawOrigin::Signed(caller.clone()).into(),
-			a.clone(),
+			RawOrigin::Signed(real.clone()).into(),
+			caller.clone(),
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),
 		)?;
-		a
+		real
 	};
 	for _ in 0..n {
 		Proxy::<T>::announce(
@@ -76,6 +80,18 @@ benchmarks! {
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		// ... and "real" is the traditional caller. This is not a typo.
+		let real: T::AccountId = account("caller", 0, SEED);
+		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		add_announcements::<T>(T::MaxPending::get(), Some(caller.clone()), None)?;
+	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call), false)
+
+	proxy_announced {
+		let p in ...;
+		// In this case the caller is the "target" proxy
+		let caller: T::AccountId = account("target", p - 1, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = account("caller", 0, SEED);
 		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
@@ -85,12 +101,45 @@ benchmarks! {
 			T::CallHasher::hash_of(&call),
 		)?;
 		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
-	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
+	}: proxy(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call), true)
+
+	remove_announcement {
+		let p in ...;
+		// In this case the caller is the "target" proxy
+		let caller: T::AccountId = account("target", p - 1, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		// ... and "real" is the traditional caller. This is not a typo.
+		let real: T::AccountId = account("caller", 0, SEED);
+		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		Proxy::<T>::announce(
+			RawOrigin::Signed(caller.clone()).into(),
+			real.clone(),
+			T::CallHasher::hash_of(&call),
+		)?;
+		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
+	}: _(RawOrigin::Signed(caller), real, T::CallHasher::hash_of(&call))
+
+	reject_announcement {
+		let p in ...;
+		// In this case the caller is the "target" proxy
+		let caller: T::AccountId = account("target", p - 1, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		// ... and "real" is the traditional caller. This is not a typo.
+		let real: T::AccountId = account("caller", 0, SEED);
+		let call: <T as Trait>::Call = frame_system::Call::<T>::remark(vec![]).into();
+		Proxy::<T>::announce(
+			RawOrigin::Signed(caller.clone()).into(),
+			real.clone(),
+			T::CallHasher::hash_of(&call),
+		)?;
+		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
+	}: _(RawOrigin::Signed(real), caller, T::CallHasher::hash_of(&call))
 
 	announce {
 		let p in ...;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = account("caller", 0, SEED);
 		add_announcements::<T>(T::MaxPending::get() - 1, Some(caller.clone()), None)?;
@@ -101,12 +150,22 @@ benchmarks! {
 	add_proxy {
 		let p in ...;
 		let caller: T::AccountId = account("caller", 0, SEED);
-	}: _(RawOrigin::Signed(caller), account("target", T::MaxProxies::get().into(), SEED), T::ProxyType::default(), T::BlockNumber::zero())
+	}: _(
+		RawOrigin::Signed(caller),
+		account("target", T::MaxProxies::get().into(), SEED),
+		T::ProxyType::default(),
+		T::BlockNumber::zero()
+	)
 
 	remove_proxy {
 		let p in ...;
 		let caller: T::AccountId = account("caller", 0, SEED);
-	}: _(RawOrigin::Signed(caller), account("target", 0, SEED), T::ProxyType::default(), T::BlockNumber::zero())
+	}: _(
+		RawOrigin::Signed(caller),
+		account("target", 0, SEED),
+		T::ProxyType::default(),
+		T::BlockNumber::zero()
+	)
 
 	remove_proxies {
 		let p in ...;
@@ -115,14 +174,24 @@ benchmarks! {
 
 	anonymous {
 		let p in ...;
-	}: _(RawOrigin::Signed(account("caller", 0, SEED)), T::ProxyType::default(), T::BlockNumber::zero(), 0)
+	}: _(
+		RawOrigin::Signed(account("caller", 0, SEED)),
+		T::ProxyType::default(),
+		T::BlockNumber::zero(),
+		0
+	)
 
 	kill_anonymous {
 		let p in 0 .. (T::MaxProxies::get() - 2).into();
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Module::<T>::anonymous(RawOrigin::Signed(account("caller", 0, SEED)).into(), T::ProxyType::default(), T::BlockNumber::zero(), 0)?;
+		Module::<T>::anonymous(
+			RawOrigin::Signed(account("caller", 0, SEED)).into(),
+			T::ProxyType::default(),
+			T::BlockNumber::zero(),
+			0
+		)?;
 		let height = system::Module::<T>::block_number();
 		let ext_index = system::Module::<T>::extrinsic_index().unwrap_or(0);
 		let anon = Module::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);

@@ -336,16 +336,25 @@ decl_module! {
 		/// # </weight>
 		#[weight = {
 			let di = call.get_dispatch_info();
-			(T::DbWeight::get().reads(1)
-				.saturating_add(di.weight)
-				.saturating_add(20 * WEIGHT_PER_MICROS)
-				.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
-			di.class)
+			if *announced {
+				(T::DbWeight::get().reads_writes(3, 2)
+					.saturating_add(di.weight)
+					.saturating_add(80 * WEIGHT_PER_MICROS)
+					.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
+				di.class)
+			} else {
+				(T::DbWeight::get().reads_writes(1, 0)
+					.saturating_add(di.weight)
+					.saturating_add(20 * WEIGHT_PER_MICROS)
+					.saturating_add((140 * WEIGHT_PER_NANOS).saturating_mul(T::MaxProxies::get().into())),
+				di.class)
+			}
 		}]
 		fn proxy(origin,
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Trait>::Call>
+			call: Box<<T as Trait>::Call>,
+			announced: bool,
 		) {
 			let who = ensure_signed(origin)?;
 			let def = Proxies::<T>::get(&real).0.into_iter()
@@ -353,30 +362,32 @@ decl_module! {
 					&& force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
 				).ok_or(Error::<T>::NotProxy)?;
 
-			Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
-				let mut announcement_period = T::BlockNumber::zero();
-				if let Some((old_deposit, mut pending)) = x.take() {
-					let call_hash = T::CallHasher::hash_of(&call);
-					let now = system::Module::<T>::block_number();
-					pending.retain(|ann|
-						if ann.real == real && ann.call_hash == call_hash {
-							announcement_period = announcement_period.max(now.saturating_sub(ann.height));
-							false
-						} else {
-							true
-						}
-					);
-					*x = Self::rejig_deposit(
-						&who,
-						old_deposit,
-						T::AnnouncementDepositBase::get(),
-						T::AnnouncementDepositFactor::get(),
-						pending.len(),
-					)?.map(|deposit| (deposit, pending));
-				}
-				ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
-				Ok(())
-			})?;
+			let mut announcement_period = T::BlockNumber::zero();
+			if announced {
+				Announcements::<T>::try_mutate_exists(&who, |x| -> DispatchResult {
+					if let Some((old_deposit, mut pending)) = x.take() {
+						let call_hash = T::CallHasher::hash_of(&call);
+						let now = system::Module::<T>::block_number();
+						pending.retain(|ann|
+							if ann.real == real && ann.call_hash == call_hash {
+								announcement_period = announcement_period.max(now.saturating_sub(ann.height));
+								false
+							} else {
+								true
+							}
+						);
+						*x = Self::rejig_deposit(
+							&who,
+							old_deposit,
+							T::AnnouncementDepositBase::get(),
+							T::AnnouncementDepositFactor::get(),
+							pending.len(),
+						)?.map(|deposit| (deposit, pending));
+					}
+					Ok(())
+				})?;
+			}
+			ensure!(announcement_period >= def.delay, Error::<T>::Unannounced);
 
 			// This is a freshly authenticated new account, the origin restrictions doesn't apply.
 			let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
