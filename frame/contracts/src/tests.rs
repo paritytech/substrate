@@ -269,16 +269,12 @@ impl ExtBuilder {
 /// The fixture files are located under the `fixtures/` directory.
 fn compile_module<T>(
 	fixture_name: &str,
-) -> Result<(Vec<u8>, <T::Hashing as Hash>::Output), wabt::Error>
+) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
 where
 	T: frame_system::Trait,
 {
-	use std::fs;
-
 	let fixture_path = ["fixtures/", fixture_name, ".wat"].concat();
-	let module_wat_source =
-		fs::read_to_string(&fixture_path).expect(&format!("Unable to find {} fixture", fixture_name));
-	let wasm_binary = wabt::wat2wasm(module_wat_source)?;
+	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
 }
@@ -295,6 +291,7 @@ fn returns_base_call_cost() {
 			Ok(
 				PostDispatchInfo {
 					actual_weight: Some(67500000),
+					pays_fee: Default::default(),
 				}
 			)
 		);

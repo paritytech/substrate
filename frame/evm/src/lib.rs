@@ -21,8 +21,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod backend;
-mod precompiles;
 mod tests;
+pub mod precompiles;
 
 pub use crate::precompiles::{Precompile, Precompiles};
 pub use crate::backend::{Account, Log, Vicinity, Backend};

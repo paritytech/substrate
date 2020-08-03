@@ -1211,7 +1211,7 @@ where
 /// the order of items is not preserved.
 fn has_duplicates<T: PartialEq + AsRef<[u8]>>(items: &mut Vec<T>) -> bool {
 	// Sort the vector
-	items.sort_unstable_by(|a, b| {
+	items.sort_by(|a, b| {
 		Ord::cmp(a.as_ref(), b.as_ref())
 	});
 	// And then find any two consecutive equal elements.
