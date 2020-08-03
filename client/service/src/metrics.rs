@@ -199,7 +199,7 @@ impl MetricsService {
 
 		Self {
 			metrics,
-			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
+			system: sysinfo::System::new(),
 			pid: Some(process.pid),
 		}
 	}
@@ -234,7 +234,7 @@ impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
-			system: sysinfo::System::new_with_specifics(sysinfo::RefreshKind::new().with_processes()),
+			system: sysinfo::System::new(),
 			pid: sysinfo::get_current_pid().ok(),
 		}
 	}
