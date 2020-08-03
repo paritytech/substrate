@@ -20,8 +20,9 @@
 
 use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 
-pub struct WeightInfo;
-impl crate::WeightInfo for WeightInfo {
+/// Default implementation of weight, this is just from an example return, values may change
+/// depending on the runtime. This is not meant to be used in production.
+impl crate::WeightInfo for () {
 	fn propose() -> Weight {
 		(49113000 as Weight)
 			.saturating_add(DbWeight::get().reads(2 as Weight))

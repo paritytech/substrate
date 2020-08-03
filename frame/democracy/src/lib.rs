@@ -228,40 +228,6 @@ pub trait WeightInfo {
 	fn remove_other_vote(r: u32, ) -> Weight;
 }
 
-/// Default implementation of weight, this is just from an example return, values may change
-/// depending on the runtime. This is not meant to be used in production.
-impl WeightInfo for () {
-	fn propose() -> Weight { default_weight::WeightInfo::propose() }
-	fn second(s: u32, ) -> Weight { default_weight::WeightInfo::second(s) }
-	fn vote_new(r: u32, ) -> Weight { default_weight::WeightInfo::vote_new(r) }
-	fn vote_existing(r: u32, ) -> Weight { default_weight::WeightInfo::vote_existing(r) }
-	fn emergency_cancel() -> Weight { default_weight::WeightInfo::emergency_cancel() }
-	fn external_propose(v: u32, ) -> Weight { default_weight::WeightInfo::external_propose(v) }
-	fn external_propose_majority() -> Weight {
-		default_weight::WeightInfo::external_propose_majority()
-	}
-	fn external_propose_default() -> Weight {
-		default_weight::WeightInfo::external_propose_default()
-	}
-	fn fast_track() -> Weight { default_weight::WeightInfo::fast_track() }
-	fn veto_external(v: u32, ) -> Weight { default_weight::WeightInfo::veto_external(v) }
-	fn cancel_referendum() -> Weight { default_weight::WeightInfo::cancel_referendum() }
-	fn cancel_queued(r: u32, ) -> Weight { default_weight::WeightInfo::cancel_queued(r) }
-	fn on_initialize_base(r: u32, ) -> Weight { default_weight::WeightInfo::on_initialize_base(r) }
-	fn delegate(r: u32, ) -> Weight { default_weight::WeightInfo::delegate(r) }
-	fn undelegate(r: u32, ) -> Weight { default_weight::WeightInfo::undelegate(r) }
-	fn clear_public_proposals() -> Weight { default_weight::WeightInfo::clear_public_proposals() }
-	fn note_preimage(b: u32, ) -> Weight { default_weight::WeightInfo::note_preimage(b) }
-	fn note_imminent_preimage(b: u32, ) -> Weight {
-		default_weight::WeightInfo::note_imminent_preimage(b)
-	}
-	fn reap_preimage(b: u32, ) -> Weight { default_weight::WeightInfo::reap_preimage(b) }
-	fn unlock_remove(r: u32, ) -> Weight { default_weight::WeightInfo::unlock_remove(r) }
-	fn unlock_set(r: u32, ) -> Weight { default_weight::WeightInfo::unlock_set(r) }
-	fn remove_vote(r: u32, ) -> Weight { default_weight::WeightInfo::remove_vote(r) }
-	fn remove_other_vote(r: u32, ) -> Weight { default_weight::WeightInfo::remove_other_vote(r) }
-}
-
 pub trait Trait: frame_system::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + From<Call<Self>>;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
