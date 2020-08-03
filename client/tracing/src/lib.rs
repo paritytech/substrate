@@ -46,6 +46,16 @@ use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 const ZERO_DURATION: Duration = Duration::from_nanos(0);
 const PROXY_TARGET: &'static str = "sp_tracing::proxy";
+const SPAN_LIMIT: usize = 1000;
+
+/// Responsible for assigning ids to new spans, which are not re-used.
+pub struct ProfilingSubscriber {
+	next_id: AtomicU64,
+	targets: Vec<(String, Level)>,
+	trace_handler: Box<dyn TraceHandler>,
+	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
+	current_span: CurrentSpan,
+}
 
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
@@ -207,15 +217,6 @@ impl slog::Value for Values {
 	}
 }
 
-/// Responsible for assigning ids to new spans, which are not re-used.
-pub struct ProfilingSubscriber {
-	next_id: AtomicU64,
-	targets: Vec<(String, Level)>,
-	trace_handler: Box<dyn TraceHandler>,
-	span_data: Mutex<FxHashMap<Id, SpanDatum>>,
-	current_span: CurrentSpan,
-}
-
 impl ProfilingSubscriber {
 	/// Takes a `TracingReceiver` and a comma separated list of targets,
 	/// either with a level: "pallet=trace,frame=debug"
@@ -308,7 +309,18 @@ impl Subscriber for ProfilingSubscriber {
 			overall_time: ZERO_DURATION,
 			values,
 		};
-		self.span_data.lock().insert(id.clone(), span_datum);
+		{
+			let mut span_data = self.span_data.lock();
+			if span_data.len() > SPAN_LIMIT {
+				log::warn!("Accumulated too many spans, discarding oldest");
+				let mut keys = span_data.keys().map(|id| id.into_u64()).collect::<Vec<_>>();
+				keys.sort();
+				for key in keys[0.. SPAN_LIMIT / 10].iter() {
+					span_data.remove(&Id::from_u64(*key));
+				}
+			}
+			span_data.insert(id.clone(), span_datum);
+		}
 		id
 	}
 
@@ -419,8 +431,8 @@ impl TraceHandler for LogTraceHandler {
 	fn handle_event(&self, event: TraceEvent) {
 		log::log!(
 			log_level(event.level),
-			"{}: {}, parent_id: {:?}, values: {}",
-			event.name,
+			"{}, parent_id: {:?}, {}",
+			// event.name,
 			event.target,
 			event.parent_id.map(|s| s.into_u64()),
 			event.values
