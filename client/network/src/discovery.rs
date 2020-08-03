@@ -312,7 +312,7 @@ impl DiscoveryBehaviour {
 		for k in self.kademlias.values_mut() {
 			if let Err(e) = k.put_record(Record::new(key.clone(), value.clone()), Quorum::All) {
 				warn!(target: "sub-libp2p", "Libp2p => Failed to put record: {:?}", e);
-				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone()));
+				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone(), Duration::from_secs(0)));
 			}
 		}
 	}
@@ -379,17 +379,25 @@ pub enum DiscoveryOut {
 	/// the `identify` protocol.
 	UnroutablePeer(PeerId),
 
-	/// The DHT yielded results for the record request, grouped in (key, value) pairs.
-	ValueFound(Vec<(record::Key, Vec<u8>)>),
+	/// The DHT yielded results for the record request.
+	///
+	/// Returning the result grouped in (key, value) pairs as well as the request duration..
+	ValueFound(Vec<(record::Key, Vec<u8>)>, Duration),
 
 	/// The record requested was not found in the DHT.
-	ValueNotFound(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValueNotFound(record::Key, Duration),
 
 	/// The record with a given key was successfully inserted into the DHT.
-	ValuePut(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValuePut(record::Key, Duration),
 
 	/// Inserting a value into the DHT failed.
-	ValuePutFailed(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValuePutFailed(record::Key, Duration),
 
 	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
 	RandomKademliaStarted(Vec<ProtocolId>),
@@ -620,7 +628,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								}
 							}
 						}
-						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), .. } => {
+						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), stats, .. } => {
 							let ev = match res {
 								Ok(ok) => {
 									let results = ok.records
@@ -628,28 +636,28 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 										.map(|r| (r.record.key, r.record.value))
 										.collect();
 
-									DiscoveryOut::ValueFound(results)
+									DiscoveryOut::ValueFound(results, stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 									trace!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key())
+									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key())
+									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), .. } => {
+						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), stats, .. } => {
 							let ev = match res {
-								Ok(ok) => DiscoveryOut::ValuePut(ok.key),
+								Ok(ok) => DiscoveryOut::ValuePut(ok.key, stats.duration().unwrap_or_else(Default::default)),
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to put record: {:?}", e);
-									DiscoveryOut::ValuePutFailed(e.into_key())
+									DiscoveryOut::ValuePutFailed(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
