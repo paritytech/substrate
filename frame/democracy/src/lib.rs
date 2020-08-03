@@ -1107,7 +1107,9 @@ decl_module! {
 		}
 
 		/// Register the preimage for an upcoming proposal. This requires the proposal to be
-		/// in the dispatch queue. No deposit is needed.
+		/// in the dispatch queue. No deposit is needed. When this call is successful, i.e.
+		/// the preimage has not been uploaded before and matches some imminent proposal,
+		/// no fee is paid.
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
