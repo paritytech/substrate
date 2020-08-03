@@ -283,28 +283,14 @@ impl From<u32> for LogLevel {
 	}
 }
 
-impl From<log::Level> for LogLevel {
-	fn from(l: log::Level) -> Self {
-		use tracing::Level::*;
-		match l {
-			Error => Self::Error,
-			Warn => Self::Warn,
-			Info => Self::Info,
-			Debug => Self::Debug,
-			Trace => Self::Trace,
-		}
-	}
-}
-
-impl From<LogLevel> for log::Level {
+impl From<LogLevel> for tracing::Level {
 	fn from(l: LogLevel) -> Self {
-		use self::LogLevel::*;
 		match l {
-			Error => Self::Error,
-			Warn => Self::Warn,
-			Info => Self::Info,
-			Debug => Self::Debug,
-			Trace => Self::Trace,
+			LogLevel::Error => Self::ERROR,
+			LogLevel::Warn => Self::WARN,
+			LogLevel::Info => Self::INFO,
+			LogLevel::Debug => Self::DEBUG,
+			LogLevel::Trace => Self::TRACE,
 		}
 	}
 }

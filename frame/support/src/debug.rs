@@ -188,7 +188,7 @@ impl RuntimeLogger {
 	/// This is a no-op when running natively (`std`).
 	#[cfg(not(feature = "std"))]
 	pub fn init() {
-		static LOGGER: RuntimeLogger = RuntimeLogger;;
+		static LOGGER: RuntimeLogger = RuntimeLogger;
 		let _ = log::set_logger(&LOGGER);
 	}
 }

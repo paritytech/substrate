@@ -49,7 +49,7 @@ pub struct TracingProxy {
 impl Drop for TracingProxy {
 	fn drop(&mut self) {
 		if !self.spans.is_empty() {
-			log::debug!(
+			tracing::debug!(
 				target: "tracing",
 				"Dropping TracingProxy with {} un-exited spans, marking as not valid", self.spans.len()
 			);
@@ -86,7 +86,7 @@ impl TracingProxy {
 			// This is to prevent unbounded growth of Vec and could mean one of the following:
 			// 1. Too many nested spans, or MAX_SPANS_LEN is too low.
 			// 2. Not correctly exiting spans due to misconfiguration / misuse
-			log::warn!(
+			tracing::warn!(
 				target: "tracing",
 				"TracingProxy MAX_SPANS_LEN exceeded, removing oldest span."
 			);
@@ -99,12 +99,12 @@ impl TracingProxy {
 	/// Exit a span by dropping it along with it's associated guard.
 	pub fn exit_span(&mut self, id: u64) {
 		if self.spans.last().map(|l| id > l.0).unwrap_or(true) {
-			log::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
+			tracing::warn!(target: "tracing", "Span id not found in TracingProxy: {}", id);
 			return;
 		}
 		let mut last_span = self.spans.pop().expect("Just checked that there is an element to pop; qed");
 		while id < last_span.0 {
-			log::warn!(
+			tracing::warn!(
 				target: "tracing",
 				"TracingProxy Span ids not equal! id parameter given: {}, last span: {}",
 				id,
@@ -114,7 +114,7 @@ impl TracingProxy {
 			if let Some(s) = self.spans.pop() {
 				last_span = s;
 			} else {
-				log::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
+				tracing::warn!(target: "tracing", "Span id not found in TracingProxy {}", id);
 				return;
 			}
 		}

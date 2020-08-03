@@ -77,7 +77,7 @@ fn error(msg: &'static str) -> Error {
 macro_rules! trace {
 	( $( $args:expr ),+ ) => {
 		sp_std::if_std! {
-			log::trace!(target: "wasm-heap", $( $args ),+);
+			tracing::trace!(target: "wasm-heap", $( $args ),+);
 		}
 	}
 }

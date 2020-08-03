@@ -19,7 +19,7 @@
 
 mod log;
 
-use tracing::log2;
+use log::log2;
 use proc_macro::TokenStream;
 use proc_macro2::{TokenStream as TokenStream2, Span};
 use proc_macro_crate::crate_name;
