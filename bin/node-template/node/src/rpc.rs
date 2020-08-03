@@ -82,7 +82,7 @@ pub fn create_full<C, P, SC>(
 	let FullDeps {
 		client,
 		pool,
-		select_chain,
+		select_chain: _,
 		deny_unsafe,
 	} = deps;
 
