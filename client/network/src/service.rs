@@ -29,7 +29,7 @@
 
 use crate::{
 	ExHashT, NetworkStateInfo,
-	behaviour::{Behaviour, BehaviourOut},
+	behaviour::{Behaviour, BehaviourOut, BitswapApi},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	DhtEvent,
 	discovery::DiscoveryConfig,
@@ -61,7 +61,6 @@ use sp_runtime::{
 	ConsensusEngineId,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_core::offchain::OffchainStorage;
 use std::{
 	borrow::{Borrow, Cow},
 	collections::{HashMap, HashSet},
@@ -555,28 +554,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// Get a mutable reference to the Bitswap behaviour.
-	pub fn bitswap(&mut self) -> &mut libp2p_bitswap::Bitswap {
-		&mut self.network_service.bitswap
+	pub fn bitswap_api(&mut self) -> BitswapApi {
+		self.network_service.bitswap_api()
 	}
-
-	/// Handle a `BitswapEvent`, reading and writing from the `OffchainStorage`.
-	pub fn handle_bitswap_event<S: OffchainStorage>(
-		&mut self, event: libp2p_bitswap::BitswapEvent, mut storage: S,
-	) {
-		match event {
-			libp2p_bitswap::BitswapEvent::ReceivedBlock(_, cid, data) => {
-				let cid_bytes = &cid.to_bytes()[..];
-				storage.set(b"bitswap", cid_bytes, &data[..]);
-			},
-			libp2p_bitswap::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
-				if let Some(data) = storage.get(b"bitswap", &cid.to_bytes()[..]) {
-					self.bitswap().send_block(&peer_id, cid, data.into_boxed_slice());
-				}
-			}
-			libp2p_bitswap::BitswapEvent::ReceivedCancel(_, _) => {},
-		}
-	}
-
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {

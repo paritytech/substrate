@@ -6853,6 +6853,7 @@ dependencies = [
  "bitflags",
  "bs58",
  "bytes 0.5.4",
+ "cid",
  "derive_more",
  "either",
  "env_logger 0.7.1",

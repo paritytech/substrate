@@ -49,6 +49,7 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::{status_sinks, mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender}};
+use sp_api::offchain::OffchainStorage;
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -341,12 +342,32 @@ async fn build_network_future<
 
 			event = bitswap_events.select_next_some() => {
 				if let Some(offchain) = backend.offchain_storage() {
-					network.handle_bitswap_event(event, offchain);
+					handle_bitswap_event(&mut network, event, offchain);
 				}
 			}
 		}
 	}
 }
+
+/// Handle a `BitswapEvent`, reading and writing from the `OffchainStorage`.
+pub fn handle_bitswap_event<B: BlockT, H: sc_network::ExHashT, S: OffchainStorage>(
+	network: &mut sc_network::NetworkWorker<B, H>,
+	event: sc_network::BitswapEvent,
+	mut storage: S,
+) {
+	match event {
+		sc_network::BitswapEvent::ReceivedBlock(_, cid, data) => {
+			let cid_bytes = &cid.to_bytes()[..];
+			storage.set(b"bitswap", cid_bytes, &data[..]);
+		},
+		sc_network::BitswapEvent::ReceivedWant(peer_id, cid, _) => {
+			if let Some(data) = storage.get(b"bitswap", &cid.to_bytes()[..]) {
+				network.bitswap_api().send_block(&peer_id, cid, data.into_boxed_slice());
+			}
+		}
+	}
+}
+
 
 #[cfg(not(target_os = "unknown"))]
 // Wrapper for HTTP and WS servers that makes sure they are properly shut down.

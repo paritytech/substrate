@@ -268,7 +268,7 @@ pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
-pub use libp2p_bitswap::BitswapEvent;
+pub use behaviour::{BitswapEvent, BitswapApi};
 
 pub use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};

@@ -957,7 +957,7 @@ pub trait TestNetFactory: Sized {
 
 				while let Poll::Ready(Some(event)) = peer.bitswap_stream.as_mut().poll_next(cx) {
 					if let Some(offchain) = peer.client.offchain_storage() {
-						peer.network.handle_bitswap_event(event, offchain);
+						sc_service::handle_bitswap_event(&mut peer.network, event, offchain);
 					}
 				}
 			}
