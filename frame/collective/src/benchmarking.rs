@@ -111,8 +111,8 @@ benchmarks_instance! {
 	}
 
 	execute {
-		let m in 1 .. MAX_MEMBERS;
 		let b in 1 .. MAX_BYTES;
+		let m in 1 .. MAX_MEMBERS;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -141,8 +141,8 @@ benchmarks_instance! {
 
 	// This tests when execution would happen immediately after proposal
 	propose_execute {
-		let m in 1 .. MAX_MEMBERS;
 		let b in 1 .. MAX_BYTES;
+		let m in 1 .. MAX_MEMBERS;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -172,9 +172,9 @@ benchmarks_instance! {
 
 	// This tests when proposal is created and queued as "proposed"
 	propose_proposed {
+		let b in 1 .. MAX_BYTES;
 		let m in 2 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -287,10 +287,10 @@ benchmarks_instance! {
 	}
 
 	close_early_disapproved {
+		let b in 1 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -364,10 +364,10 @@ benchmarks_instance! {
 	}
 
 	close_early_approved {
+		let b in 1 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -445,10 +445,10 @@ benchmarks_instance! {
 	}
 
 	close_disapproved {
+		let b in 1 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
@@ -517,10 +517,10 @@ benchmarks_instance! {
 	}
 
 	close_approved {
+		let b in 1 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. MAX_MEMBERS;
 		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
 
