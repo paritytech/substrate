@@ -277,10 +277,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 /// - `Event` or `Event<T>` (if the event is generic)
 /// - `Origin` or `Origin<T>` (if the origin is generic)
 /// - `Config` or `Config<T>` (if the config is generic)
-/// - `Inherent ( $(CALL),* )` - If the module provides/can check inherents. The optional parameter
-///                             is for modules that use a `Call` from a different module as
-///                             inherent.
-/// - `ValidateUnsigned`      - If the module validates unsigned extrinsics.
+/// - `Inherent` - If the module provides/can check inherents.
+/// - `ValidateUnsigned` - If the module validates unsigned extrinsics.
 ///
 /// # Note
 ///

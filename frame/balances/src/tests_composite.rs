@@ -91,6 +91,7 @@ impl frame_system::Trait for Test {
 	type AccountData = super::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 parameter_types! {
 	pub const TransactionByteFee: u64 = 1;
@@ -108,6 +109,7 @@ impl Trait for Test {
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = system::Module<Test>;
+	type WeightInfo = ();
 }
 
 pub struct ExtBuilder {

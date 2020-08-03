@@ -14,19 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{Stream, stream::futures_unordered::FuturesUnordered};
-use std::time::Duration;
-use std::pin::Pin;
-use std::task::{Poll, Context};
+use crate::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use futures::{prelude::*, lock::Mutex};
 use futures_timer::Delay;
-use crate::mpsc::TracingUnboundedSender;
+use std::{pin::Pin, task::{Poll, Context}, time::Duration};
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
 ///
 /// Senders are removed only when they are closed.
 pub struct StatusSinks<T> {
-	entries: FuturesUnordered<YieldAfter<T>>,
+	/// Should only be locked by `next`.
+	inner: Mutex<Inner<T>>,
+	/// Sending side of `Inner::entries_rx`.
+	entries_tx: TracingUnboundedSender<YieldAfter<T>>,
+}
+
+struct Inner<T> {
+	/// The actual entries of the list.
+	entries: stream::FuturesUnordered<YieldAfter<T>>,
+	/// Receives new entries and puts them in `entries`.
+	entries_rx: TracingUnboundedReceiver<YieldAfter<T>>,
 }
 
 struct YieldAfter<T> {
@@ -38,52 +46,110 @@ struct YieldAfter<T> {
 impl<T> StatusSinks<T> {
 	/// Builds a new empty collection.
 	pub fn new() -> StatusSinks<T> {
+		let (entries_tx, entries_rx) = tracing_unbounded("status-sinks-entries");
+
 		StatusSinks {
-			entries: FuturesUnordered::new(),
+			inner: Mutex::new(Inner {
+				entries: stream::FuturesUnordered::new(),
+				entries_rx,
+			}),
+			entries_tx,
 		}
 	}
 
 	/// Adds a sender to the collection.
 	///
 	/// The `interval` is the time period between two pushes on the sender.
-	pub fn push(&mut self, interval: Duration, sender: TracingUnboundedSender<T>) {
-		self.entries.push(YieldAfter {
+	pub fn push(&self, interval: Duration, sender: TracingUnboundedSender<T>) {
+		let _ = self.entries_tx.unbounded_send(YieldAfter {
 			delay: Delay::new(interval),
 			interval,
 			sender: Some(sender),
-		})
+		});
 	}
 
-	/// Processes all the senders. If any sender is ready, calls the `status_grab` function and
-	/// pushes what it returns to the sender.
+	/// Waits until one of the sinks is ready, then returns an object that can be used to send
+	/// an element on said sink.
 	///
-	/// This function doesn't return anything, but it should be treated as if it implicitly
-	/// returns `Poll::Pending`. In particular, it should be called again when the task
-	/// is waken up.
-	///
-	/// # Panic
-	///
-	/// Panics if not called within the context of a task.
-	pub fn poll(&mut self, cx: &mut Context, mut status_grab: impl FnMut() -> T) {
+	/// If the object isn't used to send an element, the slot is skipped.
+	pub async fn next(&self) -> ReadySinkEvent<'_, T> {
+		// This is only ever locked by `next`, which means that one `next` at a time can run.
+		let mut inner = self.inner.lock().await;
+		let inner = &mut *inner;
+
 		loop {
-			match Pin::new(&mut self.entries).poll_next(cx) {
-				Poll::Ready(Some((sender, interval))) => {
-					let status = status_grab();
-					if sender.unbounded_send(status).is_ok() {
-						self.entries.push(YieldAfter {
-							// Note that since there's a small delay between the moment a task is
-							// waken up and the moment it is polled, the period is actually not
-							// `interval` but `interval + <delay>`. We ignore this problem in
-							// practice.
-							delay: Delay::new(interval),
-							interval,
-							sender: Some(sender),
-						});
+			// Future that produces the next ready entry in `entries`, or doesn't produce anything if
+			// the list is empty.
+			let next_ready_entry = {
+				let entries = &mut inner.entries;
+				async move {
+					if let Some(v) = entries.next().await {
+						v
+					} else {
+						loop {
+							futures::pending!()
+						}
 					}
 				}
-				Poll::Ready(None) |
-				Poll::Pending => break,
+			};
+
+			futures::select!{
+				new_entry = inner.entries_rx.next() => {
+					if let Some(new_entry) = new_entry {
+						inner.entries.push(new_entry);
+					}
+				},
+				(sender, interval) = next_ready_entry.fuse() => {
+					return ReadySinkEvent {
+						sinks: self,
+						sender: Some(sender),
+						interval,
+					}
+				}
 			}
+		}
+	}
+}
+
+/// One of the sinks is ready.
+#[must_use]
+pub struct ReadySinkEvent<'a, T> {
+	sinks: &'a StatusSinks<T>,
+	sender: Option<TracingUnboundedSender<T>>,
+	interval: Duration,
+}
+
+impl<'a, T> ReadySinkEvent<'a, T> {
+	/// Sends an element on the sender.
+	pub fn send(mut self, element: T) {
+		if let Some(sender) = self.sender.take() {
+			if sender.unbounded_send(element).is_ok() {
+				let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {
+					// Note that since there's a small delay between the moment a task is
+					// woken up and the moment it is polled, the period is actually not
+					// `interval` but `interval + <delay>`. We ignore this problem in
+					// practice.
+					delay: Delay::new(self.interval),
+					interval: self.interval,
+					sender: Some(sender),
+				});
+			}
+		}
+	}
+}
+
+impl<'a, T> Drop for ReadySinkEvent<'a, T> {
+	fn drop(&mut self) {
+		if let Some(sender) = self.sender.take() {
+			if sender.is_closed() {
+				return;
+			}
+
+			let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {
+				delay: Delay::new(self.interval),
+				interval: self.interval,
+				sender: Some(sender),
+			});
 		}
 	}
 }
@@ -107,28 +173,30 @@ impl<T> futures::Future for YieldAfter<T> {
 
 #[cfg(test)]
 mod tests {
+	use crate::mpsc::tracing_unbounded;
 	use super::StatusSinks;
 	use futures::prelude::*;
-	use crate::mpsc::tracing_unbounded;
 	use std::time::Duration;
-	use std::task::Poll;
 
 	#[test]
 	fn works() {
 		// We're not testing that the `StatusSink` properly enforces an order in the intervals, as
 		// this easily causes test failures on busy CPUs.
 
-		let mut status_sinks = StatusSinks::new();
+		let status_sinks = StatusSinks::new();
 
-		let (tx, rx) = tracing_unbounded("status_sink_test");
+		let (tx, rx) = tracing_unbounded("test");
 		status_sinks.push(Duration::from_millis(100), tx);
 
 		let mut val_order = 5;
 
 		futures::executor::block_on(futures::future::select(
-			futures::future::poll_fn(move |cx| {
-				status_sinks.poll(cx, || { val_order += 1; val_order });
-				Poll::<()>::Pending
+			Box::pin(async move {
+				loop {
+					let ev = status_sinks.next().await;
+					val_order += 1;
+					ev.send(val_order);
+				}
 			}),
 			Box::pin(async {
 				let items: Vec<i32> = rx.take(3).collect().await;

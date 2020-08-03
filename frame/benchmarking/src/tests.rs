@@ -100,6 +100,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type SystemWeightInfo = ();
 }
 
 impl Trait for Test {
@@ -113,8 +114,6 @@ impl OtherTrait for Test {
 	type OtherEvent = ();
 }
 
-// This function basically just builds a genesis storage key/value store according to
-// our desired mockup.
 fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
@@ -166,6 +165,10 @@ benchmarks!{
 	verify {
 		ensure!(m[0] == 0, "You forgot to sort!")
 	}
+
+	no_components {
+		let caller = account::<T::AccountId>("caller", 0, 0);
+	}: set_value(RawOrigin::Signed(caller), 0)
 }
 
 #[test]
@@ -241,5 +244,6 @@ fn benchmarks_generate_unit_tests() {
 		assert_ok!(test_benchmark_sort_vector::<Test>());
 		assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
 		assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
+		assert_ok!(test_benchmark_no_components::<Test>());
 	});
 }

@@ -260,7 +260,7 @@ where
 			&voters,
 			self.client.clone(),
 			&self.network,
-			&self.keystore,
+			self.keystore.as_ref(),
 			None,
 		);
 

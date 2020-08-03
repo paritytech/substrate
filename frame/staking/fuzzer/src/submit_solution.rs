@@ -162,7 +162,7 @@ fn main() {
 				match mode {
 					Mode::WeakerSubmission => {
 						assert_eq!(
-							call.dispatch_bypass_filter(origin.clone().into()).unwrap_err().error,
+							call.dispatch_bypass_filter(origin.into()).unwrap_err().error,
 							DispatchError::Module {
 								index: 0,
 								error: 16,

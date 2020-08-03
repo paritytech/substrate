@@ -21,7 +21,7 @@
 //! the extra APIs.
 
 use std::{
-	collections::BTreeMap,
+	collections::{BTreeMap, VecDeque},
 	sync::Arc,
 };
 use crate::offchain::{
@@ -120,9 +120,8 @@ impl OffchainStorage for TestPersistentOffchainDB {
 pub struct OffchainState {
 	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
-	/// Request counter
-	pub request_ctr: u16,
-	expected_requests: BTreeMap<RequestId, PendingRequest>,
+	// Queue of requests that the test is expected to perform (in order).
+	expected_requests: VecDeque<PendingRequest>,
 	/// Persistent local storage
 	pub persistent_storage: TestPersistentOffchainDB,
 	/// Local storage
@@ -158,12 +157,10 @@ impl OffchainState {
 	}
 
 	fn fulfill_expected(&mut self, id: u16) {
-		if let Some(mut req) = self.expected_requests.remove(&RequestId(self.request_ctr)) {
+		if let Some(mut req) = self.expected_requests.pop_back() {
 			let response = req.response.take().expect("Response checked when added.");
 			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
-
-			self.request_ctr = self.request_ctr.saturating_add(1);
 		}
 	}
 
@@ -173,11 +170,12 @@ impl OffchainState {
 	/// before running the actual code that utilizes them (for instance before calling into runtime).
 	/// Expected request has to be fulfilled before this struct is dropped,
 	/// the `response` and `response_headers` fields will be used to return results to the callers.
-	pub fn expect_request(&mut self, id: u16, expected: PendingRequest) {
+	/// Requests are expected to be performed in the insertion order.
+	pub fn expect_request(&mut self, expected: PendingRequest) {
 		if expected.response.is_none() {
 			panic!("Expected request needs to have a response.");
 		}
-		self.expected_requests.insert(RequestId(id), expected);
+		self.expected_requests.push_front(expected);
 	}
 }
 
@@ -361,7 +359,7 @@ impl offchain::Externalities for TestOffchainExt {
 		if let Some(req) = state.requests.get_mut(&request_id) {
 			let response = req.response
 				.as_mut()
-				.expect(&format!("No response provided for request: {:?}", request_id));
+				.unwrap_or_else(|| panic!("No response provided for request: {:?}", request_id));
 
 			if req.read >= response.len() {
 				// Remove the pending request as per spec.

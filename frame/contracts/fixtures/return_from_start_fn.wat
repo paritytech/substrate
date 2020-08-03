@@ -1,5 +1,5 @@
 (module
-	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32 i32)))
 	(import "env" "ext_deposit_event" (func $ext_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -12,6 +12,7 @@
 			(i32.const 4) ;; The data buffer's length
 		)
 		(call $ext_return
+			(i32.const 0)
 			(i32.const 8)
 			(i32.const 4)
 		)

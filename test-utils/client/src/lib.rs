@@ -23,7 +23,7 @@ pub mod client_ext;
 
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks, CloneableSpawn,
+	ForkBlocks, BadBlocks,
 };
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
@@ -33,17 +33,21 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
+pub use sp_core::traits::BareCryptoStorePtr;
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
-pub use sc_service::client;
+pub use sc_service::{RpcHandlers, RpcSession, client};
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
+use std::pin::Pin;
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
+use futures::{future::{Future, FutureExt}, stream::StreamExt};
+use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
+use sp_runtime::{OpaqueExtrinsic, codec::Encode, traits::{Block as BlockT, BlakeTwo256}};
 use sc_service::client::{LocalCallExecutor, ClientConfig};
+use sc_client_api::BlockchainEvents;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = sc_light::Backend<
@@ -250,8 +254,198 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor(), Default::default());
+		let executor = LocalCallExecutor::new(
+			self.backend.clone(),
+			executor,
+			Box::new(sp_core::testing::TaskExecutor::new()),
+			Default::default(),
+		);
 
 		self.build_with_executor(executor)
+	}
+}
+
+/// The output of an RPC transaction.
+pub struct RpcTransactionOutput {
+	/// The output string of the transaction if any.
+	pub result: Option<String>,
+	/// The session object.
+	pub session: RpcSession,
+	/// An async receiver if data will be returned via a callback.
+	pub receiver: futures01::sync::mpsc::Receiver<String>,
+}
+
+impl std::fmt::Debug for RpcTransactionOutput {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "RpcTransactionOutput {{ result: {:?}, session, receiver }}", self.result)
+	}
+}
+
+/// An error for when the RPC call fails.
+#[derive(Deserialize, Debug)]
+pub struct RpcTransactionError {
+	/// A Number that indicates the error type that occurred.
+	pub code: i64,
+	/// A String providing a short description of the error.
+	pub message: String,
+	/// A Primitive or Structured value that contains additional information about the error.
+	pub data: Option<serde_json::Value>,
+}
+
+impl std::fmt::Display for RpcTransactionError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		std::fmt::Debug::fmt(self, f)
+	}
+}
+
+/// An extension trait for `RpcHandlers`.
+pub trait RpcHandlersExt {
+	/// Send a transaction through the RpcHandlers.
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>>;
+}
+
+impl RpcHandlersExt for RpcHandlers {
+	fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Pin<Box<dyn Future<Output = Result<RpcTransactionOutput, RpcTransactionError>> + Send>> {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+		Box::pin(self
+			.rpc_query(
+				&mem,
+				&format!(
+					r#"{{
+						"jsonrpc": "2.0",
+						"method": "author_submitExtrinsic",
+						"params": ["0x{}"],
+						"id": 0
+					}}"#,
+					hex::encode(extrinsic.encode())
+				),
+			)
+			.map(move |result| parse_rpc_result(result, mem, rx))
+		)
+	}
+}
+
+pub(crate) fn parse_rpc_result(
+	result: Option<String>,
+	session: RpcSession,
+	receiver: futures01::sync::mpsc::Receiver<String>,
+) -> Result<RpcTransactionOutput, RpcTransactionError> {
+	if let Some(ref result) = result {
+		let json: serde_json::Value = serde_json::from_str(result)
+			.expect("the result can only be a JSONRPC string; qed");
+		let error = json
+			.as_object()
+			.expect("JSON result is always an object; qed")
+			.get("error");
+
+		if let Some(error) = error {
+			return Err(
+				serde_json::from_value(error.clone())
+					.expect("the JSONRPC result's error is always valid; qed")
+			)
+		}
+	}
+
+	Ok(RpcTransactionOutput {
+		result,
+		session,
+		receiver,
+	})
+}
+
+/// An extension trait for `BlockchainEvents`.
+pub trait BlockchainEventsExt<C, B>
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	/// Wait for `count` blocks to be imported in the node and then exit. This function will not return if no blocks
+	/// are ever created, thus you should restrict the maximum amount of time of the test execution.
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+impl<C, B> BlockchainEventsExt<C, B> for C
+where
+	C: BlockchainEvents<B>,
+	B: BlockT,
+{
+	fn wait_for_blocks(&self, count: usize) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		assert!(count > 0, "'count' argument must be greater than 0");
+
+		let mut import_notification_stream = self.import_notification_stream();
+		let mut blocks = HashSet::new();
+
+		Box::pin(async move {
+			while let Some(notification) = import_notification_stream.next().await {
+				blocks.insert(notification.hash);
+				if blocks.len() == count {
+					break;
+				}
+			}
+		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use sc_service::RpcSession;
+
+	fn create_session_and_receiver() -> (RpcSession, futures01::sync::mpsc::Receiver<String>) {
+		let (tx, rx) = futures01::sync::mpsc::channel(0);
+		let mem = RpcSession::new(tx.into());
+
+		(mem, rx)
+	}
+
+	#[test]
+	fn parses_error_properly() {
+		let (mem, rx) = create_session_and_receiver();
+		assert!(super::parse_rpc_result(None, mem, rx).is_ok());
+
+		let (mem, rx) = create_session_and_receiver();
+		assert!(
+			super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"result": 19,
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.is_ok(),
+		);
+
+		let (mem, rx) = create_session_and_receiver();
+		let error = super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found"
+				},
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_none());
+
+		let (mem, rx) = create_session_and_receiver();
+		let error = super::parse_rpc_result(Some(r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found",
+					"data": 42
+				},
+				"id": 1
+			}"#.to_string()), mem, rx)
+			.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_some());
 	}
 }

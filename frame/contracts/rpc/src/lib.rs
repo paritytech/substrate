@@ -92,10 +92,12 @@ pub struct CallRequest<AccountId, Balance> {
 pub enum RpcContractExecResult {
 	/// Successful execution
 	Success {
-		/// Status code
-		status: u8,
+		/// The return flags
+		flags: u32,
 		/// Output data
 		data: Bytes,
+		/// How much gas was consumed by the call.
+		gas_consumed: u64,
 	},
 	/// Error execution
 	Error(()),
@@ -104,9 +106,14 @@ pub enum RpcContractExecResult {
 impl From<ContractExecResult> for RpcContractExecResult {
 	fn from(r: ContractExecResult) -> Self {
 		match r {
-			ContractExecResult::Success { status, data } => RpcContractExecResult::Success {
-				status,
+			ContractExecResult::Success {
+				flags,
+				data,
+				gas_consumed
+			} => RpcContractExecResult::Success {
+				flags,
 				data: data.into(),
+				gas_consumed,
 			},
 			ContractExecResult::Error => RpcContractExecResult::Error(()),
 		}
@@ -309,7 +316,7 @@ mod tests {
 			let actual = serde_json::to_string(&res).unwrap();
 			assert_eq!(actual, expected);
 		}
-		test(r#"{"success":{"status":5,"data":"0x1234"}}"#);
+		test(r#"{"success":{"flags":5,"data":"0x1234","gas_consumed":5000}}"#);
 		test(r#"{"error":null}"#);
 	}
 }

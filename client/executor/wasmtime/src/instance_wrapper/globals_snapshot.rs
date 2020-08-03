@@ -40,7 +40,7 @@ impl GlobalsSnapshot {
 	pub fn take(instance_wrapper: &InstanceWrapper) -> Result<Self> {
 		// EVIL:
 		// Usage of an undocumented function.
-		let handle = unsafe { instance_wrapper.instance.handle().clone() };
+		let handle = instance_wrapper.instance.handle().clone().handle;
 
 		let mut preserved_mut_globals = vec![];
 
@@ -75,7 +75,7 @@ impl GlobalsSnapshot {
 	///
 	/// This instance must be the same that was used for creation of this snapshot.
 	pub fn apply(&self, instance_wrapper: &InstanceWrapper) -> Result<()> {
-		if instance_wrapper.instance.handle() != &self.handle {
+		if instance_wrapper.instance.handle().handle != self.handle {
 			return Err(Error::from("unexpected instance handle".to_string()));
 		}
 

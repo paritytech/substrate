@@ -64,7 +64,6 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	})
 }
 
-
 /// Implements required traits and creates `Fork` structs for `ChainSpec` custom parameter group.
 pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types, _fields| {
@@ -75,9 +74,27 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 		let to_fork = generate_base_to_fork(&fork_name, &field_names);
 		let combine_with = generate_combine_with(&field_names);
 		let to_base = generate_fork_to_base(name, &field_names);
+		let serde_crate_name = match proc_macro_crate::crate_name("serde") {
+			Ok(name) => Ident::new(&name.replace("-", "_"), Span::call_site()),
+			Err(e) => {
+				let err = Error::new(
+					Span::call_site(),
+					&format!("Could not find `serde` crate: {}", e),
+				).to_compile_error();
+
+				return quote!( #err ).into();
+			}
+		};
 
 		quote! {
-			#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ChainSpecExtension)]
+			#[derive(
+				Debug,
+				Clone,
+				PartialEq,
+				#serde_crate_name::Serialize,
+				#serde_crate_name::Deserialize,
+				ChainSpecExtension,
+			)]
 			pub struct #fork_name #ty_generics #where_clause {
 				#fork_fields
 			}

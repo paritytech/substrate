@@ -19,6 +19,7 @@
 use codec::{Encode, Decode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
+use sp_consensus_slots::EquivocationProof;
 use sp_runtime::traits::Header;
 
 const SLOT_HEADER_MAP_KEY: &[u8] = b"slot_header_map";
@@ -44,31 +45,6 @@ fn load_decode<C, T>(backend: &C, key: &[u8]) -> ClientResult<Option<T>>
 	}
 }
 
-/// Represents an equivocation proof.
-#[derive(Debug, Clone)]
-pub struct EquivocationProof<H> {
-	slot: u64,
-	fst_header: H,
-	snd_header: H,
-}
-
-impl<H> EquivocationProof<H> {
-	/// Get the slot number where the equivocation happened.
-	pub fn slot(&self) -> u64 {
-		self.slot
-	}
-
-	/// Get the first header involved in the equivocation.
-	pub fn fst_header(&self) -> &H {
-		&self.fst_header
-	}
-
-	/// Get the second header involved in the equivocation.
-	pub fn snd_header(&self) -> &H {
-		&self.snd_header
-	}
-}
-
 /// Checks if the header is an equivocation and returns the proof in that case.
 ///
 /// Note: it detects equivocations only when slot_now - slot <= MAX_SLOT_CAPACITY.
@@ -78,7 +54,7 @@ pub fn check_equivocation<C, H, P>(
 	slot: u64,
 	header: &H,
 	signer: &P,
-) -> ClientResult<Option<EquivocationProof<H>>>
+) -> ClientResult<Option<EquivocationProof<H, P>>>
 	where
 		H: Header,
 		C: AuxStore,
@@ -114,9 +90,10 @@ pub fn check_equivocation<C, H, P>(
 			// 2) with different hash
 			if header.hash() != prev_header.hash() {
 				return Ok(Some(EquivocationProof {
-					slot, // 3) and mentioning the same slot.
-					fst_header: prev_header.clone(),
-					snd_header: header.clone(),
+					slot_number: slot,
+					offender: signer.clone(),
+					first_header: prev_header.clone(),
+					second_header: header.clone(),
 				}));
 			} else {
 				// We don't need to continue in case of duplicated header,

@@ -17,18 +17,14 @@
 
 //! Private implementation details of BABE digests.
 
-#[cfg(feature = "std")]
-use super::{BABE_ENGINE_ID, AuthoritySignature};
-use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight, BabeEpochConfiguration, AllowedSlots};
-#[cfg(feature = "std")]
-use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
-#[cfg(feature = "std")]
-use std::fmt::Debug;
-use codec::{Decode, Encode};
-#[cfg(feature = "std")]
-use codec::Codec;
+use super::{
+	AllowedSlots, AuthorityId, AuthorityIndex, AuthoritySignature, BabeAuthorityWeight,
+	BabeEpochConfiguration, SlotNumber, BABE_ENGINE_ID,
+};
+use codec::{Codec, Decode, Encode};
 use sp_std::vec::Vec;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{generic::OpaqueDigestItemId, DigestItem, RuntimeDebug};
+
 use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 
 /// Raw BABE primary slot assignment pre-digest.
@@ -151,7 +147,6 @@ impl From<NextConfigDescriptor> for BabeEpochConfiguration {
 }
 
 /// A digest item which is usable with BABE consensus.
-#[cfg(feature = "std")]
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which contains a BABE pre-digest.
 	fn babe_pre_digest(seal: PreDigest) -> Self;
@@ -172,9 +167,8 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor>;
 }
 
-#[cfg(feature = "std")]
 impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
-	Hash: Debug + Send + Sync + Eq + Clone + Codec + 'static
+	Hash: Send + Sync + Eq + Clone + Codec + 'static
 {
 	fn babe_pre_digest(digest: PreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())

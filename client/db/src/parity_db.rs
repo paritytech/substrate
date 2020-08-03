@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 /// A `Database` adapter for parity-db.
 
-use sp_database::{Database, Change, Transaction, ColumnId};
+use sp_database::{Database, Change, ColumnId, Transaction, error::DatabaseError};
 use crate::utils::NUM_COLUMNS;
 use crate::columns;
 
@@ -44,7 +44,7 @@ pub fn open<H: Clone>(path: &std::path::Path) -> parity_db::Result<std::sync::Ar
 }
 
 impl<H: Clone> Database<H> for DbAdapter {
-	fn commit(&self, transaction: Transaction<H>) {
+	fn commit(&self, transaction: Transaction<H>) -> Result<(), DatabaseError> {
 		handle_err(self.0.commit(transaction.0.into_iter().map(|change|
 			match change {
 				Change::Set(col, key, value) => (col as u8, key, Some(value)),
@@ -52,6 +52,8 @@ impl<H: Clone> Database<H> for DbAdapter {
 				_ => unimplemented!(),
 			}))
 		);
+
+		Ok(())
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {

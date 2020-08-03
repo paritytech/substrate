@@ -52,7 +52,7 @@ use ip_network::IpNetwork;
 use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
 use libp2p::swarm::protocols_handler::multi::MultiHandler;
-use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, QueryResult, Quorum, Record};
+use libp2p::kad::{Kademlia, KademliaBucketInserts, KademliaConfig, KademliaEvent, QueryResult, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::handler::KademliaHandler;
 use libp2p::kad::QueryId;
@@ -108,7 +108,7 @@ impl DiscoveryConfig {
 	{
 		for (peer_id, addr) in user_defined {
 			for kad in self.kademlias.values_mut() {
-				kad.add_address(&peer_id, addr.clone())
+				kad.add_address(&peer_id, addr.clone());
 			}
 			self.user_defined.push((peer_id, addr))
 		}
@@ -137,17 +137,9 @@ impl DiscoveryConfig {
 	}
 
 	/// Add discovery via Kademlia for the given protocol.
-	pub fn add_protocol(&mut self, p: ProtocolId) -> &mut Self {
-		// NB: If this protocol name derivation is changed, check if
-		// `DiscoveryBehaviour::new_handler` is still correct.
-		let proto_name = {
-			let mut v = vec![b'/'];
-			v.extend_from_slice(p.as_bytes());
-			v.extend_from_slice(b"/kad");
-			v
-		};
-
-		self.add_kademlia(p, proto_name);
+	pub fn add_protocol(&mut self, id: ProtocolId) -> &mut Self {
+		let name = protocol_name_from_protocol_id(&id);
+		self.add_kademlia(id, name);
 		self
 	}
 
@@ -159,6 +151,10 @@ impl DiscoveryConfig {
 
 		let mut config = KademliaConfig::default();
 		config.set_protocol_name(proto_name);
+		// By default Kademlia attempts to insert all peers into its routing table once a dialing
+		// attempt succeeds. In order to control which peer is added, disable the auto-insertion and
+		// instead add peers manually.
+		config.set_kbucket_inserts(KademliaBucketInserts::Manual);
 
 		let store = MemoryStore::new(self.local_peer_id.clone());
 		let mut kad = Kademlia::with_config(self.local_peer_id.clone(), store, config);
@@ -230,12 +226,18 @@ pub struct DiscoveryBehaviour {
 
 impl DiscoveryBehaviour {
 	/// Returns the list of nodes that we know exist in the network.
-	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
-		let mut set = HashSet::new();
-		for p in self.kademlias.values_mut().map(|k| k.kbuckets_entries()).flatten() {
-			set.insert(p);
+	pub fn known_peers(&mut self) -> HashSet<PeerId> {
+		let mut peers = HashSet::new();
+		for k in self.kademlias.values_mut() {
+			for b in k.kbuckets() {
+				for e in b.iter() {
+					if !peers.contains(e.node.key.preimage()) {
+						peers.insert(e.node.key.preimage().clone());
+					}
+				}
+			}
 		}
-		set.into_iter()
+		peers
 	}
 
 	/// Adds a hard-coded address for the given peer, that never expires.
@@ -246,24 +248,50 @@ impl DiscoveryBehaviour {
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		if self.user_defined.iter().all(|(p, a)| *p != peer_id && *a != addr) {
 			for k in self.kademlias.values_mut() {
-				k.add_address(&peer_id, addr.clone())
+				k.add_address(&peer_id, addr.clone());
 			}
 			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id.clone()));
 			self.user_defined.push((peer_id, addr));
 		}
 	}
 
-	/// Call this method when a node reports an address for itself.
+	/// Add a self-reported address of a remote peer to the k-buckets of the supported
+	/// DHTs (`supported_protocols`).
 	///
-	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
-	/// not properly work.
-	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, addr: Multiaddr) {
-		if self.allow_non_globals_in_dht || self.can_add_to_dht(&addr) {
-			for k in self.kademlias.values_mut() {
-				k.add_address(peer_id, addr.clone())
+	/// **Note**: It is important that you call this method. The discovery mechanism will not
+	/// automatically add connecting peers to the Kademlia k-buckets.
+	pub fn add_self_reported_address(
+		&mut self,
+		peer_id: &PeerId,
+		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
+		addr: Multiaddr
+	) {
+		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
+			log::trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
+			return
+		}
+
+		let mut added = false;
+		for protocol in supported_protocols {
+			for kademlia in self.kademlias.values_mut() {
+				if protocol.as_ref() == kademlia.protocol_name() {
+					log::trace!(
+						target: "sub-libp2p",
+						"Adding self-reported address {} from {} to Kademlia DHT {}.",
+						addr, peer_id, String::from_utf8_lossy(kademlia.protocol_name()),
+					);
+					kademlia.add_address(peer_id, addr.clone());
+					added = true;
+				}
 			}
-		} else {
-			log::trace!(target: "sub-libp2p", "Ignoring self-reported address {} from {}", addr, peer_id);
+		}
+
+		if !added {
+			log::trace!(
+				target: "sub-libp2p",
+				"Ignoring self-reported address {} from {} as remote node is not part of any \
+				 Kademlia DHTs supported by the local node.", addr, peer_id,
+			);
 		}
 	}
 
@@ -284,14 +312,15 @@ impl DiscoveryBehaviour {
 		for k in self.kademlias.values_mut() {
 			if let Err(e) = k.put_record(Record::new(key.clone(), value.clone()), Quorum::All) {
 				warn!(target: "sub-libp2p", "Libp2p => Failed to put record: {:?}", e);
-				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone()));
+				self.pending_events.push_back(DiscoveryOut::ValuePutFailed(key.clone(), Duration::from_secs(0)));
 			}
 		}
 	}
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
 	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
-		self.kademlias.iter_mut().map(|(id, kad)| (id, kad.kbuckets_entries().count()))
+		self.kademlias.iter_mut()
+			.map(|(id, kad)| (id, kad.kbuckets().map(|bucket| bucket.iter().count()).sum()))
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
@@ -333,30 +362,42 @@ impl DiscoveryBehaviour {
 }
 
 /// Event generated by the `DiscoveryBehaviour`.
+#[derive(Debug)]
 pub enum DiscoveryOut {
-	/// The address of a peer has been added to the Kademlia routing table.
-	///
-	/// Can be called multiple times with the same identity.
+	/// A connection to a peer has been established but the peer has not been
+	/// added to the routing table because [`KademliaBucketInserts::Manual`] is
+	/// configured. If the peer is to be included in the routing table, it must
+	/// be explicitly added via
+	/// [`DiscoveryBehaviour::add_self_reported_address`].
 	Discovered(PeerId),
 
 	/// A peer connected to this node for whom no listen address is known.
 	///
 	/// In order for the peer to be added to the Kademlia routing table, a known
-	/// listen address must be added via [`DiscoveryBehaviour::add_self_reported_address`],
-	/// e.g. obtained through the `identify` protocol.
+	/// listen address must be added via
+	/// [`DiscoveryBehaviour::add_self_reported_address`], e.g. obtained through
+	/// the `identify` protocol.
 	UnroutablePeer(PeerId),
 
-	/// The DHT yielded results for the record request, grouped in (key, value) pairs.
-	ValueFound(Vec<(record::Key, Vec<u8>)>),
+	/// The DHT yielded results for the record request.
+	///
+	/// Returning the result grouped in (key, value) pairs as well as the request duration..
+	ValueFound(Vec<(record::Key, Vec<u8>)>, Duration),
 
 	/// The record requested was not found in the DHT.
-	ValueNotFound(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValueNotFound(record::Key, Duration),
 
 	/// The record with a given key was successfully inserted into the DHT.
-	ValuePut(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValuePut(record::Key, Duration),
 
 	/// Inserting a value into the DHT failed.
-	ValuePutFailed(record::Key),
+	///
+	/// Returning the corresponding key as well as the request duration.
+	ValuePutFailed(record::Key, Duration),
 
 	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
 	RandomKademliaStarted(Vec<ProtocolId>),
@@ -407,23 +448,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		if !list.is_empty() {
-			trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
-
-		} else {
-			let mut has_entry = false;
-			for k in self.kademlias.values_mut() {
-				if k.kbuckets_entries().any(|p| p == peer_id) {
-					has_entry = true;
-					break
-				}
-			}
-			if has_entry {
-				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer in k-buckets)", peer_id);
-			} else {
-				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer not in k-buckets)", peer_id);
-			}
-		}
+		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
 
 		list
 	}
@@ -570,13 +595,20 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			while let Poll::Ready(ev) = kademlia.poll(cx, params) {
 				match ev {
 					NetworkBehaviourAction::GenerateEvent(ev) => match ev {
+						KademliaEvent::RoutingUpdated { peer, .. } => {
+							let ev = DiscoveryOut::Discovered(peer);
+							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
 						KademliaEvent::UnroutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::UnroutablePeer(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::RoutingUpdated { peer, .. } => {
+						KademliaEvent::RoutablePeer { peer, .. } => {
 							let ev = DiscoveryOut::Discovered(peer);
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
+						}
+						KademliaEvent::PendingRoutablePeer { .. } => {
+							// We are not interested in this event at the moment.
 						}
 						KademliaEvent::QueryResult { result: QueryResult::GetClosestPeers(res), .. } => {
 							match res {
@@ -596,7 +628,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								}
 							}
 						}
-						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), .. } => {
+						KademliaEvent::QueryResult { result: QueryResult::GetRecord(res), stats, .. } => {
 							let ev = match res {
 								Ok(ok) => {
 									let results = ok.records
@@ -604,28 +636,28 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 										.map(|r| (r.record.key, r.record.value))
 										.collect();
 
-									DiscoveryOut::ValueFound(results)
+									DiscoveryOut::ValueFound(results, stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 									trace!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key())
+									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to get record: {:?}", e);
-									DiscoveryOut::ValueNotFound(e.into_key())
+									DiscoveryOut::ValueNotFound(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 						}
-						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), .. } => {
+						KademliaEvent::QueryResult { result: QueryResult::PutRecord(res), stats, .. } => {
 							let ev = match res {
-								Ok(ok) => DiscoveryOut::ValuePut(ok.key),
+								Ok(ok) => DiscoveryOut::ValuePut(ok.key, stats.duration().unwrap_or_else(Default::default)),
 								Err(e) => {
 									warn!(target: "sub-libp2p",
 										"Libp2p => Failed to put record: {:?}", e);
-									DiscoveryOut::ValuePutFailed(e.into_key())
+									DiscoveryOut::ValuePutFailed(e.into_key(), stats.duration().unwrap_or_else(Default::default))
 								}
 							};
 							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
@@ -639,9 +671,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									"Libp2p => Republishing of record {:?} failed with: {:?}",
 									e.key(), e)
 							}
-						}
-						KademliaEvent::Discovered { .. } => {
-							// We are not interested in these events at the moment.
 						}
 						// We never start any other type of query.
 						e => {
@@ -698,25 +727,36 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 }
 
+// NB: If this protocol name derivation is changed, check if
+// `DiscoveryBehaviour::new_handler` is still correct.
+fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
+	let mut v = vec![b'/'];
+	v.extend_from_slice(id.as_bytes());
+	v.extend_from_slice(b"/kad");
+	v
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::identity::Keypair;
-	use libp2p::Multiaddr;
+	use libp2p::{Multiaddr, PeerId};
 	use libp2p::core::upgrade;
 	use libp2p::core::transport::{Transport, MemoryTransport};
 	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
 	use libp2p::swarm::Swarm;
 	use std::{collections::HashSet, task::Poll};
-	use super::{DiscoveryConfig, DiscoveryOut};
+	use super::{DiscoveryConfig, DiscoveryOut, protocol_name_from_protocol_id};
 
 	#[test]
 	fn discovery_working() {
-		let mut user_defined = Vec::new();
+		let mut first_swarm_peer_id_and_addr = None;
+		let protocol_id = ProtocolId::from(b"dot".as_ref());
 
-		// Build swarms whose behaviour is `DiscoveryBehaviour`.
-		let mut swarms = (0..25).map(|_| {
+		// Build swarms whose behaviour is `DiscoveryBehaviour`, each aware of
+		// the first swarm via `with_user_defined`.
+		let mut swarms = (0..25).map(|i| {
 			let keypair = Keypair::generate_ed25519();
 			let keypair2 = keypair.clone();
 
@@ -739,14 +779,12 @@ mod tests {
 				});
 
 			let behaviour = {
-				let protocol_id: &[u8] = b"/test/kad/1.0.0";
-
 				let mut config = DiscoveryConfig::new(keypair.public());
-				config.with_user_defined(user_defined.clone())
+				config.with_user_defined(first_swarm_peer_id_and_addr.clone())
 					.allow_private_ipv4(true)
 					.allow_non_globals_in_dht(true)
 					.discovery_limit(50)
-					.add_protocol(ProtocolId::from(protocol_id));
+					.add_protocol(protocol_id.clone());
 
 				config.finish()
 			};
@@ -754,8 +792,8 @@ mod tests {
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
-			if user_defined.is_empty() {
-				user_defined.push((keypair.public().into_peer_id(), listen_addr.clone()));
+			if i == 0 {
+				first_swarm_peer_id_and_addr = Some((keypair.public().into_peer_id(), listen_addr.clone()))
 			}
 
 			Swarm::listen_on(&mut swarm, listen_addr.clone()).unwrap();
@@ -764,7 +802,10 @@ mod tests {
 
 		// Build a `Vec<HashSet<PeerId>>` with the list of nodes remaining to be discovered.
 		let mut to_discover = (0..swarms.len()).map(|n| {
-			(0..swarms.len()).filter(|p| *p != n)
+			(0..swarms.len())
+				// Skip the first swarm as all other swarms already know it.
+				.skip(1)
+				.filter(|p| *p != n)
 				.map(|p| Swarm::local_peer_id(&swarms[p].0).clone())
 				.collect::<HashSet<_>>()
 		}).collect::<Vec<_>>();
@@ -775,7 +816,7 @@ mod tests {
 					match swarms[swarm_n].0.poll_next_unpin(cx) {
 						Poll::Ready(Some(e)) => {
 							match e {
-								DiscoveryOut::UnroutablePeer(other) => {
+								DiscoveryOut::UnroutablePeer(other) | DiscoveryOut::Discovered(other) => {
 									// Call `add_self_reported_address` to simulate identify happening.
 									let addr = swarms.iter().find_map(|(s, a)|
 										if s.local_peer_id == other {
@@ -784,12 +825,16 @@ mod tests {
 											None
 										})
 										.unwrap();
-									swarms[swarm_n].0.add_self_reported_address(&other, addr);
-								},
-								DiscoveryOut::Discovered(other) => {
+									swarms[swarm_n].0.add_self_reported_address(
+										&other,
+										[protocol_name_from_protocol_id(&protocol_id)].iter(),
+										addr,
+									);
+
 									to_discover[swarm_n].remove(&other);
-								}
-								_ => {}
+								},
+								DiscoveryOut::RandomKademliaStarted(_) => {},
+								e => {panic!("Unexpected event: {:?}", e)},
 							}
 							continue 'polling
 						}
@@ -807,5 +852,104 @@ mod tests {
 		});
 
 		futures::executor::block_on(fut);
+	}
+
+	#[test]
+	fn discovery_ignores_peers_with_unknown_protocols() {
+		let supported_protocol_id = ProtocolId::from(b"a".as_ref());
+		let unsupported_protocol_id = ProtocolId::from(b"b".as_ref());
+
+		let mut discovery = {
+			let keypair = Keypair::generate_ed25519();
+			let mut config = DiscoveryConfig::new(keypair.public());
+			config.allow_private_ipv4(true)
+				.allow_non_globals_in_dht(true)
+				.discovery_limit(50)
+				.add_protocol(supported_protocol_id.clone());
+			config.finish()
+		};
+
+		let remote_peer_id = PeerId::random();
+		let remote_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
+
+		// Add remote peer with unsupported protocol.
+		discovery.add_self_reported_address(
+			&remote_peer_id,
+			[protocol_name_from_protocol_id(&unsupported_protocol_id)].iter(),
+			remote_addr.clone(),
+		);
+
+		for kademlia in discovery.kademlias.values_mut() {
+			assert!(
+				kademlia.kbucket(remote_peer_id.clone())
+					.expect("Remote peer id not to be equal to local peer id.")
+					.is_empty(),
+				"Expect peer with unsupported protocol not to be added."
+			);
+		}
+
+		// Add remote peer with supported protocol.
+		discovery.add_self_reported_address(
+			&remote_peer_id,
+			[protocol_name_from_protocol_id(&supported_protocol_id)].iter(),
+			remote_addr.clone(),
+		);
+
+		for kademlia in discovery.kademlias.values_mut() {
+			assert_eq!(
+				1,
+				kademlia.kbucket(remote_peer_id.clone())
+					.expect("Remote peer id not to be equal to local peer id.")
+					.num_entries(),
+				"Expect peer with supported protocol to be added."
+			);
+		}
+	}
+
+	#[test]
+	fn discovery_adds_peer_to_kademlia_of_same_protocol_only() {
+		let protocol_a = ProtocolId::from(b"a".as_ref());
+		let protocol_b = ProtocolId::from(b"b".as_ref());
+
+		let mut discovery = {
+			let keypair = Keypair::generate_ed25519();
+			let mut config = DiscoveryConfig::new(keypair.public());
+			config.allow_private_ipv4(true)
+				.allow_non_globals_in_dht(true)
+				.discovery_limit(50)
+				.add_protocol(protocol_a.clone())
+				.add_protocol(protocol_b.clone());
+			config.finish()
+		};
+
+		let remote_peer_id = PeerId::random();
+		let remote_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
+
+		// Add remote peer with `protocol_a` only.
+		discovery.add_self_reported_address(
+			&remote_peer_id,
+			[protocol_name_from_protocol_id(&protocol_a)].iter(),
+			remote_addr.clone(),
+		);
+
+		assert_eq!(
+			1,
+			discovery.kademlias.get_mut(&protocol_a)
+				.expect("Kademlia instance to exist.")
+				.kbucket(remote_peer_id.clone())
+				.expect("Remote peer id not to be equal to local peer id.")
+				.num_entries(),
+			"Expected remote peer to be added to `protocol_a` Kademlia instance.",
+
+		);
+
+		assert!(
+			discovery.kademlias.get_mut(&protocol_b)
+				.expect("Kademlia instance to exist.")
+				.kbucket(remote_peer_id.clone())
+				.expect("Remote peer id not to be equal to local peer id.")
+				.is_empty(),
+			"Expected remote peer not to be added to `protocol_b` Kademlia instance.",
+		);
 	}
 }

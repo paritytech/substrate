@@ -83,7 +83,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], peerset, None),
+			inner: GenericProto::new(local_peer_id, &b"test"[..], &[1], vec![], peerset),
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -221,9 +221,10 @@ fn two_nodes_transfer_lots_of_packets() {
 	// We spawn two nodes, then make the first one send lots of packets to the second one. The test
 	// ends when the second one has received all of them.
 
-	// Note that if we go too high, we will reach the limit to the number of simultaneous
-	// substreams allowed by the multiplexer.
-	const NUM_PACKETS: u32 = 5000;
+	// This test consists in transferring this given number of packets. Considering that (by
+	// design) the connection gets closed if one of the remotes can't follow the pace, this number
+	// should not exceed the size of the buffer of pending notifications.
+	const NUM_PACKETS: u32 = 512;
 
 	let (mut service1, mut service2) = build_nodes();
 
@@ -241,6 +242,8 @@ fn two_nodes_transfer_lots_of_packets() {
 						);
 					}
 				},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				_ => panic!(),
 			}
 		}
@@ -251,6 +254,8 @@ fn two_nodes_transfer_lots_of_packets() {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
 				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				Some(GenericProtoOut::LegacyMessage { message, .. }) => {
 					match Message::<Block>::decode(&mut &message[..]).unwrap() {
 						Message::<Block>::BlockResponse(BlockResponse { id: _, blocks }) => {
@@ -312,6 +317,8 @@ fn basic_two_nodes_requests_in_parallel() {
 						service1.send_packet(&peer_id, msg.encode());
 					}
 				},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				_ => panic!(),
 			}
 		}
@@ -321,6 +328,8 @@ fn basic_two_nodes_requests_in_parallel() {
 		loop {
 			match ready!(service2.poll_next_unpin(cx)) {
 				Some(GenericProtoOut::CustomProtocolOpen { .. }) => {},
+				// An empty handshake is being sent after opening.
+				Some(GenericProtoOut::LegacyMessage { message, .. }) if message.is_empty() => {},
 				Some(GenericProtoOut::LegacyMessage { message, .. }) => {
 					let pos = to_receive.iter().position(|m| m.encode() == message).unwrap();
 					to_receive.remove(pos);

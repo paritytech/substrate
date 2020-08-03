@@ -50,8 +50,7 @@ mod subdb;
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 use std::io;
-use std::collections::HashMap;
-
+use std::collections::{HashMap, HashSet};
 
 use sc_client_api::{
 	UsageInfo, MemoryInfo, IoInfo, MemorySize,
@@ -70,6 +69,7 @@ use parking_lot::RwLock;
 use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::storage::{OffchainOverlayedChange, OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_arithmetic::traits::Saturating;
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
@@ -512,7 +512,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 					header_metadata.clone(),
 				);
 				header_metadata
-			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
+			}).ok_or_else(|| ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
 		}, Ok)
 	}
 
@@ -962,6 +962,7 @@ impl<Block: BlockT> Backend<Block> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
+
 		self.note_finalized(
 			transaction,
 			false,
@@ -1015,9 +1016,10 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn try_commit_operation(&self, mut operation: BlockImportOperation<Block>)
-		-> ClientResult<()>
-	{
+	fn try_commit_operation(
+		&self,
+		mut operation: BlockImportOperation<Block>,
+	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let mut finalization_displaced_leaves = None;
 
@@ -1243,7 +1245,7 @@ impl<Block: BlockT> Backend<Block> {
 			None
 		};
 
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 
 		if let Some((
 			number,
@@ -1356,7 +1358,7 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 		for k in delete {
 			transaction.remove(columns::AUX, k);
 		}
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		Ok(())
 	}
 
@@ -1404,7 +1406,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation(
+		&self,
+		operation: Self::BlockImportOperation,
+	) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
@@ -1420,9 +1425,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>)
-		-> ClientResult<()>
-	{
+	fn finalize_block(
+		&self,
+		block: BlockId<Block>,
+		justification: Option<Justification>,
+	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
@@ -1438,7 +1445,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			&mut changes_trie_cache_ops,
 			&mut displaced,
 		)?;
-		self.storage.db.commit(transaction);
+		self.storage.db.commit(transaction)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
@@ -1488,7 +1495,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		})
 	}
 
-	fn revert(&self, n: NumberFor<Block>, revert_finalized: bool) -> ClientResult<NumberFor<Block>> {
+	fn revert(
+		&self,
+		n: NumberFor<Block>,
+		revert_finalized: bool,
+	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
+		let mut reverted_finalized = HashSet::new();
+
 		let mut best_number = self.blockchain.info().best_number;
 		let mut best_hash = self.blockchain.info().best_hash;
 
@@ -1507,18 +1520,28 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
+				let removed_number = best_number;
+				let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
+					|| sp_blockchain::Error::UnknownBlock(
+						format!("Error reverting to {}. Block hash not found.", best_number)))?;
+				let removed_hash = removed.hash();
+
+				let prev_number = best_number.saturating_sub(One::one());
+				let prev_hash = self.blockchain.hash(prev_number)?.ok_or_else(
+					|| sp_blockchain::Error::UnknownBlock(
+						format!("Error reverting to {}. Block hash not found.", best_number))
+				)?;
+
+				if !self.have_state_at(&prev_hash, prev_number) {
+					return Ok(c.saturated_into::<NumberFor<Block>>())
+				}
+
 				match self.storage.state_db.revert_one() {
 					Some(commit) => {
 						apply_state_commit(&mut transaction, commit);
-						let removed_number = best_number;
-						let removed = self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(
-							|| sp_blockchain::Error::UnknownBlock(
-								format!("Error reverting to {}. Block hash not found.", best_number)))?;
 
-						best_number -= One::one();	// prev block
-						best_hash = self.blockchain.hash(best_number)?.ok_or_else(
-							|| sp_blockchain::Error::UnknownBlock(
-								format!("Error reverting to {}. Block hash not found.", best_number)))?;
+						best_number = prev_number;
+						best_hash = prev_hash;
 
 						let update_finalized = best_number < finalized;
 
@@ -1531,12 +1554,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							),
 						)?;
 						if update_finalized {
-							transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, key.clone());
+							transaction.set_from_vec(
+								columns::META,
+								meta_keys::FINALIZED_BLOCK,
+								key.clone()
+							);
+							reverted_finalized.insert(removed_hash);
 						}
 						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
 						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
-						self.storage.db.commit(transaction);
+						self.storage.db.commit(transaction)?;
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
 					}
@@ -1555,14 +1583,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 			leaves.revert(best_hash, best_number);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-			self.storage.db.commit(transaction);
+			self.storage.db.commit(transaction)?;
 
 			Ok(())
 		};
 
 		revert_leaves()?;
 
-		Ok(reverted)
+		Ok((reverted, reverted_finalized))
 	}
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {
@@ -1985,7 +2013,6 @@ pub(crate) mod tests {
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
-
 
 			assert!(backend.storage.db.get(
 				columns::STATE,

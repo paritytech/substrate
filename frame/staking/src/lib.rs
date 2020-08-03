@@ -151,7 +151,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_system::{self as system, ensure_signed};
+//! use frame_system::ensure_signed;
 //! use pallet_staking::{self as staking};
 //!
 //! pub trait Trait: staking::Trait {}
@@ -829,6 +829,68 @@ pub mod weight {
 	}
 }
 
+pub trait WeightInfo {
+	fn bond(u: u32, ) -> Weight;
+	fn bond_extra(u: u32, ) -> Weight;
+	fn unbond(u: u32, ) -> Weight;
+	fn withdraw_unbonded_update(s: u32, ) -> Weight;
+	fn withdraw_unbonded_kill(s: u32, ) -> Weight;
+	fn validate(u: u32, ) -> Weight;
+	fn nominate(n: u32, ) -> Weight;
+	fn chill(u: u32, ) -> Weight;
+	fn set_payee(u: u32, ) -> Weight;
+	fn set_controller(u: u32, ) -> Weight;
+	fn set_validator_count(c: u32, ) -> Weight;
+	fn force_no_eras(i: u32, ) -> Weight;
+	fn force_new_era(i: u32, ) -> Weight;
+	fn force_new_era_always(i: u32, ) -> Weight;
+	fn set_invulnerables(v: u32, ) -> Weight;
+	fn force_unstake(s: u32, ) -> Weight;
+	fn cancel_deferred_slash(s: u32, ) -> Weight;
+	fn payout_stakers(n: u32, ) -> Weight;
+	fn payout_stakers_alive_controller(n: u32, ) -> Weight;
+	fn rebond(l: u32, ) -> Weight;
+	fn set_history_depth(e: u32, ) -> Weight;
+	fn reap_stash(s: u32, ) -> Weight;
+	fn new_era(v: u32, n: u32, ) -> Weight;
+	fn do_slash(l: u32, ) -> Weight;
+	fn payout_all(v: u32, n: u32, ) -> Weight;
+	fn submit_solution_initial(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	fn submit_solution_better(v: u32, n: u32, a: u32, w: u32, ) -> Weight;
+	fn submit_solution_weaker(v: u32, n: u32, ) -> Weight;
+}
+
+impl WeightInfo for () {
+	fn bond(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn bond_extra(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn unbond(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn withdraw_unbonded_update(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn withdraw_unbonded_kill(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn validate(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn nominate(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn chill(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn set_payee(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn set_controller(_u: u32, ) -> Weight { 1_000_000_000 }
+	fn set_validator_count(_c: u32, ) -> Weight { 1_000_000_000 }
+	fn force_no_eras(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn force_new_era(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn force_new_era_always(_i: u32, ) -> Weight { 1_000_000_000 }
+	fn set_invulnerables(_v: u32, ) -> Weight { 1_000_000_000 }
+	fn force_unstake(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn cancel_deferred_slash(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn payout_stakers(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn payout_stakers_alive_controller(_n: u32, ) -> Weight { 1_000_000_000 }
+	fn rebond(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn set_history_depth(_e: u32, ) -> Weight { 1_000_000_000 }
+	fn reap_stash(_s: u32, ) -> Weight { 1_000_000_000 }
+	fn new_era(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn do_slash(_l: u32, ) -> Weight { 1_000_000_000 }
+	fn payout_all(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_solution_initial(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_solution_better(_v: u32, _n: u32, _a: u32, _w: u32, ) -> Weight { 1_000_000_000 }
+	fn submit_solution_weaker(_v: u32, _n: u32, ) -> Weight { 1_000_000_000 }
+}
+
 pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
@@ -894,7 +956,7 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+	type Call: Dispatchable + From<Call<Self>> + IsSubType<Call<Self>> + Clone;
 
 	/// Maximum number of balancing iterations to run in the offchain submission.
 	///
@@ -915,6 +977,9 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 	/// This is exposed so that it can be tuned for particular runtime, when
 	/// multiple pallets send unsigned transactions.
 	type UnsignedPriority: Get<TransactionPriority>;
+
+	/// Weight information for extrinsics in this pallet.
+	type WeightInfo: WeightInfo;
 }
 
 /// Mode of era-forcing.
@@ -1174,27 +1239,29 @@ decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
+		/// [era_index, validator_payout, remainder]
 		EraPayout(EraIndex, Balance, Balance),
-		/// The staker has been rewarded by this amount. `AccountId` is the stash account.
+		/// The staker has been rewarded by this amount. [stash, amount]
 		Reward(AccountId, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
+		/// [validator, amount]
 		Slash(AccountId, Balance),
 		/// An old slashing report from a prior era was discarded because it could
-		/// not be processed.
+		/// not be processed. [session_index]
 		OldSlashingReportDiscarded(SessionIndex),
-		/// A new set of stakers was elected with the given computation method.
+		/// A new set of stakers was elected with the given [compute].
 		StakingElection(ElectionCompute),
-		/// A new solution for the upcoming election has been stored.
+		/// A new solution for the upcoming election has been stored. [compute]
 		SolutionStored(ElectionCompute),
-		/// An account has bonded this amount.
+		/// An account has bonded this amount. [stash, amount]
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
 		/// it will not be emitted for staking rewards when they are added to stake.
 		Bonded(AccountId, Balance),
-		/// An account has unbonded this amount.
+		/// An account has unbonded this amount. [stash, amount]
 		Unbonded(AccountId, Balance),
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
-		/// from the unlocking queue.
+		/// from the unlocking queue. [stash, amount]
 		Withdrawn(AccountId, Balance),
 	}
 );
@@ -1559,7 +1626,7 @@ decl_module! {
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
 				ledger.unlocking.push(UnlockChunk { value, era });
 				Self::update_ledger(&controller, &ledger);
-				Self::deposit_event(RawEvent::Unbonded(ledger.stash.clone(), value));
+				Self::deposit_event(RawEvent::Unbonded(ledger.stash, value));
 			}
 		}
 
@@ -2352,7 +2419,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Lets now calculate how this is split to the nominators.
-		// Sort nominators by highest to lowest exposure, but only keep `max_nominator_payouts` of them.
+		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others.iter() {
 			let nominator_exposure_part = Perbill::from_rational_approximation(
 				nominator.value,
@@ -2822,7 +2889,7 @@ impl<T: Trait> Module<T> {
 				let mut exposure_clipped = exposure;
 				let clipped_max_len = T::MaxNominatorRewardedPerValidator::get() as usize;
 				if exposure_clipped.others.len() > clipped_max_len {
-					exposure_clipped.others.sort_unstable_by(|a, b| a.value.cmp(&b.value).reverse());
+					exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
 					exposure_clipped.others.truncate(clipped_max_len);
 				}
 				<ErasStakersClipped<T>>::insert(&current_era, &stash, exposure_clipped);
@@ -3354,6 +3421,10 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 			);
 			Ok(())
 		}
+	}
+
+	fn is_known_offence(offenders: &[Offender], time_slot: &O::TimeSlot) -> bool {
+		R::is_known_offence(offenders, time_slot)
 	}
 }
 

@@ -471,8 +471,8 @@ where
 			let root = self
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
-				.unwrap_or(
-					empty_child_trie_root::<Layout<H>>()
+				.unwrap_or_else(
+					|| empty_child_trie_root::<Layout<H>>()
 				);
 			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
 				self.id,
@@ -512,8 +512,8 @@ where
 				let root = self
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					.unwrap_or(
-						empty_child_trie_root::<Layout<H>>()
+					.unwrap_or_else(
+						|| empty_child_trie_root::<Layout<H>>()
 					);
 				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
 					self.id,
