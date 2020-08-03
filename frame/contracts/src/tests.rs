@@ -299,7 +299,7 @@ fn calling_plain_account_fails() {
 			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
 			Err(
 				DispatchErrorWithPostInfo {
-					error: Error::<Test>::InvalidContractCalled.into(),
+					error: Error::<Test>::NotCallable.into(),
 					post_info: PostDispatchInfo {
 						actual_weight: Some(67500000),
 						pays_fee: Default::default(),
@@ -999,7 +999,7 @@ fn call_removed_contract() {
 			// Calling contract should remove contract and fail.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
-				Error::<Test>::InvalidContractCalled
+				Error::<Test>::NotCallable
 			);
 			// Calling a contract that is about to evict shall emit an event.
 			assert_eq!(System::events(), vec![
@@ -1013,7 +1013,7 @@ fn call_removed_contract() {
 			// Subsequent contract calls should also fail.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
-				Error::<Test>::InvalidContractCalled
+				Error::<Test>::NotCallable
 			);
 		})
 }
@@ -1140,7 +1140,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			// we expect that it will get removed leaving tombstone.
 			assert_err_ignore_postinfo!(
 				Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
-				Error::<Test>::InvalidContractCalled
+				Error::<Test>::NotCallable
 			);
 			assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 			assert_eq!(System::events(), vec![
@@ -1687,7 +1687,7 @@ fn call_return_code() {
 			GAS_LIMIT,
 			vec![0],
 		).0.unwrap();
-		assert_return_code!(result, RuntimeReturnCode::InvalidContractCalled);
+		assert_return_code!(result, RuntimeReturnCode::NotCallable);
 
 		assert_ok!(
 			Contracts::instantiate(

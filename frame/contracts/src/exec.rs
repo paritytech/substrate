@@ -359,7 +359,7 @@ where
 		let contract = if let Some(ContractInfo::Alive(info)) = rent::collect_rent::<T>(&dest) {
 			info
 		} else {
-			Err(Error::<T>::InvalidContractCalled)?
+			Err(Error::<T>::NotCallable)?
 		};
 
 		let transactor_kind = self.transactor_kind();

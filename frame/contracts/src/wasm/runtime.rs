@@ -62,7 +62,7 @@ pub enum ReturnCode {
 	CodeNotFound = 7,
 	/// The contract that was called is either no contract at all (a plain account)
 	/// or is a tombstone.
-	InvalidContractCalled = 8,
+	NotCallable = 8,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -433,14 +433,14 @@ fn err_into_return_code<T: Trait>(from: DispatchError) -> Result<ReturnCode, Dis
 	let transfer_failed = Error::<T>::TransferFailed.into();
 	let not_funded = Error::<T>::NewContractNotFunded.into();
 	let no_code = Error::<T>::CodeNotFound.into();
-	let invalid_contract = Error::<T>::InvalidContractCalled.into();
+	let invalid_contract = Error::<T>::NotCallable.into();
 
 	match from {
 		x if x == below_sub => Ok(BelowSubsistenceThreshold),
 		x if x == transfer_failed => Ok(TransferFailed),
 		x if x == not_funded => Ok(NewContractNotFunded),
 		x if x == no_code => Ok(CodeNotFound),
-		x if x == invalid_contract => Ok(InvalidContractCalled),
+		x if x == invalid_contract => Ok(NotCallable),
 		err => Err(err)
 	}
 }
@@ -646,7 +646,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::CalleeTrapped`
 	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
-	// `ReturnCode::InvalidContractCalled`
+	// `ReturnCode::NotCallable`
 	ext_call(
 		ctx,
 		callee_ptr: u32,

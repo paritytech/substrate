@@ -434,7 +434,7 @@ decl_error! {
 		MaxCallDepthReached,
 		/// The contract that was called is either no contract at all (a plain account)
 		/// or is a tombstone.
-		InvalidContractCalled,
+		NotCallable,
 		/// The code supplied to `put_code` exceeds the limit specified in the current schedule.
 		CodeTooLarge,
 		/// No code could be found at the supplied code hash.
