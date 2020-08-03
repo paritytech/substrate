@@ -3,7 +3,7 @@ use frame_support::weights::{Weight, constants::RocksDbWeight as DbWeight};
 pub struct WeightInfo;
 impl pallet_democracy::WeightInfo for WeightInfo {
 	fn propose() -> Weight {
-		(59363000 as Weight)
+		(59363000 as Weight) // TODO: all those weight must be generated from parity machine.
 			.saturating_add(DbWeight::get().reads(2 as Weight))
 			.saturating_add(DbWeight::get().writes(3 as Weight))
 	}
