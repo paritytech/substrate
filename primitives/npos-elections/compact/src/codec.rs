@@ -143,7 +143,6 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 					_phragmen::codec::Compact(t.clone()),
 				))
 				.collect::<Vec<_>>();
-			// TODO: will this work without Encode in scope? no probably.
 			#name.encode_to(&mut r);
 		}
 	};
