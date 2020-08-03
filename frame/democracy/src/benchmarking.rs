@@ -655,7 +655,10 @@ benchmarks! {
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
 
-	remove_other_vote {
+	// If target is caller then logic is same as remove_vote
+	// If it is different then logic is slightly different.
+	// Worst case must be the max of both.
+	remove_other_vote_different {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let other = funded_account::<T>("other", r);
@@ -768,7 +771,7 @@ mod tests {
 			assert_ok!(test_benchmark_unlock_remove::<Test>());
 			assert_ok!(test_benchmark_unlock_set::<Test>());
 			assert_ok!(test_benchmark_remove_vote::<Test>());
-			assert_ok!(test_benchmark_remove_other_vote::<Test>());
+			assert_ok!(test_benchmark_remove_other_vote_different::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_execute::<Test>());
 			assert_ok!(test_benchmark_enact_proposal_slash::<Test>());
 		});
