@@ -64,7 +64,7 @@ where
 			return;
 		}
 
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+		addresses.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 		self.cache.insert(id, addresses);
 	}
 
@@ -94,7 +94,7 @@ where
 			.collect::<Vec<Addr>>();
 
 		addresses.dedup();
-		addresses.sort_unstable_by(|a, b| a.as_ref().cmp(b.as_ref()));
+		addresses.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
 
 		addresses
 			.choose_multiple(&mut rng, MAX_NUM_AUTHORITY_CONN)
