@@ -4273,7 +4273,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "pretty_assertions",
- "pwasm-utils 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pwasm-utils",
  "serde",
  "sp-core",
  "sp-io",
@@ -5502,19 +5502,9 @@ dependencies = [
 
 [[package]]
 name = "pwasm-utils"
-version = "0.12.0"
-source = "git+https://github.com/paritytech/wasm-utils?branch=expose-globals#3ea2c9a70d2dffb6e40bdf2523647c5c12802e50"
-dependencies = [
- "byteorder",
- "log",
- "parity-wasm 0.41.0",
-]
-
-[[package]]
-name = "pwasm-utils"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f7a12f176deee919f4ba55326ee17491c8b707d0987aed822682c821b660192"
+checksum = "bc30496a3e1e3dff21b3aceeacd3eeb867a67d8f50a212ae6263baa2d8d94051"
 dependencies = [
  "byteorder",
  "log",
@@ -6621,7 +6611,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
- "pwasm-utils 0.12.0 (git+https://github.com/paritytech/wasm-utils?branch=expose-globals)",
+ "pwasm-utils",
  "sc-executor-common",
  "scoped-tls",
  "sp-allocator",
